@@ -17,7 +17,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "glog/logging.h"
+#include "gutil/collections.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
@@ -320,27 +322,30 @@ absl::Status EvaluateAction(const ir::Action &action,
   VLOG(1) << "evaluating action '" << context.action_name << "'";
 
   // Add action parameters to scope.
-  const auto &parameters = action.action_definition().params_by_id();
+  const auto &parameters = action.action_definition().params_by_name();
   if (static_cast<int>(parameters.size()) != args.size()) {
     return absl::InvalidArgumentError(
         absl::StrCat("Action ", action.action_definition().preamble().name(),
                      " called with incompatible number of parameters"));
   }
 
-  // Find each parameter value in argument by parameter's name.
-  for (size_t i = 1; i <= parameters.size(); i++) {
-    // parameter id is the same as its index + 1.
-    const pdpi::IrActionDefinition::IrActionParamDefinition &parameter =
-        parameters.at(i);
-    const std::string &parameter_name = parameter.param().name();
-    const std::string &parameter_type_name =
-        parameter.param().type_name().name();
-    const int bitwidth = parameter.param().bitwidth();
-    ASSIGN_OR_RETURN(z3::expr parameter_value,
-                     values::FormatP4RTValue(
-                         Z3Context(), /*field_name=*/"", parameter_type_name,
-                         args.at(i - 1).value(), bitwidth, translator));
-    context.scope.insert({parameter_name, parameter_value});
+  // Find each parameter value in arguments by argument name. We should not rely
+  // on argument order matching param definition order, because the P4 runtime
+  // spec does not enforce this assumption in implementations, and furthermore
+  // the spec explicitly states that read entries do not have to preserve the
+  // order of repeated fields in written entries.
+  for (const auto &arg : args) {
+    absl::string_view arg_name = arg.name();
+    ASSIGN_OR_RETURN(const pdpi::IrActionDefinition::IrActionParamDefinition
+                         *param_definition,
+                     gutil::FindPtrOrStatus(parameters, arg_name));
+    ASSIGN_OR_RETURN(
+        z3::expr parameter_value,
+        values::FormatP4RTValue(
+            Z3Context(), /*field_name=*/"",
+            param_definition->param().type_name().name(), arg.value(),
+            param_definition->param().bitwidth(), translator));
+    context.scope.insert({param_definition->param().name(), parameter_value});
   }
 
   // Iterate over the body in order, and evaluate each statement.

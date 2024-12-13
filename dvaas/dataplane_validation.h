@@ -29,6 +29,7 @@ limitations under the License.
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
@@ -102,6 +103,12 @@ struct DataplaneValidationParams {
   // NOTE: Not required for valid mirror testbeds. This is a workaround for
   // non-standard testbeds only.
   std::optional<MirrorTestbedP4rtPortIdMap> mirror_testbed_port_map_override;
+
+  // Maximum allowed time for dataplane validation to synthesize test packets.
+  // If nullopt, packet synthesizer runs to completion for its coverage goals.
+  // Otherwise, if packet synthesis timed out, the synthesis results cover the
+  // coverage goals only partially.
+  std::optional<absl::Duration> packet_synthesis_time_limit = std::nullopt;
 };
 
 // Forward declaration. See below for description.
@@ -213,13 +220,12 @@ class DataplaneValidationBackend {
   // specific packet synthesis implementation (our current implementation is not
   // even open-source yet), so DVaaS takes the synthesis function as an input
   // parameter.
-  virtual absl::StatusOr<
-      std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>>
-  SynthesizePackets(const pdpi::IrP4Info& ir_p4info,
-                    const pdpi::IrTableEntries& ir_entries,
-                    const p4::v1::ForwardingPipelineConfig& p4_symbolic_config,
-                    absl::Span<const pins_test::P4rtPortId> ports,
-                    const OutputWriterFunctionType& write_stats) const = 0;
+  virtual absl::StatusOr<PacketSynthesisResult> SynthesizePackets(
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
+      const p4::v1::ForwardingPipelineConfig& p4_symbolic_config,
+      absl::Span<const pins_test::P4rtPortId> ports,
+      const OutputWriterFunctionType& write_stats,
+      std::optional<absl::Duration> time_limit = std::nullopt) const = 0;
 
   // Generates a map of test ID to PacketTestVector with output prediction
   // given a list of `synthesized_packets` for the given input (program,
@@ -237,7 +243,7 @@ class DataplaneValidationBackend {
   //  3. The packet will be padded to minimum size and the computed fields
   //     recomputed.
   virtual absl::StatusOr<PacketTestVectorById> GeneratePacketTestVectors(
-      const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntries& ir_entries,
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
       const p4::v1::ForwardingPipelineConfig& bmv2_config,
       absl::Span<const pins_test::P4rtPortId> ports,
       std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>&
@@ -267,10 +273,17 @@ class DataplaneValidationBackend {
   virtual ~DataplaneValidationBackend() = default;
 };
 
-// Generates and returns test vectors using the backend functions
-// `SynthesizePackets` and `GeneratePacketTestVectors`. Reads the table entries,
-// P4Info, and relevant P4RT port IDs from the switch.
-absl::StatusOr<PacketTestVectorById> GenerateTestVectors(
+// Stores test vectors as well as the result of automated test packet synthesis
+// (if any).
+struct GenerateTestVectorsResult {
+  PacketTestVectorById packet_test_vector_by_id;
+  PacketSynthesisResult packet_synthesis_result;
+};
+
+// Generates and returns test vectors as well as packet synthesis result using
+// the backend functions `SynthesizePackets` and `GeneratePacketTestVectors`.
+// Reads the table entries, P4Info, and relevant P4RT port IDs from the switch.
+absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
     const DataplaneValidationParams& params, SwitchApi& sut,
     DataplaneValidationBackend& backend, gutil::TestArtifactWriter& writer);
 
