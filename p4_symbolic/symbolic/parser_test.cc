@@ -312,5 +312,685 @@ constexpr absl::string_view kProgramExtractEthernet = R"pb(
   }
 )pb";
 
+TEST(EvaluateParsers, ReturnsErrorForNonFreeBitVectorHeaderField) {
+  ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
+                       ParseProgramTextProto(kProgramExtractEthernet));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  ASSERT_OK(ingress_headers.Set("ethernet.dst_addr", Z3Context().bv_val(0, 48),
+                                Z3Context().bool_val(true)));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       "Field 'ethernet.dst_addr' should be a free bit-vector. "
+                       "Found: (ite true #x000000000000 ethernet.dst_addr)"));
+}
+
+constexpr absl::string_view kProgramWithUnknownFieldSet = R"pb(
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          parser_ops {
+            set {
+              lvalue { header_name: "ethernet" field_name: "unknown" }
+              hexstr_rvalue { value: "0xBEEF" }
+            }
+          }
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
+  }
+)pb";
+
+TEST(EvaluateParsers, ReturnsErrorForUnknownFieldSet) {
+  ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
+                       ParseProgramTextProto(kProgramWithUnknownFieldSet));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  EXPECT_THAT(
+      EvaluateParsers(data_plane.program, ingress_headers),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          "Cannot assign to key \"ethernet.unknown\" in SymbolicGuardedMap!"));
+}
+
+constexpr absl::string_view kProgramWithLookaheadSet = R"pb(
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          parser_ops {
+            set {
+              lvalue { header_name: "ethernet" field_name: "dst_addr" }
+              lookahead_rvalue { bitwidth: 48 }
+            }
+          }
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
+  }
+)pb";
+
+TEST(EvaluateParsers, ReturnsErrorForUnimplementedLookaheadSet) {
+  ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
+                       ParseProgramTextProto(kProgramWithLookaheadSet));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  EXPECT_THAT(
+      EvaluateParsers(data_plane.program, ingress_headers),
+      StatusIs(absl::StatusCode::kUnimplemented,
+               "Lookahead R-values for set operations are not supported."));
+}
+
+constexpr absl::string_view kProgramWithNonHeaderFieldTransitionKey = R"pb(
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          transition_key_fields { lookahead { bitwidth: 16 } }
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
+  }
+)pb";
+
+TEST(EvaluateParsers, ReturnsErrorForNonHeaderFieldTransitionKey) {
+  ASSERT_OK_AND_ASSIGN(
+      const ir::Dataplane data_plane,
+      ParseProgramTextProto(kProgramWithNonHeaderFieldTransitionKey));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+              StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+constexpr absl::string_view kProgramWithUnknownFieldTransitionKey = R"pb(
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          transition_key_fields {
+            field { header_name: "un" field_name: "known" }
+          }
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
+  }
+)pb";
+
+TEST(EvaluateParsers, ReturnsErrorForUnknownFieldTransitionKey) {
+  ASSERT_OK_AND_ASSIGN(
+      const ir::Dataplane data_plane,
+      ParseProgramTextProto(kProgramWithUnknownFieldTransitionKey));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       "Cannot find key \"un.known\" in SymbolicGuardedMap!"));
+}
+
+constexpr absl::string_view kProgramWithDeadCodeTransition = R"pb(
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          transition_key_fields {
+            field { header_name: "ethernet" field_name: "ether_type" }
+          }
+          transitions {
+            hex_string_transition {
+              value { value: "0x0000" }
+              mask { value: "0xfe00" }
+              next_state: $eoparser
+            }
+          }
+          transitions { default_transition { next_state: $eoparser } }
+          transitions {
+            hex_string_transition {
+              value { value: "0x0800" }
+              mask {}
+              next_state: "parse_ipv4"
+            }
+          }
+        }
+      }
+    }
+  }
+)pb";
+
+TEST(EvaluateParsers, ReturnsErrorForDeadCodeTransition) {
+  ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
+                       ParseProgramTextProto(kProgramWithDeadCodeTransition));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+constexpr absl::string_view kProgramWithNoTransitionKey = R"pb(
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          transitions {
+            hex_string_transition {
+              value { value: "0x0800" }
+              mask {}
+              next_state: "parse_ipv4"
+            }
+          }
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
+  }
+)pb";
+
+TEST(EvaluateParsers, ReturnsErrorForNoTransitionKey) {
+  ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
+                       ParseProgramTextProto(kProgramWithNoTransitionKey));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  EXPECT_THAT(
+      EvaluateParsers(data_plane.program, ingress_headers),
+      StatusIs(
+          absl::StatusCode::kNotFound,
+          "No transition key specified but hex string transitions exist."));
+}
+
+struct ParserTestParam {
+  // Text proto representing the input IR P4Program.
+  std::string ir_program_text_proto;
+  // Expected SMT formulae of the parsed headers keyed with fully qualified
+  // header field names. If a header field is not specified in this map, its
+  // symbolic value remains untouched, meaning that it will be the same as that
+  // of the ingress headers. Note that the symbolic expressions of all header
+  // fields are checked against the parsed headers rather than just the
+  // specified ones.
+  std::function<absl::btree_map<std::string, z3::expr>(z3::context&)>
+      expected_symbolic_parsed_headers;
+};
+
+using EvaluateParsersTest = ::testing::TestWithParam<ParserTestParam>;
+
+std::vector<ParserTestParam> GetParserTestInstances() {
+  return {
+      {
+          // Minimal parser. The parsed headers should be the same as the
+          // ingress headers.
+          .ir_program_text_proto = R"pb(
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info {
+                      merge_point: $eoparser
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+              }
+            }
+          )pb",
+          .expected_symbolic_parsed_headers = [](z3::context& ctx)
+              -> absl::btree_map<std::string, z3::expr> { return {}; },
+      },
+      {
+          // Basic parser with Ethernet and IPv4 headers.
+          .ir_program_text_proto = R"pb(
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask {}
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info {
+                      merge_point: $eoparser
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info { merge_point: $eoparser }
+                  }
+                }
+              }
+            }
+          )pb",
+          .expected_symbolic_parsed_headers =
+              [](z3::context& ctx) -> absl::btree_map<std::string, z3::expr> {
+            return {
+                {"ethernet.$valid$", ctx.bool_val(true)},
+                {"ethernet.$extracted$", ctx.bool_val(true)},
+                {"ipv4.$valid$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                  ctx.bv_val(0x0800, 16))},
+                {"ipv4.$extracted$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                      ctx.bv_val(0x0800, 16))},
+            };
+          },
+      },
+      {
+          // Parser with set operations.
+          .ir_program_text_proto = R"pb(
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    parser_ops {
+                      set {
+                        lvalue {
+                          header_name: "ethernet"
+                          field_name: "dst_addr"
+                        }
+                        hexstr_rvalue { value: "0x0000DEADBEEF" }
+                      }
+                    }
+                    parser_ops {
+                      set {
+                        lvalue {
+                          header_name: "ethernet"
+                          field_name: "src_addr"
+                        }
+                        field_rvalue {
+                          header_name: "ethernet"
+                          field_name: "dst_addr"
+                        }
+                      }
+                    }
+                    parser_ops {
+                      set {
+                        lvalue {
+                          header_name: "ethernet"
+                          field_name: "src_addr"
+                        }
+                        expression_rvalue {
+                          binary_expression {
+                            operation: BIT_AND
+                            left {
+                              field_value {
+                                header_name: "ethernet"
+                                field_name: "src_addr"
+                              }
+                            }
+                            right { hexstr_value { value: "0x00000000FFFF" } }
+                          }
+                        }
+                      }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask {}
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info {
+                      merge_point: $eoparser
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info { merge_point: $eoparser }
+                  }
+                }
+              }
+            }
+          )pb",
+          .expected_symbolic_parsed_headers =
+              [](z3::context& ctx) -> absl::btree_map<std::string, z3::expr> {
+            return {
+                {"ethernet.$valid$", ctx.bool_val(true)},
+                {"ethernet.$extracted$", ctx.bool_val(true)},
+                {"ethernet.dst_addr", ctx.bv_val(0xDEADBEEF, 48)},
+                {"ethernet.src_addr", ctx.bv_val(0xBEEF, 48)},
+                {"ipv4.$valid$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                  ctx.bv_val(0x0800, 16))},
+                {"ipv4.$extracted$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                      ctx.bv_val(0x0800, 16))},
+            };
+          },
+      },
+      {
+          // Parser with primitive operations.
+          .ir_program_text_proto = R"pb(
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    parser_ops {
+                      primitive {
+                        assignment {
+                          left {
+                            field_value {
+                              header_name: "ethernet"
+                              field_name: "$valid$"
+                            }
+                          }
+                          right { bool_value { value: true } }
+                        }
+                      }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask {}
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info {
+                      merge_point: $eoparser
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    parser_ops {
+                      primitive {
+                        assignment {
+                          left {
+                            field_value {
+                              header_name: "ethernet"
+                              field_name: "$valid$"
+                            }
+                          }
+                          right { bool_value {} }
+                        }
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info { merge_point: $eoparser }
+                  }
+                }
+              }
+            }
+          )pb",
+          .expected_symbolic_parsed_headers =
+              [](z3::context& ctx) -> absl::btree_map<std::string, z3::expr> {
+            return {
+                {"ethernet.$valid$", (ctx.bv_const("ethernet.ether_type", 16) !=
+                                      ctx.bv_val(0x0800, 16))},
+                {"ethernet.$extracted$", ctx.bool_val(true)},
+                {"ipv4.$valid$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                  ctx.bv_val(0x0800, 16))},
+                {"ipv4.$extracted$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                      ctx.bv_val(0x0800, 16))},
+            };
+          },
+      },
+      {
+          // Parser with masked hex string transitions.
+          .ir_program_text_proto = R"pb(
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask { value: "0xff00" }
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info {
+                      merge_point: $eoparser
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info { merge_point: $eoparser }
+                  }
+                }
+              }
+            }
+          )pb",
+          .expected_symbolic_parsed_headers =
+              [](z3::context& ctx) -> absl::btree_map<std::string, z3::expr> {
+            return {
+                {"ethernet.$valid$", ctx.bool_val(true)},
+                {"ethernet.$extracted$", ctx.bool_val(true)},
+                {"ipv4.$valid$",
+                 ((ctx.bv_const("ethernet.ether_type", 16) &
+                   ctx.bv_val(0xff00, 16)) == ctx.bv_val(0x0800, 16))},
+                {"ipv4.$extracted$",
+                 ((ctx.bv_const("ethernet.ether_type", 16) &
+                   ctx.bv_val(0xff00, 16)) == ctx.bv_val(0x0800, 16))},
+            };
+          },
+      },
+      {
+          // Parser with fall-through (error.NoMatch) conditions.
+          .ir_program_text_proto = R"pb(
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask {}
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    optimized_symbolic_execution_info {
+                      merge_point: "parse_ipv4"
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    transitions { default_transition { next_state: $eoparser } }
+                    optimized_symbolic_execution_info {
+                      merge_point: $eoparser
+                      continue_to_merge_point: true
+                    }
+                  }
+                }
+              }
+            }
+          )pb",
+          .expected_symbolic_parsed_headers =
+              [](z3::context& ctx) -> absl::btree_map<std::string, z3::expr> {
+            return {
+                {"ethernet.$valid$", ctx.bool_val(true)},
+                {"ethernet.$extracted$", ctx.bool_val(true)},
+                {"ipv4.$valid$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                  ctx.bv_val(0x0800, 16))},
+                {"ipv4.$extracted$", (ctx.bv_const("ethernet.ether_type", 16) ==
+                                      ctx.bv_val(0x0800, 16))},
+                {std::string(kParserErrorField),
+                 z3::ite((ctx.bv_const("ethernet.ether_type", 16) !=
+                          ctx.bv_val(0x0800, 16)),
+                         ctx.bv_val(2, 32), ctx.bv_val(0, 32))},
+            };
+          },
+      },
+  };
+}
+
+TEST_P(EvaluateParsersTest, ValidateParsedHeadersSMTFormulae) {
+  // TODO: a workaround for using global Z3 context.
+  Z3Context(/*renew=*/true);
+
+  // Parse the P4 program from IR text proto and evaluate the parsers.
+  const ParserTestParam& param = GetParam();
+  ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
+                       ParseProgramTextProto(param.ir_program_text_proto));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  ASSERT_OK(
+      v1model::InitializeIngressHeaders(data_plane.program, ingress_headers));
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState parsed_headers,
+                       EvaluateParsers(data_plane.program, ingress_headers));
+
+  // Construct the expected parsed headers.
+  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState expected_parsed_headers,
+                       SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           data_plane.program.headers()));
+  ASSERT_OK(v1model::InitializeIngressHeaders(data_plane.program,
+                                              expected_parsed_headers));
+  // Update the expected SMT formulae of certain fields specified by the test.
+  for (const auto& [field_name, field] :
+       param.expected_symbolic_parsed_headers(Z3Context())) {
+    ASSERT_TRUE(expected_parsed_headers.ContainsKey(field_name));
+    ASSERT_OK(expected_parsed_headers.UnguardedSet(field_name, field));
+  }
+
+  std::unique_ptr<z3::solver> solver =
+      std::make_unique<z3::solver>(Z3Context());
+
+  // Check if the SMT formulae of the parsed headers are semantically the
+  // same as the expected parsed headers.
+  for (const auto& [field_name, actual_value] : parsed_headers) {
+    ASSERT_TRUE(expected_parsed_headers.ContainsKey(field_name));
+    ASSERT_OK_AND_ASSIGN(z3::expr expected_value,
+                         expected_parsed_headers.Get(field_name));
+    LOG(INFO) << "Check semantic equivalence for " << field_name << ": "
+              << expected_value << " vs " << actual_value;
+    z3::expr_vector assumptions(Z3Context());
+    assumptions.push_back(expected_value != actual_value);
+    EXPECT_EQ(solver->check(assumptions), z3::check_result::unsat);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(EvaluateParsers, EvaluateParsersTest,
+                         ::testing::ValuesIn(GetParserTestInstances()));
+
 }  // namespace
 }  // namespace p4_symbolic::symbolic::parser
