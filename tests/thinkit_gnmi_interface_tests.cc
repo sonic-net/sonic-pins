@@ -62,7 +62,8 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
                              gnmi::gNMI::StubInterface* sut_gnmi_stub,
                              RandomPortBreakoutInfo port_info,
                              const std::string& platform_json_contents,
-                             bool test_child_port_in_use) {
+                             bool test_child_port_in_use,
+                             const p4::config::v1::P4Info& p4_info) {
   // Get the original breakout info on the port.
   // This contains the state values of physical channels and
   // operational status information for ports in original breakout mode.
@@ -121,13 +122,11 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       sut_p4_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      sai::GetP4Info(sai::Instantiation::kMiddleblock)))
+      p4_info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
   ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
 
-  p4::config::v1::P4Info p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  ASSERT_OK_AND_ASSIGN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
+  ASSERT_OK_AND_ASSIGN(auto ir_p4info, pdpi::CreateIrP4Info(p4_info));
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
                        pdpi::PartialPdTableEntryToPiTableEntry(pdpi::IrP4Info(), pd_entry));
 
@@ -205,7 +204,8 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
 }
 
 void TestGNMIParentPortInUseDuringBreakout(
-    thinkit::Switch& sut, std::string& platform_json_contents) {
+    thinkit::Switch& sut, std::string& platform_json_contents,
+    const p4::config::v1::P4Info& p4_info) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   // Get a random port from list of front panel ports that supports at least
   // one breakout mode of required type other than its current mode.
@@ -213,11 +213,12 @@ void TestGNMIParentPortInUseDuringBreakout(
                                       *sut_gnmi_stub, platform_json_contents,
                                       BreakoutType::kAny));
   BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), port,
-                          platform_json_contents, false);
+                          platform_json_contents, false, p4_info);
 }
 
-void TestGNMIChildPortInUseDuringBreakout(thinkit::Switch& sut,
-                                          std::string& platform_json_contents) {
+void TestGNMIChildPortInUseDuringBreakout(
+    thinkit::Switch& sut, std::string& platform_json_contents,
+    const p4::config::v1::P4Info& p4_info) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   // Get a random port from list of front panel ports that supports at least
   // one breakout mode of required type other than its current mode.
@@ -225,6 +226,6 @@ void TestGNMIChildPortInUseDuringBreakout(thinkit::Switch& sut,
                                       *sut_gnmi_stub, platform_json_contents,
                                       BreakoutType::kChannelized));
   BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), port,
-                          platform_json_contents, true);
+                          platform_json_contents, true, p4_info);
 }
 }  // namespace pins_test

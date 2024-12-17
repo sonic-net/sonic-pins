@@ -238,7 +238,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
             src_ip { value: "$1" mask: "255.255.255.255" }
             dst_ip { value: "$2" mask: "255.255.255.255" }
           }
-          action { acl_trap { qos_queue: "$3" } }
+          action { acl_experimental_trap { qos_queue: "$3" } }
           priority: 1
           meter_config { bytes_per_second: $4 burst_bytes: $5 }
         }
