@@ -458,6 +458,8 @@ deparsers {
     column: 8
     source_fragment: "MyDeparser"
   }
+  order: "ethernet"
+  order: "ipv4"
 }
 actions {
   name: "NoAction"
