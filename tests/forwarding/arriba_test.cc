@@ -35,6 +35,8 @@ namespace pins_test {
 namespace {
 
 TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
+  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseIDs(
+      {"6e9a272e-fd0a-494e-aa31-edb7188ba856"});
   ASSERT_OK_AND_ASSIGN(dvaas::MirrorTestbedConfigurator configured_testbed,
                        dvaas::MirrorTestbedConfigurator::Create(
                            &GetParam().mirror_testbed->GetMirrorTestbed()));
@@ -57,12 +59,13 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
 
-  ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
-                       dvaas::ValidateAgainstArribaTestVector(
-                           *configured_testbed.SutApi().p4rt,
-                           *configured_testbed.ControlSwitchApi().p4rt,
-                           GetParam().arriba_test_vector,
-                           GetParam().validation_params));
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      dvaas::ValidateAgainstArribaTestVector(
+          *configured_testbed.SutApi().p4rt,
+          *configured_testbed.ControlSwitchApi().p4rt,
+          GetParam().arriba_test_vector, GetParam().validation_params));
+  validation_result.RecordStatisticsAsGoogleTestProperties();
 
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(
       GetParam().validation_params.expected_minimum_success_rate));
