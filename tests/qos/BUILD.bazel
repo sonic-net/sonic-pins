@@ -31,6 +31,7 @@ cc_library(
     ],
     deps = [
         ":gnmi_parsers",
+        ":qos_test_util",
         "//gutil:collections",
         "//gutil:overload",
         "//gutil:proto",
@@ -52,9 +53,9 @@ cc_library(
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_pdpi/string_encodings:decimal_string",
-        "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/forwarding:util",
+        "//tests/lib:switch_test_setup_helpers",
         "//thinkit:control_device",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
@@ -136,3 +137,19 @@ cmd_diff_test(
     tools = [":gnmi_parsers_test_runner"],
 )
 
+cc_library(
+    name = "qos_test_util",
+    srcs = ["qos_test_util.cc"],
+    hdrs = ["qos_test_util.h"],
+    deps = [
+        "//lib/gnmi:gnmi_helper",
+        "//thinkit:generic_testbed",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
