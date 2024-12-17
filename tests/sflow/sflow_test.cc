@@ -516,10 +516,4 @@ void SflowTestFixture::TearDown() {
   LOG(INFO) << "\n------ TearDown END ------\n";
 }
 
-// This test checks SFlow works as expected for interface set with punt rule.
-// 1. Pick one interface connected to Ixia and set up punt rule.
-// 2. Set up Ixia traffic and send packets to SUT via Ixia.
-// 3. Collect Sflow samples via sflowtool on SUT.
-// 4. Validate the result is as expected
-
 }  // namespace pins
