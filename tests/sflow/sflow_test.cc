@@ -15,10 +15,14 @@
 #include "tests/sflow/sflow_test.h"
 
 #include <cmath>
+#include <memory>
 #include <string>
+#include <thread>  // NOLINT
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -40,16 +44,303 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins {
 
 namespace {
+// Number of packets sent to one port.
+constexpr int kPacketsNum = 400000;
+
+// Number of packets sent per second.
+constexpr int kPacketsPerSecond = 3000;
+
+// The maximum number of bytes that should be copied from a sampled packet to
+// the sFlow datagram
+constexpr int kSampleSize = 128;
+
+// Once accumulated data reaches kMaxPacketSize, Sflow would generate an sflow
+// packet.
+constexpr int kMaxPacketSize = 1400;
+
+// Sflowtool binary name in the collector.
+constexpr absl::string_view kSflowToolName = "sflowtool";
+constexpr absl::string_view kSflowCommandTemplate =
+    "/etc/init.d/sflow-container exec '$0 -l -p 6343 &"
+    " pid=$$!; sleep $1; kill -9 $$pid;'";
+
+// IpV4 address for filtering the sflow packet.
+constexpr uint32_t kIpV4Src = 0x01020304;  // 1.2.3.4
+// Ixia flow details.
+constexpr auto kDstMac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
+constexpr auto kSourceMac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
+constexpr auto kIpV4Dst = netaddr::Ipv4Address(192, 168, 10, 1);
+
+// TODO: Parse the sampling rate from config or state path.
+constexpr int kSamplingRateInterval = 4000;
+
+// Buffering and software bottlenecks can cause some amount of variance in rate
+// measured end to end.
+// Level of tolerance for packet rate verification.
+// This could be parameterized in future if this is platform dependent.
+constexpr double kTolerance = 0.1;
+
 constexpr absl::string_view kSpeed100GB =
     "\"openconfig-if-ethernet:SPEED_100GB\"";
 constexpr absl::string_view kSpeed200GB =
     "\"openconfig-if-ethernet:SPEED_200GB\"";
+
+std::string GetSrcIpv4AddrByPortId(const int port_id) {
+  return netaddr::Ipv4Address(std::bitset<32>(kIpV4Src + port_id)).ToString();
+}
+
+// These are the counters we track in these tests.
+struct Counters {
+  uint64_t in_pkts;
+  uint64_t out_pkts;
+  uint64_t in_octets;
+  uint64_t out_octets;
+};
+
+absl::StatusOr<uint64_t> GetGnmiStat(std::string stat_name,
+                                     absl::string_view iface,
+                                     gnmi::gNMI::StubInterface* gnmi_stub) {
+  std::string ops_state_path;
+  std::string ops_parse_str;
+
+  if (absl::StartsWith(stat_name, "ipv4-")) {
+    std::string name = stat_name.substr(5);
+    ops_state_path = absl::StrCat(
+        "interfaces/interface[name=", iface,
+        "]subinterfaces/subinterface[index=0]/ipv4/state/counters/", name);
+    ops_parse_str = "openconfig-if-ip:" + name;
+  } else if (absl::StartsWith(stat_name, "ipv6-")) {
+    std::string name = stat_name.substr(5);
+    ops_state_path = absl::StrCat(
+        "interfaces/interface[name=", iface,
+        "]subinterfaces/subinterface[index=0]/ipv6/state/counters/", name);
+    ops_parse_str = "openconfig-if-ip:" + name;
+  } else {
+    ops_state_path = absl::StrCat("interfaces/interface[name=", iface,
+                                  "]/state/counters/", stat_name);
+    ops_parse_str = "openconfig-interfaces:" + stat_name;
+  }
+
+  ASSIGN_OR_RETURN(std::string ops_response,
+                   pins_test::GetGnmiStatePathInfo(gnmi_stub, ops_state_path,
+                                                   ops_parse_str));
+
+  uint64_t stat;
+  // skip over the initial quote '"'
+  (void)absl::SimpleAtoi(ops_response.substr(1), &stat);
+  return stat;
+}
+
+void ShowCounters(const Counters& cnt) {
+  LOG(INFO) << "in-pkts " << cnt.in_pkts;
+  LOG(INFO) << "out-pkts " << cnt.out_pkts;
+  LOG(INFO) << "in-octets " << cnt.in_octets;
+  LOG(INFO) << "out-octets " << cnt.out_octets;
+}
+
+// DeltaCounters - computer delta as change from initial to final counters
+Counters DeltaCounters(const Counters& initial, const Counters& final) {
+  Counters delta = {};
+
+  delta.in_pkts = final.in_pkts - initial.in_pkts;
+  delta.out_pkts = final.out_pkts - initial.out_pkts;
+  delta.in_octets = final.in_octets - initial.in_octets;
+  delta.out_octets = final.out_octets - initial.out_octets;
+  return delta;
+}
+
+absl::StatusOr<Counters> ReadCounters(std::string iface,
+                                      gnmi::gNMI::StubInterface* gnmi_stub) {
+  Counters cnt = {};
+
+  ASSIGN_OR_RETURN(cnt.in_pkts, GetGnmiStat("in-pkts", iface, gnmi_stub));
+  ASSIGN_OR_RETURN(cnt.out_pkts, GetGnmiStat("out-pkts", iface, gnmi_stub));
+  ASSIGN_OR_RETURN(cnt.in_octets, GetGnmiStat("in-octets", iface, gnmi_stub));
+  ASSIGN_OR_RETURN(cnt.out_octets, GetGnmiStat("out-octets", iface, gnmi_stub));
+  return cnt;
+}
+
+// The packets are all same for one port. Use port_id as the index for
+// generating packets.
+absl::Status SendNPacketsToSut(absl::Span<const std::string> traffic_ref,
+                               absl::string_view topology_ref,
+                               absl::Duration runtime,
+                               thinkit::GenericTestbed& testbed) {
+  // Send Ixia traffic.
+  RETURN_IF_ERROR(
+      pins_test::ixia::StartTraffic(traffic_ref, topology_ref, testbed));
+
+  // Wait for Traffic to be sent.
+  absl::SleepFor(runtime);
+
+  // Stop Ixia traffic.
+  RETURN_IF_ERROR(pins_test::ixia::StopTraffic(traffic_ref, testbed));
+
+  return absl::OkStatus();
+}
+
+// Set up Ixia traffic with given parameters and return the traffic ref and
+// topology ref string.
+absl::StatusOr<std::pair<std::vector<std::string>, std::string>>
+SetUpIxiaTraffic(absl::Span<const IxiaLink> ixia_links,
+                 thinkit::GenericTestbed& testbed, const int pkt_count,
+                 const int pkt_rate, const int frame_size = 1000) {
+  std::vector<std::string> traffic_refs;
+  std::string topology_ref;
+  for (const IxiaLink& ixia_link : ixia_links) {
+    LOG(INFO) << __func__ << " Ixia if:" << ixia_link.ixia_interface
+              << " sut if:" << ixia_link.sut_interface
+              << " port id:" << ixia_link.port_id;
+
+    std::string ixia_interface = ixia_link.ixia_interface;
+    std::string sut_interface = ixia_link.sut_interface;
+
+    // Set up Ixia traffic.
+    ASSIGN_OR_RETURN(pins_test::ixia::IxiaPortInfo ixia_port,
+                     pins_test::ixia::ExtractPortInfo(ixia_interface));
+    ASSIGN_OR_RETURN(std::string topology_ref_tmp,
+                     pins_test::ixia::IxiaConnect(ixia_port.hostname, testbed));
+    if (topology_ref.empty()) {
+      topology_ref = topology_ref_tmp;
+    } else {
+      EXPECT_EQ(topology_ref, topology_ref_tmp);
+    }
+
+    ASSIGN_OR_RETURN(std::string vport_ref,
+                     pins_test::ixia::IxiaVport(topology_ref, ixia_port.card,
+                                                ixia_port.port, testbed));
+
+    ASSIGN_OR_RETURN(std::string traffic_ref,
+                     pins_test::ixia::IxiaSession(vport_ref, testbed));
+
+    RETURN_IF_ERROR(
+        pins_test::ixia::SetFrameRate(traffic_ref, pkt_rate, testbed));
+
+    RETURN_IF_ERROR(
+        pins_test::ixia::SetFrameCount(traffic_ref, pkt_count, testbed));
+
+    RETURN_IF_ERROR(
+        pins_test::ixia::SetFrameSize(traffic_ref, frame_size, testbed));
+
+    RETURN_IF_ERROR(pins_test::ixia::SetSrcMac(traffic_ref,
+                                               kSourceMac.ToString(), testbed));
+
+    RETURN_IF_ERROR(
+        pins_test::ixia::SetDestMac(traffic_ref, kDstMac.ToString(), testbed));
+
+    RETURN_IF_ERROR(pins_test::ixia::AppendIPv4(traffic_ref, testbed));
+
+    // Use Ipv4 source address to differentiate different ports.
+    RETURN_IF_ERROR(pins_test::ixia::SetSrcIPv4(
+        traffic_ref, GetSrcIpv4AddrByPortId(ixia_link.port_id), testbed));
+
+    RETURN_IF_ERROR(pins_test::ixia::SetDestIPv4(traffic_ref,
+                                                 kIpV4Dst.ToString(), testbed));
+    traffic_refs.push_back(traffic_ref);
+  }
+  return std::make_pair(traffic_refs, topology_ref);
+}
+
+// Get the packet counters on SUT interface connected to Ixia.
+absl::StatusOr<std::vector<Counters>> GetIxiaInterfaceCounters(
+    absl::Span<const IxiaLink> ixia_links,
+    gnmi::gNMI::StubInterface* gnmi_stub) {
+  std::vector<Counters> counters;
+  for (const IxiaLink& ixia_link : ixia_links) {
+    ASSIGN_OR_RETURN(auto initial_in_counter,
+                     ReadCounters(ixia_link.sut_interface, gnmi_stub));
+    LOG(INFO) << "Ingress Counters (" << ixia_link.sut_interface << "):\n";
+    ShowCounters(initial_in_counter);
+    LOG(INFO) << "\n";
+    counters.push_back(initial_in_counter);
+  }
+  return counters;
+}
+
+// Run sflowtool on SUT in a new thread. Returns the thread to let caller to
+// wait for the finish.
+absl::StatusOr<std::thread> StartSflowCollector(
+    thinkit::SSHClient* ssh_client, absl::string_view device_name,
+    const int sflowtool_runtime, std::string& sflow_tool_result) {
+  std::thread sflow_tool_thread = std::thread(
+      [&sflow_tool_result, ssh_client, device_name, sflowtool_runtime]() {
+        const std::string ssh_command = absl::Substitute(
+            kSflowCommandTemplate, kSflowToolName, sflowtool_runtime);
+        LOG(INFO) << "ssh command:" << ssh_command;
+        ASSERT_OK_AND_ASSIGN(
+            sflow_tool_result,
+            ssh_client->RunCommand(
+                device_name, ssh_command,
+                /*timeout=*/absl::Seconds(sflowtool_runtime + 2)));
+      });
+  // Sleep to wait sflowtool to start.
+  absl::SleepFor(absl::Seconds(5));
+  return sflow_tool_thread;
+}
+
+// Send packets to SUT and validate packet counters via gNMI.
+absl::Status SendSflowTraffic(const std::vector<std::string>& traffic_refs,
+                              const std::string& topology_ref,
+                              absl::Span<const IxiaLink> ixia_links,
+                              thinkit::GenericTestbed& testbed,
+                              gnmi::gNMI::StubInterface* gnmi_stub,
+                              const int pkt_count, const int pkt_rate) {
+  // Send packets to SUT.
+  const absl::Time start_time = absl::Now();
+
+  // Read initial counters via GNMI from the SUT
+  LOG(INFO) << "Read initial packet counters.";
+  ASSIGN_OR_RETURN(std::vector<Counters> initial_in_counters,
+                   GetIxiaInterfaceCounters(ixia_links, gnmi_stub));
+
+  RETURN_IF_ERROR(SendNPacketsToSut(
+      traffic_refs, topology_ref,
+      /*runtime=*/absl::Seconds(std::ceil(1.0f * kPacketsNum / pkt_rate)),
+      testbed));
+
+  LOG(INFO) << "Sent " << kPacketsNum << " packets in "
+            << (absl::Now() - start_time) << "\n";
+
+  LOG(INFO) << "Read final packet counters.";
+  // Read final counters via GNMI from the SUT
+  ASSIGN_OR_RETURN(std::vector<Counters> final_in_counters,
+                   GetIxiaInterfaceCounters(ixia_links, gnmi_stub));
+  for (size_t i = 0; i < ixia_links.size(); ++i) {
+    auto delta = DeltaCounters(initial_in_counters[i], final_in_counters[i]);
+    // Display the difference in the counters for now (during test dev)
+    LOG(INFO) << "\nIngress Deltas (" << ixia_links[i].sut_interface << "):\n";
+    ShowCounters(delta);
+    EXPECT_EQ(delta.in_pkts, pkt_count)
+        << "Received packets count is not equal to sent packets count: "
+        << ". Port id: " << ixia_links[i].port_id << ". Sent " << pkt_count
+        << ". Received " << delta.in_pkts << ".";
+  }
+
+  return absl::OkStatus();
+}
+
+int GetSflowSamplesOnSut(const std::string& sflowtool_output,
+                         const int port_id) {
+  // Every "startDatagram" indicates an sFlow datagram.
+  constexpr int kFieldSize = 20, kSrcIpIdx = 9;
+  int count = 0;
+  for (absl::string_view sflow : absl::StrSplit(sflowtool_output, '\n')) {
+    std::vector<absl::string_view> fields = absl::StrSplit(sflow, ',');
+    if (fields.size() < kFieldSize) {
+      continue;
+    }
+    // Filter src ip.
+    if (fields[kSrcIpIdx] == GetSrcIpv4AddrByPortId(port_id)) {
+      count++;
+    }
+  }
+  return count;
+}
 
 // Set port speed by configuraing interface/ethernet/config/port-speed value.
 absl::Status SetPortSpeed(absl::string_view port_speed, absl::string_view iface,
@@ -182,6 +473,9 @@ void SflowTestFixture::SetUp() {
   // in 10s. Lets wait for a bit more.
   EXPECT_OK(pins_test::WaitForCondition(speed_config_applied, absl::Seconds(30),
                                         kSpeed200GB, gnmi_stub_.get()));
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      testbed_->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   ASSERT_OK_AND_ASSIGN(ready_links_,
                        GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
