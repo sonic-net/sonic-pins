@@ -317,6 +317,7 @@ cc_library(
         "//thinkit:mirror_testbed_fixture",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,

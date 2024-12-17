@@ -53,7 +53,7 @@ struct TaggedPacketIn {
 using IsExpectedUnsolicitedPacketFunctionType =
     std::function<bool(const packetlib::Packet &packet)>;
 
-// Unsolicited packets that, for the time being, are acceptable in a GPINS
+// Unsolicited packets that, for the time being, are acceptable in a PINS
 // testbeds.
 inline bool
 DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet &packet) {
