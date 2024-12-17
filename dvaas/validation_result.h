@@ -28,8 +28,19 @@
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
 #include "google/protobuf/descriptor.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 
 namespace dvaas {
+
+// Result of automated test packet synthesis (using P4-Symbolic)
+struct PacketSynthesisResult {
+  std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>
+      synthesized_packets;
+  // True if and only if packet synthesis runs with a time limit and does not
+  // finish within that time limit. If true, `synthesized_packets` may not
+  // fully cover the target coverage goals.
+  bool packet_synthesis_timed_out = false;
+};
 
 // The result of dataplane validation, as returned to DVaaS users.
 class [[nodiscard]] ValidationResult {
@@ -61,12 +72,22 @@ public:
   // Constructs a `ValidationResult` from the given `test_vectors`. Ignores
   // `ignored_fields` and `ignored_metadata` during validation, see
   // `test_run_validation.h` for details.
-  ValidationResult(const PacketTestRuns &test_runs,
-                   const SwitchOutputDiffParams &diff_params);
+  ValidationResult(const PacketTestRuns& test_runs,
+                   const SwitchOutputDiffParams& diff_params,
+                   const PacketSynthesisResult& packet_synthesis_result);
+
+  // Returns true if and only if packet synthesis runs with a time limit and
+  // does not finish within that time limit.
+  // NOTE: If true, dataplane validation did not fully cover the target coverage
+  // goals (in the worst case, it may have not tested dataplane at all). This
+  // should be taken into account when interpreting the results of other
+  // functions like `HasSuccessRateOfAtLeast` and `GetAllFailures`.
+  bool PacketSynthesizerTimedOut() const;
 
 private:
   PacketTestOutcomes test_outcomes_;
   TestVectorStats test_vector_stats_;
+  PacketSynthesisResult packet_synthesis_result_;
 };
 
 } // namespace dvaas

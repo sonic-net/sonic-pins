@@ -19,9 +19,10 @@
 
 #ifndef PINS_TESTS_CPU_QOS_TEST_H_
 #define PINS_TESTS_CPU_QOS_TEST_H_
+
+#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"

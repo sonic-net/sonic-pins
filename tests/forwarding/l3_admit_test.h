@@ -27,7 +27,9 @@
 namespace pins {
 
 class L3AdmitTestFixture : public thinkit::MirrorTestbedFixture {
-protected:
+ protected:
+  void SetUp() override;
+
   // This test runs on a mirror testbed setup so we open a P4RT connection to
   // both switches.
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_sut_switch_session_;

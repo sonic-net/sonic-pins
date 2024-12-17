@@ -67,10 +67,11 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.pb.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
+#include "tests/qos/qos_test_util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
@@ -237,7 +238,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
             src_ip { value: "$1" mask: "255.255.255.255" }
             dst_ip { value: "$2" mask: "255.255.255.255" }
           }
-          action { acl_trap { qos_queue: "$3" } }
+          action { acl_experimental_trap { qos_queue: "$3" } }
           priority: 1
           meter_config { bytes_per_second: $4 burst_bytes: $5 }
         }
@@ -250,100 +251,6 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
                    pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry));
   RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
   return pi_acl_entry;
-}
-
-// These are the counters we track in these tests.
-struct QueueCounters {
-  int64_t num_packets_transmitted = 0;
-  int64_t num_packet_dropped = 0;
-};
-
-std::ostream &operator<<(std::ostream &os, const QueueCounters &counters) {
-  return os << absl::StreamFormat(
-             "QueueCounters{"
-             ".num_packets_transmitted = %d, "
-             ".num_packets_dropped = %d"
-             "}",
-             counters.num_packets_transmitted, counters.num_packet_dropped);
-}
-
-// TODO: Move this to a helper library.
-absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
-    absl::string_view port, absl::string_view queue,
-    gnmi::gNMI::StubInterface &gnmi_stub) {
-  QueueCounters counters;
-  const std::string openconfig_transmit_count_state_path = absl::Substitute(
-      "qos/interfaces/interface[interface-id=$0]"
-      "/output/queues/queue[name=$1]/state/transmit-pkts",
-      port, queue);
-
-  ASSIGN_OR_RETURN(
-      std::string transmit_counter_response,
-      GetGnmiStatePathInfo(&gnmi_stub, openconfig_transmit_count_state_path,
-                           "openconfig-qos:transmit-pkts"));
-
-  if (!absl::SimpleAtoi(StripQuotes(transmit_counter_response),
-                        &counters.num_packets_transmitted)) {
-    return absl::InternalError(absl::StrCat("Unable to parse counter from ",
-                                            transmit_counter_response));
-  }
-
-  const std::string openconfig_drop_count_state_path = absl::Substitute(
-      "qos/interfaces/interface[interface-id=$0]"
-      "/output/queues/queue[name=$1]/state/dropped-pkts",
-      port, queue);
-
-  ASSIGN_OR_RETURN(
-      std::string drop_counter_response,
-      GetGnmiStatePathInfo(&gnmi_stub, openconfig_drop_count_state_path,
-                           "openconfig-qos:dropped-pkts"));
-
-  if (!absl::SimpleAtoi(StripQuotes(drop_counter_response),
-                        &counters.num_packet_dropped)) {
-    return absl::InternalError(
-        absl::StrCat("Unable to parse counter from ", drop_counter_response));
-  }
-
-  return counters;
-}
-
-// Returns the total number of packets enqueued for the queue with the given
-// `QueueCounters`.
-int64_t CumulativeNumPacketsEnqueued(const QueueCounters &counters) {
-  return counters.num_packet_dropped + counters.num_packets_transmitted;
-}
-
-absl::Status SetPortSpeed(const std::string &port_speed,
-                          const std::string &iface,
-                          gnmi::gNMI::StubInterface &gnmi_stub) {
-  std::string ops_config_path = absl::StrCat(
-      "interfaces/interface[name=", iface, "]/ethernet/config/port-speed");
-  std::string ops_val =
-      absl::StrCat("{\"openconfig-if-ethernet:port-speed\":", port_speed, "}");
-  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(&gnmi_stub, ops_config_path,
-                                               GnmiSetType::kUpdate, ops_val));
-  return absl::OkStatus();
-}
-
-absl::Status SetPortMtu(int port_mtu, const std::string &interface_name,
-                        gnmi::gNMI::StubInterface &gnmi_stub) {
-  std::string config_path = absl::StrCat(
-      "interfaces/interface[name=", interface_name, "]/config/mtu");
-  std::string value = absl::StrCat("{\"config:mtu\":", port_mtu, "}");
-  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
-                                               GnmiSetType::kUpdate, value));
-  return absl::OkStatus();
-}
-
-absl::StatusOr<bool> CheckLinkUp(const std::string &iface,
-                                 gnmi::gNMI::StubInterface &gnmi_stub) {
-  std::string oper_status_state_path =
-      absl::StrCat("interfaces/interface[name=", iface, "]/state/oper-status");
-  std::string parse_str = "openconfig-interfaces:oper-status";
-  ASSIGN_OR_RETURN(
-      std::string ops_response,
-      GetGnmiStatePathInfo(&gnmi_stub, oper_status_state_path, parse_str));
-  return ops_response == "\"UP\"";
 }
 
 absl::StatusOr<packetlib::Packet> MakeIpv4PacketWithDscp(
@@ -410,27 +317,6 @@ absl::StatusOr<packetlib::Packet> MakeIpv6PacketWithDscp(
   return packet;
 }
 
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config) {
-  // TODO: Actually parse config -- hard-coded for now.
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  for (int dscp = 0; dscp < 64; ++dscp) queue_by_dscp[dscp] = "BE1";
-  for (int dscp = 8; dscp <= 11; ++dscp) queue_by_dscp[dscp] = "AF1";
-  queue_by_dscp[13] = "LLQ1";
-  for (int dscp = 16; dscp <= 19; ++dscp) queue_by_dscp[dscp] = "AF2";
-  queue_by_dscp[21] = "LLQ2";
-  for (int dscp = 24; dscp <= 27; ++dscp) queue_by_dscp[dscp] = "AF3";
-  for (int dscp = 32; dscp <= 35; ++dscp) queue_by_dscp[dscp] = "AF4";
-  for (int dscp = 48; dscp <= 59; ++dscp) queue_by_dscp[dscp] = "NC1";
-  return queue_by_dscp;
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return ParseIpv4DscpToQueueMapping(gnmi_config);
-}
-
 // Represents a link connecting the switch under test (SUT) to a control device.
 struct SutToControlLink {
   std::string sut_port_gnmi_name;
@@ -487,28 +373,17 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
-
-  // Set up gNMI.
+  // Configure mirror testbed.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
-
-  // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping 10 seconds to wait for config to be applied/links to "
-               "come up.";
-  absl::SleepFor(absl::Seconds(10));
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, GetParam().gnmi_config, p4info));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -536,7 +411,7 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
                            priority: 1
                            match {
                              is_ipv6 { value: "0x1" }
-                             ttl { value: "0xff" mask: "0xff" }
+                             ip_protocol { value: "0xfd" mask: "0xff" }
                            }
                            action { acl_drop {} }
                          }
@@ -572,11 +447,13 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
             ipv6_destination: "2001:db8:0:12::2"
           }
         }
-        payload: "IPv6 packet with TTL 0xff (255)."
+        payload: "IPv6 packet with next header 0xfd (253)."
       )pb"));
   // The ACL entry should match the test packet.
-  ASSERT_EQ(test_packet.headers().at(1).ipv6_header().hop_limit(),
-            pd_acl_entry.acl_ingress_table_entry().match().ttl().value());
+  ASSERT_EQ(
+      test_packet.headers().at(1).ipv6_header().next_header(),
+      pd_acl_entry.acl_ingress_table_entry().match().ip_protocol().value());
+
   ASSERT_OK(packetlib::PadPacketToMinimumSize(test_packet));
   ASSERT_OK(packetlib::UpdateAllComputedFields(test_packet));
   ASSERT_OK_AND_ASSIGN(const std::string raw_packet,
@@ -782,28 +659,17 @@ TEST_P(CpuQosTestWithoutIxia,
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
-
-  // Set up gNMI.
+  // Configure mirror testbed.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
-
-  // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
-            << " to wait for config to be applied/links to come up.";
-  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, GetParam().gnmi_config, p4info));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -832,6 +698,7 @@ TEST_P(CpuQosTestWithoutIxia,
 
   // Read CPU queue state prior to injecting test packets. The state should
   // remain unchanged when we inject test packets.
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(openconfig::QueuesByName initial_cpu_queue_state,
                        GetCpuQueueStateViaGnmi(*gnmi_stub));
 
@@ -894,27 +761,17 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
-
-  // Set up gNMI.
+  // Configure mirror testbed.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
-  // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
-            << " to wait for config to be applied/links to come up.";
-  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+    std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, GetParam().gnmi_config, p4info));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -934,8 +791,8 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
             link_used_for_test_packets.sut_port_p4rt_name,
             /*mac=*/kSutMacAddress,
             /*ir_p4info=*/ir_p4info));
-    ASSERT_OK(
-        pdpi::InstallPiTableEntry(p4rt_session.get(), router_interface_entry));
+    ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(),
+                                        router_interface_entry));
   }
 
   // Extract DSCP-to-queue mapping from gNMI config.
@@ -983,10 +840,11 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
       LOG(INFO) << "Target queue: " << target_queue;
 
       // Read counters of the target queue.
+      ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
       ASSERT_OK_AND_ASSIGN(
           const QueueCounters queue_counters_before_test_packet,
           GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
-                               *gnmi_stub));
+                               *sut_gnmi_stub));
 
       // Inject test packet.
       ASSERT_OK_AND_ASSIGN(
@@ -1011,7 +869,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
         ASSERT_OK_AND_ASSIGN(
             queue_counters_after_test_packet,
             GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
-                                 *gnmi_stub));
+                                 *sut_gnmi_stub));
       } while (
           // It may take several seconds for the queue counters to update.
           CumulativeNumPacketsEnqueued(queue_counters_after_test_packet) ==
@@ -1116,15 +974,16 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   thinkit::Switch &sut = generic_testbed->Sut();
 
-  // Set up P4Runtime session.
+  // Configure SUT.
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.json", GetParam().gnmi_config));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "p4info.textproto", GetParam().p4info));
+
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           generic_testbed->Sut(), GetParam().p4info));
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, GetParam().gnmi_config, GetParam().p4info));
 
-  // Push GNMI config.
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-
-  // Hook up to GNMI.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   // Flow details.
@@ -1170,15 +1029,15 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
   thinkit::Switch &sut = generic_testbed->Sut();
 
-  // Set up P4Runtime session.
+  // Configure SUT.
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.json", GetParam().gnmi_config));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "p4info.textproto", GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           generic_testbed->Sut(), GetParam().p4info));
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, GetParam().gnmi_config, GetParam().p4info));
 
-  // Push GNMI config.
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-
-  // Hook up to GNMI.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   // Flow details.
@@ -1205,6 +1064,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
             << " to wait for config to be applied/links to come up.";
   absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  ASSERT_OK(
+      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
                        GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
@@ -1333,8 +1195,6 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
     // Wait for Traffic to be sent.
     absl::SleepFor(kTrafficDuration);
-
-    ASSERT_OK(pins_test::ixia::StopTraffic(traffic_ref, *generic_testbed));
 
     // Check for counters every 5 seconds upto 30 seconds till the fetched gNMI
     // queue counter stats match packets and bytes sent by Ixia.
