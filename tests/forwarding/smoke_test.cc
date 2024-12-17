@@ -15,12 +15,15 @@
 #include "tests/forwarding/smoke_test.h"
 
 #include "absl/strings/str_cat.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -58,10 +61,6 @@ TEST_P(SmokeTestFixture, AclTableAddDeleteOkButModifyFails) {
                        pdpi::PdWriteRequestToPi(
 		       sai::GetIrP4Info(sai::Instantiation::kMiddleblock), pd_insert));
   
-  // Insert works.
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
-                                                   pi_insert));
-
   const sai::WriteRequest pd_modify = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
         updates {
@@ -79,13 +78,6 @@ TEST_P(SmokeTestFixture, AclTableAddDeleteOkButModifyFails) {
                        pdpi::PdWriteRequestToPi(
 		       sai::GetIrP4Info(sai::Instantiation::kMiddleblock), pd_modify));
   
-  // Many ACL table attribues are NOT modifiable currently due to missing SAI
-  // implementation. Because there are no production use-cases, these are
-  // de-prioritized.
-  ASSERT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
-                                                     pi_modify),
-             StatusIs(absl::StatusCode::kUnknown));
-
   const sai::WriteRequest pd_delete = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
         updates {
@@ -102,6 +94,35 @@ TEST_P(SmokeTestFixture, AclTableAddDeleteOkButModifyFails) {
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest pi_delete,
                        pdpi::PdWriteRequestToPi(
 		       sai::GetIrP4Info(sai::Instantiation::kMiddleblock), pd_delete));
+
+  // Insert works.
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_insert));
+
+  // ACL table entries are expected to contain counter data. However, it's
+  // updated periodically and may not be avaialable immediatly after writing so
+  // we poll the entry for a few seconds until we see the data.
+  absl::Time timeout = absl::Now() + absl::Seconds(11);
+  p4::v1::ReadResponse pi_read_response;
+  p4::v1::ReadRequest pi_read_request;
+  pi_read_request.add_entities()->mutable_table_entry();
+  do {
+    ASSERT_OK_AND_ASSIGN(pi_read_response,
+                         pdpi::SetMetadataAndSendPiReadRequest(
+                             &GetSutP4RuntimeSession(), pi_read_request));
+    ASSERT_EQ(pi_read_response.entities_size(), 1);
+
+    if (absl::Now() > timeout) {
+      FAIL() << "ACL table entry does not have counter data.";
+    }
+  } while (!pi_read_response.entities(0).table_entry().has_counter_data());
+
+  // Many ACL table attribues are NOT modifiable currently due to missing SAI
+  // implementation. Because there are no production use-cases, these are
+  // de-prioritized.
+  ASSERT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                     pi_modify),
+              StatusIs(absl::StatusCode::kUnknown));
 
   // Delete works.
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
@@ -309,6 +330,44 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
   ASSERT_OK(pdpi::CheckNoTableEntries(session.get()));
   ASSERT_OK(pdpi::CheckNoTableEntries(session2.get()));
 }
+
+// Ensures that a GNMI Config can be pushed even with programmed flows already
+// on the switch.
+TEST_P(SmokeTestFixture, PushGnmiConfigWithFlows) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // All tables should be clear after setup.
+  ASSERT_OK(pdpi::CheckNoTableEntries(&GetSutP4RuntimeSession()));
+
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, testbed.Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(const std::string gnmi_config,
+                       pins_test::GetGnmiConfig(*sut_gnmi_stub));
+
+  // Pushing a Gnmi Config is OK when tables are cleared.
+  ASSERT_OK(pins_test::PushGnmiConfig(GetMirrorTestbed().Sut(), gnmi_config));
+
+  // Sets up an example table entry.
+  const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+      R"pb(
+        router_interface_table_entry {
+          match { router_interface_id: "router-interface-1" }
+          action {
+            set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
+          }
+        }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
+                       pdpi::PartialPdTableEntryToPiTableEntry(
+		       sai::GetIrP4Info(sai::Instantiation::kMiddleblock), pd_entry));
+
+  ASSERT_OK(pdpi::InstallPiTableEntries(&GetSutP4RuntimeSession(),
+                                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock), {pi_entry}));
+
+  // Pushing the same Gnmi Config is also OK when entries are programmed.
+  ASSERT_OK(pins_test::PushGnmiConfig(GetMirrorTestbed().Sut(), gnmi_config));
+}
+
 
 }  // namespace
 }  // namespace pins
