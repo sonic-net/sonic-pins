@@ -72,6 +72,8 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
       GetBreakoutStateInfoForPort(sut_gnmi_stub, port_info.port_name,
                                   port_info.curr_breakout_mode));
 
+  LOG(INFO) << "Using port " << port_info.port_name
+            << " with current breakout mode " << port_info.curr_breakout_mode;
   // Verify that all ports for the selected port are operationally up.
   auto resp_parse_str = "openconfig-interfaces:oper-status";
   for (const auto& p : orig_breakout_info) {
