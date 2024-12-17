@@ -66,8 +66,9 @@ public:
 
   // Logs various statistics about the number of test vectors and how many of
   // them passed.
-  const ValidationResult &LogStatistics() const;
-  ValidationResult &LogStatistics();
+  const ValidationResult& LogStatistics() const;
+  ValidationResult& LogStatistics();
+  void RecordStatisticsAsGoogleTestProperties() const;
 
   // Returns a list of all test failures. Prefer using `HasSuccessRateOfAtLeast`
   // as it includes additional information to ease debugging.

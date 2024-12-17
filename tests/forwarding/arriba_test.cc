@@ -87,6 +87,7 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
                            *configured_testbed.SutApi().p4rt,
                            *configured_testbed.ControlSwitchApi().p4rt,
                            GetParam().arriba_test_vector, validation_params));
+  validation_result.RecordStatisticsAsGoogleTestProperties();
 
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(
       validation_params.expected_minimum_success_rate));
