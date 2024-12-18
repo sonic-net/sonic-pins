@@ -51,6 +51,7 @@ cc_library(
     srcs = ["ethcounter_ixia_test.cc"],
     hdrs = ["ethcounter_ixia_test.h"],
     deps = [
+	"//gutil:collections",
         "//gutil:status",
         "//gutil:status_matchers",
         "//gutil:testing",
