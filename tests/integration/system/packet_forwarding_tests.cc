@@ -20,9 +20,14 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/flags/flag.h"
+#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -37,6 +42,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/basic_traffic/basic_p4rt_util.h"
+#include "lib/basic_traffic/basic_traffic.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -50,13 +56,18 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
 
+ABSL_FLAG(bool, push_p4_info, true, "Push P4 info to SUT.");
+
 namespace pins_test {
 namespace {
+
+constexpr int kMtu[] = {1500, 5000, 9000};
 
 // Test packet proto message sent from control switch to sut.
 constexpr absl::string_view kTestPacket = R"pb(
@@ -84,6 +95,18 @@ constexpr absl::string_view kTestPacket = R"pb(
   }
   headers { udp_header { source_port: "0x0000" destination_port: "0x0000" } }
   payload: "Basic L3 test packet")pb";
+
+// Pushes the P4 Info to SUT if the flag push_p4_info is set to true and returns
+// the P4 Runtime Session
+absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> P4InfoPush(
+    const p4::config::v1::P4Info& p4_info, thinkit::GenericTestbed& testbed) {
+  std::optional<p4::config::v1::P4Info> p4info = std::nullopt;
+  if (absl::GetFlag(FLAGS_push_p4_info)) {
+    p4info = p4_info;
+  }
+  return ConfigureSwitchAndReturnP4RuntimeSession(
+      testbed.Sut(), /*gnmi_config=*/std::nullopt, p4info);
+}
 
 // Sets up route from source port to destination port on sut.
 absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
@@ -180,6 +203,144 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
   }
   EXPECT_EQ(received_packets.size(), kPacketsToSend);
 }
+
+using InterfaceCounters = absl::flat_hash_map<std::string, Counters>;
+
+TEST_P(PacketForwardingTestFixture, AllPortsPacketForwardingTest) {
+  thinkit::TestRequirements requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 2
+                 interface_mode: CONTROL_INTERFACE
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
+
+  std::vector<std::string> sut_interfaces =
+      GetSutInterfaces(FromTestbed(GetAllControlLinks, *testbed));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                       P4InfoPush(GetParam().p4_info, *testbed));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
+
+  // Collect counters before the test.
+  ASSERT_OK_AND_ASSIGN(InterfaceCounters pretraffic_counters,
+                       GetAllInterfaceCounters(*gnmi_stub));
+
+  const auto test_packet =
+      gutil::ParseProtoOrDie<packetlib::Packet>(kTestPacket);
+  ASSERT_OK_AND_ASSIGN(
+      auto statistics,
+      basic_traffic::SendTraffic(*testbed, p4_session.get(), ir_p4info,
+                                 basic_traffic::AllToAll(sut_interfaces),
+                                 {test_packet}, absl::Minutes(5)));
+
+  // Collate traffic statistics to dump to artifacts.
+  std::string packet_statistics_csv =
+      "ingress_interface,egress_interface,packets_sent,packets_received\n";
+  for (const basic_traffic::TrafficStatistic& statistic : statistics) {
+    absl::StrAppend(&packet_statistics_csv,
+                    absl::StrJoin({statistic.interfaces.ingress_interface,
+                                   statistic.interfaces.egress_interface,
+                                   absl::StrCat(statistic.packets_sent),
+                                   absl::StrCat(statistic.packets_received)},
+                                  ","),
+                    "\n");
+    EXPECT_EQ(statistic.packets_sent, statistic.packets_received);
+    EXPECT_EQ(statistic.packets_routed_incorrectly, 0);
+  }
+  EXPECT_OK(testbed->Environment().StoreTestArtifact("traffic_statistics.csv",
+                                                     packet_statistics_csv));
+
+  // Calculate counter differences and dump to artifacts.
+  std::string sut_counters_csv = "interface,in_packets,out_packets\n";
+  ASSERT_OK_AND_ASSIGN(InterfaceCounters posttraffic_counters,
+                       GetAllInterfaceCounters(*gnmi_stub));
+  for (const std::string& interface : sut_interfaces) {
+    const Counters& pre = pretraffic_counters[interface];
+    const Counters& post = posttraffic_counters[interface];
+    absl::StrAppend(
+        &sut_counters_csv,
+        absl::StrJoin({interface, absl::StrCat(post.in_pkts - pre.in_pkts),
+                       absl::StrCat(post.out_pkts - pre.out_pkts)},
+                      ","),
+        "\n");
+  }
+  EXPECT_OK(testbed->Environment().StoreTestArtifact("sut_counters.csv",
+                                                     sut_counters_csv));
+}
+
+TEST_P(PacketForwardingTestFixture, MtuPacketForwardingTest) {
+  thinkit::TestRequirements requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 2
+                 interface_mode: CONTROL_INTERFACE
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
+  std::vector<std::string> sut_interfaces =
+      GetSutInterfaces(FromTestbed(GetAllControlLinks, *testbed));
+
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                       P4InfoPush(GetParam().p4_info, *testbed));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
+
+  for (int mtu : kMtu) {
+    // Collect counters before the test.
+    ASSERT_OK_AND_ASSIGN(InterfaceCounters pretraffic_counters,
+                         GetAllInterfaceCounters(*gnmi_stub));
+
+    LOG(INFO) << "MTU: " << mtu;
+    auto test_packet = gutil::ParseProtoOrDie<packetlib::Packet>(kTestPacket);
+    ASSERT_OK(PadPacket(mtu, test_packet));
+    LOG(INFO) << "Packet: " << test_packet.DebugString();
+    ASSERT_OK_AND_ASSIGN(
+        auto statistics,
+        basic_traffic::SendTraffic(*testbed, p4_session.get(), ir_p4info,
+                                   basic_traffic::AllToAll(sut_interfaces),
+                                   {test_packet}, absl::Minutes(5)));
+
+    // Collate traffic statistics to dump to artifacts.
+    std::string packet_statistics_csv =
+        "ingress_interface,egress_interface,packets_sent,packets_received\n";
+    for (const basic_traffic::TrafficStatistic& statistic : statistics) {
+      absl::StrAppend(&packet_statistics_csv,
+                      absl::StrJoin({statistic.interfaces.ingress_interface,
+                                     statistic.interfaces.egress_interface,
+                                     absl::StrCat(statistic.packets_sent),
+                                     absl::StrCat(statistic.packets_received)},
+                                    ","),
+                      "\n");
+      EXPECT_EQ(statistic.packets_sent, statistic.packets_received);
+      EXPECT_EQ(statistic.packets_routed_incorrectly, 0);
+    }
+    EXPECT_OK(testbed->Environment().StoreTestArtifact(
+        absl::StrCat("traffic_statistics_mtu", mtu, ".csv"),
+        packet_statistics_csv));
+
+    // Calculate counter differences and dump to artifacts.
+    std::string sut_counters_csv = "interface,in_packets,out_packets\n";
+    ASSERT_OK_AND_ASSIGN(InterfaceCounters posttraffic_counters,
+                         GetAllInterfaceCounters(*gnmi_stub));
+    for (const std::string& interface : sut_interfaces) {
+      const Counters& pre = pretraffic_counters[interface];
+      const Counters& post = posttraffic_counters[interface];
+      absl::StrAppend(
+          &sut_counters_csv,
+          absl::StrJoin({interface, absl::StrCat(post.in_pkts - pre.in_pkts),
+                         absl::StrCat(post.out_pkts - pre.out_pkts)},
+                        ","),
+          "\n");
+    }
+    EXPECT_OK(testbed->Environment().StoreTestArtifact(
+        absl::StrCat("sut_counters_mtu", mtu, ".csv"), sut_counters_csv));
+  }
+}
+
 
 }  // namespace
 }  // namespace pins_test
