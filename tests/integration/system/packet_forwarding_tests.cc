@@ -23,7 +23,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -32,11 +31,14 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "lib/basic_traffic/basic_p4rt_util.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/utils/generic_testbed_utils.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
@@ -56,104 +58,6 @@
 namespace pins_test {
 namespace {
 
-constexpr absl::string_view kL3AdmitEntry = R"pb(
-  updates {
-    type: INSERT
-    table_entry {
-      vrf_table_entry {
-        match { vrf_id: "default-vrf" }
-        action { no_action {} }
-      }
-    }
-  }
-  updates {
-    type: INSERT
-    table_entry {
-      acl_pre_ingress_table_entry {
-        match {}
-        priority: 2000
-        action { set_vrf { vrf_id: "default-vrf" } }
-      }
-    }
-  }
-  updates {
-    type: INSERT
-    table_entry {
-      l3_admit_table_entry {
-        match {}
-        priority: 2070
-        action { admit_to_l3 {} }
-      }
-    }
-  })pb";
-
-constexpr absl::string_view kIngressRouterInterface = R"pb(
-  updates {
-    type: INSERT
-    table_entry {
-      router_interface_table_entry {
-        match { router_interface_id: "ingress-router-interface" }
-        action {
-          set_port_and_src_mac { port: "$0" src_mac: "00:00:00:00:00:$1" }
-        }
-      }
-    }
-  })pb";
-
-constexpr absl::string_view kEgressRouterInterface = R"pb(
-  updates {
-    type: INSERT
-    table_entry {
-      router_interface_table_entry {
-        match { router_interface_id: "egress-router-interface" }
-        action {
-          set_port_and_src_mac { port: "$0" src_mac: "00:00:00:00:00:$1" }
-        }
-      }
-    }
-  })pb";
-
-constexpr absl::string_view kNeighborEntry = R"pb(
-  updates {
-    type: INSERT
-    table_entry {
-      neighbor_table_entry {
-        match {
-          router_interface_id: "egress-router-interface"
-          neighbor_id: "10.0.0.1"
-        }
-        action { set_dst_mac { dst_mac: "3c:28:6d:34:c0:02" } }
-      }
-    }
-  })pb";
-
-constexpr absl::string_view kNexthopEntry = R"pb(
-  updates {
-    type: INSERT
-    table_entry {
-      nexthop_table_entry {
-        match { nexthop_id: "nexthop-1" }
-        action {
-          set_nexthop {
-            router_interface_id: "egress-router-interface"
-            neighbor_id: "10.0.0.1"
-          }
-        }
-      }
-    }
-  })pb";
-
-constexpr absl::string_view kIp4tableEntry = R"pb(
-  updates {
-    type: INSERT
-    table_entry {
-      ipv4_table_entry {
-        match { vrf_id: "default-vrf" }
-        action { set_nexthop_id { nexthop_id: "nexthop-1" } }
-      }
-    }
-  })pb";
-
 // Test packet proto message sent from control switch to sut.
 constexpr absl::string_view kTestPacket = R"pb(
   headers {
@@ -169,81 +73,34 @@ constexpr absl::string_view kTestPacket = R"pb(
       ihl: "0x5"
       dscp: "0x03"
       ecn: "0x0"
-      total_length: "0x00d4"
       identification: "0x0000"
       flags: "0x0"
       fragment_offset: "0x0000"
       ttl: "0x20"
       protocol: "0x11"
-      checksum: "0x8c07"
       ipv4_source: "1.2.3.4"
-      ipv4_destination: "10.0.0.1"
+      ipv4_destination: "$0"
     }
   }
-  headers {
-    udp_header {
-      source_port: "0x0000"
-      destination_port: "0x0000"
-      length: "0x00c0"
-      checksum: "0xd557"
-    }
-  }
-  payload: "test packet #1: p4-symbolic: ipv4_table_entry { match { vrf_id: \"default-vrf\" ipv4_dst { value: \"10.0.0.1\" prefix_length: 32 } } action { set_nexthop_id { nexthop_id: \"nexthop-1\" } } }")pb";
-
-// Creates mac address for the interface based on it's port id.
-std::string CreateMacAddress(int port_id) {
-  if (port_id < 10) {
-    return absl::StrCat("0", port_id);
-  } else {
-    return absl::StrCat(port_id % 100);
-  }
-}
-
-// Sets the request type and sends a write request.
-absl::Status ProgramRequest(pdpi::P4RuntimeSession& p4_session,
-                            const pdpi::IrP4Info& ir_p4info,
-                            absl::string_view request_str) {
-  ASSIGN_OR_RETURN(
-      p4::v1::WriteRequest request,
-      pdpi::PdWriteRequestToPi(
-          ir_p4info, gutil::ParseProtoOrDie<sai::WriteRequest>(request_str)));
-  request.mutable_updates(0)->set_type(p4::v1::Update::INSERT);
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, request))
-      << "Failed to program the request: " << request.ShortDebugString();
-  return absl::OkStatus();
-}
+  headers { udp_header { source_port: "0x0000" destination_port: "0x0000" } }
+  payload: "Basic L3 test packet")pb";
 
 // Sets up route from source port to destination port on sut.
-absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session,
-                        const pdpi::IrP4Info& ir_p4info, int src_port_id,
-                        int des_port_id) {
-  LOG(INFO) << "Setup Route on sut from port: " << src_port_id << " to "
-            << des_port_id;
-  LOG(INFO) << "Program request default_vrf.";
-  RETURN_IF_ERROR(ProgramRequest(p4_session, ir_p4info, kL3AdmitEntry));
-
-  LOG(INFO) << "Program request ingress_router_interface.";
+absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
+                        int dst_port_id) {
+  RETURN_IF_ERROR(pins_test::basic_traffic::ProgramTrafficVrf(&p4_session,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
   RETURN_IF_ERROR(
-      ProgramRequest(p4_session, ir_p4info,
-                     absl::Substitute(kIngressRouterInterface, src_port_id,
-                                      CreateMacAddress(src_port_id))));
-  LOG(INFO) << "Program request egress_router_interface.";
+      basic_traffic::ProgramRouterInterface(&p4_session, src_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
   RETURN_IF_ERROR(
-      ProgramRequest(p4_session, ir_p4info,
-                     absl::Substitute(kEgressRouterInterface, des_port_id,
-                                      CreateMacAddress(des_port_id))));
-
-  // Create neighbor object.
-  LOG(INFO) << "Program request neightbor_entry.";
-  RETURN_IF_ERROR(ProgramRequest(p4_session, ir_p4info, kNeighborEntry));
-
-  // Create nexthop table entry.
-  LOG(INFO) << "Program request nexthop_entry.";
-  RETURN_IF_ERROR(ProgramRequest(p4_session, ir_p4info, kNexthopEntry));
-  LOG(INFO) << "Program request ip4table_entry.";
-  RETURN_IF_ERROR(ProgramRequest(p4_session, ir_p4info, kIp4tableEntry));
-  LOG(INFO) << "Setup route complete.";
-  return absl::OkStatus();
+      basic_traffic::ProgramRouterInterface(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  return basic_traffic::ProgramIPv4Route(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock));
 }
 
 TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
@@ -255,70 +112,73 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
                })pb");
 
   ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
-  std::vector<std::string> sut_interfaces;
-  std::vector<std::string> peer_interfaces;
-  std::vector<int> sut_interface_ports;
+  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> sut_interface_info =
+      testbed->GetSutInterfaceInfo();
+  std::vector<InterfaceLink> control_interfaces =
+      GetAllControlLinks(sut_interface_info);
 
   ASSERT_OK_AND_ASSIGN(auto stub, testbed->Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(auto port_id_by_interface,
                        GetAllInterfaceNameToPortId(*stub));
-  for (const auto& [interface, info] : testbed->GetSutInterfaceInfo()) {
-    if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
-      int port_id;
-      EXPECT_TRUE(absl::SimpleAtoi(port_id_by_interface[interface], &port_id));
-      LOG(INFO) << "@ " << interface << ":" << info.peer_interface_name << ":"
-                << port_id;
-      sut_interfaces.push_back(interface);
-      peer_interfaces.push_back(info.peer_interface_name);
-      sut_interface_ports.push_back(port_id);
-    }
-    if (sut_interfaces.size() == 2) {
-      break;
-    }
-  }
 
-  LOG(INFO) << "Source port: " << sut_interfaces[0]
-            << " port id: " << sut_interface_ports[0];
-  LOG(INFO) << "Destination port: " << sut_interfaces[1]
-            << " port id: " << sut_interface_ports[1];
+  // Set the `source_interface` to the first SUT control interface.
+  const InterfaceLink& source_interface = control_interfaces[0];
+  ASSERT_OK_AND_ASSIGN(std::string source_port_id_value,
+                       gutil::FindOrStatus(port_id_by_interface,
+                                           source_interface.sut_interface));
+  int source_port_id;
+  ASSERT_TRUE(absl::SimpleAtoi(source_port_id_value, &source_port_id));
+
+  // Set the `destination_interface` to the second SUT control interface.
+  const InterfaceLink& destination_interface = control_interfaces[1];
+  ASSERT_OK_AND_ASSIGN(
+      std::string destination_port_id_value,
+      gutil::FindOrStatus(port_id_by_interface,
+                          destination_interface.sut_interface));
+  int destination_port_id;
+  ASSERT_TRUE(
+      absl::SimpleAtoi(destination_port_id_value, &destination_port_id));
+
+  LOG(INFO) << "Source port: " << source_interface.sut_interface
+            << " port id: " << source_port_id;
+  LOG(INFO) << "Destination port: " << destination_interface.sut_interface
+            << " port id: " << destination_port_id;
 
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
           testbed->Sut(), sai::GetP4Info(sai::Instantiation::kMiddleblock)));
-  const pdpi::IrP4Info& ir_p4info =
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
 
-  // Sets up a route from first to second port.
-  ASSERT_OK(SetupRoute(*p4_session, ir_p4info, sut_interface_ports[0],
-                       sut_interface_ports[1]));
+  // Set up a route between the source and destination interfaces.
+  ASSERT_OK(SetupRoute(*p4_session, source_port_id, destination_port_id));
 
-  // Makes test packets.
+  // Make test packet based on destination port ID.
   const auto test_packet =
-      gutil::ParseProtoOrDie<packetlib::Packet>(kTestPacket);
+      gutil::ParseProtoOrDie<packetlib::Packet>(absl::Substitute(
+          kTestPacket, basic_traffic::PortIdToIP(destination_port_id)));
   ASSERT_OK_AND_ASSIGN(std::string test_packet_data,
                        packetlib::SerializePacket(test_packet));
 
   absl::Mutex mutex;
   std::vector<std::string> received_packets;
-
+  static constexpr int kPacketsToSend = 10;
   {
     ASSERT_OK_AND_ASSIGN(auto finalizer,
                          testbed.get()->ControlDevice().CollectPackets());
 
-    LOG(INFO) << "Sending Packet to " << peer_interfaces[0];
+    LOG(INFO) << "Sending Packet to " << source_interface.peer_interface;
     LOG(INFO) << "Test packet data: " << test_packet.DebugString();
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < kPacketsToSend; i++) {
       // Send packet to SUT.
-      ASSERT_OK(testbed->ControlDevice().SendPacket(peer_interfaces[0],
-                                                    test_packet_data))
+      ASSERT_OK(testbed->ControlDevice().SendPacket(
+          source_interface.peer_interface, test_packet_data))
           << "failed to inject the packet.";
       LOG(INFO) << "SendPacket completed";
     }
     absl::SleepFor(absl::Seconds(30));
   }
-  EXPECT_EQ(received_packets.size(), 10);
+  EXPECT_EQ(received_packets.size(), kPacketsToSend);
 }
 
 }  // namespace
