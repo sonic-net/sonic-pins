@@ -45,8 +45,10 @@ namespace dvaas {
 
 absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
     const ArribaTestVector& arriba_test_vector,
-    const std::vector<pdpi::IrTableEntry>& used_entries_list,
     const pdpi::IrP4Info& ir_p4_info) {
+  std::vector<pdpi::IrTableEntry> used_entries_list(
+      arriba_test_vector.ir_table_entries().entries().begin(),
+      arriba_test_vector.ir_table_entries().entries().end());
   ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
                    pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
 
@@ -97,18 +99,21 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   gutil::BazelTestArtifactWriter artifact_writer;
 
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
-                   SendTestPacketsAndCollectOutputs(
-                       sut, control_switch, test_vector_by_id,
-                       {
-                           .max_packets_to_send_per_second =
-                               params.max_packets_to_send_per_second,
-                           .is_expected_unsolicited_packet =
-                               params.is_expected_unsolicited_packet,
-                           .mirror_testbed_port_map =
-                               MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
-                       },
-                       packet_statistics));
+  ASSIGN_OR_RETURN(
+      PacketTestRuns test_runs,
+      SendTestPacketsAndCollectOutputs(
+          sut, control_switch, test_vector_by_id,
+          {
+              .max_packets_to_send_per_second =
+                  params.max_packets_to_send_per_second,
+              .is_expected_unsolicited_packet =
+                  params.is_expected_unsolicited_packet,
+              .mirror_testbed_port_map =
+                  params.mirror_testbed_port_map_override.has_value()
+                      ? *params.mirror_testbed_port_map_override
+                      : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+          },
+          packet_statistics));
 
   ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
                    pdpi::ReadIrTableEntries(sut));
