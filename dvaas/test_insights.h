@@ -16,7 +16,6 @@
 #define PINS_DVAAS_TEST_INSIGHTS_H_
 
 #include <string>
-#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
