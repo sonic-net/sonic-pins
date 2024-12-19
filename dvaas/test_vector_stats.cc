@@ -178,7 +178,7 @@ std::string ExplainTestVectorStats(const TestVectorStats& stats) {
         &result,
         "- came close* to expected behavior:   for %d failing test vectors\n"
         "  (*produced expected number of forwarded/punted packets, but with "
-        "unexpected header/payload values)",
+        "unexpected header/payload values)\n",
         num_almost_passed);
   }
 
