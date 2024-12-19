@@ -45,6 +45,12 @@ absl::StatusOr<z3::expr> SymbolicGuardedMap::Get(absl::string_view key) const {
       absl::StrCat("Cannot find key \"", key, "\" in SymbolicGuardedMap!"));
 }
 
+absl::StatusOr<z3::expr> SymbolicGuardedMap::Get(
+    absl::string_view header_name, absl::string_view field_name) const {
+  std::string key = absl::StrFormat("%s.%s", header_name, field_name);
+  return Get(key);
+}
+
 absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
                                      const z3::expr &guard) {
   if (!this->ContainsKey(key)) {
@@ -57,15 +63,46 @@ absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
   // Ite will pad bitvectors to the same size, but this is not the right
   // semantics if we assign a larger bitvector into a smaller one. Instead, the
   // assigned value needs to be truncated to the bitsize of the asignee.
-  if (old_value.get_sort().is_bv() && value.get_sort().is_bv() &&
-      old_value.get_sort().bv_size() < value.get_sort().bv_size()) {
-    value = value.extract(old_value.get_sort().bv_size() - 1, 0);
-  }
+  RETURN_IF_ERROR(operators::TruncateBitVectorToFit(old_value, value));
 
   // This will return an absl error if the sorts are incompatible, and will pad
   // shorter bit vectors.
   ASSIGN_OR_RETURN(old_value, operators::Ite(guard, value, old_value));
   return absl::OkStatus();
+}
+
+absl::Status SymbolicGuardedMap::Set(absl::string_view header_name,
+                                     absl::string_view field_name,
+                                     z3::expr value, const z3::expr &guard) {
+  std::string key = absl::StrFormat("%s.%s", header_name, field_name);
+  return Set(key, value, guard);
+}
+
+absl::Status SymbolicGuardedMap::UnguardedSet(absl::string_view key,
+                                              z3::expr value) {
+  if (!this->ContainsKey(key)) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Cannot assign to key \"", key, "\" in SymbolicGuardedMap!"));
+  }
+
+  z3::expr &old_value = this->map_.at(key);
+
+  // Padding shorter bit-vectors is not the right semantics if we assign a
+  // larger bitvector into a smaller one. Instead, the assigned value needs to
+  // be truncated to the bitsize of the assignee.
+  RETURN_IF_ERROR(operators::TruncateBitVectorToFit(old_value, value));
+
+  // This will return an absl error if the sorts are incompatible, and will pad
+  // shorter bit vectors.
+  ASSIGN_OR_RETURN(auto pair, operators::SortCheckAndPad(value, old_value));
+  old_value = pair.first;
+  return absl::OkStatus();
+}
+absl::Status SymbolicGuardedMap::UnguardedSet(absl::string_view header_name,
+                                              absl::string_view field_name,
+                                              z3::expr value) {
+  std::string key = absl::StrFormat("%s.%s", header_name, field_name);
+  return UnguardedSet(key, value);
 }
 
 }  // namespace symbolic
