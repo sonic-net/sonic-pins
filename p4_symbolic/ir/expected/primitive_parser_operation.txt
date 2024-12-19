@@ -548,4 +548,11 @@ errors {
     value: 3
   }
 }
+deparsers {
+  key: "deparser"
+  value {
+    name: "deparser"
+    header_order: "ethernet"
+  }
+}
 

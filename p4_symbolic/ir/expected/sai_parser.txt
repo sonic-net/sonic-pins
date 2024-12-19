@@ -1704,4 +1704,25 @@ errors {
     value: 3
   }
 }
+deparsers {
+  key: "deparser"
+  value {
+    name: "deparser"
+    header_order: "packet_out_header"
+    header_order: "packet_in_header"
+    header_order: "erspan_ethernet"
+    header_order: "erspan_ipv4"
+    header_order: "erspan_gre"
+    header_order: "ethernet"
+    header_order: "vlan"
+    header_order: "tunnel_encap_ipv6"
+    header_order: "tunnel_encap_gre"
+    header_order: "ipv4"
+    header_order: "ipv6"
+    header_order: "arp"
+    header_order: "icmp"
+    header_order: "tcp"
+    header_order: "udp"
+  }
+}
 
