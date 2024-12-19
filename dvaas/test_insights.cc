@@ -19,6 +19,7 @@
 #include <optional>
 #include <queue>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
@@ -39,6 +40,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 
@@ -57,6 +59,65 @@ constexpr absl::string_view kNotAppliedAction = "not applied";
 
 namespace {
 
+constexpr absl::string_view kPacketFieldNotKnownOrPresent = "-";
+
+// Values for interesting features of input packet.
+struct SwitchInputFeatures {
+  std::string type{kPacketFieldNotKnownOrPresent};
+  std::string port{kPacketFieldNotKnownOrPresent};
+  std::string ethernet_source{kPacketFieldNotKnownOrPresent};
+  std::string ethernet_destination{kPacketFieldNotKnownOrPresent};
+  std::string ethernet_ethertype{kPacketFieldNotKnownOrPresent};
+  std::string vlan_id{kPacketFieldNotKnownOrPresent};
+  std::string vlan_ethertype{kPacketFieldNotKnownOrPresent};
+  std::string ip_src{kPacketFieldNotKnownOrPresent};
+  std::string ip_dst{kPacketFieldNotKnownOrPresent};
+  std::string ip_ttl{kPacketFieldNotKnownOrPresent};
+  std::string ip_dscp{kPacketFieldNotKnownOrPresent};
+  std::string ip_protocol{kPacketFieldNotKnownOrPresent};
+  std::string entire_packet;
+};
+
+inline std::string SwitchInputFeaturesCsvHeader() {
+  return absl::StrJoin(
+      {
+          "input_type",
+          "input_port",
+          "input_eth_src",
+          "input_eth_dst",
+          "input_eth_ethertype",
+          "input_vlan_id",
+          "input_vlan_ethertype",
+          "input_ip_src",
+          "input_ip_dst",
+          "input_ip_ttl",
+          "input_ip_dscp",
+          "input_ip_protocol",
+          "input_packet",
+      },
+      ",");
+}
+
+inline std::string ToCsvRow(const SwitchInputFeatures& features) {
+  return absl::StrJoin(
+      {
+          features.type,
+          features.port,
+          features.ethernet_source,
+          features.ethernet_destination,
+          features.ethernet_ethertype,
+          features.vlan_id,
+          features.vlan_ethertype,
+          features.ip_src,
+          features.ip_dst,
+          features.ip_ttl,
+          features.ip_dscp,
+          features.ip_protocol,
+          features.entire_packet,
+      },
+      ",");
+}
+
 // Values for various features of a single packet test.
 // The fields in the struct correspond to columns in the test insights table and
 // each instance corresponds to one row in the table.
@@ -67,8 +128,60 @@ struct TestInsightsRow {
   std::string acceptable_outcomes;
   std::optional<std::string> actual_outcome;
   std::optional<bool> test_pass;
-  std::string input_packet;
+  SwitchInputFeatures input_features;
 };
+
+absl::StatusOr<SwitchInputFeatures> GetSwitchInputFeatures(
+    const SwitchInput& input) {
+  SwitchInputFeatures features;
+  features.type = input.Type_Name(input.type());
+  features.port = input.packet().port();
+  features.entire_packet = gutil::PrintShortTextProto(input.packet());
+
+  const packetlib::Packet& packet = input.packet().parsed();
+  if (packet.headers().empty())
+    return absl::InvalidArgumentError("Packet has no headers");
+  if (!packet.headers().at(0).has_ethernet_header())
+    return absl::InvalidArgumentError(
+        "Packet does not start with an ethernet header");
+
+  const auto& ethernet_header = packet.headers().at(0).ethernet_header();
+  features.ethernet_source = ethernet_header.ethernet_source();
+  features.ethernet_destination = ethernet_header.ethernet_destination();
+  features.ethernet_ethertype = ethernet_header.ethertype();
+
+  if (packet.headers().size() < 2) return features;
+
+  packetlib::Header next_header = packet.headers().at(1);
+
+  if (next_header.has_vlan_header()) {
+    const auto& vlan_header = next_header.vlan_header();
+    features.vlan_id = vlan_header.vlan_identifier();
+    features.vlan_ethertype = vlan_header.ethertype();
+    if (packet.headers().size() < 3) return features;
+    next_header = packet.headers().at(2);
+  }
+
+  if (next_header.has_ipv4_header()) {
+    const auto& ipv4_header = next_header.ipv4_header();
+    features.ip_src = ipv4_header.ipv4_source();
+    features.ip_dst = ipv4_header.ipv4_destination();
+    features.ip_ttl = ipv4_header.ttl();
+    features.ip_dscp = ipv4_header.dscp();
+    features.ip_protocol = ipv4_header.protocol();
+  }
+
+  if (next_header.has_ipv6_header()) {
+    const auto& ipv6_header = next_header.ipv6_header();
+    features.ip_src = ipv6_header.ipv6_source();
+    features.ip_dst = ipv6_header.ipv6_destination();
+    features.ip_ttl = ipv6_header.hop_limit();
+    features.ip_dscp = ipv6_header.dscp();
+    features.ip_protocol = ipv6_header.next_header();
+  }
+
+  return features;
+}
 
 // Topologically sorts the partial orders and returns a total order.
 // Precondition: The partial orders are consistent (i.e., no cycles).
@@ -297,12 +410,14 @@ absl::StatusOr<std::vector<TestInsightsRow>> GetTestInsightsRows(
 
     ASSIGN_OR_RETURN(int id, ExtractIdFromTaggedPacketInHex(
                                  packet_test_vector.input().packet().hex()));
+    ASSIGN_OR_RETURN(const SwitchInputFeatures input_features,
+                     GetSwitchInputFeatures(packet_test_vector.input()));
     rows.push_back({
         .id = id,
         .actions = ordered_actions,
         .acceptable_outcomes =
             GetAcceptableOutcomesDescription(packet_test_vector),
-	.input_packet = gutil::PrintShortTextProto(packet_test_vector.input()),
+        .input_features = input_features,
     });
   }
 
@@ -353,14 +468,15 @@ absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
                    GetTableAliases(ordered_tables, ir_p4info));
   absl::SubstituteAndAppend(&csv,
                             "test vector id,functional cluster,$0, "
-                            "accceptable outcomes,input packet\n",
-                            absl::StrJoin(ordered_table_aliases, ","));
+                            "acceptable outcomes,$1\n",
+                            absl::StrJoin(ordered_table_aliases, ","),
+                            SwitchInputFeaturesCsvHeader());
   // Add CSV rows.
   for (const auto& row : rows) {
-    absl::SubstituteAndAppend(&csv, "$0,$1,$2,$3,$4\n", row.id,
-                              *row.functional_cluster_id,
-                              absl::StrJoin(row.actions, ","),
-                              row.acceptable_outcomes, row.input_packet);
+    absl::SubstituteAndAppend(
+        &csv, "$0,$1,$2,$3,$4\n", row.id, *row.functional_cluster_id,
+        absl::StrJoin(row.actions, ","), row.acceptable_outcomes,
+        ToCsvRow(row.input_features));
   }
 
   return csv;
@@ -404,15 +520,17 @@ absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
                    GetTableAliases(ordered_tables, ir_p4info));
   absl::SubstituteAndAppend(&csv,
                             "test vector id,functional cluster,$0,"
-                            "accceptable outcomes,actual outcome,test "
-                            "pass,input packet\n",
-                            absl::StrJoin(ordered_table_aliases, ","));
+                            "acceptable outcomes,actual outcome,test "
+                            "pass,$1\n",
+                            absl::StrJoin(ordered_table_aliases, ","),
+                            SwitchInputFeaturesCsvHeader());
   // Add CSV rows.
   for (const auto& row : rows) {
     absl::SubstituteAndAppend(
         &csv, "$0,$1,$2,$3,$4,$5,$6\n", row.id, *row.functional_cluster_id,
         absl::StrJoin(row.actions, ","), row.acceptable_outcomes,
-        *row.actual_outcome, (*row.test_pass ? "yes" : "no"), row.input_packet);
+        *row.actual_outcome, (*row.test_pass ? "pass" : "fail"),
+        ToCsvRow(row.input_features));
   }
 
   return csv;
