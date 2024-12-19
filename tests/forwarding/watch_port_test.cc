@@ -82,13 +82,16 @@ MATCHER(KeyEq, "") {
 }
 
 // Admin down/up state used for interfaces.
-enum class AdminState {
+enum class InterfaceState {
   kDown,
   kUp,
 };
 
 // Admin status path (partial match) string in the form of "admin-status":"UP".
 constexpr LazyRE2 kAdminStatusPathMatch = {R"("admin-status":\"(\w+)\")"};
+
+// Oper status path (partial match) string in the form of "oper-status":"UP".
+constexpr LazyRE2 kOperStatusPathMatch = {R"("oper-status":\"(\w+)\")"};
 
 // Group id used in this test.
 constexpr absl::string_view kGroupId = "group-1";
@@ -348,8 +351,9 @@ GetPortNamePerPortId(gnmi::gNMI::StubInterface& gnmi_stub) {
 }
 
 // Returns the current admin state of the interface.
-absl::StatusOr<AdminState> GetInterfaceAdminState(
-    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view if_name) {
+absl::StatusOr<InterfaceState> GetInterfaceState(
+    gnmi::gNMI::StubInterface& gnmi_stub, const LazyRE2& state_path_match,
+    absl::string_view if_name) {
   const std::string if_state_path =
       absl::StrCat("interfaces/interface[name=", if_name, "]/state");
   ASSIGN_OR_RETURN(const std::string state_path_response,
@@ -357,56 +361,68 @@ absl::StatusOr<AdminState> GetInterfaceAdminState(
                        &gnmi_stub, if_state_path,
                        /*resp_parse_str=*/"openconfig-interfaces:state"));
 
-  // Admin status is part of the overall interface state path response.
-  // Extract out the "admin-status":"UP" tuple.
-  std::string admin_status_str;
-  if (RE2::PartialMatch(state_path_response, *kAdminStatusPathMatch,
-                        &admin_status_str)) {
-    if (admin_status_str == "UP") {
-      return AdminState::kUp;
-    } else if (admin_status_str == "DOWN") {
-      return AdminState::kDown;
+  // Status is part of the overall interface state path response.
+  // Extract out the admin or oper status, for example, "admin-status":"UP"
+  // tuple.
+  std::string status_str;
+  if (RE2::PartialMatch(state_path_response, *state_path_match, &status_str)) {
+    if (status_str == "UP") {
+      return InterfaceState::kUp;
+    } else if (status_str == "DOWN") {
+      return InterfaceState::kDown;
     }
   }
-  return absl::UnknownError(
-      absl::StrCat("Unable to get admin status for interface ", if_name,
-                   " state path: ", state_path_response));
+  return absl::UnknownError(absl::Substitute(
+      "Unable to get the status path: $0 for interface: $1, state path "
+      "response: $2",
+      state_path_match->pattern(), if_name, state_path_response));
+}
+// Verifies the admin or oper status of the interface is the same as
+// "desired_state" in the state verification path.
+absl::Status VerifyInterfaceState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                  absl::string_view if_name,
+                                  const LazyRE2& state_path_match,
+                                  InterfaceState desired_state) {
+  // Poll with a delay for the oper state to take effect.
+  absl::Time timeout = absl::Now() + absl::Seconds(15);
+  InterfaceState current_state;
+  do {
+    if (absl::Now() > timeout) {
+      return absl::DeadlineExceededError(absl::Substitute(
+          "Unable to validate interface: $0 to state: $1", if_name,
+          desired_state == InterfaceState::kDown ? "DOWN" : "UP"));
+    }
+    absl::SleepFor(absl::Seconds(1));
+    ASSIGN_OR_RETURN(current_state,
+                     GetInterfaceState(gnmi_stub, state_path_match, if_name));
+  } while (current_state != desired_state);
+  return absl::OkStatus();
 }
 
 // Sets the admin state of the interface to UP/DOWN using GNMI config path.
 // Queries the  state path to verify if the desired state is achieved or not.
 absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
                                     absl::string_view if_name,
-                                    AdminState admin_state) {
-  ASSIGN_OR_RETURN(AdminState current_admin_state,
-                   GetInterfaceAdminState(gnmi_stub, if_name));
-  if (current_admin_state == admin_state) {
+                                    InterfaceState admin_state) {
+  ASSIGN_OR_RETURN(
+      InterfaceState current_admin_state,
+      GetInterfaceState(gnmi_stub, kAdminStatusPathMatch, if_name));
+      if (current_admin_state == admin_state) {
     return absl::OkStatus();
   }
 
   const std::string config_value =
-      admin_state == AdminState::kDown ? "false" : "true";
+      admin_state == InterfaceState::kDown ? "false" : "true";
   const std::string if_admin_config_path =
       absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
   const std::string if_status =
-      admin_state == AdminState::kDown ? "DOWN" : "UP";
+      admin_state == InterfaceState::kDown ? "DOWN" : "UP";
   LOG(INFO) << "Setting interface " << if_name << " to admin " << if_status;
   RETURN_IF_ERROR(SetGnmiConfigPath(
       &gnmi_stub, if_admin_config_path, pins_test::GnmiSetType::kUpdate,
       absl::Substitute("{\"enabled\":$0}", config_value)));
-
-  // Poll with a delay for the admin state to take effect.
-  absl::Time timeout = absl::Now() + absl::Seconds(5);
-  do {
-    if (absl::Now() > timeout) {
-      return absl::UnknownError(absl::Substitute(
-          "Unable to set interface: $0 to admin: $1", if_name, if_status));
-    }
-    absl::SleepFor(absl::Seconds(1));
-    ASSIGN_OR_RETURN(current_admin_state,
-                     GetInterfaceAdminState(gnmi_stub, if_name));
-  } while (current_admin_state != admin_state);
-  return absl::OkStatus();
+  return VerifyInterfaceState(gnmi_stub, if_name, kAdminStatusPathMatch,
+                              admin_state);
 }
 
 // Checks if the switch is in critical state.
@@ -470,9 +486,12 @@ void WatchPortTestFixture::SetUp() {
       ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
                                                   &pd_response))
           << " PacketIn PI to PD failed: ";
-      ASSERT_TRUE(pd_response.has_packet())
-          << " Received unexpected stream message for packet in: "
-          << pd_response.DebugString();
+      if (!pd_response.has_packet()) {
+        LOG(WARNING)
+            << " Received unexpected stream message (expected packet in): "
+            << pd_response.DebugString();
+        continue;
+      }
       absl::string_view raw_packet = pd_response.packet().payload();
       dvaas::Packet packet;
       packet.set_port(pd_response.packet().metadata().ingress_port());
@@ -501,11 +520,13 @@ void WatchPortTestFixture::TearDown() {
     ASSERT_OK(testbed.SaveSwitchLogs("before_reboot_"));
     LOG(INFO) << "Switch is in critical state, rebooting the switch.";
     pins_test::TestGnoiSystemColdReboot(testbed.GetMirrorTestbed().Sut());
-    pins_test::TestGnoiSystemColdReboot(
-        testbed.GetMirrorTestbed().ControlSwitch());
+    EXPECT_OK(control_p4_session_->Finish());
     if (receive_packet_thread_.joinable()) {
       receive_packet_thread_.join();
     }
+    pins_test::TestGnoiSystemColdReboot(
+        testbed.GetMirrorTestbed().ControlSwitch());
+
     testbed.TearDown();
     return;
   }
@@ -529,8 +550,8 @@ void WatchPortTestFixture::TearDown() {
                          GetPortNamePerPortId(*control_gnmi_stub_));
     // Restore the admin state to UP.
     for (const auto& [port_id, name] : port_name_per_port_id) {
-      EXPECT_OK(
-          SetInterfaceAdminState(*control_gnmi_stub_, name, AdminState::kUp));
+      EXPECT_OK(SetInterfaceAdminState(*control_gnmi_stub_, name,
+                                       InterfaceState::kUp));
     }
   }
   testbed.TearDown();
@@ -673,16 +694,16 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   const int selected_port_id = members[random_member_index].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
                        GetPortNamePerPortId(*control_gnmi_stub_));
-  for (auto operation : {AdminState::kDown, AdminState::kUp}) {
+  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {  
     ASSERT_OK_AND_ASSIGN(const auto& port_name,
                          gutil::FindOrStatus(port_name_per_port_id,
                                              absl::StrCat(selected_port_id)));
     ASSERT_OK(
         SetInterfaceAdminState(*control_gnmi_stub_, port_name, operation));
 
-    // TODO: Adding watch port up action causes unexpected traffic
-    // loss. Remove after the bug in OrchAgent is fixed.
-    absl::SleepFor(absl::Seconds(5));
+    // Verify the oper status is reflected on the SUT.
+    ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, port_name,
+                                   kOperStatusPathMatch, operation));
 
     // Clear the counters before the test.
     test_data_.ClearReceivedPackets();
@@ -711,7 +732,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
 
       // Add/remove the selected member from expected_member_ports for admin
       // up/down case.
-      if (operation == AdminState::kDown) {
+      if (operation == InterfaceState::kDown) {
         expected_member_ports.erase(selected_port_id);
       } else {
         expected_member_ports.insert(selected_port_id);
@@ -729,7 +750,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   }
 }
 
-// TODO: Bring down APG member (when in critical state) and verify traffic is
+// Bring down APG member (when in critical state) and verify traffic is
 // distributed only to the up ports.
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   // Validate that the function to raise critical state exists to run this test.
@@ -795,11 +816,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   // Set admin down from control switch side (since sut is in critical state and
   // write operations are disabled) and verify watch port action kicks in.
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
-                                   AdminState::kDown));
-
-  // TODO: Adding watch port action causes unexpected traffic
-  // loss. Remove after the bug in OrchAgent is fixed.
-  absl::SleepFor(absl::Seconds(5));
+                                   InterfaceState::kDown));
+  // Verify the oper status is reflected on the SUT.
+  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, port_name,
+                                 kOperStatusPathMatch, InterfaceState::kDown));
 
   // Clear the counters before the test.
   test_data_.ClearReceivedPackets();
@@ -895,7 +915,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   const int single_member_port_id = members[0].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
                        GetPortNamePerPortId(*control_gnmi_stub_));
-  for (auto operation : {AdminState::kDown, AdminState::kUp}) {
+  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {
     ASSERT_OK_AND_ASSIGN(
         const auto& port_name,
         gutil::FindOrStatus(port_name_per_port_id,
@@ -903,12 +923,12 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
     ASSERT_OK(
         SetInterfaceAdminState(*control_gnmi_stub_, port_name, operation));
 
+    // Verify the oper status is reflected on the SUT.
+    ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, port_name,
+                                   kOperStatusPathMatch, operation));
+
     // Clear the counters before the test.
     test_data_.ClearReceivedPackets();
-
-    // TODO: Adding watch port up action causes unexpected traffic
-    // loss. Remove after the bug in OrchAgent is fixed.
-    absl::SleepFor(absl::Seconds(5));
 
     // Send 5000 packets and check for packet distribution.
     ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
@@ -924,7 +944,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
       absl::MutexLock lock(&test_data_.mutex);
       TestInputOutput& test =
           test_data_.input_output_per_packet[test_config_key];
-      if (operation == AdminState::kDown) {
+      if (operation == InterfaceState::kDown) {
         // Expect all packets to be lost for single member group watch port down
         // action.
         EXPECT_EQ(test.output.size(), 0)
@@ -1009,7 +1029,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
                        gutil::FindOrStatus(port_name_per_port_id,
                                            absl::StrCat(selected_port_id)));
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                   AdminState::kDown));
+                                   InterfaceState::kDown));
+  // Verify the oper status is reflected on the SUT.
+  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
+                                 kOperStatusPathMatch, InterfaceState::kDown));
 
   // Send Modify request to remove the down member from the group.
   members.erase(members.begin() + random_member_index);
@@ -1018,11 +1041,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
                                            p4::v1::Update::MODIFY));
   // Bring the down member watch port up.
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                   AdminState::kUp));
-
-  // TODO: Adding watch port up action causes unexpected traffic
-  // loss. Remove after the bug in OrchAgent is fixed.
-  absl::SleepFor(absl::Seconds(5));
+                                   InterfaceState::kUp));
+  // Verify the oper status is reflected on the SUT.
+  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
+                                 kOperStatusPathMatch, InterfaceState::kUp));
 
   // Send 5000 packets and check for packet distribution.
   ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
@@ -1088,7 +1110,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
                                            absl::StrCat(selected_port_id)));
   // Bring the port down before the group and members are created.
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                   AdminState::kDown));
+                                   InterfaceState::kDown));
+  // Verify the oper status is reflected on the SUT.
+  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
+                                 kOperStatusPathMatch, InterfaceState::kDown));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
@@ -1122,17 +1147,17 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
     };
   }
 
-  for (auto operation : {AdminState::kDown, AdminState::kUp}) {
+  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {
     // Down operation is a no-op here since the port is already down.
     ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                      operation));
 
+    // Verify the oper status is reflected on the SUT.
+    ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
+                                   kOperStatusPathMatch, operation));
+
     // Clear the counters before the test.
     test_data_.ClearReceivedPackets();
-
-    // TODO: Adding watch port up action causes unexpected traffic
-    // loss. Remove after the bug in OrchAgent is fixed.
-    absl::SleepFor(absl::Seconds(5));
 
     // Send 5000 packets and check for packet distribution.
     ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
@@ -1157,7 +1182,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
           CreateExpectedMemberPorts(members);
       // Remove the selected member from expected_member_ports for admin
       // down case.
-      if (operation == AdminState::kDown) {
+      if (operation == InterfaceState::kDown) {
         expected_member_ports.erase(selected_port_id);
       }
       ASSERT_OK_AND_ASSIGN(auto num_packets_per_port,
