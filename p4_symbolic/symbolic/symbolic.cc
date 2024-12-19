@@ -32,6 +32,11 @@
 namespace p4_symbolic {
 namespace symbolic {
 
+std::string SolverState::GetSolverSMT() const {
+  if (!solver) return "";
+  return solver->to_smt2();
+}
+
 z3::expr EgressSpecDroppedValue() {
   return Z3Context().bv_val(kDropPort, kPortBitwidth);
 }
@@ -226,7 +231,7 @@ std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
                      const Assertion &assertion) {
   solver_state->solver->push();
   solver_state->solver->add(assertion(solver_state->context));
-  std::string smt = solver_state->solver->to_smt2();
+  std::string smt = solver_state->GetSolverSMT();
   solver_state->solver->pop();
   return smt;
 }

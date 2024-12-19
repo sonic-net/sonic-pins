@@ -24,8 +24,10 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "gutil/status.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -104,6 +106,15 @@ absl::StatusOr<std::pair<z3::expr, z3::expr>> SortCheckAndExtract(
     return std::make_pair(Suffix(a, b_len), Suffix(b, a_len));
   }
   return std::make_pair(z3::expr(a), z3::expr(b));
+}
+
+absl::Status TruncateBitVectorToFit(const z3::expr &target, z3::expr &value) {
+  if (target.is_bv() && value.is_bv() &&
+      target.get_sort().bv_size() < value.get_sort().bv_size()) {
+    value = value.extract(target.get_sort().bv_size() - 1, 0);
+  }
+
+  return absl::OkStatus();
 }
 
 // Free Variable.
@@ -256,6 +267,15 @@ absl::StatusOr<z3::expr> RShift(const z3::expr &bits, const z3::expr &shift) {
 absl::StatusOr<z3::expr> Ite(const z3::expr &condition,
                              const z3::expr &true_value,
                              const z3::expr &false_value) {
+  // The sort of the condition must be bool. Otherwise z3::ite() will throw an
+  // assertion failure.
+  if (!condition.is_bool()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "The condition of an if-then-else operation must be boolean. "
+              "Found: "
+           << condition.to_string();
+  }
+
   // Optimization: if both branches are the same *syntactically*
   // then we can just use the branch expression directly and no need
   // for an if-then-else statement.
