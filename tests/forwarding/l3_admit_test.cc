@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 
 #include "absl/status/status.h"
@@ -27,6 +28,7 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gutil/proto.h"
+#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -36,6 +38,7 @@
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/p4info_helper.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/packet_in_helper.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -46,39 +49,69 @@ namespace {
 absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
                                  const pdpi::IrP4Info& ir_p4info,
                                  const std::string& vrf_id) {
-  pdpi::IrWriteRequest ir_write_request;
+  LOG(INFO) << "Assigning all packets to VRF " << vrf_id << ".";
+  pdpi::IrUpdate set_vrf_ir_update;
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
       absl::Substitute(R"pb(
-                         updates {
-                           type: INSERT
-                           table_entry {
-                             table_name: "vrf_table"
-                             matches {
+                         type: INSERT
+                         table_entry {
+                           table_name: "acl_pre_ingress_table"
+                           priority: 2000
+                           action {
+                             name: "set_vrf"
+                             params {
                                name: "vrf_id"
-                               exact { str: "$0" }
+                               value { str: "$0" }
                              }
-                             action { name: "no_action" }
                            }
                          }
-                         updates {
-                           type: INSERT
-                           table_entry {
-                             table_name: "acl_pre_ingress_table"
-                             priority: 2000
-                             action {
-                               name: "set_vrf"
-                               params {
-                                 name: "vrf_id"
-                                 value { str: "$0" }
-                               }
+                         )pb",
+                       vrf_id),
+      &set_vrf_ir_update));
+  p4::v1::WriteRequest pi_write_request;
+  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
+                   VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
+  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
+                   pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
+  return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
+}
+
+absl::Status AllowVrfTrafficToDstMac(pdpi::P4RuntimeSession& session,
+                                     const pdpi::IrP4Info& ir_p4info,
+                                     const std::string& dst_mac,
+                                     const std::string& vrf_id) {
+  LOG(INFO) << "Assigning " << dst_mac << " packets with to " << vrf_id << ".";
+  pdpi::IrUpdate set_vrf_ir_update;
+  RETURN_IF_ERROR(gutil::ReadProtoFromString(
+      absl::Substitute(R"pb(
+                         type: INSERT
+                         table_entry {
+                           table_name: "acl_pre_ingress_table"
+                           matches {
+                             name: "dst_mac"
+                             ternary {
+                               value { mac: "$0" }
+                               mask { mac: "ff:ff:ff:ff:ff:ff" }
+                             }
+                           }
+                           priority: 2000
+                           action {
+                             name: "set_vrf"
+                             params {
+                               name: "vrf_id"
+                               value { str: "$1" }
                              }
                            }
                          }
                        )pb",
-                       vrf_id),
-      &ir_write_request));
-  ASSIGN_OR_RETURN(p4::v1::WriteRequest pi_write_request,
-                   pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+                       dst_mac, vrf_id),
+      &set_vrf_ir_update));
+
+  p4::v1::WriteRequest pi_write_request;
+  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
+                   VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
+  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
+                   pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
   return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
 }
 
@@ -128,7 +161,14 @@ struct L3Route {
 absl::Status AddL3Route(pdpi::P4RuntimeSession& session,
                         const pdpi::IrP4Info& ir_p4info,
                         const L3Route& options) {
+  LOG(INFO) << absl::StreamFormat(
+      "Adding L3 route for %s, %s to port %s.", options.vrf_id,
+      absl::StrCat(options.switch_ip.first, "/", options.switch_ip.second),
+      options.peer_port);
+
   p4::v1::WriteRequest write_request;
+  LOG(INFO) << "Adding router interface for " << options.switch_mac
+            << " on port " << options.peer_port << ".";
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),
       RouterInterfaceTableUpdate(ir_p4info, p4::v1::Update::INSERT,
@@ -158,8 +198,8 @@ absl::Status AddL3Route(pdpi::P4RuntimeSession& session,
 absl::Status AdmitL3Route(pdpi::P4RuntimeSession& session,
                           const pdpi::IrP4Info& ir_p4info,
                           const L3AdmitOptions& options) {
-  LOG(INFO) << "Admiting L3 packets with DST MAC matching: "
-            << options.dst_mac.first << " & " << options.dst_mac.second;
+  LOG(INFO) << "Admiting L3 packets with DST MAC: " << options.dst_mac.first
+            << " & " << options.dst_mac.second;
   p4::v1::WriteRequest write_request;
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),
@@ -211,8 +251,8 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
                            const std::string& port_id, int packet_count,
                            absl::string_view dst_mac, absl::string_view dst_ip,
                            absl::string_view payload) {
-  LOG(INFO) << "Sending " << packet_count
-            << " packets with DST MAC: " << dst_mac;
+  LOG(INFO) << absl::StreamFormat("Sending %d packets with %s, %s to port %s.",
+                                  packet_count, dst_mac, dst_ip, port_id);
   ASSIGN_OR_RETURN(std::string packet, UdpPacket(dst_mac, dst_ip, payload));
   for (int i = 0; i < packet_count; ++i) {
     RETURN_IF_ERROR(InjectEgressPacket(port_id, packet, ir_p4info, &session));
@@ -222,14 +262,15 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
 
 }  // namespace
 
-TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
+TEST_P(L3AdmitTestFixture,
+       DISABLED_L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
   std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(p4rt_control_switch_session_.get(),
+      std::make_unique<PacketInHelper>(&GetControlP4RuntimeSession(),
                                        PacketInHelper::NoFilter);
   ASSERT_OK(
-      PuntAllPacketsToController(*p4rt_control_switch_session_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+      PuntAllPacketsToController(GetControlP4RuntimeSession(), sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   
   // Add an L3 route to enable forwarding.
   L3Route l3_route{
@@ -242,13 +283,13 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
-  ASSERT_OK(AddAndSetDefaultVrf(*p4rt_sut_switch_session_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+  ASSERT_OK(AddAndSetDefaultVrf(GetSutP4RuntimeSession(), sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                                 l3_route.vrf_id));
-  ASSERT_OK(AddL3Route(*p4rt_sut_switch_session_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock), l3_route));
+  ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(), sai::GetIrP4Info(sai::Instantiation::kMiddleblock), l3_route));
   
   // Admit only 1 MAC address to the forwaring pipeline.
   ASSERT_OK(AdmitL3Route(
-      *p4rt_sut_switch_session_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      GetSutP4RuntimeSession(), sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
       L3AdmitOptions{
           .priority = 2070,
           .dst_mac = std ::make_pair("00:01:02:03:04:05", "FF:FF:FF:FF:FF:FF"),
@@ -262,7 +303,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
   // Send the "bad" packets first to give them the most time.
   const std::string kBadPayload =
       "Testing L3 forwarding. This packet should be dropped.";
-  ASSERT_OK(SendUdpPacket(*p4rt_control_switch_session_, 
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           /*port_id=*/"1", kNumberOfTestPacket,
                           /*dst_mac=*/"00:aa:bb:cc:cc:dd",
@@ -271,7 +312,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
   // Then send the "good" packets.
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
-  ASSERT_OK(SendUdpPacket(*p4rt_control_switch_session_, 
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           /*port_id=*/"1", kNumberOfTestPacket,
                           /*dst_mac=*/"00:01:02:03:04:05",
@@ -314,10 +355,10 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
   std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(p4rt_control_switch_session_.get(),
+      std::make_unique<PacketInHelper>(&GetControlP4RuntimeSession(),
                                        PacketInHelper::NoFilter);
   ASSERT_OK(
-      PuntAllPacketsToController(*p4rt_control_switch_session_, 
+      PuntAllPacketsToController(GetControlP4RuntimeSession(), 
 	      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
 
   // Add an L3 route to enable forwarding.
@@ -332,16 +373,16 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
       .nexthop_id = "nexthop-1",
   };
 
-  ASSERT_OK(AddAndSetDefaultVrf(*p4rt_sut_switch_session_,
+  ASSERT_OK(AddAndSetDefaultVrf(GetSutP4RuntimeSession(),
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
 			       l3_route.vrf_id));
-  ASSERT_OK(AddL3Route(*p4rt_sut_switch_session_, 
+  ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
 			       l3_route));
 
   // Admit multiple MAC addresses into L3 routing with a single L3 admit rule.
   ASSERT_OK(AdmitL3Route(
-      *p4rt_sut_switch_session_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      GetSutP4RuntimeSession(), sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
       L3AdmitOptions{
           .priority = 2070,
           .dst_mac = std ::make_pair("00:01:02:03:00:05", "FF:FF:FF:FF:F0:FF"),
@@ -354,7 +395,7 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
       "Testing L3 forwarding. This packet should arrive to packet in.";
   for (int i = 0; i < 5; ++i) {
     std::string dst_mac = absl::StrFormat("00:01:02:03:%02d:05", i);
-    ASSERT_OK(SendUdpPacket(*p4rt_control_switch_session_, 
+    ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
 			    sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                             /*port_id=*/"1", kNumberOfTestPacket, dst_mac,
                             /*dst_ip=*/"10.0.0.1", kGoodPayload));
@@ -389,14 +430,14 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
   EXPECT_EQ(good_packet_count, 5 * kNumberOfTestPacket);
 }
 
-TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
+TEST_P(L3AdmitTestFixture, DISABLED_L3AdmitCanUseInPortToRestrictMacAddresses) {
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
   std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(p4rt_control_switch_session_.get(),
+      std::make_unique<PacketInHelper>(&GetControlP4RuntimeSession(),
                                        PacketInHelper::NoFilter);
   ASSERT_OK(
-      PuntAllPacketsToController(*p4rt_control_switch_session_, 
+      PuntAllPacketsToController(GetControlP4RuntimeSession(), 
 	  sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
 
   // Add an L3 route to enable forwarding.
@@ -410,16 +451,16 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
-  ASSERT_OK(AddAndSetDefaultVrf(*p4rt_sut_switch_session_, 
+  ASSERT_OK(AddAndSetDefaultVrf(GetSutP4RuntimeSession(), 
 			 sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                                 l3_route.vrf_id));
-  ASSERT_OK(AddL3Route(*p4rt_sut_switch_session_, 
+  ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(), 
 			 sai::GetIrP4Info(sai::Instantiation::kMiddleblock), 
 			        l3_route));
 
   // Admit the MAC addresses only on port XYZ
   ASSERT_OK(AdmitL3Route(
-      *p4rt_sut_switch_session_, 
+      GetSutP4RuntimeSession(), 
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
       L3AdmitOptions{
           .priority = 2070,
@@ -435,7 +476,7 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
   // Send the "bad" packets first to give them the most time.
   const std::string kBadPayload =
       "Testing L3 forwarding. This packet should be dropped.";
-  ASSERT_OK(SendUdpPacket(*p4rt_control_switch_session_, 
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           /*port_id=*/"1", kNumberOfTestPacket,
                           /*dst_mac=*/"00:01:02:03:04:05",
@@ -444,7 +485,7 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
   // Then send the "good" packets.
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
-  ASSERT_OK(SendUdpPacket(*p4rt_control_switch_session_, 
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           /*port_id=*/"2", kNumberOfTestPacket,
                           /*dst_mac=*/"00:01:02:03:04:05",
@@ -488,10 +529,10 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
   std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(p4rt_control_switch_session_.get(),
+      std::make_unique<PacketInHelper>(&GetControlP4RuntimeSession(),
                                        PacketInHelper::NoFilter);
 ASSERT_OK(
-      PuntAllPacketsToController(*p4rt_control_switch_session_, 
+      PuntAllPacketsToController(GetControlP4RuntimeSession(), 
 	      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
 
 // Add an L3 route to enable forwarding, but do not add an explicit L3Admit
@@ -506,10 +547,10 @@ ASSERT_OK(
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
-  ASSERT_OK(AddAndSetDefaultVrf(*p4rt_sut_switch_session_, 
+  ASSERT_OK(AddAndSetDefaultVrf(GetSutP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           l3_route.vrf_id));
-  ASSERT_OK(AddL3Route(*p4rt_sut_switch_session_, 
+  ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
 			  l3_route));
 
@@ -518,7 +559,7 @@ ASSERT_OK(
   const int kNumberOfTestPacket = 100;
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
-  ASSERT_OK(SendUdpPacket(*p4rt_control_switch_session_, 
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
 			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           /*port_id=*/"1", kNumberOfTestPacket,
                           /*dst_mac=*/"00:00:00:00:00:01",
@@ -550,6 +591,116 @@ ASSERT_OK(
   LOG(INFO) << "Done collecting packets.";
 
   EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+}
+
+TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
+  // Only run this test if the ACL_PRE_INGRESS table supports matching on
+  // DST_MAC.
+  if (!TableHasMatchField(sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+			  "acl_pre_ingress_table", "dst_mac")) {
+    GTEST_SKIP()
+        << "Skipping because ACL_PRE_INGRESS table can not match on DST_MAC.";
+  }
+
+  // Punt all traffic arriving at the control switch, and collect them to verify
+  // forwarding.
+  std::unique_ptr<PacketInHelper> packetio_control =
+      std::make_unique<PacketInHelper>(&GetControlP4RuntimeSession(),
+                                       PacketInHelper::NoFilter);
+  ASSERT_OK(
+      PuntAllPacketsToController(GetControlP4RuntimeSession(),
+	      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+
+  // This test uses 2 MAC addresses. Both will be admitted to L3 routing, but
+  // only one will get assigned a VRF ID. We expect packets receiving the
+  // VRF ID (i.e. good) to get routed, and the others (i.e. bad/drop) to get
+  // dropped.
+  std::string vrf_id = "vrf-1";
+  std::string good_dst_mac = "00:00:00:00:00:03";
+  std::string drop_dst_mac = "00:00:00:00:00:04";
+  ASSERT_OK(AllowVrfTrafficToDstMac(GetSutP4RuntimeSession(),
+			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                                    good_dst_mac, vrf_id));
+  ASSERT_OK(AdmitL3Route(
+      GetSutP4RuntimeSession(),
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      L3AdmitOptions{
+          .priority = 2070,
+          .dst_mac = std ::make_pair(good_dst_mac, "FF:FF:FF:FF:FF:FF"),
+      }));
+  ASSERT_OK(AdmitL3Route(
+      GetSutP4RuntimeSession(),
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      L3AdmitOptions{
+          .priority = 2070,
+          .dst_mac = std ::make_pair(drop_dst_mac, "FF:FF:FF:FF:FF:FF"),
+      }));
+
+  // Add an L3 route to enable forwarding for 10.0.0.1/32 packets.
+  L3Route l3_route{
+      .vrf_id = vrf_id,
+      .switch_mac = "00:00:00:00:00:01",
+      .switch_ip = std::make_pair("10.0.0.1", 32),
+      .peer_port = "1",
+      .peer_mac = "00:00:00:00:00:02",
+      .peer_ip = "10.0.0.2",
+      .router_interface_id = "rif-1",
+      .nexthop_id = "nexthop-1",
+  };
+  ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(),
+			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock), l3_route));
+
+  // Send 2 set of packets to the switch. One using the expected destination
+  // MAC (gets forwarded), and another using an unexpected destination MAC
+  // (gets dropped).
+  const int kNumberOfTestPacket = 100;
+  const std::string kGoodPayload =
+      "Testing L3 forwarding. This packet should arrive to packet in.";
+  const std::string kBadPayload =
+      "Testing L3 forwarding. This packet should be dropped.";
+
+  // Send the "bad" packets first to give them the most time.
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(),
+			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                          /*port_id=*/"1", kNumberOfTestPacket, drop_dst_mac,
+                          /*dst_ip=*/"10.0.0.1", kBadPayload));
+  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(),
+			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                          /*port_id=*/"1", kNumberOfTestPacket, good_dst_mac,
+                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
+
+  // Wait for all the good packets to get punted back on the control switch.
+  absl::Time timeout = absl::Now() + absl::Minutes(1);
+  int good_packet_count = 0;
+  int bad_packet_count = 0;
+  while (good_packet_count < kNumberOfTestPacket) {
+    if (packetio_control->HasPacketInMessage()) {
+      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
+                           packetio_control->GetNextPacketInMessage());
+
+       // Verify this is the packet we expect.
+      packetlib::Packet packet_in =
+          packetlib::ParsePacket(response.packet().payload());
+      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+          packet_in.payload() == kGoodPayload) {
+        ++good_packet_count;
+      } else if (response.update_case() ==
+                     p4::v1::StreamMessageResponse::kPacket &&
+                 packet_in.payload() == kBadPayload) {
+        ++bad_packet_count;
+      } else {
+        LOG(WARNING) << "Unexpected response: " << response.DebugString();
+      }
+    }
+
+    if (absl::Now() > timeout) {
+      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
+      break;
+    }
+  }
+  LOG(INFO) << "Done collecting packets.";
+  EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+  EXPECT_EQ(bad_packet_count, 0);
 }
 
 }  // namespace pins

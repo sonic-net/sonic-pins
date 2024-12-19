@@ -59,7 +59,7 @@ namespace pins {
 
 namespace {
 // Number of packets sent to one port.
-constexpr int kPacketsNum = 400000;
+constexpr int kPacketsNum = 4000000;
 
 // Number of packets sent per second.
 constexpr int kPacketsPerSecond = 16000;
