@@ -17,14 +17,12 @@
 
 #include <memory>
 #include <string>
-#include <thread>  // NOLINT: Need threads (instead of fiber) for upstream code.
 #include <vector>
 
-#include "absl/memory/memory.h"
 #include "gtest/gtest.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
@@ -35,6 +33,11 @@ struct SflowTestParams {
   thinkit::SSHClient* ssh_client;
   std::string gnmi_config;
   p4::config::v1::P4Info p4_info;
+  // For sampling size tests.
+  int packet_size;
+  int sample_size;
+  // For sampling rate tests.
+  int sample_rate;
 };
 
 // Structure represents a link between SUT and Ixia.
@@ -62,7 +65,15 @@ class SflowTestFixture : public testing::TestWithParam<SflowTestParams> {
   thinkit::SSHClient* ssh_client_ = GetParam().ssh_client;
 
   std::vector<IxiaLink> ready_links_;
+
+ private:
+  // Set to true when config already has sampling config and is set to true.
+  bool sflow_enabled_by_config_ = false;
 };
+
+class SampleSizeTest : public SflowTestFixture {};
+
+class SampleRateTest : public SflowTestFixture {};
 
 }  // namespace pins
 
