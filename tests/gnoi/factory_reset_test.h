@@ -22,25 +22,25 @@
 namespace factory_reset {
 
 void IssueGnoiFactoryResetAndValidateStatus(
-    thinkit::Switch& sut, const gnoi::factory_reset::StartRequest& request,
-    gnoi::factory_reset::StartResponse* response,
+    thinkit::Switch &sut, const gnoi::factory_reset::StartRequest &request,
+    gnoi::factory_reset::StartResponse *response,
     grpc::Status expected_status = grpc::Status());
 
-void ValidateStackState(thinkit::Switch& sut,
+void ValidateStackState(thinkit::Switch &sut,
                         absl::Span<const std::string> interfaces);
 
-void TestFactoryResetSuccess(thinkit::Switch& sut,
-                             thinkit::SSHClient& ssh_client,
+void TestFactoryResetSuccess(thinkit::Switch &sut,
+                             thinkit::SSHClient &ssh_client,
                              absl::Span<const std::string> interfaces);
 
-void TestDuplicateFactoryResetFailure(thinkit::Switch& sut,
-                                      thinkit::SSHClient& ssh_client,
+void TestDuplicateFactoryResetFailure(thinkit::Switch &sut,
+                                      thinkit::SSHClient &ssh_client,
                                       absl::Span<const std::string> interfaces);
 
 void TestGnoiFactoryResetGnoiServerUnreachableFail(
-    thinkit::Switch& sut, thinkit::SSHClient& ssh_client,
+    thinkit::Switch &sut, thinkit::SSHClient &ssh_client,
     absl::Span<const std::string> interfaces);
 
-}  // namespace factory_reset
+} // namespace factory_reset
 
-#endif  // PINS_TESTS_GNOI_FACTORY_RESET_TEST_H_
+#endif // PINS_TESTS_GNOI_FACTORY_RESET_TEST_H_

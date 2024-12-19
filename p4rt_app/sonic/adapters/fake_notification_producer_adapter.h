@@ -28,17 +28,18 @@ namespace sonic {
 
 class FakeNotificationProducerAdapter final
     : public NotificationProducerAdapter {
- public:
+public:
   explicit FakeNotificationProducerAdapter(FakeSonicDbTable *sonic_db_table_);
 
- // void send(const std::vector<swss::KeyOpFieldsValuesTuple> &updates) override;
- virtual  void send(const std::vector<swss::KeyOpFieldsValuesTuple> &updates);
+  // void send(const std::vector<swss::KeyOpFieldsValuesTuple> &updates)
+  // override;
+  virtual void send(const std::vector<swss::KeyOpFieldsValuesTuple> &updates);
 
- private:
+private:
   FakeSonicDbTable &sonic_db_table_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_

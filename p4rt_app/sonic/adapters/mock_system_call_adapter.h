@@ -19,33 +19,33 @@
 #include <stddef.h>
 #include <unistd.h>
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockSystemCallAdapter final : public SystemCallAdapter {
- public:
-  MOCK_METHOD(ssize_t, read, (int, void*, size_t), (const, override));
-  MOCK_METHOD(ssize_t, write, (int, const void*, size_t), (const, override));
+public:
+  MOCK_METHOD(ssize_t, read, (int, void *, size_t), (const, override));
+  MOCK_METHOD(ssize_t, write, (int, const void *, size_t), (const, override));
   MOCK_METHOD(int, socket, (int, int, int), (const, override));
-  MOCK_METHOD(int, connect, (int, const struct sockaddr*, socklen_t),
+  MOCK_METHOD(int, connect, (int, const struct sockaddr *, socklen_t),
               (const, override));
-  MOCK_METHOD(int, bind, (int, const struct sockaddr*, socklen_t),
+  MOCK_METHOD(int, bind, (int, const struct sockaddr *, socklen_t),
               (const, override));
-  MOCK_METHOD(int, ioctl, (int, int, struct ifreq*), (const, override));
-  MOCK_METHOD(int, setsockopt, (int, int, int, const void*, socklen_t),
+  MOCK_METHOD(int, ioctl, (int, int, struct ifreq *), (const, override));
+  MOCK_METHOD(int, setsockopt, (int, int, int, const void *, socklen_t),
               (const, override));
-  MOCK_METHOD(unsigned int, if_nametoindex, (const char*), (const, override));
+  MOCK_METHOD(unsigned int, if_nametoindex, (const char *), (const, override));
   MOCK_METHOD(int, close, (int), (const, override));
-  MOCK_METHOD(int, getifaddrs, (struct ifaddrs**), (const, override));
-  MOCK_METHOD(void, freeifaddrs, (struct ifaddrs*), (const, override));
-  MOCK_METHOD(int, getsockopt, (int, int, int, int*, socklen_t*),
+  MOCK_METHOD(int, getifaddrs, (struct ifaddrs **), (const, override));
+  MOCK_METHOD(void, freeifaddrs, (struct ifaddrs *), (const, override));
+  MOCK_METHOD(int, getsockopt, (int, int, int, int *, socklen_t *),
               (const, override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H

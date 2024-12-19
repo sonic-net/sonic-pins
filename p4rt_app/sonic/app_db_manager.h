@@ -99,54 +99,53 @@ struct AppDbUpdates {
 };
 
 // Insert table definition
-absl::Status AppendExtTableDefinition(
-    nlohmann::json &tables,
-    const pdpi::IrTableDefinition& ir_table);
+absl::Status AppendExtTableDefinition(nlohmann::json &tables,
+                                      const pdpi::IrTableDefinition &ir_table);
 
 // A definition set string in json format published to AppDb
-absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
-    const nlohmann::json &tables_json,
-    uint64_t cookie,
-    P4rtTable& p4rt_table);
+absl::StatusOr<std::string>
+PublishExtTablesDefinitionToAppDb(const nlohmann::json &tables_json,
+                                  uint64_t cookie, P4rtTable &p4rt_table);
 
 // Takes a list of AppDb updates (i.e. inserts, modifies, or deletes) and
 // translates them so that they are consumable by the AppDb. It will also
 // create, or remove, any VRF IDs as needed.
-absl::Status UpdateAppDb(P4rtTable& p4rt_table,
-                         VrfTable& vrf_table,
-                         const AppDbUpdates& updates,
-                         const pdpi::IrP4Info& p4_info,
-                         pdpi::IrWriteResponse* response);
+absl::Status UpdateAppDb(P4rtTable &p4rt_table, VrfTable &vrf_table,
+                         const AppDbUpdates &updates,
+                         const pdpi::IrP4Info &p4_info,
+                         pdpi::IrWriteResponse *response);
 
 // Returns all P4RT keys currently installed in the AppStateDb. This does not
 // include any keys that are currently being handled by the lower layers (i.e.
 // keys starting with _).
-std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table);
+std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable &p4rt_table);
 
 // Returns the expected P4RT_TABLE key for a given IRTableEntry.
-absl::StatusOr<std::string> GetRedisP4rtTableKey(
-    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
+absl::StatusOr<std::string>
+GetRedisP4rtTableKey(const pdpi::IrTableEntry &entry,
+                     const pdpi::IrP4Info &p4_info);
 
 // Reads a table entry from the P4RT_TABLE in the AppStateDb. Returns a failure
 // if the entry does not exist, or cannot be translated into a pdpi::IrEntity.
 // Note: this function will not be used to read packet replication entries from
 // the P4RT_TABLE.
-absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
-    P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
-    const std::string& key);
+absl::StatusOr<pdpi::IrTableEntry>
+ReadP4TableEntry(P4rtTable &p4rt_table, const pdpi::IrP4Info &p4info,
+                 const std::string &key);
 
 // Checks CounterDB for any counter data relating to the table entry and appends
 // it to the ir_table_entry argument. The ir_table_entry is untouched if no
 // counter data is found.
-absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
-                                            P4rtTable& p4rt_table,
-                                            const pdpi::IrP4Info& p4info);
+absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry &ir_table_entry,
+                                            P4rtTable &p4rt_table,
+                                            const pdpi::IrP4Info &p4info);
 
 // Returns the expected P4RT_TABLE key for a given IRTableEntry.
-absl::StatusOr<std::string> GetRedisP4rtTableKey(
-    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
+absl::StatusOr<std::string>
+GetRedisP4rtTableKey(const pdpi::IrTableEntry &entry,
+                     const pdpi::IrP4Info &p4_info);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#endif // PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_

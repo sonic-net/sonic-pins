@@ -29,11 +29,11 @@ namespace dvaas {
 // prepare them for forwarding related tests (e.g. Arriba, DVaaS, Ouroboros) and
 // restoring the testbed to its original configuration after the test.
 class MirrorTestbedConfigurator {
- public:
+public:
   // Creates and returns MirrorTestbedConfigurator object from the given
   // testbed. Establishes connections to SUT and control switch.
-  static absl::StatusOr<MirrorTestbedConfigurator> Create(
-      std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface);
+  static absl::StatusOr<MirrorTestbedConfigurator>
+  Create(std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface);
 
   // Prepares the testbed for forwarding related tests by:
   //    - Setting up control switch ports to be a mirror of SUT.
@@ -58,22 +58,22 @@ class MirrorTestbedConfigurator {
 
   // Returns APIs to SUT.
   // Invariant: All pointers in the returned SwitchApi are non-empty.
-  SwitchApi& SutApi() { return sut_api_; }
+  SwitchApi &SutApi() { return sut_api_; }
   // Returns APIs to control switch.
   // Invariant: All pointers in the returned SwitchApi are non-empty.
-  SwitchApi& ControlSwitchApi() { return control_switch_api_; }
+  SwitchApi &ControlSwitchApi() { return control_switch_api_; }
 
   // Movable only. Can only be created through `Create`.
-  MirrorTestbedConfigurator(MirrorTestbedConfigurator&&) = default;
-  MirrorTestbedConfigurator& operator=(MirrorTestbedConfigurator&&) = default;
-  MirrorTestbedConfigurator(const MirrorTestbedConfigurator&) = delete;
-  MirrorTestbedConfigurator& operator=(const MirrorTestbedConfigurator&) =
-      delete;
+  MirrorTestbedConfigurator(MirrorTestbedConfigurator &&) = default;
+  MirrorTestbedConfigurator &operator=(MirrorTestbedConfigurator &&) = default;
+  MirrorTestbedConfigurator(const MirrorTestbedConfigurator &) = delete;
+  MirrorTestbedConfigurator &
+  operator=(const MirrorTestbedConfigurator &) = delete;
 
- private:
+private:
   // May only be called by `Create`.
   MirrorTestbedConfigurator(
-      std::shared_ptr<thinkit::MirrorTestbedInterface>& testbed_interface)
+      std::shared_ptr<thinkit::MirrorTestbedInterface> &testbed_interface)
       : testbed_interface_(testbed_interface) {}
 
   // The testbed to be configured.
@@ -91,6 +91,6 @@ class MirrorTestbedConfigurator {
   std::optional<pins_test::openconfig::Interfaces> original_control_interfaces_;
 };
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_MIRROR_TESTBED_CONFIG_H_
+#endif // PINS_DVAAS_MIRROR_TESTBED_CONFIG_H_

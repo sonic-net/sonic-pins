@@ -51,22 +51,22 @@ inline std::vector<Instantiation> AllInstantiations() {
 // Returns the name of the given P4 program instantiation.
 inline std::string InstantiationToString(Instantiation role) {
   switch (role) {
-    case Instantiation::kFabricBorderRouter:
-      return "fabric_border_router";
-    case Instantiation::kMiddleblock:
-      return "middleblock";
-    case Instantiation::kTor:
-      return "tor";
-    case Instantiation::kWbb:
-      return "wbb";
+  case Instantiation::kFabricBorderRouter:
+    return "fabric_border_router";
+  case Instantiation::kMiddleblock:
+    return "middleblock";
+  case Instantiation::kTor:
+    return "tor";
+  case Instantiation::kWbb:
+    return "wbb";
   }
   LOG(DFATAL) << "invalid Instantiation: " << static_cast<int>(role);
   return "";
 }
 
 // Returns the P4 program `Instantiation` of the given name.
-inline absl::StatusOr<Instantiation> StringToInstantiation(
-    absl::string_view instantiation_name) {
+inline absl::StatusOr<Instantiation>
+StringToInstantiation(absl::string_view instantiation_name) {
   for (auto instantiation : AllInstantiations()) {
     if (instantiation_name == InstantiationToString(instantiation)) {
       return instantiation;
@@ -82,20 +82,20 @@ inline absl::StatusOr<Instantiation> StringToInstantiation(
 // See https://abseil.io/docs/cpp/guides/flags#validating-flag-values for more
 // information.
 bool AbslParseFlag(absl::string_view instantiation_text,
-                   Instantiation* instantiation, std::string* error);
+                   Instantiation *instantiation, std::string *error);
 
 // Returns a textual flag value corresponding to the given instantiation.
 std::string AbslUnparseFlag(Instantiation instantiation);
 
-inline std::ostream& operator<<(std::ostream& os, Instantiation instantiation) {
+inline std::ostream &operator<<(std::ostream &os, Instantiation instantiation) {
   return os << InstantiationToString(instantiation);
 }
 
 template <typename Sink>
-void AbslStringify(Sink& sink, Instantiation instantiation) {
+void AbslStringify(Sink &sink, Instantiation instantiation) {
   absl::Format(&sink, "%s", InstantiationToString(instantiation));
 }
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_

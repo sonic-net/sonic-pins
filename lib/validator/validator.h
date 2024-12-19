@@ -37,7 +37,7 @@ namespace pins_test {
 // Usage:
 // validator.RunValidations({"device1.net"}, {Validator::kReady});
 class Validator {
- public:
+public:
   // `kReady` refers to when the device is ready to have operations run on it.
   static constexpr absl::string_view kReady = "Ready";
 
@@ -55,11 +55,11 @@ class Validator {
                               int retry_count = 3,
                               absl::Duration timeout = absl::Minutes(5));
 
- private:
+private:
   // The provided backends that this `Validator` will use.
   std::vector<std::unique_ptr<ValidatorBackend>> backends_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_VALIDATOR_VALIDATOR_H_
+#endif // PINS_LIB_VALIDATOR_VALIDATOR_H_

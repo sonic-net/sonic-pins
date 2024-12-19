@@ -42,15 +42,15 @@ namespace sonic {
 // Whenver the PORT_TABLE in APPL_STATE_DB is updated the StateEventMonitor will
 // call the HandleEvent.
 class StateEventHandler {
- public:
+public:
   // Callback to Handle events for the monitored table.
   virtual absl::Status HandleEvent(
-      const std::string& operation, const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) = 0;
+      const std::string &operation, const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) = 0;
 
   virtual ~StateEventHandler() = default;
 
- protected:
+protected:
   StateEventHandler() = default;
 };
 
@@ -62,13 +62,13 @@ class StateEventHandler {
 // Waiting for events is a blocking call, but all tables are monitored in
 // parallel. So if any table entry changes the monitor will react.
 class StateEventMonitor {
- public:
-  StateEventMonitor(swss::DBConnector& db);
+public:
+  StateEventMonitor(swss::DBConnector &db);
   virtual ~StateEventMonitor() = default;
 
   // Not copyable or movable.
-  StateEventMonitor(const StateEventMonitor&) = delete;
-  StateEventMonitor& operator=(const StateEventMonitor&) = delete;
+  StateEventMonitor(const StateEventMonitor &) = delete;
+  StateEventMonitor &operator=(const StateEventMonitor &) = delete;
 
   // Add a new table that should be monitored for changes in the DB. Only one
   // handler can exist per table, and this method will return an AlreadyExists
@@ -80,7 +80,7 @@ class StateEventMonitor {
   // monitored table.
   absl::Status WaitForNextEventAndHandle();
 
- private:
+private:
   // When an event is detected we will check the `subscriber_table` for any new
   // events, and then call its `event_handler`.
   struct TableHandler {
@@ -89,7 +89,7 @@ class StateEventMonitor {
   };
 
   // The Redis DB we are monitoring (e.g. CONFIG_DB, STATE_DB, etc.).
-  swss::DBConnector& redis_db_;
+  swss::DBConnector &redis_db_;
 
   // The swss::Select container can monitor multiple swss::Selectable objects
   // like the swss::SubscriberStateTable. When any of it's monitored events
@@ -100,7 +100,7 @@ class StateEventMonitor {
   absl::flat_hash_map<std::string, TableHandler> monitored_tables_by_name_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_
+#endif // PINS_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_

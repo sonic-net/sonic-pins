@@ -37,8 +37,9 @@ struct FuzzerTestState {
 
 // Constructs a FuzzerTestState from an IrP4Info, only fuzzing tables with the
 // given role.
-absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
-    const p4::config::v1::P4Info& info, const std::string& role);
+absl::StatusOr<FuzzerTestState>
+ConstructFuzzerTestState(const p4::config::v1::P4Info &info,
+                         const std::string &role);
 
 // Constructs a FuzzerTestState from a standard testing P4Info.
 // By default, this test state should be used for all tests.
@@ -60,31 +61,31 @@ inline FuzzerTestState ConstructFuzzerTestStateFromSaiMiddleBlock() {
 // a given IrP4Info.
 absl::StatusOr<pdpi::IrMatchFieldDefinition>
 GetAMatchFieldDefinitionWithMatchType(
-    const pdpi::IrTableDefinition& table_definition,
+    const pdpi::IrTableDefinition &table_definition,
     p4::config::v1::MatchField::MatchType match_type);
 
 // Gets a table that has a field with the given match type. Deterministic for a
 // given IrP4Info.
 absl::StatusOr<pdpi::IrTableDefinition> GetATableDefinitionWithMatchType(
-    const FuzzerTestState& fuzzer_state,
+    const FuzzerTestState &fuzzer_state,
     p4::config::v1::MatchField::MatchType match_type);
 
 // Helpers to get specific pieces of the IrP4Info.
 // Gets a table that uses one-shot programming. Deterministic for a given
 // IrP4Info.
-absl::StatusOr<pdpi::IrTableDefinition> GetAOneShotTableDefinition(
-    const pdpi::IrP4Info& info);
+absl::StatusOr<pdpi::IrTableDefinition>
+GetAOneShotTableDefinition(const pdpi::IrP4Info &info);
 
 // Gets the Action Profile that implements the given table.
 absl::StatusOr<pdpi::IrActionProfileDefinition>
-GetActionProfileImplementingTable(const pdpi::IrP4Info& info,
-                                  const pdpi::IrTableDefinition& table);
+GetActionProfileImplementingTable(const pdpi::IrP4Info &info,
+                                  const pdpi::IrTableDefinition &table);
 
 // Helpers to modify specific pieces of the FuzzerConfig.
-absl::Status SetMaxGroupSizeInActionProfile(FuzzerConfig& config,
+absl::Status SetMaxGroupSizeInActionProfile(FuzzerConfig &config,
                                             int action_profile_id,
                                             int max_group_size);
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
+#endif // PINS_INFRA_P4_FUZZER_TEST_UTILS_H_

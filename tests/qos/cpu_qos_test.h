@@ -27,12 +27,13 @@
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
 // Parameters used by the tests that don't require an Ixia.
 struct ParamsForTestsWithoutIxia {
-  thinkit::MirrorTestbedInterface* testbed_interface;
+  thinkit::MirrorTestbedInterface *testbed_interface;
   std::string gnmi_config;
   p4::config::v1::P4Info p4info;
 };
@@ -42,7 +43,7 @@ struct ParamsForTestsWithoutIxia {
 // received packets.
 class CpuQosTestWithoutIxia
     : public testing::TestWithParam<ParamsForTestsWithoutIxia> {
- protected:
+protected:
   void SetUp() override {
     GetParam().testbed_interface->SetUp();
 
@@ -62,7 +63,7 @@ class CpuQosTestWithoutIxia
     //     testbed_, GetParam().testbed_interface->GetMirrorTestbed());
   }
 
-  thinkit::MirrorTestbed& Testbed() {
+  thinkit::MirrorTestbed &Testbed() {
     return GetParam().testbed_interface->GetMirrorTestbed();
   }
 
@@ -70,13 +71,13 @@ class CpuQosTestWithoutIxia
 
   ~CpuQosTestWithoutIxia() override { delete GetParam().testbed_interface; }
 
- private:
+private:
   std::unique_ptr<thinkit::MirrorTestbed> testbed_;
 };
 
 // Parameters used by the tests that require an Ixia.
 struct ParamsForTestsWithIxia {
-  thinkit::GenericTestbedInterface* testbed_interface;
+  thinkit::GenericTestbedInterface *testbed_interface;
   std::string gnmi_config;
   p4::config::v1::P4Info p4info;
   absl::optional<std::string> test_case_id;
@@ -88,7 +89,7 @@ struct ParamsForTestsWithIxia {
 
 class CpuQosTestWithIxia
     : public testing::TestWithParam<ParamsForTestsWithIxia> {
- protected:
+protected:
   void SetUp() override { GetParam().testbed_interface->SetUp(); }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
@@ -96,5 +97,5 @@ class CpuQosTestWithIxia
   ~CpuQosTestWithIxia() override { delete GetParam().testbed_interface; }
 };
 
-}  // namespace pins_test
-#endif  // PINS_TESTS_CPU_QOS_TEST_H_
+} // namespace pins_test
+#endif // PINS_TESTS_CPU_QOS_TEST_H_

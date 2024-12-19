@@ -24,9 +24,9 @@ namespace sai_pd {
 // to pick the table, match fields, action, etc, but the function guarantees the
 // entries are valid. Useful for testing when the exact table entry doesn't
 // matter.
-std::vector<sai::TableEntry> CreateUpTo255GenericTableEntries(
-    int num_table_entries);
+std::vector<sai::TableEntry>
+CreateUpTo255GenericTableEntries(int num_table_entries);
 
-}  // namespace sai_pd
+} // namespace sai_pd
 
-#endif  // PINS_TESTS_FORWARDING_TEST_DATA_H_
+#endif // PINS_TESTS_FORWARDING_TEST_DATA_H_

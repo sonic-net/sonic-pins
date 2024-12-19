@@ -21,12 +21,12 @@
 
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gtest/gtest.h"
 #include "gutil/proto.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace gutil {
 
@@ -71,29 +71,29 @@ namespace gutil {
 //   }
 //   priority: 456
 class ProtobufEqMatcher {
- public:
-  ProtobufEqMatcher(const google::protobuf::Message& expected)
+public:
+  ProtobufEqMatcher(const google::protobuf::Message &expected)
       : expected_(expected.New()), expected_text_(PrintTextProto(expected)) {
     expected_->CopyFrom(expected);
   }
   ProtobufEqMatcher(absl::string_view expected_text)
       : expected_text_{expected_text} {}
 
-  void DescribeTo(std::ostream* os, bool negated) const {
+  void DescribeTo(std::ostream *os, bool negated) const {
     *os << "is " << (negated ? "not " : "") << "equal to "
         << (expected_ == nullptr ? ""
                                  : absl::StrCat(expected_->GetTypeName(), " "))
         << "<\n"
         << expected_text_ << ">";
   }
-  void DescribeTo(std::ostream* os) const { return DescribeTo(os, false); }
-  void DescribeNegationTo(std::ostream* os) const {
+  void DescribeTo(std::ostream *os) const { return DescribeTo(os, false); }
+  void DescribeNegationTo(std::ostream *os) const {
     return DescribeTo(os, true);
   }
 
   template <typename ProtoType>
-  bool MatchAndExplain(const ProtoType& actual,
-                       ::testing::MatchResultListener* listener) const {
+  bool MatchAndExplain(const ProtoType &actual,
+                       ::testing::MatchResultListener *listener) const {
     std::string diff;
     google::protobuf::util::MessageDifferencer differ;
     differ.set_scope(comparison_scope_);
@@ -127,49 +127,48 @@ class ProtobufEqMatcher {
     comparison_scope_ = google::protobuf::util::MessageDifferencer::PARTIAL;
   }
 
- private:
+private:
   mutable std::shared_ptr<google::protobuf::Message> expected_;
   std::string expected_text_;
   google::protobuf::util::MessageDifferencer::Scope comparison_scope_ =
       google::protobuf::util::MessageDifferencer::FULL;
 };
 
-inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
-    const google::protobuf::Message& proto) {
+inline ::testing::PolymorphicMatcher<ProtobufEqMatcher>
+EqualsProto(const google::protobuf::Message &proto) {
   return ::testing::MakePolymorphicMatcher(ProtobufEqMatcher(proto));
 }
 
-inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
-    absl::string_view proto_text) {
+inline ::testing::PolymorphicMatcher<ProtobufEqMatcher>
+EqualsProto(absl::string_view proto_text) {
   return ::testing::MakePolymorphicMatcher(ProtobufEqMatcher(proto_text));
 }
 
 // Checks that a pair of protos are equal. Useful in combination with
 // `Pointwise`.
 MATCHER(EqualsProto, "is a pair of equal protobufs") {
-  const auto& [x, y] = arg;
+  const auto &[x, y] = arg;
   return testing::ExplainMatchResult(EqualsProto(x), y, result_listener);
 }
 
 // Checks that a sequences of protos is equal to a given sequence.
-template <class T>
-auto EqualsProtoSequence(T&& sequence) {
+template <class T> auto EqualsProtoSequence(T &&sequence) {
   return testing::Pointwise(EqualsProto(), std::forward<T>(sequence));
 }
 
 // -- HasOneofCaseMatcher matcher ----------------------------------------------
 
-template <class ProtoMessage>
-class HasOneofCaseMatcher {
- public:
+template <class ProtoMessage> class HasOneofCaseMatcher {
+public:
   using is_gtest_matcher = void;
   using OneofCase = int;
   HasOneofCaseMatcher(absl::string_view oneof_name,
                       OneofCase expected_oneof_case)
       : oneof_name_{oneof_name}, expected_oneof_case_(expected_oneof_case) {}
 
-  void DescribeTo(std::ostream* os, bool negate) const {
-    if (os == nullptr) return;
+  void DescribeTo(std::ostream *os, bool negate) const {
+    if (os == nullptr)
+      return;
     *os << "is a `" << GetMessageDescriptor().full_name()
         << "` protobuf message whose oneof field `" << oneof_name_ << "`";
     if (negate) {
@@ -179,13 +178,13 @@ class HasOneofCaseMatcher {
     }
     *os << "`" << GetOneofCaseName(expected_oneof_case_) << "`";
   }
-  void DescribeTo(std::ostream* os) const { DescribeTo(os, false); }
-  void DescribeNegationTo(std::ostream* os) const { DescribeTo(os, true); }
+  void DescribeTo(std::ostream *os) const { DescribeTo(os, false); }
+  void DescribeNegationTo(std::ostream *os) const { DescribeTo(os, true); }
 
-  bool MatchAndExplain(const ProtoMessage& message,
-                       testing::MatchResultListener* listener) const {
-    const google::protobuf::Message& m = message;
-    const google::protobuf::FieldDescriptor* set_oneof_field =
+  bool MatchAndExplain(const ProtoMessage &message,
+                       testing::MatchResultListener *listener) const {
+    const google::protobuf::Message &m = message;
+    const google::protobuf::FieldDescriptor *set_oneof_field =
         m.GetReflection()->GetOneofFieldDescriptor(m, GetOneofDescriptor());
     *listener << "the oneof `" << oneof_name_ << "` is ";
     if (set_oneof_field == nullptr) {
@@ -197,27 +196,27 @@ class HasOneofCaseMatcher {
     }
   }
 
- private:
+private:
   std::string oneof_name_;
   OneofCase expected_oneof_case_;
 
-  const google::protobuf::Descriptor& GetMessageDescriptor() const {
-    auto* descriptor = ProtoMessage::descriptor();
+  const google::protobuf::Descriptor &GetMessageDescriptor() const {
+    auto *descriptor = ProtoMessage::descriptor();
     if (descriptor == nullptr) {
-      LOG(FATAL)  // Crash ok: test
+      LOG(FATAL) // Crash ok: test
           << "ProtoMessage::descriptor() returned null.";
     }
     return *descriptor;
   }
-  const google::protobuf::OneofDescriptor* GetOneofDescriptor() const {
+  const google::protobuf::OneofDescriptor *GetOneofDescriptor() const {
     return GetMessageDescriptor().FindOneofByName(oneof_name_);
   }
-  const google::protobuf::FieldDescriptor* GetOneofCaseDescriptor(
-      OneofCase oneof_case) const {
+  const google::protobuf::FieldDescriptor *
+  GetOneofCaseDescriptor(OneofCase oneof_case) const {
     return GetMessageDescriptor().FindFieldByNumber(oneof_case);
   }
   std::string GetOneofCaseName(OneofCase oneof_case) const {
-    const google::protobuf::FieldDescriptor* descriptor =
+    const google::protobuf::FieldDescriptor *descriptor =
         GetOneofCaseDescriptor(oneof_case);
     return descriptor == nullptr ? "<unknown case>" : descriptor->name();
   }
@@ -251,6 +250,6 @@ inline InnerProtoMatcher Partially(InnerProtoMatcher inner_proto_matcher) {
   return inner_proto_matcher;
 }
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // GUTIL_PROTO_MATCHERS_H
+#endif // GUTIL_PROTO_MATCHERS_H

@@ -32,12 +32,12 @@ namespace p4rt_app {
 // provide a uniform mechanism to report various information back to the user.
 // They will print to either stdout or stderr, and can use different colors in
 // the terminal.
-void Info(absl::string_view message);     // default color to stdout
-void Warning(absl::string_view message);  // yellow color to stderr
-void Error(absl::string_view message);    // red color to stderr
+void Info(absl::string_view message);    // default color to stdout
+void Warning(absl::string_view message); // yellow color to stderr
+void Error(absl::string_view message);   // red color to stderr
 
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> CreateP4rtSession();
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
+#endif // PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_

@@ -34,12 +34,12 @@ namespace thinkit {
 // The Switch interface represents a P4RT-capable switch that can be connected
 // to in a blackbox fashion.
 class Switch {
- public:
+public:
   virtual ~Switch() {}
 
   // Returns the chassis name of the switch. This should be a reachable
   // hostname to the switch.
-  virtual const std::string& ChassisName() = 0;
+  virtual const std::string &ChassisName() = 0;
 
   // Returns the P4Runtime device ID of the switch.
   virtual uint32_t DeviceId() = 0;
@@ -96,6 +96,6 @@ class Switch {
   }
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // THINKIT_SWITCH_H_
+#endif // THINKIT_SWITCH_H_

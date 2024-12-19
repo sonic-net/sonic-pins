@@ -39,17 +39,18 @@ struct PacketIoPortParams {
 };
 
 // Adds a port to packet I/O by creating the receive & transmit sockets.
-absl::StatusOr<std::unique_ptr<PacketIoPortParams>> AddPacketIoPort(
-    const SystemCallAdapter& system_call_adapter, absl::string_view port_name,
-    packet_metadata::ReceiveCallbackFunction callback_function);
+absl::StatusOr<std::unique_ptr<PacketIoPortParams>>
+AddPacketIoPort(const SystemCallAdapter &system_call_adapter,
+                absl::string_view port_name,
+                packet_metadata::ReceiveCallbackFunction callback_function);
 
 // Send a packet out on the specified egress socket.
-absl::Status SendPacketOut(const SystemCallAdapter& system_call_adapter,
+absl::Status SendPacketOut(const SystemCallAdapter &system_call_adapter,
                            int transmit_socket,
                            absl::string_view interface_name,
-                           const std::string& packet);
+                           const std::string &packet);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_PACKETIO_PORT_H_
+#endif // PINS_P4RT_APP_SONIC_PACKETIO_PORT_H_

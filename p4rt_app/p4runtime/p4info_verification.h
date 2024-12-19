@@ -21,8 +21,8 @@ namespace p4rt_app {
 
 // Verifies if all the required P4Info fields are as expected.
 // For now, checks PacketIo metadata & Fixed tables
-absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info);
+absl::Status ValidateP4Info(const p4::config::v1::P4Info &p4info);
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_H_
+#endif // PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_H_

@@ -25,10 +25,11 @@ namespace p4_symbolic {
 
 // Deparses the given packet into a byte string, using values according to the
 // given model.
-absl::StatusOr<std::string> SaiDeparser(
-    const symbolic::SymbolicPerPacketState& packet, const z3::model& model);
-absl::StatusOr<std::string> SaiDeparser(const SaiFields& packet,
-                                        const z3::model& model);
+absl::StatusOr<std::string>
+SaiDeparser(const symbolic::SymbolicPerPacketState &packet,
+            const z3::model &model);
+absl::StatusOr<std::string> SaiDeparser(const SaiFields &packet,
+                                        const z3::model &model);
 
-}  // namespace p4_symbolic
-#endif  // PINS_P4_SYMBOLIC_SAI_DEPARSER_H_
+} // namespace p4_symbolic
+#endif // PINS_P4_SYMBOLIC_SAI_DEPARSER_H_

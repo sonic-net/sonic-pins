@@ -31,9 +31,9 @@ namespace p4_symbolic {
 // Generates constraints encoding the behavior of the SAI parser.
 // NOTE: The parser logic is currently hard-coded and not parsed from the
 // program.
-absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
-    const symbolic::SymbolicPerPacketState &state);
+absl::StatusOr<std::vector<z3::expr>>
+EvaluateSaiParser(const symbolic::SymbolicPerPacketState &state);
 
-}  // namespace p4_symbolic
+} // namespace p4_symbolic
 
-#endif  // GOOGLE_P4_SYMBOLIC_SAI_PARSER_H_
+#endif // GOOGLE_P4_SYMBOLIC_SAI_PARSER_H_

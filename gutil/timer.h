@@ -22,7 +22,7 @@ namespace gutil {
 
 // A simple timer implementation.
 class Timer {
- public:
+public:
   // Returns the duration between the current time and the last reset (or
   // initialization).
   absl::Duration GetDuration() { return absl::Now() - start_time_; }
@@ -38,10 +38,10 @@ class Timer {
   // call to Reset and those calls.
   void Reset() { start_time_ = absl::Now(); }
 
- private:
+private:
   absl::Time start_time_ = absl::Now();
 };
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_GUTIL_TIMER_H_
+#endif // PINS_GUTIL_TIMER_H_

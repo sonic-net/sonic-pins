@@ -29,7 +29,7 @@ namespace sonic {
 // system calls. The base class virtual methods are just a pass through to the
 // Libc system calls.
 class SystemCallAdapter {
- public:
+public:
   SystemCallAdapter() {}
   virtual ~SystemCallAdapter() = default;
 
@@ -52,7 +52,7 @@ class SystemCallAdapter {
                          int *option_value, socklen_t *option_len) const;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_

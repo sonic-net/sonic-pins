@@ -47,8 +47,9 @@ enum P4EntityKind {
 
 // Given a P4 name for a given entity kind, returns the name of the
 // corresponding protobuf message name.
-absl::StatusOr<std::string> P4NameToProtobufMessageName(
-    absl::string_view p4_name, P4EntityKind entity_kind);
+absl::StatusOr<std::string>
+P4NameToProtobufMessageName(absl::string_view p4_name,
+                            P4EntityKind entity_kind);
 
 // Given a P4 name for a given entity kind, returns the name of the
 // corresponding protobuf field name.
@@ -347,6 +348,6 @@ absl::StatusOr<int> GetEnumField(const google::protobuf::Message &message,
 absl::Status SetEnumField(google::protobuf::Message *message,
                           const std::string &enum_field_name, int enum_value);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_PD_H_
+#endif // PINS_P4_PDPI_PD_H_

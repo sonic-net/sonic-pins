@@ -48,7 +48,8 @@ inline std::string TestHeader(absl::string_view test_name) {
 
 inline void Fail(absl::string_view test_name, absl::string_view message) {
   // Splitting "DO NOT SUB***" into two pieces to avoid triggering our tools.
-  std::cout << "TEST FAILED (DO NOT " << "SUBMIT)" << std::endl;
+  std::cout << "TEST FAILED (DO NOT "
+            << "SUBMIT)" << std::endl;
   std::cout << "TEST NAME: " << test_name << std::endl;
   std::cout << "FAILURE REASON: " << message << std::endl << std::endl;
 }
@@ -69,9 +70,9 @@ inline std::string TestStatusToString(absl::Status status) {
 // provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PI>
 void RunGenericPiTest(
-    const pdpi::IrP4Info& info, const std::string& test_name, const PI& pi,
+    const pdpi::IrP4Info &info, const std::string &test_name, const PI &pi,
     pdpi::TranslationOptions options,
-    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info &, const PI &,
                                          pdpi::TranslationOptions options)>
         pi_to_ir,
     InputValidity validity = INPUT_IS_INVALID) {
@@ -81,7 +82,7 @@ void RunGenericPiTest(
   std::cout << ::gutil::PrintTextProto(pi) << std::endl;
 
   // Convert PI to IR.
-  const auto& ir = pi_to_ir(info, pi, options);
+  const auto &ir = pi_to_ir(info, pi, options);
   if (!ir.ok()) {
     if (validity == INPUT_IS_VALID) {
       Fail(test_name,
@@ -113,9 +114,9 @@ void RunGenericPiTest(
 // provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PI>
 void RunGenericIrToPiTest(
-    const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
+    const pdpi::IrP4Info &info, const std::string &test_name, const IR &ir,
     pdpi::TranslationOptions options,
-    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info &, const IR &,
                                          pdpi::TranslationOptions options)>
         ir_to_pi,
     InputValidity validity = INPUT_IS_INVALID) {
@@ -125,7 +126,7 @@ void RunGenericIrToPiTest(
   std::cout << ::gutil::PrintTextProto(ir) << std::endl;
 
   // Convert IR to PI.
-  const auto& pi = ir_to_pi(info, ir, options);
+  const auto &pi = ir_to_pi(info, ir, options);
   if (!pi.ok()) {
     if (validity == INPUT_IS_VALID) {
       Fail(test_name,
@@ -157,10 +158,10 @@ void RunGenericIrToPiTest(
 // provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PD>
 void RunGenericIrToPdTest(
-    const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
+    const pdpi::IrP4Info &info, const std::string &test_name, const IR &ir,
     pdpi::TranslationOptions options,
-    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
-                                   google::protobuf::Message*,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info &, const IR &,
+                                   google::protobuf::Message *,
                                    pdpi::TranslationOptions)>
         ir_to_pd,
     InputValidity validity = INPUT_IS_INVALID) {
@@ -171,7 +172,7 @@ void RunGenericIrToPdTest(
 
   // Convert IR to PD.
   PD pd;
-  const auto& status_pd = ir_to_pd(info, ir, &pd, options);
+  const auto &status_pd = ir_to_pd(info, ir, &pd, options);
   if (!status_pd.ok()) {
     if (validity == INPUT_IS_VALID) {
       Fail(test_name,
@@ -202,33 +203,33 @@ void RunGenericIrToPdTest(
 // relevant_pd_fields(PD) == PD2 are checked.
 template <typename PD, typename IR, typename PI>
 void RunGenericPdTest(
-    const pdpi::IrP4Info& info, const std::string& test_name, const PD& pd,
+    const pdpi::IrP4Info &info, const std::string &test_name, const PD &pd,
     pdpi::TranslationOptions options,
-    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info &, const PD &,
                                          pdpi::TranslationOptions options)>
         pd_to_ir,
-    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
-                                   google::protobuf::Message*,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info &, const IR &,
+                                   google::protobuf::Message *,
                                    pdpi::TranslationOptions options)>
         ir_to_pd,
-    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info &, const IR &,
                                          pdpi::TranslationOptions options)>
         ir_to_pi,
-    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info &, const PI &,
                                          pdpi::TranslationOptions options)>
         pi_to_ir,
-    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info &, const PD &,
                                          pdpi::TranslationOptions options)>
         pd_to_pi,
-    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const PI&,
-                                   google::protobuf::Message*,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info &, const PI &,
+                                   google::protobuf::Message *,
                                    pdpi::TranslationOptions options)>
         pi_to_pd,
-    const InputValidity& validity,
-    absl::FunctionRef<PD(const pdpi::IrP4Info& info, const PD&,
+    const InputValidity &validity,
+    absl::FunctionRef<PD(const pdpi::IrP4Info &info, const PD &,
                          pdpi::TranslationOptions options)>
         relevant_pd_fields =
-            [](const pdpi::IrP4Info& info, const PD& pd,
+            [](const pdpi::IrP4Info &info, const PD &pd,
                pdpi::TranslationOptions options) { return pd; }) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
@@ -245,7 +246,7 @@ void RunGenericPdTest(
   diff.ReportDifferencesToString(&explanation);
 
   // Convert PD to IR.
-  const auto& status_or_ir = pd_to_ir(info, pd, options);
+  const auto &status_or_ir = pd_to_ir(info, pd, options);
   if (!status_or_ir.ok()) {
     if (validity == INPUT_IS_VALID) {
       Fail(test_name,
@@ -258,9 +259,9 @@ void RunGenericPdTest(
     std::cout << TestStatusToString(status_or_ir.status()) << std::endl;
     return;
   }
-  const auto& ir = status_or_ir.value();
+  const auto &ir = status_or_ir.value();
   // Convert IR to PI.
-  const auto& status_or_pi = ir_to_pi(info, ir, options);
+  const auto &status_or_pi = ir_to_pi(info, ir, options);
 
   if (validity == INPUT_IS_INVALID) {
     if (status_or_pi.status().ok()) {
@@ -288,15 +289,16 @@ void RunGenericPdTest(
     return;
   }
 
-  const auto& status_or_pi2 = pd_to_pi(info, pd, options);
-  if (!status_or_pi2.ok()) Fail(test_name, "pd_to_pi failed.");
+  const auto &status_or_pi2 = pd_to_pi(info, pd, options);
+  if (!status_or_pi2.ok())
+    Fail(test_name, "pd_to_pi failed.");
 
-  const auto& pi = status_or_pi.value();
+  const auto &pi = status_or_pi.value();
   std::cout << "--- PI:" << std::endl;
   std::cout << ::gutil::PrintTextProto(pi) << std::endl;
 
   // Convert PI back to IR.
-  const auto& status_or_ir2 = pi_to_ir(info, pi, options);
+  const auto &status_or_ir2 = pi_to_ir(info, pi, options);
   if (!status_or_ir2.status().ok()) {
     Fail(test_name, "Reverse translation from PI to IR failed.");
     std::cout << status_or_ir2.status().message() << std::endl;
@@ -313,7 +315,7 @@ void RunGenericPdTest(
 
   // Convert IR back to PD.
   PD pd2;
-  const auto& status_pd2 = ir_to_pd(info, ir, &pd2, options);
+  const auto &status_pd2 = ir_to_pd(info, ir, &pd2, options);
   if (!status_pd2.ok()) {
     Fail(test_name, "Reverse translation from IR to PD failed.");
     std::cout << status_pd2.message() << std::endl;
@@ -329,10 +331,11 @@ void RunGenericPdTest(
   }
 
   PD pd3;
-  const auto& status_pd3 = pi_to_pd(info, pi, &pd3, options);
-  if (!status_pd3.ok()) Fail(test_name, "pi_to_pd failed.");
+  const auto &status_pd3 = pi_to_pd(info, pi, &pd3, options);
+  if (!status_pd3.ok())
+    Fail(test_name, "pi_to_pd failed.");
 
   std::cout << std::endl;
 }
 
-#endif  // P4_PDPI_TESTING_TEST_HELPER_H_
+#endif // P4_PDPI_TESTING_TEST_HELPER_H_

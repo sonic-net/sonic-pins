@@ -38,7 +38,7 @@ namespace pdpi {
 // -- Conversions to Hex Strings -----------------------------------------------
 
 template <std::size_t num_bits>
-std::string BitsetToHexString(const std::bitset<num_bits>& bitset);
+std::string BitsetToHexString(const std::bitset<num_bits> &bitset);
 
 std::string ByteStringToHexString(absl::string_view byte_string);
 
@@ -63,8 +63,8 @@ std::string ByteStringToHexString(absl::string_view byte_string);
 // num_bits is not in the interval [4 * # hex digits - 3, 4 * # hex digits].
 
 template <std::size_t num_bits>
-absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
-    absl::string_view hex_string);
+absl::StatusOr<std::bitset<num_bits>>
+HexStringToBitset(absl::string_view hex_string);
 
 absl::StatusOr<int> HexStringToInt(absl::string_view hex_string);
 absl::StatusOr<int32_t> HexStringToInt32(absl::string_view hex_string);
@@ -80,9 +80,9 @@ char HexDigitToChar(int digit);
 absl::StatusOr<int> HexCharToDigit(char hex_char);
 
 template <std::size_t num_bits>
-std::string BitsetToHexString(const std::bitset<num_bits>& bitset) {
+std::string BitsetToHexString(const std::bitset<num_bits> &bitset) {
   // Each hexadecimal digit is given by 4 bits in the bitset.
-  const int num_hex_digits = (num_bits + 3) / 4;  // ceil(num_bits / 4.0)
+  const int num_hex_digits = (num_bits + 3) / 4; // ceil(num_bits / 4.0)
 
   // Construct hex_string in reverse order, starting from least significant
   // digit.
@@ -92,7 +92,7 @@ std::string BitsetToHexString(const std::bitset<num_bits>& bitset) {
     // The ith digit is given by bits 4i+3 to 4i; we set the bits from most to
     // least significant.
     for (int k = 4 * i + 3; k >= 4 * i; --k) {
-      int kth_bit = (k < num_bits) ? bitset[k] : 0;  // Implicit bits are 0.
+      int kth_bit = (k < num_bits) ? bitset[k] : 0; // Implicit bits are 0.
       ith_digit = (ith_digit << 1) | kth_bit;
     }
     hex_string.push_back(HexDigitToChar(ith_digit));
@@ -104,8 +104,8 @@ std::string BitsetToHexString(const std::bitset<num_bits>& bitset) {
 }
 
 template <std::size_t num_bits>
-absl::StatusOr<std::bitset<num_bits>> HexStringToAnyLargeEnoughBitset(
-    absl::string_view hex_string) {
+absl::StatusOr<std::bitset<num_bits>>
+HexStringToAnyLargeEnoughBitset(absl::string_view hex_string) {
   if (!absl::ConsumePrefix(&hex_string, "0x")) {
     return gutil::InvalidArgumentErrorBuilder()
            << "missing '0x'-prefix in hexadecimal string: '" << hex_string
@@ -116,14 +116,15 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToAnyLargeEnoughBitset(
   std::bitset<num_bits> bitset;
   for (int i = 0; i < hex_string.size(); ++i) {
     const char ith_char = hex_string[hex_string.size() - i - 1];
-    ASSIGN_OR_RETURN(
-        const int ith_digit, HexCharToDigit(ith_char),
-        _ << " while trying to convert hex string: " << hex_string);
+    ASSIGN_OR_RETURN(const int ith_digit, HexCharToDigit(ith_char),
+                     _ << " while trying to convert hex string: "
+                       << hex_string);
     for (int j = 0; j < 4; ++j) {
       // k is the index of the j-th bit of the i-th hex digit.
       const std::size_t k = 4 * i + j;
       const bool kth_bit = (ith_digit >> j) % 2 == 1;
-      if (!kth_bit) continue;
+      if (!kth_bit)
+        continue;
       if (k < num_bits) {
         bitset.set(k, kth_bit);
       } else {
@@ -138,12 +139,12 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToAnyLargeEnoughBitset(
 }
 
 template <std::size_t num_bits>
-absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
-    absl::string_view hex_string) {
+absl::StatusOr<std::bitset<num_bits>>
+HexStringToBitset(absl::string_view hex_string) {
   // Sanity check: hex_string.size() - 2 == ceil(num_bits/4).
   if (absl::StartsWith(hex_string, "0x")) {
-    const int num_hex_chars = hex_string.size() - 2;  // Due to "0x"-prefix.
-    const int expected_num_hex_chars = (num_bits + 3) / 4;  // ceil(num_bits/4)
+    const int num_hex_chars = hex_string.size() - 2; // Due to "0x"-prefix.
+    const int expected_num_hex_chars = (num_bits + 3) / 4; // ceil(num_bits/4)
     if (num_hex_chars != expected_num_hex_chars) {
       return gutil::InvalidArgumentErrorBuilder()
              << "illegal conversion from hex string '" << hex_string << "' to "
@@ -154,6 +155,6 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
   return HexStringToAnyLargeEnoughBitset<num_bits>(hex_string);
 }
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_HEX_H_
+#endif // PINS_P4_PDPI_HEX_H_

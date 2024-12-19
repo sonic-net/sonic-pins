@@ -30,7 +30,7 @@ namespace dvaas {
 // Keeps a map between the P4RT port IDs of connected interfaces between the
 // control switch and the SUT in a mirror testbed.
 class MirrorTestbedP4rtPortIdMap {
- public:
+public:
   // Creates a port mapping from SUT -> control switch port map.
   static absl::StatusOr<MirrorTestbedP4rtPortIdMap>
   CreateFromSutToControlSwitchPortMap(
@@ -51,8 +51,8 @@ class MirrorTestbedP4rtPortIdMap {
   // Creates a map in which the P4RT port IDs of interfaces of SUT and control
   // switch with the same OpenConfig interface name are mapped to each other.
   static absl::StatusOr<MirrorTestbedP4rtPortIdMap>
-  CreateFromMatchingInterfaceNames(gnmi::gNMI::StubInterface& sut,
-                                   gnmi::gNMI::StubInterface& control_switch) {
+  CreateFromMatchingInterfaceNames(gnmi::gNMI::StubInterface &sut,
+                                   gnmi::gNMI::StubInterface &control_switch) {
     // TODO: Implement inferring port ID mapping from mirror
     // testbed interface names.
     return absl::UnimplementedError(
@@ -64,15 +64,15 @@ class MirrorTestbedP4rtPortIdMap {
   // the control switch with the given P4RT port ID according to the port
   // mapping.
   absl::StatusOr<pins_test::P4rtPortId> GetSutPortConnectedToControlSwitchPort(
-      const pins_test::P4rtPortId& control_port) const;
+      const pins_test::P4rtPortId &control_port) const;
 
   // Returns the P4RT port ID of the control switch interface connected to the
   // interface on the SUT with the given P4RT port ID according to the port
   // mapping.
   absl::StatusOr<pins_test::P4rtPortId> GetControlSwitchPortConnectedToSutPort(
-      const pins_test::P4rtPortId& sut_port) const;
+      const pins_test::P4rtPortId &sut_port) const;
 
- private:
+private:
   MirrorTestbedP4rtPortIdMap(
       absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>
           control_to_sut_port_map)
@@ -89,10 +89,10 @@ class MirrorTestbedP4rtPortIdMap {
 // any unmapped ports in both.
 // Also, ensures that mapped ports exist.
 absl::Status CheckAndStoreMappedAndUnmappedPortIds(
-    const MirrorTestbedP4rtPortIdMap& port_id_map,
-    gnmi::gNMI::StubInterface& sut, gnmi::gNMI::StubInterface& control_switch,
-    gutil::TestArtifactWriter& writer);
+    const MirrorTestbedP4rtPortIdMap &port_id_map,
+    gnmi::gNMI::StubInterface &sut, gnmi::gNMI::StubInterface &control_switch,
+    gutil::TestArtifactWriter &writer);
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_PORT_ID_MAP_H_
+#endif // PINS_DVAAS_PORT_ID_MAP_H_

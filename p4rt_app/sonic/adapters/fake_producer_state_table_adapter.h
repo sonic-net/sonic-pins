@@ -26,13 +26,13 @@ namespace sonic {
 
 // Fake the OrchAgent write path behavior for table entries in a SONiC DB.
 class FakeProducerStateTableAdapter final : public ProducerStateTableAdapter {
- public:
+public:
   explicit FakeProducerStateTableAdapter(FakeSonicDbTable *sonic_db_table);
 
   // Not copyable or moveable.
   FakeProducerStateTableAdapter(const FakeProducerStateTableAdapter &) = delete;
-  FakeProducerStateTableAdapter &operator=(
-      const FakeProducerStateTableAdapter &) = delete;
+  FakeProducerStateTableAdapter &
+  operator=(const FakeProducerStateTableAdapter &) = delete;
 
   // Faked methods.
   void set(const std::string &key,
@@ -41,15 +41,15 @@ class FakeProducerStateTableAdapter final : public ProducerStateTableAdapter {
   void batch_set(const std::vector<swss::KeyOpFieldsValuesTuple> &values);
   void batch_del(const std::vector<std::string> &keys);
 
- private:
+private:
   const std::string table_name_;
 
   // The SONiC table maintains a list of all installed table entries created by
   // this fake.
-  FakeSonicDbTable *sonic_db_table_;  // No ownership.
+  FakeSonicDbTable *sonic_db_table_; // No ownership.
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_PRODUCER_STATE_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_PRODUCER_STATE_TABLE_ADAPTER_H_

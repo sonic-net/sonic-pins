@@ -30,11 +30,11 @@ namespace packetlib {
 //               ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
 //                           HasHeaderCase(packetlib::Header::kIpv4Header)));
 // ```
-inline gutil::HasOneofCaseMatcher<Header> HasHeaderCase(
-    Header::HeaderCase header_case) {
+inline gutil::HasOneofCaseMatcher<Header>
+HasHeaderCase(Header::HeaderCase header_case) {
   return gutil::HasOneofCaseMatcher<Header>("header", header_case);
 }
 
-}  // namespace packetlib
+} // namespace packetlib
 
-#endif  // PINS_P4_PDPI_PACKETLIB_PACKETLIB_MATCHERS_H_
+#endif // PINS_P4_PDPI_PACKETLIB_PACKETLIB_MATCHERS_H_

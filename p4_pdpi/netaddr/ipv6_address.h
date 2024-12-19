@@ -25,7 +25,7 @@
 namespace netaddr {
 
 class Ipv6Address : public NetworkAddress<128, Ipv6Address> {
- public:
+public:
   // The default constructor returns the address with all bits set to zero.
   constexpr Ipv6Address() = default;
 
@@ -65,6 +65,6 @@ class Ipv6Address : public NetworkAddress<128, Ipv6Address> {
   int MinimumMaskLength() const;
 };
 
-}  // namespace netaddr
+} // namespace netaddr
 
-#endif  // PINS_P4_PDPI_NETADDR_IPV6_ADDRESS_H_
+#endif // PINS_P4_PDPI_NETADDR_IPV6_ADDRESS_H_

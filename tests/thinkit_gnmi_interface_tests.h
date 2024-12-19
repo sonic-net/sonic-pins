@@ -40,27 +40,27 @@ void TestGNMIChildPortInUseDuringBreakout(
         sai::GetP4Info(sai::Instantiation::kMiddleblock));
 
 // Helper function to test port in use.
-void BreakoutDuringPortInUse(thinkit::Switch& sut,
-                             gnmi::gNMI::StubInterface* sut_gnmi_stub,
+void BreakoutDuringPortInUse(thinkit::Switch &sut,
+                             gnmi::gNMI::StubInterface *sut_gnmi_stub,
                              RandomPortBreakoutInfo port_info,
                              const std::string& platform_json_contents,
                              bool test_child_port_in_use,
                              const p4::config::v1::P4Info& p4_info);
 
 // Test port breakout during parent port in use.
-void TestGNMIParentPortInUseDuringBreakout(thinkit::Switch& sut,
-                                           std::string& platform_json_contents);
+void TestGNMIParentPortInUseDuringBreakout(thinkit::Switch &sut,
+                                           std::string &platform_json_contents);
 
 // Test port breakout during child port in use.
-void TestGNMIChildPortInUseDuringBreakout(thinkit::Switch& sut,
-                                          std::string& platform_json_contents);
+void TestGNMIChildPortInUseDuringBreakout(thinkit::Switch &sut,
+                                          std::string &platform_json_contents);
 
 // Helper function to test port in use.
-void BreakoutDuringPortInUse(thinkit::Switch& sut,
-                             gnmi::gNMI::StubInterface* sut_gnmi_stub,
+void BreakoutDuringPortInUse(thinkit::Switch &sut,
+                             gnmi::gNMI::StubInterface *sut_gnmi_stub,
                              RandomPortBreakoutInfo port_info,
-                             const std::string& platform_json_contents,
+                             const std::string &platform_json_contents,
                              bool test_child_port_in_use);
 
-}  // namespace pins_test
-#endif  // GOOGLE_TESTS_THINKIT_GNMI_INTERFACE_TESTS_H_
+} // namespace pins_test
+#endif // GOOGLE_TESTS_THINKIT_GNMI_INTERFACE_TESTS_H_

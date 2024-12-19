@@ -16,19 +16,18 @@
 #define PINS_TESTS_GNOI_BERT_TESTS_H_
 
 #include "absl/strings/substitute.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "thinkit/generic_testbed_fixture.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace bert {
 
 class BertTest : public thinkit::GenericTestbedFixture<> {
- public:
+public:
   BertTest()
-      : generic_testbed_(nullptr),
-        sut_gnmi_stub_(nullptr),
+      : generic_testbed_(nullptr), sut_gnmi_stub_(nullptr),
         sut_diag_stub_(nullptr) {}
 
   void InitializeTestEnvironment(absl::string_view test_id) {
@@ -50,9 +49,10 @@ class BertTest : public thinkit::GenericTestbedFixture<> {
                          generic_testbed_->Sut().CreateGnmiStub());
     ASSERT_OK_AND_ASSIGN(sut_diag_stub_,
                          generic_testbed_->Sut().CreateGnoiDiagStub());
-    
+
     for (const auto &[interface, info] : interface_info) {
-      if ((info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) == thinkit::CONTROL_INTERFACE) {
+      if ((info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) ==
+          thinkit::CONTROL_INTERFACE) {
         sut_interfaces_.push_back(interface);
         peer_interfaces_.push_back(info.peer_interface_name);
         sut_to_peer_interface_mapping_[interface] = info.peer_interface_name;
@@ -74,7 +74,7 @@ class BertTest : public thinkit::GenericTestbedFixture<> {
     return peer_interfaces;
   }
 
- protected:
+protected:
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
   std::unique_ptr<gnoi::diag::Diag::StubInterface> sut_diag_stub_;
@@ -90,6 +90,6 @@ class BertTest : public thinkit::GenericTestbedFixture<> {
   absl::flat_hash_map<std::string, std::string> sut_to_peer_interface_mapping_;
 };
 
-}  // namespace bert
+} // namespace bert
 
-#endif  // PINS_TESTS_GNOI_BERT_TESTS_H_
+#endif // PINS_TESTS_GNOI_BERT_TESTS_H_

@@ -17,12 +17,12 @@
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pdpi {
 
@@ -77,7 +77,7 @@ MATCHER_P(ParsedPayloadIs, parsed_payload_matcher,
               "contains a `payload` that (when parsed as a packetlib.Packet) ",
               testing::DescribeMatcher<packetlib::Packet>(
                   parsed_payload_matcher, negation))) {
-  const p4::v1::PacketIn& packet_in = arg;
+  const p4::v1::PacketIn &packet_in = arg;
   packetlib::Packet packet = packetlib::ParsePacket(packet_in.payload());
   *result_listener << ", whose `payload` parses to the packetlib.Packet <\n"
                    << packet.DebugString() << ">, ";
@@ -85,6 +85,6 @@ MATCHER_P(ParsedPayloadIs, parsed_payload_matcher,
                                      result_listener);
 }
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_P4_RUNTIME_MATCHERS_H_
+#endif // PINS_P4_PDPI_P4_RUNTIME_MATCHERS_H_

@@ -38,18 +38,18 @@ std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id);
 // unexpected format, e.g. for untagged packets.
 // TODO: Implement and use a unified (open-source) API for test
 // packet tag embedding and extraction.
-absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet);
+absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet &packet);
 
 // Needed to make gUnit produce human-readable output in open source.
-std::ostream& operator<<(std::ostream& os, const SwitchOutput& output);
+std::ostream &operator<<(std::ostream &os, const SwitchOutput &output);
 
 // Updates the test tag (to `new_tag`) and all computed fields of all packets
 // (input, acceptable outputs) in the given `packet_test_vectr`. Returns an
 // error if the packets are not already tagged.
-absl::Status UpdateTestTag(PacketTestVector& packet_test_vector, int new_tag);
+absl::Status UpdateTestTag(PacketTestVector &packet_test_vector, int new_tag);
 
 using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_TESTS_FORWARDING_TEST_VECTOR_H_
+#endif // PINS_TESTS_FORWARDING_TEST_VECTOR_H_

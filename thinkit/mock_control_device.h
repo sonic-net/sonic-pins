@@ -27,14 +27,14 @@
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
-#include "gmock/gmock.h"
 #include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
+#include "gmock/gmock.h"
 
 namespace thinkit {
 
 class MockControlDevice : public ControlDevice {
- public:
+public:
   MOCK_METHOD(
       absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>,
       CollectPackets, (), (override));
@@ -52,11 +52,11 @@ class MockControlDevice : public ControlDevice {
               (override));
   MOCK_METHOD(absl::Status, Reboot, (RebootType reboot_Type), (override));
   MOCK_METHOD(absl::StatusOr<gnoi::diag::StartBERTResponse>, StartBERT,
-              (const gnoi::diag::StartBERTRequest& request), (override));
+              (const gnoi::diag::StartBERTRequest &request), (override));
   MOCK_METHOD(absl::StatusOr<gnoi::diag::StopBERTResponse>, StopBERT,
-              (const gnoi::diag::StopBERTRequest& request), (override));
+              (const gnoi::diag::StopBERTRequest &request), (override));
   MOCK_METHOD(absl::StatusOr<gnoi::diag::GetBERTResultResponse>, GetBERTResult,
-              (const gnoi::diag::GetBERTResultRequest& request));
+              (const gnoi::diag::GetBERTResultRequest &request));
   MOCK_METHOD(absl::StatusOr<absl::flat_hash_set<std::string>>, GetUpLinks,
               (absl::Span<const std::string> sut_ports), (override));
   MOCK_METHOD(absl::Status, CheckUp, (), (override));
@@ -73,6 +73,6 @@ class MockControlDevice : public ControlDevice {
               (absl::Span<const std::string> interfaces), (override));
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // PINS_THINKIT_MOCK_CONTROL_DEVICE_H_
+#endif // PINS_THINKIT_MOCK_CONTROL_DEVICE_H_

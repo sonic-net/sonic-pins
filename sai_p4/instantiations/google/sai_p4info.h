@@ -14,7 +14,7 @@ namespace sai {
 // given instantiation. The reference is guaranteed to remain valid at all
 // times. If an invalid Instantiation is provided, the method does a LOG(DFATAL)
 // and returns an empty P4Info.
-const p4::config::v1::P4Info& GetP4Info(Instantiation instantiation);
+const p4::config::v1::P4Info &GetP4Info(Instantiation instantiation);
 
 // TODO: Remove this function in favor of the sai_p4info_builder
 // library.
@@ -30,18 +30,18 @@ p4::config::v1::P4Info GetP4InfoWithHashSeed(Instantiation instantiation,
 // The reference is guaranteed to remain valid at all times.  If a invalid
 // Instantiation is provided, the method does a LOG(DFATAL) and returns an
 // empty IrP4Info.
-const pdpi::IrP4Info& GetIrP4Info(Instantiation instantiation);
+const pdpi::IrP4Info &GetIrP4Info(Instantiation instantiation);
 
 // Returns a reference to a static unioned P4Info of all instantiations. The
 // reference is guaranteed to remain valid at all times. For details of the
 // unioning process, see p4info_union_lib.h
-const p4::config::v1::P4Info& GetUnionedP4Info();
+const p4::config::v1::P4Info &GetUnionedP4Info();
 
 // Returns a reference to a static unioned IrP4info message for the SAI P4
 // program. The reference is guaranteed to remain valid at all times. For
 // details of the unioning process, see p4info_union_lib.h
-const pdpi::IrP4Info& GetUnionedIrP4Info();
+const pdpi::IrP4Info &GetUnionedIrP4Info();
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_H_

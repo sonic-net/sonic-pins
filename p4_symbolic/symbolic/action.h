@@ -65,9 +65,10 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
 // Constructs a symbolic expression for the assignment value, and either
 // constrains it in an enclosing assignment expression, or stores it in
 // the action scope.
-absl::Status EvaluateAssignmentStatement(
-    const ir::AssignmentStatement &assignment, SymbolicPerPacketState *state,
-    ActionContext *context, const z3::expr &guard);
+absl::Status
+EvaluateAssignmentStatement(const ir::AssignmentStatement &assignment,
+                            SymbolicPerPacketState *state,
+                            ActionContext *context, const z3::expr &guard);
 
 // Constructs a symbolic expression corresponding to this value, according
 // to its type.
@@ -93,12 +94,13 @@ absl::StatusOr<z3::expr> EvaluateVariable(const ir::Variable &variable,
 
 // Evaluate expression by recursively evaluating operands and applying the
 // symbolic version of the operator to them.
-absl::StatusOr<z3::expr> EvaluateRExpression(
-    const ir::RExpression &expr, const SymbolicPerPacketState &state,
-    const ActionContext &context);
+absl::StatusOr<z3::expr>
+EvaluateRExpression(const ir::RExpression &expr,
+                    const SymbolicPerPacketState &state,
+                    const ActionContext &context);
 
-}  // namespace action
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace action
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_ACTION_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_ACTION_H_

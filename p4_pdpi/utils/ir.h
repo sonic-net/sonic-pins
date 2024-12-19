@@ -27,7 +27,7 @@
 #include "google/rpc/code.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #if !defined(ABSL_IS_LITTLE_ENDIAN)
-#error \
+#error                                                                         \
     "Some of the utility functions are not supported in Big Endian architecture"
 #endif
 
@@ -69,8 +69,8 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
 absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format);
 
 // Converts the IR value to a PI byte string and returns it.
-absl::StatusOr<std::string> IrValueToNormalizedByteString(
-    const IrValue &ir_value, const int bitwidth);
+absl::StatusOr<std::string>
+IrValueToNormalizedByteString(const IrValue &ir_value, const int bitwidth);
 
 // Converts the PI value to an IR value and returns it.
 absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
@@ -102,8 +102,9 @@ std::string IrValueString(const IrValue &value);
 std::string ShortDescription(const IrTableEntry &entry);
 
 // Returns a string of length ceil(expected_bitwidth/8).
-absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
-    const std::string &bytes, int expected_bitwidth);
+absl::StatusOr<std::string>
+ArbitraryToNormalizedByteString(const std::string &bytes,
+                                int expected_bitwidth);
 
 // Convert an arbitrary byte string to its canonical form.
 // TODO: Move to byte_string.h and rename appropriately.
@@ -134,8 +135,8 @@ absl::Status IsGoogleRpcCode(int rpc_code);
 absl::Status ValidateGenericUpdateStatus(google::rpc::Code code,
                                          const std::string &message);
 // Parses IrUpdateStatus inside of `ir_write_response`` into string.
-std::string IrWriteResponseToReadableMessage(
-    const IrWriteResponse &ir_write_response);
+std::string
+IrWriteResponseToReadableMessage(const IrWriteResponse &ir_write_response);
 
 // Returns a formatted error message that can be inserted directly into a
 // status.
@@ -165,5 +166,5 @@ std::string MetadataName(absl::string_view metadata_name);
 bool IsElementDeprecated(
     const google::protobuf::RepeatedPtrField<std::string> &annotations);
 
-}  // namespace pdpi
-#endif  // P4_PDPI_UTILS_IR_H
+} // namespace pdpi
+#endif // P4_PDPI_UTILS_IR_H

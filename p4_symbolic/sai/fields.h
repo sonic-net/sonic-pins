@@ -196,15 +196,16 @@ struct SaiFields {
   V1ModelStandardMetadata standard_metadata;
 };
 
-absl::StatusOr<SaiFields> GetSaiFields(
-    const symbolic::SymbolicPerPacketState& state);
+absl::StatusOr<SaiFields>
+GetSaiFields(const symbolic::SymbolicPerPacketState &state);
 
 // The p4c compiler "mangles" field names of user defined metadata and the
 // mangled name is used in some places in p4-symbolic. This function returns
 // the mangled name of a given user defined metadata field. Note that this is a
 // workaround and done in a best effort fashion.
-absl::StatusOr<std::string> GetUserMetadataFieldName(
-    const std::string& field, const symbolic::SymbolicPerPacketState& state);
+absl::StatusOr<std::string>
+GetUserMetadataFieldName(const std::string &field,
+                         const symbolic::SymbolicPerPacketState &state);
 
 // The p4c compiler adds a special field ("$valid$") to each header
 // corresponding to its validity. This function returns a field reference (in
@@ -213,6 +214,6 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
 // Note: This function does NOT check if the given header exists.
 std::string GetHeaderValidityFieldRef(absl::string_view header);
 
-}  // namespace p4_symbolic
+} // namespace p4_symbolic
 
-#endif  // PINS_P4_SYMBOLIC_SAI_FIELDS_H_
+#endif // PINS_P4_SYMBOLIC_SAI_FIELDS_H_

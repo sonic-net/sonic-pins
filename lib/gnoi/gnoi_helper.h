@@ -15,5 +15,5 @@
 #ifndef PINS_LIB_GNOI_GNOI_HELPER_H_
 #define PINS_LIB_GNOI_GNOI_HELPER_H_
 
-namespace pins_test {}  // namespace pins_test
-#endif  // PINS_LIB_GNOI_GNOI_HELPER_H_
+namespace pins_test {} // namespace pins_test
+#endif                 // PINS_LIB_GNOI_GNOI_HELPER_H_

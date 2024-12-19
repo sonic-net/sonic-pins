@@ -21,6 +21,6 @@ namespace pins_test {
 
 class PacketForwardingTestFixture : public thinkit::GenericTestbedFixture<> {};
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_TESTS_INTEGRATION_SYSTEM_PACKET_FORWARDING_TESTS_H_
+#endif // PINS_TESTS_INTEGRATION_SYSTEM_PACKET_FORWARDING_TESTS_H_

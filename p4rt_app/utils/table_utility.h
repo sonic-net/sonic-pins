@@ -25,17 +25,16 @@
 #include "google/protobuf/map.h"
 #include "p4_pdpi/ir.pb.h"
 
-
 namespace p4rt_app {
 namespace table {
 
 // Individual table types that may require different processing.
 enum class Type {
-  kAcl,        // ACL pipeline table
-  kFixed,      // Fixed pipeline table
-  kExt,        // Extended pipeline table
-  kAclDefinition,  // Pipeline table definitions table (Required for ACLs)
-  kTblsDefinitionSet,  // tables definition set table
+  kAcl,               // ACL pipeline table
+  kFixed,             // Fixed pipeline table
+  kExt,               // Extended pipeline table
+  kAclDefinition,     // Pipeline table definitions table (Required for ACLs)
+  kTblsDefinitionSet, // tables definition set table
 };
 
 // Returns a string representation of the table type.
@@ -45,18 +44,18 @@ std::string TypeName(Type type);
 // Otherwise, returns an error.
 absl::StatusOr<Type> TypeParse(absl::string_view type_name);
 
-}  // namespace table
+} // namespace table
 
 // Returns the table type of the provided table.
-absl::StatusOr<table::Type> GetTableType(
-    const pdpi::IrTableDefinition& ir_table);
+absl::StatusOr<table::Type>
+GetTableType(const pdpi::IrTableDefinition &ir_table);
 
 // Looks at the bitwidth for all match fields in a table and returns an ordered
 // list of table definitions in decreasing order.
 std::vector<pdpi::IrTableDefinition> OrderTablesBySize(
-    const google::protobuf::Map<std::string, pdpi::IrTableDefinition>&
-        tables_by_name);
+    const google::protobuf::Map<std::string, pdpi::IrTableDefinition>
+        &tables_by_name);
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#endif // PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_

@@ -64,6 +64,6 @@ class SflowTestFixture : public testing::TestWithParam<SflowTestParams> {
   std::vector<IxiaLink> ready_links_;
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_SFLOW_SFLOW_TEST_H_
+#endif // PINS_TESTS_SFLOW_SFLOW_TEST_H_

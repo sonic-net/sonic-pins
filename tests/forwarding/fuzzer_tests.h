@@ -23,11 +23,11 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
-#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "gtest/gtest.h"
 
 namespace p4_fuzzer {
 
@@ -50,7 +50,7 @@ MilestoneToStringMapping() {
 }
 
 struct FuzzerTestFixtureParams {
-  thinkit::MirrorTestbedInterface* mirror_testbed;
+  thinkit::MirrorTestbedInterface *mirror_testbed;
   // The test assumes that the switch is pre-configured if no `gnmi_config` is
   // given (default), or otherwise pushes the given config before starting.
   std::optional<std::string> gnmi_config;
@@ -92,8 +92,8 @@ struct FuzzerTestFixtureParams {
   std::string p4rt_role;
   // A function for masking inequalities (due to known bugs) between entries
   // with the same TableEntryKey on the switch and in the fuzzer.
-  std::optional<
-      std::function<bool(const pdpi::IrTableEntry&, const pdpi::IrTableEntry&)>>
+  std::optional<std::function<bool(const pdpi::IrTableEntry &,
+                                   const pdpi::IrTableEntry &)>>
       TreatAsEqualDuringReadDueToKnownBug;
   // Ignores the constraints on tables listed when fuzzing entries.
   absl::flat_hash_set<std::string> ignore_constraints_on_tables;
@@ -103,13 +103,14 @@ struct FuzzerTestFixtureParams {
   // parameter.
   bool do_not_enforce_fail_on_first_switch_ordering;
   // A function for masking any updates that should not be sent to the switch.
-  std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
-      [](const AnnotatedUpdate& update) { return false; };
+  std::function<bool(const AnnotatedUpdate &)>
+      IsBuggyUpdateThatShouldBeSkipped =
+          [](const AnnotatedUpdate &update) { return false; };
 };
 
 class FuzzerTestFixture
     : public testing::TestWithParam<FuzzerTestFixtureParams> {
- protected:
+protected:
   // Sets up the mirror test bed, then sets the test_case_id.
   void SetUp() override;
 
@@ -121,10 +122,10 @@ class FuzzerTestFixture
   ~FuzzerTestFixture() override { delete GetParam().mirror_testbed; }
 };
 
-bool AbslParseFlag(absl::string_view milestone_text, Milestone* milestone,
-                   std::string* error);
+bool AbslParseFlag(absl::string_view milestone_text, Milestone *milestone,
+                   std::string *error);
 std::string AbslUnparseFlag(Milestone milestone);
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_
+#endif // PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_

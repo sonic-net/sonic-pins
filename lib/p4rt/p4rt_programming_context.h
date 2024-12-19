@@ -29,57 +29,57 @@ namespace pins_test {
 // and provides a function to revert those requests either explicitly or on
 // destruction.
 class P4rtProgrammingContext {
- public:
+public:
   // The constructor normally just takes in a pointer to a `P4RuntimeSession`.
   // This pointer needs to be valid during the lifetime of this object.
   //
   // The optional `write_request` function is meant for testing purposes or
   // overriding the write behavior.
   explicit P4rtProgrammingContext(
-      pdpi::P4RuntimeSession* session,
-      std::function<absl::Status(pdpi::P4RuntimeSession*,
-                                 p4::v1::WriteRequest&)>
+      pdpi::P4RuntimeSession *session,
+      std::function<absl::Status(pdpi::P4RuntimeSession *,
+                                 p4::v1::WriteRequest &)>
           write_request = pdpi::SetMetadataAndSendPiWriteRequest)
-      : session_(session),
-        write_request_(std::move(write_request)),
+      : session_(session), write_request_(std::move(write_request)),
         inverse_programming_requests_(),
-        write_request_function_(absl::bind_front(
-            &P4rtProgrammingContext::SendWriteRequest, this)) {}
+        write_request_function_(
+            absl::bind_front(&P4rtProgrammingContext::SendWriteRequest, this)) {
+  }
 
-  P4rtProgrammingContext(const P4rtProgrammingContext& other) = delete;
-  P4rtProgrammingContext(P4rtProgrammingContext&& other) = default;
+  P4rtProgrammingContext(const P4rtProgrammingContext &other) = delete;
+  P4rtProgrammingContext(P4rtProgrammingContext &&other) = default;
 
   // The destructor reverts the programmed requests, logging an error if it
   // fails to do so.
   ~P4rtProgrammingContext();
 
-  P4rtProgrammingContext& operator=(const P4rtProgrammingContext& other) =
-      delete;
-  P4rtProgrammingContext& operator=(P4rtProgrammingContext&& other) = default;
+  P4rtProgrammingContext &
+  operator=(const P4rtProgrammingContext &other) = delete;
+  P4rtProgrammingContext &operator=(P4rtProgrammingContext &&other) = default;
 
   // Returns the `SendWriteRequest` function as a standalone function for
   // convenience.
-  const std::function<absl::Status(p4::v1::WriteRequest&)>&
+  const std::function<absl::Status(p4::v1::WriteRequest &)> &
   GetWriteRequestFunction() const {
     return write_request_function_;
   }
 
   // Sends a write `request` to the `P4RuntimeSession`. This function only
   // supports INSERT and DELETE operations.
-  absl::Status SendWriteRequest(p4::v1::WriteRequest& request);
+  absl::Status SendWriteRequest(p4::v1::WriteRequest &request);
 
   // Reverts all programmed write requests by sending them back in reverse order
   // with INSERT replaced by DELETE and vice versa.
   absl::Status Revert();
 
- private:
-  pdpi::P4RuntimeSession* session_;
-  std::function<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+private:
+  pdpi::P4RuntimeSession *session_;
+  std::function<absl::Status(pdpi::P4RuntimeSession *, p4::v1::WriteRequest &)>
       write_request_;
   std::vector<p4::v1::WriteRequest> inverse_programming_requests_;
-  std::function<absl::Status(p4::v1::WriteRequest&)> write_request_function_;
+  std::function<absl::Status(p4::v1::WriteRequest &)> write_request_function_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // GOOGLE_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_
+#endif // GOOGLE_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_

@@ -36,7 +36,7 @@ inline orion::p4::test::Bmv2::Args DefaultSaiP4Bmv2Args() {
 // Configures BMv2 by pushing the given `config` and installing the auxiliary
 // clone session entry required for PacketIO.
 absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
-    const p4::v1::ForwardingPipelineConfig& bmv2_config,
+    const p4::v1::ForwardingPipelineConfig &bmv2_config,
     orion::p4::test::Bmv2::Args bmv2_args = DefaultSaiP4Bmv2Args());
 
 // Returns configured BMv2 ready for use with SAI P4.
@@ -47,6 +47,6 @@ absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
     Instantiation instantiation,
     orion::p4::test::Bmv2::Args bmv2_args = DefaultSaiP4Bmv2Args());
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_SET_UP_BMV2_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_SET_UP_BMV2_H_

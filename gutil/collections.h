@@ -31,10 +31,10 @@
 namespace gutil {
 
 // Returns a vector of the keys in a map collection.
-template <typename M>
-std::vector<typename M::key_type> Keys(const M &m) {
+template <typename M> std::vector<typename M::key_type> Keys(const M &m) {
   std::vector<typename M::key_type> keys;
-  for (const auto &[key, val] : m) keys.push_back(key);
+  for (const auto &[key, val] : m)
+    keys.push_back(key);
   return keys;
 }
 
@@ -46,7 +46,8 @@ template <typename M, typename KeyType = typename M::key_type>
 absl::StatusOr<const typename M::mapped_type> FindOrStatus(const M &m,
                                                            const KeyType &k) {
   auto it = m.find(k);
-  if (it != m.end()) return it->second;
+  if (it != m.end())
+    return it->second;
   if constexpr (std::is_same_v<KeyType, std::string>) {
     return absl::NotFoundError(absl::StrCat("Key not found: '", k, "'"));
   } else {
@@ -57,10 +58,11 @@ absl::StatusOr<const typename M::mapped_type> FindOrStatus(const M &m,
 // Returns a const, non-null pointer of the value associated with a given key
 // if it exists, or a status failure if it does not.
 template <typename M, typename KeyType = typename M::key_type>
-absl::StatusOr<const typename M::mapped_type *> FindPtrOrStatus(
-    const M &m, const KeyType &k) {
+absl::StatusOr<const typename M::mapped_type *>
+FindPtrOrStatus(const M &m, const KeyType &k) {
   auto it = m.find(k);
-  if (it != m.end()) return &it->second;
+  if (it != m.end())
+    return &it->second;
   if constexpr (std::is_same_v<typename M::key_type, std::string>) {
     return absl::NotFoundError(absl::StrCat("Key not found: '", k, "'"));
   } else {
@@ -71,10 +73,11 @@ absl::StatusOr<const typename M::mapped_type *> FindPtrOrStatus(
 // Returns a mutable, non-null pointer of the value associated with a given key
 // if it exists, or a status failure if it does not.
 template <typename M, typename KeyType = typename M::key_type>
-absl::StatusOr<typename M::mapped_type *> FindMutablePtrOrStatus(
-    M &m, const KeyType &k) {
+absl::StatusOr<typename M::mapped_type *>
+FindMutablePtrOrStatus(M &m, const KeyType &k) {
   auto it = m.find(k);
-  if (it != m.end()) return &it->second;
+  if (it != m.end())
+    return &it->second;
   if constexpr (std::is_same_v<typename M::key_type, std::string>) {
     return absl::NotFoundError(absl::StrCat("Key not found: '", k, "'"));
   } else {
@@ -87,7 +90,8 @@ absl::StatusOr<typename M::mapped_type *> FindMutablePtrOrStatus(
 template <typename M, typename KeyType = typename M::key_type>
 const typename M::mapped_type *FindOrNull(const M &m, const KeyType &k) {
   const auto it = m.find(k);
-  if (it != m.end()) return &(it->second);
+  if (it != m.end())
+    return &(it->second);
   return nullptr;
 }
 
@@ -96,7 +100,8 @@ const typename M::mapped_type *FindOrNull(const M &m, const KeyType &k) {
 template <typename M, typename KeyType = typename M::key_type>
 typename M::mapped_type *FindOrNull(M &m, const KeyType &k) {
   auto it = m.find(k);
-  if (it != m.end()) return &(it->second);
+  if (it != m.end())
+    return &(it->second);
   return nullptr;
 }
 
@@ -105,7 +110,7 @@ typename M::mapped_type *FindOrNull(M &m, const KeyType &k) {
 template <typename M, typename KeyType = typename M::key_type>
 typename M::mapped_type &FindOrDie(M &map, const KeyType &key) {
   auto iter = map.find(key);
-  CHECK(iter != map.end()) << "Could not find key";  // Crash OK
+  CHECK(iter != map.end()) << "Could not find key"; // Crash OK
   return iter->second;
 }
 
@@ -114,7 +119,7 @@ typename M::mapped_type &FindOrDie(M &map, const KeyType &key) {
 template <typename M, typename KeyType = typename M::key_type>
 const typename M::mapped_type &FindOrDie(const M &map, const KeyType &key) {
   auto iter = map.find(key);
-  CHECK(iter != map.end()) << "Could not find key";  // Crash OK
+  CHECK(iter != map.end()) << "Could not find key"; // Crash OK
 
   return iter->second;
 }
@@ -163,6 +168,6 @@ absl::Status InsertIfUnique(google::protobuf::Map<K, V> *map, K key,
   return absl::OkStatus();
 }
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // GUTIL_COLLECTIONS_H
+#endif // GUTIL_COLLECTIONS_H

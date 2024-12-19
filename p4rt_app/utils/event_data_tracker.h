@@ -14,7 +14,7 @@
 #ifndef PINS_P4RT_APP_UTILS_EVENT_DATA_TRACKER_H_
 #define PINS_P4RT_APP_UTILS_EVENT_DATA_TRACKER_H_
 
-#include <mutex>  // NOLINT
+#include <mutex> // NOLINT
 #include <optional>
 #include <utility>
 
@@ -24,13 +24,12 @@ namespace p4rt_app {
 //
 //  Thread safe container for accumulating data. Note the data type must support
 //  the '+' operator.
-template <typename T>
-class EventDataTracker {
- public:
+template <typename T> class EventDataTracker {
+public:
   explicit EventDataTracker(T default_value)
       : default_value_(std::move(default_value)), data_(default_value_) {}
 
-  void Increment(const T& value) {
+  void Increment(const T &value) {
     std::lock_guard<std::mutex> lock(l_);
     if (!min_value_seen_.has_value() || value < *min_value_seen_) {
       min_value_seen_ = value;
@@ -41,7 +40,7 @@ class EventDataTracker {
     data_ += value;
   }
 
-  EventDataTracker<T>& operator+=(const T& value) {
+  EventDataTracker<T> &operator+=(const T &value) {
     this->Increment(value);
     return *this;
   }
@@ -71,7 +70,7 @@ class EventDataTracker {
     return tmp;
   }
 
- private:
+private:
   mutable std::mutex l_;
 
   T default_value_;
@@ -80,6 +79,6 @@ class EventDataTracker {
   std::optional<T> max_value_seen_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_UTILS_EVENT_DATA_TRACKER_H_
+#endif // PINS_P4RT_APP_UTILS_EVENT_DATA_TRACKER_H_

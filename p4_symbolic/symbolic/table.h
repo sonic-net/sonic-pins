@@ -39,11 +39,11 @@ namespace table {
 // P4-Symbolic models the default action as an entry with index -1.
 constexpr int kDefaultActionEntryIndex = -1;
 
-absl::StatusOr<SymbolicTableMatches> EvaluateTable(
-    const Dataplane &data_plane, const ir::Table &table,
-    const std::vector<pdpi::IrTableEntry> &entries,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+absl::StatusOr<SymbolicTableMatches>
+EvaluateTable(const Dataplane &data_plane, const ir::Table &table,
+              const std::vector<pdpi::IrTableEntry> &entries,
+              SymbolicPerPacketState *state,
+              values::P4RuntimeTranslator *translator, const z3::expr &guard);
 
 // Analyze a single match that is part of a table entry.
 // Constructs a symbolic expression that semantically corresponds to this
@@ -53,8 +53,8 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
     const std::string &field_name, const z3::expr &field_expression,
     const pdpi::IrMatch &match, values::P4RuntimeTranslator *translator);
 
-}  // namespace table
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace table
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_TABLE_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_TABLE_H_

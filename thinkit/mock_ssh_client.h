@@ -21,35 +21,35 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "gmock/gmock.h"
 #include "thinkit/ssh_client.h"
+#include "gmock/gmock.h"
 
 namespace thinkit {
 
 class MockSSHClient : public SSHClient {
- public:
+public:
   MOCK_METHOD(absl::StatusOr<std::string>, RunCommand,
               (absl::string_view, absl::string_view, absl::Duration),
               (override));
   MOCK_METHOD(absl::Status, PutFile,
-              (absl::string_view, const RemotePath&, absl::Duration),
+              (absl::string_view, const RemotePath &, absl::Duration),
               (override));
   MOCK_METHOD(absl::Status, PutFileContents,
-              (absl::string_view, const RemotePath&, absl::Duration),
+              (absl::string_view, const RemotePath &, absl::Duration),
               (override));
   MOCK_METHOD(absl::Status, PutDirectory,
-              (absl::string_view, const RemotePath&, absl::Duration),
+              (absl::string_view, const RemotePath &, absl::Duration),
               (override));
   MOCK_METHOD(absl::Status, GetFile,
-              (const RemotePath&, absl::string_view, absl::Duration),
+              (const RemotePath &, absl::string_view, absl::Duration),
               (override));
   MOCK_METHOD(absl::StatusOr<std::string>, GetFileContents,
-              (const RemotePath&, absl::Duration), (override));
+              (const RemotePath &, absl::Duration), (override));
   MOCK_METHOD(absl::Status, GetDirectory,
-              (const RemotePath&, absl::string_view, absl::Duration),
+              (const RemotePath &, absl::string_view, absl::Duration),
               (override));
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // THINKIT_MOCK_SSH_CLIENT_H_
+#endif // THINKIT_MOCK_SSH_CLIENT_H_

@@ -17,31 +17,31 @@
 #include <string>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "swss/table.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockProducerStateTableAdapter : public ProducerStateTableAdapter {
- public:
+public:
   MOCK_METHOD(void, set,
-              (const std::string& key,
-               const std::vector<swss::FieldValueTuple>& values),
+              (const std::string &key,
+               const std::vector<swss::FieldValueTuple> &values),
               (override));
 
-  MOCK_METHOD(void, del, (const std::string& key), (override));
+  MOCK_METHOD(void, del, (const std::string &key), (override));
 
   MOCK_METHOD(void, batch_set,
-              (const std::vector<swss::KeyOpFieldsValuesTuple>& key_values),
+              (const std::vector<swss::KeyOpFieldsValuesTuple> &key_values),
               (override));
 
-  MOCK_METHOD(void, batch_del, (const std::vector<std::string>& keys),
+  MOCK_METHOD(void, batch_del, (const std::vector<std::string> &keys),
               (override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_PRODUCER_STATE_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_PRODUCER_STATE_TABLE_ADAPTER_H_

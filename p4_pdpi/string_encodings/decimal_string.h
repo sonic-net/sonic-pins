@@ -30,10 +30,10 @@ namespace pdpi {
 absl::StatusOr<int> DecimalStringToInt(absl::string_view decimal_string);
 absl::StatusOr<int32_t> DecimalStringToInt32(absl::string_view decimal_string);
 absl::StatusOr<int64_t> DecimalStringToInt64(absl::string_view decimal_string);
-absl::StatusOr<uint32_t> DecimalStringToUint32(
-    absl::string_view decimal_string);
-absl::StatusOr<uint64_t> DecimalStringToUint64(
-    absl::string_view decimal_string);
+absl::StatusOr<uint32_t>
+DecimalStringToUint32(absl::string_view decimal_string);
+absl::StatusOr<uint64_t>
+DecimalStringToUint64(absl::string_view decimal_string);
 
 // Converts given integer value to decimal string if the integer is
 // non-negative, or returns an error status otherwise.
@@ -41,6 +41,6 @@ absl::StatusOr<std::string> IntToDecimalString(int value);
 absl::StatusOr<std::string> IntToDecimalString(int64_t value);
 absl::StatusOr<std::string> IntToDecimalString(uint32_t value);
 absl::StatusOr<std::string> IntToDecimalString(uint64_t value);
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
+#endif // PINS_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_

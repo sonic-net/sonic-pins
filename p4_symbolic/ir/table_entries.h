@@ -33,10 +33,11 @@ using TableEntries =
     std::unordered_map<std::string, std::vector<pdpi::IrTableEntry>>;
 
 // Returns table entries in PDPI IR representation, keyed by table name.
-absl::StatusOr<TableEntries> ParseTableEntries(
-    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::TableEntry> entries);
+absl::StatusOr<TableEntries>
+ParseTableEntries(const pdpi::IrP4Info &p4info,
+                  absl::Span<const p4::v1::TableEntry> entries);
 
-}  // namespace ir
-}  // namespace p4_symbolic
+} // namespace ir
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_IR_TABLE_ENTRIES_H_
+#endif // P4_SYMBOLIC_IR_TABLE_ENTRIES_H_

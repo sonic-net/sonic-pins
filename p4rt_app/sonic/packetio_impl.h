@@ -16,7 +16,7 @@
 
 #include <memory>
 #include <string>
-#include <thread>  //NOLINT
+#include <thread> //NOLINT
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -38,22 +38,22 @@ struct PacketIoOptions {
 
 // Implementation class for PacketIoInterface.
 class PacketIoImpl : public PacketIoInterface {
- public:
+public:
   explicit PacketIoImpl(std::unique_ptr<SystemCallAdapter> system_call_adapter,
-                        const PacketIoOptions& options)
+                        const PacketIoOptions &options)
       : system_call_adapter_(std::move(system_call_adapter)),
         callback_function_(options.callback_function),
         use_genetlink_(options.use_genetlink) {}
 
   // Not copyable or moveable.
-  PacketIoImpl(const PacketIoImpl&) = delete;
-  PacketIoImpl& operator=(const PacketIoImpl&) = delete;
+  PacketIoImpl(const PacketIoImpl &) = delete;
+  PacketIoImpl &operator=(const PacketIoImpl &) = delete;
 
   // Start the receive thread for the packet-io interfaces that invokes callback
   // function for every packet in.
-  ABSL_MUST_USE_RESULT absl::StatusOr<std::thread> StartReceive(
-      packet_metadata::ReceiveCallbackFunction callback_function,
-      bool use_genetlink) override;
+  ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
+  StartReceive(packet_metadata::ReceiveCallbackFunction callback_function,
+               bool use_genetlink) override;
 
   // Add a new port to Packet I/O.
   absl::Status AddPacketIoPort(absl::string_view port_name) override;
@@ -63,7 +63,7 @@ class PacketIoImpl : public PacketIoInterface {
 
   // Send the given packet out on the specified interface.
   absl::Status SendPacketOut(absl::string_view port_name,
-                             const std::string& packet) override;
+                             const std::string &packet) override;
 
   // Checks if a transmit socket exists for the specified port.
   bool IsValidPortForTransmit(absl::string_view port_name) const;
@@ -71,7 +71,7 @@ class PacketIoImpl : public PacketIoInterface {
   // Checks if a receive socket (netdev model) exists for the specified port.
   bool IsValidPortForReceive(absl::string_view port_name) const;
 
- private:
+private:
   // System call adapter object to call into the utility functions.
   const std::unique_ptr<SystemCallAdapter> system_call_adapter_;
 
@@ -92,7 +92,7 @@ class PacketIoImpl : public PacketIoInterface {
   swss::Select port_select_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_PACKETIO_IMPL_H_
+#endif // PINS_P4RT_APP_SONIC_PACKETIO_IMPL_H_

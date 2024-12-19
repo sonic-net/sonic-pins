@@ -44,7 +44,7 @@ struct PacketSynthesisResult {
 
 // The result of dataplane validation, as returned to DVaaS users.
 class [[nodiscard]] ValidationResult {
- public:
+public:
   // Asserts that at least an `expected_success_rate` fraction of test vectors
   // succeeded, returning either:
   // * an `Ok` status if that is the case, or
@@ -62,8 +62,8 @@ class [[nodiscard]] ValidationResult {
 
   // Logs various statistics about the number of test vectors and how many of
   // them passed.
-  const ValidationResult& LogStatistics() const;
-  ValidationResult& LogStatistics();
+  const ValidationResult &LogStatistics() const;
+  ValidationResult &LogStatistics();
 
   // Returns a list of all test failures. Prefer using `HasSuccessRateOfAtLeast`
   // as it includes additional information to ease debugging.
@@ -84,12 +84,12 @@ class [[nodiscard]] ValidationResult {
   // functions like `HasSuccessRateOfAtLeast` and `GetAllFailures`.
   bool PacketSynthesizerTimedOut() const;
 
- private:
+private:
   PacketTestOutcomes test_outcomes_;
   TestVectorStats test_vector_stats_;
   PacketSynthesisResult packet_synthesis_result_;
 };
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_VALIDATION_RESULT_H_
+#endif // PINS_DVAAS_VALIDATION_RESULT_H_

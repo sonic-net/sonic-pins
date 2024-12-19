@@ -15,7 +15,7 @@ struct NumPkts {
 };
 
 class MtuRoutingTestFixture : public thinkit::GenericTestbedFixture<> {
- protected:
+protected:
   // Acquires testbed with 2 pairs of connected ports between SUT and
   // control switch. Sets up route from first to second port on SUT.
   void SetUp() override;
@@ -32,7 +32,7 @@ class MtuRoutingTestFixture : public thinkit::GenericTestbedFixture<> {
                                       absl::string_view test_packet_str);
 
   // Set up route from source port to destination port on SUT.
-  absl::Status SetupRoute(P4rtProgrammingContext* p4rt_context);
+  absl::Status SetupRoute(P4rtProgrammingContext *p4rt_context);
 
   InterfaceLink source_link_, destination_link_;
   int sut_source_port_id_, sut_destination_port_id_;
@@ -40,6 +40,6 @@ class MtuRoutingTestFixture : public thinkit::GenericTestbedFixture<> {
   std::unique_ptr<gnmi::gNMI::StubInterface> stub_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_TESTS_MTU_TESTS_MTU_TESTS_H_
+#endif // PINS_TESTS_MTU_TESTS_MTU_TESTS_H_

@@ -37,21 +37,21 @@ namespace pins_test {
 // This class represents a P4Runtime port ID, abstracting away the encoding.
 // TODO: Agree on a single encoding so this class becomes obsolete.
 class P4rtPortId {
- public:
+public:
   // Constructors.
   P4rtPortId() = default;
 
   // Expects a decimal string. Else returns InvalidArgumentError.
-  static absl::StatusOr<P4rtPortId> MakeFromP4rtEncoding(
-      absl::string_view p4rt_port_id);
-  static absl::StatusOr<std::vector<P4rtPortId>> MakeVectorFromP4rtEncodings(
-      absl::Span<const std::string> p4rt_port_id);
+  static absl::StatusOr<P4rtPortId>
+  MakeFromP4rtEncoding(absl::string_view p4rt_port_id);
+  static absl::StatusOr<std::vector<P4rtPortId>>
+  MakeVectorFromP4rtEncodings(absl::Span<const std::string> p4rt_port_id);
 
   // Constructs a P4rtPortId from an OpenConfig encoding, i.e. a uint32. Never
   // fails.
   static P4rtPortId MakeFromOpenConfigEncoding(uint32_t p4rt_port_id);
-  static std::vector<P4rtPortId> MakeVectorFromOpenConfigEncodings(
-      absl::Span<const uint32_t> p4rt_port_id);
+  static std::vector<P4rtPortId>
+  MakeVectorFromOpenConfigEncodings(absl::Span<const uint32_t> p4rt_port_id);
 
   // Getters.
   // Returns OpenConfig encoding of the port ID, e.g. the uint32 `42`.
@@ -60,26 +60,25 @@ class P4rtPortId {
   // Returns P4Runtime encoding of the port ID, e.g. the string `"42"`.
   std::string GetP4rtEncoding() const;
 
-  bool operator==(const P4rtPortId& other) const;
-  bool operator<(const P4rtPortId& other) const;
+  bool operator==(const P4rtPortId &other) const;
+  bool operator<(const P4rtPortId &other) const;
 
-  template <typename H>
-  friend H AbslHashValue(H h, const P4rtPortId& port_id) {
+  template <typename H> friend H AbslHashValue(H h, const P4rtPortId &port_id) {
     return H::combine(std::move(h), port_id.p4rt_port_id_);
   }
 
- private:
+private:
   explicit P4rtPortId(uint32_t p4rt_port_id) : p4rt_port_id_(p4rt_port_id) {}
   uint32_t p4rt_port_id_ = 0;
 };
 
-std::ostream& operator<<(std::ostream& os, const P4rtPortId& p4rt_port_id);
+std::ostream &operator<<(std::ostream &os, const P4rtPortId &p4rt_port_id);
 
 template <typename Sink>
-inline void AbslStringify(Sink& sink, const P4rtPortId& p4rt_port_id) {
+inline void AbslStringify(Sink &sink, const P4rtPortId &p4rt_port_id) {
   absl::Format(&sink, "%s", p4rt_port_id.GetP4rtEncoding());
 }
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_P4RT_P4RT_PORT_H_
+#endif // PINS_LIB_P4RT_P4RT_PORT_H_

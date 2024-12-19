@@ -29,7 +29,7 @@ namespace thinkit {
 // The TestEnvironment interface represents the underlying test infrastructure
 // to which a test might want to pass additional debug information to.
 class TestEnvironment {
- public:
+public:
   virtual ~TestEnvironment() {}
 
   // Stores a test artifact with the specified filename and contents. Overwrites
@@ -37,7 +37,7 @@ class TestEnvironment {
   virtual absl::Status StoreTestArtifact(absl::string_view filename,
                                          absl::string_view contents) = 0;
   absl::Status StoreTestArtifact(absl::string_view filename,
-                                 const google::protobuf::Message& proto) {
+                                 const google::protobuf::Message &proto) {
     return StoreTestArtifact(filename, proto.DebugString());
   }
 
@@ -46,7 +46,7 @@ class TestEnvironment {
   virtual absl::Status AppendToTestArtifact(absl::string_view filename,
                                             absl::string_view contents) = 0;
   absl::Status AppendToTestArtifact(absl::string_view filename,
-                                    const google::protobuf::Message& proto) {
+                                    const google::protobuf::Message &proto) {
     return AppendToTestArtifact(filename,
                                 absl::StrCat(proto.DebugString(), "\n"));
   }
@@ -60,12 +60,12 @@ class TestEnvironment {
   }
 
   // Set the `test_case_ids` for use by tracking tools.
-  virtual void SetTestCaseIDs(const std::vector<std::string>& test_case_ids) {}
+  virtual void SetTestCaseIDs(const std::vector<std::string> &test_case_ids) {}
 
   // Record a group of metrics for use by tracking tools.
-  virtual void RecordMetrics(const MetricGroup& metric_group) {}
+  virtual void RecordMetrics(const MetricGroup &metric_group) {}
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // THINKIT_TEST_ENVIRONMENT_H_
+#endif // THINKIT_TEST_ENVIRONMENT_H_

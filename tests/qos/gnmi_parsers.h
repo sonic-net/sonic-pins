@@ -20,18 +20,18 @@ ParseLoopbackIps(absl::string_view gnmi_config);
 
 absl::StatusOr<
     std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>>
-ParseLoopbackIps(const openconfig::Config& gnmi_config);
+ParseLoopbackIps(const openconfig::Config &gnmi_config);
 
-absl::StatusOr<std::vector<netaddr::Ipv4Address>> ParseLoopbackIpv4s(
-    absl::string_view gnmi_config);
-absl::StatusOr<std::vector<netaddr::Ipv4Address>> ParseLoopbackIpv4s(
-    const openconfig::Config& gnmi_config);
+absl::StatusOr<std::vector<netaddr::Ipv4Address>>
+ParseLoopbackIpv4s(absl::string_view gnmi_config);
+absl::StatusOr<std::vector<netaddr::Ipv4Address>>
+ParseLoopbackIpv4s(const openconfig::Config &gnmi_config);
 
-absl::StatusOr<std::vector<netaddr::Ipv6Address>> ParseLoopbackIpv6s(
-    absl::string_view gnmi_config);
-absl::StatusOr<std::vector<netaddr::Ipv6Address>> ParseLoopbackIpv6s(
-    const openconfig::Config& gnmi_config);
+absl::StatusOr<std::vector<netaddr::Ipv6Address>>
+ParseLoopbackIpv6s(absl::string_view gnmi_config);
+absl::StatusOr<std::vector<netaddr::Ipv6Address>>
+ParseLoopbackIpv6s(const openconfig::Config &gnmi_config);
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // GOOGLE_TESTS_QOS_GNMI_PARSERS_H_
+#endif // GOOGLE_TESTS_QOS_GNMI_PARSERS_H_

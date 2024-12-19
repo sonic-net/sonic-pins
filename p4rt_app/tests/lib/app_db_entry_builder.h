@@ -38,14 +38,14 @@ namespace test_lib {
 //       .AddMatchField("field1", "123")
 //       .AddMatchField("field2", "abc");
 class AppDbEntryBuilder {
- public:
-  AppDbEntryBuilder& SetTableName(const std::string& table_name);
-  AppDbEntryBuilder& SetAction(const std::string& action);
-  AppDbEntryBuilder& SetPriority(int value);
-  AppDbEntryBuilder& AddMatchField(const std::string& key,
-                                   const std::string& value);
-  AppDbEntryBuilder& AddActionParam(const std::string& param,
-                                    const std::string& value);
+public:
+  AppDbEntryBuilder &SetTableName(const std::string &table_name);
+  AppDbEntryBuilder &SetAction(const std::string &action);
+  AppDbEntryBuilder &SetPriority(int value);
+  AppDbEntryBuilder &AddMatchField(const std::string &key,
+                                   const std::string &value);
+  AppDbEntryBuilder &AddActionParam(const std::string &param,
+                                    const std::string &value);
 
   // Returns an AppDb entry key formatted as:
   //   <table_name>:{<match_0>,<match_1>,...,<match_N>}
@@ -55,7 +55,7 @@ class AppDbEntryBuilder {
   std::vector<std::pair<std::string, std::string>> GetValueList() const;
   std::unordered_map<std::string, std::string> GetValueMap() const;
 
- private:
+private:
   // The table name is always used when generating the AppDb key. If no value is
   // explicitly set an empty string will be used instead.
   std::string table_name_;
@@ -83,7 +83,7 @@ class AppDbEntryBuilder {
   std::vector<std::pair<std::string, std::string>> action_params_;
 };
 
-}  // namespace test_lib
-}  // namespace p4rt_app
+} // namespace test_lib
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_TESTS_LIB_APP_DB_ENTRY_BUILDER_H_
+#endif // PINS_P4RT_APP_TESTS_LIB_APP_DB_ENTRY_BUILDER_H_
