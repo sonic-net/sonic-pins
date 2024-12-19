@@ -62,7 +62,7 @@ absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
 
   // Ite will pad bitvectors to the same size, but this is not the right
   // semantics if we assign a larger bitvector into a smaller one. Instead, the
-  // assigned value needs to be truncated to the bitsize of the asignee.
+  // assigned value needs to be truncated to the bitsize of the assignee.
   RETURN_IF_ERROR(operators::TruncateBitVectorToFit(old_value, value));
 
   // This will return an absl error if the sorts are incompatible, and will pad

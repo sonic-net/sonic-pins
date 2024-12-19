@@ -17,16 +17,11 @@
 
 #include <bitset>
 #include <string>
-#include <type_traits>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "gutil/status.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
