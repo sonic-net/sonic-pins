@@ -24,6 +24,7 @@
 
 #include <string>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/escaping.h"
@@ -44,6 +45,7 @@
 #include "lib/p4rt/packet_listener.h"
 #include "lib/validator/validator_lib.h"
 #include "p4_pdpi/ir.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -141,11 +143,9 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
   constexpr absl::string_view kVrfId = "vrf-80";
   constexpr absl::string_view kRifOutId = "router-interface-1";
   constexpr absl::string_view kNhopId = "nexthop-1";
-  constexpr absl::string_view kNborIdv4 = "1.1.1.2";
-  constexpr absl::string_view kNborIdv6 = "fe80::002:02ff:fe02:0202";
-  absl::string_view nborid = kNborIdv4;
 
-  if (is_ipv6) nborid = kNborIdv6;
+  const std::string nborid =
+      netaddr::MacAddress(2, 2, 2, 2, 2, 2).ToLinkLocalIpv6Address().ToString();
 
   auto vrf_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
@@ -774,6 +774,13 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   // Set the egress port to loopback mode
   EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
 
+  // Restore loopback configuration after test.
+  const auto kRestoreLoopbackConfig = absl::Cleanup([&] {
+    EXPECT_OK(
+        SetLoopback(out_initial_loopback, sut_out_interface, gnmi_stub.get()))
+        << "failed to restore initial loopback config.";
+  });
+
   ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
       generic_testbed->Sut(), GetParam().gnmi_config,
       /*timeout=*/absl::Minutes(3)));
@@ -784,6 +791,7 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   EXPECT_OK(ForwardToEgress(std::stoul(in_id), std::stoul(out_id), false,
                             kDestMac, generic_testbed->Sut(),
                             GetParam().p4_info));
+  
   LOG(INFO) << "\n\n----- ForwardToEgress Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
@@ -801,6 +809,7 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
 
   // Connect to the Ixia
   LOG(INFO) << "\n\nTestIPv4Pkts: IxiaConnect\n\n";
+  
   ASSERT_OK_AND_ASSIGN(std::string href,
                        ixia::IxiaConnect(ixia_ip, *generic_testbed));
 
@@ -907,13 +916,11 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   EXPECT_EQ(delta_out.out_errors, 0);
   EXPECT_EQ(delta_out.out_discards, 0);
   
-  // TODO: Remove mask after bug is addressed.
-  if (!generic_testbed->Environment().MaskKnownFailures()) {
-    EXPECT_LE(delta_in.in_ipv4_pkts, delta_out.out_pkts + 10);
-    EXPECT_GE(delta_in.in_ipv4_pkts, delta_out.out_pkts - 10);
-    EXPECT_GE(delta_out.out_ipv4_pkts, delta_out.out_pkts - 10);
-    EXPECT_LE(delta_out.out_ipv4_pkts, delta_out.out_pkts + 10);
-  }
+  EXPECT_LE(delta_in.in_ipv4_pkts, delta_out.out_pkts + 10);
+  EXPECT_GE(delta_in.in_ipv4_pkts, delta_out.out_pkts - 10);
+  EXPECT_GE(delta_out.out_ipv4_pkts, delta_out.out_pkts - 10);
+  EXPECT_LE(delta_out.out_ipv4_pkts, delta_out.out_pkts + 10);
+  
   EXPECT_EQ(delta_out.out_ipv6_pkts, 0);
   EXPECT_EQ(delta_out.out_ipv6_discarded_pkts, 0);
 
@@ -1268,6 +1275,7 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
   ASSERT_OK_AND_ASSIGN(
       const std::string in_id,
       gutil::FindOrStatus(port_id_by_interface, sut_in_interface));
+  
   ASSERT_OK_AND_ASSIGN(
       const std::string out_id,
       gutil::FindOrStatus(port_id_by_interface, sut_out_interface));
@@ -1309,6 +1317,13 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
   // Set the egress port to loopback mode
   EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
 
+  // Restore loopback configuration after test.
+  const auto kRestoreLoopbackConfig = absl::Cleanup([&] {
+    EXPECT_OK(
+        SetLoopback(out_initial_loopback, sut_out_interface, gnmi_stub.get()))
+        << "failed to restore initial loopback config.";
+  });
+
   ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
       generic_testbed->Sut(), GetParam().gnmi_config,
       /*timeout=*/absl::Minutes(3)));
@@ -1327,6 +1342,7 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
 
   LOG(INFO) << "\n\nInitial Ingress Counters (" << sut_in_interface << "):\n";
   ShowCounters(initial_in_counters);
+  
   LOG(INFO) << "\n\nInitial Egress Counters (" << sut_out_interface << "):\n";
   ShowCounters(initial_out_counters);
   LOG(INFO) << "\n\n";
@@ -1441,13 +1457,10 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
   EXPECT_GE(delta_out.in_ipv6_pkts, delta_out.out_pkts - 10);
   EXPECT_LE(delta_out.in_ipv6_pkts, delta_out.out_pkts + 10);
 
-  // TODO: Remove mask after bug is addressed.
-  if (!generic_testbed->Environment().MaskKnownFailures()) {
-    EXPECT_LE(delta_out.out_ipv6_pkts, delta_out.out_pkts + 10);
-    EXPECT_GE(delta_out.out_ipv6_pkts, delta_out.out_pkts - 10);
-    EXPECT_LE(delta_in.in_ipv6_pkts, delta_out.out_pkts + 10);
-    EXPECT_GE(delta_in.in_ipv6_pkts, delta_out.out_pkts - 10);
-  }
+  EXPECT_LE(delta_out.out_ipv6_pkts, delta_out.out_pkts + 10);
+  EXPECT_GE(delta_out.out_ipv6_pkts, delta_out.out_pkts - 10);
+  EXPECT_LE(delta_in.in_ipv6_pkts, delta_out.out_pkts + 10);
+  EXPECT_GE(delta_in.in_ipv6_pkts, delta_out.out_pkts - 10);
 
   EXPECT_EQ(delta_out.out_ipv6_discarded_pkts, 0);
   
