@@ -18,9 +18,8 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
 #define P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
 
-#include "gutil/status.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
@@ -30,7 +29,7 @@ namespace symbolic {
 namespace conditional {
 
 absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
-    const Dataplane &data_plane, const ir::Conditional &conditional,
+    const ir::Dataplane &data_plane, const ir::Conditional &conditional,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard);
 

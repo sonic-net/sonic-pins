@@ -30,39 +30,11 @@
 #include "p4_symbolic/symbolic/conditional.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
-#include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic::symbolic::control {
 
-absl::StatusOr<SymbolicTableMatches> EvaluateV1model(
-    const Dataplane &data_plane, SymbolicPerPacketState *state,
-    values::P4RuntimeTranslator *translator) {
-  // TODO: This is a simplification that omits a lot of features, e.g.
-  // cloning, digests, resubmit, and multicast. The full semantics we should
-  // implement is documented here:
-  // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
-  // Evaluate the ingress pipeline.
-  ASSIGN_OR_RETURN(SymbolicTableMatches matches,
-                   EvaluatePipeline(data_plane, "ingress", state, translator,
-                                    /*guard=*/Z3Context().bool_val(true)));
-  ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(*state));
-
-  // Constrain egress_port to be equal to egress_spec.
-  ASSIGN_OR_RETURN(z3::expr egress_spec,
-                   state->Get("standard_metadata.egress_spec"));
-  RETURN_IF_ERROR(state->Set("standard_metadata.egress_port", egress_spec,
-                             /*guard=*/Z3Context().bool_val(true)));
-
-  // Evaluate the egress pipeline.
-  ASSIGN_OR_RETURN(SymbolicTableMatches egress_matches,
-                   EvaluatePipeline(data_plane, "egress", state, translator,
-                                    /*guard=*/!dropped));
-  matches.merge(std::move(egress_matches));
-  return matches;
-}
-
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
-    const Dataplane &data_plane, const std::string &pipeline_name,
+    const ir::Dataplane &data_plane, const std::string &pipeline_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
   if (auto it = data_plane.program.pipeline().find(pipeline_name);
@@ -75,7 +47,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
 }
 
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
-    const Dataplane &data_plane, const std::string &control_name,
+    const ir::Dataplane &data_plane, const std::string &control_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!

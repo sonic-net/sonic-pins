@@ -79,6 +79,7 @@ cc_library(
     deps = [
         ":cfg",
         ":ir_cc_proto",
+        ":table_entries",
         "//gutil:status",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -102,6 +103,7 @@ cc_library(
     hdrs = ["cfg.h"],
     deps = [
         ":ir_cc_proto",
+        ":table_entries",
         "//gutil:status",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
         "@com_google_absl//absl/container:btree",
@@ -135,7 +137,6 @@ cc_binary(
     ],
     deps = [
         "//gutil:proto",
-        "//gutil:status",
         "//p4_symbolic:parser",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
