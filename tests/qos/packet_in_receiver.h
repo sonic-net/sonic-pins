@@ -1,0 +1,51 @@
+#ifndef PINS_TESTS_QOS_PACKET_IN_RECEIVER_H_
+#define PINS_TESTS_QOS_PACKET_IN_RECEIVER_H_
+
+#include <thread>  // NOLINT
+
+#include "p4_pdpi/p4_runtime_session.h"
+namespace pins_test {
+
+// Packet receiver thread to receive punted packets from switch over a P4
+// session. The callback is invoked serially for every packet received.
+// Example:
+// PacketInReceiver receiver(
+//      p4_session,
+//      [&num_packets_punted]() -> absl::Status {
+//          num_packets_punted++;
+//      });
+//      .. do stuff
+//      receiver.Destroy();
+class PacketInReceiver final {
+ public:
+  PacketInReceiver(pdpi::P4RuntimeSession &session,
+                   std::function<void(p4::v1::StreamMessageResponse)> callback)
+      : session_(session), receiver_([this, callback = std::move(callback)]() {
+          p4::v1::StreamMessageResponse pi_response;
+          // To break out of this loop invoke Destroy().
+          while (session_.StreamChannelRead(pi_response)) {
+            if (pi_response.has_packet()) {
+              callback(std::move(pi_response));
+            }
+          }
+        }) {}
+
+  PacketInReceiver() = delete;
+
+  // It's ok to call this function multiple times.
+  void Destroy() {
+    session_.TryCancel();
+    if (receiver_.joinable()) {
+      receiver_.join();
+    }
+  }
+
+  ~PacketInReceiver() { Destroy(); }
+
+ private:
+  pdpi::P4RuntimeSession &session_;
+  std::thread receiver_;
+};
+
+}  // namespace pins_test
+#endif  // PINS_TESTS_QOS_PACKET_IN_RECEIVER_H_
