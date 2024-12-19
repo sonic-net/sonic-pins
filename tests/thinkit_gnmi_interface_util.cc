@@ -64,7 +64,7 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
   // Parse the breakout_modes_str to extract supported breakout modes.
   // Each supported breakout mode is in the format:
   // num_breakouts x speedG [alternate_speedG, ...]
-  int i = 0, pos = 0;
+  size_t i = 0, pos = 0;
   while (i < breakout_modes_str.size() && pos != std::string::npos) {
     pos = breakout_modes_str.find('x', i);
     auto num_breakouts = breakout_modes_str.substr(i, pos - i);
@@ -142,6 +142,81 @@ absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
   return true;
 }
 
+absl::StatusOr<std::string> GetCurrentBreakoutModeForPort(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub, absl::string_view port) {
+  ASSIGN_OR_RETURN(auto is_parent, IsParentPort(port));
+  if (!is_parent) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Requested port (" << port << ") is not a parent port";
+  }
+
+  // Get the physical port for the front panel port.
+  auto if_state_path =
+      absl::StrCat("interfaces/interface[name=", port, "]/state/hardware-port");
+  auto resp_parse_str = "openconfig-platform-port:hardware-port";
+  ASSIGN_OR_RETURN(
+      auto physical_port,
+      GetGnmiStatePathInfo(&sut_gnmi_stub, if_state_path, resp_parse_str),
+      _ << "Failed to get GNMI state path value for interface hardware-port "
+           "for port "
+        << port);
+  StripSymbolFromString(physical_port, '\"');
+  // Get the component breakout state paths.
+  if_state_path = absl::StrCat("components/component[name=", physical_port,
+                               "]/port/breakout-mode/groups");
+  resp_parse_str = "openconfig-platform-port:groups";
+  ASSIGN_OR_RETURN(
+      auto state_path_response,
+      GetGnmiStatePathInfo(&sut_gnmi_stub, if_state_path, resp_parse_str),
+      _ << "Failed to get GNMI state path value for component breakout paths "
+           "for port "
+        << port);
+  const auto groups = json::parse(state_path_response);
+  const auto group = groups.find("group");
+  if (group == groups.end()) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "group not found in state path response";
+  }
+  std::string current_breakout_mode = "";
+  for (const auto& i : *group) {
+    auto index = i.find("index");
+    if (index == i.end()) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "index not found in breakout group";
+    }
+    auto state = i.find("state");
+    if (state == i.end()) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "state not found in breakout group";
+    }
+    auto num_breakouts = state->find("num-breakouts");
+    if (num_breakouts == state->end()) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "num-breakouts not found in breakout group state";
+    }
+    auto breakout_speed = state->find("breakout-speed");
+    if (breakout_speed == state->end()) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "breakout-speed not found in breakout group state";
+    }
+    // Extract speed from breakout-speed string
+    // eg: "openconfig-if-ethernet:SPEED_400GB"
+    auto pos = breakout_speed->dump().find('_');
+    auto len = breakout_speed->dump().length() - pos - kBreakoutSpeedOffset;
+    auto bs = breakout_speed->dump().substr(pos + 1, len);
+    int index_int;
+    if (!absl::SimpleAtoi(index->dump(), &index_int)) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Failed to convert string (" << index->dump() << ") to integer";
+    }
+    if (index_int > 0) {
+      absl::StrAppend(&current_breakout_mode, "+");
+    }
+    absl::StrAppend(&current_breakout_mode, num_breakouts->dump(), "x", bs);
+  }
+  return current_breakout_mode;
+}
+
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
     const std::string& platform_json_contents,
@@ -163,15 +238,8 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
   std::vector<std::string> up_parent_port_list;
   for (auto& intf : interface_to_oper_status_map) {
     if (absl::StartsWith(intf.first, kEthernet)) {
-      ASSIGN_OR_RETURN(std::vector<std::string> slot_port_lane,
-                       GetSlotPortLaneForPort(intf.first));
-      int curr_lane_number;
-      if (!absl::SimpleAtoi(slot_port_lane[kLaneIndex], &curr_lane_number)) {
-        return gutil::InternalErrorBuilder().LogError()
-               << "Failed to convert string (" << slot_port_lane[kLaneIndex]
-               << ") to integer";
-      }
-      if ((curr_lane_number == 1) && intf.second == kStateUp) {
+      ASSIGN_OR_RETURN(const auto is_parent, IsParentPort(intf.first));
+      if (is_parent && intf.second == kStateUp) {
         up_parent_port_list.push_back(intf.first);
       }
     }
@@ -210,16 +278,11 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
       return gutil::InternalErrorBuilder().LogError() << absl::InternalError(
                  absl::StrCat(port, " entry not found in platform.json"));
     }
-    // Get default breakout mode for the port.
-    const auto default_breakout_mode =
-        interface_json->find("default_brkout_mode");
-    if (default_breakout_mode == interface_json->end()) {
-      return gutil::InternalErrorBuilder().LogError() << absl::InternalError(
-                 absl::StrCat("Default breakout mode not found for ", port,
-                              " in platform.json"));
-    }
-    port_info.curr_breakout_mode = default_breakout_mode->dump();
-    StripSymbolFromString(port_info.curr_breakout_mode, '\"');
+    // Get current breakout mode for the port.
+    ASSIGN_OR_RETURN(
+        auto curr_breakout_mode,
+        GetCurrentBreakoutModeForPort(sut_gnmi_stub, port_info.port_name));
+    port_info.curr_breakout_mode = curr_breakout_mode;
 
     // Get supported breakout modes based on breakout type for the port.
     ASSIGN_OR_RETURN(
@@ -256,28 +319,50 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
   return port_info;
 }
 
-absl::StatusOr<std::vector<std::string>> GetSlotPortLaneForPort(
+absl::StatusOr<SlotPortLane> GetSlotPortLaneForPort(
     const absl::string_view port) {
   if (!absl::StartsWith(port, kEthernet)) {
     return absl::InvalidArgumentError(
         absl::StrCat("Requested port (", port, ") is not a front panel port"));
   }
-  auto slot_port_lane = port.substr(kEthernetLen);
-  std::vector<std::string> values = absl::StrSplit(slot_port_lane, '/');
+  auto slot_port_lane_str = port.substr(kEthernetLen);
+  std::vector<std::string> values = absl::StrSplit(slot_port_lane_str, '/');
   if (values.size() != 3) {
     return absl::InvalidArgumentError(
         absl::StrCat("Requested port (", port,
                      ") does not have a valid format (EthernetX/Y/Z)"));
   }
-  return values;
+  SlotPortLane slot_port_lane;
+  if (!absl::SimpleAtoi(values[kSlotIndex], &slot_port_lane.slot)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to convert string (" << values[kSlotIndex]
+           << ") to integer";
+  }
+  if (!absl::SimpleAtoi(values[kPortIndex], &slot_port_lane.port)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to convert string (" << values[kPortIndex]
+           << ") to integer";
+  }
+  if (!absl::SimpleAtoi(values[kLaneIndex], &slot_port_lane.lane)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to convert string (" << values[kLaneIndex]
+           << ") to integer";
+  }
+  return slot_port_lane;
 }
 
+// TODO: Remove port naming dependent logic.
 absl::StatusOr<absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>>
 GetExpectedPortInfoForBreakoutMode(const std::string& port,
                                    absl::string_view breakout_mode) {
   if (breakout_mode.empty()) {
     return gutil::InternalErrorBuilder().LogError()
            << "Found empty breakout mode";
+  }
+  ASSIGN_OR_RETURN(auto is_parent, IsParentPort(port));
+  if (!is_parent) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Requested port (" << port << ") is not a parent port";
   }
 
   // For a mixed breakout mode, get "+" separated breakout groups.
@@ -287,20 +372,9 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
   // Get maximum physical channels in a breakout group which is max
   // lanes per physical port/number of groups in a breakout mode.
   auto max_channels_in_group = kMaxPortLanes / modes.size();
-  ASSIGN_OR_RETURN(std::vector<std::string> slot_port_lane,
-                   GetSlotPortLaneForPort(port));
-  int curr_lane_number;
-  if (!absl::SimpleAtoi(slot_port_lane[kLaneIndex], &curr_lane_number)) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "Failed to convert string (" << slot_port_lane[kLaneIndex]
-           << ") to integer";
-  }
-  // Lane number for a master port is always 1.
-  if (curr_lane_number != 1) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Requested port (", port, ") is not a parent port"));
-  }
+  ASSIGN_OR_RETURN(auto slot_port_lane, GetSlotPortLaneForPort(port));
   auto current_physical_channel = 0;
+  auto curr_lane_number = 1;
   absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>
       expected_breakout_info;
   for (auto& mode : modes) {
@@ -321,9 +395,9 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
     // of 1 leading to interfaces Ethernet1/1/1, Ethernet1/1/3 for mode 2x100G
     // and Ethernet1/1/5 for mode 1x200G.
     for (int i = 0; i < num_breakouts; i++) {
-      auto port = absl::StrCat(kEthernet, slot_port_lane[kSlotIndex], "/",
-                               slot_port_lane[kPortIndex], "/",
-                               std::to_string(curr_lane_number));
+      auto port =
+          absl::StrCat(kEthernet, slot_port_lane.slot, "/", slot_port_lane.port,
+                       "/", std::to_string(curr_lane_number));
       // Populate expected physical channels for each port.
       // Physical channels are between 0 to 7.
       int offset = max_channels_in_group / num_breakouts;
@@ -499,6 +573,7 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
   return interface_config;
 }
 
+// TODO: Remove port naming dependent logic.
 absl::Status GetBreakoutModeConfigFromString(
     gnmi::SetRequest& req, gnmi::gNMI::StubInterface* sut_gnmi_stub,
     const absl::string_view port_index, const absl::string_view intf_name,
@@ -516,16 +591,9 @@ absl::Status GetBreakoutModeConfigFromString(
   auto index = 0;
 
   // Get current port number.
-  ASSIGN_OR_RETURN(std::vector<std::string> slot_port_lane,
-                   GetSlotPortLaneForPort(intf_name));
-  int curr_lane_number;
-  if (!absl::SimpleAtoi(slot_port_lane[kLaneIndex], &curr_lane_number)) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "Failed to convert string (" << slot_port_lane[kLaneIndex]
-           << ") to integer";
-  }
+  ASSIGN_OR_RETURN(auto slot_port_lane, GetSlotPortLaneForPort(intf_name));
   ASSIGN_OR_RETURN(bool is_copper_port, IsCopperPort(sut_gnmi_stub, intf_name));
-
+  auto curr_lane_number = 1;
   for (const auto& mode : modes) {
     auto num_breakouts_str = mode.substr(0, mode.find('x'));
     int num_breakouts;
@@ -546,9 +614,9 @@ absl::Status GetBreakoutModeConfigFromString(
     // Get the interface config for all ports corresponding to current breakout
     // group.
     for (int i = 0; i < num_breakouts; i++) {
-      auto port = absl::StrCat(kEthernet, slot_port_lane[kSlotIndex], "/",
-                               slot_port_lane[kPortIndex], "/",
-                               std::to_string(curr_lane_number));
+      auto port =
+          absl::StrCat(kEthernet, slot_port_lane.slot, "/", slot_port_lane.port,
+                       "/", std::to_string(curr_lane_number));
       ASSIGN_OR_RETURN(
           auto interface_config,
           GenerateInterfaceBreakoutConfig(port, curr_lane_number,
@@ -695,5 +763,12 @@ absl::StatusOr<std::string> GetPortIndex(
   auto port_index = index->dump();
   StripSymbolFromString(port_index, '\"');
   return port_index.substr(0, port_index.find(','));
+}
+
+// TODO: Remove port naming dependent logic.
+absl::StatusOr<bool> IsParentPort(absl::string_view port) {
+  ASSIGN_OR_RETURN(auto slot_port_lane, GetSlotPortLaneForPort(port));
+  // Lane number for a master port is always 1.
+  return slot_port_lane.lane == 1;
 }
 }  // namespace pins_test
