@@ -15,13 +15,13 @@
 #ifndef PINS_TESTS_FORWARDING_SMOKE_TEST_H_
 #define PINS_TESTS_FORWARDING_SMOKE_TEST_H_
 
-#include "tests/forwarding/p4_blackbox_fixture.h"
+#include "tests/forwarding/mirror_blackbox_test_fixture.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
-namespace pins {
+namespace pins_test {
 
-class SmokeTestFixture : public P4BlackboxFixture {};
+class SmokeTestFixture : public MirrorBlackboxTestFixture {};
 
-} // namespace pins
+}  // namespace pins_test
 
 #endif // PINS_TESTS_FORWARDING_SMOKE_TEST_H_

@@ -24,6 +24,9 @@ headers {
         bitwidth: 48
       }
     }
+    ordered_fields_list: "dst_addr"
+    ordered_fields_list: "src_addr"
+    ordered_fields_list: "ether_type"
   }
 }
 headers {
@@ -136,6 +139,21 @@ headers {
         bitwidth: 4
       }
     }
+    ordered_fields_list: "version"
+    ordered_fields_list: "ihl"
+    ordered_fields_list: "dscp"
+    ordered_fields_list: "ecn"
+    ordered_fields_list: "total_len"
+    ordered_fields_list: "identification"
+    ordered_fields_list: "reserved"
+    ordered_fields_list: "do_not_fragment"
+    ordered_fields_list: "more_fragments"
+    ordered_fields_list: "frag_offset"
+    ordered_fields_list: "ttl"
+    ordered_fields_list: "protocol"
+    ordered_fields_list: "header_checksum"
+    ordered_fields_list: "src_addr"
+    ordered_fields_list: "dst_addr"
   }
 }
 headers {
@@ -268,6 +286,23 @@ headers {
         bitwidth: 3
       }
     }
+    ordered_fields_list: "ingress_port"
+    ordered_fields_list: "egress_spec"
+    ordered_fields_list: "egress_port"
+    ordered_fields_list: "instance_type"
+    ordered_fields_list: "packet_length"
+    ordered_fields_list: "enq_timestamp"
+    ordered_fields_list: "enq_qdepth"
+    ordered_fields_list: "deq_timedelta"
+    ordered_fields_list: "deq_qdepth"
+    ordered_fields_list: "ingress_global_timestamp"
+    ordered_fields_list: "egress_global_timestamp"
+    ordered_fields_list: "mcast_grp"
+    ordered_fields_list: "egress_rid"
+    ordered_fields_list: "checksum_error"
+    ordered_fields_list: "parser_error"
+    ordered_fields_list: "priority"
+    ordered_fields_list: "_padding"
   }
 }
 pipeline {
@@ -392,6 +427,13 @@ errors {
   value {
     name: "StackOutOfBounds"
     value: 3
+  }
+}
+deparsers {
+  key: "deparser"
+  value {
+    name: "deparser"
+    header_order: "ethernet"
   }
 }
 

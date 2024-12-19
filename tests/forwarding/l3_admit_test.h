@@ -21,19 +21,22 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "tests/forwarding/mirror_blackbox_test_fixture.h"
 #include "tests/lib/packet_in_helper.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
 namespace pins {
 
-class L3AdmitTestFixture : public thinkit::MirrorTestbedFixture {
+class L3AdmitTestFixture : public pins_test::MirrorBlackboxTestFixture {
  protected:
-  void SetUp() override;
-
-  // This test runs on a mirror testbed setup so we open a P4RT connection to
-  // both switches.
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_sut_switch_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_control_switch_session_;
+  void TearDown() override {
+    // MirrorBlackboxTestFixture unnecessarily clears tables at TearDown. This
+    // is not harmful for other tests but is problematic for l3_admit_tests
+    // since the P4RT session to the controller is closed during the tests (see
+    // lib/packet_in_helper.h). Therefore, We bypass table clearance in
+    // TearDown.
+    MirrorTestbedFixture::TearDown();
+  }
 };
 
 } // namespace pins
