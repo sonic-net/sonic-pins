@@ -30,6 +30,18 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace operators {
 
+// Check that the two expressions have compatible sorts, and return an absl
+// error otherwise. If the expressions are bitvector, the shortest will be
+// padded to match the longest.
+absl::StatusOr<std::pair<z3::expr, z3::expr>> SortCheckAndPad(
+    const z3::expr &a, const z3::expr &b);
+
+// If both `target` and `value` are bit-vectors, truncates the given `value` to
+// the same size as the given `target` if `value` is longer, retaining the least
+// significant bits. Otherwise this function has no effect. For example, if
+// `value` is 0x0042 and `target` has only 8 bits, `value` becomes 0x42.
+absl::Status TruncateBitVectorToFit(const z3::expr &target, z3::expr &value);
+
 // Free variable.
 absl::StatusOr<z3::expr> FreeVariable(const std::string &variable_base_name,
                                       const z3::sort &sort);
