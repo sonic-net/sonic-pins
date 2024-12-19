@@ -76,6 +76,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
       explanation_string = absl::StrCat(
           "NOTICE: Dvaas Detective failed to generate an explanation: ",
           explanation.status().message());
+      LOG(ERROR) << explanation_string;
     }
 
     return gutil::OutOfRangeErrorBuilder()
