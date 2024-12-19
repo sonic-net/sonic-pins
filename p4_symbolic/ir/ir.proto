@@ -52,6 +52,8 @@ message P4Program {
   map<string, Parser> parsers = 6;
   // Errors, keyed by error names.
   map<string, Error> errors = 7;
+  // Deparsers, keyed by deparser names.
+  map<string, Deparser> deparsers = 8;
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
@@ -64,6 +66,9 @@ message HeaderType {
   int32 id = 2;
   // Maps a field name to its definition.
   map<string, HeaderField> fields = 3;
+  // The ordered list of field names from the outer-most field to the inner-most
+  // field according to the P4 program.
+  repeated string ordered_fields_list = 4;
 }
 
 // A P4 header type definition.
@@ -81,6 +86,11 @@ message Parser {
   string initial_state = 2;
   // Defines all parse states of the state machine.
   map<string, ParseState> parse_states = 3;
+  // The names of the ordered header instances from the outer-most header to the
+  // inner-most header. When the target switch invokes the parser, the ingress
+  // packet will be deserialized in this order into headers based on the state
+  // transitions.
+  repeated string header_order = 4;
 }
 
 // Defines a parse state.
@@ -190,6 +200,16 @@ message HexStringTransition {
   HexstrValue mask = 2;
   // The name of the next state.
   string next_state = 3;
+}
+
+// A P4 deparser definition.
+message Deparser {
+  // The name of the deparser.
+  string name = 1;
+  // The names of the ordered header instances from the outer-most header to the
+  // inner-most header. When the target switch invokes the deparser, the headers
+  // will be serialized in this order, and invalid headers will be skipped.
+  repeated string header_order = 2;
 }
 
 // Overall action structure, combining definition with implementation.

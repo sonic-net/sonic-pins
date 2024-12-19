@@ -225,6 +225,9 @@ class SolverState {
     if (solver) solver->reset();
   }
 
+  // Returns the SMT formulae of all assertions in the solver.
+  std::string GetSolverSMT() const;
+
   // The IR represnetation of the p4 program being analyzed.
   ir::P4Program program;
   // Maps the name of a table to a list of its entries.

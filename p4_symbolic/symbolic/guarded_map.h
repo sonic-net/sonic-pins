@@ -66,12 +66,24 @@ class SymbolicGuardedMap {
   // Getters.
   bool ContainsKey(absl::string_view key) const;
   absl::StatusOr<z3::expr> Get(absl::string_view key) const;
+  absl::StatusOr<z3::expr> Get(absl::string_view header_name,
+                               absl::string_view field_name) const;
 
-  // Guarded setter.
+  // Guarded setters.
   // Returns an error if the assigned value has incompatible sort with the
-  // pre-defined value.
+  // predefined value.
   absl::Status Set(absl::string_view key, z3::expr value,
                    const z3::expr &guard);
+  absl::Status Set(absl::string_view header_name, absl::string_view field_name,
+                   z3::expr value, const z3::expr &guard);
+
+  // Unguarded setters.
+  // Returns an error if the assigned value has incompatible sort with the
+  // predefined value. These overwrite the old values in the map. Use with
+  // caution!
+  absl::Status UnguardedSet(absl::string_view key, z3::expr value);
+  absl::Status UnguardedSet(absl::string_view header_name,
+                            absl::string_view field_name, z3::expr value);
 
   // Constant iterators.
   using const_iterator = absl::btree_map<std::string, z3::expr>::const_iterator;
