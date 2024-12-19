@@ -32,6 +32,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -50,6 +52,8 @@
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
+#include "tests/forwarding/util.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
@@ -931,294 +935,6 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
                "----------\n\n\n\n\n\n\n\n\n\n";
 }
 
-#if 0
-TEST_P(CountersTestFixture, TestOutDiscards) {
-  LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestOutDiscards "
-               "----------\n\n\n\n\n";
-
-  // Pick a testbed with an Ixia Traffic Generator. A SUT is assumed.
-  thinkit::TestRequirements requirements =
-      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
-          R"pb(interface_requirements {
-                 count: 1
-                 interface_mode: TRAFFIC_GENERATOR
-               })pb");
-
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
-                       GetTestbedWithRequirements(requirements));
-
-  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
-      generic_testbed->GetSutInterfaceInfo();
-
-  // Hook up to GNMI
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
-
-  // go through all the ports that interface to the Ixia and set them
-  // to 100GB since the Ixia ports are all 100GB.
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      LOG(INFO) << "Host Interface " << interface;
-      EXPECT_OK(SetPortSpeed(kSpeed100GB, interface, gnmi_stub.get()));
-    }
-  }
-
-  // Wait to let the links come up
-  absl::SleepFor(absl::Seconds(20));
-
-  // Loop through the interface_info looking for Ixia/SUT interface pairs,
-  // checking if the link is up.  we need one pair with link up for the
-  // ingress interface/IXIA traffic generation
-  std::string ixia_interface = "";
-  std::string sut_in_interface = "";
-
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      auto sut_link_up = CheckLinkUp(interface, gnmi_stub.get());
-      EXPECT_TRUE(sut_link_up.ok());
-      if (sut_link_up.ok() && sut_link_up.value()) {
-        ixia_interface = info.peer_interface_name;
-        sut_in_interface = interface;
-        break;
-      }
-    }
-  }
-
-  // Now loop through again and pick an egress interface.  This one doesn't
-  // have to be up, just a different interface.
-  std::string sut_out_interface = "";
-
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      if (interface != sut_in_interface) {
-        sut_out_interface = interface;
-        break;
-      }
-    }
-  }
-
-  ASSERT_FALSE(ixia_interface.empty());
-  ASSERT_FALSE(sut_in_interface.empty());
-  ASSERT_FALSE(sut_out_interface.empty());
-
-  // Look up the port number for the egress interface
-  absl::flat_hash_map<std::string, std::string> port_id_by_interface;
-  ASSERT_OK_AND_ASSIGN(port_id_by_interface,
-                       GetAllInterfaceNameToPortId(*gnmi_stub));
-
-  ASSERT_OK_AND_ASSIGN(
-      const std::string in_id,
-      gutil::FindOrStatus(port_id_by_interface, sut_in_interface));
-  ASSERT_OK_AND_ASSIGN(
-      const std::string out_id,
-      gutil::FindOrStatus(port_id_by_interface, sut_out_interface));
-
-  LOG(INFO) << "\n\nTestOutDiscards:\n"
-            << "\n\nChose Ixia interface " << ixia_interface << "\n"
-            << "and SUT ingress interface " << sut_in_interface << " (id "
-            << in_id << ")\n"
-            << "and SUT egress interface " << sut_out_interface << " (id "
-            << out_id << ")\n\n";
-
-  std::vector<absl::string_view> v = absl::StrSplit(ixia_interface, '/');
-  absl::string_view ixia_ip = v[0];
-  absl::string_view ixia_in_card = v[1];
-  absl::string_view ixia_in_port = v[2];
-  ASSERT_FALSE(ixia_ip.empty());
-  ASSERT_FALSE(ixia_in_card.empty());
-  ASSERT_FALSE(ixia_in_port.empty());
-  LOG(INFO) << "Ixia IP is " << ixia_ip;
-  LOG(INFO) << "Ixia ingress card is " << ixia_in_card;
-  LOG(INFO) << "Ixia ingress port is " << ixia_in_port;
-  LOG(INFO) << "SUT is " << generic_testbed->Sut().ChassisName();
-
-  // Fetch the initial conditions for the egress interface.
-  // Note: Not currently fetching the FEC mode since the gNMI get on that
-  // fails even if I populate redis first.  See b/197778604.  As a result
-  // the link will not come up at the end of the test after I switch it
-  // back to 100GB.  TBD.
-  ASSERT_OK_AND_ASSIGN(auto out_initial_loopback,
-                       CheckLoopback(sut_out_interface, gnmi_stub.get()));
-  ASSERT_OK_AND_ASSIGN(auto out_initial_speed,
-                       CheckPortSpeed(sut_out_interface, gnmi_stub.get()));
-
-  // Output the initial conditions
-  LOG(INFO) << "sut out_initial_speed is " << out_initial_speed;
-  LOG(INFO) << "sut out_initial_loopback is " << out_initial_loopback;
-  LOG(INFO) << "\n\n";
-
-  // Set the egress port to loopback mode
-  EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
-
-  // Set the egress port speed to 40GB
-  EXPECT_OK(SetPortSpeed(kSpeed40GB, sut_out_interface, gnmi_stub.get()));
-  absl::SleepFor(absl::Seconds(15));
-
-  auto out_status_speed = CheckPortSpeed(sut_out_interface, gnmi_stub.get());
-  EXPECT_THAT(out_status_speed, IsOkAndHolds(kSpeed40GB));
-
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      generic_testbed->Sut(), GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
-  
-  // Set up the switch to forward inbound packets to the egress port
-  LOG(INFO) << "\n\n----- ForwardToEgress: TestOutDiscards -----\n";
-  EXPECT_OK(ForwardToEgress(in_id, out_id, false, generic_testbed->Sut()));
-  LOG(INFO) << "\n\n----- ForwardToEgress Done -----\n";
-
-  // Read some initial counters via GNMI from the SUT
-  ASSERT_OK_AND_ASSIGN(auto initial_in_counters,
-                       ReadCounters(sut_in_interface, gnmi_stub.get()));
-  ASSERT_OK_AND_ASSIGN(auto initial_out_counters,
-                       ReadCounters(sut_out_interface, gnmi_stub.get()));
-
-  LOG(INFO) << "\n\nTestOutDiscards:\n\n"
-            << "\n\nInitial Ingress Counters (" << sut_in_interface << "):\n";
-  ShowCounters(initial_in_counters);
-  LOG(INFO) << "\n\nInitial Egress Counters (" << sut_out_interface << "):\n";
-  ShowCounters(initial_out_counters);
-  LOG(INFO) << "\n\n";
-
-  // Connect to the Ixia
-  ASSERT_OK_AND_ASSIGN(std::string href,
-                       ixia::IxiaConnect(ixia_ip, *generic_testbed));
-
-  std::size_t ixpos = href.find("/ixnetwork");
-  ASSERT_NE(ixpos, std::string::npos);
-  std::string ixref = href.substr(0, ixpos + 10);
-  LOG(INFO) << "ixref " << ixref;
-
-  // Connect to the Ixia card/port
-  LOG(INFO) << "\n\nTestOutDiscards: IxiaConnect\n\n";
-  ASSERT_OK_AND_ASSIGN(
-      std::string vref,
-      ixia::IxiaVport(href, ixia_in_card, ixia_in_port, *generic_testbed));
-
-  // Start a session
-  ASSERT_OK_AND_ASSIGN(std::string full_tref,
-                       ixia::IxiaSession(vref, *generic_testbed));
-
-  LOG(INFO) << "full_tref = " << full_tref;
-  ixpos = full_tref.find("/ixnetwork");
-  ASSERT_NE(ixpos, std::string::npos);
-  std::string tref = full_tref.substr(ixpos);
-  LOG(INFO) << "tref " << tref;
-
-  // Set the line rate to 100 percent
-  ASSERT_OK(ixia::SetLineRate(tref, 100, *generic_testbed));
-
-  // Set the frame count to 90M
-  ASSERT_OK(ixia::SetFrameCount(tref, 90000000, *generic_testbed));
-
-  // Set the source and destination MAC addresses
-  ASSERT_OK(ixia::SetSrcMac(tref, "00:01:02:03:04:05", *generic_testbed));
-  ASSERT_OK(ixia::SetDestMac(tref, "02:02:02:02:02:02", *generic_testbed));
-
-  // Append an IPv4 header
-  ASSERT_OK(ixia::AppendIPv4(full_tref, *generic_testbed));
-
-  // Set up the source and destination IP addresses
-  ASSERT_OK(ixia::SetSrcIPv4(tref, "192.168.0.1", *generic_testbed));
-  ASSERT_OK(ixia::SetDestIPv4(tref, "192.168.0.2", *generic_testbed));
-
-  // Set the frame size to 1514 bytes
-  ASSERT_OK(ixia::SetFrameSize(tref, kMtu, *generic_testbed));
-
-  // Start Traffic
-  ASSERT_OK(ixia::StartTraffic(full_tref, ixref, *generic_testbed));
-
-  // Wait until 10 seconds after the traffic started
-  absl::Time t1;
-  t1 = absl::Now();
-
-  absl::Time t2;
-  while (1) {
-    t2 = absl::Now();
-    if (t2 >= t1 + absl::Seconds(10)) break;
-    absl::SleepFor(absl::Milliseconds(100));
-  }
-
-  LOG(INFO) << "Time at stop is " << t2;
-  LOG(INFO) << "Delta is " << t2 - t1;
-
-  ASSERT_OK(ixia::StopTraffic(full_tref, *generic_testbed));
-
-  // Re-read the same counters via GNMI from the SUT
-  ASSERT_OK_AND_ASSIGN(auto final_in_counters,
-                       ReadCounters(sut_in_interface, gnmi_stub.get()));
-  ASSERT_OK_AND_ASSIGN(auto final_out_counters,
-                       ReadCounters(sut_out_interface, gnmi_stub.get()));
-
-  // Check the time again
-  absl::Time t3 = absl::Now();
-  LOG(INFO) << "Time after statistics read is " << t3;
-  LOG(INFO) << "Delta is " << t3 - t1;
-  uint64_t seconds = absl::ToInt64Seconds(t2 - t1);
-
-  // Display the final counters
-  LOG(INFO) << "\n\nTestOutDiscards:\n\n"
-            << "\n\nFinal Ingress Counters (" << sut_in_interface << "):\n";
-  ShowCounters(final_in_counters);
-  LOG(INFO) << "\n\nFinal Egress Counters (" << sut_out_interface << "):\n";
-  ShowCounters(final_out_counters);
-  LOG(INFO) << "\n\n";
-
-  // Compute the change for each counter
-  auto delta_in = DeltaCounters(initial_in_counters, final_in_counters);
-  auto delta_out = DeltaCounters(initial_out_counters, final_out_counters);
-
-  // Display the difference in the counters for now (during test dev)
-  LOG(INFO) << "\n\nTestOutDiscards:\n\n"
-            << "\n\nIngress Deltas (" << sut_in_interface << ") in " << seconds
-            << " seconds:";
-  ShowCounters(delta_in);
-  LOG(INFO) << "\n\nEgress Deltas (" << sut_out_interface << ") in " << seconds
-            << " seconds:";
-  ShowCounters(delta_out);
-
-  // Check the changes are as expected.  Test should run about 10sec, maybe
-  // a little more (time to stop). Ixia is sending 100GB line rate unicast
-  // IPv4 traffic. ACL/Route is forwarding all of it to the egress but it
-  // is running at 40GB so only about 40% can fit.
-  // note that i'm seeing an occasional multicast packet (probably LLDP)
-  // going out so I'm allowing some minimal change in some counters
-  // during the test to account for this.
-  uint64_t expect = 90000000;
-  EXPECT_GT(delta_out.out_pkts, ((expect * 35) / 100));
-  EXPECT_LT(delta_out.out_pkts, ((expect * 45) / 100));
-  EXPECT_LE(delta_out.out_octets, delta_out.out_pkts * kMtu + 15000);
-  EXPECT_GE(delta_out.out_octets, delta_out.out_pkts * kMtu - 15000);
-  EXPECT_LE(delta_out.out_unicast_pkts, delta_out.out_pkts + 10);
-  EXPECT_GE(delta_out.out_unicast_pkts, delta_out.out_pkts - 10);
-  EXPECT_LE(delta_out.out_multicast_pkts, 5);
-  EXPECT_EQ(delta_out.out_broadcast_pkts, 0);
-  EXPECT_EQ(delta_out.out_errors, 0);
-  EXPECT_GE(delta_out.out_discards, ((55 * expect) / 100));
-  EXPECT_LE(delta_out.out_discards, ((65 * expect) / 100));
-  EXPECT_LE(delta_out.out_ipv4_pkts, delta_out.out_pkts + 10);
-  EXPECT_GE(delta_out.out_ipv4_pkts, delta_out.out_pkts - 10);
-  EXPECT_EQ(delta_out.out_ipv6_pkts, 0);
-  EXPECT_EQ(delta_out.out_ipv6_discarded_pkts, 0);
-
-  LOG(INFO) << "\n\n\n\n\n---------- Restore ----------\n\n\n\n\n";
-
-  // go through all the ports that interface to the Ixia and set them
-  // back to 100GB whether their link is up or not.
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      LOG(INFO) << "Host Interface " << interface;
-      EXPECT_OK(SetPortSpeed(kSpeed100GB, interface, gnmi_stub.get()));
-      EXPECT_OK(SetLoopback(false, interface, gnmi_stub.get()));
-    }
-  }
-
-  // Tear down any forwarding rules set up
-  EXPECT_OK(ForwardTeardown(generic_testbed->Sut()));
-
-  LOG(INFO) << "\n\n\n\n\n---------- Finished TestOutDiscards "
-               "----------\n\n\n\n\n\n\n\n\n\n";
-}
-#endif
-
 TEST_P(CountersTestFixture, TestIPv6Pkts) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestIPv6Pkts "
                "----------\n\n\n\n\n";
@@ -1471,220 +1187,515 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
                "----------\n\n\n\n\n\n\n\n\n\n";
 }
 
-#if 0
+// Set up the switch to punt packets to CPU.
+absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
+                            const netaddr::Ipv4Address &src_ip,
+                            const netaddr::Ipv4Address &dst_ip,
+                            absl::string_view p4_queue,
+                            const p4::config::v1::P4Info &p4info,
+                            pdpi::P4RuntimeSession &p4_session) {
+  ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
+  
+  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      &p4_session,
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
+      << "SetForwardingPipelineConfig: Failed to push P4Info: ";
+
+  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+
+  auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+      R"pb(
+        acl_ingress_table_entry {
+          match {
+            dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+            is_ipv4 { value: "0x1" }
+            src_ip { value: "$1" mask: "255.255.255.255" }
+            dst_ip { value: "$2" mask: "255.255.255.255" }
+          }
+          action { acl_trap { qos_queue: "$3" } }
+          priority: 1
+        }
+      )pb",
+      dmac.ToString(), src_ip.ToString(), dst_ip.ToString(), p4_queue));
+  std::vector<p4::v1::TableEntry> pi_entries;
+  ASSIGN_OR_RETURN(
+      pi_entries.emplace_back(), pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
+      _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
+                     << acl_entry.DebugString() << " error: ");
+
+  LOG(INFO) << "InstallPiTableEntries";
+  return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
+}
+
+// Ixia configurations:
+// 1. Frames sent per second by Ixia.
+// 2. Total frames sent by Ixia.
+// 3. Default framesize.
+// 4. Maximum framesize.
+// 5. Minimum framesize.
+constexpr int kFramesPerSecond = 1000000;
+constexpr int kTotalFrames = 10000000;
+constexpr int kDefaultFrameSize = 1514;
+
 TEST_P(CountersTestFixture, TestCPUOutDiscards) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestCPUOutDiscards "
                "----------\n\n\n\n\n";
 
-  // Pick a testbed with an Ixia Traffic Generator. A SUT is assumed.
-  thinkit::TestRequirements requirements =
+  // Pick a testbed with an Ixia Traffic Generator.
+  auto requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
           R"pb(interface_requirements {
                  count: 1
                  interface_mode: TRAFFIC_GENERATOR
                })pb");
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
-                       GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
-  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
-      generic_testbed->GetSutInterfaceInfo();
+  ASSERT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.txt", GetParam().gnmi_config));
 
-  // Hook up to GNMI
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
+  thinkit::Switch &sut = generic_testbed->Sut();
 
-  // go through all the ports that interface to the Ixia and set them
-  // to 100GB since the Ixia ports are all 100GB.
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      LOG(INFO) << "Host Interface " << interface;
-      EXPECT_OK(SetPortSpeed(kSpeed100GB, interface, gnmi_stub.get()));
-    }
+  // Configure SUT.
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.json", GetParam().gnmi_config));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "p4info.textproto", GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, absl::nullopt, GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
+
+  // Flow details.
+  const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
+  const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
+  const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
+  const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
+
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
+
+  ASSERT_FALSE(ready_links.empty()) << "Ixia links are not ready";
+
+  std::string ixia_interface = ready_links[0].ixia_interface;
+  std::string sut_interface = ready_links[0].sut_interface;
+  
+  // Set up Ixia traffic.
+  // Send Ixia traffic.
+  // Stop Ixia traffic.
+  
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_port,
+                       ixia::ExtractPortInfo(ixia_interface));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string topology_ref,
+      pins_test::ixia::IxiaConnect(ixia_port.hostname, *generic_testbed));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string vport_ref,
+      pins_test::ixia::IxiaVport(topology_ref, ixia_port.card, ixia_port.port,
+                                 *generic_testbed));
+  
+  ASSERT_OK_AND_ASSIGN(
+      std::string traffic_ref,
+      pins_test::ixia::IxiaSession(vport_ref, *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameRate(traffic_ref, kFramesPerSecond,
+                                          *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameCount(traffic_ref, kTotalFrames,
+                                           *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, kDefaultFrameSize,
+                                          *generic_testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetSrcMac(traffic_ref, source_mac.ToString(),
+                                       *generic_testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetDestMac(traffic_ref, dest_mac.ToString(),
+                                        *generic_testbed));
+  
+  ASSERT_OK(pins_test::ixia::AppendIPv4(traffic_ref, *generic_testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetSrcIPv4(traffic_ref, source_ip.ToString(),
+                                        *generic_testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref, dest_ip.ToString(),
+                                         *generic_testbed));
+  
+  LOG(INFO) << "\n\n\nTesting CPU Out discards : "
+            << "\n===================\n\n\n";
+  
+  ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, kDefaultFrameSize,
+                                          *generic_testbed));
+  
+  ASSERT_OK(SetUpPuntToCPU(dest_mac, source_ip, dest_ip, "0x2",
+                           GetParam().p4_info, *sut_p4_session));
+
+  ASSERT_OK_AND_ASSIGN(auto initial_cpu_out_discards,
+		       GetGnmiStat("out-discards", "CPU", gnmi_stub.get()));
+  ASSERT_OK(pins_test::ixia::StartTraffic(traffic_ref, topology_ref,
+                                          *generic_testbed));
+
+  absl::SleepFor(absl::Seconds(5));
+
+  ASSERT_OK(ixia::StopTraffic(traffic_ref, *generic_testbed));
+
+  ASSERT_OK_AND_ASSIGN(auto final_cpu_out_discards,
+                       GetGnmiStat("out-discards", "CPU", gnmi_stub.get()));
+  auto delta_cpu_out_discards =
+      final_cpu_out_discards - initial_cpu_out_discards;
+  EXPECT_GT(delta_cpu_out_discards, 0);
+}
+
+// Set up the switch to forward inbound packets to the egress port using
+// default route in VRF. The rules will forward all matching packets matching
+// source MAC address to the egress port specified.
+//
+// Also set up a Copy rule to CPU to punt egress packets to test for
+// any inspection.
+//
+absl::Status SetUpForwarding(absl::string_view out_port,
+                             absl::string_view source_mac,
+                             absl::string_view dest_mac,
+                             const p4::config::v1::P4Info &p4info,
+                             pdpi::P4RuntimeSession &p4_session) {
+  constexpr absl::string_view kVrfId = "vrf-80";
+  constexpr absl::string_view kRifOutId = "router-interface";
+  constexpr absl::string_view kNextHopId = "nexthop-1";
+  constexpr absl::string_view kNeighborIdv6 = "fe80::002:02ff:fe02:0202";
+  const absl::string_view kNeighborId = kNeighborIdv6;
+
+  std::vector<sai::TableEntry> pd_entries;
+  ASSIGN_OR_RETURN(pd_entries.emplace_back(),
+                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+                       R"pb(
+                         vrf_table_entry {
+                           match { vrf_id: "$0" }
+                           action { no_action {} }
+                         })pb",
+                       kVrfId)));
+  
+  ASSIGN_OR_RETURN(
+      pd_entries.emplace_back(),
+      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            router_interface_table_entry {
+              match { router_interface_id: "$0" }
+              action {
+                set_port_and_src_mac { port: "$1" src_mac: "66:55:44:33:22:11" }
+              }
+            }
+          )pb",
+          kRifOutId, out_port)));
+
+  ASSIGN_OR_RETURN(
+      pd_entries.emplace_back(),
+      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            neighbor_table_entry {
+              match { router_interface_id: "$0" neighbor_id: "$1" }
+              action { set_dst_mac { dst_mac: "02:02:02:02:02:02" } }
+            }
+          )pb",
+          kRifOutId, kNeighborId)));
+
+  ASSIGN_OR_RETURN(
+      pd_entries.emplace_back(),
+      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            nexthop_table_entry {
+              match { nexthop_id: "$2" }
+              action {
+                set_ip_nexthop { router_interface_id: "$0" neighbor_id: "$1" }
+              }
+            }
+          )pb",
+          kRifOutId, kNeighborId, kNextHopId)));
+
+  ASSIGN_OR_RETURN(pd_entries.emplace_back(),
+                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+                       R"pb(
+                         ipv4_table_entry {
+                           match { vrf_id: "$0" }
+                           action { set_nexthop_id { nexthop_id: "$1" } }
+                         }
+                       )pb",
+                       kVrfId, kNextHopId)));
+
+   ASSIGN_OR_RETURN(pd_entries.emplace_back(),
+                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+                       R"pb(
+                         ipv6_table_entry {
+                           match { vrf_id: "$0" }
+                           action { set_nexthop_id { nexthop_id: "$1" } }
+                         }
+                       )pb",
+                       kVrfId, kNextHopId)));
+
+   ASSIGN_OR_RETURN(
+      pd_entries.emplace_back(),
+      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            acl_pre_ingress_table_entry {
+              match { src_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" } }
+              action { set_vrf { vrf_id: "$1" } }
+              priority: 1
+            }
+          )pb",
+          source_mac, kVrfId)));
+
+   ASSIGN_OR_RETURN(
+      pd_entries.emplace_back(),
+      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            l3_admit_table_entry {
+              match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
+              action { admit_to_l3 {} }
+              priority: 1
+            }
+          )pb",
+          dest_mac)));
+
+   // Clear table entries
+  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+
+  ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
+  std::vector<p4::v1::TableEntry> pi_entries;
+  for (const auto &pd_entry : pd_entries) {
+    ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
+                     pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry),
+                     _.SetPrepend()
+                         << "Failed in PD table conversion to PI, entry: "
+                         << pd_entry.DebugString() << " error: ");
+    pi_entries.push_back(pi_entry);
   }
 
-  // Wait to let the links come up
-  absl::SleepFor(absl::Seconds(20));
+  return (pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries));
+}
 
-  // Loop through the interface_info looking for Ixia/SUT interface pairs,
-  // checking if the link is up.  we need one pair with link up for the
-  // ingress interface/IXIA traffic generation
-  std::string ixia_interface = "";
-  std::string sut_in_interface = "";
+struct DiscardTestIxiaSetUpResult {
+  // Ixia reference URLs to topology.
+  std::string topology_ref;
+  // Ixia reference URLs to traffic.
+  std::vector<std::string> traffic_refs;
+};
 
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      auto sut_link_up = CheckLinkUp(interface, gnmi_stub.get());
-      EXPECT_TRUE(sut_link_up.ok());
-      if (sut_link_up.ok() && sut_link_up.value()) {
-        ixia_interface = info.peer_interface_name;
-        sut_in_interface = interface;
-        break;
-      }
-    }
-  }
+absl::StatusOr<DiscardTestIxiaSetUpResult> SetUpIxiaForDiscardTest(
+    const std::string kIxiaTxPort1, const std::string kIxiaTxPort2,
+    const std::string kIxiaRxPort, thinkit::GenericTestbed &testbed) {
+  // Extract Ixia chassis, card and port information from the Ixia interface
+  // info.
+  ASSIGN_OR_RETURN(ixia::IxiaPortInfo ixia_port1,
+                   ixia::ExtractPortInfo(kIxiaTxPort1));
 
-  ASSERT_FALSE(ixia_interface.empty());
-  ASSERT_FALSE(sut_in_interface.empty());
+  ASSIGN_OR_RETURN(ixia::IxiaPortInfo ixia_port2,
+                   ixia::ExtractPortInfo(kIxiaTxPort2));
 
-  // Look up the port numbers for the ingress and interface
+  ASSIGN_OR_RETURN(ixia::IxiaPortInfo ixia_port3,
+                   ixia::ExtractPortInfo(kIxiaRxPort));
+  
+  // Connect to Ixia.
+  ASSIGN_OR_RETURN(std::string topology_ref,
+                   pins_test::ixia::IxiaConnect(ixia_port1.hostname, testbed));
+  
+  // Get Ixia reference to Ixia ports.
+  ASSIGN_OR_RETURN(std::string vport1_ref,
+                   pins_test::ixia::IxiaVport(topology_ref, ixia_port1.card,
+                                              ixia_port1.port, testbed));
+  
+  ASSIGN_OR_RETURN(std::string vport2_ref,
+                   pins_test::ixia::IxiaVport(topology_ref, ixia_port2.card,
+                                              ixia_port2.port, testbed));
+  
+  ASSIGN_OR_RETURN(std::string vport3_ref,
+                   pins_test::ixia::IxiaVport(topology_ref, ixia_port3.card,
+                                              ixia_port3.port, testbed));
+
+  std::vector<std::string> traffic_refs;
+  // Set up traffic items with source and destination ports.
+  ASSIGN_OR_RETURN(
+      traffic_refs.emplace_back(),
+      pins_test::ixia::SetUpTrafficItem(vport1_ref, vport3_ref, testbed));
+
+   ASSIGN_OR_RETURN(
+      traffic_refs.emplace_back(),
+      pins_test::ixia::SetUpTrafficItem(vport2_ref, vport3_ref, testbed));
+  
+   return DiscardTestIxiaSetUpResult{
+      .topology_ref = topology_ref,
+      .traffic_refs = traffic_refs,
+  };
+}
+
+TEST_P(CountersTestFixture, TestFrontPanelOutDiscards) {
+  LOG(INFO)
+      << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestFrontPanelOutDiscards "
+         "----------\n\n\n\n\n";
+  // Pick a testbed with an Ixia Traffic Generator.
+  auto requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 3
+                 interface_mode: TRAFFIC_GENERATOR
+               })pb");
+  
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+
+  // Set up P4Runtime session.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed->Sut(), /*gnmi_config=*/absl::nullopt, GetParam().p4_info));
+
+  // Hook up to GNMI.
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
+
+  // Get Ixia connected links.
+  const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
+      interface_info = testbed->GetSutInterfaceInfo();
+  ASSERT_OK_AND_ASSIGN(std::vector<ixia::IxiaLink> ready_links,
+                       ixia::GetReadyIxiaLinks(*testbed, *gnmi_stub));
+  ASSERT_GE(ready_links.size(), 3)
+      << "Test requires at least 3 SUT ports connected to an Ixia";
+
+  const std::string kIxiaTxPort1 = ready_links[0].ixia_interface;
+  const std::string kSutInPort1 = ready_links[0].sut_interface;
+
+  const std::string kIxiaTxPort2 = ready_links[1].ixia_interface;
+  const std::string kSutInPort2 = ready_links[1].sut_interface;
+
+  const std::string kIxiaRxPort = ready_links[2].ixia_interface;
+  const std::string kSutOutPort = ready_links[2].sut_interface;
+
+  // Look up the port IDs used by P4RT for the SUT interfaces
   absl::flat_hash_map<std::string, std::string> port_id_by_interface;
   ASSERT_OK_AND_ASSIGN(port_id_by_interface,
                        GetAllInterfaceNameToPortId(*gnmi_stub));
+  
+  ASSERT_OK_AND_ASSIGN(const std::string kSutInPort1Id,
+                       gutil::FindOrStatus(port_id_by_interface, kSutInPort1)); 
+
+  ASSERT_OK_AND_ASSIGN(const std::string kSutInPort2Id,
+                       gutil::FindOrStatus(port_id_by_interface, kSutInPort2));
+
+  ASSERT_OK_AND_ASSIGN(std::string kSutOutPortId,
+                       gutil::FindOrStatus(port_id_by_interface, kSutOutPort));
+
+  // We will perform the following base steps with Ixia:
+  // Set up 2 Ixia traffic items.
+  // Set up source mac and destination mac address.
+  // Set initial frame rates for the 2 items.
+
+  // Flow details.
+  const auto kSourceMac =
+      netaddr::MacAddress(0x00, 0x01, 0x02, 0x03, 0x04, 0x05);
+  const auto kDestMac = netaddr::MacAddress(0x02, 0x02, 0x02, 0x02, 0x02, 0x01);
+  const auto kSourceIpv4 = netaddr::Ipv4Address(192, 168, 0, 1);
+  const auto kDestIpv4 = netaddr::Ipv4Address(172, 0, 0, 1);
+  const auto kSourceIpv6 =
+      netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 0x1);  // 1000::1
+  const auto kDestIpv6 =
+      netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 0x1);  // 2000::1
+
+  ASSERT_OK_AND_ASSIGN(DiscardTestIxiaSetUpResult ixia_setup_result,
+                       SetUpIxiaForDiscardTest(kIxiaTxPort1, kIxiaTxPort2,
+                                               kIxiaRxPort, *testbed));
+
+  ASSERT_EQ(ixia_setup_result.traffic_refs.size(), 2)
+      << "Test requires 2 traffic streams";
+
+  // Set up flow for Traffic 1. 
+
+  // Get port speed in bits per second.
+  ASSERT_OK_AND_ASSIGN(int64_t in_port1_speed_bps,
+                       GetPortSpeedInBitsPerSecond(kSutInPort1, *gnmi_stub));
+
+  constexpr int kDefaultFrameSizeinBytes = 1514;
+
+  double frame_rate_at_line_speed_of_in_port1 =
+      in_port1_speed_bps / (kDefaultFrameSizeinBytes * 8);
+
+  absl::string_view traffic_ref1 = ixia_setup_result.traffic_refs[0];
+  absl::string_view traffic_ref2 = ixia_setup_result.traffic_refs[1];
+
+  ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref1,
+                                          kDefaultFrameSizeinBytes, *testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetSrcMac(traffic_ref1, kSourceMac.ToString(),
+                                       *testbed));
+  ASSERT_OK(
+      pins_test::ixia::SetDestMac(traffic_ref1, kDestMac.ToString(), *testbed));
+  
+  ASSERT_OK(pins_test::ixia::AppendIPv4(traffic_ref1, *testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetSrcIPv4(traffic_ref1, kSourceIpv4.ToString(),
+                                        *testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref1, kDestIpv4.ToString(),
+                                         *testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetFrameRate(
+      traffic_ref1, frame_rate_at_line_speed_of_in_port1 + 1, *testbed));
+  
+  // Set up flow for Traffic 2.
+  // Get port speed in bits per second.
+  ASSERT_OK_AND_ASSIGN(auto in_port2_speed,
+                       GetPortSpeedInBitsPerSecond(kSutInPort2, *gnmi_stub));
+  
+  uint64_t frame_rate_at_line_speed_of_in_port2 =
+      in_port2_speed / (kDefaultFrameSizeinBytes * 8);
+  ASSERT_OK(pins_test::ixia::SetFrameRate(
+      traffic_ref2, frame_rate_at_line_speed_of_in_port2, *testbed));
+  ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref2,
+                                          kDefaultFrameSizeinBytes, *testbed));
+  
+  ASSERT_OK(pins_test::ixia::SetSrcMac(traffic_ref2, kSourceMac.ToString(),
+                                       *testbed));
+
+  ASSERT_OK(
+      pins_test::ixia::SetDestMac(traffic_ref2, kDestMac.ToString(), *testbed));
+
+  ASSERT_OK(pins_test::ixia::AppendIPv6(traffic_ref2, *testbed));
+  ASSERT_OK(pins_test::ixia::SetSrcIPv6(traffic_ref2, kSourceIpv6.ToString(),
+                                        *testbed));
+  ASSERT_OK(pins_test::ixia::SetDestIPv6(traffic_ref2, kDestIpv6.ToString(),
+                                         *testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameRate(
+      traffic_ref2, frame_rate_at_line_speed_of_in_port2 + 1, *testbed));
+
+  // Set up the switch to forward inbound packets to the egress port
+  ASSERT_OK(SetUpForwarding(kSutOutPortId, kSourceMac.ToString(),
+                            kDestMac.ToString(), GetParam().p4_info,
+                            *sut_p4_session));
 
   ASSERT_OK_AND_ASSIGN(
-      const std::string in_id,
-      gutil::FindOrStatus(port_id_by_interface, sut_in_interface));
+      auto initial_port_out_discards,
+      GetGnmiStat("out-discards", kSutOutPort, gnmi_stub.get()));
 
-  LOG(INFO) << "\n\nTestCPUOutDiscards:\n"
-            << "Chose Ixia interface " << ixia_interface << "\n"
-            << "and SUT ingress interface " << sut_in_interface << " (id "
-            << in_id << ")\n\n";
+  ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+    return pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
+                                         ixia_setup_result.topology_ref,
+                                         *testbed);
+  }));
 
-  std::vector<absl::string_view> v = absl::StrSplit(ixia_interface, '/');
-  absl::string_view ixia_ip = v[0];
-  absl::string_view ixia_in_card = v[1];
-  absl::string_view ixia_in_port = v[2];
-  ASSERT_FALSE(ixia_ip.empty());
-  ASSERT_FALSE(ixia_in_card.empty());
-  ASSERT_FALSE(ixia_in_port.empty());
-  LOG(INFO) << "Ixia IP is " << ixia_ip;
-  LOG(INFO) << "Ixia ingress card is " << ixia_in_card;
-  LOG(INFO) << "Ixia ingress port is " << ixia_in_port;
-  LOG(INFO) << "SUT is " << generic_testbed->Sut().ChassisName();
+  absl::SleepFor(absl::Seconds(5));
 
-  // Set up the switch to forward inbound IPv4 packets to the egress port
-  // We're doing this to overwhelm the egress port so at least some of the
-  // packets we'll send from the CPU get discarded
-  LOG(INFO) << "\n\n----- TestCPUOutDiscards: TrapToCPU -----\n";
-  EXPECT_OK(TrapToCPU(generic_testbed->Sut(), GetParam().p4_info));
-  LOG(INFO) << "\n\n----- TrapToCPU Done -----\n";
+  ASSERT_OK(
+      pins_test::ixia::StopTraffic(ixia_setup_result.traffic_refs, *testbed));
 
-  // Read some initial counters via GNMI from the SUT
-  ASSERT_OK_AND_ASSIGN(auto initial_in_counters,
-                       ReadCounters(sut_in_interface, gnmi_stub.get()));
-  std::string cpu_iface = "CPU";
-  ASSERT_OK_AND_ASSIGN(auto initial_cpu_out_discards,
-                       GetGnmiStat("out-discards", cpu_iface, gnmi_stub.get()));
-  ASSERT_OK_AND_ASSIGN(auto initial_cpu_in_discards,
-                       GetGnmiStat("in-discards", cpu_iface, gnmi_stub.get()));
-
-  LOG(INFO) << "\n\nTestCPUOutDiscards:\n\n"
-            << "\n\nInitial Ingress Counters (" << sut_in_interface << "):\n";
-  ShowCounters(initial_in_counters);
-  LOG(INFO) << "\n\nInitial CPU in-discards " << initial_cpu_in_discards
-            << "\n\n";
-  LOG(INFO) << "\n\nInitial CPU out-discards " << initial_cpu_out_discards
-            << "\n\n";
-
-  // Connect to the Ixia
-  LOG(INFO) << "\n\nTestCPUOutDiscards: IxiaConnect\n\n";
-  ASSERT_OK_AND_ASSIGN(std::string href,
-                       ixia::IxiaConnect(ixia_ip, *generic_testbed));
-
-  std::size_t ixpos = href.find("/ixnetwork");
-  ASSERT_NE(ixpos, std::string::npos);
-  std::string ixref = href.substr(0, ixpos + 10);
-  LOG(INFO) << "ixref " << ixref;
-
-  // Connect to the Ixia card/port
   ASSERT_OK_AND_ASSIGN(
-      std::string vref,
-      ixia::IxiaVport(href, ixia_in_card, ixia_in_port, *generic_testbed));
+      auto final_port_out_discards,
+      GetGnmiStat("out-discards", kSutOutPort, gnmi_stub.get()));
 
-  // Start a session
-  ASSERT_OK_AND_ASSIGN(std::string full_tref,
-                       ixia::IxiaSession(vref, *generic_testbed));
-
-  LOG(INFO) << "full_tref = " << full_tref;
-  ixpos = full_tref.find("/ixnetwork");
-  ASSERT_NE(ixpos, std::string::npos);
-  std::string tref = full_tref.substr(ixpos);
-  LOG(INFO) << "tref " << tref;
-
-  // Set the line rate to 100 percent
-  ASSERT_OK(ixia::SetLineRate(tref, 100, *generic_testbed));
-
-  // Set the frame count to 90M
-  ASSERT_OK(ixia::SetFrameCount(tref, 90000000, *generic_testbed));
-
-  // Set the source & destination MAC addresses
-  ASSERT_OK(ixia::SetSrcMac(tref, "00:01:02:03:04:05", *generic_testbed));
-  ASSERT_OK(ixia::SetDestMac(tref, "02:02:02:02:02:02", *generic_testbed));
-
-  // Append an IPv4 header
-  ASSERT_OK(ixia::AppendIPv4(full_tref, *generic_testbed));
-
-  // Set up the source and destination IP addresses
-  ASSERT_OK(ixia::SetSrcIPv4(tref, "192.168.0.1", *generic_testbed));
-  ASSERT_OK(ixia::SetDestIPv4(tref, "192.168.0.2", *generic_testbed));
-
-  // Set the frame size to 1514 bytes
-  ASSERT_OK(ixia::SetFrameSize(tref, kMtu, *generic_testbed));
-
-  // Start the traffic
-  ASSERT_OK(ixia::StartTraffic(full_tref, ixref, *generic_testbed));
-
-  // Wait for 10 seconds after the test starts
-  absl::Time t1;
-  t1 = absl::Now();
-
-  absl::Time t2;
-  while (1) {
-    t2 = absl::Now();
-    if (t2 >= t1 + absl::Seconds(10)) break;
-    absl::SleepFor(absl::Milliseconds(100));
-  }
-
-  LOG(INFO) << "Time at stop is " << t2;
-  LOG(INFO) << "Delta is " << t2 - t1;
-
-  ASSERT_OK(ixia::StopTraffic(full_tref, *generic_testbed));
-
-  // Re-read the same counters via GNMI from the SUT
-  ASSERT_OK_AND_ASSIGN(auto final_in_counters,
-                       ReadCounters(sut_in_interface, gnmi_stub.get()));
-  ASSERT_OK_AND_ASSIGN(auto final_cpu_in_discards,
-                       GetGnmiStat("in-discards", cpu_iface, gnmi_stub.get()));
-  ASSERT_OK_AND_ASSIGN(auto final_cpu_out_discards,
-                       GetGnmiStat("out-discards", cpu_iface, gnmi_stub.get()));
-
-  // Check the time again
-  absl::Time t3 = absl::Now();
-  LOG(INFO) << "Time after statistics read is " << t3;
-  LOG(INFO) << "Delta is " << t3 - t1;
-  uint64_t seconds = absl::ToInt64Seconds(t2 - t1);
-
-  // Display the final counters
-  LOG(INFO) << "\n\nTestCPUOutDiscards:\n\n"
-            << "\n\nFinal Ingress Counters (" << sut_in_interface << "):\n";
-  ShowCounters(final_in_counters);
-  LOG(INFO) << "\n\nFinal CPU in-discards " << final_cpu_in_discards << "\n\n";
-  LOG(INFO) << "\n\nFinal CPU out-discards " << final_cpu_out_discards
-            << "\n\n";
-
-  // Compute the change for each counter
-  auto delta_in = DeltaCounters(initial_in_counters, final_in_counters);
-  auto delta_cpu_in_discards = final_cpu_in_discards - initial_cpu_in_discards;
-  auto delta_cpu_out_discards =
-      final_cpu_out_discards - initial_cpu_out_discards;
-
-  // Display the difference in the counters for now (during test dev)
-  LOG(INFO) << "\n\nTestCPUOutDiscards:\n\n"
-            << "\n\nIngress Deltas (" << sut_in_interface << ") in " << seconds
-            << " seconds:";
-  ShowCounters(delta_in);
-  LOG(INFO) << "\n\nDelta CPU in-discards " << delta_cpu_in_discards << "\n\n";
-  LOG(INFO) << "\n\nDelta CPU out-discards " << delta_cpu_out_discards
-            << "\n\n";
-
-  LOG(INFO) << "\n\n\n\n\n---------- Restore ----------\n\n\n\n\n";
-
-  // Tear down any forwarding rules set up
-  EXPECT_OK(ForwardTeardown(generic_testbed->Sut()));
-
-  LOG(INFO) << "\n\n\n\n\n---------- Finished TestCPUOutDiscards "
-               "----------\n\n\n\n\n\n\n\n\n\n";
+  auto delta_port_out_discards =
+      final_port_out_discards - initial_port_out_discards;
+  EXPECT_GT(delta_port_out_discards, 0);
 }
-#endif
 
 }  // namespace pins_test
