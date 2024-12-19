@@ -15,6 +15,7 @@
 #include "tests/forwarding/watch_port_test.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>  // NOLINT
 #include <type_traits>
@@ -56,6 +57,7 @@
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "re2/re2.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -84,6 +86,9 @@ enum class AdminState {
   kDown,
   kUp,
 };
+
+// Admin status path (partial match) string in the form of "admin-status":"UP".
+constexpr LazyRE2 kAdminStatusPathMatch = {R"("admin-status":\"(\w+)\")"};
 
 // Group id used in this test.
 constexpr absl::string_view kGroupId = "group-1";
@@ -276,14 +281,7 @@ absl::Status SendNPacketsToSut(int num_packets,
   const absl::Time start_time = absl::Now();
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to 500 packets per second.
-    // TODO: Limit to 100 pps until the cpu queue
-    // assignment issue is fixed.
-    int punt_rate_limit_pps = 500;
-    if (test_environment.MaskKnownFailures()) {
-      punt_rate_limit_pps = 100;
-    }
-    auto earliest_send_time =
-        start_time + (i * absl::Seconds(1) / punt_rate_limit_pps);
+    auto earliest_send_time = start_time + (i * absl::Seconds(1) / 500);
     absl::SleepFor(earliest_send_time - absl::Now());
 
     // Vary the port on which to send the packet if the hash field selected is
@@ -349,34 +347,65 @@ GetPortNamePerPortId(gnmi::gNMI::StubInterface& gnmi_stub) {
   return port_name_per_port_id;
 }
 
-// Sets the admin state of the interface to UP/DOWN using GNMI config path.
-// Queries the  state path to verify if the desired state is achieved or not.
-absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
-                                    absl::string_view if_name,
-                                    AdminState admin_state) {
-  const std::string if_status =
-      admin_state == AdminState::kDown ? "DOWN" : "UP";
-  const std::string config_value =
-      admin_state == AdminState::kDown ? "false" : "true";
-  const std::string if_admin_config_path =
-      absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
-  LOG(INFO) << "Setting interface " << if_name << " to admin " << if_status;
-  RETURN_IF_ERROR(SetGnmiConfigPath(
-      &gnmi_stub, if_admin_config_path, pins_test::GnmiSetType::kUpdate,
-      absl::Substitute("{\"enabled\":$0}", config_value)));
-  // Wait for the admin state to take effect.
-  absl::SleepFor(absl::Seconds(1));
-  // Verifies /interfaces/interface[name=<port>]/state/admin-status = UP/DOWN.
+// Returns the current admin state of the interface.
+absl::StatusOr<AdminState> GetInterfaceAdminState(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view if_name) {
   const std::string if_state_path =
       absl::StrCat("interfaces/interface[name=", if_name, "]/state");
   ASSIGN_OR_RETURN(const std::string state_path_response,
                    pins_test::GetGnmiStatePathInfo(
                        &gnmi_stub, if_state_path,
                        /*resp_parse_str=*/"openconfig-interfaces:state"));
-  if (!absl::StrContains(state_path_response, if_status)) {
-    return absl::UnknownError(absl::StrCat("Unable to set interface ", if_name,
-                                           " to admin ", if_status));
+
+  // Admin status is part of the overall interface state path response.
+  // Extract out the "admin-status":"UP" tuple.
+  std::string admin_status_str;
+  if (RE2::PartialMatch(state_path_response, *kAdminStatusPathMatch,
+                        &admin_status_str)) {
+    if (admin_status_str == "UP") {
+      return AdminState::kUp;
+    } else if (admin_status_str == "DOWN") {
+      return AdminState::kDown;
+    }
   }
+  return absl::UnknownError(
+      absl::StrCat("Unable to get admin status for interface ", if_name,
+                   " state path: ", state_path_response));
+}
+
+// Sets the admin state of the interface to UP/DOWN using GNMI config path.
+// Queries the  state path to verify if the desired state is achieved or not.
+absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                    absl::string_view if_name,
+                                    AdminState admin_state) {
+  ASSIGN_OR_RETURN(AdminState current_admin_state,
+                   GetInterfaceAdminState(gnmi_stub, if_name));
+  if (current_admin_state == admin_state) {
+    return absl::OkStatus();
+  }
+
+  const std::string config_value =
+      admin_state == AdminState::kDown ? "false" : "true";
+  const std::string if_admin_config_path =
+      absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
+  const std::string if_status =
+      admin_state == AdminState::kDown ? "DOWN" : "UP";
+  LOG(INFO) << "Setting interface " << if_name << " to admin " << if_status;
+  RETURN_IF_ERROR(SetGnmiConfigPath(
+      &gnmi_stub, if_admin_config_path, pins_test::GnmiSetType::kUpdate,
+      absl::Substitute("{\"enabled\":$0}", config_value)));
+
+  // Poll with a delay for the admin state to take effect.
+  absl::Time timeout = absl::Now() + absl::Seconds(5);
+  do {
+    if (absl::Now() > timeout) {
+      return absl::UnknownError(absl::Substitute(
+          "Unable to set interface: $0 to admin: $1", if_name, if_status));
+    }
+    absl::SleepFor(absl::Seconds(1));
+    ASSIGN_OR_RETURN(current_admin_state,
+                     GetInterfaceAdminState(gnmi_stub, if_name));
+  } while (current_admin_state != admin_state);
   return absl::OkStatus();
 }
 
