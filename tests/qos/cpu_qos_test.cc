@@ -755,8 +755,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   // that allows us to send and receive packets to/from the SUT.
   thinkit::Switch &sut = Testbed().Sut();
   thinkit::Switch &control_device = Testbed().ControlSwitch();
-  constexpr auto kSutMacAddress =
-      netaddr::MacAddress(0x00, 0x07, 0xE9, 0x42, 0xAC, 0x28);  // Arbitrary.
+
   const P4Info &p4info = GetParam().p4info;
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
@@ -779,116 +778,74 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  // TODO: Unless a RIF exists at the test packet ingress port,
-  // packets will be dropped. Remove this once these RIFs are set up via
-  // gNMI.
-  if (Testbed().Environment().MaskKnownFailures()) {
+  for (PacketAndExpectedTargetQueue test_packet : GetParam().test_packets) {
+    std::string_view target_queue = test_packet.target_queue;
+    SCOPED_TRACE(absl::StrCat("Packet: ", test_packet.packet_name,
+                              ", Target queue: ", target_queue));
+    LOG(INFO) << absl::StrCat("Packet: ", test_packet.packet_name,
+                              ", Target queue: ", target_queue);
+    ASSERT_GT(test_packet.packet.headers().size(), 0);
+    ASSERT_TRUE(test_packet.packet.headers(0).has_ethernet_header());
     ASSERT_OK_AND_ASSIGN(
-        p4::v1::TableEntry router_interface_entry,
-        MakeRouterInterface(
-            /*router_interface_id=*/"ingress-rif-to-workaround-b/190736007",
-            /*p4rt_port_name=*/
-            link_used_for_test_packets.sut_port_p4rt_name,
-            /*mac=*/kSutMacAddress,
-            /*ir_p4info=*/ir_p4info));
-    ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(),
-                                        router_interface_entry));
-  }
+        sai::TableEntry l3_admit_entry,
+        gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+            R"pb(
+              l3_admit_table_entry {
+                match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
+                action { admit_to_l3 {} }
+                priority: 1
+              }
+            )pb",
+            test_packet.packet.headers(0)
+                .ethernet_header()
+                .ethernet_destination())));
 
-  // Extract DSCP-to-queue mapping from gNMI config.
-  using QueueNameByDscp = absl::flat_hash_map<int, std::string>;
-  ASSERT_OK_AND_ASSIGN(std::optional<QueueNameByDscp> queue_name_by_ipv4_dscp,
-                       ParseIpv4DscpToQueueMapping(GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(std::optional<QueueNameByDscp> queue_name_by_ipv6_dscp,
-                       ParseIpv6DscpToQueueMapping(GetParam().gnmi_config));
-  const std::string kDefaultQueueName = "BE1";
+    ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
+                         pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, l3_admit_entry));
 
-  // Extract loopback IPs from gNMI config.
-  using IpAddresses =
-      std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>;
-  ASSERT_OK_AND_ASSIGN(IpAddresses loopback_ips,
-                       ParseLoopbackIps(GetParam().gnmi_config));
-  ASSERT_TRUE(!loopback_ips.empty())
-      << "Expected a loopback IP to be configured via gNMI; nothing to "
-         "test.";
+    // Clear table entries and install l3 admit entry.
+    ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
+    ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
+    // Read counters of the target queue.
+    ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(
+        const QueueCounters queue_counters_before_test_packet,
+        GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
+                             *sut_gnmi_stub));
+    ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                         packetlib::SerializePacket(test_packet.packet));
 
-  // Verify DSCP-to-queue mapping for all DSCPs using IP test packets
-  // destined to the loopback IP(s).
-  constexpr int kMaxDscp = 63;
-  for (int dscp = 0; dscp <= kMaxDscp; ++dscp) {
-    for (auto &loopback_ip : loopback_ips) {
-      netaddr::Ipv4Address *loopback_ipv4 =
-          std::get_if<netaddr::Ipv4Address>(&loopback_ip);
-      netaddr::Ipv6Address *loopback_ipv6 =
-          std::get_if<netaddr::Ipv6Address>(&loopback_ip);
-      ASSERT_TRUE(loopback_ipv4 != nullptr || loopback_ipv6 != nullptr);
-      LOG(INFO) << "Testing DSCP-to-queue mapping for "
-                << (loopback_ipv4 != nullptr ? "IPv4" : "IPv6")
-                << " packet with DSCP " << dscp;
-
-      // Identify target queue for current DSCP.
-      // The algorithm for picking a queue is somewhat adhoc and PINS
-      // specific.
-      std::string target_queue = kDefaultQueueName;
-      if (queue_name_by_ipv4_dscp.has_value()) {
-        target_queue = gutil::FindOrDefault(*queue_name_by_ipv4_dscp, dscp,
-                                            kDefaultQueueName);
-      } else if (queue_name_by_ipv6_dscp.has_value()) {
-        target_queue = gutil::FindOrDefault(*queue_name_by_ipv6_dscp, dscp,
-                                            kDefaultQueueName);
-      }
-      LOG(INFO) << "Target queue: " << target_queue;
-
-      // Read counters of the target queue.
-      ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-      ASSERT_OK_AND_ASSIGN(
-          const QueueCounters queue_counters_before_test_packet,
-          GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
-                               *sut_gnmi_stub));
-
-      // Inject test packet.
-      ASSERT_OK_AND_ASSIGN(
-          packetlib::Packet packet,
-          loopback_ipv4 != nullptr
-              ? MakeIpv4PacketWithDscp(/*dst_mac=*/kSutMacAddress,
-                                       /*dst_ip=*/*loopback_ipv4,
-                                       /*dscp=*/dscp)
-              : MakeIpv6PacketWithDscp(/*dst_mac=*/kSutMacAddress,
-                                       /*dst_ip=*/*loopback_ipv6,
-                                       /*dscp=*/dscp));
-      ASSERT_OK_AND_ASSIGN(std::string raw_packet,
-                           packetlib::SerializePacket(packet));
+    const int kPacketCount = 50;
+    for (int iter = 0; iter < kPacketCount; iter++) {
       ASSERT_OK(pins::InjectEgressPacket(
           /*port=*/link_used_for_test_packets.control_device_port_p4rt_name,
           /*packet=*/raw_packet, ir_p4info, control_p4rt_session.get()));
-
-      // Read counter of the target queue again.
-      absl::Time time_packet_sent = absl::Now();
-      QueueCounters queue_counters_after_test_packet;
-      do {
-        ASSERT_OK_AND_ASSIGN(
-            queue_counters_after_test_packet,
-            GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
-                                 *sut_gnmi_stub));
-      } while (
-          // It may take several seconds for the queue counters to update.
-          CumulativeNumPacketsEnqueued(queue_counters_after_test_packet) ==
-              CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) &&
-          absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
-
-      // We terminate early if this fails, as that can cause this loop to get
-      // out of sync when counters increment after a long delay, resulting in
-      // confusing error messages where counters increment by 2.
-      ASSERT_EQ(
-          CumulativeNumPacketsEnqueued(queue_counters_after_test_packet),
-          CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) + 1)
-          << "Counters for queue " << target_queue
-          << " did not increment within " << kMaxQueueCounterUpdateTime
-          << " after injecting the following test packet:\n"
-          << packet.DebugString()
-          << "\nBefore: " << queue_counters_before_test_packet
-          << "\nAfter : " << queue_counters_after_test_packet;
     }
+    // Read counter of the target queue again.
+    absl::Time time_packet_sent = absl::Now();
+    QueueCounters queue_counters_after_test_packet;
+    do {
+      ASSERT_OK_AND_ASSIGN(
+          queue_counters_after_test_packet,
+          GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
+                               *sut_gnmi_stub));
+    } while (
+        // It may take several seconds for the queue counters to update.
+        CumulativeNumPacketsEnqueued(queue_counters_after_test_packet) ==
+            CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) &&
+        absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
+    // We terminate early if this fails, as that can cause this loop to get
+    // out of sync when counters increment after a long delay, resulting in
+    // confusing error messages where counters increment by 2.
+    ASSERT_EQ(CumulativeNumPacketsEnqueued(queue_counters_after_test_packet),
+              CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) +
+                  kPacketCount)
+        << "Counters for queue " << target_queue << " did not increment within "
+        << kMaxQueueCounterUpdateTime
+        << " after injecting the following test packet:\n"
+        << test_packet.packet.DebugString()
+        << "\nBefore: " << queue_counters_before_test_packet
+        << "\nAfter : " << queue_counters_after_test_packet;
   }
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }

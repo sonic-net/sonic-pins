@@ -68,7 +68,7 @@ CreateP4RuntimeSessionAndOptionallyPushP4Info(
     ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
                      pdpi::GetForwardingPipelineConfig(session.get()));
     ASSIGN_OR_RETURN(std::string p4info_diff,
-                     gutil::ProtoDiff(*p4info, response.config().p4info()));
+                     gutil::ProtoDiff(response.config().p4info(), *p4info));
     if (response.config().has_p4info() && !p4info_diff.empty()) {
       LOG(WARNING)
           << "Rebooting since P4Info reconfiguration is unsupported by PINS, "
