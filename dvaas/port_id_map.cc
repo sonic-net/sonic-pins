@@ -176,4 +176,22 @@ absl::Status CheckAndStoreMappedAndUnmappedPortIds(
                                      artifact_string);
 }
 
+bool MirrorTestbedP4rtPortIdMap::IsImplicitIdentityMap() const {
+  return !control_to_sut_port_map_.has_value();
+}
+
+absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>>
+MirrorTestbedP4rtPortIdMap::GetMappedSutPorts() const {
+  if (IsImplicitIdentityMap()) {
+    return absl::FailedPreconditionError(
+        "Getting mapped SUT ports is not supported for the implicit identity "
+        "map.");
+  }
+  absl::btree_set<pins_test::P4rtPortId> sut_ports;
+  for (const auto& [control_port, sut_port] : *control_to_sut_port_map_) {
+    sut_ports.insert(sut_port);
+  }
+  return sut_ports;
+}
+
 }  // namespace dvaas
