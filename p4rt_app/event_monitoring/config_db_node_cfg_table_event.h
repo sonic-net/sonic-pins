@@ -27,17 +27,17 @@ namespace p4rt_app {
 // Reacts to NODE_CFG changes in the CONFIG_DB:
 //  * Update P4RT device ID.
 class ConfigDbNodeCfgTableEventHandler : public sonic::StateEventHandler {
- public:
-  ConfigDbNodeCfgTableEventHandler(P4RuntimeImpl* p4runtime);
+public:
+  ConfigDbNodeCfgTableEventHandler(P4RuntimeImpl *p4runtime);
 
   absl::Status HandleEvent(
-      const std::string& operation, const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) override;
+      const std::string &operation, const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) override;
 
- private:
-  P4RuntimeImpl& p4runtime_;
+private:
+  P4RuntimeImpl &p4runtime_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_NODE_CFG_TABLE_H_
+#endif // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_NODE_CFG_TABLE_H_

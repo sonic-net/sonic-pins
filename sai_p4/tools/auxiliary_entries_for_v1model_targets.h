@@ -34,6 +34,6 @@ namespace sai {
 // Not required by PINS targets, since PINS has this config built-in.
 p4::v1::Entity MakeV1modelPacketReplicationEngineEntryRequiredForPunts();
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_TOOLS_AUXILIARY_ENTRIES_FOR_V1MODEL_TARGETS_H_
+#endif // PINS_SAI_P4_TOOLS_AUXILIARY_ENTRIES_FOR_V1MODEL_TARGETS_H_

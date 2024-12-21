@@ -176,6 +176,7 @@ absl::StatusOr<std::string> AppendSflowConfig(
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const int sampling_rate, const int sampling_header_size) {
   ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
+
   if (agent_addr_ipv6.empty()) {
     return absl::InvalidArgumentError(
         "loopback_address parameter cannot be empty.");

@@ -27,11 +27,11 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "diag/diag.pb.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "system/system.grpc.pb.h"
@@ -44,11 +44,11 @@ namespace pins_test {
 // A `PinsControlDevice` represents a single PINs switch used as a control
 // device for a ThinKit generic testbed.
 class PinsControlDevice : public thinkit::ControlDevice {
- public:
-  static absl::StatusOr<PinsControlDevice> Create(
-      std::unique_ptr<thinkit::Switch> sut,
-      p4::config::v1::P4Info p4_info =
-          sai::GetP4Info(sai::Instantiation::kMiddleblock));
+public:
+  static absl::StatusOr<PinsControlDevice>
+  Create(std::unique_ptr<thinkit::Switch> sut,
+         p4::config::v1::P4Info p4_info =
+             sai::GetP4Info(sai::Instantiation::kMiddleblock));
 
   PinsControlDevice(
       std::unique_ptr<thinkit::Switch> sut, pdpi::IrP4Info ir_p4_info,
@@ -71,34 +71,34 @@ class PinsControlDevice : public thinkit::ControlDevice {
 
   absl::Status Reboot(thinkit::RebootType reboot_type) override;
 
-  absl::StatusOr<::gnoi::diag::StartBERTResponse> StartBERT(
-      const ::gnoi::diag::StartBERTRequest& request) override;
+  absl::StatusOr<::gnoi::diag::StartBERTResponse>
+  StartBERT(const ::gnoi::diag::StartBERTRequest &request) override;
 
-  absl::StatusOr<::gnoi::diag::StopBERTResponse> StopBERT(
-      const ::gnoi::diag::StopBERTRequest& request) override;
+  absl::StatusOr<::gnoi::diag::StopBERTResponse>
+  StopBERT(const ::gnoi::diag::StopBERTRequest &request) override;
 
-  absl::StatusOr<::gnoi::diag::GetBERTResultResponse> GetBERTResult(
-      const ::gnoi::diag::GetBERTResultRequest& request) override;
+  absl::StatusOr<::gnoi::diag::GetBERTResultResponse>
+  GetBERTResult(const ::gnoi::diag::GetBERTResultRequest &request) override;
 
-  absl::StatusOr<absl::flat_hash_set<std::string>> GetUpLinks(
-      absl::Span<const std::string> interfaces) override;
+  absl::StatusOr<absl::flat_hash_set<std::string>>
+  GetUpLinks(absl::Span<const std::string> interfaces) override;
 
   absl::Status CheckUp() override;
-  
-  absl::Status ValidatePortsUp(
-      absl::Span<const std::string> interfaces) override;
+
+  absl::Status
+  ValidatePortsUp(absl::Span<const std::string> interfaces) override;
 
   absl::Status FlapLinks(absl::string_view interface,
                          absl::Duration down_duration) override;
 
-  absl::StatusOr<absl::flat_hash_map<std::string, int>> GetInterfaceLaneSpeed(
-       absl::flat_hash_set<std::string>& interfaces) override;
+  absl::StatusOr<absl::flat_hash_map<std::string, int>>
+  GetInterfaceLaneSpeed(absl::flat_hash_set<std::string> &interfaces) override;
 
   absl::StatusOr<std::vector<std::string>>
   FilterCollateralDownOnAdminDownInterfaces(
       absl::Span<const std::string> interfaces) override;
 
- private:
+private:
   std::unique_ptr<thinkit::Switch> sut_;
   pdpi::IrP4Info ir_p4_info_;
   std::unique_ptr<pdpi::P4RuntimeSession> control_session_;
@@ -106,6 +106,6 @@ class PinsControlDevice : public thinkit::ControlDevice {
   absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_PINS_CONTROL_DEVICE_H_
+#endif // PINS_LIB_PINS_CONTROL_DEVICE_H_

@@ -21,7 +21,7 @@
 #include <optional>
 #include <queue>
 #include <string>
-#include <thread>  // NOLINT: third_party code.
+#include <thread> // NOLINT: third_party code.
 #include <vector>
 
 #include "absl/base/attributes.h"
@@ -116,15 +116,15 @@ struct P4RuntimeSessionOptionalArgs {
 
 // A P4Runtime session
 class P4RuntimeSession {
- public:
+public:
   // Creates and sets up a standard P4RuntimeSession. If you don't have
   // particular requirements, this is likely the function you want to use.
   // Specifically, creates a session, clears all tables, and pushes the given
   // P4Info via RECONCILE_AND_COMMIT.
   static absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
   CreateWithP4InfoAndClearTables(
-      thinkit::Switch& thinkit_switch, const p4::config::v1::P4Info& p4info,
-      const P4RuntimeSessionOptionalArgs& metadata = {});
+      thinkit::Switch &thinkit_switch, const p4::config::v1::P4Info &p4info,
+      const P4RuntimeSessionOptionalArgs &metadata = {});
 
   // Creates a session with the switch, which lasts until the session object is
   // destructed. Performs primary arbitration and, if `error_if_not_primary` is
@@ -132,63 +132,63 @@ class P4RuntimeSession {
   // controller:
   // * `ALREADY_EXISTS` will be returned if there is already a primary.
   // * `NOT_FOUND` will be returned if there is no primary.
-  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
-      std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
-      uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {},
-      bool error_if_not_primary = true);
-  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
-      const std::string& address,
-      const std::shared_ptr<grpc::ChannelCredentials>& credentials,
-      uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {},
-      bool error_if_not_primary = true);
-  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
-      thinkit::Switch& thinkit_switch,
-      const P4RuntimeSessionOptionalArgs& metadata = {},
-      bool error_if_not_primary = true);
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+  Create(std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
+         uint32_t device_id, const P4RuntimeSessionOptionalArgs &metadata = {},
+         bool error_if_not_primary = true);
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+  Create(const std::string &address,
+         const std::shared_ptr<grpc::ChannelCredentials> &credentials,
+         uint32_t device_id, const P4RuntimeSessionOptionalArgs &metadata = {},
+         bool error_if_not_primary = true);
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+  Create(thinkit::Switch &thinkit_switch,
+         const P4RuntimeSessionOptionalArgs &metadata = {},
+         bool error_if_not_primary = true);
 
   // Connects to the default session on the switch, which has no election_id
   // and which cannot be terminated. This should only be used for testing.
   // The stream_channel and stream_channel_context will be the nullptr.
-  static std::unique_ptr<P4RuntimeSession> Default(
-      std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
-      uint32_t device_id,
-      const std::string& role = "P4RUNTIME_ROLE_SDN_CONTROLLER");
+  static std::unique_ptr<P4RuntimeSession>
+  Default(std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
+          uint32_t device_id,
+          const std::string &role = "P4RUNTIME_ROLE_SDN_CONTROLLER");
 
   // Cleanly closes the P4RT stream connection if it hasn't already been
   // stopped.
   ~P4RuntimeSession();
 
   // Disables copy semantics.
-  P4RuntimeSession(const P4RuntimeSession&) = delete;
-  P4RuntimeSession& operator=(const P4RuntimeSession&) = delete;
+  P4RuntimeSession(const P4RuntimeSession &) = delete;
+  P4RuntimeSession &operator=(const P4RuntimeSession &) = delete;
 
   // Allows move semantics.
-  P4RuntimeSession(P4RuntimeSession&&) = default;
-  P4RuntimeSession& operator=(P4RuntimeSession&&) = default;
+  P4RuntimeSession(P4RuntimeSession &&) = default;
+  P4RuntimeSession &operator=(P4RuntimeSession &&) = default;
 
   // Sends the write request, and returns OK if all requests in the batch were
   // handled successfully. If you need to evaluate the result of each request
   // individually consider using WriteAndReturnGrpcStatus.
-  absl::Status Write(const p4::v1::WriteRequest& request);
+  absl::Status Write(const p4::v1::WriteRequest &request);
 
   // Sends the write request, and returns the raw gRPC response from the switch.
   // Notice that the status only means the request was sent and handled
   // correctly, but NOT that the flow was successfully programmed.
   //
   // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-error-reporting
-  grpc::Status WriteAndReturnGrpcStatus(const p4::v1::WriteRequest& request);
+  grpc::Status WriteAndReturnGrpcStatus(const p4::v1::WriteRequest &request);
 
   // Sends the read request, and aggregates all the read responses into a
   // single response. Will return an error if an issue is detected with the
   // stream.
-  absl::StatusOr<p4::v1::ReadResponse> Read(const p4::v1::ReadRequest& request);
+  absl::StatusOr<p4::v1::ReadResponse> Read(const p4::v1::ReadRequest &request);
 
   // Set/Get methods for the forwarding pipeline.
   absl::Status SetForwardingPipelineConfig(
-      const p4::v1::SetForwardingPipelineConfigRequest& request);
+      const p4::v1::SetForwardingPipelineConfigRequest &request);
   absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
   GetForwardingPipelineConfig(
-      const p4::v1::GetForwardingPipelineConfigRequest& request);
+      const p4::v1::GetForwardingPipelineConfigRequest &request);
 
   // Returns the id of the node that this session belongs to.
   uint32_t DeviceId() const { return device_id_; }
@@ -199,13 +199,13 @@ class P4RuntimeSession {
   // Thread-safe wrapper around the stream channel's `Read` method.
   // It blocks until the stream message queue is non-empty, the
   // stream channel is closed, or (if specified) the `timeout` is expired .
-  ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response,
-      std::optional<absl::Duration> timeout = std::nullopt)
+  ABSL_MUST_USE_RESULT bool
+  StreamChannelRead(p4::v1::StreamMessageResponse &response,
+                    std::optional<absl::Duration> timeout = std::nullopt)
       ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
-  ABSL_MUST_USE_RESULT bool StreamChannelWrite(
-      const p4::v1::StreamMessageRequest& request)
+  ABSL_MUST_USE_RESULT bool
+  StreamChannelWrite(const p4::v1::StreamMessageRequest &request)
       ABSL_LOCKS_EXCLUDED(stream_write_lock_);
 
   // Thread-safe call that waits for the switch to respond with a stream message
@@ -220,11 +220,11 @@ class P4RuntimeSession {
   //   false  : if it wants the packet to be ignored.
   //   Status : if it wants to stop processing more packets.
   ABSL_MUST_USE_RESULT
-  absl::Status HandleNextNStreamMessages(
-      absl::AnyInvocable<
-          absl::StatusOr<bool>(const p4::v1::StreamMessageResponse& message)>
-          callback,
-      int expected_messages, absl::Duration timeout)
+  absl::Status
+  HandleNextNStreamMessages(absl::AnyInvocable<absl::StatusOr<bool>(
+                                const p4::v1::StreamMessageResponse &message)>
+                                callback,
+                            int expected_messages, absl::Duration timeout)
       ABSL_LOCKS_EXCLUDED(stream_read_lock_);
 
   // Thread-safe call that waits for the next stream message response from the
@@ -255,10 +255,10 @@ class P4RuntimeSession {
   ReadStreamChannelResponsesAndFinish()
       ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
 
- private:
+private:
   P4RuntimeSession(uint32_t device_id,
                    std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
-                   absl::uint128 election_id, const std::string& role);
+                   absl::uint128 election_id, const std::string &role);
 
   // Updates the internal state for RPC stream. Logs any changes (e.g. up->down,
   // down->up, but not up->up).
@@ -312,98 +312,100 @@ class P4RuntimeSession {
   // All stream messages are queued by the P4RuntimeSession (ensuring the gRPC
   // stream is flushed and can be cleanly closed) for users to read at their
   // discression.
-  std::queue<p4::v1::StreamMessageResponse> stream_messages_
-      ABSL_GUARDED_BY(stream_read_lock_);
+  std::queue<p4::v1::StreamMessageResponse>
+      stream_messages_ ABSL_GUARDED_BY(stream_read_lock_);
 };
 
 // Create P4Runtime stub.
 // Set the host_name for secure connection that needs to verify the switch.
 std::unique_ptr<p4::v1::P4Runtime::Stub> CreateP4RuntimeStub(
-    const std::string& address,
-    const std::shared_ptr<grpc::ChannelCredentials>& credentials,
-    const std::string& host_name = "");
+    const std::string &address,
+    const std::shared_ptr<grpc::ChannelCredentials> &credentials,
+    const std::string &host_name = "");
 
 // -- Helper functions mainly used with `P4RuntimeSession` ---------------------
 
 // Create PI updates from PI table entries.
-std::vector<p4::v1::Update> CreatePiUpdates(
-    absl::Span<const p4::v1::TableEntry> pi_entries,
-    p4::v1::Update_Type update_type);
+std::vector<p4::v1::Update>
+CreatePiUpdates(absl::Span<const p4::v1::TableEntry> pi_entries,
+                p4::v1::Update_Type update_type);
 
 // Creates PI updates from PI entities.
-std::vector<p4::v1::Update> CreatePiUpdates(
-    absl::Span<const p4::v1::Entity> pi_entities,
-    p4::v1::Update_Type update_type);
+std::vector<p4::v1::Update>
+CreatePiUpdates(absl::Span<const p4::v1::Entity> pi_entities,
+                p4::v1::Update_Type update_type);
 
 // Sets the request's metadata (i.e. device id, role). And sends a PI
 // (program independent) read request.
-absl::StatusOr<p4::v1::ReadResponse> SetMetadataAndSendPiReadRequest(
-    P4RuntimeSession* session, p4::v1::ReadRequest& read_request);
+absl::StatusOr<p4::v1::ReadResponse>
+SetMetadataAndSendPiReadRequest(P4RuntimeSession *session,
+                                p4::v1::ReadRequest &read_request);
 
 // Sets the request's metadata (i.e. device id, role and election id).
 // And sends a PI (program independent) write request.
-absl::Status SetMetadataAndSendPiWriteRequest(
-    P4RuntimeSession* session, p4::v1::WriteRequest& write_request);
+absl::Status
+SetMetadataAndSendPiWriteRequest(P4RuntimeSession *session,
+                                 p4::v1::WriteRequest &write_request);
 
 // Sets the requests' metadata (i.e. device id, role and election id). And sends
 // PI (program independent) write requests.
 absl::Status SetMetadataAndSendPiWriteRequests(
-    P4RuntimeSession* session,
-    std::vector<p4::v1::WriteRequest>& write_requests);
+    P4RuntimeSession *session,
+    std::vector<p4::v1::WriteRequest> &write_requests);
 
 // Reads PI (program independent) entities.
-absl::StatusOr<std::vector<p4::v1::Entity>> ReadPiEntities(
-    P4RuntimeSession* session);
+absl::StatusOr<std::vector<p4::v1::Entity>>
+ReadPiEntities(P4RuntimeSession *session);
 
 // Reads PI (program independent) table entries.
 ABSL_DEPRECATED("Prefer ReadPiEntities instead.")
-absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntries(
-    P4RuntimeSession* session);
+absl::StatusOr<std::vector<p4::v1::TableEntry>>
+ReadPiTableEntries(P4RuntimeSession *session);
 
 // Reads and returns the `CounterData` for the table entry whose `table_id`,
 // `match`, and `priority` fields match `target_entry_signature`, or returns
 // NotFoundError if no such table entry exists. Note that on P4Runtime
 // standard-compliant targets, at most one matching table entry can exist.
 // Other fields of `target_entry_signature` -- e.g. the `action` -- are ignored.
-absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
-    P4RuntimeSession* session,
-    const p4::v1::TableEntry& target_entry_signature);
+absl::StatusOr<p4::v1::CounterData>
+ReadPiCounterData(P4RuntimeSession *session,
+                  const p4::v1::TableEntry &target_entry_signature);
 
 // Checks that a read from `session` returns no entities.
-absl::Status CheckNoEntities(P4RuntimeSession& session);
+absl::Status CheckNoEntities(P4RuntimeSession &session);
 
 // Deletes all entities read from `session`.
-absl::Status ClearEntities(P4RuntimeSession& session);
+absl::Status ClearEntities(P4RuntimeSession &session);
 
 // Returns the `MeterCounterData` for the matching table entry, ignoring
 // `action` and `meter_config`.
-absl::StatusOr<p4::v1::MeterCounterData> ReadPiMeterCounterData(
-    P4RuntimeSession* session,
-    const p4::v1::TableEntry& target_entry_signature);
+absl::StatusOr<p4::v1::MeterCounterData>
+ReadPiMeterCounterData(P4RuntimeSession *session,
+                       const p4::v1::TableEntry &target_entry_signature);
 
 // Checks that there are no table entries.
 ABSL_DEPRECATED("Use CheckNoEntities instead.")
-absl::Status CheckNoTableEntries(P4RuntimeSession* session);
+absl::Status CheckNoTableEntries(P4RuntimeSession *session);
 
 // Clears the table entries.
 ABSL_DEPRECATED("Use ClearEntities instead.")
-absl::Status ClearTableEntries(P4RuntimeSession* session);
+absl::Status ClearTableEntries(P4RuntimeSession *session);
 
 // Installs the given PI (program independent) table entry on the switch.
-absl::Status InstallPiTableEntry(P4RuntimeSession* session,
+absl::Status InstallPiTableEntry(P4RuntimeSession *session,
                                  p4::v1::TableEntry pi_entry);
 
 // Installs the given PI (program independent) table entries on the switch.
-absl::Status InstallPiTableEntries(
-    P4RuntimeSession* session, const IrP4Info& info,
-    absl::Span<const p4::v1::TableEntry> pi_entries);
+absl::Status
+InstallPiTableEntries(P4RuntimeSession *session, const IrP4Info &info,
+                      absl::Span<const p4::v1::TableEntry> pi_entries);
 
 // Installs the given PI (program independent) entity on the switch.
-absl::Status InstallPiEntity(P4RuntimeSession* session,
+absl::Status InstallPiEntity(P4RuntimeSession *session,
                              p4::v1::Entity pi_entity);
 
 // Installs the given PI (program independent) entity on the switch.
-absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
+absl::Status InstallPiEntities(P4RuntimeSession *session, const IrP4Info &info,
                                absl::Span<const p4::v1::Entity> pi_entities);
 
 // Sends the given PI updates to the switch.
@@ -415,28 +417,28 @@ absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
 // the size of request is "8192 + MAX_UPDATES_PER_WRITE * 100 bytes of
 // metadata". P4RuntimeSession uses a 1MB limit and 5000 updates falls safely
 // within those limits and is simultaneously more than we ever tend to send.
-absl::Status SendPiUpdates(P4RuntimeSession* session,
+absl::Status SendPiUpdates(P4RuntimeSession *session,
                            absl::Span<const p4::v1::Update> pi_updates,
                            std::optional<int> max_batch_size = 5000);
 
 // Sets the forwarding pipeline to the given P4 info and, optionally, device
 // configuration.
 absl::Status SetMetadataAndSetForwardingPipelineConfig(
-    P4RuntimeSession* session,
+    P4RuntimeSession *session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
-    const p4::config::v1::P4Info& p4info,
+    const p4::config::v1::P4Info &p4info,
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
 // Sets the forwarding pipeline to the given one.
 absl::Status SetMetadataAndSetForwardingPipelineConfig(
-    P4RuntimeSession* session,
+    P4RuntimeSession *session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
-    const p4::v1::ForwardingPipelineConfig& config);
+    const p4::v1::ForwardingPipelineConfig &config);
 
 // Gets the forwarding pipeline from the device.
 absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
 GetForwardingPipelineConfig(
-    P4RuntimeSession* session,
+    P4RuntimeSession *session,
     p4::v1::GetForwardingPipelineConfigRequest::ResponseType type =
         p4::v1::GetForwardingPipelineConfigRequest::ALL);
 
@@ -444,7 +446,7 @@ GetForwardingPipelineConfig(
 // specified in the `PkgInfo` message.
 // Assumes semantic versioning, i.e. that the `version` field is a string of the
 // the form `MAJOR.MINOR.PATCH`.
-absl::StatusOr<gutil::Version> GetPkgInfoVersion(P4RuntimeSession* session);
+absl::StatusOr<gutil::Version> GetPkgInfoVersion(P4RuntimeSession *session);
 
-}  // namespace pdpi
-#endif  // PINS_P4_PDPI_P4_RUNTIME_SESSION_H_
+} // namespace pdpi
+#endif // PINS_P4_PDPI_P4_RUNTIME_SESSION_H_

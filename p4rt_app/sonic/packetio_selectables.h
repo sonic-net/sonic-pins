@@ -27,11 +27,10 @@ namespace sonic {
 // mechanism. Operates on receive socket that was created for each netdev port
 // and the virtual funcs will read the buffers when packet in arrives.
 class PacketInSelectable : public swss::Selectable {
- public:
+public:
   PacketInSelectable(absl::string_view port_name, int receive_socket,
                      packet_metadata::ReceiveCallbackFunction callback_function)
-      : port_name_(port_name),
-        receive_socket_(receive_socket),
+      : port_name_(port_name), receive_socket_(receive_socket),
         callback_function_(callback_function) {}
   ~PacketInSelectable() override{};
 
@@ -41,9 +40,9 @@ class PacketInSelectable : public swss::Selectable {
   // packet.
   uint64_t readData() override;
 
- private:
-  PacketInSelectable(const PacketInSelectable&) = delete;
-  PacketInSelectable& operator=(const PacketInSelectable&) = delete;
+private:
+  PacketInSelectable(const PacketInSelectable &) = delete;
+  PacketInSelectable &operator=(const PacketInSelectable &) = delete;
 
   // Sonic port name.
   std::string port_name_;
@@ -55,7 +54,7 @@ class PacketInSelectable : public swss::Selectable {
   packet_metadata::ReceiveCallbackFunction callback_function_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_PACKETIO_SELECTABLES_H_
+#endif // PINS_P4RT_APP_SONIC_PACKETIO_SELECTABLES_H_

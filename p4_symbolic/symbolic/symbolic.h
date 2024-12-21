@@ -41,9 +41,9 @@ namespace symbolic {
 // A port reserved to encode dropping packets.
 // The value is arbitrary; we choose the same value as BMv2:
 // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#standard-metadata
-constexpr int kDropPort = 511;  // 2^9 - 1.
+constexpr int kDropPort = 511; // 2^9 - 1.
 // An arbitrary port we reserve for the CPU port (for PacketIO packets).
-constexpr int kCpuPort = 510;  // 2^9 - 2.
+constexpr int kCpuPort = 510; // 2^9 - 2.
 constexpr int kPortBitwidth = 9;
 
 // Boolean pseudo header field that is initialized to false, set to true when
@@ -88,7 +88,7 @@ absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state);
 // Expresses a concrete match for a corresponding concrete packet with a
 // table in the program.
 struct ConcreteTableMatch {
-  bool matched;  // false if no entry in this table was matched, true otherwise.
+  bool matched; // false if no entry in this table was matched, true otherwise.
   // If matched is false, this is set to -1.
   // If matched is true, this is the index of the matched table entry, or -1 if
   // the default entry was matched.
@@ -123,8 +123,8 @@ struct ConcreteTrace {
   // Can be extended more in the future to include useful
   // flags about dropping the packet, taking specific code (e.g. if)
   // branches, vrf, other interesting events, etc.
-  bool dropped;     // true if the packet was dropped.
-  bool got_cloned;  // true if the packet got cloned.
+  bool dropped;    // true if the packet was dropped.
+  bool got_cloned; // true if the packet got cloned.
   std::string to_string() const {
     std::string result;
     absl::StrAppend(&result, "dropped = ", dropped, "\n");
@@ -154,7 +154,7 @@ struct ConcreteContext {
   std::string egress_port;
   ConcretePerPacketState ingress_headers;
   ConcretePerPacketState egress_headers;
-  ConcreteTrace trace;  // Expected trace in the program.
+  ConcreteTrace trace; // Expected trace in the program.
 
   std::string to_string() const { return to_string(false); }
   std::string to_string(bool verbose) const {
@@ -265,28 +265,29 @@ using TranslationPerType =
 // string) annotation, a static mapping between the P4RT values and the
 // underlying bitvector values may be provided. Otherwise, a mapping is
 // inferred dynamically for such types.
-absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
-    const Dataplane &data_plane, const std::vector<int> &physical_ports = {},
-    const TranslationPerType &translation_per_type = {});
+absl::StatusOr<std::unique_ptr<SolverState>>
+EvaluateP4Pipeline(const Dataplane &data_plane,
+                   const std::vector<int> &physical_ports = {},
+                   const TranslationPerType &translation_per_type = {});
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.
-absl::StatusOr<std::optional<ConcreteContext>> Solve(
-    SolverState &solver_state, const Assertion &assertion);
-absl::StatusOr<std::optional<ConcreteContext>> Solve(
-    const SolverState &solver_state);
+absl::StatusOr<std::optional<ConcreteContext>>
+Solve(SolverState &solver_state, const Assertion &assertion);
+absl::StatusOr<std::optional<ConcreteContext>>
+Solve(const SolverState &solver_state);
 
 ABSL_DEPRECATED(
     "Use the overload Solve(SolverState&, const Assertion&) instead.")
-absl::StatusOr<std::optional<ConcreteContext>> Solve(
-    const std::unique_ptr<SolverState> &solver_state,
-    const Assertion &assertion);
+absl::StatusOr<std::optional<ConcreteContext>>
+Solve(const std::unique_ptr<SolverState> &solver_state,
+      const Assertion &assertion);
 
 // Dumps the underlying SMT program for debugging.
 std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
                      const Assertion &assertion);
 
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_

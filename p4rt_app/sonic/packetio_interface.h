@@ -16,7 +16,7 @@
 
 #include <memory>
 #include <string>
-#include <thread>  //NOLINT
+#include <thread> //NOLINT
 
 #include "absl/status/status.h"
 #include "p4rt_app/sonic/receive_genetlink.h"
@@ -40,21 +40,21 @@ struct PacketIoCounters {
 
 // Base class for PacketIoInterface.
 class PacketIoInterface {
- public:
+public:
   virtual ~PacketIoInterface() = default;
   // Add a new port to Packet I/O.
   virtual absl::Status AddPacketIoPort(absl::string_view port_name) = 0;
   // Remove an existing port from Packet I/O.
   virtual absl::Status RemovePacketIoPort(absl::string_view port_name) = 0;
-  ABSL_MUST_USE_RESULT virtual absl::StatusOr<std::thread> StartReceive(
-      packet_metadata::ReceiveCallbackFunction callback_function,
-      bool use_genetlink) = 0;
+  ABSL_MUST_USE_RESULT virtual absl::StatusOr<std::thread>
+  StartReceive(packet_metadata::ReceiveCallbackFunction callback_function,
+               bool use_genetlink) = 0;
   // Send the given packet out on the specified interface.
   virtual absl::Status SendPacketOut(absl::string_view port_name,
-                                     const std::string& packet) = 0;
+                                     const std::string &packet) = 0;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#endif // PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_

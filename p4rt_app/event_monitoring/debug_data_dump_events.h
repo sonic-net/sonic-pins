@@ -14,7 +14,7 @@
 #ifndef PINS_INFRA_P4RT_APP_EVENT_MONITORING_DEBUG_DATA_DUMP_EVENT_H_
 #define PINS_INFRA_P4RT_APP_EVENT_MONITORING_DEBUG_DATA_DUMP_EVENT_H_
 
-#include <thread>  // NOLINT
+#include <thread> // NOLINT
 
 #include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
@@ -27,11 +27,11 @@
 namespace p4rt_app {
 
 class DebugDataDumpEventHandler {
- public:
+public:
   explicit DebugDataDumpEventHandler(
-      P4RuntimeImpl& p4runtime,
-      sonic::ConsumerNotifierAdapter& notification_channel,
-      sonic::NotificationProducerAdapter& response_channel);
+      P4RuntimeImpl &p4runtime,
+      sonic::ConsumerNotifierAdapter &notification_channel,
+      sonic::NotificationProducerAdapter &response_channel);
 
   // Waits on a notification from RedisDB to dump debug data for the P4RT App.
   // If the notification is for another component then we do nothing and exit
@@ -43,22 +43,22 @@ class DebugDataDumpEventHandler {
   void Start();
   void Stop();
 
- private:
+private:
   // SWSS DB connections are not thread safe so we should only handle one event
   // at a time.
   absl::Mutex event_lock_;
 
   // P4Runtime service from which we will collect debug data.
-  P4RuntimeImpl& p4runtime_;
+  P4RuntimeImpl &p4runtime_;
 
   // SWSS notification channel that should be listening to events on the
   // DEBUG_DATA_REQ_CHANNEL.
-  sonic::ConsumerNotifierAdapter& notification_channel_
-      ABSL_GUARDED_BY(event_lock_);
+  sonic::ConsumerNotifierAdapter &
+      notification_channel_ ABSL_GUARDED_BY(event_lock_);
 
   // Send response to DEBUG_DATA_RESP_CHANNEL.
-  sonic::NotificationProducerAdapter& response_channel_
-      ABSL_GUARDED_BY(event_lock_);
+  sonic::NotificationProducerAdapter &
+      response_channel_ ABSL_GUARDED_BY(event_lock_);
 
   // Event thread that can be started to continually monitor for events. Once
   // the destructor is called we can notify the thread to stop monitoring
@@ -69,6 +69,6 @@ class DebugDataDumpEventHandler {
   void ContinuallyMonitorForEvents();
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_INFRA_P4RT_APP_EVENT_MONITORING_DEBUG_DATA_DUMP_EVENT_H_
+#endif // PINS_INFRA_P4RT_APP_EVENT_MONITORING_DEBUG_DATA_DUMP_EVENT_H_

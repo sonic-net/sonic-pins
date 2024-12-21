@@ -26,9 +26,9 @@ namespace pdpi {
 // as required by some legacy targets such as BMv2.
 //
 // Note: The resulting table entry is not P4Runtime standard conform.
-absl::Status ZeroPadPiTableEntry(const IrP4Info& info,
-                                 p4::v1::TableEntry& pi_entry);
+absl::Status ZeroPadPiTableEntry(const IrP4Info &info,
+                                 p4::v1::TableEntry &pi_entry);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_PI_H_
+#endif // PINS_P4_PDPI_PI_H_

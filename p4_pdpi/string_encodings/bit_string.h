@@ -33,7 +33,7 @@ namespace pdpi {
 // incrementally), as well as methods for consuming bits and outputting them in
 // various formats.
 class BitString {
- public:
+public:
   // Constructs a bit string from a byte string.
   static BitString OfByteString(absl::string_view data) {
     BitString result;
@@ -45,7 +45,7 @@ class BitString {
 
   void AppendBit(bool bit) { bits_.push_back(bit); }
   template <size_t num_bits>
-  void AppendBits(const std::bitset<num_bits>& bits) {
+  void AppendBits(const std::bitset<num_bits> &bits) {
     for (int i = 0; i < num_bits; i++) {
       bits_.push_back(bits.test(num_bits - 1 - i));
     }
@@ -105,7 +105,7 @@ class BitString {
   // Returns a hex string representation. Fails if there are no bits.
   absl::StatusOr<std::string> ToHexString() const;
 
- private:
+private:
   // Consumes num_bits and returns ok if BitString is long enough, or an error
   // status otherwise.
   absl::Status Consume(int num_bits);
@@ -119,6 +119,6 @@ class BitString {
   int start_index_ = 0;
 };
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
+#endif // PINS_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_

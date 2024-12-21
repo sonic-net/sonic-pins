@@ -19,22 +19,22 @@
 #include <string>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "swss/table.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockConsumerNotifierAdapter : public ConsumerNotifierAdapter {
- public:
+public:
   MOCK_METHOD(bool, WaitForNotificationAndPop,
               (std::string & op, std::string &data,
                std::vector<swss::FieldValueTuple> &values, int64_t timeout_ms),
               (override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_CONSUMER_NOTIFIER_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_CONSUMER_NOTIFIER_ADAPTER_H_
