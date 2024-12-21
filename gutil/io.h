@@ -33,6 +33,6 @@ absl::StatusOr<std::vector<std::string>> ReadFileLines(const std::string &path);
 // Writes the content of the string to the file.
 absl::Status WriteFile(const std::string &content, const std::string &path);
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // P4_SYMBOLIC_UTIL_IO_H_
+#endif // P4_SYMBOLIC_UTIL_IO_H_

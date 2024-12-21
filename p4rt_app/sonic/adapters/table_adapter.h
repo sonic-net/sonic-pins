@@ -37,37 +37,37 @@ namespace sonic {
 // we wanted to read data about Ethernet0 we only need to call:
 //   auto data = table_adapter.get("Ethernet0");
 class TableAdapter {
- public:
-  explicit TableAdapter(swss::DBConnector* db_connector,
-                        const std::string& table_name);
+public:
+  explicit TableAdapter(swss::DBConnector *db_connector,
+                        const std::string &table_name);
   virtual ~TableAdapter() = default;
 
-  virtual bool exists(const std::string& key);
+  virtual bool exists(const std::string &key);
   virtual std::vector<std::string> keys();
 
-  virtual std::vector<std::pair<std::string, std::string>> get(
-      const std::string& key);
-  virtual void set(
-      const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values);
-  virtual void batch_set(
-      const std::vector<swss::KeyOpFieldsValuesTuple>& values);
+  virtual std::vector<std::pair<std::string, std::string>>
+  get(const std::string &key);
+  virtual void
+  set(const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values);
+  virtual void
+  batch_set(const std::vector<swss::KeyOpFieldsValuesTuple> &values);
 
-  virtual void del(const std::string& key);
-  virtual void batch_del(const std::vector<std::string>& keys);
+  virtual void del(const std::string &key);
+  virtual void batch_del(const std::vector<std::string> &keys);
 
   virtual std::string getTablePrefix() const;
 
- protected:
+protected:
   // Test only constructor used to construct Mock & Fake classes.
   TableAdapter() = default;
 
- private:
-  swss::DBConnector* db_connector_;  // Not owned
+private:
+  swss::DBConnector *db_connector_; // Not owned
   std::unique_ptr<swss::Table> table_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_TABLE_ADAPTER_H_

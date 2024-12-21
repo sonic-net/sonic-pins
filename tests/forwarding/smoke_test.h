@@ -24,4 +24,4 @@ class SmokeTestFixture : public MirrorBlackboxTestFixture {};
 
 }  // namespace pins_test
 
-#endif  // PINS_TESTS_FORWARDING_SMOKE_TEST_H_
+#endif // PINS_TESTS_FORWARDING_SMOKE_TEST_H_

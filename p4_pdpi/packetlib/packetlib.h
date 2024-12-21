@@ -26,7 +26,7 @@
 
 namespace packetlib {
 
-constexpr uint32_t kIpfixUdpDestPort = 4739;  // 0x1283
+constexpr uint32_t kIpfixUdpDestPort = 4739; // 0x1283
 
 // Parses the given packet. Parsing is a total function, and any aspect that
 // cannot be parsed correctly will be put into `payload` of `Packet`.
@@ -61,11 +61,11 @@ Packet ParsePacket(absl::string_view input,
 // 3. Computed fields have the right value.
 // 4. The packet has the minimum size required by its headers.
 // 5. The packet is non-empty (not uninitialized).
-absl::Status ValidatePacket(const Packet& packet);
+absl::Status ValidatePacket(const Packet &packet);
 
 // Same as ValidatePacket, but returns a list of reasons why the packet isn't
 // valid instead.
-std::vector<std::string> PacketInvalidReasons(const Packet& packet);
+std::vector<std::string> PacketInvalidReasons(const Packet &packet);
 
 // Seralizes a given packet. The packet may miss computed fields, which will be
 // filled in automatically when missing (but not changed if they are present).
@@ -76,25 +76,25 @@ absl::StatusOr<std::string> SerializePacket(Packet packet);
 
 // Like the other `SerializePacket` overload, but takes in the `packet` in text
 // proto format.
-absl::StatusOr<std::string> SerializePacket(
-    absl::string_view packet_text_proto);
+absl::StatusOr<std::string>
+SerializePacket(absl::string_view packet_text_proto);
 
 // Seralizes a given packet without checking header invariants. All fields must
 // be present and use a valid value (according to ir::Format), but otherwise no
 // requirements are made on the set of headers; they will just be serialized in
 // order without checking, if computed fields are correct, header order is
 // valid, etc.
-absl::StatusOr<std::string> RawSerializePacket(const Packet& packet);
+absl::StatusOr<std::string> RawSerializePacket(const Packet &packet);
 
 // Updates all computed fields that are missing. Computed fields that are
 // already present are not modified. Returns true iff any changes where made.
 // Fails if fields that are required for determining computed fields are missing
 // or invalid.
-absl::StatusOr<bool> UpdateMissingComputedFields(Packet& packet);
+absl::StatusOr<bool> UpdateMissingComputedFields(Packet &packet);
 
 // Like `UpdateMissingComputedFields`, but also overwrites comuted fields
 // that are already present.
-absl::StatusOr<bool> UpdateAllComputedFields(Packet& packet);
+absl::StatusOr<bool> UpdateAllComputedFields(Packet &packet);
 
 // If the given packet must have a minimum size based on its headers (e.g., an
 // Ethernet payload can be no smaller than 46 bytes), and if the packet size can
@@ -105,13 +105,13 @@ absl::StatusOr<bool> UpdateAllComputedFields(Packet& packet);
 //
 // Note: This function may invalidate computed fields (e.g., checksum and length
 // fields) and should be called prior to `Update*ComputedFields`.
-absl::StatusOr<bool> PadPacketToMinimumSize(Packet& packet);
+absl::StatusOr<bool> PadPacketToMinimumSize(Packet &packet);
 
 // Pads a packet to certain size by appending zeros to the payload and return
 // true. If the packet size is bigger than or equal to the target size,
 // leaves the packet unmodified and returns false. If the packet size cannot be
 // computed, returns error satus.
-absl::StatusOr<bool> PadPacket(int num_bytes, Packet& packet);
+absl::StatusOr<bool> PadPacket(int num_bytes, Packet &packet);
 
 // Returns the size of the given packet in bits, starting at the nth header and
 // ignoring all headers before that. Works even when computed fields are
@@ -120,12 +120,12 @@ absl::StatusOr<bool> PadPacket(int num_bytes, Packet& packet);
 // - `start_header_index` is not in [0, packet.headers().size()], or
 // - `packet.headers(i)` is uninitialized for i in
 //   [start_header_index, packet.headers().size()]
-absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
+absl::StatusOr<int> PacketSizeInBits(const Packet &packet,
                                      int start_header_index = 0);
 
 // Like `PacketSizeInBits`, but returns size in bytes, or an error if the bit
 // size is not divisible by 8.
-absl::StatusOr<int> PacketSizeInBytes(const Packet& packet,
+absl::StatusOr<int> PacketSizeInBytes(const Packet &packet,
                                       int start_header_index = 0);
 
 // Computes the 16-bit checksum of an IPv4 header. All fields must be set and
@@ -224,6 +224,6 @@ std::string ValidateAndConvertToHexString(uint64_t input) {
   return pdpi::BitsetToHexString(std::bitset<bit_limit>(input));
 }
 
-}  // namespace packetlib
+} // namespace packetlib
 
-#endif  // GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_
+#endif // GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_

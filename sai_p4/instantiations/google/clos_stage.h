@@ -26,16 +26,16 @@ inline std::vector<ClosStage> AllStages() {
 
 inline std::string ClosStageToString(ClosStage stage) {
   switch (stage) {
-    case ClosStage::kStage2:
-      return "Stage2";
-    case ClosStage::kStage3:
-      return "Stage3";
+  case ClosStage::kStage2:
+    return "Stage2";
+  case ClosStage::kStage3:
+    return "Stage3";
   }
   LOG(DFATAL) << "invalid ClosStage: " << static_cast<int>(stage);
   return "";
 }
 
-inline std::ostream& operator<<(std::ostream& os, ClosStage stage) {
+inline std::ostream &operator<<(std::ostream &os, ClosStage stage) {
   return os << ClosStageToString(stage);
 }
 
@@ -44,14 +44,15 @@ bool DiffersByClosStage(Instantiation instantiation);
 
 // Returns an error if the given `instantiation` and CLOS `stage` pair are
 // incompatible.
-absl::Status AssertInstantiationAndClosStageAreCompatible(
-    Instantiation instantiation, std::optional<ClosStage> stage);
+absl::Status
+AssertInstantiationAndClosStageAreCompatible(Instantiation instantiation,
+                                             std::optional<ClosStage> stage);
 
-bool AbslParseFlag(absl::string_view stage_txt, ClosStage* stage,
-                   std::string* error);
+bool AbslParseFlag(absl::string_view stage_txt, ClosStage *stage,
+                   std::string *error);
 
 std::string AbslUnparseFlag(ClosStage stage);
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_CLOS_STAGE_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_CLOS_STAGE_H_

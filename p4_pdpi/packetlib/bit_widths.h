@@ -40,21 +40,21 @@ constexpr int kVlanVlanIdentifierBitwidth = 12;
 constexpr int kVlanEthertypeBitwidth = 16;
 
 // IP constants.
-constexpr int kIpVersionBitwidth = 4;          // IPv4 & IPv6
-constexpr int kIpIhlBitwidth = 4;              // IPv4
-constexpr int kIpDscpBitwidth = 6;             // IPv4 & IPv6
-constexpr int kIpEcnBitwidth = 2;              // IPv4 & IPv6
-constexpr int kIpTotalLengthBitwidth = 16;     // IPv4
-constexpr int kIpIdentificationBitwidth = 16;  // IPv4
-constexpr int kIpFlagsBitwidth = 3;            // IPv4
-constexpr int kIpFragmentOffsetBitwidth = 13;  // IPv4
-constexpr int kIpTtlBitwidth = 8;              // IPv4
-constexpr int kIpProtocolBitwidth = 8;         // IPv4
-constexpr int kIpChecksumBitwidth = 16;        // IPv4
-constexpr int kIpFlowLabelBitwidth = 20;       // IPv6
-constexpr int kIpPayloadLengthBitwidth = 16;   // IPv6
-constexpr int kIpNextHeaderBitwidth = 8;       // IPv6
-constexpr int kIpHopLimitBitwidth = 8;         // IPv6
+constexpr int kIpVersionBitwidth = 4;         // IPv4 & IPv6
+constexpr int kIpIhlBitwidth = 4;             // IPv4
+constexpr int kIpDscpBitwidth = 6;            // IPv4 & IPv6
+constexpr int kIpEcnBitwidth = 2;             // IPv4 & IPv6
+constexpr int kIpTotalLengthBitwidth = 16;    // IPv4
+constexpr int kIpIdentificationBitwidth = 16; // IPv4
+constexpr int kIpFlagsBitwidth = 3;           // IPv4
+constexpr int kIpFragmentOffsetBitwidth = 13; // IPv4
+constexpr int kIpTtlBitwidth = 8;             // IPv4
+constexpr int kIpProtocolBitwidth = 8;        // IPv4
+constexpr int kIpChecksumBitwidth = 16;       // IPv4
+constexpr int kIpFlowLabelBitwidth = 20;      // IPv6
+constexpr int kIpPayloadLengthBitwidth = 16;  // IPv6
+constexpr int kIpNextHeaderBitwidth = 8;      // IPv6
+constexpr int kIpHopLimitBitwidth = 8;        // IPv6
 
 // UDP constants.
 constexpr int kUdpPortBitwidth = 16;
@@ -118,6 +118,6 @@ constexpr int kPsampUserMetaFieldBitwidth = 16;
 constexpr int kPsampDlbIdBitwidth = 8;
 constexpr int kPsampVariableLengthBitwidth = 8;
 constexpr int kPsampPacketSampledLengthBitwidth = 16;
-}  // namespace packetlib
+} // namespace packetlib
 
-#endif  // GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
+#endif // GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_

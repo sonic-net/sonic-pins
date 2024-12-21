@@ -27,34 +27,34 @@ namespace p4rt_app {
 namespace sonic {
 
 class DBConnectorAdapter {
- public:
-  explicit DBConnectorAdapter(swss::DBConnector* db_connector);
+public:
+  explicit DBConnectorAdapter(swss::DBConnector *db_connector);
   virtual ~DBConnectorAdapter() = default;
 
-  virtual int64_t del(const std::string& key);
+  virtual int64_t del(const std::string &key);
 
-  virtual bool exists(const std::string& key);
+  virtual bool exists(const std::string &key);
 
-  virtual std::unordered_map<std::string, std::string> hgetall(
-      const std::string& glob);
+  virtual std::unordered_map<std::string, std::string>
+  hgetall(const std::string &glob);
 
-  virtual std::vector<std::string> keys(const std::string& glob);
+  virtual std::vector<std::string> keys(const std::string &glob);
 
-  virtual void hmset(
-      const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values);
+  virtual void
+  hmset(const std::string &key,
+        const std::vector<std::pair<std::string, std::string>> &values);
 
-  virtual void batch_del(const std::vector<std::string>& keys);
+  virtual void batch_del(const std::vector<std::string> &keys);
 
- protected:
+protected:
   // Test only constructor for Mock and Fake classes.
   DBConnectorAdapter() = default;
 
- private:
-  swss::DBConnector* db_connector_;  // not owned.
+private:
+  swss::DBConnector *db_connector_; // not owned.
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_DB_CONNECTOR_ADAPTER_H_
+#endif // GOOGLE_P4RT_APP_SONIC_ADAPTERS_DB_CONNECTOR_ADAPTER_H_

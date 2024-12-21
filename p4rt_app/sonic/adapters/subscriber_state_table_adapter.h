@@ -30,24 +30,25 @@ namespace sonic {
 // This provides the flexibility to define the constructors needed for mocks
 // and fakes.
 class SubscriberStateTableAdapter {
- public:
+public:
   explicit SubscriberStateTableAdapter(swss::DBConnector *db,
                                        const std::string &table_name);
   virtual ~SubscriberStateTableAdapter() = default;
 
-  virtual bool WaitForNotificationAndPop(
-      std::string &key, std::string &op,
-      std::vector<swss::FieldValueTuple> &values, int64_t timeout_ms);
+  virtual bool
+  WaitForNotificationAndPop(std::string &key, std::string &op,
+                            std::vector<swss::FieldValueTuple> &values,
+                            int64_t timeout_ms);
 
- protected:
+protected:
   // Test only constructor used to construct Mock & Fake classes.
   SubscriberStateTableAdapter() = default;
 
- private:
+private:
   std::unique_ptr<swss::SubscriberStateTable> subscriber_state_table_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_SUBSCRIBER_STATE_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_SUBSCRIBER_STATE_TABLE_ADAPTER_H_

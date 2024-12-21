@@ -37,11 +37,11 @@ struct ArribaTestParams {
 // packets, collects the output packets, and compares the results against the
 // expected outputs in the test vector.
 class ArribaTest : public testing::TestWithParam<ArribaTestParams> {
- protected:
+protected:
   void SetUp() override { GetParam().mirror_testbed->SetUp(); }
   void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_TESTS_FORWARDING_ARRIBA_TEST_H_
+#endif // PINS_TESTS_FORWARDING_ARRIBA_TEST_H_

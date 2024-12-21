@@ -31,7 +31,7 @@
 namespace pins_test {
 
 class PINSBackend : public ValidatorBackend {
- public:
+public:
   // Validates if a P4Runtime can be connected to and used.
   static constexpr absl::string_view kP4RuntimeUsable = "P4RuntimeUsable";
   // Validates if a gNMI can be connected to and used.
@@ -57,7 +57,7 @@ class PINSBackend : public ValidatorBackend {
   // Checks if "oper-status" of all interfaces are "UP".
   absl::Status PortsUp(absl::string_view chassis, absl::Duration timeout);
 
- protected:
+protected:
   void SetupValidations() override {
     AddCallbacksToValidation(kP4RuntimeUsable,
                              {absl::bind_front(&PINSBackend::P4rtAble, this)});
@@ -73,10 +73,10 @@ class PINSBackend : public ValidatorBackend {
                               absl::bind_front(&PINSBackend::GnoiAble, this)});
   }
 
- private:
+private:
   absl::flat_hash_map<std::string, std::unique_ptr<thinkit::Switch>>
       switches_map_;
 };
 
-}  // namespace pins_test
-#endif  // PINS_LIB_VALIDATOR_PINS_BACKEND_H_
+} // namespace pins_test
+#endif // PINS_LIB_VALIDATOR_PINS_BACKEND_H_

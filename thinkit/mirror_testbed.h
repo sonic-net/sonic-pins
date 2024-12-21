@@ -26,15 +26,15 @@ namespace thinkit {
 // The MirrorTestbed interface represents a testbed topology with two
 // P4RT-capable switches connected back-to-back.
 class MirrorTestbed {
- public:
+public:
   virtual ~MirrorTestbed() {}
 
   // Returns the control switch (switch connected to the SUT (system under
   // test)).
-  virtual Switch& ControlSwitch() = 0;
+  virtual Switch &ControlSwitch() = 0;
 
   // Returns the SUT (system under test) switch.
-  virtual Switch& Sut() = 0;
+  virtual Switch &Sut() = 0;
 
   // Returns the SUT (or Control Switch) interfaces that are connected to
   // Control Switch (or SUT) and have the same name as the peer
@@ -47,9 +47,9 @@ class MirrorTestbed {
   virtual std::vector<std::string> GetConnectedInterfaces() { return {}; };
 
   // Returns the test environment.
-  virtual TestEnvironment& Environment() = 0;
+  virtual TestEnvironment &Environment() = 0;
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // THINKIT_MIRROR_TESTBED_H_
+#endif // THINKIT_MIRROR_TESTBED_H_

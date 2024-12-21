@@ -735,11 +735,13 @@ void SflowTestFixture::SetUp() {
         "gnmi_config_with_sflow.txt",
         json_yang::FormatJsonBestEffort(gnmi_config)));
   }
+
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
       "p4info.pb.txt", GetP4Info().DebugString()));
-  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           testbed_->Sut(), gnmi_config, GetP4Info()));
+  ASSERT_OK_AND_ASSIGN(
+      sut_p4_session_,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed_->Sut(), gnmi_config_with_sflow, GetP4Info()));
   ASSERT_OK_AND_ASSIGN(ir_p4_info_, pdpi::CreateIrP4Info(GetP4Info()));
 
   ASSERT_OK_AND_ASSIGN(gnmi_stub_, testbed_->Sut().CreateGnmiStub());

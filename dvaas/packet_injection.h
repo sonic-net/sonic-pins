@@ -41,12 +41,12 @@ struct PacketStatistics {
 // the control switch, determines if the packet is among expected such packets
 // or not.
 using IsExpectedUnsolicitedPacketFunctionType =
-    std::function<bool(const packetlib::Packet& packet)>;
+    std::function<bool(const packetlib::Packet &packet)>;
 
 // Unsolicited packets that, for the time being, are acceptable in a GPINS
 // testbeds.
-inline bool DefaultIsExpectedUnsolicitedPacket(
-    const packetlib::Packet& packet) {
+inline bool
+DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet &packet) {
   // TODO Switch generates router solicitation packets.
   if (packet.headers().size() == 3 &&
       packet.headers(2).icmp_header().type() == "0x85") {
@@ -68,8 +68,8 @@ inline bool DefaultIsExpectedUnsolicitedPacket(
 // Gets 'ingress_port' value from metadata in `packet_in`. Returns
 // InvalidArgumentError if 'ingress_port' metadata is missing.
 // TODO: Make this function private.
-absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
-    const pdpi::IrPacketIn& packet_in);
+absl::StatusOr<std::string>
+GetIngressPortFromIrPacketIn(const pdpi::IrPacketIn &packet_in);
 
 struct PacketInjectionParams {
   // Max number of packets to be injected per second. If null, there will be no
@@ -96,10 +96,10 @@ struct PacketInjectionParams {
 // - Determining the set of packets that were forwarded (punted from control
 //   switch) and punted (punted from SUT) for each input packet.
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
-    const PacketTestVectorById& packet_test_vector_by_id,
-    const PacketInjectionParams& parameters, PacketStatistics& statistics);
+    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
+    const PacketTestVectorById &packet_test_vector_by_id,
+    const PacketInjectionParams &parameters, PacketStatistics &statistics);
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_PACKET_INJECTION_H_
+#endif // PINS_DVAAS_PACKET_INJECTION_H_

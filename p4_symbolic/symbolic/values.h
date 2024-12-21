@@ -53,7 +53,7 @@ struct TranslationData {
 // It also handles the reverse translation of previously allocated ids to
 // their corresponding string value.
 class IdAllocator {
- public:
+public:
   IdAllocator(const TranslationData &translation_data);
 
   // Allocates an integer ID to this string identifier. If a static mapping is
@@ -69,7 +69,7 @@ class IdAllocator {
   // which it was allocated.
   absl::StatusOr<std::string> IdToString(uint64_t value) const;
 
- private:
+private:
   // A mapping from string values to bitvector values.
   std::unordered_map<std::string, uint64_t> string_to_id_map_;
 
@@ -113,12 +113,10 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value);
 // translated values (i.e. string IrValues) the bitwidth MUST be 0, in which
 // case we use the minimum number of bits to encode the resulting translated
 // value.
-absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
-                                         const std::string &field_name,
-                                         const std::string &type_name,
-                                         const pdpi::IrValue &value,
-                                         int bitwidth,
-                                         P4RuntimeTranslator *translator);
+absl::StatusOr<z3::expr>
+FormatP4RTValue(z3::context &context, const std::string &field_name,
+                const std::string &type_name, const pdpi::IrValue &value,
+                int bitwidth, P4RuntimeTranslator *translator);
 
 // Reverse translation: operates opposite to FormatP4RTValue().
 // If the given field was not detected to be translatable (perhaps it is indeed
@@ -127,12 +125,12 @@ absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
 // were previously translated by a call to FormatP4RTValue), then the value
 // is looked up using the reverse mapping inside the given translator, if that
 // look fails, an absl error is returned.
-absl::StatusOr<std::string> TranslateValueToP4RT(
-    const std::string &field_name, const std::string &value,
-    const P4RuntimeTranslator &translator);
+absl::StatusOr<std::string>
+TranslateValueToP4RT(const std::string &field_name, const std::string &value,
+                     const P4RuntimeTranslator &translator);
 
-}  // namespace values
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace values
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_VALUES_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_VALUES_H_
