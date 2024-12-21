@@ -68,8 +68,8 @@ absl::Status VerifyGnmiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
     return absl::OkStatus();
   }
   return absl::FailedPreconditionError(
-      absl::StrCat(state_path, " value is ", state_value,
-                   ", which is not equal to ", expected_value));
+      absl::StrCat("Actual state path: ", state_path, " value is ", state_value,
+                   ", expected value is ", expected_value));
 }
 
 absl::Status SetSflowSamplingSize(gnmi::gNMI::StubInterface* gnmi_stub,
