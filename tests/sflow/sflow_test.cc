@@ -14,23 +14,28 @@
 
 #include "tests/sflow/sflow_test.h"
 
+#include <algorithm>
+#include <bitset>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
-#include <thread>  // NOLINT
+#include <thread>  // NOLINT: Need threads (instead of fiber) for upstream code.
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -45,13 +50,9 @@
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/pd.h"
-#include "p4_pdpi/string_encodings/decimal_string.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/group_programming_util.h"
-#include "tests/forwarding/packet_test_util.h"
-#include "tests/forwarding/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
@@ -104,11 +105,6 @@ constexpr int kSamplingRateInterval = 4000;
 // Level of tolerance for packet rate verification.
 // This could be parameterized in future if this is platform dependent.
 constexpr double kTolerance = 0.15;
-
-constexpr absl::string_view kSpeed100GB =
-    "\"openconfig-if-ethernet:SPEED_100GB\"";
-constexpr absl::string_view kSpeed200GB =
-    "\"openconfig-if-ethernet:SPEED_200GB\"";
 
 // Vrf prefix used in the test.
 constexpr absl::string_view kVrfIdPrefix = "vrf-";
@@ -742,7 +738,7 @@ void SflowTestFixture::SetUp() {
   ASSERT_OK(GetSflowInfoFromSut(testbed_.get(), gnmi_config, &agent_addr_ipv6,
                                 &sflow_enabled_interfaces));
   ASSERT_OK_AND_ASSIGN(
-      gnmi_config, AppendSflowConfig(
+      gnmi_config, UpdateSflowConfig(
                        gnmi_config, agent_addr_ipv6, collector_address_and_port,
                        sflow_enabled_interfaces, sampling_rate, sampling_size));
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
@@ -764,64 +760,8 @@ void SflowTestFixture::SetUp() {
       agent_addr_ipv6, sampling_rate, sampling_size, collector_address_and_port,
       sflow_enabled_interfaces));
 
-  // TODO: Remove unused set speed in sFlow test.
-  // Go through all the ports that connect to the Ixia and set them
-  // first to 200GB.
-  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
-      testbed_->GetSutInterfaceInfo();
-  for (const auto& [interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      ASSERT_OK(pins_test::SetPortSpeedInBitsPerSecond(std::string(kSpeed200GB),
-                                                       interface, *gnmi_stub_));
-    }
-  }
-
-  auto speed_config_applied =
-      [&interface_info](absl::string_view expected_speed,
-                        gnmi::gNMI::StubInterface* gnmi_stub) -> absl::Status {
-    for (const auto& [interface, info] : interface_info) {
-     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-        ASSIGN_OR_RETURN(auto port_speed, GetPortSpeed(interface, gnmi_stub));
-        if (port_speed != expected_speed) {
-          return absl::FailedPreconditionError(absl::Substitute(
-              "Port speed is not converged. Interface $0 "
-              "speed state path value is $1, expected speed is $2.",
-              interface, port_speed, expected_speed));
-        }
-      }
-    }
-    return absl::OkStatus();
-  };
-  // Waits for speed config to be applied.
-  EXPECT_OK(pins_test::WaitForCondition(speed_config_applied, absl::Seconds(30),
-                                        kSpeed200GB, gnmi_stub_.get()));
-  auto links_up = [this]() -> absl::Status {
-    ASSIGN_OR_RETURN(ready_links_,
-                     GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
-    if (ready_links_.empty()) {
-      return absl::FailedPreconditionError("No Ixia links up.");
-    }
-    return absl::OkStatus();
-  };
-  // Waits for links to be up.
-  EXPECT_OK(pins_test::WaitForCondition(links_up, absl::Seconds(30)));
-
-  // If links didn't come, lets try 100GB as some testbeds have 100GB
-  // IXIA connections.
-  if (ready_links_.empty()) {
-    for (const auto& [interface, info] : interface_info) {
-      if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-        ASSERT_OK(pins_test::SetPortSpeedInBitsPerSecond(
-            std::string(kSpeed100GB), interface, *gnmi_stub_));
-      }
-    }
-    // Waits for speed config to be applied.
-    EXPECT_OK(pins_test::WaitForCondition(speed_config_applied,
-                                          absl::Seconds(30), kSpeed100GB,
-                                          gnmi_stub_.get()));
-    // Waits for links to come up.
-    EXPECT_OK(pins_test::WaitForCondition(links_up, absl::Seconds(30)));
-  }
+  ASSERT_OK_AND_ASSIGN(ready_links_,
+                       GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
   ASSERT_FALSE(ready_links_.empty()) << "Ixia links are not ready";
 }
 

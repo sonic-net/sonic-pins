@@ -17,14 +17,12 @@
 
 #include <memory>
 #include <string>
-#include <thread>  // NOLINT: Need threads (instead of fiber) for upstream code.
 #include <vector>
 
-#include "absl/memory/memory.h"
 #include "gtest/gtest.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
