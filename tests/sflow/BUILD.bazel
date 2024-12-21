@@ -68,12 +68,25 @@ cc_library(
     hdrs = ["sflow_util.h"],
     deps = [
         "//lib/gnmi:gnmi_helper",
+        "//lib/utils:json_utils",
         "//lib/validator:validator_lib",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "sflow_util_test",
+    srcs = ["sflow_util_test.cc"],
+    deps = [
+        ":sflow_util",
+        "//gutil:status_matchers",
+        "//lib/utils:json_utils",
+        "@com_google_googletest//:gtest_main",
     ],
 )
