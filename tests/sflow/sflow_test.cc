@@ -33,12 +33,14 @@
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
@@ -50,14 +52,17 @@
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/group_programming_util.h"
+#include "tests/forwarding/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
 #include "tests/sflow/sflow_util.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins {
@@ -531,22 +536,16 @@ absl::StatusOr<bool> CheckLinkUp(absl::string_view interface,
   return ops_response == "\"UP\"";
 }
 
-struct Port {
-  std::string interface_name;
-  int port_id;
-};
-
-// Returns an available port which is UP and different from `ingress_port`.
+// Returns an available port which is UP and different from `used_port`.
 // Returns an error if failed.
-absl::StatusOr<Port> GetUpEgressPort(thinkit::GenericTestbed& generic_testbed,
-                                     gnmi::gNMI::StubInterface& gnmi_stub,
-                                     absl::string_view ingress_port) {
+absl::StatusOr<Port> GetUnusedUpPort(gnmi::gNMI::StubInterface& gnmi_stub,
+                                     absl::string_view used_port) {
   absl::flat_hash_map<std::string, std::string> port_id_per_port_name;
   ASSIGN_OR_RETURN(port_id_per_port_name,
                    pins_test::GetAllUpInterfacePortIdsByName(gnmi_stub));
   for (const auto& [interface, port_id_str] : port_id_per_port_name) {
     int port_id;
-    if (interface != ingress_port && absl::SimpleAtoi(port_id_str, &port_id)) {
+    if (interface != used_port && absl::SimpleAtoi(port_id_str, &port_id)) {
       return Port{
           .interface_name = interface,
           .port_id = port_id,
@@ -744,13 +743,11 @@ void SflowTestFixture::SetUp() {
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
       "gnmi_config_with_sflow.txt",
       json_yang::FormatJsonBestEffort(gnmi_config)));
-
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
       "p4info.pb.txt", GetP4Info().DebugString()));
-  ASSERT_OK_AND_ASSIGN(
-      sut_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed_->Sut(), gnmi_config_with_sflow, GetP4Info()));
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed_->Sut(), gnmi_config, GetP4Info()));
   ASSERT_OK_AND_ASSIGN(ir_p4_info_, pdpi::CreateIrP4Info(GetP4Info()));
   ASSERT_OK_AND_ASSIGN(gnmi_stub_, testbed_->Sut().CreateGnmiStub());
 
@@ -854,7 +851,7 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
   };
   ASSERT_OK_AND_ASSIGN(
       Port egress_port,
-      GetUpEgressPort(*testbed_, *gnmi_stub_, ingress_port.interface_name));
+      GetUnusedUpPort(*gnmi_stub_, ingress_port.interface_name));
   // Programs forwarding rule.
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(1, {egress_port.port_id}));
@@ -1151,6 +1148,293 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
   // is high.
   EXPECT_GE(sample_count, expected_count * (1 - kTolerance));
   EXPECT_LE(sample_count, expected_count * (1 + kTolerance));
+}
+namespace {
+
+constexpr int kInbandSamplingRate = 256;
+constexpr int kInbandSamplingHeaderSize = 128;
+constexpr int kInbandTrafficPps = 120;
+
+// Sends N packets at a rate of kInbandTrafficPps.
+absl::Status SendNPacketsFromSwitch(
+    int num_packets, const std::string& port, const pdpi::IrP4Info& ir_p4info,
+    pdpi::P4RuntimeSession& p4_session,
+    thinkit::TestEnvironment& test_environment) {
+  const absl::Time start_time = absl::Now();
+  auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(
+      R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "02:03:04:05:06:07"
+            ethernet_source: "00:01:02:03:04:05"
+            ethertype: "0x0800"
+          }
+        }
+        headers {
+          ipv4_header {
+            version: "0x4"
+            ihl: "0x5"
+            dscp: "0x03"
+            ecn: "0x0"
+            identification: "0x0000"
+            flags: "0x0"
+            fragment_offset: "0x0000"
+            ttl: "0x20"
+            protocol: "0x05"
+            ipv4_source: "1.2.3.4"
+            ipv4_destination: "5.6.7.8"
+          }
+        }
+        payload: "Test packet for Sflow Inband testing")pb");
+  ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
+  for (int i = 0; i < num_packets; i++) {
+    // Rate limit to kInbandTrafficPps packets per second.
+    RETURN_IF_ERROR(InjectEgressPacket(
+        port, raw_packet, ir_p4info, &p4_session,
+        /*packet_delay=*/absl::Milliseconds(1000 / kInbandTrafficPps)));
+  }
+
+  LOG(INFO) << "Sent " << num_packets << " packets in "
+            << (absl::Now() - start_time) << ".";
+  return absl::OkStatus();
+}
+
+// Sets VRF id for all packets.
+absl::Status SetSwitchVrfForAllPackets(pdpi::P4RuntimeSession& p4_session,
+                                       const pdpi::IrP4Info& ir_p4info,
+                                       absl::string_view vrf_id) {
+  // Create default VRF for test.
+  ASSIGN_OR_RETURN(
+      p4::v1::TableEntry pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(
+          ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+                         R"pb(
+                           vrf_table_entry {
+                             match { vrf_id: "$0" }
+                             action { no_action {} }
+                           })pb",
+                         vrf_id))));
+  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+
+  ASSIGN_OR_RETURN(
+      pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(
+          ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+                         R"pb(
+                           acl_pre_ingress_table_entry {
+                             match {}  # Wildcard match
+                             action { set_vrf { vrf_id: "$0" } }
+                             priority: 1
+                           })pb",
+                         vrf_id))));
+  return pdpi::InstallPiTableEntry(&p4_session, pi_entry);
+}
+
+// Programs ipv6_table_entry using `vrf_id`, `ip_address` and `next_hop_id`.
+absl::Status ProgramRoutesForIpv6(pdpi::P4RuntimeSession& p4_session,
+                                  const pdpi::IrP4Info& ir_p4info,
+                                  absl::string_view vrf_id,
+                                  absl::string_view ip_address,
+                                  absl::string_view next_hop_id) {
+  auto ipv4_entry = gutil::ParseProtoOrDie<sai::Update>(absl::Substitute(
+      R"pb(
+        type: INSERT
+        table_entry {
+          ipv6_table_entry {
+            match {
+              vrf_id: "$0"
+              ipv6_dst { value: "$1" prefix_length: 128 }
+            }
+            action { set_nexthop_id { nexthop_id: "$2" } }
+          }
+        })pb",
+      vrf_id, ip_address, next_hop_id));
+  p4::v1::WriteRequest write_request;
+  ASSIGN_OR_RETURN(
+      p4::v1::Update pi_entry, pdpi::PdUpdateToPi(ir_p4info, ipv4_entry),
+      _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
+                     << ipv4_entry.DebugString() << " error: ");
+  *write_request.add_updates() = pi_entry;
+  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+}
+
+// Programs a next hop entry for `port_id` and returns nexthop id if successful.
+absl::StatusOr<std::string> ProgramNextHops(pdpi::P4RuntimeSession& p4_session,
+                                            const pdpi::IrP4Info& ir_p4info,
+                                            absl::string_view port_id) {
+  p4::v1::WriteRequest pi_request;
+  const std::string rif_id = absl::StrCat("rif-", port_id);
+  const std::string neighbor_id = "fe80::2";
+  const std::string src_mac = "00:02:03:04:05:06";
+  const std::string dst_mac = "00:1a:11:17:5f:80";
+  ASSIGN_OR_RETURN(*pi_request.add_updates(),
+                   RouterInterfaceTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                              rif_id, port_id, src_mac));
+  ASSIGN_OR_RETURN(*pi_request.add_updates(),
+                   NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                       rif_id, neighbor_id, dst_mac));
+  const std::string nexthop_id = absl::StrCat("nexthop-", port_id);
+  ASSIGN_OR_RETURN(*pi_request.add_updates(),
+                   NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                      nexthop_id, rif_id, neighbor_id));
+  RETURN_IF_ERROR(
+      pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, pi_request));
+  return nexthop_id;
+}
+
+}  // namespace
+
+void SflowInbandTestFixture::SetUp() {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+
+  // Push gNMI config to main switch.
+  const std::string& main_gnmi_config = GetParam().main_gnmi_config;
+  ASSERT_OK(testbed.Environment().StoreTestArtifact("main_gnmi_config.txt",
+                                                    main_gnmi_config));
+  ASSERT_OK_AND_ASSIGN(main_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           GetMainSwitch(), main_gnmi_config, GetP4Info()));
+  ASSERT_OK_AND_ASSIGN(ir_p4_info_, pdpi::CreateIrP4Info(GetP4Info()));
+
+  // Push gNMI config to peer switch.
+  const std::string& peer_gnmi_config = GetParam().peer_gnmi_config;
+  ASSERT_OK(testbed.Environment().StoreTestArtifact("peer_gnmi_config.txt",
+                                                    peer_gnmi_config));
+  ASSERT_OK_AND_ASSIGN(peer_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           GetPeerSwitch(), peer_gnmi_config, GetP4Info()));
+
+  // Find the loopback0 address for main switch & peer switch.
+  ASSERT_OK_AND_ASSIGN(auto main_loopback0_ipv6s,
+                       pins_test::ParseLoopbackIpv6s(main_gnmi_config));
+  ASSERT_GT(main_loopback0_ipv6s.size(), 0) << absl::Substitute(
+      "No loopback IP found for $0 testbed.", GetMainSwitch().ChassisName());
+  netaddr::Ipv6Address main_loopback0_ipv6 = main_loopback0_ipv6s[0];
+  ASSERT_OK_AND_ASSIGN(auto peer_loopback0_ipv6s,
+                       pins_test::ParseLoopbackIpv6s(peer_gnmi_config));
+  ASSERT_GT(peer_loopback0_ipv6s.size(), 0) << absl::Substitute(
+      "No loopback IP found for $0 testbed.", GetPeerSwitch().ChassisName());
+  const std::string peer_loopback0_ipv6 = peer_loopback0_ipv6s[0].ToString();
+  collector_ipv6_ = main_loopback0_ipv6.ToString();
+  ASSERT_NE(collector_ipv6_, peer_loopback0_ipv6);
+
+  // Create GNMI stub for admin operations.
+  ASSERT_OK_AND_ASSIGN(peer_gnmi_stub_, GetPeerSwitch().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(
+      auto port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*peer_gnmi_stub_));
+  ASSERT_GE(port_id_per_port_name.size(), 2);
+
+  // Set peer switch with sFlow gNMI config.
+  ASSERT_OK_AND_ASSIGN(auto gnmi_config_json,
+                       json_yang::ParseJson(peer_gnmi_config));
+  if (gnmi_config_json.find("openconfig-sampling:sampling") !=
+          gnmi_config_json.end() &&
+      gnmi_config_json["openconfig-sampling:sampling"]
+                      ["openconfig-sampling-sflow:sflow"]["config"]
+                      ["enabled"]) {
+    sflow_enabled_by_config_ = true;
+  }
+  std::vector<std::pair<std::string, int>> collector_address_and_port;
+
+  // Use main switch Loopback0 Ip address as collector.
+  collector_address_and_port.push_back({collector_ipv6_, 6343});
+
+  ASSERT_OK_AND_ASSIGN(traffic_port_,
+                       GetUnusedUpPort(*peer_gnmi_stub_, /*used_port=*/""));
+
+  absl::flat_hash_set<std::string> sflow_enabled_interfaces{
+      traffic_port_.interface_name};
+  ASSERT_OK_AND_ASSIGN(
+      auto peer_gnmi_config_with_sflow,
+      UpdateSflowConfig(peer_gnmi_config, peer_loopback0_ipv6,
+                        collector_address_and_port, sflow_enabled_interfaces,
+                        kInbandSamplingRate, kInbandSamplingHeaderSize));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "peer_gnmi_config_with_sflow.txt",
+      json_yang::FormatJsonBestEffort(peer_gnmi_config_with_sflow)));
+  ASSERT_OK(
+      pins_test::PushGnmiConfig(GetPeerSwitch(), peer_gnmi_config_with_sflow));
+
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(30), peer_gnmi_stub_.get(),
+      peer_loopback0_ipv6, kInbandSamplingRate, kInbandSamplingHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+}
+
+void SflowInbandTestFixture::TearDown() {
+  // Restore sFlow config on peer switch.
+  if (!sflow_enabled_by_config_) {
+    ASSERT_OK(SetSflowConfigEnabled(peer_gnmi_stub_.get(),
+                                    /*enabled=*/false));
+  }
+
+  if (main_p4_session_ != nullptr) {
+    EXPECT_OK(main_p4_session_->Finish());
+  }
+  if (peer_p4_session_ != nullptr) {
+    EXPECT_OK(pdpi::ClearTableEntries(peer_p4_session_.get()));
+    EXPECT_OK(peer_p4_session_->Finish());
+  }
+  GetParam().testbed_interface->TearDown();
+}
+
+// 1. Pick an interface and let main switch send some traffic via this
+// interface.
+// 2. Set rules on peer switch to forward sample to main switch.
+// 3. Verifies on main switch that samples are generated.
+// |-----------| Traffic  | --------- |
+// | Main(SUT) | -------> |  Peer(CS) |
+// |-----------| Inband   | --------  |
+// | Main(SUT) | <------- |  Peer(CS) |
+TEST_P(SflowInbandTestFixture, TestInbandPathToSflowCollector) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+  const int packets_num = 2000;
+
+  ASSERT_OK_AND_ASSIGN(
+      Port inband_port,
+      GetUnusedUpPort(*peer_gnmi_stub_, traffic_port_.interface_name));
+
+  // Program rules to forward sample pkts to main switch loopback0 IPv6 address.
+  // 1. Set a default vrf for all packets
+  // 2. Install a route entry matching on the default vrf and route prefix of
+  // the main switch loopback0 ipv6.
+  // 3. Define the nexthop and dependent objects for the route entry action.
+  const std::string vrf_id = "vrf-50";
+  ASSERT_OK(
+      SetSwitchVrfForAllPackets(*peer_p4_session_, GetIrP4Info(), vrf_id));
+
+  ASSERT_OK_AND_ASSIGN(std::string next_hop_id,
+                       ProgramNextHops(*peer_p4_session_, GetIrP4Info(),
+                                       absl::StrCat(inband_port.port_id)));
+  ASSERT_OK(ProgramRoutesForIpv6(*peer_p4_session_, GetIrP4Info(), vrf_id,
+                                 collector_ipv6_, next_hop_id));
+
+  // Start sflowtool on main switch.
+  std::string sflow_result;
+  ASSERT_OK_AND_ASSIGN(
+      std::thread sflow_tool_thread,
+      StartSflowCollector(
+          GetParam().main_ssh_client, GetMainSwitch().ChassisName(),
+          kSflowtoolLineFormatTemplate,
+          /*sflowtool_runtime=*/packets_num / kInbandTrafficPps + 20,
+          sflow_result));
+
+  // Send packets from main switch.
+  ASSERT_OK(SendNPacketsFromSwitch(
+      packets_num, absl::StrCat(traffic_port_.port_id), GetIrP4Info(),
+      *main_p4_session_, testbed.Environment()));
+
+  // Wait for sflowtool to finish and check sFlow result.
+  if (sflow_tool_thread.joinable()) {
+    sflow_tool_thread.join();
+  }
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
+                                                    sflow_result));
+  ASSERT_FALSE(sflow_result.empty());
 }
 
 }  // namespace pins
