@@ -14,15 +14,15 @@
 #ifndef PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_WARM_BOOT_STATE_ADAPTER_H_
 #define PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_WARM_BOOT_STATE_ADAPTER_H_
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "swss/warm_restart.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockWarmBootStateAdapter : public WarmBootStateAdapter {
- public:
+public:
   MOCK_METHOD(swss::WarmStart::WarmStartState, GetWarmBootState, (),
               (override));
   MOCK_METHOD(void, SetWarmBootState, (swss::WarmStart::WarmStartState state),
@@ -30,7 +30,7 @@ class MockWarmBootStateAdapter : public WarmBootStateAdapter {
   MOCK_METHOD(bool, IsWarmStart, (), (override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_WARM_BOOT_STATE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_WARM_BOOT_STATE_ADAPTER_H_

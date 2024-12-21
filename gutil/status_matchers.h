@@ -24,25 +24,24 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "gutil/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
 
 namespace gutil {
 
 namespace internal {
 
-template <class Status>
-const Status& GetStatus(const Status& status) {
+template <class Status> const Status &GetStatus(const Status &status) {
   return status;
 }
 
 template <class T>
-const absl::Status& GetStatus(const absl::StatusOr<T>& statusor) {
+const absl::Status &GetStatus(const absl::StatusOr<T> &statusor) {
   return statusor.status();
 }
 
-}  // namespace internal
+} // namespace internal
 
 MATCHER(IsOk, negation ? "is not OK" : "is OK") {
   return internal::GetStatus(arg).ok();
@@ -60,12 +59,12 @@ MATCHER(IsOk, negation ? "is not OK" : "is OK") {
 // ASSERT_OK_AND_ASSIGN evaluates the expression (which needs to evaluate to a
 // StatusOr) and asserts that the expression has status OK. It then assigns the
 // result to lhs, and otherwise fails.
-#define ASSERT_OK_AND_ASSIGN(lhs, expression)                           \
-  auto __ASSIGN_OR_RETURN_VAL(__LINE__) = expression;                   \
-  if (!__ASSIGN_OR_RETURN_VAL(__LINE__).status().ok()) {                \
-    FAIL() << #expression                                               \
-           << " failed: " << __ASSIGN_OR_RETURN_VAL(__LINE__).status(); \
-  }                                                                     \
+#define ASSERT_OK_AND_ASSIGN(lhs, expression)                                  \
+  auto __ASSIGN_OR_RETURN_VAL(__LINE__) = expression;                          \
+  if (!__ASSIGN_OR_RETURN_VAL(__LINE__).status().ok()) {                       \
+    FAIL() << #expression                                                      \
+           << " failed: " << __ASSIGN_OR_RETURN_VAL(__LINE__).status();        \
+  }                                                                            \
   lhs = std::move(__ASSIGN_OR_RETURN_VAL(__LINE__)).value();
 
 MATCHER_P(StatusIs, status_code,
@@ -79,9 +78,9 @@ MATCHER_P2(StatusIs, status_code, message_matcher,
                            negation ? "not " : "",
                            absl::StatusCodeToString(status_code),
                            negation ? "or" : "and",
-                           testing::DescribeMatcher<const std::string&>(
+                           testing::DescribeMatcher<const std::string &>(
                                message_matcher, negation))) {
-  const absl::Status& status = internal::GetStatus(arg);
+  const absl::Status &status = internal::GetStatus(arg);
   return status.code() == status_code &&
          testing::ExplainMatchResult(message_matcher, status.message(),
                                      result_listener);
@@ -89,16 +88,16 @@ MATCHER_P2(StatusIs, status_code, message_matcher,
 
 template <class StatusOrT>
 class IsOkAndHoldsMatcherImpl : public testing::MatcherInterface<StatusOrT> {
- public:
+public:
   using T = typename std::remove_reference_t<StatusOrT>::value_type;
 
   template <class InnerMatcher>
-  explicit IsOkAndHoldsMatcherImpl(InnerMatcher&& inner_matcher)
+  explicit IsOkAndHoldsMatcherImpl(InnerMatcher &&inner_matcher)
       : inner_matcher_(testing::SafeMatcherCast<T>(
             std::forward<InnerMatcher>(inner_matcher))) {}
 
   bool MatchAndExplain(StatusOrT t,
-                       testing::MatchResultListener* listener) const override {
+                       testing::MatchResultListener *listener) const override {
     if (!t.ok()) {
       *listener << "which has status " << t.status();
       return false;
@@ -106,41 +105,40 @@ class IsOkAndHoldsMatcherImpl : public testing::MatcherInterface<StatusOrT> {
     return inner_matcher_.MatchAndExplain(*t, listener);
   }
 
-  void DescribeTo(std::ostream* os) const override {
+  void DescribeTo(std::ostream *os) const override {
     *os << "is OK and has a value that ";
     inner_matcher_.DescribeTo(os);
   }
-  void DescribeNegationTo(std::ostream* os) const override {
+  void DescribeNegationTo(std::ostream *os) const override {
     *os << "is not OK or has a value that ";
     inner_matcher_.DescribeNegationTo(os);
   }
 
- private:
+private:
   testing::Matcher<T> inner_matcher_;
 };
 
-template <class InnerMatcher>
-class IsOkAndHoldsMatcher {
- public:
-  explicit IsOkAndHoldsMatcher(InnerMatcher&& inner_matcher)
+template <class InnerMatcher> class IsOkAndHoldsMatcher {
+public:
+  explicit IsOkAndHoldsMatcher(InnerMatcher &&inner_matcher)
       : inner_matcher_(std::forward<InnerMatcher>(inner_matcher)) {}
 
   template <class StatusOrT>
-  operator testing::Matcher<StatusOrT>() const {  // NOLINT
+  operator testing::Matcher<StatusOrT>() const { // NOLINT
     return testing::Matcher<StatusOrT>(
         new IsOkAndHoldsMatcherImpl<StatusOrT>(inner_matcher_));
   }
 
- private:
+private:
   InnerMatcher inner_matcher_;
 };
 
 template <class InnerMatcher>
-IsOkAndHoldsMatcher<InnerMatcher> IsOkAndHolds(InnerMatcher&& inner_matcher) {
+IsOkAndHoldsMatcher<InnerMatcher> IsOkAndHolds(InnerMatcher &&inner_matcher) {
   return IsOkAndHoldsMatcher<InnerMatcher>(
       std::forward<InnerMatcher>(inner_matcher));
 }
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // GUTIL_STATUS_MATCHERS_H
+#endif // GUTIL_STATUS_MATCHERS_H

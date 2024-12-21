@@ -61,20 +61,20 @@ struct AnnotationComponents {
   std::string label;
   std::string body;
 };
-}  // namespace annotation
+} // namespace annotation
 
 // Parses an annotation into the AnnotationComponents.
 // Returns an InvalidArgument error if parsing failed.
-absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
-    const std::string& annotation);
+absl::StatusOr<annotation::AnnotationComponents>
+ParseAnnotation(const std::string &annotation);
 
 // Returns a list of all annotations split into label & body.
 // Skips annotations that do not follow the expected @<label>(<body>) format.
 template <typename Container>
-std::vector<annotation::AnnotationComponents> GetAllAnnotations(
-    const Container& annotations) {
+std::vector<annotation::AnnotationComponents>
+GetAllAnnotations(const Container &annotations) {
   std::vector<annotation::AnnotationComponents> components;
-  for (const auto& annotation : annotations) {
+  for (const auto &annotation : annotations) {
     auto parser_result = ParseAnnotation(annotation);
     if (parser_result.ok()) {
       components.push_back(std::move(*parser_result));
@@ -92,20 +92,21 @@ std::vector<annotation::AnnotationComponents> GetAllAnnotations(
 //   ASSIGN_OR_RETURN(auto result,
 //                    GetAllParsedAnnotations<int>(label, annotations, parser);
 template <typename T, typename Container>
-absl::StatusOr<std::vector<T>> GetAllParsedAnnotations(
-    absl::string_view label, const Container& annotations,
-    annotation::BodyParser<T> parser) {
+absl::StatusOr<std::vector<T>>
+GetAllParsedAnnotations(absl::string_view label, const Container &annotations,
+                        annotation::BodyParser<T> parser) {
   std::vector<T> values;
-  for (const auto& annotation : annotations) {
+  for (const auto &annotation : annotations) {
     auto parser_result = ParseAnnotation(annotation);
-    if (!parser_result.ok()) continue;  // Skip unknown labels.
+    if (!parser_result.ok())
+      continue; // Skip unknown labels.
 
-    const annotation::AnnotationComponents& parsed_annotation =
+    const annotation::AnnotationComponents &parsed_annotation =
         parser_result.value();
     if (parsed_annotation.label == label) {
-      ASSIGN_OR_RETURN(
-          T value, parser(std::move(parsed_annotation.body)),
-          _ << "Failed to parse annotation \"" << annotation << "\"");
+      ASSIGN_OR_RETURN(T value, parser(std::move(parsed_annotation.body)),
+                       _ << "Failed to parse annotation \"" << annotation
+                         << "\"");
       values.push_back(value);
     }
   }
@@ -125,7 +126,7 @@ absl::StatusOr<std::vector<T>> GetAllParsedAnnotations(
 //                    GetParsedAnnotation<int>(label, annotations, parser);
 template <typename T, typename Container>
 absl::StatusOr<T> GetParsedAnnotation(absl::string_view label,
-                                      const Container& annotations,
+                                      const Container &annotations,
                                       annotation::BodyParser<T> parser) {
   // Add extra parentheses around GetAllParsedAnnotations to prevent the
   // precompiler from splitting GetAllParsedAnnotations<T into its own argument.
@@ -146,8 +147,8 @@ absl::StatusOr<T> GetParsedAnnotation(absl::string_view label,
 // Returns an empty list if the matching annotation has no arguments.
 // Returns a Status with code kNotFound if there is no matching annotation.
 template <typename Container>
-absl::StatusOr<std::vector<std::string>> GetAnnotationAsArgList(
-    absl::string_view label, const Container& annotations) {
+absl::StatusOr<std::vector<std::string>>
+GetAnnotationAsArgList(absl::string_view label, const Container &annotations) {
   return GetParsedAnnotation<std::vector<std::string>>(
       label, annotations, annotation::ParseAsArgList);
 }
@@ -157,7 +158,7 @@ absl::StatusOr<std::vector<std::string>> GetAnnotationAsArgList(
 template <typename Container>
 absl::StatusOr<std::vector<std::vector<std::string>>>
 GetAllAnnotationsAsArgList(absl::string_view label,
-                           const Container& annotations) {
+                           const Container &annotations) {
   return GetAllParsedAnnotations<std::vector<std::string>>(
       label, annotations, annotation::ParseAsArgList);
 }
@@ -166,18 +167,18 @@ GetAllAnnotationsAsArgList(absl::string_view label,
 // Returns a Status with code kNotFound if there is no matching annotation.
 template <typename Container>
 absl::StatusOr<std::string> GetAnnotationBody(absl::string_view label,
-                                              const Container& annotations) {
+                                              const Container &annotations) {
   return GetParsedAnnotation<std::string>(label, annotations, annotation::Raw);
 }
 
 // Returns all annotation bodies from all annotations with the given label.
 template <typename Container>
-absl::StatusOr<std::vector<std::string>> GetAllAnnotationBodies(
-    absl::string_view label, const Container& annotations) {
+absl::StatusOr<std::vector<std::string>>
+GetAllAnnotationBodies(absl::string_view label, const Container &annotations) {
   return GetAllParsedAnnotations<std::string>(label, annotations,
                                               annotation::Raw);
 }
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // _COMMON_ANNOTATION_PARSER_H_
+#endif // _COMMON_ANNOTATION_PARSER_H_

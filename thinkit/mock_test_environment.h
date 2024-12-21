@@ -20,14 +20,14 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "gmock/gmock.h"
 #include "thinkit/proto/metrics.pb.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
 
 namespace thinkit {
 
 class MockTestEnvironment : public TestEnvironment {
- public:
+public:
   MOCK_METHOD(absl::Status, StoreTestArtifact,
               (absl::string_view filename, absl::string_view contents),
               (override));
@@ -41,6 +41,6 @@ class MockTestEnvironment : public TestEnvironment {
   MOCK_METHOD(void, RecordMetrics, (const MetricGroup &), (override));
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // THINKIT_MOCK_TEST_ENVIRONMENT_H_
+#endif // THINKIT_MOCK_TEST_ENVIRONMENT_H_

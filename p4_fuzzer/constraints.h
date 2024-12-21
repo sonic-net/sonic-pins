@@ -27,18 +27,18 @@
 namespace p4_fuzzer {
 
 // Checks whether a table uses P4-Constraints.
-bool UsesP4Constraints(const pdpi::IrTableDefinition& table,
-                       const FuzzerConfig& config);
+bool UsesP4Constraints(const pdpi::IrTableDefinition &table,
+                       const FuzzerConfig &config);
 
 // Checks whether a table uses P4-Constraints.
-bool UsesP4Constraints(int table_id, const FuzzerConfig& config);
+bool UsesP4Constraints(int table_id, const FuzzerConfig &config);
 
 // Generates a valid table entry for a table that uses P4-Constraints. Fails if
 // given a table for which `!UsesP4Constraints`.
 absl::StatusOr<p4::v1::TableEntry> FuzzValidConstrainedTableEntry(
-    const FuzzerConfig& config, const SwitchState& switch_state,
-    const pdpi::IrTableDefinition& table, absl::BitGen& gen);
+    const FuzzerConfig &config, const SwitchState &switch_state,
+    const pdpi::IrTableDefinition &table, absl::BitGen &gen);
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // PINS_INFRA_P4_FUZZER_CONSTRAINTS_H_
+#endif // PINS_INFRA_P4_FUZZER_CONSTRAINTS_H_

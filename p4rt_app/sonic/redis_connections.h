@@ -83,7 +83,7 @@ struct HostStatsTable {
   std::unique_ptr<TableAdapter> state_db;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_REDIS_CONNECTIONS_H_
+#endif // PINS_P4RT_APP_SONIC_REDIS_CONNECTIONS_H_

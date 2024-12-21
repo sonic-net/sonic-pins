@@ -16,7 +16,7 @@
 #define PINS_DVAAS_TRAFFIC_GENERATOR_H_
 
 #include <memory>
-#include <thread>  // NOLINT: third_party code.
+#include <thread> // NOLINT: third_party code.
 #include <utility>
 #include <vector>
 
@@ -43,7 +43,7 @@ struct PacketSynthesisStats {
 
 // Interface for generating traffic and validating it.
 class TrafficGenerator {
- public:
+public:
   // Traffic generation and validation parameters.
   struct Params {
     // See dataplane_validation.h for details.
@@ -92,9 +92,9 @@ class TrafficGenerator {
   // - Any preexisting P4RT connections to SUT and control switch will be
   //   non-primary.
   // - The gNMI configs will be unchanged.
-  virtual absl::StatusOr<PacketSynthesisStats> Init(
-      std::shared_ptr<thinkit::MirrorTestbedInterface> testbed,
-      const Params& params) = 0;
+  virtual absl::StatusOr<PacketSynthesisStats>
+  Init(std::shared_ptr<thinkit::MirrorTestbedInterface> testbed,
+       const Params &params) = 0;
 
   // Asynchronously starts injecting traffic (and validating the result) using
   // test packets that were synthesized during `Init`.
@@ -138,21 +138,21 @@ class TrafficGenerator {
 // injection rate guarantee (see `InjectTraffic` function comments for more
 // details).
 class SimpleTrafficGenerator : public TrafficGenerator {
- public:
+public:
   SimpleTrafficGenerator() = delete;
   explicit SimpleTrafficGenerator(
       std::unique_ptr<DataplaneValidationBackend> backend)
       : backend_(std::move(backend)) {}
 
-  absl::StatusOr<PacketSynthesisStats> Init(
-      std::shared_ptr<thinkit::MirrorTestbedInterface> testbed,
-      const Params& params) override;
+  absl::StatusOr<PacketSynthesisStats>
+  Init(std::shared_ptr<thinkit::MirrorTestbedInterface> testbed,
+       const Params &params) override;
   absl::Status StartTraffic() override;
   absl::Status StopTraffic() override;
   absl::StatusOr<ValidationResult> GetValidationResult() override;
   absl::StatusOr<ValidationResult> GetAndClearValidationResult() override;
 
- private:
+private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
   std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
   // Test vectors created as a result of (latest) call to `Init`. Calls to
@@ -202,6 +202,6 @@ class SimpleTrafficGenerator : public TrafficGenerator {
   TrafficGenerator::Params params_;
 };
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_TRAFFIC_GENERATOR_H_
+#endif // PINS_DVAAS_TRAFFIC_GENERATOR_H_

@@ -53,8 +53,8 @@ namespace dvaas {
 //   "Section 16.1: Packet I/O".
 absl::StatusOr<PacketTestVectorById> LegitimizeUserProvidedTestVectors(
     absl::Span<const PacketTestVector> user_provided_test_vectors,
-    const pdpi::IrP4Info& ir_info);
+    const pdpi::IrP4Info &ir_info);
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_USER_PROVIDED_PACKET_TEST_VECTOR_H_
+#endif // PINS_USER_PROVIDED_PACKET_TEST_VECTOR_H_

@@ -14,7 +14,7 @@
 #ifndef PINS_P4RT_APP_SONIC_RECEIVE_GENETLINK_H_
 #define PINS_P4RT_APP_SONIC_RECEIVE_GENETLINK_H_
 
-#include <thread>  //NOLINT
+#include <thread> //NOLINT
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -24,15 +24,15 @@ namespace packet_metadata {
 // Alias of the Receive Callback function used by the Receive thread to
 // be invoked on every packet from the hardware.
 using ReceiveCallbackFunction = std::function<absl::Status(
-    const std::string& src_port_name, const std::string& target_port_name,
-    const std::string& payload)>;
+    const std::string &src_port_name, const std::string &target_port_name,
+    const std::string &payload)>;
 
 // Spawns the Receive thread for receiving all punted packets via the generic
 // netlink socket. Invokes the callback function with the packet metadata
 // information like source port, target egress port etc.
-ABSL_MUST_USE_RESULT absl::StatusOr<std::thread> StartReceive(
-    packet_metadata::ReceiveCallbackFunction callback_function);
+ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
+StartReceive(packet_metadata::ReceiveCallbackFunction callback_function);
 
-}  // namespace packet_metadata
+} // namespace packet_metadata
 
-#endif  // PINS_P4RT_APP_SONIC_RECEIVE_GENETLINK_H_
+#endif // PINS_P4RT_APP_SONIC_RECEIVE_GENETLINK_H_

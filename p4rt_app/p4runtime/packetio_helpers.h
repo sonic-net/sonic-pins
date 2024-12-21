@@ -28,17 +28,17 @@ namespace p4rt_app {
 #define SEND_TO_INGRESS_PORT_NAME "SEND_TO_INGRESS"
 
 // Add the required metadata and return a PacketIn.
-p4::v1::PacketIn CreatePacketInMessage(const std::string& source_port_id,
-                                       const std::string& target_port_id);
+p4::v1::PacketIn CreatePacketInMessage(const std::string &source_port_id,
+                                       const std::string &target_port_id);
 
 // Utility function to parse the packet metadata and send it out via the
 // socket interface.
 absl::Status SendPacketOut(
-    const pdpi::IrP4Info& p4_info, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::PacketIoInterface* const packetio_impl,
-    const p4::v1::PacketOut& packet);
+    const pdpi::IrP4Info &p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string> &port_translation_map,
+    sonic::PacketIoInterface *const packetio_impl,
+    const p4::v1::PacketOut &packet);
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
+#endif // PINS_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_

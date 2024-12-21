@@ -26,9 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
-#include "gmock/gmock.h"
 #include "grpcpp/grpcpp.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
@@ -38,6 +36,8 @@
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins {
 
@@ -55,7 +55,7 @@ struct ArbitrationTestParams {
 
 class ArbitrationTestFixture
     : public testing::TestWithParam<ArbitrationTestParams> {
- public:
+public:
   void SetUp() override {
     GetParam().mirror_testbed->SetUp();
 
@@ -83,7 +83,7 @@ class ArbitrationTestFixture
   // Puts the switch into a known state:
   //  * Forwarding pipeline is configured
   //  * No P4RT entries are programmed.
-  absl::Status NormalizeSwitchState(pdpi::P4RuntimeSession* p4rt_session) {
+  absl::Status NormalizeSwitchState(pdpi::P4RuntimeSession *p4rt_session) {
     ASSIGN_OR_RETURN(p4::config::v1::P4Info p4_info, GetP4InfoFromParamOrSUT());
     // Set the forwarding pipeline.
     RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
@@ -120,9 +120,9 @@ class ArbitrationTestFixture
   }
 
   // Attempts to become primary on a given stub.
-  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> BecomePrimary(
-      std::unique_ptr<P4Runtime::StubInterface> stub,
-      uint64_t lower_election_id) const {
+  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
+  BecomePrimary(std::unique_ptr<P4Runtime::StubInterface> stub,
+                uint64_t lower_election_id) const {
     return pdpi::P4RuntimeSession::Create(
         std::move(stub), device_id_,
         pdpi::P4RuntimeSessionOptionalArgs{
@@ -130,20 +130,20 @@ class ArbitrationTestFixture
   }
 
   // Attempts to become primary on a new stub.
-  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> BecomePrimary(
-      uint64_t lower_election_id) {
+  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
+  BecomePrimary(uint64_t lower_election_id) {
     ASSIGN_OR_RETURN(auto stub, Stub());
     return BecomePrimary(std::move(stub), lower_election_id);
   }
 
   uint32_t DeviceId() const { return device_id_; }
 
-  thinkit::TestEnvironment& TestEnvironment() {
+  thinkit::TestEnvironment &TestEnvironment() {
     return GetParam().mirror_testbed->GetMirrorTestbed().Environment();
   }
 
   absl::StatusOr<p4::config::v1::P4Info> GetP4InfoFromParamOrSUT() {
-    static const auto* const kP4Info =
+    static const auto *const kP4Info =
         new auto([&]() -> absl::StatusOr<p4::config::v1::P4Info> {
           if (GetParam().p4info.has_value()) {
             return GetParam().p4info.value();
@@ -154,11 +154,11 @@ class ArbitrationTestFixture
     return *kP4Info;
   }
 
- private:
+private:
   uint64_t upper_election_id_;
   uint32_t device_id_;
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_ARBITRATION_TEST_H_
+#endif // PINS_TESTS_FORWARDING_ARBITRATION_TEST_H_

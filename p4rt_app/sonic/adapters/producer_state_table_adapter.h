@@ -26,30 +26,30 @@ namespace p4rt_app {
 namespace sonic {
 
 class ProducerStateTableAdapter {
- public:
-  explicit ProducerStateTableAdapter(swss::DBConnector* db,
-                                     const std::string& table_name);
+public:
+  explicit ProducerStateTableAdapter(swss::DBConnector *db,
+                                     const std::string &table_name);
   virtual ~ProducerStateTableAdapter() = default;
 
-  virtual void set(const std::string& key,
-                   const std::vector<swss::FieldValueTuple>& values);
+  virtual void set(const std::string &key,
+                   const std::vector<swss::FieldValueTuple> &values);
 
-  virtual void del(const std::string& key);
+  virtual void del(const std::string &key);
 
-  virtual void batch_set(
-      const std::vector<swss::KeyOpFieldsValuesTuple>& values);
+  virtual void
+  batch_set(const std::vector<swss::KeyOpFieldsValuesTuple> &values);
 
-  virtual void batch_del(const std::vector<std::string>& keys);
+  virtual void batch_del(const std::vector<std::string> &keys);
 
- protected:
+protected:
   // Test only constructor used to construct Mock & Fake classes.
   ProducerStateTableAdapter() = default;
 
- private:
+private:
   std::unique_ptr<swss::ProducerStateTable> producer_state_table_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_PRODUCER_STATE_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_PRODUCER_STATE_TABLE_ADAPTER_H_

@@ -23,7 +23,7 @@
 namespace pins_test {
 
 class CommonBackend : public ValidatorBackend {
- public:
+public:
   // Tags for a single validation.
   static constexpr absl::string_view kPingable = "Pingable";
   static constexpr absl::string_view kSSHable = "Sshable";
@@ -39,7 +39,7 @@ class CommonBackend : public ValidatorBackend {
   // Checks if ssh access to the switch is working.
   absl::Status IsSSHable(absl::string_view chassis, absl::Duration timeout);
 
- protected:
+protected:
   void SetupValidations() override {
     Callback pingable = absl::bind_front(&CommonBackend::IsPingable, this);
     Callback sshable = absl::bind_front(&CommonBackend::IsSSHable, this);
@@ -52,6 +52,6 @@ class CommonBackend : public ValidatorBackend {
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_VALIDATOR_COMMON_BACKEND_H_
+#endif // PINS_LIB_VALIDATOR_COMMON_BACKEND_H_
