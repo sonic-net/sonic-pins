@@ -21,10 +21,10 @@
 // in deterministic fashion. Note that the original map and its contents must
 // remain live (i.e. allocated) or else this will cause dangling references.
 template <typename M>
-absl::btree_map<typename M::key_type, const typename M::mapped_type&> Ordered(
-    const M& map) {
-  return absl::btree_map<typename M::key_type, const typename M::mapped_type&>(
+absl::btree_map<typename M::key_type, const typename M::mapped_type &>
+Ordered(const M &map) {
+  return absl::btree_map<typename M::key_type, const typename M::mapped_type &>(
       map.begin(), map.end());
 }
 
-#endif  // PINS_P4_PDPI_INTERNAL_ORDERED_MAP_H_
+#endif // PINS_P4_PDPI_INTERNAL_ORDERED_MAP_H_

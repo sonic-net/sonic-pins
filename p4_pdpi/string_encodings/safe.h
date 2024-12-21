@@ -32,6 +32,6 @@ char SafeChar(uint8_t byte);
 // For example: `SafeString({0xFF, 0x10})`.
 std::string SafeString(std::vector<uint8_t> bytes);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_STRING_ENCODINGS_SAFE_H_
+#endif // PINS_P4_PDPI_STRING_ENCODINGS_SAFE_H_

@@ -26,6 +26,7 @@ using ::gutil::StatusIs;
 using ::testing::HasSubstr;
 
 constexpr absl::string_view kGnmiConfig = R"json({
+
     "openconfig-interfaces:interfaces":{
       "interface":[
         {
@@ -267,6 +268,7 @@ TEST(SflowconfigTest, ModifySamplingRateSuccess) {
     }
   }
 })json"));
+
 }
 
 TEST(SflowconfigTest, AppendSflowConfigWrongParameterFail) {

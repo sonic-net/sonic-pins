@@ -19,16 +19,16 @@ namespace gutil {
 // The syslog message will be formatted similar to a GLOG message with a
 // microsecond timestamp.
 class SyslogSink : google::LogSink {
- public:
-  SyslogSink(const char* process_name);
+public:
+  SyslogSink(const char *process_name);
   ~SyslogSink();
 
-  void send(google::LogSeverity severity, const char* full_filename,
-            const char* base_filename, int line,
-            const google::LogMessageTime& logmsgtime, const char* message,
+  void send(google::LogSeverity severity, const char *full_filename,
+            const char *base_filename, int line,
+            const google::LogMessageTime &logmsgtime, const char *message,
             size_t message_len) override;
 };
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_GUTIL_SYSLOG_SINK_H_
+#endif // PINS_GUTIL_SYSLOG_SINK_H_

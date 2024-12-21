@@ -27,17 +27,18 @@
 namespace p4_fuzzer {
 
 // Returns an AnnotatedTableEntry.
-AnnotatedTableEntry GetAnnotatedTableEntry(
-    const pdpi::IrP4Info& ir_p4_info, const p4::v1::TableEntry& entry,
-    const std::vector<Mutation>& mutations);
+AnnotatedTableEntry
+GetAnnotatedTableEntry(const pdpi::IrP4Info &ir_p4_info,
+                       const p4::v1::TableEntry &entry,
+                       const std::vector<Mutation> &mutations);
 
 // Returns an AnnotatedUpdate.
-AnnotatedUpdate GetAnnotatedUpdate(const pdpi::IrP4Info& ir_p4_info,
-                                   const p4::v1::Update& pi_update,
-                                   const std::vector<Mutation>& mutations);
+AnnotatedUpdate GetAnnotatedUpdate(const pdpi::IrP4Info &ir_p4_info,
+                                   const p4::v1::Update &pi_update,
+                                   const std::vector<Mutation> &mutations);
 
 // Creates a P4Runtime WriteRequest from an AnnotatedWriteRequest.
-p4::v1::WriteRequest RemoveAnnotations(const AnnotatedWriteRequest& request);
+p4::v1::WriteRequest RemoveAnnotations(const AnnotatedWriteRequest &request);
 
 // Returns a more readable version of AnnotatedWriteRequest.
 AnnotatedWriteRequest MakeReadable(AnnotatedWriteRequest request);
@@ -48,11 +49,11 @@ AnnotatedWriteRequest MakeReadable(AnnotatedWriteRequest request);
 // `artifact_name`. `identifying_prefix` distinguishes different calls to the
 // function.
 absl::Status OutputInterleavedRequestAndResponseToArtifact(
-    thinkit::TestEnvironment& environment, absl::string_view artifact_name,
+    thinkit::TestEnvironment &environment, absl::string_view artifact_name,
     absl::string_view identifying_prefix,
-    const AnnotatedWriteRequest& annotated_request,
-    const pdpi::IrWriteRpcStatus& response);
+    const AnnotatedWriteRequest &annotated_request,
+    const pdpi::IrWriteRpcStatus &response);
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // P4_FUZZER_ANNOTATION_UTIL_H_
+#endif // P4_FUZZER_ANNOTATION_UTIL_H_

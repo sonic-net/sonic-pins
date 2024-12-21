@@ -23,21 +23,21 @@ struct ReferenceRelationKey {
   // for each referring table.
   uint32_t referred_table_id;
 
-  bool operator==(const ReferenceRelationKey& rhs) const {
+  bool operator==(const ReferenceRelationKey &rhs) const {
     return referred_table_id == rhs.referred_table_id;
   }
-  bool operator!=(const ReferenceRelationKey& rhs) const {
+  bool operator!=(const ReferenceRelationKey &rhs) const {
     return !(*this == rhs);
   }
-  bool operator<(const ReferenceRelationKey& rhs) const {
+  bool operator<(const ReferenceRelationKey &rhs) const {
     return referred_table_id < rhs.referred_table_id;
   }
   template <typename H>
-  friend H AbslHashValue(H h, const ReferenceRelationKey& key) {
+  friend H AbslHashValue(H h, const ReferenceRelationKey &key) {
     return H::combine(std::move(h), key.referred_table_id);
   }
   template <typename Sink>
-  friend void AbslStringify(Sink& sink, const ReferenceRelationKey& key) {
+  friend void AbslStringify(Sink &sink, const ReferenceRelationKey &key) {
     absl::Format(&sink, "ReferenceRelationKey{referred_table_id: %v}",
                  key.referred_table_id);
   }
@@ -48,7 +48,7 @@ struct ReferenceRelationKey {
 struct ReferenceRelation {
   absl::btree_set<uint32_t> match_field_ids;
   template <typename Sink>
-  friend void AbslStringify(Sink& sink, const ReferenceRelation& relation) {
+  friend void AbslStringify(Sink &sink, const ReferenceRelation &relation) {
     absl::Format(&sink, "ReferenceRelation{match_field_ids: [%v]}",
                  absl::StrJoin(relation.match_field_ids, ", "));
   }
@@ -61,11 +61,11 @@ struct ReferredField {
   uint32_t match_field_id;
   std::string value;
 
-  bool operator==(const ReferredField& rhs) const {
+  bool operator==(const ReferredField &rhs) const {
     return match_field_id == rhs.match_field_id && value == rhs.value;
   }
-  bool operator!=(const ReferredField& rhs) const { return !(*this == rhs); }
-  bool operator<(const ReferredField& rhs) const {
+  bool operator!=(const ReferredField &rhs) const { return !(*this == rhs); }
+  bool operator<(const ReferredField &rhs) const {
     return match_field_id < rhs.match_field_id ||
            (match_field_id == rhs.match_field_id && value < rhs.value);
   }
@@ -74,11 +74,11 @@ struct ReferredField {
   // See https://abseil.io/docs/cpp/guides/hash for details about making a
   // struct hashable.
   template <typename H>
-  friend H AbslHashValue(H h, const ReferredField& field) {
+  friend H AbslHashValue(H h, const ReferredField &field) {
     return H::combine(std::move(h), field.match_field_id, field.value);
   }
   template <typename Sink>
-  friend void AbslStringify(Sink& sink, const ReferredField& referred_field) {
+  friend void AbslStringify(Sink &sink, const ReferredField &referred_field) {
     absl::Format(&sink, "ReferredField{match_field_id: %v,field_value: %v}",
                  referred_field.match_field_id, referred_field.value);
   }
@@ -89,13 +89,13 @@ struct ReferredTableEntry {
   uint32_t table_id;
   absl::btree_set<ReferredField> referred_fields;
 
-  bool operator==(const ReferredTableEntry& rhs) const {
+  bool operator==(const ReferredTableEntry &rhs) const {
     return table_id == rhs.table_id && referred_fields == rhs.referred_fields;
   }
-  bool operator!=(const ReferredTableEntry& rhs) const {
+  bool operator!=(const ReferredTableEntry &rhs) const {
     return !(*this == rhs);
   }
-  bool operator<(const ReferredTableEntry& rhs) const {
+  bool operator<(const ReferredTableEntry &rhs) const {
     return table_id < rhs.table_id ||
            (table_id == rhs.table_id && referred_fields < rhs.referred_fields);
   }
@@ -105,9 +105,9 @@ struct ReferredTableEntry {
   // See https://abseil.io/docs/cpp/guides/hash for details about making a
   // struct hashable.
   template <typename H>
-  friend H AbslHashValue(H h, const ReferredTableEntry& table_entry) {
+  friend H AbslHashValue(H h, const ReferredTableEntry &table_entry) {
     h = H::combine(std::move(h), table_entry.table_id);
-    for (const ReferredField& referred_field : table_entry.referred_fields) {
+    for (const ReferredField &referred_field : table_entry.referred_fields) {
       h = H::combine(std::move(h), referred_field.match_field_id,
                      referred_field.value);
     }
@@ -115,7 +115,7 @@ struct ReferredTableEntry {
   }
 
   template <typename Sink>
-  friend void AbslStringify(Sink& sink, const ReferredTableEntry& table_entry) {
+  friend void AbslStringify(Sink &sink, const ReferredTableEntry &table_entry) {
     absl::Format(
         &sink,
         "ReferredTableEntry{table_id: %v, match_fields and values: [%v]}",
@@ -126,7 +126,7 @@ struct ReferredTableEntry {
 // Returns a map from table ids to the match fields that the table contains
 // that can be referred to.
 absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
-CreateReferenceRelations(const IrP4Info& ir_p4info);
+CreateReferenceRelations(const IrP4Info &ir_p4info);
 
 // Returns a vector of ReferredTableEntries that `table_entry` refers to.
 // What table entries `table_entry` refers to depends on `ir_p4info`'s reference
@@ -134,18 +134,19 @@ CreateReferenceRelations(const IrP4Info& ir_p4info);
 // and actions.
 // This function assumes each `table_entry` can at most refer to 1
 // table entry for each table type.
-absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByTableEntry(
-    const IrP4Info& ir_p4info, const p4::v1::TableEntry& table_entry);
+absl::StatusOr<std::vector<ReferredTableEntry>>
+EntriesReferredToByTableEntry(const IrP4Info &ir_p4info,
+                              const p4::v1::TableEntry &table_entry);
 
 // Returns a ReferredTableEntry representation of `table_entry` that could be
 // referred to by other table entries based on `reference_relations`.
 // If `table_entry` can't be referred to by any table, returns an error.
 absl::StatusOr<ReferredTableEntry> CreateReferrableTableEntry(
-    const IrP4Info& ir_p4info,
-    const absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>&
-        reference_relations,
-    const p4::v1::TableEntry& table_entry);
+    const IrP4Info &ir_p4info,
+    const absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
+        &reference_relations,
+    const p4::v1::TableEntry &table_entry);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_SEQUENCING_UTIL_H_
+#endif // PINS_P4_PDPI_SEQUENCING_UTIL_H_

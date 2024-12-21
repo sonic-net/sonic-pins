@@ -39,6 +39,6 @@ class L3AdmitTestFixture : public pins_test::MirrorBlackboxTestFixture {
   }
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_L3_ADMIT_TEST_H_
+#endif // PINS_TESTS_FORWARDING_L3_ADMIT_TEST_H_

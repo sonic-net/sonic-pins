@@ -28,9 +28,9 @@ namespace p4_symbolic::packet_synthesizer {
 // (composite) coverage `goals`, consistent with the semantics defined in
 // coverage_goal.proto:CoverageGoals.
 absl::StatusOr<std::vector<PacketSynthesisCriteria>>
-GenerateSynthesisCriteriaFor(const CoverageGoals& goals,
-                             const symbolic::SolverState& solver_state);
+GenerateSynthesisCriteriaFor(const CoverageGoals &goals,
+                             const symbolic::SolverState &solver_state);
 
-}  // namespace p4_symbolic::packet_synthesizer
+} // namespace p4_symbolic::packet_synthesizer
 
-#endif  // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_CRITERIA_GENERATOR_H_
+#endif // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_CRITERIA_GENERATOR_H_

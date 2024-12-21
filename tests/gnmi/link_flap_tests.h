@@ -19,10 +19,10 @@
 namespace pins_test {
 
 class ExampleTestFixture : public thinkit::GenericTestbedFixture<> {
- protected:
+protected:
   ExampleTestFixture() { GetParam().testbed_interface->ExpectLinkFlaps(); }
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // GOOGLE_TESTS_GNMI_LINK_FLAP_TESTS_H_
+#endif // GOOGLE_TESTS_GNMI_LINK_FLAP_TESTS_H_

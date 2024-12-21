@@ -73,8 +73,8 @@ struct ConfigParams {
   absl::flat_hash_set<std::string> non_modifiable_tables;
   // A function for masking inequalities (due to known bugs) between entries
   // with the same TableEntryKey on the switch and in the fuzzer.
-  std::optional<
-      std::function<bool(const pdpi::IrTableEntry&, const pdpi::IrTableEntry&)>>
+  std::optional<std::function<bool(const pdpi::IrTableEntry &,
+                                   const pdpi::IrTableEntry &)>>
       TreatAsEqualDuringReadDueToKnownBug;
   // Controls whether empty ActionProfile one-shots should be generated.
   bool no_empty_action_profile_groups = false;
@@ -83,23 +83,23 @@ struct ConfigParams {
 };
 
 class FuzzerConfig {
- public:
-  static absl::StatusOr<FuzzerConfig> Create(const p4::config::v1::P4Info& info,
+public:
+  static absl::StatusOr<FuzzerConfig> Create(const p4::config::v1::P4Info &info,
                                              ConfigParams params);
 
-  absl::Status SetP4Info(const p4::config::v1::P4Info& info);
+  absl::Status SetP4Info(const p4::config::v1::P4Info &info);
 
-  const p4::config::v1::P4Info& GetP4Info() const { return info_; }
-  const pdpi::IrP4Info& GetIrP4Info() const { return ir_info_; }
-  const p4_constraints::ConstraintInfo& GetConstraintInfo() const {
+  const p4::config::v1::P4Info &GetP4Info() const { return info_; }
+  const pdpi::IrP4Info &GetIrP4Info() const { return ir_info_; }
+  const p4_constraints::ConstraintInfo &GetConstraintInfo() const {
     return constraint_info_;
   }
 
   // Param Setters - implement only if needed.
-  void SetPorts(const std::vector<pins_test::P4rtPortId>& ports) {
+  void SetPorts(const std::vector<pins_test::P4rtPortId> &ports) {
     params_.ports = ports;
   }
-  void SetQosQueues(const std::vector<std::string>& qos_queues) {
+  void SetQosQueues(const std::vector<std::string> &qos_queues) {
     params_.qos_queues = qos_queues;
   }
   void SetMutateUpdateProbability(float mutate_update_probability) {
@@ -111,7 +111,7 @@ class FuzzerConfig {
         fuzz_multicast_group_entry_probability;
   }
   void SetDisabledFullyQualifiedNames(
-      const absl::flat_hash_set<std::string>& disabled_fully_qualified_names) {
+      const absl::flat_hash_set<std::string> &disabled_fully_qualified_names) {
     params_.disabled_fully_qualified_names = disabled_fully_qualified_names;
   }
   void SetNoEmptyActionProfileGroups(bool no_empty_action_profile_groups) {
@@ -119,10 +119,10 @@ class FuzzerConfig {
   }
 
   // Param Getters
-  const std::vector<pins_test::P4rtPortId>& GetPorts() const {
+  const std::vector<pins_test::P4rtPortId> &GetPorts() const {
     return params_.ports;
   }
-  const std::vector<std::string>& GetQosQueues() const {
+  const std::vector<std::string> &GetQosQueues() const {
     return params_.qos_queues;
   }
   std::string GetRole() const { return params_.role; }
@@ -132,30 +132,30 @@ class FuzzerConfig {
   float GetFuzzMulticastGroupEntryProbability() const {
     return params_.fuzz_multicast_group_entry_probability;
   }
-  const absl::btree_set<std::string>&
+  const absl::btree_set<std::string> &
   GetTablesForWhichToNotExceedResourceGuarantees() const {
     return params_.tables_for_which_to_not_exceed_resource_guarantees;
   }
-  const absl::flat_hash_set<std::string>& GetDisabledFullyQualifiedNames()
-      const {
+  const absl::flat_hash_set<std::string> &
+  GetDisabledFullyQualifiedNames() const {
     return params_.disabled_fully_qualified_names;
   }
-  const absl::flat_hash_set<std::string>& GetNonModifiableTables() const {
+  const absl::flat_hash_set<std::string> &GetNonModifiableTables() const {
     return params_.non_modifiable_tables;
   }
-  const std::optional<std::function<bool(const pdpi::IrTableEntry&,
-                                         const pdpi::IrTableEntry&)>>&
+  const std::optional<std::function<bool(const pdpi::IrTableEntry &,
+                                         const pdpi::IrTableEntry &)>> &
   GetTreatAsEqualDuringReadDueToKnownBug() const {
     return params_.TreatAsEqualDuringReadDueToKnownBug;
   }
   bool GetNoEmptyActionProfileGroups() const {
     return params_.no_empty_action_profile_groups;
   }
-  const absl::flat_hash_set<std::string>& GetIgnoreConstraintsOnTables() const {
+  const absl::flat_hash_set<std::string> &GetIgnoreConstraintsOnTables() const {
     return params_.ignore_constraints_on_tables;
   }
 
- private:
+private:
   explicit FuzzerConfig() {}
 
   // The P4Info of the program to be fuzzed.
@@ -188,6 +188,6 @@ class FuzzerConfig {
   absl::Status CheckConstraintAssumptions();
 };
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // PINS_INFRA_P4_FUZZER_FUZZER_CONFIG_H_
+#endif // PINS_INFRA_P4_FUZZER_FUZZER_CONFIG_H_

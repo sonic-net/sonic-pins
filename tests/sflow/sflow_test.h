@@ -77,4 +77,4 @@ class SampleRateTest : public SflowTestFixture {};
 
 }  // namespace pins
 
-#endif  // PINS_TESTS_SFLOW_SFLOW_TEST_H_
+#endif // PINS_TESTS_SFLOW_SFLOW_TEST_H_

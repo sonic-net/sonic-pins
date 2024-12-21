@@ -81,8 +81,9 @@ absl::Status WaitForComplete(const thinkit::HttpResponse &response,
 // IxiaConnect - connect to the Ixia.  returns the href from the response
 // or an error.  takes the IP address of the Ixia as a string parameter,
 // e.g. "A.B.C.D"
-absl::StatusOr<std::string> IxiaConnect(
-    absl::string_view ixia_ip, thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string>
+IxiaConnect(absl::string_view ixia_ip,
+            thinkit::GenericTestbed &generic_testbed);
 
 // IxiaVport - Connect to an Ixia Card/Port.  Returns either an error or the
 // href string from the response. The card and port are supplied as e.g.
@@ -92,18 +93,18 @@ absl::StatusOr<std::string> IxiaVport(absl::string_view href,
                                       absl::string_view ixia_card,
                                       absl::string_view ixia_port,
                                       thinkit::GenericTestbed &generic_testbed);
-absl::StatusOr<std::string> IxiaVport(
-    absl::string_view href,
-    absl::string_view fully_qualified_ixia_interface_name,
-    thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string>
+IxiaVport(absl::string_view href,
+          absl::string_view fully_qualified_ixia_interface_name,
+          thinkit::GenericTestbed &generic_testbed);
 
 // IxiaSession - starts an Ixia session.  Returns either an error or the
 // href string for the first traffic item, e.g. something like
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
 // to as a tref is this namespace. Takes in the vref returned by IxiaConnect
 // as a parameter.
-absl::StatusOr<std::string> IxiaSession(
-    absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string>
+IxiaSession(absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
 
 // SetUpTrafficItem - Sets up a traffic item with source and destination,
 // and optionally with a `traffic_name` useful for querying stats.
@@ -112,12 +113,13 @@ absl::StatusOr<std::string> IxiaSession(
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
 // to as a tref is this namespace. Takes in the vref returned by Ixia ports
 // as parameters.
-absl::StatusOr<std::string> SetUpTrafficItem(
-    absl::string_view vref_src, absl::string_view vref_dst,
-    thinkit::GenericTestbed &generic_testbed);
-absl::StatusOr<std::string> SetUpTrafficItem(
-    absl::string_view vref_src, absl::string_view vref_dst,
-    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string>
+SetUpTrafficItem(absl::string_view vref_src, absl::string_view vref_dst,
+                 thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string>
+SetUpTrafficItem(absl::string_view vref_src, absl::string_view vref_dst,
+                 absl::string_view traffic_name,
+                 thinkit::GenericTestbed &generic_testbed);
 
 // Deletes traffic item. Takes in the tref returned by IxiaSession.
 // Deleting a traffic item manually is not strictly required, but is useful
@@ -248,8 +250,8 @@ absl::Status AppendProtocolAtStack(absl::string_view tref,
 // The priority fields of an IP packet. Aka "type of service" for IPv4 and
 // "traffic class" for IPv6.
 struct IpPriority {
-  int dscp = 0;  // 6 bits.
-  int ecn = 0;   // 2 bits.
+  int dscp = 0; // 6 bits.
+  int ecn = 0;  // 2 bits.
 };
 
 struct Ipv4TrafficParameters {
@@ -260,9 +262,9 @@ struct Ipv4TrafficParameters {
 
 struct Ipv6TrafficParameters {
   netaddr::Ipv6Address src_ipv6 =
-      netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 1);  // 1000::1;
+      netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 1); // 1000::1;
   netaddr::Ipv6Address dst_ipv6 =
-      netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 2);  // 2000::2;
+      netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 2); // 2000::2;
   std::optional<IpPriority> priority;
 };
 
@@ -307,22 +309,23 @@ absl::Status SetTrafficParameters(absl::string_view tref,
 // Low-level function for obtaining unparsed statistics view by index.
 // Queries `statistics/view/<index>`.
 // Takes in the href returned by IxiaConnect.
-absl::StatusOr<std::string> GetRawStatsView(
-    absl::string_view href, int stats_view_index,
-    thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string>
+GetRawStatsView(absl::string_view href, int stats_view_index,
+                thinkit::GenericTestbed &generic_testbed);
 
 // Returns statistics for the traffic item of the given name.
 // Takes in the href returned by IxiaConnect, and the `traffic_item_name` set
 // by `SetUpTrafficItem`.
-absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
-    absl::string_view href, absl::string_view traffic_item_name,
-    thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<TrafficItemStats>
+GetTrafficItemStats(absl::string_view href, absl::string_view traffic_item_name,
+                    thinkit::GenericTestbed &generic_testbed);
 
 // Returns statistics for all traffic items, keyed by traffic item name.
 // Takes in the href returned by IxiaConnect, and the `traffic_item_name` set
 // by `SetUpTrafficItem`.
-absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
-    absl::string_view href, thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<TrafficStats>
+GetAllTrafficItemStats(absl::string_view href,
+                       thinkit::GenericTestbed &generic_testbed);
 
 // Computes average rate (bytes/s) at which traffic was received back by Ixia.
 inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
@@ -337,9 +340,9 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(absl::string_view raw_stats);
 
 // Go over the connections and return vector of connections
 // whose links are up.
-absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
-    thinkit::GenericTestbed &generic_testbed,
-    gnmi::gNMI::StubInterface &gnmi_stub);
+absl::StatusOr<std::vector<IxiaLink>>
+GetReadyIxiaLinks(thinkit::GenericTestbed &generic_testbed,
+                  gnmi::gNMI::StubInterface &gnmi_stub);
 
 // Returns Ixia link information for requested `port` on switch connected to
 // Ixia. Returns failure status if Ixia link information is not found.
@@ -350,6 +353,6 @@ absl::StatusOr<IxiaLink> GetIxiaLink(thinkit::GenericTestbed &generic_testbed,
 // Connects to Ixia on the given testbed and returns a string handle identifying
 // the connection (aka "topology ref").
 absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed);
-}  // namespace pins_test::ixia
+} // namespace pins_test::ixia
 
-#endif  // PINS_THINKIT_IXIA_INTERFACE_H_
+#endif // PINS_THINKIT_IXIA_INTERFACE_H_

@@ -28,6 +28,6 @@ struct SwitchApi {
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi;
 };
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_SWITCH_API_H_
+#endif // PINS_DVAAS_SWITCH_API_H_

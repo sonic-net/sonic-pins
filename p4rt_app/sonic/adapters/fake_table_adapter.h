@@ -30,36 +30,36 @@ namespace sonic {
 // The Table is able to read/write/modify entries in a given SONiC table without
 // notifiying the OrchAgent.
 class FakeTableAdapter final : public TableAdapter {
- public:
-  explicit FakeTableAdapter(FakeSonicDbTable* sonic_db_table,
-                            const std::string& table_name,
-                            const std::string& table_delimiter = ":");
+public:
+  explicit FakeTableAdapter(FakeSonicDbTable *sonic_db_table,
+                            const std::string &table_name,
+                            const std::string &table_delimiter = ":");
 
-  bool exists(const std::string& key) override;
+  bool exists(const std::string &key) override;
   std::vector<std::string> keys() override;
 
-  std::vector<std::pair<std::string, std::string>> get(
-      const std::string& key) override;
-  void set(
-      const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) override;
+  std::vector<std::pair<std::string, std::string>>
+  get(const std::string &key) override;
+  void
+  set(const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) override;
 
-  void batch_set(
-      const std::vector<swss::KeyOpFieldsValuesTuple>& values) override;
+  void
+  batch_set(const std::vector<swss::KeyOpFieldsValuesTuple> &values) override;
 
-  void del(const std::string& key) override;
-  void batch_del(const std::vector<std::string>& keys) override;
+  void del(const std::string &key) override;
+  void batch_del(const std::vector<std::string> &keys) override;
 
   std::string getTablePrefix() const override;
 
- private:
-  FakeSonicDbTable* sonic_db_table_;  // Not owned.
+private:
+  FakeSonicDbTable *sonic_db_table_; // Not owned.
 
   std::string table_name_;
   std::string table_delimiter_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_TABLE_ADAPTER_H_
