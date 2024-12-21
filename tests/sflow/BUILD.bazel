@@ -71,7 +71,6 @@ cc_library(
         "//lib/utils:json_utils",
         "//lib/validator:validator_lib",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

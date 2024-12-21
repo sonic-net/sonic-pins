@@ -42,9 +42,17 @@ constexpr absl::string_view kSflowGnmiStateSampleSizePath =
     "/sampling/sflow/state/sample-size";
 constexpr absl::string_view kSflowGnmiStateEnablePath =
     "/sampling/sflow/state/enabled";
+constexpr absl::string_view kSflowGnmiStateAgentIpPath =
+    "/sampling/sflow/state/agent-id-ipv6";
 constexpr absl::string_view kSflowGnmiStateInterfaceSampleRatePath =
     "/sampling/sflow/interfaces/interface[name=$0]/state/"
     "ingress-sampling-rate";
+constexpr absl::string_view kSflowGnmiStateInterfaceEnablePath =
+    "/sampling/sflow/interfaces/interface[name=$0]/state/enabled";
+constexpr absl::string_view kSflowGnmiStateCollectorAddressPath =
+    "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/address";
+constexpr absl::string_view kSflowGnmiStateCollectorPortPath =
+    "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/port";
 
 }  // namespace
 
@@ -105,16 +113,70 @@ absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
       ops_val);
 }
 
-absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
+absl::Status VerifySflowStatesConverged(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view agent_addr_ipv6,
+    const int sampling_rate, const int sampling_header_size,
+    const std::vector<std::pair<std::string, int>>& collector_address_and_port,
+    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces) {
+  // Verify sFlow global states.
+  RETURN_IF_ERROR(VerifyGnmiStateConverged(
+      gnmi_stub, kSflowGnmiStateEnablePath,
+      /*expected_value=*/
+      R"({"openconfig-sampling-sflow:enabled":true})"));
+  RETURN_IF_ERROR(VerifyGnmiStateConverged(
+      gnmi_stub, kSflowGnmiStateAgentIpPath,
+      /*expected_value=*/
+      absl::Substitute(R"({"openconfig-sampling-sflow:agent-id-ipv6":"$0"})",
+                       agent_addr_ipv6)));
+  RETURN_IF_ERROR(VerifyGnmiStateConverged(
+      gnmi_stub, kSflowGnmiStateSampleSizePath,
+      /*expected_value=*/
+      absl::Substitute(R"({"openconfig-sampling-sflow:sample-size":$0})",
+                       sampling_header_size)));
+
+  // Verify sFlow collector states.
+  for (const auto& [ip_address, port] : collector_address_and_port) {
+    const std::string state_address_path =
+        absl::Substitute(kSflowGnmiStateCollectorAddressPath, ip_address, port);
+    const std::string state_port_path =
+        absl::Substitute(kSflowGnmiStateCollectorPortPath, ip_address, port);
+    RETURN_IF_ERROR(VerifyGnmiStateConverged(
+        gnmi_stub, state_address_path,
+        /*expected_value=*/
+        absl::Substitute(R"({"openconfig-sampling-sflow:address":"$0"})",
+                         ip_address)));
+    RETURN_IF_ERROR(VerifyGnmiStateConverged(
+        gnmi_stub, state_port_path,
+        /*expected_value=*/
+        absl::Substitute(R"({"openconfig-sampling-sflow:port":$0})", port)));
+  }
+
+  // Verify sFlow interface states.
+  for (const auto& interface_name : sflow_enabled_interfaces) {
+    const std::string state_enable_path = absl::Substitute(
+        kSflowGnmiStateInterfaceEnablePath, interface_name, sampling_rate);
+    const std::string state_sampling_rate_path = absl::Substitute(
+        kSflowGnmiStateInterfaceSampleRatePath, interface_name, sampling_rate);
+    RETURN_IF_ERROR(VerifyGnmiStateConverged(
+        gnmi_stub, state_enable_path,
+        /*expected_value=*/R"({"openconfig-sampling-sflow:enabled":true})"));
+    RETURN_IF_ERROR(VerifyGnmiStateConverged(
+        gnmi_stub, state_sampling_rate_path,
+        /*expected_value=*/
+        absl::Substitute(
+            R"({"openconfig-sampling-sflow:ingress-sampling-rate":$0})",
+            sampling_rate)));
+  }
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::string> AppendSflowConfig(
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const int sampling_rate, const int sampling_header_size) {
   ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
-  if (gnmi_config_json.find("openconfig-sampling:sampling") !=
-      gnmi_config_json.end()) {
-    return std::string(gnmi_config);
-  }
+
   if (agent_addr_ipv6.empty()) {
     return absl::InvalidArgumentError(
         "loopback_address parameter cannot be empty.");
