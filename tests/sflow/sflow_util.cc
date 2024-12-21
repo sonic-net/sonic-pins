@@ -103,4 +103,5 @@ absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
       absl::Substitute(kSflowGnmiStateInterfaceSampleRatePath, interface),
       ops_val);
 }
+
 }  // namespace pins

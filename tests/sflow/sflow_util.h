@@ -48,5 +48,6 @@ absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
 
+
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
