@@ -36,15 +36,15 @@ namespace pins_test {
 // `PacketListener` will callback once a packet is received and stop listening
 // for packets when it goes out of scope.
 class PacketListener : public thinkit::PacketGenerationFinalizer {
- public:
+public:
   // Calls PacketCallback once a packet is received. `interface_port_id_to_name`
   // needs to outlive this class. `on_finish` will get called when the listener
   // is finished.
-  PacketListener(pdpi::P4RuntimeSession* session,
+  PacketListener(pdpi::P4RuntimeSession *session,
                  P4rtProgrammingContext context,
                  sai::Instantiation instantiation,
-                 const absl::flat_hash_map<std::string, std::string>*
-                     interface_port_id_to_name);
+                 const absl::flat_hash_map<std::string, std::string>
+                     *interface_port_id_to_name);
 
   absl::Status HandlePacketsFor(absl::Duration duration,
                                 thinkit::PacketCallback callback_) override;
@@ -56,14 +56,14 @@ class PacketListener : public thinkit::PacketGenerationFinalizer {
     }
   }
 
- private:
-  pdpi::P4RuntimeSession* session_;
+private:
+  pdpi::P4RuntimeSession *session_;
   P4rtProgrammingContext context_;
   sai::Instantiation instantiation_;
-  const absl::flat_hash_map<std::string, std::string>&
-      interface_port_id_to_name_;
+  const absl::flat_hash_map<std::string, std::string>
+      &interface_port_id_to_name_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // GOOGLE_LIB_P4RT_PACKET_LISTENERR_H_
+#endif // GOOGLE_LIB_P4RT_PACKET_LISTENERR_H_

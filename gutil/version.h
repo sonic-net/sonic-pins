@@ -48,31 +48,29 @@ absl::StatusOr<Version> ParseVersion(absl::string_view version_string);
 Version ParseVersionOrDie(absl::string_view version_string);
 
 // Returns semantic version string of the form `MAJOR.MINOR.PATCH`.
-std::string VersionToString(const Version& v);
+std::string VersionToString(const Version &v);
 
 // Pretty printer.
-std::ostream& operator<<(std::ostream& os, const Version& v);
+std::ostream &operator<<(std::ostream &os, const Version &v);
 
 // Absl pretty printer (https://abseil.io/blog/20221115-stringify).
-template <class Sink>
-void AbslStringify(Sink& sink, const Version& v);
+template <class Sink> void AbslStringify(Sink &sink, const Version &v);
 
 // Comparison operators.
-bool operator==(const Version& x, const Version& y);
-bool operator!=(const Version& x, const Version& y);
-bool operator<=(const Version& x, const Version& y);
-bool operator<(const Version& x, const Version& y);
-bool operator>=(const Version& x, const Version& y);
-bool operator>(const Version& x, const Version& y);
+bool operator==(const Version &x, const Version &y);
+bool operator!=(const Version &x, const Version &y);
+bool operator<=(const Version &x, const Version &y);
+bool operator<(const Version &x, const Version &y);
+bool operator>=(const Version &x, const Version &y);
+bool operator>(const Version &x, const Version &y);
 
 // -- END OF PUBLIC INTERFACE -- implementation details follow -----------------
 
-template <class Sink>
-void AbslStringify(Sink& sink, const Version& v) {
+template <class Sink> void AbslStringify(Sink &sink, const Version &v) {
   absl::Format(&sink, "%d.%d.%d", v.major_version, v.minor_version,
                v.patch_version);
 }
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_GUTIL_VERSION_H_
+#endif // PINS_GUTIL_VERSION_H_

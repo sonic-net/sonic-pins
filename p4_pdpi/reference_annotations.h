@@ -32,8 +32,8 @@ struct ParsedReferencedByAnnotation {
 // Returns UnimplementedError if:
 //   - there is a reference to an action
 //   - there is a reference involving a match field whose type is not `EXACT`
-absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
-    const IrP4Info &info);
+absl::StatusOr<std::vector<IrTableReference>>
+ParseIrTableReferences(const IrP4Info &info);
 
 // Returns a list of `RefersToAnnotation` parsed from the `annotations`.
 // Returns empty list if no annotation contained the label `@refers_to`.
@@ -53,15 +53,17 @@ ParseAllReferencedByAnnotations(
 
 // Returns an `IrField` created from an @refers_to annotation. Returns error
 // if annotation has invalid information or is a reference to an action.
-absl::StatusOr<IrField> CreateIrFieldFromRefersTo(
-    const ParsedRefersToAnnotation &annotation, const IrP4Info &info);
+absl::StatusOr<IrField>
+CreateIrFieldFromRefersTo(const ParsedRefersToAnnotation &annotation,
+                          const IrP4Info &info);
 
 // Returns an `IrField` created from an @referenced_by annotation. Returns
 // error if annotation has invalid information or if the information can be
 // captured by an @refers_to annotation (this is an opinionated choice we make
 // to steer users towards using @refers_to over @referenced_by when possible).
-absl::StatusOr<IrField> CreateIrFieldFromReferencedBy(
-    const ParsedReferencedByAnnotation &annotation, const IrP4Info &info);
+absl::StatusOr<IrField>
+CreateIrFieldFromReferencedBy(const ParsedReferencedByAnnotation &annotation,
+                              const IrP4Info &info);
 
 // Returns an `IrTable` corresponding to `table_name`. `table_name` can be a
 // user-defined or built-in table. Return error if `table_name` does not exist.
@@ -106,6 +108,6 @@ bool FieldIsOptional(const IrField &field);
 bool FieldIsOptional(const IrMatchField &match_field);
 bool FieldIsOptional(const IrP4MatchField &p4_match_field);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_REFERENCE_ANNOTATIONS_H_
+#endif // PINS_P4_PDPI_REFERENCE_ANNOTATIONS_H_

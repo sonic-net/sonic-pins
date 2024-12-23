@@ -21,13 +21,13 @@
 
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/test_vector.pb.h"
-#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -54,12 +54,12 @@ struct TunnelDecapTestVectorParams {
 
 class TunnelDecapTestFixture
     : public testing::TestWithParam<TunnelDecapTestParams> {
- public:
+public:
   void SetUp() override { GetParam().mirror_testbed->SetUp(); }
 
   void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_TESTS_FORWARDING_TUNNEL_DECAP_TEST_H_
+#endif // PINS_TESTS_FORWARDING_TUNNEL_DECAP_TEST_H_

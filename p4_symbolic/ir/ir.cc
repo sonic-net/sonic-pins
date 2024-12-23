@@ -202,6 +202,7 @@ absl::StatusOr<HeaderType> ExtractHeaderType(const bmv2::HeaderType &header) {
     field.set_name(unparsed_field.values(0).string_value());
     field.set_bitwidth(unparsed_field.values(1).number_value());
     field.set_signed_(unparsed_field.values(2).bool_value());
+    output.add_ordered_fields_list(unparsed_field.values(0).string_value());
   }
 
   return output;
@@ -1105,6 +1106,15 @@ absl::StatusOr<Parser> ExtractParser(const bmv2::Parser &bmv2_parser) {
   return parser;
 }
 
+absl::StatusOr<Deparser> ExtractDeparser(const bmv2::Deparser &bmv2_deparser) {
+  Deparser deparser;
+  deparser.set_name(bmv2_deparser.name());
+  for (const std::string &header_name : bmv2_deparser.order()) {
+    deparser.add_header_order(header_name);
+  }
+  return deparser;
+}
+
 // Translate an error code definition from the BMv2 protobuf message.
 absl::StatusOr<Error> ExtractError(
     const google::protobuf::ListValue &bmv2_error) {
@@ -1156,18 +1166,18 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   // by the compiler.
   //
   //   ```p4
-  //   parser main_parser {
+  //   parser main_parser(...) {
   //     state start {
   //       ...
   //     }
   //     state parse_ethernet {
   //       ...
-  //       ipv4_parser.apply();
+  //       ipv4_parser.apply(...);
   //       transition accept;
   //     }
   //   }
   //
-  //   parser ipv4_parser {
+  //   parser ipv4_parser(...) {
   //     ...
   //   }
   //   ```
@@ -1176,10 +1186,43 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
         absl::StrCat("Expected single parser. Found: ", bmv2.parsers_size()));
   }
 
-  // Translate parsers from bmv2.
+  // Translate parsers from BMv2.
   for (const bmv2::Parser &bmv2_parser : bmv2.parsers()) {
     Parser &extracted_parser = (*output.mutable_parsers())[bmv2_parser.name()];
     ASSIGN_OR_RETURN(extracted_parser, ExtractParser(bmv2_parser));
+  }
+
+  // Check the number of deparsers. The current implementation of the P4
+  // compiler compresses all the deparsers in the P4 program into one big
+  // deparser. Since conditional statements are disallowed in parsers, the
+  // compiler outputs one ordered list of header names in the output JSON. For
+  // instance, the compilation output of the following P4 program snippet will
+  // contain the header order: ["ethernet", "ipv4", "ipv4"].
+  //
+  //   ```p4
+  //   control deparser2(packet_out packet, in headers hdr) {
+  //       apply {
+  //           packet.emit(hdr.ipv4);
+  //       }
+  //   }
+  //   control main_deparser(packet_out packet, in headers hdr) {
+  //       apply {
+  //           packet.emit(hdr.ethernet);
+  //           packet.emit(hdr.ipv4);
+  //           deparser2.apply(packet, hdr);
+  //       }
+  //   }
+  //   ```
+  if (bmv2.deparsers_size() != 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Expected single deparser. Found: ", bmv2.deparsers_size()));
+  }
+
+  // Translate deparsers from BMv2.
+  for (const bmv2::Deparser &bmv2_deparser : bmv2.deparsers()) {
+    Deparser &extracted_deparser =
+        (*output.mutable_deparsers())[bmv2_deparser.name()];
+    ASSIGN_OR_RETURN(extracted_deparser, ExtractDeparser(bmv2_deparser));
   }
 
   // In reality, pdpi.actions_by_name is keyed on aliases and

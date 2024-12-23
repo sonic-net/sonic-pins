@@ -27,18 +27,18 @@ namespace p4rt_app {
 //  * Create/Destroy PacketIO interface for sending to ingress.
 class AppStateDbSendToIngressPortTableEventHandler
     : public sonic::StateEventHandler {
- public:
-  AppStateDbSendToIngressPortTableEventHandler(P4RuntimeImpl* p4runtime)
+public:
+  AppStateDbSendToIngressPortTableEventHandler(P4RuntimeImpl *p4runtime)
       : p4runtime_(*p4runtime) {}
 
   absl::Status HandleEvent(
-      const std::string& operation, const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) override;
+      const std::string &operation, const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) override;
 
- private:
-  P4RuntimeImpl& p4runtime_;
+private:
+  P4RuntimeImpl &p4runtime_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_SEND_TO_INGRESS_PORT_TABLE_EVENT_H_
+#endif // GOOGLE_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_SEND_TO_INGRESS_PORT_TABLE_EVENT_H_

@@ -21,8 +21,8 @@ namespace sai {
 
 // Replaces all @sai_hash_seed() annotations with value 0 to the provided seed.
 // Returns true if any hash seed was set.
-bool SetSaiHashSeed(p4::config::v1::P4Info& p4info, uint32_t seed);
+bool SetSaiHashSeed(p4::config::v1::P4Info &p4info, uint32_t seed);
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_
+#endif // PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_

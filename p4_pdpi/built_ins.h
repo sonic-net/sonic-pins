@@ -58,8 +58,8 @@ bool BuiltInActionHasParameter(IrBuiltInAction action,
 // Returns enum `IrBuiltInAction` that built-in `parameter` belongs to.
 // Returns InvalidArgumentError if built-in `parameter` holds invalid/unknown
 // enum.
-absl::StatusOr<IrBuiltInAction> GetBuiltInActionFromBuiltInParameter(
-    IrBuiltInParameter parameter);
+absl::StatusOr<IrBuiltInAction>
+GetBuiltInActionFromBuiltInParameter(IrBuiltInParameter parameter);
 
 // Returns string representation of built-in `table`.
 // Returns InvalidArgumentError if built-in `table` holds invalid/unknown enum.
@@ -67,8 +67,8 @@ absl::StatusOr<std::string> IrBuiltInTableToString(IrBuiltInTable table);
 
 // Returns string representation of built-in `field`.
 // Returns InvalidArgumentError if built-in `field` holds invalid/unknown enum.
-absl::StatusOr<std::string> IrBuiltInMatchFieldToString(
-    IrBuiltInMatchField field);
+absl::StatusOr<std::string>
+IrBuiltInMatchFieldToString(IrBuiltInMatchField field);
 
 // Returns string representation of built-in `action`.
 // Returns InvalidArgumentError if built-in `action` holds invalid/unknown enum.
@@ -77,33 +77,33 @@ absl::StatusOr<std::string> IrBuiltInActionToString(IrBuiltInAction action);
 // Returns string representation of built-in `parameter`.
 // Returns InvalidArgumentError if built-in `parameter` holds invalid/unknown
 // enum.
-absl::StatusOr<std::string> IrBuiltInParameterToString(
-    IrBuiltInParameter parameter);
+absl::StatusOr<std::string>
+IrBuiltInParameterToString(IrBuiltInParameter parameter);
 
 // Returns enum `IrBuiltInTable` whose string representation is `table_name`.
 // Returns InvalidArgumentError if no `IrBuiltInTable` has string representation
 // `table_name` (i.e. if `IsBuiltInTable(table_name)` is false).
-absl::StatusOr<IrBuiltInTable> StringToIrBuiltInTable(
-    absl::string_view table_name);
+absl::StatusOr<IrBuiltInTable>
+StringToIrBuiltInTable(absl::string_view table_name);
 
 // Returns enum `IrBuiltInMatchField` whose string representation is
 // `field_name`. Returns InvalidArgumentError if no IrBuiltInMatchField has
 // string representation `field_name`.
-absl::StatusOr<IrBuiltInMatchField> StringToIrBuiltInMatchField(
-    absl::string_view field_name);
+absl::StatusOr<IrBuiltInMatchField>
+StringToIrBuiltInMatchField(absl::string_view field_name);
 
 // Returns enum `IrBuiltInAction` whose string representation is `action_name`.
 // Returns InvalidArgumentError if no IrBuiltInAction has string representation
 // `action_name`.
-absl::StatusOr<IrBuiltInAction> StringToIrBuiltInAction(
-    absl::string_view action_name);
+absl::StatusOr<IrBuiltInAction>
+StringToIrBuiltInAction(absl::string_view action_name);
 
 // Returns enum `IrBuiltInParameter` whose string representation is
 // `parameter_name`. Returns InvalidArgumentError if no IrBuiltInParameter has
 // string representation `parameter_name`.
-absl::StatusOr<IrBuiltInParameter> StringToIrBuiltInParameter(
-    absl::string_view parameter_name);
+absl::StatusOr<IrBuiltInParameter>
+StringToIrBuiltInParameter(absl::string_view parameter_name);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_UTILS_BUILT_INS_H_
+#endif // PINS_P4_PDPI_UTILS_BUILT_INS_H_

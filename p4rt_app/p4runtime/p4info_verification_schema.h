@@ -25,18 +25,18 @@ namespace p4rt_app {
 
 // Convert an IrP4Info object into a P4InfoVerificationSchema. Return an error
 // if a valid schema cannot be produced.
-absl::StatusOr<P4InfoVerificationSchema> ConvertToSchema(
-    const pdpi::IrP4Info& ir_p4info);
+absl::StatusOr<P4InfoVerificationSchema>
+ConvertToSchema(const pdpi::IrP4Info &ir_p4info);
 
 // Returns the P4InfoVerificationSchema that represents the supported fixed
 // tables.
 absl::StatusOr<P4InfoVerificationSchema> SupportedSchema();
 
 // Returns OK if the IrP4Info is supported by the capabilities schema.
-absl::Status IsSupportedBySchema(
-    const pdpi::IrP4Info& ir_p4info,
-    const P4InfoVerificationSchema& supported_schema);
+absl::Status
+IsSupportedBySchema(const pdpi::IrP4Info &ir_p4info,
+                    const P4InfoVerificationSchema &supported_schema);
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_
+#endif // PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_

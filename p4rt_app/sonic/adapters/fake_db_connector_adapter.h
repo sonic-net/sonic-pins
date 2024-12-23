@@ -33,38 +33,38 @@ namespace sonic {
 // The DBConnector is able to read and modify any table (e.g. P4RT or VRF_TABLE)
 // in a redis DB (e.g. AppDb, ConfigDb, AsicDb, etc.).
 class FakeDBConnectorAdapter final : public DBConnectorAdapter {
- public:
+public:
   FakeDBConnectorAdapter() = default;
 
   // Not copyable or moveable.
-  FakeDBConnectorAdapter(const FakeDBConnectorAdapter&) = delete;
-  FakeDBConnectorAdapter& operator=(const FakeDBConnectorAdapter&) = delete;
+  FakeDBConnectorAdapter(const FakeDBConnectorAdapter &) = delete;
+  FakeDBConnectorAdapter &operator=(const FakeDBConnectorAdapter &) = delete;
 
   // Allows access to a fake SONiC Redis DB table.
-  void AddSonicDbTable(const std::string& table_name, FakeSonicDbTable* table);
+  void AddSonicDbTable(const std::string &table_name, FakeSonicDbTable *table);
 
   // Faked methods.
-  std::vector<std::string> keys(const std::string& glob) override;
-  std::unordered_map<std::string, std::string> hgetall(
-      const std::string& key) override;
-  bool exists(const std::string& key) override;
-  int64_t del(const std::string& key) override;
-  void hmset(const std::string& key,
-             const std::vector<swss::FieldValueTuple>& values) override;
-  void batch_del(const std::vector<std::string>& keys) override;
+  std::vector<std::string> keys(const std::string &glob) override;
+  std::unordered_map<std::string, std::string>
+  hgetall(const std::string &key) override;
+  bool exists(const std::string &key) override;
+  int64_t del(const std::string &key) override;
+  void hmset(const std::string &key,
+             const std::vector<swss::FieldValueTuple> &values) override;
+  void batch_del(const std::vector<std::string> &keys) override;
 
- private:
+private:
   // The DBConnector interface has access to all tables (e.g. P4RT, or
   // VRF_TABLE) in a redis DB (e.g. AppDb). To fake this behavior we maintain a
   // map of any faked tables the client should have access to.
   //
   // key: name of the SONiC DB table (i.e. P4RT)
   // val: faked table holding all installed entries.
-  absl::flat_hash_map<std::string, FakeSonicDbTable*>
-      sonic_db_tables_;  // No ownership.
+  absl::flat_hash_map<std::string, FakeSonicDbTable *>
+      sonic_db_tables_; // No ownership.
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_DB_CONNECTOR_ADAPTER_H_
+#endif // GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_DB_CONNECTOR_ADAPTER_H_

@@ -30,18 +30,18 @@ namespace pins_test {
 
 // Parameters used by the tests.
 struct QosTestParams {
-  thinkit::GenericTestbedInterface* testbed_interface;
+  thinkit::GenericTestbedInterface *testbed_interface;
   std::string gnmi_config;
   p4::config::v1::P4Info p4info;
 };
 
 class FrontpanelQosTest : public testing::TestWithParam<QosTestParams> {
- protected:
+protected:
   void SetUp() override { GetParam().testbed_interface->SetUp(); }
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
   ~FrontpanelQosTest() override { delete GetParam().testbed_interface; }
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // GOOGLE_TESTS_QOS_FRONTPANEL_QOS_TEST_H_
+#endif // GOOGLE_TESTS_QOS_FRONTPANEL_QOS_TEST_H_

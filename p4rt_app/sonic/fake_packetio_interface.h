@@ -17,7 +17,7 @@
 #define PINS_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
 
 #include <string>
-#include <thread>  //NOLINT
+#include <thread> //NOLINT
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
@@ -39,7 +39,7 @@ namespace sonic {
 // having a helper method to return the set of sent packets for a particular
 // port.
 class FakePacketIoInterface final : public PacketIoInterface {
- public:
+public:
   FakePacketIoInterface() = default;
   // Push the receive packets by invoking the callback method.
   absl::Status PushPacketIn(absl::string_view source_port,
@@ -47,29 +47,30 @@ class FakePacketIoInterface final : public PacketIoInterface {
                             absl::string_view packet) const;
 
   // Return the packets sent for the specified port.
-  absl::StatusOr<std::vector<std::string>> VerifyPacketOut(
-      absl::string_view port_name) ABSL_LOCKS_EXCLUDED(packet_lock_);
+  absl::StatusOr<std::vector<std::string>>
+  VerifyPacketOut(absl::string_view port_name)
+      ABSL_LOCKS_EXCLUDED(packet_lock_);
 
   // Faked methods.
-  absl::StatusOr<std::thread> StartReceive(
-      packet_metadata::ReceiveCallbackFunction callback_function,
-      bool use_genetlink) override;
+  absl::StatusOr<std::thread>
+  StartReceive(packet_metadata::ReceiveCallbackFunction callback_function,
+               bool use_genetlink) override;
   absl::Status SendPacketOut(absl::string_view port_name,
-                             const std::string& packet)
+                             const std::string &packet)
       ABSL_LOCKS_EXCLUDED(packet_lock_) override;
   absl::Status AddPacketIoPort(absl::string_view port_name) override;
   absl::Status RemovePacketIoPort(absl::string_view port_name) override;
 
- private:
+private:
   // Used for fake implementation.
   packet_metadata::ReceiveCallbackFunction callback_function_;
   absl::flat_hash_set<std::string> valid_ports_;
   absl::Mutex packet_lock_;
-  absl::flat_hash_map<std::string, std::vector<std::string>> transmit_packets_
-      ABSL_GUARDED_BY(packet_lock_);
+  absl::flat_hash_map<std::string, std::vector<std::string>>
+      transmit_packets_ ABSL_GUARDED_BY(packet_lock_);
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
+#endif // PINS_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_

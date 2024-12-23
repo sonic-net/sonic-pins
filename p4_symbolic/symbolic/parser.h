@@ -39,12 +39,12 @@ absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
 // set to the corresponding error code and the function returns immediately. The
 // current implementation may only result in 2 types of parser error, NoError
 // and NoMatch.
-absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
-    const ir::P4Program &program,
-    const SymbolicPerPacketState &ingress_headers);
+absl::StatusOr<SymbolicPerPacketState>
+EvaluateParsers(const ir::P4Program &program,
+                const SymbolicPerPacketState &ingress_headers);
 
-}  // namespace parser
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace parser
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_
+#endif // PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_

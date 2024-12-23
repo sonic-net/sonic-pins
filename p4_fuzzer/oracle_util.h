@@ -46,24 +46,25 @@ struct IndexUpdateStatus {
 
 // Is the given update well-formed according to the P4RT specification (e.g.,
 // not missing a field)?
-absl::Status IsWellformedUpdate(const pdpi::IrP4Info& ir_p4_info,
-                                const p4::v1::Update& update);
+absl::Status IsWellformedUpdate(const pdpi::IrP4Info &ir_p4_info,
+                                const p4::v1::Update &update);
 
 // Is `status` a correct way to respond to the given update, when the switch is
 // the given state?
-absl::Status UpdateOracle(const pdpi::IrP4Info& ir_p4_info,
-                          const p4::v1::Update& update,
-                          const pdpi::IrUpdateStatus& status,
-                          const SwitchState& state);
+absl::Status UpdateOracle(const pdpi::IrP4Info &ir_p4_info,
+                          const p4::v1::Update &update,
+                          const pdpi::IrUpdateStatus &status,
+                          const SwitchState &state);
 
 // Takes a batch and checks whether the way the switch responded is legal.  For
 // now, batches are processed in sequence.  Returns nullopt if everything is
 // valid, and a list of problems otherwise.
-absl::optional<std::vector<std::string>> WriteRequestOracle(
-    const pdpi::IrP4Info& ir_p4_info, const AnnotatedWriteRequest& request,
-    const absl::Span<const pdpi::IrUpdateStatus>& statuses,
-    const SwitchState& state);
+absl::optional<std::vector<std::string>>
+WriteRequestOracle(const pdpi::IrP4Info &ir_p4_info,
+                   const AnnotatedWriteRequest &request,
+                   const absl::Span<const pdpi::IrUpdateStatus> &statuses,
+                   const SwitchState &state);
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // P4_FUZZER_ORACLE_UTIL_H_
+#endif // P4_FUZZER_ORACLE_UTIL_H_

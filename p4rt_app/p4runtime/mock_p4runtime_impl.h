@@ -14,76 +14,74 @@
 #ifndef PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
 #define PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
 
-#include "gmock/gmock.h"
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/server_context.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 
 class MockP4RuntimeImpl : public P4RuntimeImpl {
- public:
-  MockP4RuntimeImpl()
-      : P4RuntimeImpl(/*translate_port_ids=*/false) {}
+public:
+  MockP4RuntimeImpl() : P4RuntimeImpl(/*translate_port_ids=*/false) {}
 
   MOCK_METHOD(grpc::Status, Write,
               (grpc::ServerContext * context,
-               const p4::v1::WriteRequest* request,
-               p4::v1::WriteResponse* response),
+               const p4::v1::WriteRequest *request,
+               p4::v1::WriteResponse *response),
               (override));
 
   MOCK_METHOD(grpc::Status, Read,
               (grpc::ServerContext * context,
-               const p4::v1::ReadRequest* request,
-               grpc::ServerWriter<p4::v1::ReadResponse>* response_writer),
+               const p4::v1::ReadRequest *request,
+               grpc::ServerWriter<p4::v1::ReadResponse> *response_writer),
               (override));
 
   MOCK_METHOD(grpc::Status, SetForwardingPipelineConfig,
               (grpc::ServerContext * context,
-               const p4::v1::SetForwardingPipelineConfigRequest* request,
-               p4::v1::SetForwardingPipelineConfigResponse* response),
+               const p4::v1::SetForwardingPipelineConfigRequest *request,
+               p4::v1::SetForwardingPipelineConfigResponse *response),
               (override));
 
   MOCK_METHOD(grpc::Status, GetForwardingPipelineConfig,
               (grpc::ServerContext * context,
-               const p4::v1::GetForwardingPipelineConfigRequest* request,
-               p4::v1::GetForwardingPipelineConfigResponse* response),
+               const p4::v1::GetForwardingPipelineConfigRequest *request,
+               p4::v1::GetForwardingPipelineConfigResponse *response),
               (override));
 
   MOCK_METHOD(absl::Status, UpdateDeviceId, (uint64_t device_id), (override));
 
-  MOCK_METHOD(absl::Status, AddPacketIoPort, (const std::string& port_name),
+  MOCK_METHOD(absl::Status, AddPacketIoPort, (const std::string &port_name),
               (override));
 
-  MOCK_METHOD(absl::Status, RemovePacketIoPort, (const std::string& port_name),
+  MOCK_METHOD(absl::Status, RemovePacketIoPort, (const std::string &port_name),
               (override));
 
   MOCK_METHOD(absl::Status, AddPortTranslation,
-              (const std::string& port_name, const std::string& port_id),
+              (const std::string &port_name, const std::string &port_id),
               (override));
 
   MOCK_METHOD(absl::Status, RemovePortTranslation,
-              (const std::string& port_name), (override));
+              (const std::string &port_name), (override));
 
   MOCK_METHOD(absl::Status, VerifyState, (), (override));
 
   MOCK_METHOD(absl::Status, DumpDebugData,
-              (const std::string& path, const std::string& log_level),
+              (const std::string &path, const std::string &log_level),
               (override));
 
   MOCK_METHOD(void, SetCpuQueueTranslator,
               (std::unique_ptr<CpuQueueTranslator>), (override));
 
-/* TODO(PINS): To handle Component, System & Interface Translator in November release.
- private:
-  swss::MockComponentStateHelper mock_component_state_helper_;
-  swss::MockSystemStateHelper mock_system_state_helper_; */
-//  sonic::FakeIntfTranslator fake_intf_translator_{/*enabled=*/true}; 
-
+  /* TODO(PINS): To handle Component, System & Interface Translator in November
+   release. private: swss::MockComponentStateHelper
+   mock_component_state_helper_; swss::MockSystemStateHelper
+   mock_system_state_helper_; */
+  //  sonic::FakeIntfTranslator fake_intf_translator_{/*enabled=*/true};
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
+#endif // PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_

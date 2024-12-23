@@ -32,27 +32,29 @@ namespace sonic {
 //
 // On success an empty vector is returned. Otherwise, the vector will contain
 // one message for every error found.
-std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
-    TableAdapter& app_state_db, TableAdapter& app_db);
+std::vector<std::string>
+VerifyAppStateDbAndAppDbEntries(TableAdapter &app_state_db,
+                                TableAdapter &app_db);
 
 // Reads all the entries out of a P4RT table, and compares the values to a
 // list of PI TableEntries. Non-P4RT table entries will be ignored.
 //
 // On success an empty vector is returned. Otherwise, the vector will contain
 // one message for every error found.
-std::vector<std::string> VerifyP4rtTableWithCacheEntities(
-    TableAdapter& app_db, const std::vector<pdpi::IrEntity>& ir_entities,
-    const pdpi::IrP4Info& ir_p4_info);
+std::vector<std::string>
+VerifyP4rtTableWithCacheEntities(TableAdapter &app_db,
+                                 const std::vector<pdpi::IrEntity> &ir_entities,
+                                 const pdpi::IrP4Info &ir_p4_info);
 
 // Reads all the packet replication entries out of the P4RT table and compares
 // the values to a list of PI PacketReplicationEntries.
 // On success, an empty vector is returned.  Otherwise, the vector will contain
 // an error message for each problem found.
 std::vector<std::string> VerifyPacketReplicationWithCacheEntities(
-    P4rtTable& p4rt_table,
-    const std::vector<pdpi::IrEntity>& cache_ir_entities);
+    P4rtTable &p4rt_table,
+    const std::vector<pdpi::IrEntity> &cache_ir_entities);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_STATE_VERIFICATION_H_
+#endif // PINS_P4RT_APP_SONIC_STATE_VERIFICATION_H_

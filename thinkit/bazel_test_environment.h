@@ -37,11 +37,11 @@ namespace thinkit {
 // Calls to {Store,AppendTo}TestArtifact within a BazelTestEnvironment
 // object are guaranteed to be thread-safe due to writes being sequential.
 class BazelTestEnvironment : public TestEnvironment {
- public:
+public:
   BazelTestEnvironment() = delete;
   explicit BazelTestEnvironment(
       bool mask_known_failures,
-      std::function<void(const std::vector<std::string>&)> set_test_case_ids =
+      std::function<void(const std::vector<std::string> &)> set_test_case_ids =
           [](auto) {})
       : mask_known_failures_{mask_known_failures},
         set_test_case_ids_(std::move(set_test_case_ids)) {}
@@ -49,25 +49,25 @@ class BazelTestEnvironment : public TestEnvironment {
   absl::Status StoreTestArtifact(absl::string_view filename,
                                  absl::string_view contents) override;
   absl::Status StoreTestArtifact(absl::string_view filename,
-                                 const google::protobuf::Message& proto);
+                                 const google::protobuf::Message &proto);
 
   absl::Status AppendToTestArtifact(absl::string_view filename,
                                     absl::string_view contents) override;
   absl::Status AppendToTestArtifact(absl::string_view filename,
-                                    const google::protobuf::Message& proto);
+                                    const google::protobuf::Message &proto);
 
   bool MaskKnownFailures() { return mask_known_failures_; };
 
-  void SetTestCaseIDs(const std::vector<std::string>& test_case_ids) override {
+  void SetTestCaseIDs(const std::vector<std::string> &test_case_ids) override {
     set_test_case_ids_(test_case_ids);
   }
 
- private:
+private:
   bool mask_known_failures_;
-  std::function<void(const std::vector<std::string>&)> set_test_case_ids_;
+  std::function<void(const std::vector<std::string> &)> set_test_case_ids_;
   gutil::BazelTestArtifactWriter artifact_writer_;
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // PINS_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
+#endif // PINS_THINKIT_BAZEL_TEST_ENVIRONMENT_H_

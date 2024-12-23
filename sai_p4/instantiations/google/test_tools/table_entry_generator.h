@@ -29,8 +29,8 @@ namespace sai {
 // Returns a table entry generator for the given table.
 // Returns Unimplemented error if the table is known and not supported.
 // Returns an Unknown error if the table is unknown.
-absl::StatusOr<TableEntryGenerator> GetGenerator(
-    const pdpi::IrTableDefinition& table);
+absl::StatusOr<TableEntryGenerator>
+GetGenerator(const pdpi::IrTableDefinition &table);
 
-}  // namespace sai
-#endif  // PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
+} // namespace sai
+#endif // PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_

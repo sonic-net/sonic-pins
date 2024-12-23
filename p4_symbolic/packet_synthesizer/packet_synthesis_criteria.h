@@ -21,20 +21,21 @@
 namespace p4_symbolic::packet_synthesizer {
 
 // Returns whether two CriteriaVariants are considered equal.
-bool Equals(const CriteriaVariant& lhs, const CriteriaVariant& rhs);
+bool Equals(const CriteriaVariant &lhs, const CriteriaVariant &rhs);
 
 // Get a single CriteriaVariant corresponding to the given `criteria_case` in
 // the given `criteria`.
-absl::StatusOr<CriteriaVariant> GetCriteriaVariant(
-    const PacketSynthesisCriteria& criteria,
-    CriteriaVariant::CriteriaCase criteria_case);
+absl::StatusOr<CriteriaVariant>
+GetCriteriaVariant(const PacketSynthesisCriteria &criteria,
+                   CriteriaVariant::CriteriaCase criteria_case);
 
 // Checks whether `lhs` and `rhs` have equal criteria variants corresponding
 // to the given `criteria_case`.
-absl::StatusOr<bool> HaveEqualCriteriaVariants(
-    const PacketSynthesisCriteria& lhs, const PacketSynthesisCriteria& rhs,
-    CriteriaVariant::CriteriaCase criteria_case);
+absl::StatusOr<bool>
+HaveEqualCriteriaVariants(const PacketSynthesisCriteria &lhs,
+                          const PacketSynthesisCriteria &rhs,
+                          CriteriaVariant::CriteriaCase criteria_case);
 
-}  // namespace p4_symbolic::packet_synthesizer
+} // namespace p4_symbolic::packet_synthesizer
 
-#endif  // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_PACKET_SYNTHESIS_CRITERIA_H_
+#endif // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_PACKET_SYNTHESIS_CRITERIA_H_

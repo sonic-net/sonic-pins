@@ -47,7 +47,7 @@ struct SwitchServices {
 };
 
 class LocalTcp {
- public:
+public:
   std::shared_ptr<grpc::ChannelCredentials> Credentials() {
     return grpc::experimental::LocalCredentials(LOCAL_TCP);
   }
@@ -58,19 +58,19 @@ class LocalTcp {
 // `std::shared_ptr<grpc::ChannelCredentials> Credentials()`.
 template <class CredentialsPolicy>
 class CreateGrpcStub : private CredentialsPolicy {
- public:
+public:
   template <class... Args>
-  explicit CreateGrpcStub(Args&&... args)
+  explicit CreateGrpcStub(Args &&...args)
       : CredentialsPolicy(std::forward<Args>(args)...) {}
 
   template <class NewStubFunction>
-  auto Create(NewStubFunction&& new_stub, const std::string& address,
+  auto Create(NewStubFunction &&new_stub, const std::string &address,
               std::string_view /*chassis*/, std::string_view /*stub_type*/,
               grpc::ChannelArguments channel_arguments = {}) {
-    return new_stub(
-        grpc::CreateCustomChannel(address, CredentialsPolicy::Credentials(),
-                                  channel_arguments),
-        grpc::StubOptions());
+    return new_stub(grpc::CreateCustomChannel(address,
+                                              CredentialsPolicy::Credentials(),
+                                              channel_arguments),
+                    grpc::StubOptions());
   }
 };
 
@@ -97,16 +97,15 @@ class CreateGrpcStub : private CredentialsPolicy {
 // absl::make_unique<BasicSwitch<CreateGrpcStub<LocalTcp>>>(...);
 template <class CreateStubPolicy>
 class BasicSwitch : public thinkit::Switch, private CreateStubPolicy {
- public:
+public:
   template <class... Args>
   BasicSwitch(std::string chassis_name, uint32_t device_id,
-              SwitchServices services, Args&&... args)
+              SwitchServices services, Args &&...args)
       : CreateStubPolicy(std::forward<Args>(args)...),
-        chassis_name_(std::move(chassis_name)),
-        device_id_(device_id),
+        chassis_name_(std::move(chassis_name)), device_id_(device_id),
         services_(std::move(services)) {}
 
-  const std::string& ChassisName() override { return chassis_name_; };
+  const std::string &ChassisName() override { return chassis_name_; };
 
   uint32_t DeviceId() override { return device_id_; }
 
@@ -117,8 +116,8 @@ class BasicSwitch : public thinkit::Switch, private CreateStubPolicy {
         "P4 Runtime", pdpi::GrpcChannelArgumentsForP4rt());
   }
 
-  absl::StatusOr<std::unique_ptr<gnmi::gNMI::StubInterface>> CreateGnmiStub()
-      override {
+  absl::StatusOr<std::unique_ptr<gnmi::gNMI::StubInterface>>
+  CreateGnmiStub() override {
     return CreateStubPolicy::Create(gnmi::gNMI::NewStub, services_.gnmi_address,
                                     chassis_name_, "gNMI");
   }
@@ -160,12 +159,12 @@ class BasicSwitch : public thinkit::Switch, private CreateStubPolicy {
                                     "gNOI OS");
   }
 
- private:
+private:
   std::string chassis_name_;
   uint32_t device_id_;
   SwitchServices services_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_BASIC_SWITCH_H_
+#endif // PINS_LIB_BASIC_SWITCH_H_

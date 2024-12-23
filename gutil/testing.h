@@ -28,8 +28,7 @@ namespace gutil {
 
 // Parses a protobuf from a string, and crashes if parsing failed. Only use in
 // tests.
-template <typename T>
-T ParseProtoOrDie(absl::string_view proto_string) {
+template <typename T> T ParseProtoOrDie(absl::string_view proto_string) {
   T message;
   CHECK_OK(ReadProtoFromString(proto_string, &message));
   return message;
@@ -37,8 +36,7 @@ T ParseProtoOrDie(absl::string_view proto_string) {
 
 // Parses a protobuf from a file, and crashes if parsing failed. Only use in
 // tests.
-template <typename T>
-T ParseProtoFileOrDie(absl::string_view proto_file) {
+template <typename T> T ParseProtoFileOrDie(absl::string_view proto_file) {
   T message;
   CHECK_OK(ReadProtoFromFile(proto_file, &message));
   return message;
@@ -51,6 +49,6 @@ T ParseProtoFileOrDie(absl::string_view proto_file) {
 std::string SnakeCaseToCamelCase(absl::string_view input,
                                  bool lower_first = false);
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // GUTIL_TESTING_H
+#endif // GUTIL_TESTING_H

@@ -17,29 +17,29 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gmock/gmock.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
 
 namespace thinkit {
 
 class MockGenericTestbed : public GenericTestbed {
- public:
-  MOCK_METHOD(Switch&, Sut, (), (override));
-  MOCK_METHOD(class ControlDevice&, ControlDevice, (), (override));
-  MOCK_METHOD(class ControlDevice&, ControlDevice, (int index), (override));
-  MOCK_METHOD(TestEnvironment&, Environment, (), (override));
+public:
+  MOCK_METHOD(Switch &, Sut, (), (override));
+  MOCK_METHOD(class ControlDevice &, ControlDevice, (), (override));
+  MOCK_METHOD(class ControlDevice &, ControlDevice, (int index), (override));
+  MOCK_METHOD(TestEnvironment &, Environment, (), (override));
   MOCK_METHOD((absl::flat_hash_map<std::string, InterfaceInfo>),
               GetSutInterfaceInfo, (), (override));
-  MOCK_METHOD(otg::Openapi::StubInterface*, GetTrafficClient, (), (override));
+  MOCK_METHOD(otg::Openapi::StubInterface *, GetTrafficClient, (), (override));
   MOCK_METHOD(absl::StatusOr<HttpResponse>, SendRestRequestToIxia,
               (RequestType type, absl::string_view url,
                absl::string_view payload),
               (override));
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
+#endif // PINS_THINKIT_MOCK_GENERIC_TESTBED_H_

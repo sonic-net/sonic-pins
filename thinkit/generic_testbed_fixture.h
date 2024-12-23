@@ -22,10 +22,10 @@
 
 #include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
-#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "gtest/gtest.h"
 
 namespace thinkit {
 
@@ -34,7 +34,7 @@ namespace thinkit {
 // should only be accessed after SetUp() is called and before TearDown() is
 // called.
 class GenericTestbedInterface {
- public:
+public:
   virtual ~GenericTestbedInterface() = default;
 
   virtual void SetUp() = 0;
@@ -43,7 +43,7 @@ class GenericTestbedInterface {
   // Declares the test requirements for this test and returns a testbed that can
   // support them.
   virtual absl::StatusOr<std::unique_ptr<GenericTestbed>>
-  GetTestbedWithRequirements(const thinkit::TestRequirements& requirements) = 0;
+  GetTestbedWithRequirements(const thinkit::TestRequirements &requirements) = 0;
 
   // Calling this function indicates that the test is expected to produce link
   // flaps.
@@ -54,7 +54,7 @@ class GenericTestbedInterface {
 // the `GenericTestbedFixture` class.
 struct GenericTestbedFixtureParams {
   // Ownership transferred in GenericTestbedFixture class.
-  GenericTestbedInterface* testbed_interface;
+  GenericTestbedInterface *testbed_interface;
   std::string gnmi_config;
   p4::config::v1::P4Info p4_info;
 };
@@ -90,7 +90,7 @@ struct GenericTestbedFixtureParams {
 //    class MyPinsTest : public thinkit::GenericTestbedFixture<MyParams> {...};
 template <class Params = GenericTestbedFixtureParams>
 class GenericTestbedFixture : public testing::TestWithParam<Params> {
- protected:
+protected:
   // A derived class that needs/wants to do its own setup can override this
   // method. However, it should take care to call this base setup first. That
   // will ensure the platform is ready, and in a healthy state.
@@ -104,18 +104,18 @@ class GenericTestbedFixture : public testing::TestWithParam<Params> {
 
   // Accessor for the Generic testbed. This is only safe to be called after the
   // SetUp has completed.
-  absl::StatusOr<std::unique_ptr<GenericTestbed>> GetTestbedWithRequirements(
-      const thinkit::TestRequirements& requirements) {
+  absl::StatusOr<std::unique_ptr<GenericTestbed>>
+  GetTestbedWithRequirements(const thinkit::TestRequirements &requirements) {
     return generic_testbed_interface_->GetTestbedWithRequirements(requirements);
   }
 
- private:
+private:
   // Takes ownership of the GenericTestbedInterface parameter.
   std::unique_ptr<GenericTestbedInterface> generic_testbed_interface_ =
       absl::WrapUnique<GenericTestbedInterface>(
           this->GetParam().testbed_interface);
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // PINS_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
+#endif // PINS_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_

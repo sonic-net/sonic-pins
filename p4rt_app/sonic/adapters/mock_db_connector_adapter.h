@@ -21,34 +21,34 @@
 #include <utility>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockDBConnectorAdapter final : public DBConnectorAdapter {
- public:
-  MOCK_METHOD(int64_t, del, (const std::string& key), (override));
+public:
+  MOCK_METHOD(int64_t, del, (const std::string &key), (override));
 
-  MOCK_METHOD(bool, exists, (const std::string& key), (override));
+  MOCK_METHOD(bool, exists, (const std::string &key), (override));
 
   MOCK_METHOD((std::unordered_map<std::string, std::string>), hgetall,
-              (const std::string& glob), (override));
+              (const std::string &glob), (override));
 
-  MOCK_METHOD((std::vector<std::string>), keys, (const std::string& glob),
+  MOCK_METHOD((std::vector<std::string>), keys, (const std::string &glob),
               (override));
 
   MOCK_METHOD(void, hmset,
-              (const std::string& key,
+              (const std::string &key,
                (const std::vector<std::pair<std::string, std::string>>)&values),
               (override));
 
-  MOCK_METHOD(void, batch_del, (const std::vector<std::string>& keys),
+  MOCK_METHOD(void, batch_del, (const std::vector<std::string> &keys),
               (override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_DB_CONNECTOR_ADAPTER_H_
+#endif // GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_DB_CONNECTOR_ADAPTER_H_

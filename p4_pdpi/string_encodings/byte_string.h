@@ -46,8 +46,8 @@ namespace pdpi {
 // Missing bits are assumed to be zero.
 // Extra bits are checked to be zero, returning error status otherwise.
 template <std::size_t num_bits>
-absl::StatusOr<std::bitset<num_bits>> ByteStringToBitset(
-    absl::string_view byte_string);
+absl::StatusOr<std::bitset<num_bits>>
+ByteStringToBitset(absl::string_view byte_string);
 
 // Writes the given bits to a zero-padded byte string of size ceil(bits/8).
 template <std::size_t num_bits>
@@ -71,7 +71,7 @@ namespace internal {
 
 // Returns the number of bytes needed to encode the given number of bits.
 inline constexpr int NumBitsToNumBytes(int num_bits) {
-  return (num_bits + 7) / 8;  // ceil(num_bits/8)
+  return (num_bits + 7) / 8; // ceil(num_bits/8)
 }
 
 template <std::size_t num_bits>
@@ -86,11 +86,11 @@ std::bitset<num_bits> AnyByteStringToBitset(absl::string_view byte_string) {
   return bits;
 }
 
-}  // namespace internal
+} // namespace internal
 
 template <std::size_t num_bits>
-absl::StatusOr<std::bitset<num_bits>> ByteStringToBitset(
-    absl::string_view byte_string) {
+absl::StatusOr<std::bitset<num_bits>>
+ByteStringToBitset(absl::string_view byte_string) {
   if (byte_string.empty()) {
     return absl::InvalidArgumentError("byte string must be nonempty");
   }
@@ -106,13 +106,15 @@ absl::StatusOr<std::bitset<num_bits>> ByteStringToBitset(
       static_cast<int>(byte_string.size()) - kNumRelevantBytes;
   if (num_extra_bytes >= 0) {
     for (char extra_byte : byte_string.substr(0, num_extra_bytes)) {
-      if (extra_byte != 0) return invalid();
+      if (extra_byte != 0)
+        return invalid();
     }
     byte_string.remove_prefix(num_extra_bytes);
 
     if (num_bits % 8 != 0) {
       char extra_bits = byte_string[0] >> (num_bits % 8);
-      if (extra_bits != 0) return invalid();
+      if (extra_bits != 0)
+        return invalid();
     }
   }
 
@@ -138,6 +140,6 @@ std::string BitsetToP4RuntimeByteString(std::bitset<num_bits> bits) {
   return ByteStringToP4runtimeByteString(BitsetToPaddedByteString(bits));
 }
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
+#endif // PINS_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_

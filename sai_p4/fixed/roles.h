@@ -14,8 +14,8 @@
 #endif
 
 #ifndef P4RUNTIME_ROLE_PACKET_REPLICATION_ENGINE
-#define P4RUNTIME_ROLE_PACKET_REPLICATION_ENGINE \
+#define P4RUNTIME_ROLE_PACKET_REPLICATION_ENGINE                               \
   "packet_replication_engine_manager"
 #endif
 
-#endif  // SAI_ROLES_P4_
+#endif // SAI_ROLES_P4_

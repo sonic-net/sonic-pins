@@ -18,41 +18,41 @@
 #include <utility>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "swss/table.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockTableAdapter : public TableAdapter {
- public:
-  MOCK_METHOD(bool, exists, (const std::string& key), (override));
+public:
+  MOCK_METHOD(bool, exists, (const std::string &key), (override));
 
   MOCK_METHOD((std::vector<std::string>), keys, (), (override));
 
   MOCK_METHOD((std::vector<std::pair<std::string, std::string>>), get,
-              (const std::string& key), (override));
+              (const std::string &key), (override));
 
   MOCK_METHOD(
       void, set,
-      (const std::string& key,
-       (const std::vector<std::pair<std::string, std::string>>& values)),
+      (const std::string &key,
+       (const std::vector<std::pair<std::string, std::string>> &values)),
       (override));
 
   MOCK_METHOD(void, batch_set,
-              (const std::vector<swss::KeyOpFieldsValuesTuple>& values),
+              (const std::vector<swss::KeyOpFieldsValuesTuple> &values),
               (override));
 
-  MOCK_METHOD(void, del, (const std::string& key), (override));
+  MOCK_METHOD(void, del, (const std::string &key), (override));
 
-  MOCK_METHOD(void, batch_del, (const std::vector<std::string>& keys),
+  MOCK_METHOD(void, batch_del, (const std::vector<std::string> &keys),
               (override));
 
   MOCK_METHOD(std::string, getTablePrefix, (), (const, override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_TABLE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_TABLE_ADAPTER_H_
