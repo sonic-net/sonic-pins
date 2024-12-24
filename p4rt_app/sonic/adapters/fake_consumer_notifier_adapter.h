@@ -31,26 +31,26 @@ namespace sonic {
 // either succeed or fail. In the latter case a failed StatusCode should be
 // returned by the fake.
 class FakeConsumerNotifierAdapter final : public ConsumerNotifierAdapter {
- public:
-  explicit FakeConsumerNotifierAdapter(FakeSonicDbTable* sonic_db_table);
+public:
+  explicit FakeConsumerNotifierAdapter(FakeSonicDbTable *sonic_db_table);
 
   // Not copyable or moveable.
-  FakeConsumerNotifierAdapter(const FakeConsumerNotifierAdapter&) = delete;
-  FakeConsumerNotifierAdapter& operator=(const FakeConsumerNotifierAdapter&) =
-      delete;
+  FakeConsumerNotifierAdapter(const FakeConsumerNotifierAdapter &) = delete;
+  FakeConsumerNotifierAdapter &
+  operator=(const FakeConsumerNotifierAdapter &) = delete;
 
   // Faked methods.
-  bool WaitForNotificationAndPop(std::string& op, std::string& data,
-                                 SonicDbEntryList& values,
+  bool WaitForNotificationAndPop(std::string &op, std::string &data,
+                                 SonicDbEntryList &values,
                                  int64_t timeout_ms = 60000LL) override;
 
- private:
+private:
   // The SONiC table maintains a list of notifications that this fake can
   // request.
-  FakeSonicDbTable* sonic_db_table_;  // No ownership.
+  FakeSonicDbTable *sonic_db_table_; // No ownership.
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_CONSUMER_NOTIFIER_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_CONSUMER_NOTIFIER_ADAPTER_H_

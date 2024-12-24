@@ -55,11 +55,11 @@ absl::StatusOr<T> ParseTextProto(absl::string_view proto_string) {
 // returns `InvalidArgumentError` otherwise.
 // Optionally, a `differ` can be provided for fine-grained control over how to
 // compute the diff.
-absl::StatusOr<std::string> ProtoDiff(
-    const google::protobuf::Message &message1,
-    const google::protobuf::Message &message2,
-    google::protobuf::util::MessageDifferencer differ =
-        google::protobuf::util::MessageDifferencer());
+absl::StatusOr<std::string>
+ProtoDiff(const google::protobuf::Message &message1,
+          const google::protobuf::Message &message2,
+          google::protobuf::util::MessageDifferencer differ =
+              google::protobuf::util::MessageDifferencer());
 
 // Similar to `ProtoDiff`, execpt returns boolean result of equality comparison.
 bool ProtoEqual(const google::protobuf::Message &message1,
@@ -81,8 +81,9 @@ bool ProtoEqual(const google::protobuf::Message &message1,
 // value.set_hex_str("0xf00d");
 // std::string name = GetOneOfFieldName(value, std::string("format"));
 // EXPECT_EQ(name, "hex_str");
-absl::StatusOr<std::string> GetOneOfFieldName(
-    const google::protobuf::Message &message, const std::string &oneof_name);
+absl::StatusOr<std::string>
+GetOneOfFieldName(const google::protobuf::Message &message,
+                  const std::string &oneof_name);
 
 // Print proto in TextFormat.
 std::string PrintTextProto(const google::protobuf::Message &message);
@@ -96,8 +97,8 @@ absl::StatusOr<T> ParseJsonAsProto(absl::string_view raw_json_string,
                                    bool ignore_unknown_fields = false);
 
 // Serializes the given proto message as a JSON string.
-absl::StatusOr<std::string> SerializeProtoAsJson(
-    const google::protobuf::Message &proto);
+absl::StatusOr<std::string>
+SerializeProtoAsJson(const google::protobuf::Message &proto);
 
 // -- END OF PUBLIC INTERFACE - Implementation details follow ------------------
 
@@ -119,6 +120,6 @@ absl::StatusOr<T> ParseJsonAsProto(absl::string_view raw_json_string,
   return proto;
 }
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // GUTIL_PROTO_H
+#endif // GUTIL_PROTO_H

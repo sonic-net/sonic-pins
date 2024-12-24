@@ -14,7 +14,7 @@
 #ifndef PINS_P4RT_APP_EVENT_MONITORING_STATE_VERIFICATION_EVENT_H_
 #define PINS_P4RT_APP_EVENT_MONITORING_STATE_VERIFICATION_EVENT_H_
 
-#include <thread>  // NOLINT
+#include <thread> // NOLINT
 
 #include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
@@ -27,11 +27,11 @@
 namespace p4rt_app {
 
 class StateVerificationEvents {
- public:
+public:
   explicit StateVerificationEvents(
-      P4RuntimeImpl& p4runtime,
-      sonic::ConsumerNotifierAdapter& notification_channel,
-      sonic::TableAdapter& response_channel);
+      P4RuntimeImpl &p4runtime,
+      sonic::ConsumerNotifierAdapter &notification_channel,
+      sonic::TableAdapter &response_channel);
 
   // Waits on a notification from RedisDB to verify state for the P4RT App. If
   // the notification is for another component then we do nothing and exit
@@ -44,22 +44,22 @@ class StateVerificationEvents {
   void Start();
   void Stop();
 
- private:
+private:
   // SWSS DB connections are not thread safe so we should only handle one event
   // at a time.
   absl::Mutex event_lock_;
 
   // P4Runtime service where we will verify state.
-  P4RuntimeImpl& p4runtime_;
+  P4RuntimeImpl &p4runtime_;
 
   // SWSS notification channel that should be listening to events on the
   // VERIFY_STATE_REQ_CHANNEL in the StateDb.
-  sonic::ConsumerNotifierAdapter& notification_channel_
-      ABSL_GUARDED_BY(event_lock_);
+  sonic::ConsumerNotifierAdapter &
+      notification_channel_ ABSL_GUARDED_BY(event_lock_);
 
   // When updating StateDb we should be manually writing into
   // VERIFY_STATE_RESP_TABLE.
-  sonic::TableAdapter& response_channel_ ABSL_GUARDED_BY(event_lock_);
+  sonic::TableAdapter &response_channel_ ABSL_GUARDED_BY(event_lock_);
 
   // Event thread that can be started to continually monitor for events. Once
   // the destructor is called we can notify the thread to stop monitoring
@@ -70,6 +70,6 @@ class StateVerificationEvents {
   void ContinuallyMonitorForEvents();
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_EVENT_MONITORING_STATE_VERIFICATION_EVENT_H_
+#endif // PINS_P4RT_APP_EVENT_MONITORING_STATE_VERIFICATION_EVENT_H_

@@ -34,52 +34,53 @@
 
 namespace pins_test {
 namespace internal {
-absl::StatusOr<std::string> RunPingCommand(const std::string& ping_command);
-}  // namespace internal
+absl::StatusOr<std::string> RunPingCommand(const std::string &ping_command);
+} // namespace internal
 
 constexpr absl::Duration kDefaultTimeout = absl::Seconds(60);
 
 // Checks if the switch can be pinged.
 // Will wait up to `timeout` for the switch to respond to the ping.
-absl::Status Pingable(
-    absl::string_view chassis_name, absl::Duration timeout = kDefaultTimeout,
-    std::function<absl::StatusOr<std::string>(const std::string&)>
-        run_ping_command = internal::RunPingCommand);
+absl::Status
+Pingable(absl::string_view chassis_name,
+         absl::Duration timeout = kDefaultTimeout,
+         std::function<absl::StatusOr<std::string>(const std::string &)>
+             run_ping_command = internal::RunPingCommand);
 
-absl::Status Pingable(thinkit::Switch& thinkit_switch,
+absl::Status Pingable(thinkit::Switch &thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if ssh access to the switch is working.
 // Will wait up to `timeout` for the switch to respond to SSH.
 absl::Status SSHable(absl::string_view chassis_name,
-                     thinkit::SSHClient& ssh_client,
+                     thinkit::SSHClient &ssh_client,
                      absl::Duration timeout = kDefaultTimeout);
 
-absl::Status SSHable(thinkit::Switch& thinkit_switch,
-                     thinkit::SSHClient& ssh_client,
+absl::Status SSHable(thinkit::Switch &thinkit_switch,
+                     thinkit::SSHClient &ssh_client,
                      absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a P4Runtime session could be established.
 // Will wait up to `timeout` for the RPC to return. Performs one request.
-absl::Status P4rtAble(thinkit::Switch& thinkit_switch,
+absl::Status P4rtAble(thinkit::Switch &thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a gNMI get all interface request can be sent and a response
 // received.
 // Will wait up to `timeout` for the RPC to return. Peforms one request.
-absl::Status GnmiAble(thinkit::Switch& thinkit_switch,
+absl::Status GnmiAble(thinkit::Switch &thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a gNOI system get time request can be sent and a response
 // received.
 // Will wait up to `timeout` for the RPC to return. Peforms one request.
-absl::Status GnoiAble(thinkit::Switch& thinkit_switch,
+absl::Status GnoiAble(thinkit::Switch &thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if "oper-status" of all interfaces are "UP". If the interfaces are
 // provided, checks only those interfaces.
 // Will wait up to `timeout` for the RPC to return. Performs one request.
-absl::Status PortsUp(thinkit::Switch& thinkit_switch,
+absl::Status PortsUp(thinkit::Switch &thinkit_switch,
                      absl::Span<const std::string> interfaces = {},
                      bool with_healthz = true,
                      absl::Duration timeout = kDefaultTimeout);
@@ -87,12 +88,12 @@ absl::Status PortsUp(thinkit::Switch& thinkit_switch,
 // Checks if "oper-status" of all interfaces are "DOWN". If the interfaces are
 // provided, checks only those interfaces.
 // Will wait up to `timeout` for the RPC to return. Performs one request.
-absl::Status PortsDown(thinkit::Switch& thinkit_switch,
+absl::Status PortsDown(thinkit::Switch &thinkit_switch,
                        absl::Span<const std::string> interfaces = {},
                        bool with_healthz = true,
                        absl::Duration timeout = kDefaultTimeout);
 
-inline absl::Status AllPortsUp(thinkit::Switch& thinkit_switch,
+inline absl::Status AllPortsUp(thinkit::Switch &thinkit_switch,
                                bool with_healthz = true,
                                absl::Duration timeout = kDefaultTimeout) {
   return PortsUp(thinkit_switch,
@@ -101,19 +102,19 @@ inline absl::Status AllPortsUp(thinkit::Switch& thinkit_switch,
 
 // Checks to make sure no alarms are set.
 // Will wait up to `timeout` for the RPC to return. Peforms one request.
-absl::Status NoAlarms(thinkit::Switch& thinkit_switch,
+absl::Status NoAlarms(thinkit::Switch &thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if the switch is ready by running the following validations:
 // Pingable, P4rtAble, GnmiAble, GnoiAble.
-absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
+absl::Status SwitchReady(thinkit::Switch &thinkit_switch,
                          absl::Span<const std::string> interfaces = {},
                          absl::Duration timeout = kDefaultTimeout);
 
 // Checks if the switch is ready by running the following validations:
 // Pingable, SSHable, P4rtAble, GnmiAble, GnoiAble, [PortsUp].
-absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
-                                thinkit::SSHClient& ssh_client,
+absl::Status SwitchReadyWithSsh(thinkit::Switch &thinkit_switch,
+                                thinkit::SSHClient &ssh_client,
                                 absl::Span<const std::string> interfaces = {},
                                 bool check_interfaces_state = true,
                                 bool with_healthz = true,
@@ -122,7 +123,7 @@ absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
 // Runs an additional routine if the status is a failure. This function
 // transparently forwards the status.
 absl::Status OnFailure(absl::Status status,
-                       const std::function<void()>& on_failure);
+                       const std::function<void()> &on_failure);
 
 // Waits for the expected condition to return success. The condition will be
 // checked until either the timeout is expired (in which case an error status is
@@ -134,8 +135,8 @@ absl::Status OnFailure(absl::Status status,
 //
 //   ASSERT_OK(WaitForCondition(P4rtAble, absl::Seconds(10)));
 template <typename Func, typename... Args>
-absl::Status WaitForCondition(Func&& condition, absl::Duration timeout,
-                              Args&&... args) {
+absl::Status WaitForCondition(Func &&condition, absl::Duration timeout,
+                              Args &&...args) {
   absl::Time deadline = absl::Now() + timeout;
   constexpr int kMaxResults = 2;
   absl::Status final_status = absl::OkStatus();
@@ -152,9 +153,11 @@ absl::Status WaitForCondition(Func&& condition, absl::Duration timeout,
     }
     latest_results.push_back(absl::StrCat(absl::FormatTime(absl::Now()), ": ",
                                           final_status.message()));
-    if (latest_results.size() > kMaxResults) latest_results.pop_front();
+    if (latest_results.size() > kMaxResults)
+      latest_results.pop_front();
   } while (!final_status.ok() && absl::Now() < deadline);
-  if (final_status.ok()) return final_status;
+  if (final_status.ok())
+    return final_status;
 
   return absl::DeadlineExceededError(absl::StrCat(
       "Failed to reach the requested condition after ",
@@ -166,10 +169,10 @@ absl::Status WaitForCondition(Func&& condition, absl::Duration timeout,
 // Waits for the expected condition to return an error. The inverse of
 // WaitForCondition.
 template <typename Func, typename... Args>
-absl::Status WaitForNot(Func&& condition, absl::Duration timeout,
-                        Args&&... args) {
+absl::Status WaitForNot(Func &&condition, absl::Duration timeout,
+                        Args &&...args) {
   return WaitForCondition(
-      [condition = std::forward<Func>(condition)](Args&&... args) {
+      [condition = std::forward<Func>(condition)](Args &&...args) {
         absl::Status status = condition(std::forward<Args>(args)...);
         if (status.ok()) {
           return absl::InternalError("Validator still returns okay.");
@@ -179,6 +182,6 @@ absl::Status WaitForNot(Func&& condition, absl::Duration timeout,
       timeout, std::forward<Args>(args)...);
 }
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
+#endif // PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_

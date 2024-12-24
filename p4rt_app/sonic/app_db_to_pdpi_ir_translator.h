@@ -32,13 +32,13 @@ namespace p4rt_app {
 namespace sonic {
 
 // Given a PDPI IrTableEntry will generate the SONiC AppDb key for a P4RT table.
-absl::StatusOr<std::string> IrTableEntryToAppDbKey(
-    const pdpi::IrTableEntry &entry);
+absl::StatusOr<std::string>
+IrTableEntryToAppDbKey(const pdpi::IrTableEntry &entry);
 
 // Given a PDPI IrTableEntry will generate the SONiC AppDb field values for a
 // P4RT table.
-absl::StatusOr<std::vector<swss::FieldValueTuple>> IrTableEntryToAppDbValues(
-    const pdpi::IrTableEntry &entry);
+absl::StatusOr<std::vector<swss::FieldValueTuple>>
+IrTableEntryToAppDbValues(const pdpi::IrTableEntry &entry);
 
 // Given the SONiC AppDb key, and field values will generate a PDPI
 // IrTableEntry.
@@ -48,10 +48,10 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
 
 // Given a PDPI IrMulticastGroupEntry, generate the SONiC AppDb key for
 // packet replication in the P4RT table.
-std::string IrMulticastGroupEntryToAppDbKey(
-    const pdpi::IrMulticastGroupEntry &entry);
+std::string
+IrMulticastGroupEntryToAppDbKey(const pdpi::IrMulticastGroupEntry &entry);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
+#endif // PINS_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_

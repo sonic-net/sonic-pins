@@ -35,7 +35,7 @@ struct RemotePath {
 // onto a specified device. As these operations are whitebox and platform
 // specific, this interface should be used sparingly and only when needed.
 class SSHClient {
- public:
+public:
   virtual ~SSHClient() {}
 
   // Runs the specified command on the device and returns stdout. If SSH
@@ -48,37 +48,37 @@ class SSHClient {
   // Copies a local file's contents to a remote destination file, creating a new
   // file if needed and replacing any existing contents that was there.
   virtual absl::Status PutFile(absl::string_view source,
-                               const RemotePath& destination,
+                               const RemotePath &destination,
                                absl::Duration timeout) = 0;
 
   // Puts the provided contents into a remote destination file, creating a new
   // file if needed and replacing any existing contents that was there.
   virtual absl::Status PutFileContents(absl::string_view contents,
-                                       const RemotePath& destination,
+                                       const RemotePath &destination,
                                        absl::Duration timeout) = 0;
 
   // Copies a local directory's files to a remote diretory.
   virtual absl::Status PutDirectory(absl::string_view source,
-                                    const RemotePath& destination,
+                                    const RemotePath &destination,
                                     absl::Duration timeout) = 0;
 
   // Copies a remote file's contents to a local file, creating a new
   // file if needed and replacing any existing contents that was there.
-  virtual absl::Status GetFile(const RemotePath& source,
+  virtual absl::Status GetFile(const RemotePath &source,
                                absl::string_view destination,
                                absl::Duration timeout) = 0;
 
   // Returns the contents of a remote file.
-  virtual absl::StatusOr<std::string> GetFileContents(
-      const RemotePath& source, absl::Duration timeout) = 0;
+  virtual absl::StatusOr<std::string>
+  GetFileContents(const RemotePath &source, absl::Duration timeout) = 0;
 
   // Copies a remote directory to a local directory, creating a new directory if
   // needed.
-  virtual absl::Status GetDirectory(const RemotePath& source,
+  virtual absl::Status GetDirectory(const RemotePath &source,
                                     absl::string_view destination,
                                     absl::Duration timeout) = 0;
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // THINKIT_SSH_CLIENT_H_
+#endif // THINKIT_SSH_CLIENT_H_

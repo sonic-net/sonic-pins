@@ -53,7 +53,7 @@ enum class RebootType {
 // and set link state, as well as perform various other operations like link
 // qualification or reboot.
 class ControlDevice {
- public:
+public:
   virtual ~ControlDevice() {}
 
   // Starts collecting packets. This continues until the
@@ -68,9 +68,9 @@ class ControlDevice {
 
   // Sends a `packet` raw byte string out of the control device’s
   // `interface`. Rate limits packet is packet_delay is specified.
-  virtual absl::Status SendPacket(
-      absl::string_view interface, absl::string_view packet,
-      std::optional<absl::Duration> packet_delay) = 0;
+  virtual absl::Status
+  SendPacket(absl::string_view interface, absl::string_view packet,
+             std::optional<absl::Duration> packet_delay) = 0;
 
   // Check whether the ControlDevice implementation supports SendPacket - not
   // all control devices support it.
@@ -82,25 +82,26 @@ class ControlDevice {
                                    absl::Span<const std::string> packets) = 0;
 
   // Sets the admin link state on the control device's 'interfaces'.
-  virtual absl::Status SetAdminLinkState(
-      absl::Span<const std::string> interfaces, LinkState state) = 0;
+  virtual absl::Status
+  SetAdminLinkState(absl::Span<const std::string> interfaces,
+                    LinkState state) = 0;
 
   // Reboots the control device.
   virtual absl::Status Reboot(RebootType reboot_type) = 0;
 
   // BERT functions.
-  virtual absl::StatusOr<gnoi::diag::StartBERTResponse> StartBERT(
-      const gnoi::diag::StartBERTRequest& request) = 0;
+  virtual absl::StatusOr<gnoi::diag::StartBERTResponse>
+  StartBERT(const gnoi::diag::StartBERTRequest &request) = 0;
 
-  virtual absl::StatusOr<gnoi::diag::StopBERTResponse> StopBERT(
-      const gnoi::diag::StopBERTRequest& request) = 0;
+  virtual absl::StatusOr<gnoi::diag::StopBERTResponse>
+  StopBERT(const gnoi::diag::StopBERTRequest &request) = 0;
 
-  virtual absl::StatusOr<gnoi::diag::GetBERTResultResponse> GetBERTResult(
-      const gnoi::diag::GetBERTResultRequest& request) = 0;
+  virtual absl::StatusOr<gnoi::diag::GetBERTResultResponse>
+  GetBERTResult(const gnoi::diag::GetBERTResultRequest &request) = 0;
 
   // Gets which control device’s `interfaces` are admin and operationally up.
-  virtual absl::StatusOr<absl::flat_hash_set<std::string>> GetUpLinks(
-      absl::Span<const std::string> interfaces) = 0;
+  virtual absl::StatusOr<absl::flat_hash_set<std::string>>
+  GetUpLinks(absl::Span<const std::string> interfaces) = 0;
 
   // Checks if the control device is up. This implies that it is in a state that
   // it can perform its operations. This can be used to check when the control
@@ -108,8 +109,8 @@ class ControlDevice {
   virtual absl::Status CheckUp() = 0;
 
   // Checks if the given control device ports are up.
-  virtual absl::Status ValidatePortsUp(
-      absl::Span<const std::string> interfaces) = 0;
+  virtual absl::Status
+  ValidatePortsUp(absl::Span<const std::string> interfaces) = 0;
 
   // Sets the desired links down on the control device for a period of time, and
   // then brings the links back up. This can be used for devices that will go
@@ -122,7 +123,7 @@ class ControlDevice {
   }
 
   virtual absl::StatusOr<absl::flat_hash_map<std::string, int>>
-  GetInterfaceLaneSpeed(absl::flat_hash_set<std::string>& interfaces) = 0;
+  GetInterfaceLaneSpeed(absl::flat_hash_set<std::string> &interfaces) = 0;
 
   // Return the subset of the given interfaces that, when admin-disabled, do not
   // cause link flaps on the other interfaces on the same physical port.
@@ -131,6 +132,6 @@ class ControlDevice {
       absl::Span<const std::string> interfaces) = 0;
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // PINS_THINKIT_CONTROL_DEVICE_H_
+#endif // PINS_THINKIT_CONTROL_DEVICE_H_

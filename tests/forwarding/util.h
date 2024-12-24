@@ -34,32 +34,34 @@ absl::Status TryUpToNTimes(int n, absl::Duration delay,
 absl::Status TryUpToNTimes(int n, absl::Duration delay,
                            std::function<absl::Status()> callback);
 template <class T>
-absl::StatusOr<T> TryStatusOrUpToNTimes(
-    int n, absl::Duration delay, std::function<absl::StatusOr<T>()> callback);
+absl::StatusOr<T>
+TryStatusOrUpToNTimes(int n, absl::Duration delay,
+                      std::function<absl::StatusOr<T>()> callback);
 
 // Injects the given test packet via packetIO at
 // the egress port specified by the test packet, using the given P4RT session.
 // Providing the optional packet delay argument adds the required
 // fixed delay before injecting the packet.
-absl::Status InjectEgressPacket(
-    const std::string& port, const std::string& packet,
-    const pdpi::IrP4Info& p4info, pdpi::P4RuntimeSession* p4rt,
-    std::optional<absl::Duration> packet_delay = std::nullopt);
+absl::Status
+InjectEgressPacket(const std::string &port, const std::string &packet,
+                   const pdpi::IrP4Info &p4info, pdpi::P4RuntimeSession *p4rt,
+                   std::optional<absl::Duration> packet_delay = std::nullopt);
 
 // Inject the given packet into the ingress
 // pipeline of the switch.
 // Providing the optional packet delay argument adds the required
 // fixed delay before injecting the packet.
-absl::Status InjectIngressPacket(
-    const std::string& packet, const pdpi::IrP4Info& p4info,
-    pdpi::P4RuntimeSession* p4rt,
-    std::optional<absl::Duration> packet_delay = std::nullopt);
+absl::Status
+InjectIngressPacket(const std::string &packet, const pdpi::IrP4Info &p4info,
+                    pdpi::P4RuntimeSession *p4rt,
+                    std::optional<absl::Duration> packet_delay = std::nullopt);
 
 // -- END OF PUBLIC INTERFACE -- implementation details follow -----------------
 
 template <class T>
-absl::StatusOr<T> TryStatusOrUpToNTimes(
-    int n, absl::Duration delay, std::function<absl::StatusOr<T>()> callback) {
+absl::StatusOr<T>
+TryStatusOrUpToNTimes(int n, absl::Duration delay,
+                      std::function<absl::StatusOr<T>()> callback) {
   absl::StatusOr<T> result;
   TryUpToNTimes(n, delay, [&] {
     result = callback();
@@ -68,6 +70,6 @@ absl::StatusOr<T> TryStatusOrUpToNTimes(
   return result;
 }
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_UTIL_H_
+#endif // PINS_TESTS_FORWARDING_UTIL_H_

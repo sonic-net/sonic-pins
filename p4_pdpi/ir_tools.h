@@ -25,10 +25,10 @@ namespace pdpi {
 // or registers to determine if they use a particular P4NamedType. They are thus
 // currently ignored by this function.
 absl::Status TransformValuesOfType(
-    const IrP4Info& info, const p4::config::v1::P4NamedType& target_type,
-    IrTableEntry& entry,
-    const std::function<absl::StatusOr<std::string>(absl::string_view)>&
-        transformer);
+    const IrP4Info &info, const p4::config::v1::P4NamedType &target_type,
+    IrTableEntry &entry,
+    const std::function<absl::StatusOr<std::string>(absl::string_view)>
+        &transformer);
 
 // `TransformValuesOfType` uses `info` to find all values of `target_type`
 // in `entries`, then applies `transformer` to them. See the
@@ -36,20 +36,20 @@ absl::Status TransformValuesOfType(
 // information. If this function returns an error, a prefix of the `entries` may
 // still be transformed by `transformer`.
 absl::Status TransformValuesOfType(
-    const IrP4Info& info, const p4::config::v1::P4NamedType& target_type,
-    std::vector<IrTableEntry>& entries,
-    const std::function<absl::StatusOr<std::string>(absl::string_view)>&
-        transformer);
+    const IrP4Info &info, const p4::config::v1::P4NamedType &target_type,
+    std::vector<IrTableEntry> &entries,
+    const std::function<absl::StatusOr<std::string>(absl::string_view)>
+        &transformer);
 
 // `VisitValuesOfType` uses `info` to find all values of `target_type`
 // in `entries`, then applies `visitor` to them.
 // WARNING: This function is inefficient because it copies the entries and uses
 // `TransformValuesOfType`, mutating every value of `target_type`.
 absl::Status VisitValuesOfType(
-    const IrP4Info& info, const p4::config::v1::P4NamedType& target_type,
+    const IrP4Info &info, const p4::config::v1::P4NamedType &target_type,
     std::vector<IrTableEntry> entries,
-    const absl::AnyInvocable<absl::Status(absl::string_view) const>& visitor);
+    const absl::AnyInvocable<absl::Status(absl::string_view) const> &visitor);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_IR_TOOLS_H_
+#endif // PINS_P4_PDPI_IR_TOOLS_H_

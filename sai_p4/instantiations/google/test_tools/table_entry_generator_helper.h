@@ -66,9 +66,10 @@ struct TableEntryGenerator {
 //       lpm { value { ipv4: "1.0.0.16" } prefix_length: 32 }
 //     }
 //     action { name: "drop" }
-TableEntryGenerator::EntryGenerator IrMatchFieldGenerator(
-    const pdpi::IrTableDefinition& table_definition,
-    pdpi::IrTableEntry base_entry, absl::string_view match_field);
+TableEntryGenerator::EntryGenerator
+IrMatchFieldGenerator(const pdpi::IrTableDefinition &table_definition,
+                      pdpi::IrTableEntry base_entry,
+                      absl::string_view match_field);
 
 // Returns an EntryGenerator that populates the priority with an incrementing
 // value. If the base entry contains a priority, it will be overwritten.
@@ -89,15 +90,15 @@ TableEntryGenerator::EntryGenerator IrMatchFieldGenerator(
 //     table_name: "acl_egress_table"
 //     priority: 16
 //     action { name: "acl_drop" }
-TableEntryGenerator::EntryGenerator PriorityGenerator(
-    pdpi::IrTableEntry base_entry);
+TableEntryGenerator::EntryGenerator
+PriorityGenerator(pdpi::IrTableEntry base_entry);
 
 // Returns an EntryGenerator similar to the result of IrMatchFieldGenerator but
 // which also increments the priority field (similar to PriorityGenerator).
 TableEntryGenerator::EntryGenerator IrMatchFieldAndPriorityGenerator(
-    const pdpi::IrTableDefinition& table_definition,
+    const pdpi::IrTableDefinition &table_definition,
     pdpi::IrTableEntry base_entry, absl::string_view match_field);
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_HELPER_H_
+#endif // PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_HELPER_H_

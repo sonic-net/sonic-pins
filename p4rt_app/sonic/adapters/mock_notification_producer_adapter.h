@@ -17,26 +17,26 @@
 #include <string>
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
 #include "swss/rediscommand.h"
+#include "gmock/gmock.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 class MockNotificationProducerAdapter : public NotificationProducerAdapter {
- public:
-    MOCK_METHOD(void, send,
-              (const std::vector<swss::KeyOpFieldsValuesTuple>& values),
+public:
+  MOCK_METHOD(void, send,
+              (const std::vector<swss::KeyOpFieldsValuesTuple> &values),
               (override));
 
   MOCK_METHOD(void, send_with_op_key,
-              (const std::string& op, const std::string& key,
-               std::vector<swss::FieldValueTuple>& fv),
+              (const std::string &op, const std::string &key,
+               std::vector<swss::FieldValueTuple> &fv),
               (override));
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_

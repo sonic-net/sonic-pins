@@ -25,18 +25,18 @@
 namespace p4rt_app {
 
 class ConfigDbCpuQueueTableEventHandler : public sonic::StateEventHandler {
- public:
-  explicit ConfigDbCpuQueueTableEventHandler(P4RuntimeImpl* p4runtime)
+public:
+  explicit ConfigDbCpuQueueTableEventHandler(P4RuntimeImpl *p4runtime)
       : p4runtime_(*p4runtime) {}
 
   absl::Status HandleEvent(
-      const std::string& operation, const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) final;
+      const std::string &operation, const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) final;
 
- private:
-  P4RuntimeImpl& p4runtime_;
+private:
+  P4RuntimeImpl &p4runtime_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_CPU_QUEUE_TABLE_EVENT_H_
+#endif // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_CPU_QUEUE_TABLE_EVENT_H_

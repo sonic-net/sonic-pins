@@ -22,7 +22,7 @@ namespace sonic {
 // This provides the flexibility to define the constructors needed for mocks
 // and fakes.
 class WarmBootStateAdapter {
- public:
+public:
   explicit WarmBootStateAdapter();
   virtual ~WarmBootStateAdapter() = default;
 
@@ -31,7 +31,7 @@ class WarmBootStateAdapter {
   virtual bool IsWarmStart(void);
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_WARM_BOOT_STATE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_WARM_BOOT_STATE_ADAPTER_H_

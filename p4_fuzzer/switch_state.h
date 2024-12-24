@@ -78,14 +78,15 @@ using ReferableEntry = absl::flat_hash_map<std::string, std::string>;
 // TODO: Canonical form is achieved by performing an IR roundtrip
 // translation. This ties correctness to IR functionality. Local
 // canonicalization would be preferred.
-absl::StatusOr<p4::v1::TableEntry> CanonicalizeTableEntry(
-    const pdpi::IrP4Info& info, const p4::v1::TableEntry& entry, bool key_only);
+absl::StatusOr<p4::v1::TableEntry>
+CanonicalizeTableEntry(const pdpi::IrP4Info &info,
+                       const p4::v1::TableEntry &entry, bool key_only);
 
 // Tracks the state of a switch, with methods to apply updates or query the
 // current state. The class assumes all calls are valid (e.g table_ids must all
 // exist). Crashes if that is not the case.
 class SwitchState {
- public:
+public:
   // SwitchState needs to know the (PDPI internal representation of the) P4Info
   // of the P4 program P4 fuzzer is fuzzing in order to implement its functions
   // in a program independent manner.
@@ -103,8 +104,8 @@ class SwitchState {
   // Keep in mind sizes for P4 tables are minimum guarantees. So while this
   // method may suggest seeing a ResourceExhausted is expected (i.e. return OK),
   // an actual switch may still accept the insert.
-  absl::Status ResourceExhaustedIsAllowed(
-      const p4::v1::TableEntry& pi_table_entry) const;
+  absl::Status
+  ResourceExhaustedIsAllowed(const p4::v1::TableEntry &pi_table_entry) const;
 
   // Checks whether the given set of table entries is empty.
   bool AllTablesEmpty() const;
@@ -118,7 +119,7 @@ class SwitchState {
   // Returns `OrderedTableEntries` map for given `table_id`. Returns const ref
   // to map representation to avoid copying entries. If an invalid id is
   // provided, program will crash.
-  const OrderedTableEntries& GetTableEntries(const uint32_t table_id) const {
+  const OrderedTableEntries &GetTableEntries(const uint32_t table_id) const {
     return gutil::FindOrDie(ordered_tables_, table_id);
   }
 
@@ -135,20 +136,20 @@ class SwitchState {
 
   // Returns the current state of an entity (or nullopt if it is not
   // present).  Only the uniquely identifying fields of `entity` are considered.
-  std::optional<p4::v1::Entity> GetEntity(const p4::v1::Entity& entity) const;
+  std::optional<p4::v1::Entity> GetEntity(const p4::v1::Entity &entity) const;
 
   // Returns the current state of a table entry (or nullopt if it is not
   // present).  Only the uniquely identifying fields of entry are considered.
-  std::optional<p4::v1::TableEntry> GetTableEntry(
-      const p4::v1::TableEntry& entry) const;
+  std::optional<p4::v1::TableEntry>
+  GetTableEntry(const p4::v1::TableEntry &entry) const;
 
   // Returns the current state of a multicast group entry (or nullopt if it is
   // not present). Only multicast_group_id is considered when retrieving entry.
-  std::optional<p4::v1::MulticastGroupEntry> GetMulticastGroupEntry(
-      const p4::v1::MulticastGroupEntry& entry) const;
+  std::optional<p4::v1::MulticastGroupEntry>
+  GetMulticastGroupEntry(const p4::v1::MulticastGroupEntry &entry) const;
 
   // Returns all multicast group entries.
-  const absl::btree_map<int, p4::v1::MulticastGroupEntry>&
+  const absl::btree_map<int, p4::v1::MulticastGroupEntry> &
   GetMulticastGroupEntries() const {
     return ordered_multicast_entries_;
   }
@@ -161,12 +162,12 @@ class SwitchState {
   // cannot already be present, and returns an error otherwise. If this function
   // returns an error, switch state will be in an inconsistent state and no
   // longer valid.
-  absl::Status ApplyUpdate(const p4::v1::Update& update);
+  absl::Status ApplyUpdate(const p4::v1::Update &update);
 
   // Returns the max resource statistics for table with id `table_id`. Returns
   // error if such a table does not exist.
-  absl::StatusOr<PeakResourceStatistics> GetPeakResourceStatistics(
-      int table_id) const;
+  absl::StatusOr<PeakResourceStatistics>
+  GetPeakResourceStatistics(int table_id) const;
 
   // Returns max number of entries seen on the switch.
   int GetMaxEntriesSeen() const { return peak_entries_seen_; }
@@ -198,12 +199,12 @@ class SwitchState {
   // An optional functor `TreatAsEqualDueToKnownBug` can be used to mask known
   // bugs when comparing entries with the same `TableEntryKey`.
   absl::Status AssertEntriesAreEqualToState(
-      const std::vector<p4::v1::TableEntry>& switch_entries,
-      std::optional<std::function<bool(const pdpi::IrTableEntry&,
-                                       const pdpi::IrTableEntry&)>>
+      const std::vector<p4::v1::TableEntry> &switch_entries,
+      std::optional<std::function<bool(const pdpi::IrTableEntry &,
+                                       const pdpi::IrTableEntry &)>>
           TreatAsEqualDueToKnownBug = std::nullopt) const;
 
- private:
+private:
   // A map from table ids to the entries they store.
   // Invariant: An entry, `e`, is represented in `ordered_tables_` <=> e is also
   // represented in `unordered_tables_`.
@@ -212,7 +213,7 @@ class SwitchState {
   absl::flat_hash_map<int, OrderedTableEntries> ordered_tables_;
   absl::flat_hash_map<int, UnorderedTableEntries> unordered_tables_;
 
-  absl::Status UpdateResourceStatistics(const p4::v1::TableEntry& entry,
+  absl::Status UpdateResourceStatistics(const p4::v1::TableEntry &entry,
                                         p4::v1::Update::Type type);
 
   // Tracks current resource usage by table.
@@ -224,7 +225,7 @@ class SwitchState {
   int peak_entries_seen_ = 0;
 
   // Internal overload used to apply multicast updates.
-  absl::Status ApplyMulticastUpdate(const p4::v1::Update& update);
+  absl::Status ApplyMulticastUpdate(const p4::v1::Update &update);
   // Multicast group entries are keyed by their multicast group id.
   // Btree copy used for deterministic ordering.
   absl::btree_map<int, p4::v1::MulticastGroupEntry> ordered_multicast_entries_;
@@ -235,6 +236,6 @@ class SwitchState {
   pdpi::IrP4Info ir_p4info_;
 };
 
-}  // namespace p4_fuzzer
+} // namespace p4_fuzzer
 
-#endif  // P4_FUZZER_SWITCH_STATE_H_
+#endif // P4_FUZZER_SWITCH_STATE_H_

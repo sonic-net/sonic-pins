@@ -29,7 +29,7 @@ struct TranslationOptions {
   bool allow_unsupported = false;
 
   template <typename Sink>
-  friend void AbslStringify(Sink& sink, TranslationOptions options) {
+  friend void AbslStringify(Sink &sink, TranslationOptions options) {
     absl::Format(
         &sink,
         "pdpi::TranslationOptions{.key_only = %v, .allow_unsupported = %v}",
@@ -67,6 +67,6 @@ struct TranslationOptions {
 #define PDPI_TRANSLATION_OPTIONS_DEFAULT = {}
 #endif
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_INFRA_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
+#endif // PINS_INFRA_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
