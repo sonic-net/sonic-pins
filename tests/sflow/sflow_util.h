@@ -17,6 +17,7 @@
 
 #include <utility>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -69,6 +70,20 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const int sampling_rate, const int sampling_header_size);
+
+// Updates `gnmi_config` queue limit of `queue_name` to `queue_limit` and
+// returns the updated config. Returns InvalidArgumentError if `gnmi_config`
+// doesn't have any valid cpu scheduler policy config.
+absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
+                                             absl::string_view queue_name,
+                                             int queue_limit);
+
+// Returns <interface name, interface sflow sampling rate> map of each interface
+// in `interfaces`.
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetSflowSamplingRateForInterfaces(
+    gnmi::gNMI::StubInterface* gnmi_stub,
+    const absl::flat_hash_set<std::string>& interfaces);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
