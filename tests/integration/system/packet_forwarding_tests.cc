@@ -124,6 +124,24 @@ absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock));
 }
 
+// Sets up route from source port to destination port on sut.
+absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
+                        int dst_port_id) {
+  RETURN_IF_ERROR(pins_test::basic_traffic::ProgramTrafficVrf(&p4_session,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  RETURN_IF_ERROR(
+      basic_traffic::ProgramRouterInterface(&p4_session, src_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  RETURN_IF_ERROR(
+      basic_traffic::ProgramRouterInterface(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  return basic_traffic::ProgramIPv4Route(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock));
+}
+
 TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
   thinkit::TestRequirements requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
