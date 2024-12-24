@@ -21,29 +21,27 @@
 #include <string>
 
 #include "absl/types/span.h"
-#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/ir/ir.h"
 
 namespace p4_symbolic {
 
-absl::StatusOr<symbolic::Dataplane>
-ParseToIr(const std::string &bmv2_json_path, const std::string &p4info_path,
-          const std::string &table_entries_path);
+absl::StatusOr<ir::Dataplane> ParseToIr(const std::string &bmv2_json_path,
+                                        const std::string &p4info_path,
+                                        const std::string &table_entries_path);
 
-absl::StatusOr<symbolic::Dataplane>
-ParseToIr(const std::string &bmv2_json_path, const std::string &p4info_path,
-          absl::Span<const p4::v1::TableEntry> table_entries);
+absl::StatusOr<ir::Dataplane> ParseToIr(
+    const std::string &bmv2_json_path, const std::string &p4info_path,
+    absl::Span<const p4::v1::TableEntry> table_entries);
 
-absl::StatusOr<symbolic::Dataplane>
-ParseToIr(const std::string &bmv2_json, const pdpi::IrP4Info &p4info,
-          absl::Span<const p4::v1::TableEntry> table_entries);
+absl::StatusOr<ir::Dataplane> ParseToIr(
+    const std::string &bmv2_json, const pdpi::IrP4Info &p4info,
+    absl::Span<const p4::v1::TableEntry> table_entries);
 
-absl::StatusOr<symbolic::Dataplane>
-ParseToIr(const p4::v1::ForwardingPipelineConfig &config,
-          absl::Span<const p4::v1::TableEntry> table_entries);
+absl::StatusOr<ir::Dataplane> ParseToIr(
+    const p4::v1::ForwardingPipelineConfig &config,
+    absl::Span<const p4::v1::TableEntry> table_entries);
 
 } // namespace p4_symbolic
 

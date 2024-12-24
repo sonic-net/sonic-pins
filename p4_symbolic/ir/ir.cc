@@ -32,6 +32,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "glog/logging.h"
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -203,6 +204,22 @@ absl::StatusOr<HeaderType> ExtractHeaderType(const bmv2::HeaderType &header) {
     field.set_bitwidth(unparsed_field.values(1).number_value());
     field.set_signed_(unparsed_field.values(2).bool_value());
     output.add_ordered_fields_list(unparsed_field.values(0).string_value());
+  }
+
+  // TODO: We should remove this if-clause when GPINS' last tested
+  // version is updated with the complete ICMP definition.
+  if (header.name() == "icmp_t" && header.fields_size() < 4) {
+    constexpr absl::string_view kIcmpRestOfHeaderFieldName = "rest_of_header";
+    constexpr int kIcmpRestOfHeaderBitwidth = 32;
+    constexpr bool kIcmpRestOfHeaderSigned = false;
+    RET_CHECK(!output.fields().contains(kIcmpRestOfHeaderFieldName));
+    LOG(WARNING) << "Fixing incomplete definition of the ICMP header, missing '"
+                 << kIcmpRestOfHeaderFieldName << "'";
+    HeaderField &field = (*output.mutable_fields())[kIcmpRestOfHeaderFieldName];
+    field.set_name(kIcmpRestOfHeaderFieldName);
+    field.set_bitwidth(kIcmpRestOfHeaderBitwidth);
+    field.set_signed_(kIcmpRestOfHeaderSigned);
+    output.add_ordered_fields_list(kIcmpRestOfHeaderFieldName);
   }
 
   return output;
