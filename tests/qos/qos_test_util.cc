@@ -7,6 +7,15 @@
 #include "lib/gnmi/gnmi_helper.h"
 
 namespace pins_test {
+
+QueueCounters operator-(const QueueCounters &x, const QueueCounters &y) {
+  return QueueCounters{
+      .num_packets_transmitted =
+          x.num_packets_transmitted - y.num_packets_transmitted,
+      .num_packet_dropped = x.num_packet_dropped - y.num_packet_dropped,
+  };
+}
+
 absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
     absl::string_view port, absl::string_view queue,
     gnmi::gNMI::StubInterface &gnmi_stub) {
