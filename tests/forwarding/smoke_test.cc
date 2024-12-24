@@ -198,7 +198,7 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
 
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
                                                    pi_request));
-  
+
   // This used to fail with a read error.
   ASSERT_OK(pdpi::ClearTableEntries(&GetSutP4RuntimeSession()));
 }
