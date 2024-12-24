@@ -20,14 +20,9 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/flags/flag.h"
-#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -42,7 +37,6 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/basic_traffic/basic_p4rt_util.h"
-#include "lib/basic_traffic/basic_traffic.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -56,18 +50,14 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
 
-ABSL_FLAG(bool, push_p4_info, true, "Push P4 info to SUT.");
-
 namespace pins_test {
 namespace {
 
-constexpr int kMtu[] = {1500, 5000, 9000};
 
 // Test packet proto message sent from control switch to sut.
 constexpr absl::string_view kTestPacket = R"pb(
@@ -84,28 +74,54 @@ constexpr absl::string_view kTestPacket = R"pb(
       ihl: "0x5"
       dscp: "0x03"
       ecn: "0x0"
+      total_length: "0x00d4"
       identification: "0x0000"
       flags: "0x0"
       fragment_offset: "0x0000"
       ttl: "0x20"
       protocol: "0x11"
+      checksum: "0x8c07"
       ipv4_source: "1.2.3.4"
-      ipv4_destination: "$0"
+      ipv4_destination: "10.0.0.1"
     }
   }
   headers { udp_header { source_port: "0x0000" destination_port: "0x0000" } }
   payload: "Basic L3 test packet")pb";
 
-// Pushes the P4 Info to SUT if the flag push_p4_info is set to true and returns
-// the P4 Runtime Session
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> P4InfoPush(
-    const p4::config::v1::P4Info& p4_info, thinkit::GenericTestbed& testbed) {
-  std::optional<p4::config::v1::P4Info> p4info = std::nullopt;
-  if (absl::GetFlag(FLAGS_push_p4_info)) {
-    p4info = p4_info;
-  }
-  return ConfigureSwitchAndReturnP4RuntimeSession(
-      testbed.Sut(), /*gnmi_config=*/std::nullopt, p4info);
+// Sets up route from source port to destination port on sut.
+absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
+                        int dst_port_id) {
+  RETURN_IF_ERROR(pins_test::basic_traffic::ProgramTrafficVrf(&p4_session,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  RETURN_IF_ERROR(
+      basic_traffic::ProgramRouterInterface(&p4_session, src_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  RETURN_IF_ERROR(
+      basic_traffic::ProgramRouterInterface(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  return basic_traffic::ProgramIPv4Route(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock));
+}
+
+// Sets up route from source port to destination port on sut.
+absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
+                        int dst_port_id) {
+  RETURN_IF_ERROR(pins_test::basic_traffic::ProgramTrafficVrf(&p4_session,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  RETURN_IF_ERROR(
+      basic_traffic::ProgramRouterInterface(&p4_session, src_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  RETURN_IF_ERROR(
+      basic_traffic::ProgramRouterInterface(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  
+  return basic_traffic::ProgramIPv4Route(&p4_session, dst_port_id,
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock));
 }
 
 // Sets up route from source port to destination port on sut.
@@ -143,6 +159,20 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
   ASSERT_OK_AND_ASSIGN(auto stub, testbed->Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(auto port_id_by_interface,
                        GetAllInterfaceNameToPortId(*stub));
+  for (const auto& [interface, info] : testbed->GetSutInterfaceInfo()) {
+    if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
+      int port_id;
+      EXPECT_TRUE(absl::SimpleAtoi(port_id_by_interface[interface], &port_id));
+      LOG(INFO) << "@ " << interface << ":" << info.peer_interface_name << ":"
+                << port_id;
+      sut_interfaces.push_back(interface);
+      peer_interfaces.push_back(info.peer_interface_name);
+      sut_interface_ports.push_back(port_id);
+    }
+    if (sut_interfaces.size() == 2) {
+      break;
+    }
+  }
 
   // Set the `source_interface` to the first SUT control interface.
   const InterfaceLink& source_interface = control_interfaces[0];
@@ -177,22 +207,22 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
 
   // Make test packet based on destination port ID.
   const auto test_packet =
-      gutil::ParseProtoOrDie<packetlib::Packet>(absl::Substitute(
-          kTestPacket, basic_traffic::PortIdToIP(destination_port_id)));
+      gutil::ParseProtoOrDie<packetlib::Packet>(kTestPacket);
   ASSERT_OK_AND_ASSIGN(std::string test_packet_data,
                        packetlib::SerializePacket(test_packet));
 
   absl::Mutex mutex;
   std::vector<std::string> received_packets;
-  static constexpr int kPacketsToSend = 10;
+
   {
     ASSERT_OK_AND_ASSIGN(auto finalizer,
                          testbed.get()->ControlDevice().CollectPackets());
 
     LOG(INFO) << "Sending Packet to " << source_interface.peer_interface;
+
     LOG(INFO) << "Test packet data: " << test_packet.DebugString();
 
-    for (int i = 0; i < kPacketsToSend; i++) {
+    for (int i = 0; i < 10; i++) {
       // Send packet to SUT.
       ASSERT_OK(testbed->ControlDevice().SendPacket(
           source_interface.peer_interface, test_packet_data))
