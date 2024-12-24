@@ -14,9 +14,12 @@
 
 #include "tests/sflow/sflow_util.h"
 
+#include <string>
+
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -28,6 +31,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "re2/re2.h"
 
 namespace pins {
 namespace {
@@ -60,19 +64,34 @@ constexpr absl::string_view kSflowGnmiStateCollectorAddressPath =
 constexpr absl::string_view kSflowGnmiStateCollectorPortPath =
     "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/port";
 
+// ToS is present in tcp dump like
+// ... (class 0x80, ....)
+constexpr LazyRE2 kPacketTosMatchPattern{R"(class 0x([a-f0-9]+),)"};
+
 }  // namespace
+
+absl::StatusOr<bool> IsSflowConfigEnabled(absl::string_view gnmi_config) {
+  ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
+  return gnmi_config_json.find("openconfig-sampling:sampling") !=
+             gnmi_config_json.end() &&
+         gnmi_config_json["openconfig-sampling:sampling"]
+                         ["openconfig-sampling-sflow:sflow"]["config"]
+                         ["enabled"];
+}
 
 absl::Status VerifyGnmiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
                                       absl::string_view state_path,
-                                      absl::string_view expected_value) {
-  ASSIGN_OR_RETURN(std::string state_value,
-                   pins_test::GetGnmiStatePathInfo(gnmi_stub, state_path));
+                                      absl::string_view expected_value,
+                                      absl::string_view resp_parse_str) {
+  ASSIGN_OR_RETURN(
+      std::string state_value,
+      pins_test::GetGnmiStatePathInfo(gnmi_stub, state_path, resp_parse_str));
   if (expected_value == state_value) {
     return absl::OkStatus();
   }
   return absl::FailedPreconditionError(
-      absl::StrCat("Actual state path: ", state_path, " value is ", state_value,
-                   ", expected value is ", expected_value));
+      absl::StrCat("State path: [", state_path, "] actual value is ",
+                   state_value, ", expected value is ", expected_value));
 }
 
 absl::Status SetSflowSamplingSize(gnmi::gNMI::StubInterface* gnmi_stub,
@@ -85,7 +104,7 @@ absl::Status SetSflowSamplingSize(gnmi::gNMI::StubInterface* gnmi_stub,
 
   return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
                                      gnmi_stub, kSflowGnmiStateSampleSizePath,
-                                     ops_val);
+                                     ops_val, /*resp_parse_str=*/"");
 }
 
 absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
@@ -97,7 +116,7 @@ absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
 
   return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
                                      gnmi_stub, kSflowGnmiStateEnablePath,
-                                     ops_val);
+                                     ops_val, /*resp_parse_str=*/"");
 }
 
 absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
@@ -116,7 +135,7 @@ absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
   return pins_test::WaitForCondition(
       VerifyGnmiStateConverged, timeout, gnmi_stub,
       absl::Substitute(kSflowGnmiStateInterfaceSampleRatePath, interface),
-      ops_val);
+      ops_val, /*resp_parse_str=*/"");
 }
 
 absl::Status VerifySflowStatesConverged(
@@ -351,6 +370,45 @@ GetSflowSamplingRateForInterfaces(
     interface_to_sample_rate[interface] = sample_rate;
   }
   return interface_to_sample_rate;
+}
+
+absl::Status VerifySflowQueueLimitState(gnmi::gNMI::StubInterface* gnmi_stub,
+                                        int queue_number,
+                                        int expected_queue_limit,
+                                        absl::Duration timeout) {
+  const std::string kQueueLimitStatePath = absl::Substitute(
+      R"(/qos/scheduler-policies/scheduler-policy[name=cpu_scheduler]/schedulers/scheduler[sequence=$0]/two-rate-three-color/state)",
+      queue_number);
+  auto verify_queue_limit = [&]() -> absl::Status {
+    ASSIGN_OR_RETURN(
+        std::string state_value,
+        pins_test::GetGnmiStatePathInfo(gnmi_stub, kQueueLimitStatePath,
+                                        "openconfig-qos:state"));
+    ASSIGN_OR_RETURN(const auto resp_json, json_yang::ParseJson(state_value));
+    if (resp_json["google-pins-qos:pir-pkts"] ==
+        absl::StrCat(expected_queue_limit)) {
+      return absl::OkStatus();
+    }
+    return absl::FailedPreconditionError(absl::StrCat(
+        "State path: [", kQueueLimitStatePath, "] actual value is ",
+        state_value, ", expected value is ", expected_queue_limit));
+  };
+  return pins_test::WaitForCondition(verify_queue_limit, timeout);
+}
+
+absl::StatusOr<int> ExtractTosFromTcpdumpResult(
+    absl::string_view tcpdump_result) {
+  if (std::string tos;
+      RE2::PartialMatch(tcpdump_result, *kPacketTosMatchPattern, &tos)) {
+    int tos_int;
+    if (absl::SimpleHexAtoi(tos, &tos_int)) {
+      return tos_int;
+    }
+    return absl::InvalidArgumentError(
+        absl::StrCat("Failed to convert ", tos, " to int value."));
+  }
+  return absl::InvalidArgumentError(
+      "Failed to find ToS value in tcpdump result.");
 }
 
 }  // namespace pins
