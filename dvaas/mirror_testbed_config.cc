@@ -363,13 +363,15 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
   }
 
   // Ensure that all enabled ports are up.
-  RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed_.Sut()))
-          .SetPrepend()
-      << "expected enabled interfaces on SUT to be up: ";
-  RETURN_IF_ERROR(
-      pins_test::WaitForEnabledInterfacesToBeUp(testbed_.ControlSwitch()))
-          .SetPrepend()
-      << "expected enabled interfaces on control switch to be up: ";
+  if (params.wait_for_all_enabled_interfaces_to_be_up) {
+    RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed_.Sut()))
+            .SetPrepend()
+        << "expected enabled interfaces on SUT to be up: ";
+    RETURN_IF_ERROR(
+        pins_test::WaitForEnabledInterfacesToBeUp(testbed_.ControlSwitch()))
+            .SetPrepend()
+        << "expected enabled interfaces on control switch to be up: ";
+  }
 
   return absl::OkStatus();
 }

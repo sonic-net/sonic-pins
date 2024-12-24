@@ -20,6 +20,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_run_validation.h"
@@ -57,6 +58,11 @@ struct ArribaTestVectorValidationParams {
   // implementations, this value may be less than 1, ie, not all the packets
   // pass. The value should be <= 1.0.
   double expected_minimum_success_rate = 1.0;
+
+  // Maximum time expected it takes to receive output packets either from SUT
+  // or control switch in response to an injected input packet. Beyond that,
+  // the input packet might be considered dropped.
+  absl::Duration max_expected_packet_in_flight_duration = absl::Seconds(3);
 
   // For a packet in from SUT or control switch without a test tag (i.e. an
   // "unsolicited packet"), if this function return false, packet injection

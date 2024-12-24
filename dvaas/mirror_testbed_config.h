@@ -55,6 +55,9 @@ class MirrorTestbedConfigurator {
     // NOTE: Not required for valid mirror testbeds. This is a workaround for
     // non-standard testbeds only.
     std::optional<MirrorTestbedP4rtPortIdMap> original_port_map;
+
+    // If true, wait for all enabled ports to be up on SUT and control switch.
+    bool wait_for_all_enabled_interfaces_to_be_up = true;
   };
 
   // Creates and returns MirrorTestbedConfigurator object from the given

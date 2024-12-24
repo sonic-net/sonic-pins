@@ -71,6 +71,8 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       .mirror_sut_ports_ids_to_control_switch = !explicit_port_map,
       .original_port_map =
           GetParam().validation_params.mirror_testbed_port_map_override,
+      .wait_for_all_enabled_interfaces_to_be_up =
+          GetParam().wait_for_all_enabled_interfaces_to_be_up,
   }));
 
   dvaas::ArribaTestVectorValidationParams validation_params =
