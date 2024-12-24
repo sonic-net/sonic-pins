@@ -28,6 +28,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/parser.h"
+#include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -87,10 +88,10 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateSaiPipeline(
   // Add translation for vrf_id_t.
   RETURN_IF_ERROR(AddVrfIdTypeTranslation(translation_per_type));
 
-  ASSIGN_OR_RETURN(symbolic::Dataplane dataplane, ParseToIr(config, entries));
+  ASSIGN_OR_RETURN(ir::Dataplane dataplane, ParseToIr(config, entries));
   ASSIGN_OR_RETURN(std::unique_ptr<symbolic::SolverState> state,
-                   symbolic::EvaluateP4Pipeline(dataplane, physical_ports,
-                                                translation_per_type));
+                   symbolic::EvaluateP4Program(dataplane, physical_ports,
+                                               translation_per_type));
   ASSIGN_OR_RETURN(std::vector<z3::expr> parser_constraints,
                    EvaluateSaiParser(state->context.ingress_headers));
   for (auto& constraint : parser_constraints) {
@@ -101,18 +102,22 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateSaiPipeline(
 
 absl::StatusOr<std::string> ExtractLocalMetadataIngressPortFromModel(
     const symbolic::SolverState& solver_state) {
+  // We are interested in the value after parsing because the parser sets
+  // `local_metadata.ingress_port = standard_metadata.ingress_port`. Also,
+  // according to P4-16 spec, the metadata of the ingress packet may contain
+  // arbitrary value before being initialized.
   ASSIGN_OR_RETURN(
-      p4_symbolic::SaiFields ingress_fields,
-      p4_symbolic::GetSaiFields(solver_state.context.ingress_headers));
+      p4_symbolic::SaiFields parsed_fields,
+      p4_symbolic::GetSaiFields(solver_state.context.parsed_headers));
   ASSIGN_OR_RETURN(const std::string local_metadata_ingress_port_field_name,
                    p4_symbolic::GetUserMetadataFieldName(
-                       "ingress_port", solver_state.context.ingress_headers));
+                       "ingress_port", solver_state.context.parsed_headers));
   // Note: Do NOT directly use "local_metadata.ingress_port" as the field name
   // (see p4_symbolic::GetUserMetadataFieldName).
   return TranslateValueToP4RT(
       local_metadata_ingress_port_field_name,
       solver_state.solver->get_model()
-          .eval(ingress_fields.local_metadata.ingress_port, true)
+          .eval(parsed_fields.local_metadata.ingress_port, true)
           .to_string(),
       solver_state.translator);
 }

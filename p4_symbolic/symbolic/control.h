@@ -59,7 +59,7 @@
 
 #include <string>
 
-#include "gutil/status.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
@@ -68,27 +68,17 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace control {
 
-// Evaluate the entire program, assuming it was written against v1model.p4.
-//
-// Note: This only evaluates the ingress and egress pipelines, but doesn't
-// evaluate the parser or deparser.
-// TODO: Also add support for executing the parser.
-absl::StatusOr<SymbolicTableMatches>
-EvaluateV1model(const Dataplane &data_plane, SymbolicPerPacketState *state,
-                values::P4RuntimeTranslator *translator);
-
 // Evaluate the passed pipeline.
-absl::StatusOr<SymbolicTableMatches>
-EvaluatePipeline(const Dataplane &data_plane, const std::string &pipeline_name,
-                 SymbolicPerPacketState *state,
-                 values::P4RuntimeTranslator *translator,
-                 const z3::expr &guard);
+absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
+    const ir::Dataplane &data_plane, const std::string &pipeline_name,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard);
 
 // Evaluate the passed control construct.
-absl::StatusOr<SymbolicTableMatches>
-EvaluateControl(const Dataplane &data_plane, const std::string &control_name,
-                SymbolicPerPacketState *state,
-                values::P4RuntimeTranslator *translator, const z3::expr &guard);
+absl::StatusOr<SymbolicTableMatches> EvaluateControl(
+    const ir::Dataplane &data_plane, const std::string &control_name,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard);
 
 } // namespace control
 } // namespace symbolic
