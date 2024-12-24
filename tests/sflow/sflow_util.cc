@@ -15,11 +15,14 @@
 #include "tests/sflow/sflow_util.h"
 
 #include "absl/container/btree_map.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
@@ -278,6 +281,76 @@ absl::StatusOr<std::string> UpdateSflowConfig(
   }
 
   return json_yang::DumpJson(gnmi_config_json);
+}
+
+absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
+                                             absl::string_view queue_name,
+                                             int queue_limit) {
+  ASSIGN_OR_RETURN(auto config, json_yang::ParseJson(gnmi_config));
+
+  auto& qos_interfaces =
+      config["openconfig-qos:qos"]["interfaces"]["interface"];
+  std::string cpu_scheduler_policy;
+  for (auto& interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == "CPU") {
+      cpu_scheduler_policy =
+          interface["output"]["scheduler-policy"]["config"]["name"]
+              .get<std::string>();
+      break;
+    }
+  }
+  if (cpu_scheduler_policy.empty()) {
+    return absl::InvalidArgumentError(
+        "Gnmi config does not have any cpu scheduler policy.");
+  }
+
+  auto& scheduler_policies =
+      config["openconfig-qos:qos"]["scheduler-policies"]["scheduler-policy"];
+  for (auto& policy : scheduler_policies) {
+    if (policy["name"].get<std::string>() == cpu_scheduler_policy) {
+      for (auto& scheduler : policy["schedulers"]["scheduler"]) {
+        std::string current_queue_name =
+            scheduler["inputs"]["input"][0]["config"]["queue"]
+                .get<std::string>();
+        if (current_queue_name == queue_name) {
+          std::string peak_rate = scheduler["two-rate-three-color"]["config"]
+                                           ["google-pins-qos:pir-pkts"]
+                                               .get<std::string>();
+          LOG(INFO) << "Re-configuring Queue[" << current_queue_name
+                    << "] rate from <" << peak_rate << "> to <" << queue_limit
+                    << ">.";
+          scheduler["two-rate-three-color"]["config"]
+                   ["google-pins-qos:pir-pkts"] = absl::StrCat(queue_limit);
+          break;
+        }
+      }
+    }
+  }
+  return json_yang::DumpJson(config);
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetSflowSamplingRateForInterfaces(
+    gnmi::gNMI::StubInterface* gnmi_stub,
+    const absl::flat_hash_set<std::string>& interfaces) {
+  absl::flat_hash_map<std::string, int> interface_to_sample_rate;
+  const std::string parse_ops_str =
+      "openconfig-sampling-sflow:ingress-sampling-rate";
+  for (const auto& interface : interfaces) {
+    ASSIGN_OR_RETURN(
+        std::string sample_rate_str,
+        pins_test::GetGnmiStatePathInfo(
+            gnmi_stub,
+            absl::Substitute(kSflowGnmiStateInterfaceSampleRatePath, interface),
+            parse_ops_str));
+    int sample_rate;
+    if (!absl::SimpleAtoi(sample_rate_str, &sample_rate)) {
+      return absl::InternalError(absl::StrCat(
+          interface, " has invalid sample rate ", sample_rate_str));
+    }
+    interface_to_sample_rate[interface] = sample_rate;
+  }
+  return interface_to_sample_rate;
 }
 
 }  // namespace pins
