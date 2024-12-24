@@ -67,17 +67,13 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   thinkit::SSHClient* ssh_client_ = GetParam().ssh_client;
 
   std::vector<IxiaLink> ready_links_;
-
- private:
-  // Set to true when config already has sampling config and is set to true.
-  bool sflow_enabled_by_config_ = false;
 };
 
 class SampleSizeTest : public SflowTestFixture {};
 
 class SampleRateTest : public SflowTestFixture {};
 
-struct SflowInbandTestParams {
+struct SflowMirrorTestParams {
   thinkit::MirrorTestbedInterface* testbed_interface;
   thinkit::SSHClient* ssh_client;
   std::string sut_gnmi_config;
@@ -91,7 +87,7 @@ struct Port {
 };
 
 class SflowMirrorTestFixture
-    : public ::testing::TestWithParam<SflowInbandTestParams> {
+    : public ::testing::TestWithParam<SflowMirrorTestParams> {
  protected:
   void SetUp() override;
 
@@ -105,10 +101,6 @@ class SflowMirrorTestFixture
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
 
   std::string agent_address_;
-
- private:
-  // Set to true when config already has sampling config and is set to true.
-  bool sflow_enabled_by_config_ = false;
 };
 }  // namespace pins
 

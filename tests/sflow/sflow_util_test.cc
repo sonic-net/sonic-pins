@@ -167,6 +167,55 @@ constexpr absl::string_view kResultJson = R"json({
   }
 })json";
 
+TEST(SflowconfigTest, SflowEnabledTrue) {
+  const std::string sflow_config = R"json({
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 12
+      }
+    }
+  }
+})json";
+  EXPECT_THAT(IsSflowConfigEnabled(sflow_config), IsOkAndHolds(true));
+}
+
+TEST(SflowconfigTest, SflowEnabledFalse) {
+  const std::string sflow_config = R"json({
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": false,
+        "polling-interval": 0,
+        "sample-size": 12
+      }
+    }
+  }
+})json";
+  EXPECT_THAT(IsSflowConfigEnabled(sflow_config), IsOkAndHolds(false));
+}
+
+TEST(SflowconfigTest, NoSflowConfigEnabledFalse) {
+  const std::string interface_config = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  }
+})json";
+  EXPECT_THAT(IsSflowConfigEnabled(interface_config), IsOkAndHolds(false));
+}
+
 TEST(SflowconfigTest, AppendSflowConfigSuccess) {
   EXPECT_THAT(
       UpdateSflowConfig(kGnmiConfig,
@@ -539,6 +588,40 @@ TEST(SflowUtilTest, GetSampleRateSuccessForAllInterfaces) {
       {"Ethernet1/1/1", 256}, {"Ethernet1/31/5", 256}};
   EXPECT_THAT(GetSflowSamplingRateForInterfaces(&stub, interfaces),
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
+TEST(SflowUtilTest, UpdateQueueLimitSucceed) {
+  const int kQueueNumberForBE1 = 5;
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1664316653291898311
+                 prefix { origin: "openconfig" }
+                 update {
+                   path {
+                     elem { name: "openconfig-qos:qos" }
+                     elem { name: "scheduler-policies" }
+                     elem {
+                       name: "scheduler-policy"
+                       key { key: "name" value: "cpu_scheduler" }
+                     }
+                     elem { name: "schedulers" }
+                     elem {
+                       name: "scheduler"
+                       key { key: "sequence" value: "5" }
+                     }
+                     elem { name: "two-rate-three-colo" }
+                     elem { name: "state" }
+                   }
+                   val {
+                     json_ietf_val: "{\"openconfig-qos:state\":{\"google-pins-qos:bc-pkts\":0,\"google-pins-qos:be-pkts\":4,\"google-pins-qos:cir-pkts\":\"0\",\"google-pins-qos:pir-pkts\":\"120\"}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  ASSERT_OK(VerifySflowQueueLimitState(&stub, kQueueNumberForBE1,
+                                       /*expected_queue_limit=*/120));
 }
 
 }  // namespace
