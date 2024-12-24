@@ -199,6 +199,127 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
                                                    pi_request));
   
+  const sai::WriteRequest pd_delete = gutil::ParseProtoOrDie<sai::WriteRequest>(
+      R"pb(
+        updates {
+          type: DELETE
+          table_entry {
+            acl_ingress_table_entry {
+              match { is_ip { value: "0x1" } }
+              priority: 10
+              action { acl_forward {} }
+            }
+          }
+        }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest pi_delete,
+                       pdpi::PdWriteRequestToPi(
+		       sai::GetIrP4Info(sai::Instantiation::kMiddleblock), pd_delete));
+
+  // Insert works.
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_insert));
+
+  // ACL table entries are expected to contain counter data. However, it's
+  // updated periodically and may not be avaialable immediatly after writing so
+  // we poll the entry for a few seconds until we see the data.
+  absl::Time timeout = absl::Now() + absl::Seconds(11);
+  p4::v1::ReadResponse pi_read_response;
+  p4::v1::ReadRequest pi_read_request;
+  pi_read_request.add_entities()->mutable_table_entry();
+  do {
+    ASSERT_OK_AND_ASSIGN(pi_read_response,
+                         pdpi::SetMetadataAndSendPiReadRequest(
+                             &GetSutP4RuntimeSession(), pi_read_request));
+    ASSERT_EQ(pi_read_response.entities_size(), 1);
+
+    if (absl::Now() > timeout) {
+      FAIL() << "ACL table entry does not have counter data.";
+    }
+  } while (!pi_read_response.entities(0).table_entry().has_counter_data());
+
+  // Many ACL table attribues are NOT modifiable currently due to missing SAI
+  // implementation. Because there are no production use-cases, these are
+  // de-prioritized.
+  ASSERT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                     pi_modify),
+              StatusIs(absl::StatusCode::kUnknown));
+
+  // Delete works.
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_delete));
+}
+
+TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
+  p4::v1::WriteRequest pi_request;
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::VrfTableUpdate(
+	      sai::GetIrP4Info(sai::Instantiation::kMiddleblock), p4::v1::Update::INSERT, "vrf-1"));
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::RouterInterfaceTableUpdate(sai::GetIrP4Info(sai::Instantiation::kMiddleblock), 
+	                                p4::v1::Update::INSERT,
+                                        "router-intf-1", /*port=*/"1",
+                                        /*src_mac=*/"00:01:02:03:04:05"));
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::NeighborTableUpdate(sai::GetIrP4Info(sai::Instantiation::kMiddleblock), 
+	                         p4::v1::Update::INSERT,
+                                 "router-intf-1",
+                                 /*neighbor_id=*/"fe80::0000:00ff:fe17:5f80",
+                                 /*dst_mac=*/"00:01:02:03:04:06"));
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::NexthopTableUpdate(sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+	                        p4::v1::Update::INSERT,
+                                "nexthop-1", "router-intf-1",
+                                /*neighbor_id=*/"fe80::0000:00ff:fe17:5f80"));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_request));
+
+  // Add and modify IPV4 table entry with different number of action params.
+  pi_request.Clear();
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::Ipv4TableUpdate(
+          sai::GetIrP4Info(sai::Instantiation::kMiddleblock), 
+	  p4::v1::Update::INSERT,
+          pins::IpTableOptions{
+              .vrf_id = "vrf-1",
+              .dst_addr_lpm = std::make_pair("20.0.0.1", 32),
+              .action = pins::IpTableOptions::Action::kSetNextHopId,
+              .nexthop_id = "nexthop-1",
+          }));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_request));
+  pi_request.Clear();
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::Ipv4TableUpdate(sai::GetIrP4Info(sai::Instantiation::kMiddleblock), 
+	                     p4::v1::Update::MODIFY,
+                             pins::IpTableOptions{
+                                 .vrf_id = "vrf-1",
+                                 .dst_addr_lpm = std::make_pair("20.0.0.1", 32),
+                                 .action = pins::IpTableOptions::Action::kDrop,
+                             }));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_request));
+
+  pi_request.Clear();
+  ASSERT_OK_AND_ASSIGN(
+      *pi_request.add_updates(),
+      pins::Ipv4TableUpdate(sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+	                     p4::v1::Update::DELETE,
+                             pins::IpTableOptions{
+                                 .vrf_id = "vrf-1",
+                                 .dst_addr_lpm = std::make_pair("20.0.0.1", 32),
+                                 .action = pins::IpTableOptions::Action::kDrop,
+                             }));
+
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_request));
+
   // This used to fail with a read error.
   ASSERT_OK(pdpi::ClearTableEntries(&GetSutP4RuntimeSession()));
 }
