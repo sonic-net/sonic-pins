@@ -58,6 +58,7 @@
 namespace pins_test {
 namespace {
 
+
 // Test packet proto message sent from control switch to sut.
 constexpr absl::string_view kTestPacket = R"pb(
   headers {
@@ -73,13 +74,15 @@ constexpr absl::string_view kTestPacket = R"pb(
       ihl: "0x5"
       dscp: "0x03"
       ecn: "0x0"
+      total_length: "0x00d4"
       identification: "0x0000"
       flags: "0x0"
       fragment_offset: "0x0000"
       ttl: "0x20"
       protocol: "0x11"
+      checksum: "0x8c07"
       ipv4_source: "1.2.3.4"
-      ipv4_destination: "$0"
+      ipv4_destination: "10.0.0.1"
     }
   }
   headers { udp_header { source_port: "0x0000" destination_port: "0x0000" } }
@@ -120,6 +123,20 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
   ASSERT_OK_AND_ASSIGN(auto stub, testbed->Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(auto port_id_by_interface,
                        GetAllInterfaceNameToPortId(*stub));
+  for (const auto& [interface, info] : testbed->GetSutInterfaceInfo()) {
+    if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
+      int port_id;
+      EXPECT_TRUE(absl::SimpleAtoi(port_id_by_interface[interface], &port_id));
+      LOG(INFO) << "@ " << interface << ":" << info.peer_interface_name << ":"
+                << port_id;
+      sut_interfaces.push_back(interface);
+      peer_interfaces.push_back(info.peer_interface_name);
+      sut_interface_ports.push_back(port_id);
+    }
+    if (sut_interfaces.size() == 2) {
+      break;
+    }
+  }
 
   // Set the `source_interface` to the first SUT control interface.
   const InterfaceLink& source_interface = control_interfaces[0];
@@ -154,22 +171,22 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
 
   // Make test packet based on destination port ID.
   const auto test_packet =
-      gutil::ParseProtoOrDie<packetlib::Packet>(absl::Substitute(
-          kTestPacket, basic_traffic::PortIdToIP(destination_port_id)));
+      gutil::ParseProtoOrDie<packetlib::Packet>(kTestPacket);
   ASSERT_OK_AND_ASSIGN(std::string test_packet_data,
                        packetlib::SerializePacket(test_packet));
 
   absl::Mutex mutex;
   std::vector<std::string> received_packets;
-  static constexpr int kPacketsToSend = 10;
+
   {
     ASSERT_OK_AND_ASSIGN(auto finalizer,
                          testbed.get()->ControlDevice().CollectPackets());
 
     LOG(INFO) << "Sending Packet to " << source_interface.peer_interface;
+
     LOG(INFO) << "Test packet data: " << test_packet.DebugString();
 
-    for (int i = 0; i < kPacketsToSend; i++) {
+    for (int i = 0; i < 10; i++) {
       // Send packet to SUT.
       ASSERT_OK(testbed->ControlDevice().SendPacket(
           source_interface.peer_interface, test_packet_data))
