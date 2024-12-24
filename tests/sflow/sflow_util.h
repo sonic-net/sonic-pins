@@ -26,11 +26,18 @@
 
 namespace pins {
 
+// Returns true iff
+// ["openconfig-sampling:sampling"]["openconfig-sampling-sflow:sflow"]["config"]["enabled"]
+// exists and equals true. Returns a InvalidArgumentError if failed to parse
+// config.
+absl::StatusOr<bool> IsSflowConfigEnabled(absl::string_view gnmi_config);
+
 // Reads value from `state_path` and verifies it is the same with
 // `expected_value`. Returns a FailedPreconditionError if not matched.
 absl::Status VerifyGnmiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
                                       absl::string_view state_path,
-                                      absl::string_view expected_value);
+                                      absl::string_view expected_value,
+                                      absl::string_view resp_parse_str = "");
 
 // Sets sFLow sampling size to `sampling_size` and checks if it's applied to
 // corresponding state path in `timeout`. Returns error if failed.
@@ -51,24 +58,31 @@ absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
 
+// Sets sFlow interface config and waits until it's converged in state path.
+// `interface` must be present.
+absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
+                                     absl::string_view interface, bool enabled,
+                                     int samping_rate,
+                                     absl::Duration timeout = absl::Seconds(5));
+
 // Verifies all sFlow-related config is consumed by switch by reading
 // corresponding gNMI state paths. Returns an FailedPreconditionError if
-// `agent_addr_ipv6` or `sflow_enabled_interfaces` is empty.
+// `agent_addr_ipv6` is empty.
 absl::Status VerifySflowStatesConverged(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view agent_addr_ipv6,
     const int sampling_rate, const int sampling_header_size,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces);
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces);
 
 // Updates `gnmi_config` with sFlow-related config and returns modified config
 // if success. The modified config would sort collector IPs and interface names
-// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` or
-// `sflow_enabled_interfaces` is empty.
+// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` is
+// empty.
 absl::StatusOr<std::string> UpdateSflowConfig(
 
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces,
     const int sampling_rate, const int sampling_header_size);
 
 // Updates `gnmi_config` queue limit of `queue_name` to `queue_limit` and
@@ -84,6 +98,17 @@ absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetSflowSamplingRateForInterfaces(
     gnmi::gNMI::StubInterface* gnmi_stub,
     const absl::flat_hash_set<std::string>& interfaces);
+
+// Verifies that cpu_scheduler limit for `queue_sequence` is set to
+// `expected_queue_limit`.
+absl::Status VerifySflowQueueLimitState(
+    gnmi::gNMI::StubInterface* gnmi_stub, int queue_number,
+    int expected_queue_limit, absl::Duration timeout = absl::Seconds(5));
+
+// Extracts ToS value from `tcpdump_result`. Returns InvalidArgument error if
+// ToS value are not identical or failed to find ToS value in `tcpdump_result`.
+absl::StatusOr<int> ExtractTosFromTcpdumpResult(
+    absl::string_view tcpdump_result);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
