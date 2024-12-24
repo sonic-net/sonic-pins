@@ -20,9 +20,14 @@
 #ifndef PINS_TESTS_CPU_QOS_TEST_H_
 #define PINS_TESTS_CPU_QOS_TEST_H_
 
+#include <vector>
+
+#include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"
@@ -30,12 +35,22 @@
 #include "gtest/gtest.h"
 
 namespace pins_test {
+// Structure holds packet and expected target queue passed in to test as
+// parameter.
+struct PacketAndExpectedTargetQueue {
+  absl::string_view packet_name;
+  packetlib::Packet packet;
+  absl::string_view target_queue;
+};
 
 // Parameters used by the tests that don't require an Ixia.
 struct ParamsForTestsWithoutIxia {
   thinkit::MirrorTestbedInterface *testbed_interface;
   std::string gnmi_config;
   p4::config::v1::P4Info p4info;
+  // Test packets and expected target queue passsed into the test for
+  // verification.
+  std::vector<PacketAndExpectedTargetQueue> test_packets;
 };
 
 // Fixture of tests that do not require an Ixia. These test must be run on a

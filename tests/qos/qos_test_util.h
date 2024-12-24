@@ -3,6 +3,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "thinkit/generic_testbed.h"
@@ -30,6 +31,11 @@ inline std::ostream &operator<<(std::ostream &os,
 absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
     absl::string_view port, absl::string_view queue,
     gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Get queue counter with timestamp for a port queue.
+absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
+    absl::string_view port, absl::string_view queue,
+    absl::string_view statistic, gnmi::gNMI::StubInterface &gnmi_stub);
 
 // Get total packets (transmitted + dropped) for port queue.
 int64_t CumulativeNumPacketsEnqueued(const QueueCounters &counters);
