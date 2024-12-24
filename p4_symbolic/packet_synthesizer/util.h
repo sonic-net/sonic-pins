@@ -60,11 +60,6 @@ absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue &value,
 absl::StatusOr<z3::expr> GetFieldMatchConstraints(z3::expr field, int bitwidth,
                                                   const pdpi::IrMatch &match);
 
-// Extracts the bitwidth of the field with name `field_name` in the given
-// `program`.
-absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
-                                     const p4_symbolic::ir::P4Program &program);
-
-} // namespace p4_symbolic::packet_synthesizer
+}  // namespace p4_symbolic::packet_synthesizer
 
 #endif // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_UTIL_H_
