@@ -46,6 +46,19 @@ absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
   return counters;
 }
 
+absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
+    absl::string_view port, absl::string_view queue,
+    absl::string_view statistic, gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string openconfig_transmit_count_state_path = absl::Substitute(
+      "qos/interfaces/interface[interface-id=$0]"
+      "/output/queues/queue[name=$1]/state/$2",
+      port, queue, statistic);
+  
+  return GetGnmiStatePathAndTimestamp(&gnmi_stub,
+                                      openconfig_transmit_count_state_path,
+                                      "openconfig-qos:transmit-pkts");
+}
+
 // Returns the total number of packets enqueued for the queue with the given
 // `QueueCounters`.
 int64_t CumulativeNumPacketsEnqueued(const QueueCounters &counters) {
