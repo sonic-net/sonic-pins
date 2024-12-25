@@ -27,6 +27,8 @@ inline std::ostream &operator<<(std::ostream &os,
              counters.num_packets_transmitted, counters.num_packet_dropped);
 }
 
+QueueCounters operator-(const QueueCounters &x, const QueueCounters &y);
+
 // Get queue counters for a port queue.
 absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
     absl::string_view port, absl::string_view queue,
