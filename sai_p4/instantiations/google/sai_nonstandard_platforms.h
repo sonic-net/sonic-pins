@@ -25,8 +25,9 @@ p4::config::v1::P4Info GetNonstandardP4Info(Instantiation instantiation,
 
 // Returns a `ForwardingPipelineConfig` for the SAI P4 program for the given
 // platform.
-p4::v1::ForwardingPipelineConfig GetNonstandardForwardingPipelineConfig(
-    Instantiation instantiation, NonstandardPlatform platform);
+p4::v1::ForwardingPipelineConfig
+GetNonstandardForwardingPipelineConfig(Instantiation instantiation,
+                                       NonstandardPlatform platform);
 
 // Returns the file name of the preprocessed P4 program for the given
 // instantiation and platform.
@@ -34,6 +35,6 @@ std::string PreprocessedInstantiationFileName(
     Instantiation role,
     std::optional<NonstandardPlatform> nonstandard_platform);
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_NONSTANDARD_PLATFORMS_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_NONSTANDARD_PLATFORMS_H_

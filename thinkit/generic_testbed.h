@@ -37,8 +37,8 @@ struct HttpResponse {
   std::string response;
 };
 
-inline std::ostream& operator<<(std::ostream& os,
-                                const HttpResponse& response) {
+inline std::ostream &operator<<(std::ostream &os,
+                                const HttpResponse &response) {
   return os << response.response_code << ": " << response.response;
 }
 
@@ -67,13 +67,13 @@ enum class RequestType {
 //   assigned to `otg.Port.location` field.
 struct InterfaceInfo {
   absl::flat_hash_set<thinkit::InterfaceMode> interface_modes;
-  int peer_device_index;              // Ignore if not applicable.
-  std::string peer_interface_name;    // Empty if not applicable.
-  std::string peer_mac_address;       // Empty if not applicable.
-  std::string peer_ipv4_address;      // Empty if not applicable.
-  std::string peer_ipv6_address;      // Empty if not applicable.
-  std::string peer_traffic_location;  // Empty if not applicable.
-  bool operator==(const InterfaceInfo& other) const {
+  int peer_device_index;             // Ignore if not applicable.
+  std::string peer_interface_name;   // Empty if not applicable.
+  std::string peer_mac_address;      // Empty if not applicable.
+  std::string peer_ipv4_address;     // Empty if not applicable.
+  std::string peer_ipv6_address;     // Empty if not applicable.
+  std::string peer_traffic_location; // Empty if not applicable.
+  bool operator==(const InterfaceInfo &other) const {
     return std::tie(interface_modes, peer_device_index, peer_interface_name,
                     peer_mac_address, peer_ipv4_address, peer_ipv6_address,
                     peer_traffic_location) ==
@@ -87,22 +87,22 @@ struct InterfaceInfo {
 // The GenericTestbed interface represents a testbed with control interface and
 // Ixia interface.
 class GenericTestbed {
- public:
+public:
   virtual ~GenericTestbed() {}
 
   // Returns the PINS switch (aka system) under test.
-  virtual Switch& Sut() = 0;
+  virtual Switch &Sut() = 0;
 
   // Returns a default control device responsible for packet injection and
   // various management operations. This could be but isn't limited to being
   // another PINS switch, a non-PINS switch, or a host machine.
-  virtual class ControlDevice& ControlDevice() = 0;
+  virtual class ControlDevice &ControlDevice() = 0;
 
   // Returns a control device in the Generic Testbed at the specified index.
-  virtual class ControlDevice& ControlDevice(int index) = 0;
+  virtual class ControlDevice &ControlDevice(int index) = 0;
 
   // Returns the test environment in which the test is run.
-  virtual TestEnvironment& Environment() = 0;
+  virtual TestEnvironment &Environment() = 0;
 
   // Returns a map from SUT interface name (e.g. Ethernet0) to its
   // `InterfaceInfo`, which describes what it's connected to.
@@ -111,13 +111,14 @@ class GenericTestbed {
 
   // Returns a client to interact with the Open Traffic Generator Service, if
   // present, for the testbed.
-  virtual otg::Openapi::StubInterface* GetTrafficClient() { return nullptr; }
+  virtual otg::Openapi::StubInterface *GetTrafficClient() { return nullptr; }
 
   // Sends a REST request to the Ixia and returns the response.
   // `url` can be either "https://...", "/api/...", or "/ixnetwork/...".
-  virtual absl::StatusOr<HttpResponse> SendRestRequestToIxia(
-      RequestType type, absl::string_view url, absl::string_view payload) = 0;
+  virtual absl::StatusOr<HttpResponse>
+  SendRestRequestToIxia(RequestType type, absl::string_view url,
+                        absl::string_view payload) = 0;
 };
 
-}  // namespace thinkit
-#endif  // PINS_THINKIT_GENERIC_TESTBED_H_
+} // namespace thinkit
+#endif // PINS_THINKIT_GENERIC_TESTBED_H_

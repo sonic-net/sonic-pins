@@ -42,25 +42,27 @@ SymbolicTableMatch DefaultTableMatch();
 
 // Extract a concrete context by evaluating every component's corresponding
 // expression in the model.
-absl::StatusOr<ConcreteContext> ExtractFromModel(
-    SymbolicContext context, z3::model model,
-    const values::P4RuntimeTranslator &translator);
+absl::StatusOr<ConcreteContext>
+ExtractFromModel(SymbolicContext context, z3::model model,
+                 const values::P4RuntimeTranslator &translator);
 
 // Merges two maps of table matches into a single map. A field in the returned
 // map has the value of `true_matches` if the condition is true, and the
 // value of `false_matches` otherwise.
 // The two maps must contain disjoint keys, otherwise an error is returned.
-absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
-    const z3::expr &condition, const SymbolicTableMatches &true_matches,
-    const SymbolicTableMatches &false_matches);
+absl::StatusOr<SymbolicTableMatches>
+MergeMatchesOnCondition(const z3::expr &condition,
+                        const SymbolicTableMatches &true_matches,
+                        const SymbolicTableMatches &false_matches);
 
 // Merges two maps of table matches into a single map. The two maps must contain
 // disjoint keys, otherwise an error is returned.
-absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
-    const SymbolicTableMatches &lhs, const SymbolicTableMatches &rhs);
+absl::StatusOr<SymbolicTableMatches>
+MergeDisjointTableMatches(const SymbolicTableMatches &lhs,
+                          const SymbolicTableMatches &rhs);
 
-}  // namespace util
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace util
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_UTIL_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_UTIL_H_

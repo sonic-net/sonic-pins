@@ -21,12 +21,12 @@ namespace sai {
 // If the provided ClosStage is not applicable to the current instantiation, the
 // function will ignore the stage and return a default P4Info for the
 // instantiation (the same behavior as if the stage was not provided at all).
-p4::config::v1::P4Info FetchP4Info(
-    Instantiation instantiation,
-    std::optional<ClosStage> stage = std::optional<ClosStage>());
+p4::config::v1::P4Info
+FetchP4Info(Instantiation instantiation,
+            std::optional<ClosStage> stage = std::optional<ClosStage>());
 
 p4::config::v1::P4Info FetchUnionedP4Info();
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_FETCHER_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_FETCHER_H_

@@ -15,20 +15,20 @@
 #ifndef THINKIT_MOCK_MIRROR_TESTBED_H_
 #define THINKIT_MOCK_MIRROR_TESTBED_H_
 
-#include "gmock/gmock.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
 
 namespace thinkit {
 
 class MockMirrorTestbed : public MirrorTestbed {
- public:
-  MOCK_METHOD(Switch&, ControlSwitch, (), (override));
-  MOCK_METHOD(Switch&, Sut, (), (override));
-  MOCK_METHOD(TestEnvironment&, Environment, (), (override));
+public:
+  MOCK_METHOD(Switch &, ControlSwitch, (), (override));
+  MOCK_METHOD(Switch &, Sut, (), (override));
+  MOCK_METHOD(TestEnvironment &, Environment, (), (override));
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  //  THINKIT_MOCK_MIRROR_TESTBED_H_
+#endif //  THINKIT_MOCK_MIRROR_TESTBED_H_

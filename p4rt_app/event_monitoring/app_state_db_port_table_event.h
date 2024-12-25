@@ -27,18 +27,18 @@ namespace p4rt_app {
 // Reacts to PORT_TABLE changes in the APP_STATE_DB:
 //  * Create/Destroy PacketIO interfaces.
 class AppStateDbPortTableEventHandler : public sonic::StateEventHandler {
- public:
-  AppStateDbPortTableEventHandler(P4RuntimeImpl* p4runtime)
+public:
+  AppStateDbPortTableEventHandler(P4RuntimeImpl *p4runtime)
       : p4runtime_(*p4runtime) {}
 
   absl::Status HandleEvent(
-      const std::string& operation, const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) override;
+      const std::string &operation, const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) override;
 
- private:
-  P4RuntimeImpl& p4runtime_;
+private:
+  P4RuntimeImpl &p4runtime_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_PORT_TABLE_EVENT_H_
+#endif // PINS_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_PORT_TABLE_EVENT_H_

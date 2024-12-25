@@ -19,8 +19,8 @@
 
 namespace pins_test {
 
-class ExampleIxiaTestFixture : public thinkit::GenericTestbedFixture<> {};
+class CountersTestFixture : public thinkit::GenericTestbedFixture<> {};
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_TEST_GNMI_ETHCOUNTER_IXIA_TEST_H_
+#endif // PINS_TEST_GNMI_ETHCOUNTER_IXIA_TEST_H_

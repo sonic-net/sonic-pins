@@ -32,7 +32,7 @@ namespace gutil {
 
 // Abstract base class for storing test artifacts.
 class TestArtifactWriter {
- public:
+public:
   virtual ~TestArtifactWriter() = default;
 
   // Stores a test artifact with the specified filename and contents. Overwrites
@@ -40,14 +40,14 @@ class TestArtifactWriter {
   virtual absl::Status StoreTestArtifact(absl::string_view filename,
                                          absl::string_view contents) = 0;
   absl::Status StoreTestArtifact(absl::string_view filename,
-                                 const google::protobuf::Message& proto);
+                                 const google::protobuf::Message &proto);
 
   // Appends contents to an existing test artifact with the specified filename.
   // Creates a new file if it doesn't exist.
   virtual absl::Status AppendToTestArtifact(absl::string_view filename,
                                             absl::string_view contents) = 0;
   absl::Status AppendToTestArtifact(absl::string_view filename,
-                                    const google::protobuf::Message& proto);
+                                    const google::protobuf::Message &proto);
 };
 
 // A thread-safe class for storing test artifacts.
@@ -58,22 +58,22 @@ class TestArtifactWriter {
 // NOTE: This class assumes a Bazel test environment! See
 // https://docs.bazel.build/versions/main/test-encyclopedia.html#initial-conditions
 class BazelTestArtifactWriter : public TestArtifactWriter {
- public:
+public:
   // Stores a test artifact with the specified filename and contents. Overwrites
   // existing files.
   absl::Status StoreTestArtifact(absl::string_view filename,
                                  absl::string_view contents)
       ABSL_LOCKS_EXCLUDED(write_mutex_) override;
-  using TestArtifactWriter::StoreTestArtifact;  // Inherit second overload.
+  using TestArtifactWriter::StoreTestArtifact; // Inherit second overload.
 
   // Appends contents to an existing test artifact with the specified filename.
   // Creates a new file if it doesn't exist.
   absl::Status AppendToTestArtifact(absl::string_view filename,
                                     absl::string_view contents)
       ABSL_LOCKS_EXCLUDED(write_mutex_) override;
-  using TestArtifactWriter::AppendToTestArtifact;  // Inherit second overload.
+  using TestArtifactWriter::AppendToTestArtifact; // Inherit second overload.
 
- private:
+private:
   // Open files are cached to avoid closing them after every append. On certain
   // file systems (e.g. b/111316875) closing files is abnormally slow and this
   // avoids it. However, this approach should also generally be faster.
@@ -82,6 +82,6 @@ class BazelTestArtifactWriter : public TestArtifactWriter {
   absl::Mutex write_mutex_;
 };
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_GUTIL_TEST_WRITER_H_
+#endif // PINS_GUTIL_TEST_WRITER_H_

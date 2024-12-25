@@ -34,8 +34,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard);
 
-}  // namespace conditional
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace conditional
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_

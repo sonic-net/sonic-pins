@@ -7,6 +7,15 @@
 #include "lib/gnmi/gnmi_helper.h"
 
 namespace pins_test {
+
+QueueCounters operator-(const QueueCounters &x, const QueueCounters &y) {
+  return QueueCounters{
+      .num_packets_transmitted =
+          x.num_packets_transmitted - y.num_packets_transmitted,
+      .num_packet_dropped = x.num_packet_dropped - y.num_packet_dropped,
+  };
+}
+
 absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
     absl::string_view port, absl::string_view queue,
     gnmi::gNMI::StubInterface &gnmi_stub) {
@@ -44,6 +53,19 @@ absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
         absl::StrCat("Unable to parse counter from ", drop_counter_response));
   }
   return counters;
+}
+
+absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
+    absl::string_view port, absl::string_view queue,
+    absl::string_view statistic, gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string openconfig_transmit_count_state_path = absl::Substitute(
+      "qos/interfaces/interface[interface-id=$0]"
+      "/output/queues/queue[name=$1]/state/$2",
+      port, queue, statistic);
+  
+  return GetGnmiStatePathAndTimestamp(&gnmi_stub,
+                                      openconfig_transmit_count_state_path,
+                                      "openconfig-qos:transmit-pkts");
 }
 
 // Returns the total number of packets enqueued for the queue with the given
