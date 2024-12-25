@@ -77,7 +77,7 @@ class SampleSizeTest : public SflowTestFixture {};
 
 class SampleRateTest : public SflowTestFixture {};
 
-struct SflowInbandTestParams {
+struct SflowMirrorTestParams {
   thinkit::MirrorTestbedInterface* testbed_interface;
   thinkit::SSHClient* ssh_client;
   std::string sut_gnmi_config;
@@ -91,7 +91,7 @@ struct Port {
 };
 
 class SflowMirrorTestFixture
-    : public ::testing::TestWithParam<SflowInbandTestParams> {
+    : public ::testing::TestWithParam<SflowMirrorTestParams> {
  protected:
   void SetUp() override;
 
