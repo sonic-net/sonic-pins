@@ -26,7 +26,6 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
 #include "p4_symbolic/parser.h"
-#include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -130,7 +129,7 @@ TEST(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
 
   // Prepare p4-symbolic.
   ASSERT_OK_AND_ASSIGN(
-      symbolic::Dataplane dataplane,
+      ir::Dataplane dataplane,
       ParseToIr(config.p4_device_config(), ir_p4info, pi_entries));
   std::vector<int> ports = {1, 2, 3, 4, 5};
   LOG(INFO) << "building model (this may take a while) ...";

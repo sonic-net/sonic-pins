@@ -224,7 +224,7 @@ TEST_P(SimpleSaiDeparserTest, PacketInHeaderDeparsingIsCorrect) {
   z3::solver solver = z3::solver(Z3Context());
   const auto config = sai::GetNonstandardForwardingPipelineConfig(
       /*instantiation=*/GetParam(), sai::NonstandardPlatform::kP4Symbolic);
-  ASSERT_OK_AND_ASSIGN(symbolic::Dataplane dataplane,
+  ASSERT_OK_AND_ASSIGN(ir::Dataplane dataplane,
                        ParseToIr(config, /*entries=*/{}));
   ASSERT_OK_AND_ASSIGN(auto headers,
                        symbolic::SymbolicGuardedMap::CreateSymbolicGuardedMap(

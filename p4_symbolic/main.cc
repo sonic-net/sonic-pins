@@ -25,7 +25,6 @@
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "gutil/io.h"
 #include "gutil/status.h"
@@ -41,19 +40,20 @@ ABSL_FLAG(std::string, entries, "",
           "The path to the table entries txt file (optional), leave this empty "
           "if the input p4 program contains no (explicit) tables for which "
           "entries are needed.");
-ABSL_FLAG(std::string, debug, "", "Dump the SMT program for debugging");
+ABSL_FLAG(std::string, smt, "", "Dump the SMT program for debugging");
 ABSL_FLAG(int, port_count, 2, "Number of used ports (numbered 0 to N-1)");
 ABSL_FLAG(bool, hardcoded_parser, true,
           "Use the hardcoded parser during symbolic evaluation");
 
 namespace {
+
 // Parse input P4 program, analyze it symbolically
 // and generate test pakcets.
 absl::Status ParseAndEvaluate() {
   const std::string &p4info_path = absl::GetFlag(FLAGS_p4info);
   const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
   const std::string &entries_path = absl::GetFlag(FLAGS_entries);
-  const std::string &debug_path = absl::GetFlag(FLAGS_debug);
+  const std::string &smt_path = absl::GetFlag(FLAGS_smt);
   const int port_count = absl::GetFlag(FLAGS_port_count);
   bool hardcoded_parser = absl::GetFlag(FLAGS_hardcoded_parser);
 
@@ -62,7 +62,7 @@ absl::Status ParseAndEvaluate() {
 
   // Transform to IR.
   ASSIGN_OR_RETURN(
-      p4_symbolic::symbolic::Dataplane dataplane,
+      p4_symbolic::ir::Dataplane dataplane,
       p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
 
   // Generate port list.
@@ -71,8 +71,9 @@ absl::Status ParseAndEvaluate() {
 
   // Evaluate program symbolically.
   ASSIGN_OR_RETURN(
-      const std::unique_ptr<p4_symbolic::symbolic::SolverState> &solver_state,
-      p4_symbolic::symbolic::EvaluateP4Pipeline(dataplane, physical_ports));
+      std::unique_ptr<p4_symbolic::symbolic::SolverState> solver_state,
+      p4_symbolic::symbolic::EvaluateP4Program(dataplane, physical_ports));
+
   // Add constraints for parser.
   if (hardcoded_parser) {
     ASSIGN_OR_RETURN(
@@ -83,17 +84,27 @@ absl::Status ParseAndEvaluate() {
     }
   }
 
+  // Output SMT formula.
+  if (!smt_path.empty()) {
+    RETURN_IF_ERROR(gutil::WriteFile(
+        solver_state->GetHeadersAndSolverConstraintsSMT(), smt_path));
+  }
+
   // Find a packet matching every entry of every table.
-  // Loop over tables in a deterministic order for output consistency (important
-  // for ci tests).
-  std::string debug_smt_formula = "";
+  // Loop over tables in a deterministic order for output consistency
+  // (important for ci tests).
   auto ordered_tables = absl::btree_map<std::string, p4_symbolic::ir::Table>(
       dataplane.program.tables().cbegin(), dataplane.program.tables().cend());
+  constexpr int kColumnSize = 80;
+
   for (const auto &[name, table] : ordered_tables) {
     int row_count = static_cast<int>(dataplane.entries[name].size());
     for (int i = -1; i < row_count; i++) {
-      std::cout << "Finding packet for table " << name << " and row " << i
-                << std::endl;
+      std::string banner =
+          "Finding packet for table " + name + " and row " + std::to_string(i);
+      std::cout << std::string(kColumnSize, '=') << std::endl
+                << banner << std::endl
+                << std::string(kColumnSize, '=') << std::endl;
 
       p4_symbolic::symbolic::Assertion table_entry_assertion =
           [name = name,
@@ -104,75 +115,17 @@ absl::Status ParseAndEvaluate() {
                     match.entry_index == static_cast<int>(i));
           };
 
-      absl::StrAppend(
-          &debug_smt_formula,
-          p4_symbolic::symbolic::DebugSMT(solver_state, table_entry_assertion),
-          "\n");
-
       ASSIGN_OR_RETURN(
-          std::optional<p4_symbolic::symbolic::ConcreteContext> packet_option,
-          p4_symbolic::symbolic::Solve(solver_state, table_entry_assertion));
+          std::optional<p4_symbolic::symbolic::ConcreteContext> concrete_packet,
+          p4_symbolic::symbolic::Solve(*solver_state, table_entry_assertion));
 
-      if (packet_option) {
-        // Whether packet was dropped or not!
-        std::cout << "\tDropped = " << packet_option.value().trace.dropped
-                  << std::endl;
-        // Ports
-        std::cout << "\tstandard_metadata.ingress_port = "
-                  << packet_option.value().ingress_port << std::endl;
-        std::cout << "\tstandard_metadata.egress_spec = "
-                  << packet_option.value().egress_port << std::endl;
-        // IPV4
-        if (packet_option.value().egress_headers.count("ipv4.srcAddr")) {
-          std::cout << "\tipv4.srcAddr = "
-                    << packet_option.value().egress_headers.at("ipv4.srcAddr")
-                    << std::endl;
-        }
-        if (packet_option.value().egress_headers.count("ipv4.dstAddr")) {
-          std::cout << "\tipv4.dstAddr = "
-                    << packet_option.value().egress_headers.at("ipv4.dstAddr")
-                    << std::endl;
-        }
-        // Ethernet
-        if (packet_option.value().egress_headers.count("ethernet.dstAddr")) {
-          std::cout << "\tethernet.dstAddr = "
-                    << packet_option.value().egress_headers.at(
-                           "ethernet.dstAddr")
-                    << std::endl;
-        }
-        // VRF
-        if (packet_option.value().egress_headers.count(
-                "scalars.local_metadata_t.vrf")) {
-          std::cout << "\tscalars.local_metadata_t.vrf = "
-                    << packet_option.value().egress_headers.at(
-                           "scalars.local_metadata_t.vrf")
-                    << std::endl;
-        }
-        if (packet_option.value().egress_headers.count(
-                "scalars.local_metadata_t.vrf_is_valid")) {
-          std::cout << "\tscalars.local_metadata_t.vrf_is_valid = "
-                    << packet_option.value().egress_headers.at(
-                           "scalars.local_metadata_t.vrf_is_valid")
-                    << std::endl;
-        }
-        // Custom metadata field defined in testdata/string-optional/program.p4
-        if (packet_option.value().egress_headers.contains(
-                "scalars.metadata.string_field")) {
-          std::cout << "\tscalars.metadata.string_field = "
-                    << packet_option.value().egress_headers.at(
-                           "scalars.metadata.string_field")
-                    << std::endl;
-        }
+      if (concrete_packet) {
+        std::cout << concrete_packet->to_string(/*verbose=*/true) << std::endl;
       } else {
         std::cout << "Cannot find solution!" << std::endl;
       }
-      std::cout << std::endl;
+      std::cout << std::string(kColumnSize, '_') << std::endl << std::endl;
     }
-  }
-
-  // Debugging.
-  if (!debug_path.empty()) {
-    RETURN_IF_ERROR(gutil::WriteFile(debug_smt_formula, debug_path));
   }
 
   return absl::OkStatus();
