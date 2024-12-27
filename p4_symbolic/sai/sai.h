@@ -19,7 +19,6 @@
 
 #include "absl/status/statusor.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 
 namespace p4_symbolic {

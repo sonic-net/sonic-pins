@@ -103,7 +103,7 @@ def end_to_end_test(
             ("--bmv2=$(location %s)" % bmv2_file),
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),
-            ("--debug=$(location %s)" % smt_output_file),
+            ("--smt=$(location %s)" % smt_output_file),
             ("--port_count=%d" % port_count),
             # Use `tee` to simultaneously capture output in file yet still print it to stdout, to
             # ease debugging.

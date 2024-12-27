@@ -23,7 +23,6 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "gutil/proto.h"
-#include "gutil/status.h"
 #include "p4_symbolic/parser.h"
 
 ABSL_FLAG(std::string, p4info, "",
@@ -48,7 +47,7 @@ absl::Status Test() {
 
   // Transform to IR and print.
   ASSIGN_OR_RETURN(
-      p4_symbolic::symbolic::Dataplane dataplane,
+      p4_symbolic::ir::Dataplane dataplane,
       p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
 
   // Dump string representation to stdout.
@@ -70,7 +69,7 @@ int main(int argc, char *argv[]) {
   // Verify link and compile versions are the same.
   // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  // Command line arugments and help message.
+  // Command line arguments and help message.
   absl::SetProgramUsageMessage(
       absl::StrFormat("usage: %s %s", argv[0],
                       "--bmv2=path/to/bmv2.json --p4info=path/to/p4info.pb.txt "
