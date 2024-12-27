@@ -53,7 +53,7 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
       std::string field_name =
           absl::StrFormat("%s.%s", field.header_name(), field.field_name());
       if (!state->ContainsKey(field_name)) {
-        return absl::UnimplementedError(absl::StrCat(
+        return absl::NotFoundError(absl::StrCat(
             "Action ", context->action_name, " hashes to unknown header field ",
             field.DebugString()));
       }
@@ -91,14 +91,8 @@ absl::Status EvaluateAssignmentStatement(
   switch (assignment.left().lvalue_case()) {
     case ir::LValue::kFieldValue: {
       const ir::FieldValue &field_value = assignment.left().field_value();
-      std::string field_name = absl::StrFormat(
-          "%s.%s", field_value.header_name(), field_value.field_name());
-      if (!state->ContainsKey(field_name)) {
-        return absl::UnimplementedError(absl::StrCat(
-            "Action ", context->action_name, " refers to unknown header field ",
-            field_value.DebugString()));
-      }
-      RETURN_IF_ERROR(state->Set(field_name, right, guard));
+      RETURN_IF_ERROR(state->Set(field_value.header_name(),
+                                 field_value.field_name(), right, guard));
       return absl::OkStatus();
     }
 
@@ -150,15 +144,7 @@ absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
 absl::StatusOr<z3::expr> EvaluateFieldValue(const ir::FieldValue &field_value,
                                             const SymbolicPerPacketState &state,
                                             const ActionContext &context) {
-  std::string field_name = absl::StrFormat("%s.%s", field_value.header_name(),
-                                           field_value.field_name());
-  if (!state.ContainsKey(field_name)) {
-    return absl::UnimplementedError(absl::StrCat(
-        "Action ", context.action_name, " refers to unknown header field ",
-        field_value.DebugString()));
-  }
-
-  return state.Get(field_name);
+  return state.Get(field_value.header_name(), field_value.field_name());
 }
 
 // Turns bmv2 values to Symbolic Expressions.

@@ -28,8 +28,7 @@
 #include "absl/base/macros.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "gutil/status.h"
-#include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/guarded_map.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -60,6 +59,11 @@ constexpr absl::string_view kExtractedPseudoField = "$extracted$";
 // Boolean pseudo header field that is set to true by p4-symbolic if the packet
 // gets cloned. Not an actual header field, but convenient for analysis.
 constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
+// 32-bit bit-vector field in standard metadata indicating whether there is a
+// parser error. The error code is defined in core.p4 and can be extended by the
+// P4 program. 0 means no error.
+constexpr absl::string_view kParserErrorField =
+    "standard_metadata.parser_error";
 
 // Maps the name of a header field in the p4 program to its concrete value.
 using ConcretePerPacketState = absl::btree_map<std::string, std::string>;
@@ -82,8 +86,6 @@ using SymbolicPerPacketState = SymbolicGuardedMap;
 // value to indicate the packet should be dropped at the end of ingress/egress
 // processing. See v1model.p4 for details.
 z3::expr EgressSpecDroppedValue();
-absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state);
-absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state);
 
 // Expresses a concrete match for a corresponding concrete packet with a
 // table in the program.
@@ -128,7 +130,7 @@ struct ConcreteTrace {
   std::string to_string() const {
     std::string result;
     absl::StrAppend(&result, "dropped = ", dropped, "\n");
-    absl::StrAppend(&result, "got cloned = ", got_cloned, "\n");
+    absl::StrAppend(&result, "got cloned = ", got_cloned);
     for (const auto &[table, match] : matched_entries) {
       absl::StrAppend(&result, "\n", table, " => ", match.to_string());
     }
@@ -153,6 +155,7 @@ struct ConcreteContext {
   std::string ingress_port;
   std::string egress_port;
   ConcretePerPacketState ingress_headers;
+  ConcretePerPacketState parsed_headers;
   ConcretePerPacketState egress_headers;
   ConcreteTrace trace; // Expected trace in the program.
 
@@ -163,14 +166,19 @@ struct ConcreteContext {
                                trace.to_string());
     if (verbose) {
       auto ingress_string = absl::StrCat("ingress_headers", ":");
+      auto parsed_string = absl::StrCat("parsed_headers", ":");
       auto egress_string = absl::StrCat("egress_headers", ":");
       for (const auto &[name, ingress_value] : ingress_headers) {
         absl::StrAppend(&ingress_string, "\n", name, " = ", ingress_value);
       }
+      for (const auto &[name, parsed_value] : parsed_headers) {
+        absl::StrAppend(&parsed_string, "\n", name, " = ", parsed_value);
+      }
       for (const auto &[name, egress_value] : egress_headers) {
         absl::StrAppend(&egress_string, "\n", name, " = ", egress_value);
       }
-      absl::StrAppend(&result, "\n\n", ingress_string, "\n\n", egress_string);
+      absl::StrAppend(&result, "\n\n", ingress_string, "\n\n", parsed_string,
+                      "\n\n", egress_string);
     }
     return result;
   }
@@ -184,16 +192,9 @@ struct SymbolicContext {
   z3::expr ingress_port;
   z3::expr egress_port;
   SymbolicPerPacketState ingress_headers;
+  SymbolicPerPacketState parsed_headers;
   SymbolicPerPacketState egress_headers;
   SymbolicTrace trace;
-};
-
-// The dataplane configuration of the switch.
-// Used as input to our symbolic pipeline.
-struct Dataplane {
-  ir::P4Program program;
-  // Maps the full name of a table to a list of its entries.
-  ir::TableEntries entries;
 };
 
 // The overall state of our symbolic solver/interpreter.
@@ -227,8 +228,11 @@ class SolverState {
 
   // Returns the SMT formulae of all assertions in the solver.
   std::string GetSolverSMT() const;
+  // Returns the SMT formulae of all ingress, parsed, and egress headers and
+  // solver constraints.
+  std::string GetHeadersAndSolverConstraintsSMT() const;
 
-  // The IR represnetation of the p4 program being analyzed.
+  // The IR of the p4 program being analyzed.
   ir::P4Program program;
   // Maps the name of a table to a list of its entries.
   ir::TableEntries entries;
@@ -249,7 +253,8 @@ class SolverState {
 // z3::expr portIsOne(const SymbolicContext &ctx) {
 //   return ctx.ingress_port == 1;
 // }
-using Assertion = std::function<z3::expr(const SymbolicContext &)>;
+using Assertion =
+    std::function<absl::StatusOr<z3::expr>(const SymbolicContext &)>;
 
 // User provided TranslationData for P4 types. This is a partial
 // map. For any P4 type included in this map, the statically provided
@@ -265,10 +270,10 @@ using TranslationPerType =
 // string) annotation, a static mapping between the P4RT values and the
 // underlying bitvector values may be provided. Otherwise, a mapping is
 // inferred dynamically for such types.
-absl::StatusOr<std::unique_ptr<SolverState>>
-EvaluateP4Pipeline(const Dataplane &data_plane,
-                   const std::vector<int> &physical_ports = {},
-                   const TranslationPerType &translation_per_type = {});
+absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
+    const ir::Dataplane &data_plane,
+    const std::vector<int> &physical_ports = {},
+    const TranslationPerType &translation_per_type = {});
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.

@@ -40,6 +40,7 @@
 #include "p4_symbolic/sai/deparser.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic::packet_synthesizer {
@@ -168,9 +169,9 @@ absl::Status AddConstraintsForInputPacketHeader(const HeaderCriteria& criteria,
                                          field_match.name()));
 
     // Generate the constraint corresponding to the given field match.
-    ASSIGN_OR_RETURN(
-        const int bitwidth,
-        GetFieldBitwidth(field_match.name(), solver_state.program));
+    ASSIGN_OR_RETURN(const int bitwidth,
+                     symbolic::util::GetFieldBitwidth(field_match.name(),
+                                                      solver_state.program));
     ASSIGN_OR_RETURN(z3::expr constraint,
                      GetFieldMatchConstraints(field, bitwidth, field_match));
 

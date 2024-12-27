@@ -25,7 +25,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "gutil/status.h"
-#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 

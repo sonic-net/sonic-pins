@@ -6,33 +6,13 @@
 #include "absl/strings/string_view.h"
 #include "google/protobuf/util/json_util.h"
 #include "gutil/overload.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 
 namespace pins_test {
-
-namespace {
-
-template <class T>
-absl::StatusOr<T> ParseProtoFromJsonIgnoringUnknownFields(
-    absl::string_view json) {
-  google::protobuf::util::JsonParseOptions options;
-  options.ignore_unknown_fields = true;
-  T proto;
-  // OS protobuf uses its own `Status`-like and `string_view`-like classes, so
-  // some gymnastics are required here:
-  // - ToAbslStatus converts any `Status`-like type to an absl::Status.
-  // - We pass in `{json.data(), json.size()}` instead of `json`, constructing
-  //   a new object of the appropriate `string_view`-like type implicitly.
-  RETURN_IF_ERROR(
-      gutil::ToAbslStatus(google::protobuf::util::JsonStringToMessage(
-          {json.data(), json.size()}, &proto, options)));
-  return proto;
-}
-
-}  // namespace
 
 absl::StatusOr<
     std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>>
@@ -57,25 +37,25 @@ ParseLoopbackIps(const openconfig::Config& config) {
 absl::StatusOr<
     std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>>
 ParseLoopbackIps(absl::string_view gnmi_config) {
-  ASSIGN_OR_RETURN(
-      auto config,
-      ParseProtoFromJsonIgnoringUnknownFields<openconfig::Config>(gnmi_config));
+  ASSIGN_OR_RETURN(auto config,
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       gnmi_config, /*ignore_unknown_fields=*/true));
   return ParseLoopbackIps(config);
 }
 
 absl::StatusOr<std::vector<netaddr::Ipv6Address>> ParseLoopbackIpv6s(
     absl::string_view gnmi_config) {
-  ASSIGN_OR_RETURN(
-      auto config,
-      ParseProtoFromJsonIgnoringUnknownFields<openconfig::Config>(gnmi_config));
+  ASSIGN_OR_RETURN(auto config,
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       gnmi_config, /*ignore_unknown_fields=*/true));
   return ParseLoopbackIpv6s(config);
 }
 
 absl::StatusOr<std::vector<netaddr::Ipv4Address>> ParseLoopbackIpv4s(
     absl::string_view gnmi_config) {
-  ASSIGN_OR_RETURN(
-      auto config,
-      ParseProtoFromJsonIgnoringUnknownFields<openconfig::Config>(gnmi_config));
+  ASSIGN_OR_RETURN(auto config,
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       gnmi_config, /*ignore_unknown_fields=*/true));
   return ParseLoopbackIpv4s(config);
 }
 
