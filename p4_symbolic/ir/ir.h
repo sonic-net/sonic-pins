@@ -22,9 +22,18 @@
 #include "absl/status/statusor.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/ir/table_entries.h"
 
 namespace p4_symbolic {
 namespace ir {
+
+// The dataplane configuration of the switch.
+// Used as input to our symbolic pipeline.
+struct Dataplane {
+  P4Program program;
+  // Maps the full name of a table to a list of its entries.
+  TableEntries entries;
+};
 
 // A special control name indicating the end of execution in a pipeline
 // in P4-Symbolic's IR.

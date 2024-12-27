@@ -14,8 +14,8 @@
 
 #include "p4_symbolic/packet_synthesizer/util.h"
 
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "gutil/status.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
@@ -27,7 +27,6 @@
 
 namespace p4_symbolic {
 namespace packet_synthesizer {
-using ::p4_symbolic::ir::P4Program;
 using ::p4_symbolic::symbolic::operators::BitAnd;
 using ::p4_symbolic::symbolic::operators::Eq;
 using ::p4_symbolic::symbolic::operators::PrefixEq;
@@ -222,46 +221,6 @@ absl::StatusOr<z3::expr> GetFieldMatchConstraints(z3::expr field, int bitwidth,
     default:
       return gutil::InvalidArgumentErrorBuilder()
              << "Unsupported IR match type in " << match.ShortDebugString();
-  }
-}
-
-// Extract the header field defition of a `field_ref` from the given P4
-// `program`.
-absl::StatusOr<p4_symbolic::ir::HeaderField> GetFieldDefinition(
-    const P4Program& program, absl::string_view field_ref) {
-  // Split the field reference into header and field names.
-  std::vector<std::string> split = absl::StrSplit(field_ref, '.');
-  if (split.size() != 2) {
-    return absl::InvalidArgumentError(
-        absl::Substitute("Expected <header>.<field> got '$0'", field_ref));
-  }
-  const std::string& header_name = split[0];
-  const std::string& field_name = split[1];
-
-  // Extract the header definition from the program.
-  if (!program.headers().contains(header_name)) {
-    return absl::InvalidArgumentError(
-        absl::Substitute("Unexpected header instance'$0'", header_name));
-  }
-  const p4_symbolic::ir::HeaderType& header_def =
-      program.headers().at(header_name);
-
-  // Extract the field definition from the header definition.
-  if (!header_def.fields().contains(field_name)) {
-    return absl::InvalidArgumentError(absl::Substitute(
-        "Unexpected field'$0' in header '$1'", field_name, header_name));
-  }
-  return header_def.fields().at(field_name);
-}
-
-absl::StatusOr<int> GetFieldBitwidth(
-    absl::string_view field_name, const p4_symbolic::ir::P4Program& program) {
-  if (absl::EndsWith(field_name, ".$valid$")) {
-    return 1;
-  } else {
-    ASSIGN_OR_RETURN(const p4_symbolic::ir::HeaderField field_definition,
-                     GetFieldDefinition(program, field_name));
-    return field_definition.bitwidth();
   }
 }
 
