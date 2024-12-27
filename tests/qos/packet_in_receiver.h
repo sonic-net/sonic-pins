@@ -3,6 +3,7 @@
 
 #include <thread>  // NOLINT
 
+#include "absl/synchronization/notification.h"
 #include "p4_pdpi/p4_runtime_session.h"
 namespace pins_test {
 
@@ -35,6 +36,7 @@ class PacketInReceiver final {
   // It's ok to call this function multiple times.
   void Destroy() {
     if (receiver_.joinable()) {
+      stop_receiving_.Notify();
       receiver_.join();
     }
   }
@@ -44,6 +46,7 @@ class PacketInReceiver final {
  private:
   pdpi::P4RuntimeSession &session_;
   std::thread receiver_;
+  absl::Notification stop_receiving_;
 };
 
 }  // namespace pins_test
