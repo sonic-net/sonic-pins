@@ -24,39 +24,41 @@
 
 namespace p4_symbolic {
 
-absl::StatusOr<symbolic::Dataplane> ParseToIr(
-    const std::string &bmv2_json_path, const std::string &p4info_path,
-    const std::string &table_entries_path) {
-   // Parse table entries.
-   p4::v1::WriteRequest write_request;
-   if (!table_entries_path.empty()) {
-     RETURN_IF_ERROR(
-         gutil::ReadProtoFromFile(table_entries_path.c_str(), &write_request))
-             .SetPrepend()
-         << "While trying to parse table entry file '" << table_entries_path
-         << "': ";
-   }
-   std::vector<p4::v1::TableEntry> table_entries;
-   for (const auto &update : write_request.updates()) {
-     // Make sure update is of type insert.
-     if (update.type() != p4::v1::Update::INSERT) {
-       return absl::InvalidArgumentError(
-           absl::StrCat("Table entries file contains a non-insert update ",
-                        update.DebugString()));
-     }
-     // Make sure the entity is a table entry.
-     const p4::v1::Entity &entity = update.entity();
-     if (entity.entity_case() != p4::v1::Entity::kTableEntry) {
-       return absl::InvalidArgumentError(
-           absl::StrCat("Table entries file contains a non-table entry entity ",
-                        entity.DebugString()));
-     }
-     table_entries.push_back(std::move(entity.table_entry()));
-   }
-   return ParseToIr(bmv2_json_path, p4info_path, table_entries);
+absl::StatusOr<ir::Dataplane> ParseToIr(const std::string &bmv2_json_path,
+                                        const std::string &p4info_path,
+                                        const std::string &table_entries_path) {
+  // Parse table entries.
+  p4::v1::WriteRequest write_request;
+  if (!table_entries_path.empty()) {
+    RETURN_IF_ERROR(
+        gutil::ReadProtoFromFile(table_entries_path.c_str(), &write_request))
+            .SetPrepend()
+        << "While trying to parse table entry file '" << table_entries_path
+        << "': ";
+  }
+  std::vector<p4::v1::TableEntry> table_entries;
+  for (const auto &update : write_request.updates()) {
+    // Make sure update is of type insert.
+    if (update.type() != p4::v1::Update::INSERT) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Table entries file contains a non-insert update ",
+                       update.DebugString()));
+    }
+
+    // Make sure the entity is a table entry.
+    const p4::v1::Entity &entity = update.entity();
+    if (entity.entity_case() != p4::v1::Entity::kTableEntry) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Table entries file contains a non-table entry entity ",
+                       entity.DebugString()));
+    }
+    table_entries.push_back(std::move(entity.table_entry()));
+  }
+
+  return ParseToIr(bmv2_json_path, p4info_path, table_entries);
 }
 
-absl::StatusOr<symbolic::Dataplane> ParseToIr(
+absl::StatusOr<ir::Dataplane> ParseToIr(
     const std::string &bmv2_json_path, const std::string &p4info_path,
     absl::Span<const p4::v1::TableEntry> table_entries) {
   // Parse bmv2 json file into our initial bmv2 protobuf.
@@ -70,7 +72,7 @@ absl::StatusOr<symbolic::Dataplane> ParseToIr(
   return ParseToIr(bmv2_json, p4info, table_entries);
 }
 
-absl::StatusOr<symbolic::Dataplane> ParseToIr(
+absl::StatusOr<ir::Dataplane> ParseToIr(
     const std::string &bmv2_json, const pdpi::IrP4Info &p4info,
     absl::Span<const p4::v1::TableEntry> table_entries) {
   ASSIGN_OR_RETURN(bmv2::P4Program bmv2, bmv2::ParseBmv2JsonString(bmv2_json),
@@ -78,10 +80,10 @@ absl::StatusOr<symbolic::Dataplane> ParseToIr(
   ASSIGN_OR_RETURN(ir::P4Program program, ir::Bmv2AndP4infoToIr(bmv2, p4info));
   ASSIGN_OR_RETURN(ir::TableEntries ir_table_entries,
                    ir::ParseTableEntries(p4info, table_entries));
-  return p4_symbolic::symbolic::Dataplane{program, ir_table_entries};
+  return ir::Dataplane{program, ir_table_entries};
 }
 
-absl::StatusOr<symbolic::Dataplane> ParseToIr(
+absl::StatusOr<ir::Dataplane> ParseToIr(
     const p4::v1::ForwardingPipelineConfig &config,
     absl::Span<const p4::v1::TableEntry> table_entries) {
   ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,

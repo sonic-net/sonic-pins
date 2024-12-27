@@ -40,10 +40,6 @@ cc_test(
     srcs = ["util_test.cc"],
     deps = [
         ":util",
-        "//gutil:status_matchers",
-        "//gutil:testing",
-        "//p4_symbolic/ir:ir_cc_proto",
-        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
 )

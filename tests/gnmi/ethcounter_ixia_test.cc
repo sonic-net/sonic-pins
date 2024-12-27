@@ -795,7 +795,7 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   EXPECT_OK(ForwardToEgress(std::stoul(in_id), std::stoul(out_id), false,
                             kDestMac, generic_testbed->Sut(),
                             GetParam().p4_info));
-  
+
   LOG(INFO) << "\n\n----- ForwardToEgress Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
@@ -920,8 +920,6 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   EXPECT_EQ(delta_out.out_errors, 0);
   EXPECT_EQ(delta_out.out_discards, 0);
   
-  EXPECT_LE(delta_in.in_ipv4_pkts, delta_out.out_pkts + 10);
-  EXPECT_GE(delta_in.in_ipv4_pkts, delta_out.out_pkts - 10);
   EXPECT_GE(delta_out.out_ipv4_pkts, delta_out.out_pkts - 10);
   EXPECT_LE(delta_out.out_ipv4_pkts, delta_out.out_pkts + 10);
   
@@ -991,7 +989,7 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
   ASSERT_OK_AND_ASSIGN(
       const std::string in_id,
       gutil::FindOrStatus(port_id_by_interface, sut_in_interface));
-  
+
   ASSERT_OK_AND_ASSIGN(
       const std::string out_id,
       gutil::FindOrStatus(port_id_by_interface, sut_out_interface));

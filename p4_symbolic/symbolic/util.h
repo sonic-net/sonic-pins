@@ -19,8 +19,10 @@
 
 #include <string>
 
+#include "absl/container/btree_map.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "google/protobuf/map.h"
-#include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -60,6 +62,11 @@ MergeMatchesOnCondition(const z3::expr &condition,
 absl::StatusOr<SymbolicTableMatches>
 MergeDisjointTableMatches(const SymbolicTableMatches &lhs,
                           const SymbolicTableMatches &rhs);
+
+// Extracts the bit-width of the field with name `field_name` in the given
+// `program`.
+absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
+                                     const ir::P4Program &program);
 
 } // namespace util
 } // namespace symbolic

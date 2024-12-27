@@ -17,6 +17,7 @@
 
 #include <utility>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -25,11 +26,18 @@
 
 namespace pins {
 
+// Returns true iff
+// ["openconfig-sampling:sampling"]["openconfig-sampling-sflow:sflow"]["config"]["enabled"]
+// exists and equals true. Returns a InvalidArgumentError if failed to parse
+// config.
+absl::StatusOr<bool> IsSflowConfigEnabled(absl::string_view gnmi_config);
+
 // Reads value from `state_path` and verifies it is the same with
 // `expected_value`. Returns a FailedPreconditionError if not matched.
 absl::Status VerifyGnmiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
                                       absl::string_view state_path,
-                                      absl::string_view expected_value);
+                                      absl::string_view expected_value,
+                                      absl::string_view resp_parse_str = "");
 
 // Sets sFLow sampling size to `sampling_size` and checks if it's applied to
 // corresponding state path in `timeout`. Returns error if failed.
@@ -69,6 +77,26 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const int sampling_rate, const int sampling_header_size);
+
+// Updates `gnmi_config` queue limit of `queue_name` to `queue_limit` and
+// returns the updated config. Returns InvalidArgumentError if `gnmi_config`
+// doesn't have any valid cpu scheduler policy config.
+absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
+                                             absl::string_view queue_name,
+                                             int queue_limit);
+
+// Returns <interface name, interface sflow sampling rate> map of each interface
+// in `interfaces`.
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetSflowSamplingRateForInterfaces(
+    gnmi::gNMI::StubInterface* gnmi_stub,
+    const absl::flat_hash_set<std::string>& interfaces);
+
+// Verifies that cpu_scheduler limit for `queue_sequence` is set to
+// `expected_queue_limit`.
+absl::Status VerifySflowQueueLimitState(
+    gnmi::gNMI::StubInterface* gnmi_stub, int queue_number,
+    int expected_queue_limit, absl::Duration timeout = absl::Seconds(5));
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_

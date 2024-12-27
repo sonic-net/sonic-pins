@@ -67,21 +67,17 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   thinkit::SSHClient* ssh_client_ = GetParam().ssh_client;
 
   std::vector<IxiaLink> ready_links_;
-
- private:
-  // Set to true when config already has sampling config and is set to true.
-  bool sflow_enabled_by_config_ = false;
 };
 
 class SampleSizeTest : public SflowTestFixture {};
 
 class SampleRateTest : public SflowTestFixture {};
 
-struct SflowInbandTestParams {
+struct SflowMirrorTestParams {
   thinkit::MirrorTestbedInterface* testbed_interface;
-  thinkit::SSHClient* main_ssh_client;
-  std::string main_gnmi_config;
-  std::string peer_gnmi_config;
+  thinkit::SSHClient* ssh_client;
+  std::string sut_gnmi_config;
+  std::string control_gnmi_config;
   p4::config::v1::P4Info p4_info;
 };
 
@@ -90,32 +86,21 @@ struct Port {
   int port_id;
 };
 
-class SflowInbandTestFixture
-    : public ::testing::TestWithParam<SflowInbandTestParams> {
+class SflowMirrorTestFixture
+    : public ::testing::TestWithParam<SflowMirrorTestParams> {
  protected:
   void SetUp() override;
 
   void TearDown() override;
   const p4::config::v1::P4Info& GetP4Info() { return GetParam().p4_info; }
   const pdpi::IrP4Info& GetIrP4Info() { return ir_p4_info_; }
-  thinkit::Switch& GetMainSwitch() {
-    return GetParam().testbed_interface->GetMirrorTestbed().Sut();
-  }
-  thinkit::Switch& GetPeerSwitch() {
-    return GetParam().testbed_interface->GetMirrorTestbed().ControlSwitch();
-  }
 
   pdpi::IrP4Info ir_p4_info_;
-  std::unique_ptr<pdpi::P4RuntimeSession> main_p4_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> peer_p4_session_;
-  std::unique_ptr<gnmi::gNMI::StubInterface> peer_gnmi_stub_;
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+  std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
 
-  Port traffic_port_;
-  std::string collector_ipv6_;
-
- private:
-  // Set to true when config already has sampling config and is set to true.
-  bool sflow_enabled_by_config_ = false;
+  std::string agent_address_;
 };
 }  // namespace pins
 

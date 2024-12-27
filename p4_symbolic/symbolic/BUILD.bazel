@@ -27,9 +27,11 @@ cc_library(
         "control.cc",
         "guarded_map.cc",
         "operators.cc",
+        "parser.cc",
         "symbolic.cc",
         "table.cc",
         "util.cc",
+        "v1model.cc",
         "values.cc",
     ],
     hdrs = [
@@ -38,9 +40,11 @@ cc_library(
         "control.h",
         "guarded_map.h",
         "operators.h",
+        "parser.h",
         "symbolic.h",
         "table.h",
         "util.h",
+        "v1model.h",
         "values.h",
     ],
     deps = [
@@ -65,6 +69,7 @@ cc_library(
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
@@ -136,6 +141,37 @@ cc_test(
         "//p4_symbolic:z3_util",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "parser_test",
+    srcs = ["parser_test.cc"],
+    deps = [
+        ":symbolic",
+        "//gutil:proto",
+        "//gutil:status_matchers",
+        "//p4_symbolic:z3_util",
+        "//p4_symbolic/ir",
+        "//p4_symbolic/ir:ir_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_z3prover_z3//:api",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "util_test",
+    srcs = ["util_test.cc"],
+    deps = [
+        ":symbolic",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_symbolic/ir:ir_cc_proto",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
 )

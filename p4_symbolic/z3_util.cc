@@ -15,8 +15,6 @@
 
 #include "absl/status/statusor.h"
 #include "gmpxx.h"
-#include "gutil/status.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
