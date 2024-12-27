@@ -44,7 +44,7 @@ TEST(TranslateValueToP4RT, ReverseTranslatedValuesAreEqualToTheOriginalOnes) {
   }
 }
 
-// Make sure the code conforms to the pecularities of PDPI's value conversion.
+// Make sure the code conforms to the peculiarities of PDPI's value conversion.
 TEST(FormatP4RTValue, WorksFor64BitIPv6) {
   P4RuntimeTranslator trasnlator;
   ASSERT_OK_AND_ASSIGN(auto ir_value,

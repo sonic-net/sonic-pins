@@ -35,7 +35,7 @@ namespace p4_symbolic {
 using ::p4_symbolic::symbolic::SymbolicPerPacketState;
 
 absl::StatusOr<std::string> GetUserMetadataFieldName(
-    const std::string& field, const symbolic::SymbolicPerPacketState& state) {
+    const std::string& field, const SymbolicPerPacketState& state) {
   // Compute set of mangled field names that match the given field name.
   std::vector<std::string> mangled_candidates;
 
@@ -50,7 +50,7 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
   //
   // We look for names that match these templates.
   // TODO: Remove `old_prefix` eventually when we no longer
-  // need backward compatability.
+  // need backward compatibility.
   const std::string old_prefix = absl::StrCat("scalars.userMetadata._", field);
   const std::string new_prefix =
       absl::StrCat("scalars.local_metadata_t._", field);
