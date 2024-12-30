@@ -1,0 +1,521 @@
+headers {
+  key: "ethernet"
+  value {
+    name: "ethernet_t"
+    id: 2
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ether_type"
+      value {
+        name: "ether_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 48
+      }
+    }
+    ordered_fields_list: "dst_addr"
+    ordered_fields_list: "src_addr"
+    ordered_fields_list: "ether_type"
+  }
+}
+headers {
+  key: "icmp"
+  value {
+    name: "icmp_t"
+    id: 4
+    fields {
+      key: "checksum"
+      value {
+        name: "checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "code"
+      value {
+        name: "code"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "rest_of_header"
+      value {
+        name: "rest_of_header"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "type"
+      value {
+        name: "type"
+        bitwidth: 8
+      }
+    }
+    ordered_fields_list: "type"
+    ordered_fields_list: "code"
+    ordered_fields_list: "checksum"
+    ordered_fields_list: "rest_of_header"
+  }
+}
+headers {
+  key: "ipv4"
+  value {
+    name: "ipv4_t"
+    id: 3
+    fields {
+      key: "do_not_fragment"
+      value {
+        name: "do_not_fragment"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "dscp"
+      value {
+        name: "dscp"
+        bitwidth: 6
+      }
+    }
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ecn"
+      value {
+        name: "ecn"
+        bitwidth: 2
+      }
+    }
+    fields {
+      key: "frag_offset"
+      value {
+        name: "frag_offset"
+        bitwidth: 13
+      }
+    }
+    fields {
+      key: "header_checksum"
+      value {
+        name: "header_checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "identification"
+      value {
+        name: "identification"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ihl"
+      value {
+        name: "ihl"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "more_fragments"
+      value {
+        name: "more_fragments"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "protocol"
+      value {
+        name: "protocol"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "reserved"
+      value {
+        name: "reserved"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "total_len"
+      value {
+        name: "total_len"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ttl"
+      value {
+        name: "ttl"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 4
+      }
+    }
+    ordered_fields_list: "version"
+    ordered_fields_list: "ihl"
+    ordered_fields_list: "dscp"
+    ordered_fields_list: "ecn"
+    ordered_fields_list: "total_len"
+    ordered_fields_list: "identification"
+    ordered_fields_list: "reserved"
+    ordered_fields_list: "do_not_fragment"
+    ordered_fields_list: "more_fragments"
+    ordered_fields_list: "frag_offset"
+    ordered_fields_list: "ttl"
+    ordered_fields_list: "protocol"
+    ordered_fields_list: "header_checksum"
+    ordered_fields_list: "src_addr"
+    ordered_fields_list: "dst_addr"
+  }
+}
+headers {
+  key: "scalars"
+  value {
+    name: "scalars_0"
+  }
+}
+headers {
+  key: "standard_metadata"
+  value {
+    name: "standard_metadata"
+    id: 1
+    fields {
+      key: "_padding"
+      value {
+        name: "_padding"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "checksum_error"
+      value {
+        name: "checksum_error"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "deq_qdepth"
+      value {
+        name: "deq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "deq_timedelta"
+      value {
+        name: "deq_timedelta"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "egress_global_timestamp"
+      value {
+        name: "egress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "egress_rid"
+      value {
+        name: "egress_rid"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "egress_spec"
+      value {
+        name: "egress_spec"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "enq_qdepth"
+      value {
+        name: "enq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "enq_timestamp"
+      value {
+        name: "enq_timestamp"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ingress_global_timestamp"
+      value {
+        name: "ingress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "instance_type"
+      value {
+        name: "instance_type"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "mcast_grp"
+      value {
+        name: "mcast_grp"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "packet_length"
+      value {
+        name: "packet_length"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "parser_error"
+      value {
+        name: "parser_error"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "priority"
+      value {
+        name: "priority"
+        bitwidth: 3
+      }
+    }
+    ordered_fields_list: "ingress_port"
+    ordered_fields_list: "egress_spec"
+    ordered_fields_list: "egress_port"
+    ordered_fields_list: "instance_type"
+    ordered_fields_list: "packet_length"
+    ordered_fields_list: "enq_timestamp"
+    ordered_fields_list: "enq_qdepth"
+    ordered_fields_list: "deq_timedelta"
+    ordered_fields_list: "deq_qdepth"
+    ordered_fields_list: "ingress_global_timestamp"
+    ordered_fields_list: "egress_global_timestamp"
+    ordered_fields_list: "mcast_grp"
+    ordered_fields_list: "egress_rid"
+    ordered_fields_list: "checksum_error"
+    ordered_fields_list: "parser_error"
+    ordered_fields_list: "priority"
+    ordered_fields_list: "_padding"
+  }
+}
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+    initial_control: "__END_OF_PIPELINE__"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "__END_OF_PIPELINE__"
+  }
+}
+parsers {
+  key: "parser"
+  value {
+    name: "parser"
+    initial_state: "start"
+    parse_states {
+      key: "parse_icmp"
+      value {
+        name: "parse_icmp"
+        parser_ops {
+          extract {
+            header {
+              header_name: "icmp"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
+      }
+    }
+    parse_states {
+      key: "parse_ipv4"
+      value {
+        name: "parse_ipv4"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ipv4"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "ipv4"
+            field_name: "protocol"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value {
+              value: "0x01"
+            }
+            mask {
+            }
+            next_state: "parse_icmp"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
+      }
+    }
+    parse_states {
+      key: "start"
+      value {
+        name: "start"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ethernet"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "ethernet"
+            field_name: "ether_type"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value {
+              value: "0x0800"
+            }
+            mask {
+            }
+            next_state: "parse_ipv4"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+          continue_to_merge_point: true
+        }
+      }
+    }
+  }
+}
+errors {
+  key: "HeaderTooShort"
+  value {
+    name: "HeaderTooShort"
+    value: 4
+  }
+}
+errors {
+  key: "NoError"
+  value {
+    name: "NoError"
+  }
+}
+errors {
+  key: "NoMatch"
+  value {
+    name: "NoMatch"
+    value: 2
+  }
+}
+errors {
+  key: "PacketTooShort"
+  value {
+    name: "PacketTooShort"
+    value: 1
+  }
+}
+errors {
+  key: "ParserInvalidArgument"
+  value {
+    name: "ParserInvalidArgument"
+    value: 6
+  }
+}
+errors {
+  key: "ParserTimeout"
+  value {
+    name: "ParserTimeout"
+    value: 5
+  }
+}
+errors {
+  key: "StackOutOfBounds"
+  value {
+    name: "StackOutOfBounds"
+    value: 3
+  }
+}
+deparsers {
+  key: "deparser"
+  value {
+    name: "deparser"
+    header_order: "ethernet"
+    header_order: "ipv4"
+    header_order: "icmp"
+  }
+}
+

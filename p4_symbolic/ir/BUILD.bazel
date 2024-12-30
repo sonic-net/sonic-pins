@@ -82,6 +82,7 @@ cc_library(
         ":table_entries",
         "//gutil:status",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
+        "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -251,4 +252,15 @@ ir_parsing_test(
     golden_file = "expected/fall_through_transition.txt",
     p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
     p4_program = "//p4_symbolic/testdata:parser/fall_through_transition.p4",
+)
+
+# This test is used for the ICMP header patching. It makes sure that, given a
+# partial definition of the ICMP header where the 32-bit `rest_of_header` field
+# is missing, the output IR will still contain the complete ICMP header.
+# TODO: We should remove this test and the corresponding test data
+# when GPINS' last tested version is updated with the complete ICMP definition.
+ir_parsing_test(
+    name = "partial_icmp_test",
+    golden_file = "expected/partial_icmp.txt",
+    p4_program = "//p4_symbolic/testdata:incomplete-header/partial_icmp.p4",
 )
