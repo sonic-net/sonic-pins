@@ -398,14 +398,23 @@ absl::Status VerifySflowQueueLimitState(gnmi::gNMI::StubInterface* gnmi_stub,
 
 absl::StatusOr<int> ExtractTosFromTcpdumpResult(
     absl::string_view tcpdump_result) {
-  if (std::string tos;
-      RE2::PartialMatch(tcpdump_result, *kPacketTosMatchPattern, &tos)) {
-    int tos_int;
-    if (absl::SimpleHexAtoi(tos, &tos_int)) {
-      return tos_int;
+  std::string tos;
+  int tos_int = -1;
+  while (RE2::FindAndConsume(&tcpdump_result, *kPacketTosMatchPattern, &tos)) {
+    int current_tos_int;
+    if (!absl::SimpleHexAtoi(tos, &current_tos_int)) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Failed to convert ", tos, " to int value."));
     }
-    return absl::InvalidArgumentError(
-        absl::StrCat("Failed to convert ", tos, " to int value."));
+    if (tos_int != -1 && current_tos_int != tos_int) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Tos values are not identical. ", tos_int,
+                       " not equal to ", current_tos_int));
+    }
+    tos_int = current_tos_int;
+  }
+  if (tos_int != -1) {
+    return tos_int;
   }
   return absl::InvalidArgumentError(
       "Failed to find ToS value in tcpdump result.");
