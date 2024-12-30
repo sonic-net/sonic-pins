@@ -41,6 +41,7 @@ cc_library(
         "//tests/lib:p4rt_fixed_table_programming_helper",
         "//tests/lib:switch_test_setup_helpers",
         "//tests/qos:gnmi_parsers",
+        "//tests/qos:packet_in_receiver",
         "//tests/qos:qos_test_util",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
@@ -57,6 +58,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
@@ -83,6 +85,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_googlesource_code_re2//:re2",
     ],
 )
 
