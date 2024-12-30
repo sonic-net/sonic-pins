@@ -78,7 +78,7 @@ using ConcretePerPacketState = absl::btree_map<std::string, std::string>;
 // Then, we will have:
 //    SymbolicMetadata["standard_metadata.ingress_port"] =
 //         <symbolic bit vector of size 9>
-// An instace of this type is passed around and mutated by the functions
+// An instance of this type is passed around and mutated by the functions
 // responsible for symbolically evaluating the program.
 using SymbolicPerPacketState = SymbolicGuardedMap;
 

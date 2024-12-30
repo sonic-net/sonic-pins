@@ -69,7 +69,7 @@ int FindMatchWithName(const pdpi::IrTableEntry &entry,
 // Sort the given table entries by priority.
 // Priority depends on the match types.
 // If the matches contain one or more ternary matches, priority is the explicit
-// numeric priority assigned to the the entry.
+// numeric priority assigned to the entry.
 // If no ternary matches exist, and there is *exactly* one lpm match, priority
 // is determined by the length of the prefix to match, such that longer
 // prefixes have higher priority.

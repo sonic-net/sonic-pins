@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/substitute.h"
 #include "gtest/gtest.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -63,6 +64,7 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   std::unique_ptr<thinkit::GenericTestbed> testbed_;
   pdpi::IrP4Info ir_p4_info_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
+  std::string gnmi_config_with_sflow_;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
   thinkit::SSHClient* ssh_client_ = GetParam().ssh_client;
 
@@ -72,6 +74,8 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
 class SampleSizeTest : public SflowTestFixture {};
 
 class SampleRateTest : public SflowTestFixture {};
+
+class BackoffTest : public SflowTestFixture {};
 
 struct SflowMirrorTestParams {
   thinkit::MirrorTestbedInterface* testbed_interface;

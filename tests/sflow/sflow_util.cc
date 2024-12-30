@@ -14,9 +14,12 @@
 
 #include "tests/sflow/sflow_util.h"
 
+#include <string>
+
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -28,6 +31,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "re2/re2.h"
 
 namespace pins {
 namespace {
@@ -59,6 +63,10 @@ constexpr absl::string_view kSflowGnmiStateCollectorAddressPath =
     "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/address";
 constexpr absl::string_view kSflowGnmiStateCollectorPortPath =
     "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/port";
+
+// ToS is present in tcp dump like
+// ... (class 0x80, ....)
+constexpr LazyRE2 kPacketTosMatchPattern{R"(class 0x([a-f0-9]+),)"};
 
 }  // namespace
 
@@ -386,6 +394,30 @@ absl::Status VerifySflowQueueLimitState(gnmi::gNMI::StubInterface* gnmi_stub,
         state_value, ", expected value is ", expected_queue_limit));
   };
   return pins_test::WaitForCondition(verify_queue_limit, timeout);
+}
+
+absl::StatusOr<int> ExtractTosFromTcpdumpResult(
+    absl::string_view tcpdump_result) {
+  std::string tos;
+  int tos_int = -1;
+  while (RE2::FindAndConsume(&tcpdump_result, *kPacketTosMatchPattern, &tos)) {
+    int current_tos_int;
+    if (!absl::SimpleHexAtoi(tos, &current_tos_int)) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Failed to convert ", tos, " to int value."));
+    }
+    if (tos_int != -1 && current_tos_int != tos_int) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Tos values are not identical. ", tos_int,
+                       " not equal to ", current_tos_int));
+    }
+    tos_int = current_tos_int;
+  }
+  if (tos_int != -1) {
+    return tos_int;
+  }
+  return absl::InvalidArgumentError(
+      "Failed to find ToS value in tcpdump result.");
 }
 
 }  // namespace pins

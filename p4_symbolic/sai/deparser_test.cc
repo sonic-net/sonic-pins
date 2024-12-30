@@ -115,7 +115,7 @@ TEST_P(SaiDeparserTest, Ipv6TcpPacketParserIntegrationTest) {
                          GetSaiFields(state_->context.ingress_headers));
     state_->solver->add(!fields.headers.ipv4.valid);
     state_->solver->add(fields.headers.tcp.valid);
-    // The only way to have an TCP packet that is not an IPv4 packet is to have
+    // The only way to have a TCP packet that is not an IPv4 packet is to have
     // an IPv6 packet.
   }
 
@@ -213,7 +213,7 @@ TEST_P(SaiDeparserTest, PacketInHeaderIsNeverParsedIntegrationTest) {
     state_->solver->add(fields.headers.packet_in->valid);
   }
 
-  // Should be unsatisifiable, because we never parse a packet-in header.
+  // Should be unsatisfiable, because we never parse a packet-in header.
   ASSERT_EQ(state_->solver->check(), z3::check_result::unsat);
 }
 
