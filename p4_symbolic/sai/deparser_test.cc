@@ -69,6 +69,35 @@ TEST_P(SaiDeparserTest, DeparseIngressAndEgressHeadersWithoutConstraints) {
   }
 }
 
+TEST_P(SaiDeparserTest, VlanPacketParserIntegrationTest) {
+  // Add parse constraints.
+  {
+    ASSERT_OK_AND_ASSIGN(auto parse_constraints,
+                         EvaluateSaiParser(state_->context.ingress_headers));
+    for (auto& constraint : parse_constraints) state_->solver->add(constraint);
+  }
+
+  // Add VLAN constraint.
+  {
+    ASSERT_OK_AND_ASSIGN(SaiFields fields,
+                         GetSaiFields(state_->context.ingress_headers));
+    state_->solver->add(fields.headers.vlan->valid);
+  }
+
+  // Solve and deparse.
+  ASSERT_EQ(state_->solver->check(), z3::check_result::sat);
+  auto model = state_->solver->get_model();
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       SaiDeparser(state_->context.ingress_headers, model));
+
+  // Check we indeed got a VLAN packet.
+  packetlib::Packet packet = packetlib::ParsePacket(raw_packet);
+  LOG(INFO) << "Z3-generated packet = " << packet.DebugString();
+  ASSERT_GE(packet.headers_size(), 2);
+  ASSERT_TRUE(packet.headers(0).has_ethernet_header());
+  ASSERT_TRUE(packet.headers(1).has_vlan_header());
+}
+
 TEST_P(SaiDeparserTest, Ipv4UdpPacketParserIntegrationTest) {
   // Add parse constraints.
   {
@@ -77,12 +106,14 @@ TEST_P(SaiDeparserTest, Ipv4UdpPacketParserIntegrationTest) {
     for (auto& constraint : parse_constraints) state_->solver->add(constraint);
   }
 
-  // Add IPv4 + UDP constraint.
+  // Add IPv4 + UDP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
                          GetSaiFields(state_->context.ingress_headers));
     state_->solver->add(fields.headers.ipv4.valid);
     state_->solver->add(fields.headers.udp.valid);
+
+    state_->solver->add(!fields.headers.vlan->valid);
   }
 
   // Solve and deparse.
@@ -109,7 +140,7 @@ TEST_P(SaiDeparserTest, Ipv6TcpPacketParserIntegrationTest) {
     for (auto& constraint : parse_constraints) state_->solver->add(constraint);
   }
 
-  // Add IPv6 + UDP constraint.
+  // Add IPv6 + TCP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
                          GetSaiFields(state_->context.ingress_headers));
@@ -117,6 +148,7 @@ TEST_P(SaiDeparserTest, Ipv6TcpPacketParserIntegrationTest) {
     state_->solver->add(fields.headers.tcp.valid);
     // The only way to have a TCP packet that is not an IPv4 packet is to have
     // an IPv6 packet.
+    state_->solver->add(!fields.headers.vlan->valid);
   }
 
   // Solve and deparse.
@@ -143,11 +175,12 @@ TEST_P(SaiDeparserTest, ArpPacketParserIntegrationTest) {
     for (auto& constraint : parse_constraints) state_->solver->add(constraint);
   }
 
-  // Add ARP constraint.
+  // Add ARP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
                          GetSaiFields(state_->context.ingress_headers));
     state_->solver->add(fields.headers.arp.valid);
+    state_->solver->add(!fields.headers.vlan->valid);
   }
 
   // Solve and deparse.
@@ -173,11 +206,12 @@ TEST_P(SaiDeparserTest, IcmpPacketParserIntegrationTest) {
     for (auto& constraint : parse_constraints) state_->solver->add(constraint);
   }
 
-  // Add ICMP constraint.
+  // Add ICMP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
                          GetSaiFields(state_->context.ingress_headers));
     state_->solver->add(fields.headers.icmp.valid);
+    state_->solver->add(!fields.headers.vlan->valid);
   }
 
   // Solve and deparse.

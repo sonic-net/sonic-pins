@@ -50,6 +50,15 @@ struct SaiEthernet {
   z3::expr ether_type;
 };
 
+// Symbolic version of `struct vlan_t` in headers.p4.
+struct SaiVlan {
+  z3::expr valid;
+  z3::expr priority_code_point;
+  z3::expr drop_eligible_indicator;
+  z3::expr vlan_id;
+  z3::expr ether_type;
+};
+
 // Symbolic version of `struct ipv4_t` in headers.p4.
 struct SaiIpv4 {
   z3::expr valid;
@@ -147,8 +156,8 @@ struct SaiGre {
 
 // Symbolic version of `struct headers_t` in metadata.p4.
 struct SaiHeaders {
-  // TODO: Make non-optional when we no longer need
-  // backwards-compatability.
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
   std::optional<SaiPacketIn> packet_in;
   std::optional<SaiPacketOut> packet_out;
 
@@ -156,6 +165,9 @@ struct SaiHeaders {
   SaiIpv4 erspan_ipv4;
   SaiGre erspan_gre;
   SaiEthernet ethernet;
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  std::optional<SaiVlan> vlan;
 
   // Not extracted during parsing.
   SaiIpv6 tunnel_encap_ipv6;
@@ -172,6 +184,10 @@ struct SaiHeaders {
 // Symbolic version of `struct local_metadata_t` in metadata.p4.
 // TODO: add missing fields.
 struct SaiLocalMetadata {
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  std::optional<z3::expr> vlan_id;
+  std::optional<z3::expr> vlan_id_valid;
   z3::expr admit_to_l3;
   z3::expr vrf_id;
   z3::expr l4_src_port;
@@ -179,8 +195,8 @@ struct SaiLocalMetadata {
   z3::expr mirror_session_id_valid;
   z3::expr ingress_port;
   z3::expr route_metadata;
-  // TODO: Make non-optional when we no longer need
-  // backwards-compatability.
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
   std::optional<z3::expr> bypass_ingress;
 };
 

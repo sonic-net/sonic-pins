@@ -116,7 +116,7 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
   };
 
   // TODO: Make unconditional when we no longer need
-  // backwards-compatability.
+  // backwards-compatibility.
   auto packet_in =
       state.ContainsKey("packet_in_header.$valid$")
           ? std::make_optional(SaiPacketIn{
@@ -181,6 +181,19 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .src_addr = get_field("ethernet.src_addr"),
       .ether_type = get_field("ethernet.ether_type"),
   };
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  auto vlan =
+      state.ContainsKey("vlan.$valid$")
+          ? std::make_optional(SaiVlan{
+                .valid = get_field("vlan.$valid$"),
+                .priority_code_point = get_field("vlan.priority_code_point"),
+                .drop_eligible_indicator =
+                    get_field("vlan.drop_eligible_indicator"),
+                .vlan_id = get_field("vlan.vlan_id"),
+                .ether_type = get_field("vlan.ether_type"),
+            })
+          : std::nullopt;
   auto tunnel_encap_ipv6 = SaiIpv6{
       .valid = get_field("tunnel_encap_ipv6.$valid$"),
       .version = get_field("tunnel_encap_ipv6.version"),
@@ -276,6 +289,15 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .target_proto_addr = get_field("arp.target_proto_addr"),
   };
   auto local_metadata = SaiLocalMetadata{
+      // TODO: Make unconditional when we no longer need
+      // backwards-compatibility.
+      .vlan_id = GetUserMetadata("vlan_id", state).ok()
+                     ? std::make_optional(get_metadata_field("vlan_id"))
+                     : std::nullopt,
+      .vlan_id_valid =
+          GetUserMetadata("vlan_id_valid", state).ok()
+              ? std::make_optional(get_metadata_field("vlan_id_valid"))
+              : std::nullopt,
       .admit_to_l3 = get_metadata_field("admit_to_l3"),
       .vrf_id = get_metadata_field("vrf_id"),
       .l4_src_port = get_metadata_field("l4_src_port"),
@@ -284,7 +306,7 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .ingress_port = get_metadata_field("ingress_port"),
       .route_metadata = get_metadata_field("route_metadata"),
       // TODO: Make unconditional when we no longer need
-      // backwards-compatability.
+      // backwards-compatibility.
       .bypass_ingress =
           GetUserMetadata("bypass_ingress", state).ok()
               ? std::make_optional(get_metadata_field("bypass_ingress"))
@@ -311,6 +333,7 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
               .erspan_ipv4 = erspan_ipv4,
               .erspan_gre = erspan_gre,
               .ethernet = ethernet,
+              .vlan = vlan,
               .tunnel_encap_ipv6 = tunnel_encap_ipv6,
               .tunnel_encap_gre = tunnel_encap_gre,
               .ipv4 = ipv4,
