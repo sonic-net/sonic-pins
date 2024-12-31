@@ -489,6 +489,7 @@ absl::StatusOr<std::thread> RunSflowCollectorForNSecs(
                 device_name, ssh_command,
                 /*timeout=*/absl::Seconds(sflowtool_runtime + 10)));
       });
+
   // Sleep to wait sflowtool to start.
   absl::SleepFor(absl::Seconds(5));
   return sflow_tool_thread;
@@ -2616,6 +2617,95 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
   LOG(INFO) << "Ingress Deltas (CPU):\n total time: "
             << (absl::Now() - start_time);
   ShowCounters(delta);
+
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
+                                                    sflow_result));
+  std::vector<std::string> sflow_samples = absl::StrSplit(sflow_result, '\n');
+  LOG(INFO) << "Received " << sflow_samples.size() << " samples";
+  // Check ICMP pkts. ICMP for IPv6  protocol number is 58.
+  EXPECT_TRUE(HasSampleForProtocol(sflow_result, /*ip_protocol=*/58));
+}
+
+// 1. Set sFlow config on SUT for one interface.
+// 2. Set SUT sFlow collector as kLocalLoopbackIpv6.
+// 3. Send ICMP traffic from control switch to SUT on this interface.
+// 4. Validate the packets get punted and sFlowtool has expected result.
+// TODO: Enable Ip2Me test with correct expectation on CPU counter
+TEST_P(SflowMirrorTestFixture, DISABLED_TestIp2MePacketsAreSampledAndPunted) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+  const int packets_num = 3000;
+  // Use 100 for traffic speed since we want to verify the punted packets number
+  // and we don't want the punted packets to get discarded.
+  const int traffic_speed = 100;
+
+  ASSERT_OK_AND_ASSIGN(Port traffic_port,
+                       GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
+  ASSERT_OK_AND_ASSIGN(
+      auto port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*sut_gnmi_stub_));
+  ASSERT_GE(port_id_per_port_name.size(), 0) << "No up interfaces.";
+  absl::flat_hash_set<std::string> sflow_enabled_interfaces;
+  for (const auto& [interface_name, unused] : port_id_per_port_name) {
+    sflow_enabled_interfaces.insert(interface_name);
+  }
+
+  std::vector<std::pair<std::string, int>> collector_address_and_port{
+      {kLocalLoopbackIpv6, 6343}};
+  ASSERT_OK_AND_ASSIGN(
+      auto sut_gnmi_config_with_sflow,
+      UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
+                        collector_address_and_port, sflow_enabled_interfaces,
+                        kInbandSamplingRate, kSampleHeaderSize));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "sut_gnmi_config_with_sflow.txt",
+      json_yang::FormatJsonBestEffort(sut_gnmi_config_with_sflow)));
+  ASSERT_OK(
+      pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config_with_sflow));
+
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(30), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+
+  // Start sflowtool on peer switch.
+  std::string sflow_result;
+  {
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        RunSflowCollectorForNSecs(
+            *GetParam().ssh_client, testbed.Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/
+            packets_num / traffic_speed + 20, sflow_result));
+
+    ASSERT_OK_AND_ASSIGN(auto initial_cpu_counter,
+                         ReadCounters("CPU", sut_gnmi_stub_.get()));
+    absl::Time start_time = absl::Now();
+
+    // Wait for sflowtool to finish and read counter data.
+    absl::Cleanup clean_up([this, initial_cpu_counter, packets_num, start_time,
+                            &sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+
+      // Display the difference for CPU counter during test dev.
+      ASSERT_OK_AND_ASSIGN(auto final_cpu_counter,
+                           ReadCounters("CPU", sut_gnmi_stub_.get()));
+      auto delta = DeltaCounters(initial_cpu_counter, final_cpu_counter);
+      EXPECT_EQ(delta.in_discards, 0);
+      EXPECT_GT(delta.in_pkts, packets_num);
+      LOG(INFO) << "Ingress Deltas (CPU):\n total time: "
+                << (absl::Now() - start_time);
+      ShowCounters(delta);
+    });
+
+    ASSERT_OK(SendNIcmpPacketsFromSwitch(
+        packets_num, traffic_speed, traffic_port, agent_address_, GetIrP4Info(),
+        *control_p4_session_, testbed.Environment()));
+  }
 
   EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
                                                     sflow_result));

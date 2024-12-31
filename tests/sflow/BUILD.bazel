@@ -96,6 +96,8 @@ cc_test(
         ":sflow_util",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings",
