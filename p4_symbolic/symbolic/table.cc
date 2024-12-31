@@ -21,6 +21,7 @@
 #include "p4_symbolic/symbolic/table.h"
 
 #include <algorithm>
+#include <string>
 #include <utility>
 
 #include "absl/container/btree_map.h"
@@ -29,13 +30,14 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
-#include "absl/types/span.h"
+#include "google/protobuf/map.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/symbolic/action.h"
+#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -49,7 +51,7 @@ namespace table {
 
 namespace {
 
-// Finds a match field with the given id in the given table entry.
+// Finds a match field with the given match name in the given table entry.
 // Returns the index of that match field inside the matches array in entry, or
 // -1 if no such match was found.
 int FindMatchWithName(const pdpi::IrTableEntry &entry,
@@ -152,6 +154,80 @@ std::vector<std::pair<int, pdpi::IrTableEntry>> SortEntries(
   // priority.
   std::stable_sort(sorted_entries.begin(), sorted_entries.end(), comparator);
   return sorted_entries;
+}
+
+// Analyze a single match that is part of a table entry.
+// Constructs a symbolic expression that semantically corresponds to this match.
+absl::StatusOr<z3::expr> EvaluateSingleMatch(
+    z3::context &context, p4::config::v1::MatchField match_definition,
+    const std::string &field_name, const z3::expr &field_expression,
+    const pdpi::IrMatch &match, values::P4RuntimeTranslator *translator) {
+  if (match_definition.match_case() != p4::config::v1::MatchField::kMatchType) {
+    // Arch-specific match type.
+    return absl::InvalidArgumentError(
+        absl::StrCat("Found match with non-standard type"));
+  }
+
+  absl::Status mismatch =
+      gutil::InvalidArgumentErrorBuilder()
+      << "match on field '" << field_name << "' must be of type "
+      << p4::config::v1::MatchField::MatchType_Name(
+             match_definition.match_type())
+      << " according to the table definition, but got entry with match: "
+      << match_definition.ShortDebugString();
+
+  auto GetZ3Value =
+      [&](const pdpi::IrValue &value) -> absl::StatusOr<z3::expr> {
+    return values::FormatP4RTValue(context, field_name,
+                                   match_definition.type_name().name(), value,
+                                   match_definition.bitwidth(), translator);
+  };
+
+  switch (match_definition.match_type()) {
+    case p4::config::v1::MatchField::EXACT: {
+      if (match.match_value_case() != pdpi::IrMatch::kExact) return mismatch;
+      ASSIGN_OR_RETURN(z3::expr value_expression, GetZ3Value(match.exact()));
+      return operators::Eq(field_expression, value_expression);
+    }
+
+    case p4::config::v1::MatchField::LPM: {
+      if (match.match_value_case() != pdpi::IrMatch::kLpm) return mismatch;
+
+      ASSIGN_OR_RETURN(z3::expr value_expression,
+                       GetZ3Value(match.lpm().value()));
+      return operators::PrefixEq(
+          field_expression, value_expression,
+          static_cast<unsigned int>(match.lpm().prefix_length()));
+    }
+
+    case p4::config::v1::MatchField::TERNARY: {
+      if (match.match_value_case() != pdpi::IrMatch::kTernary) return mismatch;
+
+      ASSIGN_OR_RETURN(z3::expr mask_expression,
+                       GetZ3Value(match.ternary().mask()));
+      ASSIGN_OR_RETURN(z3::expr value_expression,
+                       GetZ3Value(match.ternary().value()));
+      ASSIGN_OR_RETURN(z3::expr masked_field,
+                       operators::BitAnd(field_expression, mask_expression));
+      return operators::Eq(masked_field, value_expression);
+    }
+
+    case p4::config::v1::MatchField::OPTIONAL: {
+      if (match.match_value_case() != pdpi::IrMatch::kOptional) return mismatch;
+      // According to the P4Runtime spec, "for don't care matches, the P4Runtime
+      // client must omit the field's entire FieldMatch entry when building the
+      // match repeated field of the TableEntry message". Therefore, if the
+      // match value is present for an optional match type, it must be a
+      // concrete value.
+      ASSIGN_OR_RETURN(z3::expr value_expression,
+                       GetZ3Value(match.optional().value()));
+      return operators::Eq(field_expression, value_expression);
+    }
+
+    default:
+      return absl::UnimplementedError(absl::StrCat(
+          "Found unsupported match type ", match_definition.DebugString()));
+  }
 }
 
 // Constructs a symbolic expression that is true if and only if this entry
@@ -275,78 +351,6 @@ absl::Status EvaluateTableEntryAction(
 }
 
 }  // namespace
-
-absl::StatusOr<z3::expr> EvaluateSingleMatch(
-    z3::context &context, p4::config::v1::MatchField match_definition,
-    const std::string &field_name, const z3::expr &field_expression,
-    const pdpi::IrMatch &match, values::P4RuntimeTranslator *translator) {
-  if (match_definition.match_case() != p4::config::v1::MatchField::kMatchType) {
-    // Arch-specific match type.
-    return absl::InvalidArgumentError(
-        absl::StrCat("Found match with non-standard type"));
-  }
-
-  absl::Status mismatch =
-      gutil::InvalidArgumentErrorBuilder()
-      << "match on field '" << field_name << "' must be of type "
-      << p4::config::v1::MatchField::MatchType_Name(
-             match_definition.match_type())
-      << " according to the table definition, but got entry with match: "
-      << match_definition.ShortDebugString();
-
-  auto GetZ3Value =
-      [&](const pdpi::IrValue &value) -> absl::StatusOr<z3::expr> {
-    return values::FormatP4RTValue(context, field_name,
-                                   match_definition.type_name().name(), value,
-                                   match_definition.bitwidth(), translator);
-  };
-
-  switch (match_definition.match_type()) {
-    case p4::config::v1::MatchField::EXACT: {
-      if (match.match_value_case() != pdpi::IrMatch::kExact) return mismatch;
-      ASSIGN_OR_RETURN(z3::expr value_expression, GetZ3Value(match.exact()));
-      return operators::Eq(field_expression, value_expression);
-    }
-
-    case p4::config::v1::MatchField::LPM: {
-      if (match.match_value_case() != pdpi::IrMatch::kLpm) return mismatch;
-
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       GetZ3Value(match.lpm().value()));
-      return operators::PrefixEq(
-          field_expression, value_expression,
-          static_cast<unsigned int>(match.lpm().prefix_length()));
-    }
-
-    case p4::config::v1::MatchField::TERNARY: {
-      if (match.match_value_case() != pdpi::IrMatch::kTernary) return mismatch;
-
-      ASSIGN_OR_RETURN(z3::expr mask_expression,
-                       GetZ3Value(match.ternary().mask()));
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       GetZ3Value(match.ternary().value()));
-      ASSIGN_OR_RETURN(z3::expr masked_field,
-                       operators::BitAnd(field_expression, mask_expression));
-      return operators::Eq(masked_field, value_expression);
-    }
-
-    case p4::config::v1::MatchField::OPTIONAL: {
-      if (match.match_value_case() != pdpi::IrMatch::kOptional) return mismatch;
-      // According to the P4Runtime spec, "for don't care matches, the P4Runtime
-      // client must omit the field's entire FieldMatch entry when building the
-      // match repeated field of the TableEntry message". Therefore, if the
-      // match value is present for an optional match type, it must be a
-      // concrete value.
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       GetZ3Value(match.optional().value()));
-      return operators::Eq(field_expression, value_expression);
-    }
-
-    default:
-      return absl::UnimplementedError(absl::StrCat(
-          "Found unsupported match type ", match_definition.DebugString()));
-  }
-}
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Dataplane &data_plane, const ir::Table &table,

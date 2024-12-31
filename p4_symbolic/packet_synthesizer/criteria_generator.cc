@@ -79,9 +79,11 @@ GenerateSynthesisCriteriaFor(const EntryCoverageGoal& goal,
 
     // Add one synthesis criteria with table entry reachability constraint per
     // each table entry.
+    bool table_is_empty = true;
     auto it = solver_state.entries.find(table_name);
     if (it != solver_state.entries.end()) {
       const std::vector<pdpi::IrTableEntry>& entries = it->second;
+      if (!entries.empty()) table_is_empty = false;
       for (int i = 0; i < entries.size(); i++) {
         criteria.mutable_table_entry_reachability_criteria()->set_match_index(
             i);
@@ -92,6 +94,9 @@ GenerateSynthesisCriteriaFor(const EntryCoverageGoal& goal,
     // If configured, add one synthesis criteria covering the table's default
     // action.
     if (goal.cover_default_actions()) {
+      // If configured, exclude empty tables.
+      if (goal.exclude_empty_tables() && table_is_empty) continue;
+
       criteria.mutable_table_entry_reachability_criteria()->set_match_index(
           symbolic::table::kDefaultActionEntryIndex);
       criteria_list.push_back(criteria);
