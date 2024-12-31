@@ -21,10 +21,8 @@
 
 #include <string>
 #include <unordered_map>
-#include <vector>
 
-#include "google/protobuf/repeated_field.h"
-#include "gutil/status.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -77,9 +75,8 @@ absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
                                         const ActionContext &context);
 
 // Extract the field symbolic value from the symbolic state.
-absl::StatusOr<z3::expr> EvaluateFieldValue(const ir::FieldValue &field_value,
-                                            const SymbolicPerPacketState &state,
-                                            const ActionContext &context);
+absl::StatusOr<z3::expr> EvaluateFieldValue(
+    const ir::FieldValue &field_value, const SymbolicPerPacketState &state);
 
 // Parse and format literal values as symbolic expression.
 absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr);

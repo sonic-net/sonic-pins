@@ -25,8 +25,8 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "gutil/status.h"
-#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/conditional.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
@@ -57,7 +57,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateControl(
   if (data_plane.program.tables().count(control_name) == 1) {
     // Table: call EvaluateTable on table and its entries.
     const ir::Table &table = data_plane.program.tables().at(control_name);
-    std::vector<pdpi::IrTableEntry> table_entries;
+    std::vector<ir::TableEntry> table_entries;
     if (data_plane.entries.count(control_name) == 1) {
       table_entries = data_plane.entries.at(control_name);
     }

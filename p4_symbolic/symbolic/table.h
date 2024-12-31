@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
-#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -40,9 +39,8 @@ constexpr int kDefaultActionEntryIndex = -1;
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Dataplane &data_plane, const ir::Table &table,
-    const std::vector<pdpi::IrTableEntry> &entries,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+    const std::vector<ir::TableEntry> &entries, SymbolicPerPacketState *state,
+    values::P4RuntimeTranslator *translator, const z3::expr &guard);
 
 }  // namespace table
 }  // namespace symbolic
