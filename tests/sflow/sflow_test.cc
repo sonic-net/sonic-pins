@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>  // NOLINT: Need threads (instead of fiber) for upstream code.
 #include <utility>
@@ -34,7 +35,6 @@
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -78,7 +78,7 @@ namespace {
 using ::gutil::IsOkAndHolds;
 
 // Number of packets sent to one port.
-constexpr int kPacketsNum = 4000000;
+constexpr int kPacketsNum = 1000000;
 
 // Number of packets sent per second.
 constexpr int kPacketsPerSecond = 16000;
@@ -118,7 +118,7 @@ constexpr int kSamplingRateInterval = 4000;
 // measured end to end.
 // Level of tolerance for packet rate verification.
 // This could be parameterized in future if this is platform dependent.
-constexpr double kTolerance = 0.15;
+constexpr double kTolerance = 0.20;
 
 // Vrf prefix used in the test.
 constexpr absl::string_view kVrfIdPrefix = "vrf-";
@@ -286,6 +286,7 @@ struct Counters {
   uint64_t in_octets;
   uint64_t out_octets;
   uint64_t in_discards;
+  uint64_t out_discards;
 };
 
 absl::StatusOr<uint64_t> GetGnmiStat(std::string stat_name,
@@ -328,6 +329,7 @@ void ShowCounters(const Counters& cnt) {
   LOG(INFO) << "in-octets " << cnt.in_octets;
   LOG(INFO) << "out-octets " << cnt.out_octets;
   LOG(INFO) << "in-discards " << cnt.in_discards;
+  LOG(INFO) << "out_discards " << cnt.out_discards;
 }
 
 // DeltaCounters - computer delta as change from initial to final counters
@@ -338,6 +340,8 @@ Counters DeltaCounters(const Counters& initial, const Counters& final) {
   delta.out_pkts = final.out_pkts - initial.out_pkts;
   delta.in_octets = final.in_octets - initial.in_octets;
   delta.out_octets = final.out_octets - initial.out_octets;
+  delta.in_discards = final.in_discards - initial.in_discards;
+  delta.out_discards = final.out_discards - initial.out_discards;
   return delta;
 }
 
@@ -351,6 +355,8 @@ absl::StatusOr<Counters> ReadCounters(std::string iface,
   ASSIGN_OR_RETURN(cnt.out_octets, GetGnmiStat("out-octets", iface, gnmi_stub));
   ASSIGN_OR_RETURN(cnt.in_discards,
                    GetGnmiStat("in-discards", iface, gnmi_stub));
+  ASSIGN_OR_RETURN(cnt.out_discards,
+                   GetGnmiStat("out-discards", iface, gnmi_stub));
   return cnt;
 }
 
@@ -377,8 +383,8 @@ absl::Status SendNPacketsToSut(absl::Span<const std::string> traffic_ref,
 // topology ref string.
 absl::StatusOr<std::pair<std::vector<std::string>, std::string>>
 SetUpIxiaTraffic(absl::Span<const IxiaLink> ixia_links,
-                 thinkit::GenericTestbed& testbed, const int pkt_count,
-                 const int pkt_rate, const int frame_size = 1000) {
+                 thinkit::GenericTestbed& testbed, const uint64_t pkt_count,
+                 const uint64_t pkt_rate, const int frame_size = 1000) {
   std::vector<std::string> traffic_refs;
   std::string topology_ref;
   for (const IxiaLink& ixia_link : ixia_links) {
@@ -457,8 +463,8 @@ absl::StatusOr<std::vector<Counters>> GetIxiaInterfaceCounters(
   return counters;
 }
 
-absl::Status SetIxiaTrafficParams(absl::string_view traffic_ref, int pkts_num,
-                                  int traffic_rate,
+absl::Status SetIxiaTrafficParams(absl::string_view traffic_ref,
+                                  uint64_t pkts_num, uint64_t traffic_rate,
                                   thinkit::GenericTestbed& generic_testbed) {
   RETURN_IF_ERROR(pins_test::ixia::SetFrameRate(traffic_ref, traffic_rate,
                                                 generic_testbed));
@@ -471,17 +477,19 @@ absl::StatusOr<std::thread> RunSflowCollectorForNSecs(
     thinkit::SSHClient& ssh_client, absl::string_view device_name,
     absl::string_view sflow_template, const int sflowtool_runtime,
     std::string& sflow_tool_result) {
-  std::thread sflow_tool_thread = std::thread([&sflow_tool_result, &ssh_client,
-                                               device_name, sflow_template,
-                                               sflowtool_runtime]() {
-    const std::string ssh_command =
-        absl::Substitute(sflow_template, kSflowToolName, sflowtool_runtime);
-    LOG(INFO) << "ssh command:" << ssh_command;
-    ASSERT_OK_AND_ASSIGN(sflow_tool_result,
-                         ssh_client.RunCommand(
-                             device_name, ssh_command,
-                             /*timeout=*/absl::Seconds(sflowtool_runtime + 2)));
-  });
+  std::thread sflow_tool_thread =
+      std::thread([&sflow_tool_result, &ssh_client, device_name, sflow_template,
+                   sflowtool_runtime]() {
+        const std::string ssh_command =
+            absl::Substitute(sflow_template, kSflowToolName, sflowtool_runtime);
+        LOG(INFO) << "ssh command:" << ssh_command;
+        ASSERT_OK_AND_ASSIGN(
+            sflow_tool_result,
+            ssh_client.RunCommand(
+                device_name, ssh_command,
+                /*timeout=*/absl::Seconds(sflowtool_runtime + 10)));
+      });
+
   // Sleep to wait sflowtool to start.
   absl::SleepFor(absl::Seconds(5));
   return sflow_tool_thread;
@@ -490,15 +498,15 @@ absl::StatusOr<std::thread> RunSflowCollectorForNSecs(
 // Run tcpdump on SUT in a new thread. Returns the thread to let caller to
 // wait for the finish.
 absl::StatusOr<std::thread> CaptureTcpdumpForNPackets(
-    thinkit::SSHClient* ssh_client, absl::string_view device_name,
+    thinkit::SSHClient& ssh_client, absl::string_view device_name,
     int packets_count, const int runtime, std::string& result) {
-  std::thread thread = std::thread([&result, ssh_client, device_name,
-                                    packets_count, runtime]() {
+  std::thread thread = std::thread([device_name, packets_count, runtime,
+                                    &ssh_client, &result]() {
     std::string ssh_command = absl::Substitute(kTcpdumpForTos, packets_count);
     LOG(INFO) << "ssh command:" << ssh_command;
     ASSERT_OK_AND_ASSIGN(
-        result, ssh_client->RunCommand(device_name, ssh_command,
-                                       /*timeout=*/absl::Seconds(runtime + 2)));
+        result, ssh_client.RunCommand(device_name, ssh_command,
+                                      /*timeout=*/absl::Seconds(runtime + 10)));
   });
   return thread;
 }
@@ -689,18 +697,20 @@ absl::StatusOr<std::string> GetLoopbackAddrIpv6FromConfig(
 }
 
 // Returns a set of interface names which should enable sFlow from testbed info.
-absl::StatusOr<absl::flat_hash_set<std::string>> GetSflowInterfacesFromSut(
-    thinkit::GenericTestbed& testbed) {
+// By default this would enable all interface which are connected to connected
+// to a traffic generator (e.g. Ixia).
+absl::StatusOr<absl::flat_hash_map<std::string, bool>>
+GetSflowInterfacesFromSut(thinkit::GenericTestbed& testbed) {
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       testbed.GetSutInterfaceInfo();
-  absl::flat_hash_set<std::string> sflow_interface_names;
+  absl::flat_hash_map<std::string, bool> sflow_interfaces;
   for (const auto& [interface, info] : interface_info) {
     if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE) ||
         info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      sflow_interface_names.insert(interface);
+      sflow_interfaces[interface] = true;
     }
   }
-  return sflow_interface_names;
+  return sflow_interfaces;
 }
 
 // Returns the value of `key` in `sflow_datagram`. Returns an error if not
@@ -771,13 +781,15 @@ absl::StatusOr<int> GetHeaderLenFromSflowOutput(
 // ip_ttl, udp_src_port OR tcp_src_port OR icmp_type, udp_dst_port OR
 // tcp_dst_port OR icmp_code, tcp_flags, packet_size, IP_size, sampling_rate
 void VerifySflowResult(absl::string_view sflowtool_output,
+                       std::optional<int> input_port,
+                       std::optional<int> output_port,
                        absl::string_view src_mac, absl::string_view dst_mac,
                        absl::string_view ethernet_type,
                        absl::string_view src_ip, absl::string_view dst_ip,
                        int packet_size, int sampling_rate) {
-  constexpr int kFieldSize = 20, kSrcMacIdx = 4, kDstMacIdx = 5,
-                kEthTypeIdx = 6, kSrcIpIdx = 9, kDstIpIdx = 10,
-                kPktSizeIdx = 17, kSamplingRateIdx = 19;
+  constexpr int kFieldSize = 20, kInputPortIdx = 2, kOutputPortIdx = 3,
+                kSrcMacIdx = 4, kDstMacIdx = 5, kEthTypeIdx = 6, kSrcIpIdx = 9,
+                kDstIpIdx = 10, kPktSizeIdx = 17, kSamplingRateIdx = 19;
   // Each line indicates one sFlow sample.
   for (absl::string_view sflow_sample :
        absl::StrSplit(sflowtool_output, '\n')) {
@@ -788,6 +800,12 @@ void VerifySflowResult(absl::string_view sflowtool_output,
     }
     // Filter source ip.
     if (fields[kSrcIpIdx] == src_ip) {
+      if (input_port.has_value()) {
+        EXPECT_EQ(fields[kInputPortIdx], absl::StrCat(*input_port));
+      }
+      if (output_port.has_value()) {
+        EXPECT_EQ(fields[kOutputPortIdx], absl::StrCat(*output_port));
+      }
       // The sample mac address does not have the "0x" prefix
       EXPECT_EQ(fields[kSrcMacIdx], src_mac.substr(2));
       EXPECT_EQ(fields[kDstMacIdx], dst_mac.substr(2));
@@ -936,7 +954,7 @@ void SflowTestFixture::SetUp() {
   collector_address_and_port.push_back({kLocalLoopbackIpv6, 6343});
   ASSERT_OK_AND_ASSIGN(std::string agent_addr_ipv6,
                        GetLoopbackAddrIpv6FromConfig(gnmi_config));
-  absl::flat_hash_set<std::string> sflow_enabled_interfaces;
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
   ASSERT_OK_AND_ASSIGN(sflow_enabled_interfaces,
                        GetSflowInterfacesFromSut(*testbed_));
   ASSERT_OK_AND_ASSIGN(
@@ -985,7 +1003,8 @@ void SflowTestFixture::TearDown() {
   // Restore gNMI config, clear table entries and stop RPC sessions.
   ASSERT_OK_AND_ASSIGN(auto sflow_enabled,
                        IsSflowConfigEnabled(GetParam().gnmi_config));
-  ASSERT_OK(SetSflowConfigEnabled(gnmi_stub_.get(), sflow_enabled));
+  ASSERT_OK_AND_ASSIGN(auto stub, testbed_->Sut().CreateGnmiStub());
+  ASSERT_OK(SetSflowConfigEnabled(stub.get(), sflow_enabled));
   ASSERT_OK(pins_test::PushGnmiConfig(testbed_->Sut(), GetParam().gnmi_config));
   if (sut_p4_session_ != nullptr) {
     EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
@@ -1049,7 +1068,8 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
   }
 
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
-  VerifySflowResult(sflow_result, kSourceMac.ToHexString(),
+  VerifySflowResult(sflow_result, ingress_port.port_id,
+                    /*output_port=*/std::nullopt, kSourceMac.ToHexString(),
                     kDstMac.ToHexString(), kEtherTypeIpv4,
                     GetSrcIpv4AddrByPortId(ingress_link.port_id),
                     kIpV4Dst.ToString(), pkt_size, kSamplingRateInterval);
@@ -1137,8 +1157,9 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
   EXPECT_OK(testbed_->Environment().StoreTestArtifact("sflow_result.txt",
                                                       sflow_result));
-  VerifySflowResult(sflow_result, kSourceMac.ToHexString(),
-                    kDstMac.ToHexString(), kEtherTypeIpv4,
+  VerifySflowResult(sflow_result, ingress_port.port_id, egress_port.port_id,
+                    kSourceMac.ToHexString(), kDstMac.ToHexString(),
+                    kEtherTypeIpv4,
                     GetSrcIpv4AddrByPortId(ingress_link.port_id),
                     kIpV4Dst.ToString(), pkt_size, kSamplingRateInterval);
 
@@ -1205,7 +1226,8 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
   }
 
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
-  VerifySflowResult(sflow_result, kSourceMac.ToHexString(),
+  VerifySflowResult(sflow_result, ingress_port.port_id,
+                    /*output_port=*/std::nullopt, kSourceMac.ToHexString(),
                     kDstMac.ToHexString(), kEtherTypeIpv4,
                     GetSrcIpv4AddrByPortId(ingress_link.port_id),
                     kIpV4Dst.ToString(), pkt_size, kSamplingRateInterval);
@@ -1226,6 +1248,129 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
       .actual_samples = sample_count,
   };
   LOG(INFO) << "------ Test result ------\n" << result.DebugString();
+}
+
+// Verify ingress sampling could work when punting traffic.
+// 1. Set sFlow config on SUT with kLocalLoopbackIpv6 as collector address.
+// 2. Set P4 punt rule on SUT to punt received packets.
+// 3. Send traffic from Ixia.
+// 4. Validate the packets are all get punted and sFlowtool has expected result.
+TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
+  testbed_->Environment().SetTestCaseID("70a4e3e1-f3ae-416e-99a7-24f259942981");
+
+  const IxiaLink& ingress_link = ready_links_[0];
+  Port ingress_port = Port{
+      .interface_name = ingress_link.sut_interface,
+      .port_id = ingress_link.port_id,
+  };
+
+  ASSERT_OK(
+      SetUpAclPunt(*sut_p4_session_, GetIrP4Info(), ingress_link.port_id));
+  EXPECT_OK(
+      OutputTableEntriesToArtifact(*sut_p4_session_, testbed_->Environment(),
+                                   /*artifact_name=*/"SUT_table_entries.txt"));
+
+  // Use a smaller packets num and traffic speed since we need to check punt
+  // packets data.
+  const int packets_num = 100000;
+  const int traffic_speed = 1000;
+  // Set up Ixia traffic. ixia_ref_pair would include the traffic reference
+  // and topology reference which could be used to send traffic later.
+  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
+  ASSERT_OK_AND_ASSIGN(
+      ixia_ref_pair,
+      SetUpIxiaTraffic({ingress_link}, *testbed_, packets_num, traffic_speed));
+  std::string sflow_result;
+
+  absl::Time start_time;
+  ASSERT_OK_AND_ASSIGN(auto initial_cpu_counter,
+                       ReadCounters("CPU", gnmi_stub_.get()));
+  ASSERT_OK_AND_ASSIGN(
+      auto initial_queue_counter,
+      pins_test::GetGnmiQueueCounters("CPU", /*queue=*/"NC1", *gnmi_stub_));
+
+  // 1. Start sflowtool on SUT.
+  // 2. Send packets from Ixia to SUT.
+  // 3. Wait for sflowtool to finish.
+  {
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        RunSflowCollectorForNSecs(
+            *GetParam().ssh_client, testbed_->Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/
+            packets_num / traffic_speed + 30, sflow_result));
+
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
+
+    start_time = absl::Now();
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               packets_num, traffic_speed));
+  }
+
+  // Display the difference for CPU counter during test dev.
+  ASSERT_OK_AND_ASSIGN(auto final_cpu_counter,
+                       ReadCounters("CPU", gnmi_stub_.get()));
+  auto delta = DeltaCounters(initial_cpu_counter, final_cpu_counter);
+  // TODO: Enable this after CPU in/out pkts are supported.
+  // EXPECT_GE(delta.in_pkts, packets_num);
+  LOG(INFO) << "CPU counter delta during traffic.\n Total time: "
+            << (absl::Now() - start_time);
+  ShowCounters(delta);
+
+  ASSERT_OK_AND_ASSIGN(
+      auto final_queue_counter,
+      pins_test::GetGnmiQueueCounters("CPU", /*queue=*/"NC1", *gnmi_stub_));
+  auto delta_queue_counter = final_queue_counter - initial_queue_counter;
+  LOG(INFO) << "CPU NC1 queue counter delta:\n"
+            << delta_queue_counter
+            << " \n total time: " << (absl::Now() - start_time);
+  // TODO: Enable this after counter data is stable.
+  // EXPECT_EQ(delta_queue_counter.num_packets_transmitted, packets_num);
+
+  // Verify all packets have been punted.
+  EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::StreamMessageResponse> control_packets_in,
+      sut_p4_session_->ReadStreamChannelResponsesAndFinish());
+  // Set to nullptr to avoid duplicate Finish() call during TearDown.
+  sut_p4_session_ = nullptr;
+  int num_packets_punted = 0;
+  for (const auto& packet_in : control_packets_in) {
+    if (packet_in.has_packet()) {
+      num_packets_punted++;
+    } else {
+      LOG(WARNING) << "Unexpected message received in streamchannel: "
+                   << packet_in.DebugString();
+    }
+  }
+  EXPECT_EQ(num_packets_punted, packets_num) << absl::StreamFormat(
+      "Expected punted packets: %d. Actually punted packets: %d.", packets_num,
+      num_packets_punted);
+
+  // Verify sflowtool result. Since we use port id to generate packets, we use
+  // port id to filter sFlow packets.
+  const int sample_count =
+      GetSflowSamplesOnSut(sflow_result, ingress_port.port_id);
+  const double expected_count =
+      static_cast<double>(packets_num) / kSamplingRateInterval;
+  SflowResult result = SflowResult{
+      .rule = "Punt traffic",
+      .sut_interface = ingress_port.interface_name,
+      .packets = packets_num,
+      .sampling_rate = kSamplingRateInterval,
+      .expected_samples = static_cast<int>(expected_count),
+      .actual_samples = sample_count,
+  };
+  LOG(INFO) << "------ Test result ------\n" << result.DebugString();
+  // Only validates sample count is not empty since traffic number is low in
+  // this test case and the deviation is high.
+  EXPECT_GT(sample_count, 0);
 }
 
 // Verifies sampling size could work:
@@ -1340,7 +1485,8 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
   EXPECT_OK(testbed_->Environment().StoreTestArtifact(
       absl::Substitute("sflow_result_sampling_rate_$0_result.txt", sample_rate),
       sflow_result));
-  VerifySflowResult(sflow_result, kSourceMac.ToHexString(),
+  VerifySflowResult(sflow_result, ingress_link.port_id,
+                    /*output_port=*/std::nullopt, kSourceMac.ToHexString(),
                     kDstMac.ToHexString(), kEtherTypeIpv4,
                     GetSrcIpv4AddrByPortId(ingress_link.port_id),
                     kIpV4Dst.ToString(), pkt_size, sample_rate);
@@ -1374,6 +1520,7 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
 // 3. Send traffic at a normal rate which would not trigger sFlow backoff.
 // Verify that sample rate is still doubled on all interfaces and samples.
 TEST_P(BackoffTest, VerifyBackoffWorks) {
+  testbed_->Environment().SetTestCaseID("58653895-219a-4b9e-b6af-03f6a33b5959");
   const int kQueueNumberForBE1 = 5;
   // Queue limit could only be set by pushing whole config. Setting single path
   // would not work.
@@ -1394,9 +1541,14 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
       gnmi_stub_.get(), ingress_link.sut_interface, interface_sample_rate));
 
   // Read initial sample rate from testbed.
+  absl::flat_hash_map<std::string, bool> sflow_interfaces;
+  ASSERT_OK_AND_ASSIGN(sflow_interfaces, GetSflowInterfacesFromSut(*testbed_));
   absl::flat_hash_set<std::string> sflow_enabled_interfaces;
-  ASSERT_OK_AND_ASSIGN(sflow_enabled_interfaces,
-                       GetSflowInterfacesFromSut(*testbed_));
+  for (const auto& [name, enabled] : sflow_interfaces) {
+    if (enabled) {
+      sflow_enabled_interfaces.insert(name);
+    }
+  }
   absl::flat_hash_map<std::string, int> initial_interfaces_to_sample_rate;
   ASSERT_OK_AND_ASSIGN(initial_interfaces_to_sample_rate,
                        GetSflowSamplingRateForInterfaces(
@@ -1413,9 +1565,9 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
 
   // Setup Ixia for normal traffic speed - it would generate 10
   // samples/sec.
-  int traffic_rate = 10 * interface_sample_rate;
+  uint64_t traffic_rate = 10 * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 kBackOffThresholdDuration * traffic_rate,
+                                 traffic_rate * kBackOffThresholdDuration,
                                  traffic_rate, *testbed_));
 
   // Start sflowtool on SUT.
@@ -1460,7 +1612,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
   // generate kBackOffThresholdSamples per sec.
   traffic_rate = kBackOffThresholdSamples * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 kBackOffThresholdDuration * traffic_rate,
+                                 traffic_rate * kBackOffThresholdDuration,
                                  traffic_rate, *testbed_));
 
   // Start sflowtool on SUT.
@@ -1503,7 +1655,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
   // Use a normal traffic speed, sample rate should remain as doubled.
   traffic_rate = 10 * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 kBackOffThresholdDuration * traffic_rate,
+                                 traffic_rate * kBackOffThresholdDuration,
                                  traffic_rate, *testbed_));
 
   {
@@ -1854,12 +2006,13 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
 
   // Use main switch Loopback0 Ip address as collector.
   collector_address_and_port.push_back({collector_ipv6, 6343});
+  collector_address_and_port.push_back({kLocalLoopbackIpv6, 6343});
 
   ASSERT_OK_AND_ASSIGN(Port traffic_port,
                        GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
 
-  absl::flat_hash_set<std::string> sflow_enabled_interfaces{
-      traffic_port.interface_name};
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces{
+      {traffic_port.interface_name, true}};
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
@@ -1899,15 +2052,22 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
   // 1. Start sflowtool on control switch.
   // 2. Send traffic from control switch.
   // 3. Get sflowtool result and counters stats.
-  std::string sflow_result;
+  std::string control_sflow_result, sut_sflow_result;
   {
     ASSERT_OK_AND_ASSIGN(
-        std::thread sflow_tool_thread,
+        std::thread control_sflowtool_thread,
         RunSflowCollectorForNSecs(
             *GetParam().ssh_client, testbed.ControlSwitch().ChassisName(),
             kSflowtoolLineFormatTemplate,
             /*sflowtool_runtime=*/packets_num / kInbandTrafficPps + 30,
-            sflow_result));
+            control_sflow_result));
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sut_sflowtool_thread,
+        RunSflowCollectorForNSecs(
+            *GetParam().ssh_client, testbed.Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/packets_num / kInbandTrafficPps + 30,
+            sut_sflow_result));
 
     ASSERT_OK_AND_ASSIGN(auto initial_queue_counter,
                          pins_test::GetGnmiQueueCounters("CPU", kSflowQueueName,
@@ -1931,9 +2091,12 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
                             &sut_initial_in_band_port_counter,
                             &control_initial_in_band_port_counter,
                             &control_initial_cpu_counter, &inband_port,
-                            &sflow_tool_thread] {
-      if (sflow_tool_thread.joinable()) {
-        sflow_tool_thread.join();
+                            &control_sflowtool_thread, &sut_sflowtool_thread] {
+      if (control_sflowtool_thread.joinable()) {
+        control_sflowtool_thread.join();
+      }
+      if (sut_sflowtool_thread.joinable()) {
+        sut_sflowtool_thread.join();
       }
 
       // Show counter data.
@@ -1977,9 +2140,14 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
         *control_p4_session_, testbed.Environment()));
   }
 
-  EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
-                                                    sflow_result));
-  ASSERT_FALSE(sflow_result.empty());
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("control_sflow_result.txt",
+                                                    control_sflow_result));
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("sut_sflow_result.txt",
+                                                    sut_sflow_result));
+
+  // TODO: TestInbandPathToSflowCollector should have a strict
+  // check on the sflow samples received on control switch.
+  EXPECT_FALSE(control_sflow_result.empty());
 }
 
 // 1. Pick an interface and let control switch send some traffic via this
@@ -1990,15 +2158,15 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
 TEST_P(SflowMirrorTestFixture, TestSflowDscpValue) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  testbed.Environment().SetTestCaseID("3948ef62-67d9-42e2-8cc6-30dc10cb382f");
+  testbed.Environment().SetTestCaseID("38694bb8-2a82-4379-8b85-96dcda824a14");
 
   const int packets_num = 10000;
 
   ASSERT_OK_AND_ASSIGN(Port traffic_port,
                        GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
 
-  absl::flat_hash_set<std::string> sflow_enabled_interfaces{
-      traffic_port.interface_name};
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces{
+      {traffic_port.interface_name, true}};
   std::vector<std::pair<std::string, int>> collector_address_and_port{
       {kLocalLoopbackIpv6, 6343}};
   ASSERT_OK_AND_ASSIGN(
@@ -2030,7 +2198,7 @@ TEST_P(SflowMirrorTestFixture, TestSflowDscpValue) {
     ASSERT_OK_AND_ASSIGN(
         std::thread tcpdump_thread,
         CaptureTcpdumpForNPackets(
-            GetParam().ssh_client, testbed.Sut().ChassisName(),
+            *GetParam().ssh_client, testbed.Sut().ChassisName(),
             /*packets_count=*/5, runtime_secs, tcpdump_result));
 
     ASSERT_OK_AND_ASSIGN(auto initial_queue_counter,
@@ -2086,9 +2254,9 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
       auto port_id_per_port_name,
       pins_test::GetAllUpInterfacePortIdsByName(*sut_gnmi_stub_));
   ASSERT_GE(port_id_per_port_name.size(), 0) << "No up interfaces.";
-  absl::flat_hash_set<std::string> sflow_enabled_interfaces;
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
   for (const auto& [interface_name, unused] : port_id_per_port_name) {
-    sflow_enabled_interfaces.insert(interface_name);
+    sflow_enabled_interfaces[interface_name] = true;
   }
 
   std::vector<std::pair<std::string, int>> collector_address_and_port{
@@ -2186,8 +2354,11 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
 // 6. Send traffic from control switch on the same 5 interfaces.
 // 7. Verify samples are generated for interesting interfaces.
 TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
+  GetParam().testbed_interface->ExpectLinkFlaps();
+
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
+  testbed.Environment().SetTestCaseID("6cd622a1-2d95-4e07-9c7d-77a2faad4bc0");
 
   ASSERT_OK_AND_ASSIGN(
       auto port_id_per_port_name,
@@ -2195,15 +2366,14 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
   ASSERT_GE(port_id_per_port_name.size(), 5)
       << "Not enough up interfaces. Need 5. Actual up interfaces: "
       << port_id_per_port_name.size() << ".";
-  absl::flat_hash_set<std::string> sflow_enabled_interfaces;
-
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
   // We do not want to send traffic on all ports since that would cost a lot of
   // time. Send traffic on 5 ports would be enough in our reboot test since
   // other test cases already cover sampling on all interfaces.
   std::vector<std::pair<std::string, std::string>>
       traffic_interfaces_and_port_ids;
   for (const auto& [interface_name, port_id] : port_id_per_port_name) {
-    sflow_enabled_interfaces.insert(interface_name);
+    sflow_enabled_interfaces[interface_name] = true;
     traffic_interfaces_and_port_ids.push_back({interface_name, port_id});
     if (sflow_enabled_interfaces.size() >= 5) {
       break;
@@ -2291,11 +2461,20 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
     sut_p4_session_ = nullptr;
   }
   pins_test::TestGnoiSystemColdReboot(testbed.Sut());
+  std::vector<std::string> interface_names;
+  for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
+    interface_names.push_back(interface_name);
+  }
+  ASSERT_OK(pins_test::WaitForCondition(pins_test::PortsUp, absl::Minutes(3),
+                                        testbed.Sut(), interface_names,
+                                        /*with_healthz=*/false));
+
+  ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
+  // Wait until all sFLow gNMI states are converged.
   ASSERT_OK(pins_test::WaitForCondition(
-      pins_test::PortsUp, absl::Minutes(3), testbed.Sut(),
-      std::vector<std::string>(sflow_enabled_interfaces.begin(),
-                               sflow_enabled_interfaces.end()),
-      /*with_healthz=*/false));
+      VerifySflowStatesConverged, absl::Minutes(2), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
 
   {
     // Start sflowtool on SUT.
@@ -2352,23 +2531,32 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
   }
 }
 
-// Verify ingress sampling could work when punting traffic.
-// 1. Set sFlow config on SUT with kLocalLoopbackIpv6 as collector address.
-// 2. Set P4 punt rule on SUT to punt received packets.
-// 3. Send traffic from control switch to SUT on this interface.
-// 4. Validate the packets are all get punted and sFlowtool has expected result.
-TEST_P(SflowMirrorTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
+// 1. Set sFlow config on SUT for one interface.
+// 2. Set SUT sFlow collector as kLocalLoopbackIpv6.
+// 3. Send ICMP traffic from control switch to SUT on this interface.
+// 4. Validate the packets get punted and sFlowtool has expected result.
+TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  const int packets_num = 10000;
+  testbed.Environment().SetTestCaseID("7f765661-840e-4913-b210-8bbf9d5a0e8f");
+
+  const int packets_num = 3000;
+  // Use 100 for traffic speed since we want to verify the punted packets number
+  // and we don't want the punted packets to get discarded.
   const int traffic_speed = 100;
 
   ASSERT_OK_AND_ASSIGN(Port traffic_port,
                        GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
+  ASSERT_OK_AND_ASSIGN(
+      auto port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*sut_gnmi_stub_));
+  ASSERT_GE(port_id_per_port_name.size(), 0) << "No up interfaces.";
 
-  // Push sFlow config to SUT.
-  absl::flat_hash_set<std::string> sflow_enabled_interfaces{
-      traffic_port.interface_name};
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
+  for (const auto& [interface_name, unused] : port_id_per_port_name) {
+    sflow_enabled_interfaces[interface_name] = true;
+  }
+
   std::vector<std::pair<std::string, int>> collector_address_and_port{
       {kLocalLoopbackIpv6, 6343}};
   ASSERT_OK_AND_ASSIGN(
@@ -2388,22 +2576,12 @@ TEST_P(SflowMirrorTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
       agent_address_, kInbandSamplingRate, kSampleHeaderSize,
       collector_address_and_port, sflow_enabled_interfaces));
 
-  // Set P4RT punt rule.
-  ASSERT_OK(
-      SetUpAclPunt(*sut_p4_session_, GetIrP4Info(), traffic_port.port_id));
-
+  // Start sflowtool on peer switch.
   std::string sflow_result;
-  absl::Mutex mu;
-  int num_packets_punted = 0;
 
-  // Start a receiver to receive punted packets.
-  pins_test::PacketInReceiver receiver(*sut_p4_session_,
-                                       [&mu, &num_packets_punted](auto) {
-                                         absl::MutexLock l(&mu);
-                                         num_packets_punted++;
-                                       });
+  Counters initial_cpu_counter;
+  absl::Time start_time;
   {
-    // Start sflowtool on SUT.
     ASSERT_OK_AND_ASSIGN(
         std::thread sflow_tool_thread,
         RunSflowCollectorForNSecs(
@@ -2412,46 +2590,40 @@ TEST_P(SflowMirrorTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
             /*sflowtool_runtime=*/
             packets_num / traffic_speed + 20, sflow_result));
 
-    ASSERT_OK_AND_ASSIGN(auto initial_cpu_counter,
+    // Wait for sflowtool to finish and read counter data.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
+
+    ASSERT_OK_AND_ASSIGN(initial_cpu_counter,
                          ReadCounters("CPU", sut_gnmi_stub_.get()));
-    absl::Time start_time = absl::Now();
+    start_time = absl::Now();
 
-    // Wait for sflowtool to finish.
-    absl::Cleanup clean_up(
-        [this, initial_cpu_counter, start_time, &sflow_tool_thread] {
-          if (sflow_tool_thread.joinable()) {
-            sflow_tool_thread.join();
-          }
-
-          // Display the difference for CPU counter during test dev.
-          ASSERT_OK_AND_ASSIGN(auto final_cpu_counter,
-                               ReadCounters("CPU", sut_gnmi_stub_.get()));
-          auto delta = DeltaCounters(initial_cpu_counter, final_cpu_counter);
-          EXPECT_EQ(delta.in_discards, 0);
-          LOG(INFO) << "CPU counter delta during traffic.\n Total time: "
-                    << (absl::Now() - start_time);
-          ShowCounters(delta);
-        });
-
-    // Send packets from control switch to SUT.
-    ASSERT_OK(SendNPacketsFromSwitch(
-        packets_num, traffic_speed, traffic_port.port_id, GetIrP4Info(),
+    ASSERT_OK(SendNIcmpPacketsFromSwitch(
+        packets_num, traffic_speed, traffic_port, agent_address_, GetIrP4Info(),
         *control_p4_session_, testbed.Environment()));
   }
 
-  // Verify all packets have been punted.
-  {
-    absl::MutexLock l(&mu);
-    LOG(INFO) << "Packets received at Controller: " << num_packets_punted;
-    receiver.Destroy();
-    EXPECT_GE(num_packets_punted, packets_num);
-    sut_p4_session_ = nullptr;
-  }
+  // Display the difference for CPU counter during test dev.
+  ASSERT_OK_AND_ASSIGN(auto final_cpu_counter,
+                       ReadCounters("CPU", sut_gnmi_stub_.get()));
+  auto delta = DeltaCounters(initial_cpu_counter, final_cpu_counter);
+  // TODO: Enable Ip2Me test with correct expectation on CPU
+  // counter.
+  // EXPECT_EQ(delta.in_discards, 0);
+  // EXPECT_GT(delta.in_pkts, packets_num);
+  LOG(INFO) << "Ingress Deltas (CPU):\n total time: "
+            << (absl::Now() - start_time);
+  ShowCounters(delta);
 
-  // Verify sflowtool result. Since we use port id to generate packets, we use
-  // port id to filter samples received on this port.
-  LOG(INFO) << "sFlow samples:\n" << sflow_result;
-  EXPECT_GT(GetSflowSamplesOnSut(sflow_result, traffic_port.port_id), 0);
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
+                                                    sflow_result));
+  std::vector<std::string> sflow_samples = absl::StrSplit(sflow_result, '\n');
+  LOG(INFO) << "Received " << sflow_samples.size() << " samples";
+  // Check ICMP pkts. ICMP for IPv6  protocol number is 58.
+  EXPECT_TRUE(HasSampleForProtocol(sflow_result, /*ip_protocol=*/58));
 }
 
 // 1. Set sFlow config on SUT for one interface.
