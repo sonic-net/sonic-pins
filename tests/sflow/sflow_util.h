@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_SFLOW_SFLOW_UTIL_H_
 #define PINS_TESTS_SFLOW_SFLOW_UTIL_H_
 
+#include <cstdint>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
@@ -91,11 +92,17 @@ absl::StatusOr<std::string> UpdateSflowConfig(
 absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
                                              absl::string_view queue_name,
                                              int queue_limit);
-
-// Returns <interface name, interface sflow sampling rate> map of each interface
-// in `interfaces`.
+// Returns <interface name, state/ingress-sampling-rate> map of each
+// interface in `interfaces`.
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetSflowSamplingRateForInterfaces(
+    gnmi::gNMI::StubInterface* gnmi_stub,
+    const absl::flat_hash_set<std::string>& interfaces);
+
+// Returns <interface name, state/actual-ingress-sampling-rate> map of each
+// interface in `interfaces`.
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetSflowActualSamplingRateForInterfaces(
     gnmi::gNMI::StubInterface* gnmi_stub,
     const absl::flat_hash_set<std::string>& interfaces);
 
@@ -109,6 +116,17 @@ absl::Status VerifySflowQueueLimitState(
 // ToS value are not identical or failed to find ToS value in `tcpdump_result`.
 absl::StatusOr<int> ExtractTosFromTcpdumpResult(
     absl::string_view tcpdump_result);
+
+// Reads and returns value from
+// `/sampling/sflow/interfaces/interface[name=<interface_name>]/state/packets-sampled`.
+absl::StatusOr<int64_t> GetSflowInterfacePacketsSampledCounter(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface_name);
+
+// Read and returns value from
+// /sampling/sflow/collectors/collector[address=<collector_ip>][port=<port_num>]/state/packets-sent
+absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view collector_ip,
+    int port_num);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
