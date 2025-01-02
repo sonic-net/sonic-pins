@@ -26,12 +26,12 @@
 #include "absl/flags/usage.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "glog/logging.h"
 #include "gutil/io.h"
-#include "gutil/status.h"
-#include "p4_symbolic/bmv2/bmv2.h"
-#include "p4_symbolic/parser.h"
-#include "p4_symbolic/sai/parser.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/test_util.h"
 
 ABSL_FLAG(std::string, p4info, "",
           "The path to the p4info protobuf file (required)");
@@ -40,71 +40,32 @@ ABSL_FLAG(std::string, entries, "",
           "The path to the table entries txt file (optional), leave this empty "
           "if the input p4 program contains no (explicit) tables for which "
           "entries are needed.");
-ABSL_FLAG(std::string, smt, "", "Dump the SMT program for debugging");
+ABSL_FLAG(std::string, packets, "", "The concrete packets output file");
+ABSL_FLAG(std::string, smt, "", "The SMT program output file");
 ABSL_FLAG(int, port_count, 2, "Number of used ports (numbered 0 to N-1)");
-ABSL_FLAG(bool, hardcoded_parser, true,
-          "Use the hardcoded parser during symbolic evaluation");
 
 namespace {
 
-// Parse input P4 program, analyze it symbolically
-// and generate test pakcets.
-absl::Status ParseAndEvaluate() {
-  const std::string &p4info_path = absl::GetFlag(FLAGS_p4info);
-  const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
-  const std::string &entries_path = absl::GetFlag(FLAGS_entries);
-  const std::string &smt_path = absl::GetFlag(FLAGS_smt);
-  const int port_count = absl::GetFlag(FLAGS_port_count);
-  bool hardcoded_parser = absl::GetFlag(FLAGS_hardcoded_parser);
-
-  RET_CHECK(!p4info_path.empty());
-  RET_CHECK(!bmv2_path.empty());
-
-  // Transform to IR.
-  ASSIGN_OR_RETURN(
-      p4_symbolic::ir::Dataplane dataplane,
-      p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
-
-  // Generate port list.
-  std::vector<int> physical_ports(port_count);
-  for (int i = 0; i < port_count; i++) physical_ports[i] = i;
-
-  // Evaluate program symbolically.
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<p4_symbolic::symbolic::SolverState> solver_state,
-      p4_symbolic::symbolic::EvaluateP4Program(dataplane, physical_ports));
-
-  // Add constraints for parser.
-  if (hardcoded_parser) {
-    ASSIGN_OR_RETURN(
-        std::vector<z3::expr> parser_constraints,
-        p4_symbolic::EvaluateSaiParser(solver_state->context.ingress_headers));
-    for (auto &constraint : parser_constraints) {
-      solver_state->solver->add(constraint);
-    }
-  }
-
-  // Output SMT formula.
-  if (!smt_path.empty()) {
-    RETURN_IF_ERROR(gutil::WriteFile(
-        solver_state->GetHeadersAndSolverConstraintsSMT(), smt_path));
-  }
-
-  // Find a packet matching every entry of every table.
-  // Loop over tables in a deterministic order for output consistency
-  // (important for ci tests).
-  auto ordered_tables = absl::btree_map<std::string, p4_symbolic::ir::Table>(
-      dataplane.program.tables().cbegin(), dataplane.program.tables().cend());
+// Finds a packet matching every table entry.
+absl::StatusOr<std::string> GetConcretePacketsCoveringAllTableEntries(
+    p4_symbolic::symbolic::SolverState &solver_state) {
   constexpr int kColumnSize = 80;
+  std::ostringstream result;
 
-  for (const auto &[name, table] : ordered_tables) {
-    int row_count = static_cast<int>(dataplane.entries[name].size());
+  // Loop over tables in a deterministic order for output consistency
+  // (important for CI tests).
+  for (const auto &[name, table] : Ordered(solver_state.program.tables())) {
+    int row_count = 0;
+    if (solver_state.entries.count(name) > 0) {
+      row_count = static_cast<int>(solver_state.entries.at(name).size());
+    }
+
     for (int i = -1; i < row_count; i++) {
       std::string banner =
           "Finding packet for table " + name + " and row " + std::to_string(i);
-      std::cout << std::string(kColumnSize, '=') << std::endl
-                << banner << std::endl
-                << std::string(kColumnSize, '=') << std::endl;
+      result << std::string(kColumnSize, '=') << std::endl
+             << banner << std::endl
+             << std::string(kColumnSize, '=') << std::endl;
 
       p4_symbolic::symbolic::Assertion table_entry_assertion =
           [name = name,
@@ -117,15 +78,63 @@ absl::Status ParseAndEvaluate() {
 
       ASSIGN_OR_RETURN(
           std::optional<p4_symbolic::symbolic::ConcreteContext> concrete_packet,
-          p4_symbolic::symbolic::Solve(*solver_state, table_entry_assertion));
+          p4_symbolic::symbolic::Solve(solver_state, table_entry_assertion));
 
       if (concrete_packet) {
-        std::cout << concrete_packet->to_string(/*verbose=*/true) << std::endl;
+        result << concrete_packet->to_string(/*verbose=*/true) << std::endl;
       } else {
-        std::cout << "Cannot find solution!" << std::endl;
+        result << "Cannot find solution!" << std::endl;
       }
-      std::cout << std::string(kColumnSize, '_') << std::endl << std::endl;
+      result << std::string(kColumnSize, '_') << std::endl << std::endl;
     }
+  }
+
+  return result.str();
+}
+
+// Parses input P4 program, analyzes it symbolically and generates test packets.
+absl::Status ParseAndEvaluate() {
+  const std::string &p4info_path = absl::GetFlag(FLAGS_p4info);
+  const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
+  const std::string &entries_path = absl::GetFlag(FLAGS_entries);
+  const std::string &packets_path = absl::GetFlag(FLAGS_packets);
+  const std::string &smt_path = absl::GetFlag(FLAGS_smt);
+  const int port_count = absl::GetFlag(FLAGS_port_count);
+
+  RET_CHECK(!p4info_path.empty());
+  RET_CHECK(!bmv2_path.empty());
+
+  ASSIGN_OR_RETURN(
+      p4::v1::ForwardingPipelineConfig config,
+      p4_symbolic::ParseToForwardingPipelineConfig(bmv2_path, p4info_path));
+  ASSIGN_OR_RETURN(
+      std::vector<p4::v1::TableEntry> table_entries,
+      p4_symbolic::GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
+
+  // Generate port list.
+  std::vector<int> physical_ports(port_count);
+  for (int i = 0; i < port_count; i++) physical_ports[i] = i;
+
+  // Evaluate program symbolically.
+  ASSIGN_OR_RETURN(
+      std::unique_ptr<p4_symbolic::symbolic::SolverState> solver_state,
+      p4_symbolic::symbolic::EvaluateP4Program(config, table_entries,
+                                               physical_ports));
+
+  // Output SMT formula.
+  if (!smt_path.empty()) {
+    RETURN_IF_ERROR(gutil::WriteFile(
+        solver_state->GetHeadersAndSolverConstraintsSMT(), smt_path));
+  }
+
+  // Solve and output a concrete packet for each table entry.
+  if (packets_path.empty()) {
+    LOG(WARNING) << "No output path is provided for concrete packets. Consider "
+                    "using --packets=path/to/packets.txt option.";
+  } else {
+    ASSIGN_OR_RETURN(std::string concrete_packets,
+                     GetConcretePacketsCoveringAllTableEntries(*solver_state));
+    RETURN_IF_ERROR(gutil::WriteFile(concrete_packets, packets_path));
   }
 
   return absl::OkStatus();
@@ -137,11 +146,12 @@ int main(int argc, char *argv[]) {
   // Verify link and compile versions are the same.
   // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  // Command line arugments and help message.
+  // Command line arguments and help message.
   absl::SetProgramUsageMessage(absl::StrFormat(
       "usage: %s %s", argv[0],
       "--bmv2=path/to/bmv2.json --p4info=path/to/p4info.pb.txt "
-      "[--entries=path/to/table_entries.txt] [--hardcoded_parser=false]"));
+      "[--entries=path/to/table_entries.txt] [--packets=path/to/packets.txt] "
+      "[--smt=path/to/formulas.smt2] [--port_count=N]"));
   absl::ParseCommandLine(argc, argv);
 
   // Run code

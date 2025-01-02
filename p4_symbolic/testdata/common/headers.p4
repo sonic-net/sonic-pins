@@ -1,6 +1,9 @@
 #ifndef P4_SYMBOLIC_TESTDATA_COMMON_HEADERS_P4_
 #define P4_SYMBOLIC_TESTDATA_COMMON_HEADERS_P4_
 
+#include "bitwidths.p4"
+#include "sai_ids.p4"
+
 #define ETHERTYPE_IPV4  0x0800
 #define ETHERTYPE_IPV6  0x86dd
 #define ETHERTYPE_ARP   0x0806
@@ -40,26 +43,6 @@ const vlan_id_t NO_VLAN_ID = 0x000;
 // The port used by `mark_to_drop` from v1model.p4. For details, see the
 // documentation of `mark_to_drop`.
 #define SAI_P4_DROP_PORT 511
-
-// -- Translated Types ---------------------------------------------------------
-
-// BMv2 does not support @p4runtime_translation.
-
-#ifndef PLATFORM_BMV2
-@p4runtime_translation("", string)
-@p4runtime_translation_mappings({
-  // The "default VRF", 0, corresponds to the empty string, "", in P4Runtime.
-  {"", 0},
-})
-#endif
-type bit<16> vrf_id_t;
-
-const vrf_id_t kDefaultVrf = 0;
-
-#ifndef PLATFORM_BMV2
-@p4runtime_translation("", string)
-#endif
-type bit<16> port_id_t;
 
 // -- Protocol headers ---------------------------------------------------------
 
@@ -172,30 +155,6 @@ header gre_t {
   bit<16> protocol;
 }
 
-// -- Packet IO headers --------------------------------------------------------
-
-@controller_header("packet_in")
-header packet_in_header_t {
-  // The port the packet ingressed on.
-  port_id_t ingress_port;
-  // The initial intended egress port decided for the packet by the pipeline.
-  port_id_t target_egress_port;
-}
-
-@controller_header("packet_out")
-header packet_out_header_t {
-  // The port this packet should egress out of when `submit_to_ingress == 0`.
-  // Meaningless when `submit_to_ingress == 1`.
-  port_id_t egress_port;
-  // Indicates if the packet should go through the ingress pipeline like a
-  // dataplane packet, or be sent straight out of the given `egress_port`.
-  bit<1> submit_to_ingress;
-  // Padding field to align the header to 8-bit multiple, as required by BMv2.
-  // Carries no information.
-  @padding
-  bit<7> unused_pad;
-}
-
 // -- Preserved Field Lists ----------------------------------------------------
 
 // The field list numbers used in @field_list annotations to identify the fields
@@ -213,4 +172,115 @@ enum bit<8> PreservedFieldList {
   CLONE_I2E_PACKET_IN = 8w2
 };
 
+// -- Translated Types ---------------------------------------------------------
+
+// BMv2 does not support @p4runtime_translation.
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<NEXTHOP_ID_BITWIDTH> nexthop_id_t;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<TUNNEL_ID_BITWIDTH> tunnel_id_t;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<WCMP_GROUP_ID_BITWIDTH> wcmp_group_id_t;
+
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+// TODO: The following annotation is not yet standard, and not yet
+// understood by p4-symbolic. Work with the P4Runtime WG to standardize the
+// annotation (or a similar annotation), and teach it to p4-symbolic.
+@p4runtime_translation_mappings({
+  // The "default VRF", 0, corresponds to the empty string, "", in P4Runtime.
+  {"", 0},
+})
+#endif
+type bit<VRF_BITWIDTH> vrf_id_t;
+
+const vrf_id_t kDefaultVrf = 0;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<ROUTER_INTERFACE_ID_BITWIDTH> router_interface_id_t;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<PORT_BITWIDTH> port_id_t;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<MIRROR_SESSION_ID_BITWIDTH> mirror_session_id_t;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
+type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
+
+// -- Untranslated Types -------------------------------------------------------
+
+typedef bit<ROUTE_METADATA_BITWIDTH> route_metadata_t;
+typedef bit<ACL_METADATA_BITWIDTH> acl_metadata_t;
+
+// -- Meters -------------------------------------------------------------------
+
+enum bit<2> MeterColor_t {
+  GREEN = 0,
+  YELLOW = 1,
+  RED = 2
+};
+
+// -- Packet IO headers --------------------------------------------------------
+
+@controller_header("packet_in")
+header packet_in_header_t {
+  // The port the packet ingressed on.
+  @id(PACKET_IN_INGRESS_PORT_ID)
+  port_id_t ingress_port;
+  // The initial intended egress port decided for the packet by the pipeline.
+  @id(PACKET_IN_TARGET_EGRESS_PORT_ID)
+  port_id_t target_egress_port;
+  // Padding field to align the header to 8-bit multiple, as required by BMv2.
+  // Carries no information.
+  //
+  // Contrary to the corresponding field in the `packet_out` header, we include
+  // this field only on BMv2, as clients will generally ignore this field anyhow
+  // and thus not observe this minor API deviation.
+  // TODO: Handle packet-in uniformly for all platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
+  @id(PACKET_IN_UNUSED_PAD_ID)
+  @padding
+  bit<8> unused_pad;
+#endif
+}
+
+@controller_header("packet_out")
+header packet_out_header_t {
+  // The port this packet should egress out of when `submit_to_ingress == 0`.
+  // Meaningless when `submit_to_ingress == 1`.
+  @id(PACKET_OUT_EGRESS_PORT_ID)
+  port_id_t egress_port;
+  // Indicates if the packet should go through the ingress pipeline like a
+  // dataplane packet, or be sent straight out of the given `egress_port`.
+  @id(PACKET_OUT_SUBMIT_TO_INGRESS_ID)
+  bit<1> submit_to_ingress;
+  // Padding field to align the header to 8-bit multiple, as required by BMv2.
+  // Carries no information.
+  //
+  // Technically this makes sense only for BMv2, but we include it on all
+  // platforms so clients don't have to make a distinction in packet-out
+  // requests.
+  @id(PACKET_OUT_UNUSED_PAD_ID)
+  @padding
+  bit<7> unused_pad;
+}
 #endif // P4_SYMBOLIC_TESTDATA_COMMON_HEADERS_P4_

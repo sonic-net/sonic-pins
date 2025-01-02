@@ -23,6 +23,7 @@
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_symbolic/ir/parser.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -58,9 +59,14 @@ z3::expr EgressSpecDroppedValue() {
   return Z3Context().bv_val(kDropPort, kPortBitwidth);
 }
 
-absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
-    const ir::Dataplane &data_plane, const std::vector<int> &physical_ports,
+absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
+    const p4::v1::ForwardingPipelineConfig &config,
+    const std::vector<p4::v1::TableEntry> &entries,
+    const std::vector<int> &physical_ports,
     const TranslationPerType &translation_per_type) {
+  // Parse the P4 config and entries into the P4-symbolic IR.
+  ASSIGN_OR_RETURN(ir::Dataplane dataplane, ir::ParseToIr(config, entries));
+
   // Use global context to define a solver.
   std::unique_ptr<z3::solver> z3_solver =
       std::make_unique<z3::solver>(Z3Context());
@@ -77,7 +83,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
   // Evaluate the main program, assuming it conforms to V1 model.
   ASSIGN_OR_RETURN(
       SymbolicContext context,
-      v1model::EvaluateV1model(data_plane, physical_ports, translator));
+      v1model::EvaluateV1model(dataplane, physical_ports, translator));
 
   // Restrict the value of all fields with (purely static, i.e.
   // dynamic_translation = false) P4RT translated types to what has been used in
@@ -118,7 +124,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
   }
 
   // Assemble and return result.
-  return std::make_unique<SolverState>(data_plane.program, data_plane.entries,
+  return std::make_unique<SolverState>(dataplane.program, dataplane.entries,
                                        std::move(context), std::move(z3_solver),
                                        std::move(translator));
 }

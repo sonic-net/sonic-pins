@@ -16,11 +16,8 @@
 #define PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_PACKET_SYNTHESIZER_H_
 
 #include <memory>
-#include <optional>
-#include <string>
 #include <vector>
 
-#include "p4/v1/p4runtime.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"

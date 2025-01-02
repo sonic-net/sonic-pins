@@ -68,8 +68,11 @@ MergeDisjointTableMatches(const SymbolicTableMatches &lhs,
 absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
                                      const ir::P4Program &program);
 
-} // namespace util
-} // namespace symbolic
-} // namespace p4_symbolic
+// Returns the full valid field name of the given header.
+std::string GetHeaderValidityFieldName(absl::string_view header_name);
+
+}  // namespace util
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
 #endif // P4_SYMBOLIC_SYMBOLIC_UTIL_H_

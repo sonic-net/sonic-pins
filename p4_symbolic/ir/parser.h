@@ -12,21 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_symbolic/ir/pdpi_driver.h"
+// This file defines the main API entry point for parsing input files
+// into our IR representation.
 
-#include <memory>
+#ifndef P4_SYMBOLIC_IR_PARSER_H_
+#define P4_SYMBOLIC_IR_PARSER_H_
 
-#include "gutil/proto.h"
-#include "p4_pdpi/ir.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_symbolic/ir/ir.h"
 
-namespace p4_symbolic {
-namespace ir {
+namespace p4_symbolic::ir {
 
-absl::StatusOr<pdpi::IrP4Info> ParseP4InfoFile(const std::string &p4info_path) {
-  p4::config::v1::P4Info p4info;
-  RETURN_IF_ERROR(gutil::ReadProtoFromFile(p4info_path.c_str(), &p4info));
-  return pdpi::CreateIrP4Info(p4info);
-}
+absl::StatusOr<Dataplane> ParseToIr(
+    const p4::v1::ForwardingPipelineConfig &config,
+    absl::Span<const p4::v1::TableEntry> table_entries);
 
-}  // namespace ir
-}  // namespace p4_symbolic
+}  // namespace p4_symbolic::ir
+
+#endif // P4_SYMBOLIC_PARSER_H_

@@ -21,7 +21,6 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
@@ -29,6 +28,7 @@
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
+#include "p4_symbolic/symbolic/util.h"
 
 namespace p4_symbolic::packet_synthesizer {
 namespace {
@@ -146,7 +146,7 @@ HeaderCriteria::FieldCriterion MakeHeaderValidityCriterion(
     absl::string_view header_name, bool valid) {
   HeaderCriteria::FieldCriterion field_criterion;
   field_criterion.mutable_field_match()->set_name(
-      absl::StrCat(header_name, ".$valid$"));
+      symbolic::util::GetHeaderValidityFieldName(header_name));
   field_criterion.mutable_field_match()->mutable_exact()->set_hex_str(
       valid ? "0x1" : "0x0");
   return field_criterion;
