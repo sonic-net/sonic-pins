@@ -61,10 +61,9 @@ absl::Status SetSflowIngressSamplingRate(
 
 // Sets sFlow interface config and waits until it's converged in state path.
 // `interface` must be present.
-absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
-                                     absl::string_view interface, bool enabled,
-                                     int samping_rate,
-                                     absl::Duration timeout = absl::Seconds(5));
+absl::Status SetSflowInterfaceConfigEnable(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
+    bool enabled, absl::Duration timeout = absl::Seconds(5));
 
 // Verifies all sFlow-related config is consumed by switch by reading
 // corresponding gNMI state paths. Returns an FailedPreconditionError if

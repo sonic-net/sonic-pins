@@ -147,24 +147,27 @@ absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
       ops_val, /*resp_parse_str=*/"");
 }
 
-absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
-                                     absl::string_view interface, bool enabled,
-                                     int samping_rate, absl::Duration timeout) {
+absl::Status SetSflowInterfaceConfigEnable(gnmi::gNMI::StubInterface* gnmi_stub,
+                                           absl::string_view interface,
+                                           bool enabled,
+                                           absl::Duration timeout) {
   const std::string ops_val = absl::Substitute(
-      "{\"openconfig-sampling-sflow:config\":{\"enabled\":$0,\"ingress-"
-      "sampling-rate\":$1,\"name\":\"$2\"}}",
-      (enabled ? "true" : "false"), samping_rate, interface);
+      absl::Substitute(R"({"openconfig-sampling-sflow:enabled":$0})",
+                       (enabled ? "true" : "false")));
   RETURN_IF_ERROR(SetGnmiConfigPath(
-      gnmi_stub, absl::Substitute(kSflowGnmiConfigInterfacePath, interface),
+      gnmi_stub,
+      absl::Substitute("/sampling/sflow/interfaces/interface[name=$0]/config/"
+                       "enabled",
+                       interface),
       pins_test::GnmiSetType::kUpdate, ops_val));
 
-  const std::string state_val = absl::Substitute(
-      "{\"openconfig-sampling-sflow:state\":{\"enabled\":$0,\"ingress-"
-      "sampling-rate\":$1,\"name\":\"$2\"}}",
-      (enabled ? "true" : "false"), samping_rate, interface);
+  const std::string state_val =
+      absl::Substitute(R"({"openconfig-sampling-sflow:enabled":$0})",
+                       (enabled ? "true" : "false"));
   return pins_test::WaitForCondition(
       VerifyGnmiStateConverged, timeout, gnmi_stub,
-      absl::Substitute(kSflowGnmiStateInterfacePath, interface), state_val,
+      absl::Substitute(kSflowGnmiStateInterfaceEnablePath, interface),
+      state_val,
       /*resp_parse_str=*/"");
 }
 
@@ -360,13 +363,13 @@ absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
                 .get<std::string>();
         if (current_queue_name == queue_name) {
           std::string peak_rate = scheduler["two-rate-three-color"]["config"]
-                                           ["google-pins-qos:pir-pkts"]
+                                           ["pins-qos:pir-pkts"]
                                                .get<std::string>();
           LOG(INFO) << "Re-configuring Queue[" << current_queue_name
                     << "] rate from <" << peak_rate << "> to <" << queue_limit
                     << ">.";
           scheduler["two-rate-three-color"]["config"]
-                   ["google-pins-qos:pir-pkts"] = absl::StrCat(queue_limit);
+                   ["pins-qos:pir-pkts"] = absl::StrCat(queue_limit);
           break;
         }
       }
@@ -405,7 +408,7 @@ GetSflowActualSamplingRateForInterfaces(
     const absl::flat_hash_set<std::string>& interfaces) {
   absl::flat_hash_map<std::string, int> interface_to_sample_rate;
   const std::string parse_ops_str =
-      "openconfig-sampling-sflow:actual-ingress-sampling-rate";
+      "pins-sampling-sflow:actual-ingress-sampling-rate";
   for (const auto& interface : interfaces) {
     ASSIGN_OR_RETURN(
         std::string sample_rate_str,
@@ -438,7 +441,7 @@ absl::Status VerifySflowQueueLimitState(gnmi::gNMI::StubInterface* gnmi_stub,
         pins_test::GetGnmiStatePathInfo(gnmi_stub, kQueueLimitStatePath,
                                         "openconfig-qos:state"));
     ASSIGN_OR_RETURN(const auto resp_json, json_yang::ParseJson(state_value));
-    if (resp_json["google-pins-qos:pir-pkts"] ==
+    if (resp_json["pins-qos:pir-pkts"] ==
         absl::StrCat(expected_queue_limit)) {
       return absl::OkStatus();
     }
