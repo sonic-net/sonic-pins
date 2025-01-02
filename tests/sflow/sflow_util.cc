@@ -14,11 +14,13 @@
 
 #include "tests/sflow/sflow_util.h"
 
+#include <cstdint>
 #include <string>
 
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
@@ -61,6 +63,9 @@ constexpr absl::string_view kSflowGnmiStateInterfacePath =
 constexpr absl::string_view kSflowGnmiStateInterfaceSampleRatePath =
     "/sampling/sflow/interfaces/interface[name=$0]/state/"
     "ingress-sampling-rate";
+constexpr absl::string_view kSflowGnmiStateInterfaceActualSampleRatePath =
+    "/sampling/sflow/interfaces/interface[name=$0]/state/"
+    "actual-ingress-sampling-rate";
 constexpr absl::string_view kSflowGnmiStateInterfaceEnablePath =
     "/sampling/sflow/interfaces/interface[name=$0]/state/enabled";
 constexpr absl::string_view kSflowGnmiStateCollectorAddressPath =
@@ -387,7 +392,33 @@ GetSflowSamplingRateForInterfaces(
     int sample_rate;
     if (!absl::SimpleAtoi(sample_rate_str, &sample_rate)) {
       return absl::InternalError(absl::StrCat(
-          interface, " has invalid sample rate ", sample_rate_str));
+          interface, " has invalid ingress-sampling-rate ", sample_rate_str));
+    }
+    interface_to_sample_rate[interface] = sample_rate;
+  }
+  return interface_to_sample_rate;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetSflowActualSamplingRateForInterfaces(
+    gnmi::gNMI::StubInterface* gnmi_stub,
+    const absl::flat_hash_set<std::string>& interfaces) {
+  absl::flat_hash_map<std::string, int> interface_to_sample_rate;
+  const std::string parse_ops_str =
+      "openconfig-sampling-sflow:actual-ingress-sampling-rate";
+  for (const auto& interface : interfaces) {
+    ASSIGN_OR_RETURN(
+        std::string sample_rate_str,
+        pins_test::GetGnmiStatePathInfo(
+            gnmi_stub,
+            absl::Substitute(kSflowGnmiStateInterfaceActualSampleRatePath,
+                             interface),
+            parse_ops_str));
+    int sample_rate;
+    if (!absl::SimpleAtoi(sample_rate_str, &sample_rate)) {
+      return absl::InternalError(
+          absl::StrCat(interface, " has invalid actual-ingress-sampling-rate ",
+                       sample_rate_str));
     }
     interface_to_sample_rate[interface] = sample_rate;
   }
@@ -440,6 +471,48 @@ absl::StatusOr<int> ExtractTosFromTcpdumpResult(
   }
   return absl::InvalidArgumentError(
       "Failed to find ToS value in tcpdump result.");
+}
+
+absl::StatusOr<int64_t> GetSflowInterfacePacketsSampledCounter(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface_name) {
+  const std::string gnmi_state_path = absl::Substitute(
+      "/sampling/sflow/interfaces/interface[name=$0]/state/packets-sampled",
+      interface_name);
+  const std::string parse_ops_str = "openconfig-sampling-sflow:packets-sampled";
+  ASSIGN_OR_RETURN(std::string counter_str,
+                   pins_test::GetGnmiStatePathInfo(gnmi_stub, gnmi_state_path,
+                                                   parse_ops_str));
+  LOG(INFO) << "Gnmi path: " << gnmi_state_path << " value is: " << counter_str;
+  int64_t counter;
+  // skip over the quote '"'
+  if (!absl::SimpleAtoi(counter_str.substr(1, counter_str.size() - 2),
+                        &counter)) {
+    return absl::InternalError(absl::StrCat(
+        interface_name, " has invalid packets-sampled value: ", counter_str));
+  }
+  return counter;
+}
+
+absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view collector_ip,
+    int port_num) {
+  const std::string gnmi_state_path = absl::Substitute(
+      "/sampling/sflow/collectors/"
+      "collector[address=$0][port=$1]/state/packets-sent",
+      collector_ip, port_num);
+  const std::string parse_ops_str = "openconfig-sampling-sflow:packets-sent";
+  ASSIGN_OR_RETURN(std::string counter_str,
+                   pins_test::GetGnmiStatePathInfo(gnmi_stub, gnmi_state_path,
+                                                   parse_ops_str));
+  LOG(INFO) << "Gnmi path: " << gnmi_state_path << " value is: " << counter_str;
+  int64_t counter;
+  // skip over the quote '"'
+  if (!absl::SimpleAtoi(counter_str.substr(1, counter_str.size() - 2),
+                        &counter)) {
+    return absl::InternalError(absl::StrCat(
+        collector_ip, " has invalid packets-sent value: ", counter_str));
+  }
+  return counter;
 }
 
 }  // namespace pins

@@ -650,6 +650,71 @@ TEST(SflowUtilTest, GetSampleRateSuccessForAllInterfaces) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(SflowUtilTest, GetSampleRateInvalidSampleRateFail) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(
+            notification {
+              timestamp: 1664239058571609826
+              prefix { origin: "openconfig" }
+              update {
+                val {
+                  json_ietf_val: "{\"openconfig-sampling-sflow:ingress-sampling-rate\":\"abc\"}"
+                }
+              }
+            })pb")),
+      Return(grpc::Status::OK)));
+  absl::flat_hash_set<std::string> interfaces{"Ethernet1/1/1",
+                                              "Ethernet1/31/5"};
+  EXPECT_THAT(GetSflowSamplingRateForInterfaces(&stub, interfaces),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("invalid")));
+}
+
+TEST(SflowUtilTest, GetActualSampleRateSuccessForAllInterfaces) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(
+            notification {
+              timestamp: 1664239058571609826
+              prefix { origin: "openconfig" }
+              update {
+                val {
+                  json_ietf_val: "{\"openconfig-sampling-sflow:actual-ingress-sampling-rate\":256}"
+                }
+              }
+            })pb")),
+      Return(grpc::Status::OK)));
+  absl::flat_hash_set<std::string> interfaces{"Ethernet1/1/1",
+                                              "Ethernet1/31/5"};
+  const absl::flat_hash_map<std::string, int> expected_map = {
+      {"Ethernet1/1/1", 256}, {"Ethernet1/31/5", 256}};
+  EXPECT_THAT(GetSflowActualSamplingRateForInterfaces(&stub, interfaces),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
+TEST(SflowUtilTest, GetActualSampleRateInvalidSampleRateFail) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(
+            notification {
+              timestamp: 1664239058571609826
+              prefix { origin: "openconfig" }
+              update {
+                val {
+                  json_ietf_val: "{\"openconfig-sampling-sflow:actual-ingress-sampling-rate\":\"abc\"}"
+                }
+              }
+            })pb")),
+      Return(grpc::Status::OK)));
+  absl::flat_hash_set<std::string> interfaces{"Ethernet1/1/1",
+                                              "Ethernet1/31/5"};
+  EXPECT_THAT(GetSflowActualSamplingRateForInterfaces(&stub, interfaces),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("invalid")));
+}
+
 TEST(SflowUtilTest, UpdateQueueLimitSucceed) {
   const int kQueueNumberForBE1 = 5;
   gnmi::MockgNMIStub stub;
