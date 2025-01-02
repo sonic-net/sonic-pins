@@ -33,10 +33,11 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
+#include "p4_symbolic/deparser.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 #include "p4_symbolic/packet_synthesizer/util.h"
-#include "p4_symbolic/sai/deparser.h"
+#include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -54,10 +55,8 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
     const p4_symbolic::symbolic::SolverState& solver_state,
     absl::string_view packet_payload, bool should_be_dropped) {
   z3::model model = solver_state.solver->get_model();
-  ASSIGN_OR_RETURN(
-      std::string raw_packet,
-      p4_symbolic::SaiDeparser(solver_state.context.ingress_headers, model));
-  packetlib::Packet packet = packetlib::ParsePacket(raw_packet);
+  ASSIGN_OR_RETURN(std::string packet,
+                   p4_symbolic::DeparseIngressPacket(solver_state, model));
   ASSIGN_OR_RETURN(
       const bool dropped,
       p4_symbolic::EvalZ3Bool(solver_state.context.trace.dropped, model));
@@ -123,7 +122,7 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
   // third_party/pins_infra/sai_p4/fixed/metadata.p4 for more info.
   synthesized_packet.set_ingress_port(local_metadata_ingress_port);
   // Currently, p4-symbolic has no generic, built-in support for
-  // prediciting whether a packet gets dropped and/or punted to the
+  // predicting whether a packet gets dropped and/or punted to the
   // controller. As a workaround, we hard-code some program-specific
   // predictions here; they may break in the future when the program
   // changes.
