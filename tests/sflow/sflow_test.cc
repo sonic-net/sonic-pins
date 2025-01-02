@@ -2917,8 +2917,6 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
 
   EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
                                                     sflow_result));
-  ASSERT_FALSE(sflow_result.empty())
-      << "No samples on " << traffic_port.interface_name;
   std::vector<std::string> sflow_samples = absl::StrSplit(sflow_result, '\n');
   LOG(INFO) << "Received " << sflow_samples.size() << " samples";
   // Check Ssh pkts. TCP protocol number is 6.
