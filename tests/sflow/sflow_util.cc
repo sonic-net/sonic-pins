@@ -147,6 +147,15 @@ absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
       ops_val, /*resp_parse_str=*/"");
 }
 
+absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
+                                     absl::string_view interface, bool enabled,
+                                     int samping_rate, absl::Duration timeout) {
+  RETURN_IF_ERROR(
+      SetSflowInterfaceConfigEnable(gnmi_stub, interface, enabled, timeout));
+  return SetSflowIngressSamplingRate(gnmi_stub, interface, samping_rate,
+                                     timeout);
+}
+
 absl::Status SetSflowInterfaceConfigEnable(gnmi::gNMI::StubInterface* gnmi_stub,
                                            absl::string_view interface,
                                            bool enabled,
