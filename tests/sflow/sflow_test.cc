@@ -1841,7 +1841,6 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
                                  traffic_rate * kBackoffTrafficDurationSecs,
                                  traffic_rate, *testbed_));
-
   {
     // Start sflowtool on SUT.
     ASSERT_OK_AND_ASSIGN(
