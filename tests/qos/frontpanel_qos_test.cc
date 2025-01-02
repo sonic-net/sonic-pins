@@ -24,6 +24,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 
+#include "dvaas/test_vector.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
@@ -39,9 +40,8 @@
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "dvaas/test_vector.pb.h"
+#include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
@@ -132,7 +132,7 @@ absl::Status SetUpForwardingAndCopyEgressToCpu(
             nexthop_table_entry {
               match { nexthop_id: "$2" }
               action {
-                set_nexthop { router_interface_id: "$0" neighbor_id: "$1" }
+                set_ip_nexthop { router_interface_id: "$0" neighbor_id: "$1" }
               }
             }
           )pb",
@@ -335,7 +335,7 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   // Look up the port IDs used by P4RT for the SUT interfaces
   absl::flat_hash_map<std::string, std::string> port_id_by_interface;
   ASSERT_OK_AND_ASSIGN(port_id_by_interface,
-                       GetAllInterfaceNameToPortId(GetParam().gnmi_config));
+                       GetAllInterfaceNameToPortId(*gnmi_stub));
 
   ASSERT_OK_AND_ASSIGN(const std::string kSutInPort1Id,
                        gutil::FindOrStatus(port_id_by_interface, kSutInPort1));
@@ -538,10 +538,11 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
             const QueueCounters queue_counters_before_test_packet,
             GetGnmiQueueCounters(/*port=*/kSutOutPort, /*queue=*/target_queue,
                                  *gnmi_stub));
-
-	ASSERT_OK(pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
-                                                ixia_setup_result.topology_ref,
-                                                *testbed));
+        ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+          return pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
+                                               ixia_setup_result.topology_ref,
+                                               *testbed);
+        }));
 
 	// Time to allow initial burst and to reach steady state queue usage.
         constexpr absl::Duration kCongestionTime = absl::Seconds(2);
@@ -567,10 +568,22 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
           LOG(INFO) << "ECN marked Packets: "
                     << packet_receive_info.num_packets_ecn_marked;
 
-	  if (is_congestion && is_ect) {
-            // All egress packets must be ECN marked.
-            ASSERT_EQ(packet_receive_info.num_packets_punted,
-                      packet_receive_info.num_packets_ecn_marked);
+          if (is_congestion && is_ect) {
+            // TODO: Currently we are unable to keep queue usage
+            // constantly above threshold. The queue usage starts going down in
+            // a few seconds. Till we understand this, we will allow for
+            // tolerance in packets marked for ECN.
+            constexpr float kTolerancePercent = 20.0;
+            if (testbed->Environment().MaskKnownFailures()) {
+              // Egress packets must be ECN marked. Tolerance of 20%.
+              ASSERT_GE(packet_receive_info.num_packets_ecn_marked,
+                        packet_receive_info.num_packets_punted *
+                            (1 - kTolerancePercent / 100));
+            } else {
+              // All egress packets must be ECN marked.
+              ASSERT_EQ(packet_receive_info.num_packets_punted,
+                        packet_receive_info.num_packets_ecn_marked);
+            }
           } else {
             // No egress packets must be ECN marked.
             ASSERT_EQ(packet_receive_info.num_packets_ecn_marked, 0);
