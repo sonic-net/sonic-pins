@@ -1,5 +1,6 @@
 #include "tests/qos/qos_test_util.h"
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -88,6 +89,32 @@ absl::Status SetPortSpeed(const std::string &port_speed,
   return absl::OkStatus();
 }
 
+absl::StatusOr<int64_t> GetPortSpeed(const std::string &interface_name,
+                                     gnmi::gNMI::StubInterface &gnmi_stub) {
+  // Map keyed on openconfig speed string to value in bits per second.
+  // http://ops.openconfig.net/branches/models/master/docs/openconfig-interfaces.html#mod-openconfig-if-ethernet
+  const auto kPortSpeedTable =
+      absl::flat_hash_map<absl::string_view, uint64_t>({
+          {"openconfig-if-ethernet:SPEED_100GB", 100000000000},
+          {"openconfig-if-ethernet:SPEED_200GB", 200000000000},
+          {"openconfig-if-ethernet:SPEED_400GB", 400000000000},
+      });
+  std::string speed_state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/state/port-speed");
+
+  std::string parse_str = "openconfig-if-ethernet:port-speed";
+  ASSIGN_OR_RETURN(
+      std::string response,
+      GetGnmiStatePathInfo(&gnmi_stub, speed_state_path, parse_str));
+
+  auto speed = kPortSpeedTable.find(StripQuotes(response));
+  if (speed == kPortSpeedTable.end()) {
+    return absl::NotFoundError(response);
+  }
+  return speed->second;
+}
+
 absl::Status SetPortMtu(int port_mtu, const std::string &interface_name,
                         gnmi::gNMI::StubInterface &gnmi_stub) {
   std::string config_path = absl::StrCat(
@@ -160,6 +187,45 @@ absl::StatusOr<absl::flat_hash_map<int, std::string>>
 ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config) {
   // TODO: Actually parse config -- hard-coded for now.
   return ParseIpv4DscpToQueueMapping(gnmi_config);
+}
+
+absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
+  // TODO: Actually parse config -- hard-coded for now.
+  absl::flat_hash_map<int, std::string> queue_by_dscp;
+  for (int dscp = 0; dscp < 64; ++dscp) queue_by_dscp[dscp] = "BE1";
+  for (int dscp = 8; dscp <= 11; ++dscp) queue_by_dscp[dscp] = "AF1";
+  queue_by_dscp[13] = "LLQ1";
+  for (int dscp = 16; dscp <= 19; ++dscp) queue_by_dscp[dscp] = "AF2";
+  queue_by_dscp[21] = "LLQ2";
+  for (int dscp = 24; dscp <= 27; ++dscp) queue_by_dscp[dscp] = "AF3";
+  for (int dscp = 32; dscp <= 35; ++dscp) queue_by_dscp[dscp] = "AF4";
+  for (int dscp = 48; dscp <= 59; ++dscp) queue_by_dscp[dscp] = "NC1";
+  return queue_by_dscp;
+}
+
+absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
+  // TODO: Actually parse config -- hard-coded for now.
+  return GetIpv4DscpToQueueMapping(port, gnmi_stub);
+}
+
+absl::Status SetPortLoopbackMode(bool port_loopback,
+                                 absl::string_view interface_name,
+                                 gnmi::gNMI::StubInterface &gnmi_stub) {
+  std::string config_path = absl::StrCat(
+      "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
+  std::string config_json;
+  if (port_loopback) {
+    config_json = "{\"openconfig-interfaces:loopback-mode\":true}";
+  } else {
+    config_json = "{\"openconfig-interfaces:loopback-mode\":false}";
+  }
+
+  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
+      &gnmi_stub, config_path, GnmiSetType::kUpdate, config_json));
+
+  return absl::OkStatus();
 }
 
 }  // namespace pins_test

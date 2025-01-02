@@ -7,9 +7,11 @@
 #include <cstdlib>
 #include <ostream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -45,7 +47,7 @@ std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
 }
 
 absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
-    const std::string& interface_info, const std::string& port,
+    const std::string& interface_info, const std::string_view port,
     const BreakoutType breakout_type) {
   auto interface_json = json::parse(interface_info);
   // Get breakout modes information from interface entry in platforms.json.
@@ -102,17 +104,8 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
   std::vector<std::string> supported_breakout_modes;
   if (breakout_type == BreakoutType::kChannelized) {
     for (const auto& mode : modes) {
-      // A breakout mode is a channelized mode if it is either a mixed mode (eg.
-      // 1x200G(4)+2x100G(4)) or it results in more than one number of
-      // interfaces (eg. 2x200G).
-      auto num_breakouts_str = mode.substr(0, mode.find('x'));
-      int num_breakouts;
-      if (!absl::SimpleAtoi(num_breakouts_str, &num_breakouts)) {
-        return gutil::InternalErrorBuilder().LogError()
-               << "Failed to convert string (" << num_breakouts_str
-               << ") to integer";
-      }
-      if ((num_breakouts > 1) || absl::StrContains(mode, "+")) {
+      ASSIGN_OR_RETURN(auto is_channelized, IsChannelizedBreakoutMode(mode));
+      if (is_channelized) {
         supported_breakout_modes.push_back(mode);
       }
     }
@@ -217,37 +210,53 @@ absl::StatusOr<std::string> GetCurrentBreakoutModeForPort(
   return current_breakout_mode;
 }
 
+absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode) {
+  // A breakout mode is a channelized mode if it is either a mixed mode (eg.
+  // 1x200G(4)+2x100G(4)) or it results in more than one number of
+  // interfaces (eg. 2x200G).
+  auto num_breakouts_str = mode.substr(0, mode.find('x'));
+  int num_breakouts;
+  if (!absl::SimpleAtoi(num_breakouts_str, &num_breakouts)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to convert string (" << num_breakouts_str
+           << ") to integer";
+  }
+  return ((num_breakouts > 1) || absl::StrContains(mode, "+"));
+}
+
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
     const std::string& platform_json_contents,
-    const BreakoutType breakout_type) {
+    const BreakoutType new_breakout_type,
+    const BreakoutType current_breakout_type,
+    const std::vector<absl::string_view>& allow_list) {
   // Get map of front panel port to oper-status on the switch.
+  absl::flat_hash_map<std::string, std::string> interface_to_oper_status_map;
+
   ASSIGN_OR_RETURN(
-      auto interface_to_oper_status_map,
+      interface_to_oper_status_map,
       GetInterfaceToOperStatusMapOverGnmi(sut_gnmi_stub,
                                           /*timeout=*/absl::Seconds(60)),
       _ << "Failed to get oper-status map for ports on switch");
-
+  // Consider only ports from provided list.
+  std::vector<absl::string_view> port_list;
+  if (!allow_list.empty()) {
+    port_list = allow_list;
+  } else {
+    // Use all available ports if allow list is empty.
+    for (auto& [intf, oper_status] : interface_to_oper_status_map) {
+      port_list.push_back(intf);
+    }
+  }
+  if (port_list.empty()) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "No ports found on switch";
+  }
   // Consider only ports that have p4rt ID modelled as this ID is required to
   // configure P4RT router interface on the port.
   ASSIGN_OR_RETURN(auto port_id_by_interface,
                    GetAllInterfaceNameToPortId(sut_gnmi_stub),
                    _ << "Failed to get interface name to p4rt id map");
-
-  // Consider only operationally up front panel parent ports.
-  std::vector<std::string> up_parent_port_list;
-  for (auto& intf : interface_to_oper_status_map) {
-    if (absl::StartsWith(intf.first, kEthernet)) {
-      ASSIGN_OR_RETURN(const auto is_parent, IsParentPort(intf.first));
-      if (is_parent && intf.second == kStateUp) {
-        up_parent_port_list.push_back(intf.first);
-      }
-    }
-  }
-  if (up_parent_port_list.empty()) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "No operationally up parent ports found on switch";
-  }
 
   // Get interfaces from platform.json.
   const auto platform_json = json::parse(platform_json_contents);
@@ -260,16 +269,30 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
   // Get a random port.
   unsigned int seed = time(NULL);
   RandomPortBreakoutInfo port_info;
-  while (!up_parent_port_list.empty()) {
-    // Randomly pick a port.
-    auto index = rand_r(&seed) % up_parent_port_list.size();
-    auto port = up_parent_port_list[index];
+  absl::flat_hash_set<int> already_tried_port_indices;
+  while (already_tried_port_indices.size() < port_list.size()) {
+    int index = rand_r(&seed) % port_list.size();
+    while (already_tried_port_indices.contains(index)) {
+      index = (index + 1) % port_list.size();
+    }
+    already_tried_port_indices.insert(index);
+    absl::string_view port = port_list[index];
     port_info.port_name = port;
 
     // Check if port has a p4rt id value in the state path.
-    if (!port_id_by_interface.count(port_info.port_name)) {
-      up_parent_port_list.erase(up_parent_port_list.begin() + index);
+    if (!port_id_by_interface.contains(port_info.port_name)) {
       continue;
+    }
+    // Consider only operationally up front panel parent ports.
+    if (!absl::StartsWith(port_info.port_name, kEthernet)) {
+      continue;
+    } else {
+      ASSIGN_OR_RETURN(const auto is_parent, IsParentPort(port_info.port_name));
+      if (!is_parent ||
+          interface_to_oper_status_map.contains(port_info.port_name) == 0 ||
+          interface_to_oper_status_map.at(port_info.port_name) == kStateDown) {
+        continue;
+      }
     }
 
     // Get the port entry from platform.json interfaces info.
@@ -284,11 +307,21 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
         GetCurrentBreakoutModeForPort(sut_gnmi_stub, port_info.port_name));
     port_info.curr_breakout_mode = curr_breakout_mode;
 
+    // Skip the port if it does not have the required breakout type for the
+    // currently configure breakout mode.
+    if (current_breakout_type == kChannelized) {
+      ASSIGN_OR_RETURN(auto is_channelized,
+                       IsChannelizedBreakoutMode(curr_breakout_mode));
+      if (!is_channelized) {
+        continue;
+      }
+    }
+
     // Get supported breakout modes based on breakout type for the port.
     ASSIGN_OR_RETURN(
         auto supported_breakout_modes,
         GetSupportedBreakoutModesForPort(interface_json->dump(), port,
-                                         breakout_type),
+                                         new_breakout_type),
         _ << "Breakout modes not found for " << port << " in platform.json");
 
     // Get a supported breakout mode other than current breakout mode.
@@ -307,16 +340,11 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
       }
     }
     if (!port_info.supported_breakout_mode.empty()) {
-      break;
+      return port_info;
     }
-    // Remove port from list.
-    up_parent_port_list.erase(up_parent_port_list.begin() + index);
   }
-  if (up_parent_port_list.empty()) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "No random interface with supported breakout modes found";
-  }
-  return port_info;
+  return gutil::InternalErrorBuilder().LogError()
+         << "No random interface with supported breakout modes found";
 }
 
 absl::StatusOr<SlotPortLane> GetSlotPortLaneForPort(
@@ -386,6 +414,7 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
       return gutil::InternalErrorBuilder().LogError()
              << "Failed to convert string (" << values[0] << ") to integer";
     }
+    auto breakout_speed = values[1].substr(0, values[1].find('('));
 
     // For each resulting interface, construct the front panel interface name
     // using offset from the parent port. For a breakout mode of Ethernet1/1/1
@@ -415,7 +444,10 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
       physical_channels += "]";
       current_physical_channel += offset;
       curr_lane_number += offset;
-      expected_breakout_info[port] = PortBreakoutInfo{physical_channels};
+      PortBreakoutInfo current_breakout_info;
+      current_breakout_info.physical_channels = physical_channels;
+      current_breakout_info.breakout_speed = breakout_speed;
+      expected_breakout_info[port] = current_breakout_info;
     }
   }
   return expected_breakout_info;
@@ -574,8 +606,8 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
 }
 
 // TODO: Remove port naming dependent logic.
-absl::Status GetBreakoutModeConfigFromString(
-    gnmi::SetRequest& req, gnmi::gNMI::StubInterface* sut_gnmi_stub,
+absl::StatusOr<std::string> GetBreakoutModeConfigJson(
+    gnmi::gNMI::StubInterface* sut_gnmi_stub,
     const absl::string_view port_index, const absl::string_view intf_name,
     const absl::string_view breakout_mode) {
   std::string kBreakoutPath = absl::StrCat("components/component[name=1/",
@@ -631,7 +663,7 @@ absl::Status GetBreakoutModeConfigFromString(
   std::string full_component_config = absl::StrJoin(group_configs, ",");
   std::string full_interface_config = absl::StrJoin(interface_configs, ",");
 
-  auto kBreakoutConfig = absl::Substitute(
+  return absl::Substitute(
       R"pb({
              "openconfig-interfaces:interfaces": { "interface": [ $0 ] },
              "openconfig-platform:components": {
@@ -648,9 +680,16 @@ absl::Status GetBreakoutModeConfigFromString(
            })pb",
       full_interface_config, absl::StrCat("1/", port_index), port_index,
       full_component_config);
+}
+absl::Status GetBreakoutModeConfigFromString(
+    gnmi::SetRequest& req, gnmi::gNMI::StubInterface* sut_gnmi_stub,
+    const absl::string_view port_index, const absl::string_view intf_name,
+    const absl::string_view breakout_mode) {
+  ASSIGN_OR_RETURN(auto config,
+                   GetBreakoutModeConfigJson(sut_gnmi_stub, port_index,
+                                             intf_name, breakout_mode));
   // Build GNMI config set request for given port breakout mode.
-  ASSIGN_OR_RETURN(
-      req, BuildGnmiSetRequest("", GnmiSetType::kReplace, kBreakoutConfig));
+  ASSIGN_OR_RETURN(req, BuildGnmiSetRequest("", GnmiSetType::kReplace, config));
   return absl::OkStatus();
 }
 
