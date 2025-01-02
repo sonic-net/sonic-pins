@@ -1841,7 +1841,6 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
                                  traffic_rate * kBackoffTrafficDurationSecs,
                                  traffic_rate, *testbed_));
-
   {
     // Start sflowtool on SUT.
     ASSERT_OK_AND_ASSIGN(
@@ -2966,6 +2965,49 @@ TEST_P(SflowMirrorTestFixture, TestHsflowdRestartSucceed) {
           /*timeout=*/absl::Seconds(5)));
   EXPECT_TRUE(absl::StrContains(core_file, "hsflowd.core.bz2"))
       << "core file dump doesn't exist.";
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("ls_tmp_core_hsflowd.txt",
+                                                    core_file));
+}
+
+// TODO: Check sFlow sampling could still work after restart.
+TEST_P(SflowMirrorTestFixture, TestHsflowdRestartSucceed) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+  auto& ssh_client = *GetParam().ssh_client;
+  auto& device_name = testbed.Sut().ChassisName();
+  // Get current hsflowd pid.
+  ASSERT_OK_AND_ASSIGN(std::string pid, GetHsflowdPid(ssh_client, device_name));
+  ASSERT_FALSE(pid.empty()) << "hsflowd pid should not be empty.";
+  LOG(INFO) << "hsflowd pid: " << pid;
+  // Crash hsflowd.
+  ASSERT_OK_AND_ASSIGN(std::string crash_result,
+                       ssh_client.RunCommand(device_name, /*command=*/
+                                             R"(kill -6 $(pidof hsflowd))",
+                                             /*timeout=*/absl::Seconds(5)));
+
+  // Check if hsflowd crashes and restarts.
+  ASSERT_OK(pins_test::WaitForCondition(
+      [&ssh_client, &device_name, &pid]() -> absl::Status {
+        ASSIGN_OR_RETURN(std::string hsflowd_pid,
+                         GetHsflowdPid(ssh_client, device_name));
+        if (!hsflowd_pid.empty() && hsflowd_pid != pid) {
+          return absl::OkStatus();
+        }
+        return absl::FailedPreconditionError(
+            absl::Substitute("Expected: hsflowd pid should exist and differ "
+                             "from $0. Acutal: hsflowd pid: $1.",
+                             pid, hsflowd_pid));
+      },
+      absl::Seconds(120)));
+
+  // Check and clean core file.
+  ASSERT_OK_AND_ASSIGN(
+      std::string core_file,
+      ssh_client.RunCommand(
+          device_name,
+          /*command=*/"ls /tmp/core/hsflowd* -l; rm -f /tmp/core/hsflowd*",
+          /*timeout=*/absl::Seconds(5)));
+  // TODO : Enable check of core file after fix is in release.
   EXPECT_OK(testbed.Environment().StoreTestArtifact("ls_tmp_core_hsflowd.txt",
                                                     core_file));
 }
