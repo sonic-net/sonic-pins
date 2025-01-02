@@ -419,36 +419,40 @@ deparsers {
 
 =====MyIngress.ports_exact Entries=====
 
-table_name: "MyIngress.ports_exact"
-matches {
-  name: "standard_metadata.ingress_port"
-  exact {
-    hex_str: "0x000"
+concrete_entry {
+  table_name: "MyIngress.ports_exact"
+  matches {
+    name: "standard_metadata.ingress_port"
+    exact {
+      hex_str: "0x000"
+    }
   }
-}
-action {
-  name: "MyIngress.set_egress_spec"
-  params {
-    name: "port"
-    value {
-      hex_str: "0x001"
+  action {
+    name: "MyIngress.set_egress_spec"
+    params {
+      name: "port"
+      value {
+        hex_str: "0x001"
+      }
     }
   }
 }
 
-table_name: "MyIngress.ports_exact"
-matches {
-  name: "standard_metadata.ingress_port"
-  exact {
-    hex_str: "0x001"
+concrete_entry {
+  table_name: "MyIngress.ports_exact"
+  matches {
+    name: "standard_metadata.ingress_port"
+    exact {
+      hex_str: "0x001"
+    }
   }
-}
-action {
-  name: "MyIngress.set_egress_spec"
-  params {
-    name: "port"
-    value {
-      hex_str: "0x000"
+  action {
+    name: "MyIngress.set_egress_spec"
+    params {
+      name: "port"
+      value {
+        hex_str: "0x000"
+      }
     }
   }
 }

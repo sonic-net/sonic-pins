@@ -22,20 +22,21 @@
 #include <unordered_map>
 #include <vector>
 
-#include "gutil/status.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.pb.h"
 
 namespace p4_symbolic {
 namespace ir {
 
 // Table entries by table name.
-using TableEntries =
-    std::unordered_map<std::string, std::vector<pdpi::IrTableEntry>>;
+using TableEntries = std::unordered_map<std::string, std::vector<TableEntry>>;
 
-// Returns table entries in PDPI IR representation, keyed by table name.
-absl::StatusOr<TableEntries>
-ParseTableEntries(const pdpi::IrP4Info &p4info,
-                  absl::Span<const p4::v1::TableEntry> entries);
+// Returns table entries in P4-Symbolic IR, keyed by table name.
+absl::StatusOr<TableEntries> ParseTableEntries(
+    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::TableEntry> entries);
 
 } // namespace ir
 } // namespace p4_symbolic

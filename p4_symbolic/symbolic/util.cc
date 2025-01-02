@@ -35,15 +35,6 @@ namespace util {
 
 namespace {
 
-bool Z3BooltoBool(Z3_lbool z3_bool) {
-  switch (z3_bool) {
-    case Z3_L_TRUE:
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Extract the header field definition of a `field_ref` from the given P4
 // `program`.
 absl::StatusOr<ir::HeaderField> GetFieldDefinition(
@@ -125,7 +116,7 @@ SymbolicTableMatch DefaultTableMatch() {
 }
 
 absl::StatusOr<ConcreteContext> ExtractFromModel(
-    SymbolicContext context, z3::model model,
+    const SymbolicContext &context, z3::model model,
     const values::P4RuntimeTranslator &translator) {
   // Extract ports.
   std::string ingress_port = model.eval(context.ingress_port, true).to_string();

@@ -14,7 +14,7 @@
 
 // Test file for producing IR representations of P4 Programs.
 
-#include <iostream>
+#include <sstream>
 #include <string>
 
 #include "absl/flags/flag.h"
@@ -22,6 +22,7 @@
 #include "absl/flags/usage.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "gutil/io.h"
 #include "gutil/proto.h"
 #include "p4_symbolic/parser.h"
 
@@ -32,6 +33,7 @@ ABSL_FLAG(std::string, entries, "",
           "The path to the table entries txt file (optional), leave this empty "
           "if the input p4 program contains no (explicit) tables for which "
           "entries are needed.");
+ABSL_FLAG(std::string, output, "", "The output file for parsed IR.");
 
 namespace {
 
@@ -41,24 +43,28 @@ absl::Status Test() {
   const std::string &p4info_path = absl::GetFlag(FLAGS_p4info);
   const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
   const std::string &entries_path = absl::GetFlag(FLAGS_entries);
+  const std::string &output_path = absl::GetFlag(FLAGS_output);
 
   RET_CHECK(!p4info_path.empty());
   RET_CHECK(!bmv2_path.empty());
+  RET_CHECK(!output_path.empty());
 
   // Transform to IR and print.
   ASSIGN_OR_RETURN(
       p4_symbolic::ir::Dataplane dataplane,
       p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
 
-  // Dump string representation to stdout.
-  std::cout << PrintTextProto(dataplane.program) << std::endl;
+  // Dump string representation to the output file.
+  std::ostringstream output;
+  output << PrintTextProto(dataplane.program) << std::endl;
   for (const auto &[name, entries] : dataplane.entries) {
-    std::cout << "=====" << name << " Entries=====" << std::endl;
-    std::cout << std::endl;
-    for (const pdpi::IrTableEntry &entry : entries) {
-      std::cout << PrintTextProto(entry) << std::endl;
+    output << "=====" << name << " Entries=====" << std::endl;
+    output << std::endl;
+    for (const p4_symbolic::ir::TableEntry &entry : entries) {
+      output << PrintTextProto(entry) << std::endl;
     }
   }
+  RETURN_IF_ERROR(gutil::WriteFile(output.str(), output_path));
 
   return absl::OkStatus();
 }
@@ -70,10 +76,10 @@ int main(int argc, char *argv[]) {
   // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
   // Command line arguments and help message.
-  absl::SetProgramUsageMessage(
-      absl::StrFormat("usage: %s %s", argv[0],
-                      "--bmv2=path/to/bmv2.json --p4info=path/to/p4info.pb.txt "
-                      "[--entries=path/to/table_entries.txt]"));
+  absl::SetProgramUsageMessage(absl::StrFormat(
+      "usage: %s %s", argv[0],
+      "--bmv2=path/to/bmv2.json --p4info=path/to/p4info.pb.txt "
+      "--output=path/to/output.txt [--entries=path/to/table_entries.txt]"));
   absl::ParseCommandLine(argc, argv);
 
   // Run test.

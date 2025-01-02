@@ -373,6 +373,13 @@ headers {
       }
     }
     fields {
+      key: "rest_of_header"
+      value {
+        name: "rest_of_header"
+        bitwidth: 32
+      }
+    }
+    fields {
       key: "type"
       value {
         name: "type"
@@ -382,6 +389,7 @@ headers {
     ordered_fields_list: "type"
     ordered_fields_list: "code"
     ordered_fields_list: "checksum"
+    ordered_fields_list: "rest_of_header"
   }
 }
 headers {
