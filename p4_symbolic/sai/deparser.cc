@@ -17,16 +17,11 @@
 
 #include <bitset>
 #include <string>
-#include <type_traits>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "gutil/status.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
@@ -72,6 +67,18 @@ absl::Status Deparse(const SaiEthernet& header, const z3::model& model,
   if (valid) {
     RETURN_IF_ERROR(Deparse<48>(header.dst_addr, model, result));
     RETURN_IF_ERROR(Deparse<48>(header.src_addr, model, result));
+    RETURN_IF_ERROR(Deparse<16>(header.ether_type, model, result));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status Deparse(const SaiVlan& header, const z3::model& model,
+                     pdpi::BitString& result) {
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
+  if (valid) {
+    RETURN_IF_ERROR(Deparse<3>(header.priority_code_point, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.drop_eligible_indicator, model, result));
+    RETURN_IF_ERROR(Deparse<12>(header.vlan_id, model, result));
     RETURN_IF_ERROR(Deparse<16>(header.ether_type, model, result));
   }
   return absl::OkStatus();
@@ -227,6 +234,11 @@ absl::StatusOr<std::string> SaiDeparser(const SaiFields& packet,
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_ipv4, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ethernet, model, result));
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  if (packet.headers.vlan.has_value()) {
+    RETURN_IF_ERROR(Deparse(*packet.headers.vlan, model, result));
+  }
   RETURN_IF_ERROR(Deparse(packet.headers.tunnel_encap_ipv6, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.tunnel_encap_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv4, model, result));

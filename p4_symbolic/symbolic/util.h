@@ -44,9 +44,9 @@ SymbolicTableMatch DefaultTableMatch();
 
 // Extract a concrete context by evaluating every component's corresponding
 // expression in the model.
-absl::StatusOr<ConcreteContext>
-ExtractFromModel(SymbolicContext context, z3::model model,
-                 const values::P4RuntimeTranslator &translator);
+absl::StatusOr<ConcreteContext> ExtractFromModel(
+    const SymbolicContext &context, z3::model model,
+    const values::P4RuntimeTranslator &translator);
 
 // Merges two maps of table matches into a single map. A field in the returned
 // map has the value of `true_matches` if the condition is true, and the

@@ -41,5 +41,8 @@ cc_library(
         "//p4_symbolic/symbolic",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
+

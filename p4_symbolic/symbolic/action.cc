@@ -14,6 +14,8 @@
 
 #include "p4_symbolic/symbolic/action.h"
 
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -116,7 +118,7 @@ absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
                                         const ActionContext &context) {
   switch (rvalue.rvalue_case()) {
     case ir::RValue::kFieldValue:
-      return EvaluateFieldValue(rvalue.field_value(), state, context);
+      return EvaluateFieldValue(rvalue.field_value(), state);
 
     case ir::RValue::kHexstrValue:
       return EvaluateHexStr(rvalue.hexstr_value());
@@ -141,9 +143,8 @@ absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
 }
 
 // Extract the field symbolic value from the symbolic state.
-absl::StatusOr<z3::expr> EvaluateFieldValue(const ir::FieldValue &field_value,
-                                            const SymbolicPerPacketState &state,
-                                            const ActionContext &context) {
+absl::StatusOr<z3::expr> EvaluateFieldValue(
+    const ir::FieldValue &field_value, const SymbolicPerPacketState &state) {
   return state.Get(field_value.header_name(), field_value.field_name());
 }
 
