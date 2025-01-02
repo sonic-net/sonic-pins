@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-package(default_visibility = ["//visibility:public"])
+load("//p4_symbolic/testdata:p4c.bzl", "p4_config_and_p4info_files")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
 
 # Make sure programs under p4-samples are visible to other
 # bazel packages.
@@ -21,5 +26,18 @@ exports_files(
         "**/*.p4",
         "**/*.txt",
     ]),
-    licenses = ["notice"],
+)
+
+filegroup(
+    name = "common_p4_includes",
+    srcs = glob(["common/*.p4"]),
+)
+
+p4_config_and_p4info_files(
+    name = "p4c_outputs",
+    srcs = glob(
+        include = ["**/*.p4"],
+        exclude = ["common/*.p4"],
+    ),
+    deps = [":common_p4_includes"],
 )

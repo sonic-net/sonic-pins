@@ -27,11 +27,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "gutil/io.h"
-#include "gutil/status.h"
-#include "p4_symbolic/bmv2/bmv2.h"
-#include "p4_symbolic/parser.h"
-#include "p4_symbolic/sai/parser.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/test_util.h"
 
 ABSL_FLAG(std::string, p4info, "",
           "The path to the p4info protobuf file (required)");
@@ -42,8 +40,6 @@ ABSL_FLAG(std::string, entries, "",
           "entries are needed.");
 ABSL_FLAG(std::string, smt, "", "Dump the SMT program for debugging");
 ABSL_FLAG(int, port_count, 2, "Number of used ports (numbered 0 to N-1)");
-ABSL_FLAG(bool, hardcoded_parser, true,
-          "Use the hardcoded parser during symbolic evaluation");
 
 namespace {
 
@@ -55,15 +51,15 @@ absl::Status ParseAndEvaluate() {
   const std::string &entries_path = absl::GetFlag(FLAGS_entries);
   const std::string &smt_path = absl::GetFlag(FLAGS_smt);
   const int port_count = absl::GetFlag(FLAGS_port_count);
-  bool hardcoded_parser = absl::GetFlag(FLAGS_hardcoded_parser);
 
   RET_CHECK(!p4info_path.empty());
   RET_CHECK(!bmv2_path.empty());
 
-  // Transform to IR.
   ASSIGN_OR_RETURN(
-      p4_symbolic::ir::Dataplane dataplane,
-      p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
+      p4::v1::ForwardingPipelineConfig config,
+      p4_symbolic::ParseToForwardingPipelineConfig(bmv2_path, p4info_path));
+  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> table_entries,
+                   p4_symbolic::ParseToPiTableEntries(entries_path));
 
   // Generate port list.
   std::vector<int> physical_ports(port_count);
@@ -72,17 +68,8 @@ absl::Status ParseAndEvaluate() {
   // Evaluate program symbolically.
   ASSIGN_OR_RETURN(
       std::unique_ptr<p4_symbolic::symbolic::SolverState> solver_state,
-      p4_symbolic::symbolic::EvaluateP4Program(dataplane, physical_ports));
-
-  // Add constraints for parser.
-  if (hardcoded_parser) {
-    ASSIGN_OR_RETURN(
-        std::vector<z3::expr> parser_constraints,
-        p4_symbolic::EvaluateSaiParser(solver_state->context.ingress_headers));
-    for (auto &constraint : parser_constraints) {
-      solver_state->solver->add(constraint);
-    }
-  }
+      p4_symbolic::symbolic::EvaluateP4Program(config, table_entries,
+                                               physical_ports));
 
   // Output SMT formula.
   if (!smt_path.empty()) {
@@ -94,11 +81,12 @@ absl::Status ParseAndEvaluate() {
   // Loop over tables in a deterministic order for output consistency
   // (important for ci tests).
   auto ordered_tables = absl::btree_map<std::string, p4_symbolic::ir::Table>(
-      dataplane.program.tables().cbegin(), dataplane.program.tables().cend());
+      solver_state->program.tables().cbegin(),
+      solver_state->program.tables().cend());
   constexpr int kColumnSize = 80;
 
   for (const auto &[name, table] : ordered_tables) {
-    int row_count = static_cast<int>(dataplane.entries[name].size());
+    int row_count = static_cast<int>(solver_state->entries[name].size());
     for (int i = -1; i < row_count; i++) {
       std::string banner =
           "Finding packet for table " + name + " and row " + std::to_string(i);
@@ -137,11 +125,11 @@ int main(int argc, char *argv[]) {
   // Verify link and compile versions are the same.
   // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  // Command line arugments and help message.
-  absl::SetProgramUsageMessage(absl::StrFormat(
-      "usage: %s %s", argv[0],
-      "--bmv2=path/to/bmv2.json --p4info=path/to/p4info.pb.txt "
-      "[--entries=path/to/table_entries.txt] [--hardcoded_parser=false]"));
+  // Command line arguments and help message.
+  absl::SetProgramUsageMessage(
+      absl::StrFormat("usage: %s %s", argv[0],
+                      "--bmv2=path/to/bmv2.json --p4info=path/to/p4info.pb.txt "
+                      "[--entries=path/to/table_entries.txt]"));
   absl::ParseCommandLine(argc, argv);
 
   // Run code

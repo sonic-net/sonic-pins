@@ -20,10 +20,11 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "p4_pdpi/utils/ir.h"
-#include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace packet_synthesizer {
@@ -118,14 +119,11 @@ absl::StatusOr<z3::expr> IsIpv6UnicastAddress(z3::expr ipv6_address) {
 // function would disappear.
 absl::Status AddSanePacketConstraints(
     p4_symbolic::symbolic::SolverState& state) {
-  ASSIGN_OR_RETURN(p4_symbolic::SaiFields ingress_fields,
-                   p4_symbolic::GetSaiFields(state.context.ingress_headers));
-  auto& ethernet = ingress_fields.headers.ethernet;
-  auto& ipv4 = ingress_fields.headers.ipv4;
-  auto& ipv6 = ingress_fields.headers.ipv6;
-  auto& vlan = ingress_fields.headers.vlan;
-
   // ======Ethernet constraints======
+  ASSIGN_OR_RETURN(z3::expr ethernet_src_addr,
+                   state.context.ingress_headers.Get("ethernet.src_addr"));
+  ASSIGN_OR_RETURN(z3::expr ethernet_dst_addr,
+                   state.context.ingress_headers.Get("ethernet.dst_addr"));
   // Use "locally administered", "individual" MAC addresses
   // (U/L bit = 1, I/G bit = 0).
   // TODO: A multicast MAC address is not a legal src_mac, but it
@@ -136,10 +134,10 @@ absl::Status AddSanePacketConstraints(
   // such packets still continue to hit the acl_ingress table and some of the
   // entries cause such packets to get punted. So we should not disallow the
   // generation of such packets.
-  state.solver->add((ethernet.src_addr & Bitvector<48>(0x03'00'00'00'00'00)) ==
+  state.solver->add((ethernet_src_addr & Bitvector<48>(0x03'00'00'00'00'00)) ==
                     Bitvector<48>(0x02'00'00'00'00'00));
 
-  for (auto& mac_address : {ethernet.src_addr, ethernet.dst_addr}) {
+  for (auto& mac_address : {ethernet_src_addr, ethernet_dst_addr}) {
     // Require key parts of the address to be nonzero to avoid corner cases.
     auto nonzero_masks = std::vector({
         Bitvector<48>(0x00'FF'FF'00'00'00),  // OUI
@@ -149,42 +147,54 @@ absl::Status AddSanePacketConstraints(
     }
   }
   // Require source MAC and destination MAC to differ.
-  state.solver->add(ethernet.src_addr != ethernet.dst_addr);
+  state.solver->add(ethernet_src_addr != ethernet_dst_addr);
 
   // ======IPv4 constraints======
+  ASSIGN_OR_RETURN(z3::expr ipv4_src_addr,
+                   state.context.ingress_headers.Get("ipv4.src_addr"));
+  ASSIGN_OR_RETURN(z3::expr ipv4_dst_addr,
+                   state.context.ingress_headers.Get("ipv4.dst_addr"));
   // Avoid martian IP addresses.
   // https://tools.ietf.org/html/rfc1122#section-3.2.1.3
-  state.solver->add((ipv4.src_addr & Bitvector<32>(0xFF'00'00'00)) != 0);
+  state.solver->add((ipv4_src_addr & Bitvector<32>(0xFF'00'00'00)) != 0);
   // Src IP address cannot be 255.255.255.255 (broadcast).
-  state.solver->add(ipv4.src_addr != Bitvector<32>(0xFF'FF'FF'FF));
+  state.solver->add(ipv4_src_addr != Bitvector<32>(0xFF'FF'FF'FF));
   // Neither src nor dst IPv4 addresses can be 0.
-  state.solver->add(ipv4.src_addr != Bitvector<32>(0));
-  state.solver->add(ipv4.dst_addr != Bitvector<32>(0));
+  state.solver->add(ipv4_src_addr != Bitvector<32>(0));
+  state.solver->add(ipv4_dst_addr != Bitvector<32>(0));
   // Neither src nor dst IPv4 addresses can be 127.0.0.1 (loopback).
-  state.solver->add(ipv4.src_addr != Bitvector<32>(0x7F'00'00'01));
-  state.solver->add(ipv4.dst_addr != Bitvector<32>(0x7F'00'00'01));
+  state.solver->add(ipv4_src_addr != Bitvector<32>(0x7F'00'00'01));
+  state.solver->add(ipv4_dst_addr != Bitvector<32>(0x7F'00'00'01));
 
   // ======Ipv6 constraints======
+  ASSIGN_OR_RETURN(z3::expr ipv6_src_addr,
+                   state.context.ingress_headers.Get("ipv6.src_addr"));
+  ASSIGN_OR_RETURN(z3::expr ipv6_dst_addr,
+                   state.context.ingress_headers.Get("ipv6.dst_addr"));
   // Src IP address should be a unicast address.
   {
-    ASSIGN_OR_RETURN(z3::expr constraint, IsIpv6UnicastAddress(ipv6.src_addr));
+    ASSIGN_OR_RETURN(z3::expr constraint, IsIpv6UnicastAddress(ipv6_src_addr));
     state.solver->add(constraint);
   }
   // Neither src nor dst IPv6 addresses can be 0.
-  state.solver->add(ipv6.src_addr != Bitvector<128>(0));
-  state.solver->add(ipv6.dst_addr != Bitvector<128>(0));
-  // Neither src nor dst IPv4 addresses can be ::1 (loopback).
-  state.solver->add(ipv6.src_addr != Bitvector<128>(1));
-  state.solver->add(ipv6.dst_addr != Bitvector<128>(1));
+  state.solver->add(ipv6_src_addr != Bitvector<128>(0));
+  state.solver->add(ipv6_dst_addr != Bitvector<128>(0));
+  // Neither src nor dst IPv6 addresses can be ::1 (loopback).
+  state.solver->add(ipv6_src_addr != Bitvector<128>(1));
+  state.solver->add(ipv6_dst_addr != Bitvector<128>(1));
 
   // ======VLAN constraints==========
   // TODO: Make unconditional when we no longer need
   // backwards-compatibility.
-  if (vlan.has_value()) {
+  bool vlan = state.context.ingress_headers.ContainsKey(
+      symbolic::util::GetHeaderValidityFieldName("vlan"));
+  if (vlan) {
+    ASSIGN_OR_RETURN(z3::expr vlan_id,
+                     state.context.ingress_headers.Get("vlan.vlan_id"));
     // TODO: Consider testing the following VIDs when PacketIO is
     // properly modeled.
-    state.solver->add(vlan->vlan_id != Bitvector<12>(0xFFF));
-    state.solver->add(vlan->vlan_id != Bitvector<12>(0x001));
+    state.solver->add(vlan_id != Bitvector<12>(0xFFF));
+    state.solver->add(vlan_id != Bitvector<12>(0x001));
   }
 
   return absl::OkStatus();

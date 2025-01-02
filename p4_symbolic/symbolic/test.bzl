@@ -103,7 +103,6 @@ def end_to_end_test(
         tools = ["//p4_symbolic:main"],
         cmd = " ".join([
             "$(location //p4_symbolic:main)",
-            "--hardcoded_parser=false",
             ("--bmv2=$(location %s)" % bmv2_file),
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),

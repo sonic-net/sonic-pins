@@ -24,7 +24,8 @@
 #include "absl/strings/str_format.h"
 #include "gutil/io.h"
 #include "gutil/proto.h"
-#include "p4_symbolic/parser.h"
+#include "p4_symbolic/ir/parser.h"
+#include "p4_symbolic/test_util.h"
 
 ABSL_FLAG(std::string, p4info, "",
           "The path to the p4info protobuf file (required)");
@@ -51,8 +52,12 @@ absl::Status Test() {
 
   // Transform to IR and print.
   ASSIGN_OR_RETURN(
-      p4_symbolic::ir::Dataplane dataplane,
-      p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
+      p4::v1::ForwardingPipelineConfig config,
+      p4_symbolic::ParseToForwardingPipelineConfig(bmv2_path, p4info_path));
+  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> table_entries,
+                   p4_symbolic::ParseToPiTableEntries(entries_path));
+  ASSIGN_OR_RETURN(p4_symbolic::ir::Dataplane dataplane,
+                   p4_symbolic::ir::ParseToIr(config, table_entries));
 
   // Dump string representation to the output file.
   std::ostringstream output;
