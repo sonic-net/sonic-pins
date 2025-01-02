@@ -44,6 +44,7 @@ const int kLaneIndex = 2;
 typedef struct {
   std::string physical_channels; // Eg. format: [0,1,2,3]
   std::string oper_status;       // Eg. format: "UP"
+  std::string breakout_speed;     // Eg. format: 400G
 } PortBreakoutInfo;
 
 typedef struct {
@@ -65,7 +66,7 @@ enum BreakoutType { kAny, kChannelized };
 // GetSupportedBreakoutModesForPort returns list of supported breakout modes for
 // given interface.
 absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
-    const std::string &interface_info, const std::string &port,
+    const std::string &interface_info, const std::string_view port,
     const BreakoutType breakout_type = BreakoutType::kAny);
 
 // BreakoutResultsInSpeedChangeOnly returns whether changing from current to new
@@ -77,10 +78,14 @@ absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
 // GetRandomPortWithSupportedBreakoutModes attempts to get a random port from
 // list of front panel ports that supports at least one more breakout mode other
 // than the currently configured breakout mode.
+// If allow_list is empty, all available ports on the switch will be used.
+
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface &sut_gnmi_stub,
     const std::string &platform_json_contents,
-    const BreakoutType breakout_type = BreakoutType::kAny);
+    const BreakoutType new_breakout_type = BreakoutType::kAny,
+    const BreakoutType current_breakout_type = BreakoutType::kAny,
+    const std::vector<absl::string_view>& allow_list = {});
 
 // GetBreakoutStateInfoForPort returns the state values of physical channels and
 // operational status information for ports in a given breakout mode.
@@ -102,9 +107,15 @@ GetExpectedPortInfoForBreakoutMode(const std::string &port,
 // GetBreakoutModeConfigFromString returns breakout config path values from
 // given breakout mode. Breakout mode is in the format "numBreakouts1 x
 // breakoutSpeed1 + numBreakouts2 x breakoutSpeed2 + ... Eg: "1x400G", 2x100G +
-// 1x200G"
+// 1x200G".
 absl::Status GetBreakoutModeConfigFromString(
     gnmi::SetRequest &req, gnmi::gNMI::StubInterface *sut_gnmi_stub,
+    const absl::string_view port_index, const absl::string_view intf_name,
+    const absl::string_view breakout_mode);
+
+// Same as above expect this function returns a JSON string.
+absl::StatusOr<std::string> GetBreakoutModeConfigJson(
+    gnmi::gNMI::StubInterface* sut_gnmi_stub,
     const absl::string_view port_index, const absl::string_view intf_name,
     const absl::string_view breakout_mode);
 
@@ -158,5 +169,10 @@ absl::StatusOr<std::string> GetCurrentBreakoutModeForPort(
 
 // IsParentPort returns status OK is port is a parent port.
 absl::StatusOr<bool> IsParentPort(absl::string_view port);
+
+// IsChannelizedBreakoutMode returns whether the given breakout mode is
+// channelized or no.
+absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode);
+
 }  // namespace pins_test
 #endif  // PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_

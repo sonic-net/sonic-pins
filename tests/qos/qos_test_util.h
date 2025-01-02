@@ -77,6 +77,10 @@ ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config);
 absl::StatusOr<absl::flat_hash_map<int, std::string>>
 ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config);
 
+// Get queues for an egress port.
+absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
+
 }  // namespace pins_test
 
 #endif  // PINS_TESTS_QOS_QOS_TEST_UTIL_H_
