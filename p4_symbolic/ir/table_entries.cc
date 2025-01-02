@@ -15,10 +15,11 @@
 #include "p4_symbolic/ir/table_entries.h"
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "gutil/status.h"
-#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.pb.h"
 
 namespace p4_symbolic {
 namespace ir {
@@ -78,7 +79,9 @@ absl::StatusOr<TableEntries> ParseTableEntries(
     ASSIGN_OR_RETURN(pdpi::IrTableEntry pdpi_entry,
                      pdpi::PiTableEntryToIr(p4info, pi_entry));
     RETURN_IF_ERROR(UseFullyQualifiedNamesInEntry(p4info, pdpi_entry));
-    output[pdpi_entry.table_name()].push_back(pdpi_entry);
+    TableEntry table_entry;
+    *table_entry.mutable_concrete_entry() = pdpi_entry;
+    output[pdpi_entry.table_name()].push_back(table_entry);
   }
   return output;
 }

@@ -38,6 +38,8 @@ message EntryCoverageGoal {
   Patterns table_exclusions = 2;
   // Whether to generate a packet covering the default action of the table.
   bool cover_default_actions = 3;
+  // Exclude empty tables. This is relevant when covering default actions.
+  bool exclude_empty_tables = 4;
 }
 
 // A goal corresponding to generating various input packets each containing a

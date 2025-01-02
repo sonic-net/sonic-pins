@@ -35,6 +35,7 @@ class PacketInReceiver final {
 
   // It's ok to call this function multiple times.
   void Destroy() {
+    session_.Finish();
     if (receiver_.joinable()) {
       stop_receiving_.Notify();
       receiver_.join();

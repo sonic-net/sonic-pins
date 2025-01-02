@@ -21,16 +21,14 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_TABLE_H_
 #define P4_SYMBOLIC_SYMBOLIC_TABLE_H_
 
-#include <string>
 #include <vector>
 
-#include "google/protobuf/map.h"
-#include "gutil/status.h"
-#include "p4_pdpi/ir.pb.h"
+#include "absl/status/statusor.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -41,20 +39,11 @@ constexpr int kDefaultActionEntryIndex = -1;
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Dataplane &data_plane, const ir::Table &table,
-    const std::vector<pdpi::IrTableEntry> &entries,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+    const std::vector<ir::TableEntry> &entries, SymbolicPerPacketState *state,
+    values::P4RuntimeTranslator *translator, const z3::expr &guard);
 
-// Analyze a single match that is part of a table entry.
-// Constructs a symbolic expression that semantically corresponds to this
-// match.
-absl::StatusOr<z3::expr> EvaluateSingleMatch(
-    z3::context &context, p4::config::v1::MatchField match_definition,
-    const std::string &field_name, const z3::expr &field_expression,
-    const pdpi::IrMatch &match, values::P4RuntimeTranslator *translator);
-
-} // namespace table
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace table
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
 #endif // P4_SYMBOLIC_SYMBOLIC_TABLE_H_

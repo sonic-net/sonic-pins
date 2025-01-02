@@ -123,6 +123,7 @@ absl::Status AddSanePacketConstraints(
   auto& ethernet = ingress_fields.headers.ethernet;
   auto& ipv4 = ingress_fields.headers.ipv4;
   auto& ipv6 = ingress_fields.headers.ipv6;
+  auto& vlan = ingress_fields.headers.vlan;
 
   // ======Ethernet constraints======
   // Use "locally administered", "individual" MAC addresses
@@ -175,6 +176,16 @@ absl::Status AddSanePacketConstraints(
   // Neither src nor dst IPv4 addresses can be ::1 (loopback).
   state.solver->add(ipv6.src_addr != Bitvector<128>(1));
   state.solver->add(ipv6.dst_addr != Bitvector<128>(1));
+
+  // ======VLAN constraints==========
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  if (vlan.has_value()) {
+    // TODO: Consider testing the following VIDs when PacketIO is
+    // properly modeled.
+    state.solver->add(vlan->vlan_id != Bitvector<12>(0xFFF));
+    state.solver->add(vlan->vlan_id != Bitvector<12>(0x001));
+  }
 
   return absl::OkStatus();
 }

@@ -81,7 +81,7 @@ absl::StatusOr<z3::expr> EvaluateSetOperationRValue(
     const action::ActionContext &context) {
   switch (set_op.rvalue_case()) {
     case ir::ParserOperation::Set::RvalueCase::kFieldRvalue: {
-      return action::EvaluateFieldValue(set_op.field_rvalue(), state, context);
+      return action::EvaluateFieldValue(set_op.field_rvalue(), state);
     }
     case ir::ParserOperation::Set::RvalueCase::kHexstrRvalue: {
       return action::EvaluateHexStr(set_op.hexstr_rvalue());

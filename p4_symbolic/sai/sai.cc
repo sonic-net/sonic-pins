@@ -92,11 +92,6 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateSaiPipeline(
   ASSIGN_OR_RETURN(std::unique_ptr<symbolic::SolverState> state,
                    symbolic::EvaluateP4Program(dataplane, physical_ports,
                                                translation_per_type));
-  ASSIGN_OR_RETURN(std::vector<z3::expr> parser_constraints,
-                   EvaluateSaiParser(state->context.ingress_headers));
-  for (auto& constraint : parser_constraints) {
-    state->solver->add(constraint);
-  }
   return state;
 }
 

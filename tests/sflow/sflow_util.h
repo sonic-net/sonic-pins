@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_SFLOW_SFLOW_UTIL_H_
 #define PINS_TESTS_SFLOW_SFLOW_UTIL_H_
 
+#include <cstdint>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
@@ -58,24 +59,31 @@ absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
 
+// Sets sFlow interface config and waits until it's converged in state path.
+// `interface` must be present.
+absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
+                                     absl::string_view interface, bool enabled,
+                                     int samping_rate,
+                                     absl::Duration timeout = absl::Seconds(5));
+
 // Verifies all sFlow-related config is consumed by switch by reading
 // corresponding gNMI state paths. Returns an FailedPreconditionError if
-// `agent_addr_ipv6` or `sflow_enabled_interfaces` is empty.
+// `agent_addr_ipv6` is empty.
 absl::Status VerifySflowStatesConverged(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view agent_addr_ipv6,
     const int sampling_rate, const int sampling_header_size,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces);
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces);
 
 // Updates `gnmi_config` with sFlow-related config and returns modified config
 // if success. The modified config would sort collector IPs and interface names
-// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` or
-// `sflow_enabled_interfaces` is empty.
+// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` is
+// empty.
 absl::StatusOr<std::string> UpdateSflowConfig(
 
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces,
     const int sampling_rate, const int sampling_header_size);
 
 // Updates `gnmi_config` queue limit of `queue_name` to `queue_limit` and
@@ -84,11 +92,17 @@ absl::StatusOr<std::string> UpdateSflowConfig(
 absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
                                              absl::string_view queue_name,
                                              int queue_limit);
-
-// Returns <interface name, interface sflow sampling rate> map of each interface
-// in `interfaces`.
+// Returns <interface name, state/ingress-sampling-rate> map of each
+// interface in `interfaces`.
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetSflowSamplingRateForInterfaces(
+    gnmi::gNMI::StubInterface* gnmi_stub,
+    const absl::flat_hash_set<std::string>& interfaces);
+
+// Returns <interface name, state/actual-ingress-sampling-rate> map of each
+// interface in `interfaces`.
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetSflowActualSamplingRateForInterfaces(
     gnmi::gNMI::StubInterface* gnmi_stub,
     const absl::flat_hash_set<std::string>& interfaces);
 
@@ -97,6 +111,22 @@ GetSflowSamplingRateForInterfaces(
 absl::Status VerifySflowQueueLimitState(
     gnmi::gNMI::StubInterface* gnmi_stub, int queue_number,
     int expected_queue_limit, absl::Duration timeout = absl::Seconds(5));
+
+// Extracts ToS value from `tcpdump_result`. Returns InvalidArgument error if
+// ToS value are not identical or failed to find ToS value in `tcpdump_result`.
+absl::StatusOr<int> ExtractTosFromTcpdumpResult(
+    absl::string_view tcpdump_result);
+
+// Reads and returns value from
+// `/sampling/sflow/interfaces/interface[name=<interface_name>]/state/packets-sampled`.
+absl::StatusOr<int64_t> GetSflowInterfacePacketsSampledCounter(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface_name);
+
+// Read and returns value from
+// /sampling/sflow/collectors/collector[address=<collector_ip>][port=<port_num>]/state/packets-sent
+absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view collector_ip,
+    int port_num);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_

@@ -14,6 +14,12 @@
 
 #include "p4_symbolic/sai/parser.h"
 
+#include <optional>
+#include <type_traits>
+#include <vector>
+
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "gutil/status.h"
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/operators.h"
@@ -38,6 +44,9 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
   SaiIpv4& erspan_ipv4 = fields.headers.erspan_ipv4;
   SaiGre& erspan_gre = fields.headers.erspan_gre;
   SaiEthernet& ethernet = fields.headers.ethernet;
+  // TODO: Make non-optional when we no longer need
+  // backwards-compatibility.
+  std::optional<SaiVlan>& vlan = fields.headers.vlan;
   SaiIpv6& tunnel_encap_ipv6 = fields.headers.tunnel_encap_ipv6;
   SaiGre& tunnel_encap_gre = fields.headers.tunnel_encap_gre;
   SaiIpv4& ipv4 = fields.headers.ipv4;
@@ -57,6 +66,14 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
   constraints.push_back(!erspan_gre.valid);
   constraints.push_back(!tunnel_encap_ipv6.valid);
   constraints.push_back(!tunnel_encap_gre.valid);
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  if (local_metadata.vlan_id.has_value()) {
+    constraints.push_back(*local_metadata.vlan_id == 0);
+  }
+  if (local_metadata.vlan_id_valid.has_value()) {
+    constraints.push_back(*local_metadata.vlan_id_valid == bv_false);
+  }
   constraints.push_back(local_metadata.admit_to_l3 == bv_false);
   constraints.push_back(local_metadata.vrf_id == 0);
   constraints.push_back(local_metadata.mirror_session_id_valid == bv_false);
@@ -83,11 +100,18 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
         (standard_metadata.ingress_port == symbolic::kCpuPort));
   }
 
-  // `parse_ethernet` state.
+  // `parse_ethernet` state and `parse_8021q_vlan` state.
   constraints.push_back(ethernet.valid == Z3Context().bool_val(true));
-  constraints.push_back(ipv4.valid == (ethernet.ether_type == 0x0800));
-  constraints.push_back(ipv6.valid == (ethernet.ether_type == 0x86dd));
-  constraints.push_back(arp.valid == (ethernet.ether_type == 0x0806));
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  z3::expr ether_type = ethernet.ether_type;
+  if (vlan.has_value()) {
+    constraints.push_back(vlan->valid == (ethernet.ether_type == 0x8100));
+    ether_type = z3::ite(vlan->valid, vlan->ether_type, ethernet.ether_type);
+  }
+  constraints.push_back(ipv4.valid == (ether_type == 0x0800));
+  constraints.push_back(ipv6.valid == (ether_type == 0x86dd));
+  constraints.push_back(arp.valid == (ether_type == 0x0806));
 
   // `parse_ipv{4,6}` states.
   constraints.push_back(icmp.valid == (ipv4.valid && ipv4.protocol == 0x01 ||
