@@ -16,6 +16,7 @@
 #define PINS_TESTS_SFLOW_SFLOW_UTIL_H_
 
 #include <cstdint>
+#include <string>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
@@ -132,6 +133,11 @@ absl::StatusOr<int64_t> GetSflowInterfacePacketsSampledCounter(
 absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view collector_ip,
     int port_num);
+
+// Returns true if `ip1` and `ip2` are same IP addresses. Returns error if fails
+// to parse the string.
+absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
+                                        const std::string& ip2);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
