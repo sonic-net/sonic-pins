@@ -84,8 +84,7 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface &sut_gnmi_stub,
     const std::string &platform_json_contents,
     const BreakoutType new_breakout_type = BreakoutType::kAny,
-    const BreakoutType current_breakout_type = BreakoutType::kAny,
-    const std::vector<absl::string_view>& allow_list = {});
+    const BreakoutType current_breakout_type = BreakoutType::kAny);
 
 // GetBreakoutStateInfoForPort returns the state values of physical channels and
 // operational status information for ports in a given breakout mode.
