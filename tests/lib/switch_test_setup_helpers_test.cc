@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -58,6 +59,7 @@ using ::testing::Pointwise;
 using ::testing::Return;
 using ::testing::ReturnRef;
 using ::testing::StrictMock;
+using ::testing::UnorderedElementsAre;
 using ::testing::status::IsOk;
 
 // Any constant is fine here.
@@ -486,7 +488,7 @@ MATCHER(MirroredPortIs, "") {
                             result_listener);
 }
 
-TEST(MirroredPortstest, ReturnsMirroredPorts) {
+TEST(MirroredPortsTest, ReturnsMirroredPorts) {
   auto mock_sut_stub = absl::make_unique<gnmi::MockgNMIStub>();
   auto mock_control_switch_stub = absl::make_unique<gnmi::MockgNMIStub>();
 
@@ -543,6 +545,39 @@ TEST(MirroredPortstest, ReturnsMirroredPorts) {
                   .control_switch = P4rtPortId::MakeFromOpenConfigEncoding(9),
               },
           })));
+}
+
+TEST(GetPortsUsedTest, ReturnsPortsUsed) {
+  const pdpi::IrP4Info fbr_info =
+      sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter);
+  pdpi::IrEntity multicast_entity = gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+    packet_replication_engine_entry {
+      multicast_group_entry {
+        multicast_group_id: 7
+        replicas { port: "1" instance: 1 }
+        replicas { port: "2" instance: 1 }
+      }
+    }
+  )pb");
+  pdpi::IrEntity clone_entity = gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+    packet_replication_engine_entry {
+      clone_session_entry {
+        session_id: 7
+        replicas { port: "3" instance: 1 }
+        replicas { port: "4" instance: 1 }
+        class_of_service: 2
+        packet_length_bytes: 200
+      }
+    }
+  )pb");
+  ASSERT_OK_AND_ASSIGN(
+      absl::btree_set<P4rtPortId> ports,
+      pins_test::GetPortsUsed(fbr_info, {multicast_entity, clone_entity}));
+  ASSERT_THAT(ports,
+              UnorderedElementsAre(*P4rtPortId::MakeFromP4rtEncoding("1"),
+                                   *P4rtPortId::MakeFromP4rtEncoding("2"),
+                                   *P4rtPortId::MakeFromP4rtEncoding("3"),
+                                   *P4rtPortId::MakeFromP4rtEncoding("4")));
 }
 
 }  // namespace
