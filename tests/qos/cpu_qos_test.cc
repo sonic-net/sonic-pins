@@ -91,12 +91,6 @@ using ::testing::Not;
 // frames.
 constexpr int kFrameCheckSequenceSize = 4;
 
-// The maximum time the switch is allowed to take before queue counters read via
-// gNMI have to be incremented after a packet hits a queue.
-// Empirically, for PINS, queue counters currently seem to get updated every
-// 10 seconds.
-constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(25);
-
 // After pushing gNMI config to a switch, the tests sleep for this duration
 // assuming that the gNMI config will have been fully applied afterwards.
 // TODO: Instead of hard-coding this time, tests should dynamically
@@ -391,19 +385,6 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  // We install a RIF to make this test non-trivial, as all packets are dropped
-  // by default if no RIF exists (b/190736007).
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::TableEntry router_interface_entry,
-      MakeRouterInterface(
-          /*router_interface_id=*/"ingress-rif-to-workaround-b/190736007",
-          /*p4rt_port_name=*/link_used_for_test_packets.sut_port_p4rt_name,
-          // An arbitrary MAC address will do.
-          /*mac=*/netaddr::MacAddress(0x00, 0x07, 0xE9, 0x42, 0xAC, 0x28),
-          /*ir_p4info=*/ir_p4info));
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(),
-                                      router_interface_entry));
-
   // Install ACL table entry to be hit with a test packet.
   ASSERT_OK_AND_ASSIGN(const sai::TableEntry pd_acl_entry,
                        gutil::ParseTextProto<sai::TableEntry>(R"pb(
@@ -677,19 +658,6 @@ TEST_P(CpuQosTestWithoutIxia,
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  // We install a RIF to make this test non-trivial, as all packets are dropped
-  // by default if no RIF exists (b/190736007).
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::TableEntry router_interface_entry,
-      MakeRouterInterface(
-          /*router_interface_id=*/"ingress-rif-to-workaround-b/190736007",
-          /*p4rt_port_name=*/link_used_for_test_packets.sut_port_p4rt_name,
-          // An arbitrary MAC address will do.
-          /*mac=*/netaddr::MacAddress(0x00, 0x07, 0xE9, 0x42, 0xAC, 0x28),
-          /*ir_p4info=*/ir_p4info));
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(),
-                                      router_interface_entry));
-
   // Extract loopback IPs from gNMI config, to avoid using them in test packets.
   using IpAddresses =
       std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>;
@@ -748,7 +716,7 @@ TEST_P(CpuQosTestWithoutIxia,
 }
 
 // Purpose: Verify DSCP-to-queue mapping for traffic to switch loopback IP.
-TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
+TEST_P(CpuQosTestWithoutIxia, TrafficToLoopbackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
 
   // Setup: the testbed consists of a SUT connected to a control device
@@ -777,6 +745,9 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
                        PickSutToControlDeviceLinkThatsUp(Testbed()));
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
+
+  ASSERT_FALSE(GetParam().test_packets.empty())
+      << "No packets to test, maybe no loopback IP is configured on switch?";
 
   for (PacketAndExpectedTargetQueue test_packet : GetParam().test_packets) {
     std::string_view target_queue = test_packet.target_queue;
@@ -831,14 +802,14 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
                                *sut_gnmi_stub));
     } while (
         // It may take several seconds for the queue counters to update.
-        CumulativeNumPacketsEnqueued(queue_counters_after_test_packet) ==
-            CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) &&
+        TotalPacketsForQueue(queue_counters_after_test_packet) ==
+            TotalPacketsForQueue(queue_counters_before_test_packet) &&
         absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
     // We terminate early if this fails, as that can cause this loop to get
     // out of sync when counters increment after a long delay, resulting in
     // confusing error messages where counters increment by 2.
-    ASSERT_EQ(CumulativeNumPacketsEnqueued(queue_counters_after_test_packet),
-              CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) +
+    ASSERT_EQ(TotalPacketsForQueue(queue_counters_after_test_packet),
+              TotalPacketsForQueue(queue_counters_before_test_packet) +
                   kPacketCount)
         << "Counters for queue " << target_queue << " did not increment within "
         << kMaxQueueCounterUpdateTime
@@ -868,7 +839,7 @@ constexpr int kTotalFrames = 10000000;
 constexpr absl::Duration kTrafficDuration =
     absl::Seconds(kTotalFrames / kFramesPerSecond);
 constexpr int kDefaultFrameSize = 1514;
-constexpr int kMaxFrameSize = 9000;
+constexpr int kMaxFrameSize = 9216;
 constexpr int kMinFrameSize = 64;
 
 struct PacketReceiveInfo {
@@ -1008,10 +979,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
       interface_info = generic_testbed->GetSutInterfaceInfo();
   for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR))
-    { 
-      ASSERT_OK(SetPortSpeed("\"openconfig-if-ethernet:SPEED_200GB\"",
-                             interface, *gnmi_stub));
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+      ASSERT_OK(SetPortSpeedInBitsPerSecond(
+          "\"openconfig-if-ethernet:SPEED_200GB\"", interface, *gnmi_stub));
       ASSERT_OK(SetPortMtu(kMaxFrameSize, interface, *gnmi_stub));
     }
   }
@@ -1032,8 +1002,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   if (ready_links.empty()) {
     for (const auto &[interface, info] : interface_info) {
       if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR))
-          ASSERT_OK(SetPortSpeed("\"openconfig-if-ethernet:SPEED_100GB\"",
-                               interface, *gnmi_stub));
+        ASSERT_OK(SetPortSpeedInBitsPerSecond(
+            "\"openconfig-if-ethernet:SPEED_100GB\"", interface, *gnmi_stub));
       }
     }
     // Wait to let the links come up. Switch guarantees state paths to reflect
@@ -1191,8 +1161,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       delta_counters = {
           .num_packets_transmitted = final_counters.num_packets_transmitted -
                                      initial_counters.num_packets_transmitted,
-          .num_packet_dropped = final_counters.num_packet_dropped -
-                                initial_counters.num_packet_dropped,
+          .num_packets_dropped = final_counters.num_packets_dropped -
+                                 initial_counters.num_packets_dropped,
       };
       LOG(INFO) << delta_counters;
       absl::MutexLock lock(&packet_receive_info.mutex);
@@ -1203,7 +1173,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       ASSERT_NE(gnmi_counters_check, kIterations - 1)
           << "GNMI packet count "
           << delta_counters.num_packets_transmitted +
-                 delta_counters.num_packet_dropped
+                 delta_counters.num_packets_dropped
           << " != Packets received at controller "
           << packet_receive_info.num_packets_punted;
     }

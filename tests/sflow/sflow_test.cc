@@ -578,8 +578,8 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
   auto queue_delta = final_queue_counter - initial_queue_counter;
   LOG(INFO) << "CPU " << kSflowQueueName << " queue counter delta:\n"
             << queue_delta << " \n total time: " << (absl::Now() - start_time);
-  EXPECT_EQ(queue_delta.num_packet_dropped, 0)
-      << "BE1 queue dropped packets:" << queue_delta.num_packet_dropped
+  EXPECT_EQ(queue_delta.num_packets_dropped, 0)
+      << "BE1 queue dropped packets:" << queue_delta.num_packets_dropped
       << ". BE1 queue transimitted pkts: "
       << queue_delta.num_packets_transmitted
       << ". Expected 0 drops for BE1 queue.";

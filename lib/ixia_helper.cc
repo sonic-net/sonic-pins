@@ -342,7 +342,7 @@ absl::StatusOr<std::string> SetUpTrafficItem(
 
 absl::Status DeleteTrafficItem(absl::string_view tref,
                                thinkit::GenericTestbed &testbed) {
-  RETURN_IF_ERROR(StopTraffic(tref, testbed));
+  StopTraffic(tref, testbed).IgnoreError();
   LOG(INFO) << "Sending DELETE to '" << tref << "'";
   ASSIGN_OR_RETURN(
       thinkit::HttpResponse response,
@@ -507,11 +507,17 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
   for (const Json &traffic_item : response) {
     RET_CHECK(traffic_item.contains("errors")) << titem_response;
     RET_CHECK(traffic_item.contains("warnings")) << titem_response;
-    if (!traffic_item.at("errors").empty() &&
-        !traffic_item.at("warnings").empty()) {
-      LOG(WARNING) << "Found traffic items with warnings, which may result in "
-                      "unexpected behavior. Dump of traffic items:\n"
-                   << json_yang::DumpJson(response);
+    if (!traffic_item.at("errors").empty()) {
+      return gutil::UnknownErrorBuilder()
+             << "Found traffic items with errors, which may result in "
+                "unexpected behavior. Dump of traffic items:\n"
+             << json_yang::DumpJson(response);
+    }
+    if (!traffic_item.at("warnings").empty()) {
+      LOG(INFO)
+          << "WARNING: Found traffic items with warnings, which may result in "
+             "unexpected behavior. Dump of traffic items:\n"
+          << json_yang::DumpJson(response);
     }
   }
 
