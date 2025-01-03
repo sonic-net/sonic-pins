@@ -92,6 +92,12 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params = {});
 
-} // namespace dvaas
+// If a legacy test vector (i.e. one that uses IrTableEntries) is provided,
+// returns an updated copy that uses IrEntities instead. Otherwise returns the
+// vector as is.
+absl::StatusOr<ArribaTestVector> GetUpdatedArribaTestVector(
+    const ArribaTestVector& arriba_test_vector);
+
+}  // namespace dvaas
 
 #endif // PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_

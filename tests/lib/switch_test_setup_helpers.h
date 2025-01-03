@@ -77,6 +77,10 @@ absl::Status WaitForEnabledInterfacesToBeUp(
 absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
     const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry> entries);
 
+// Gets the set of P4 Runtime port IDs used in `entities`.
+absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
+    const pdpi::IrP4Info& info, std::vector<pdpi::IrEntity> entities);
+
 // Rewrites the ports of the given table `entries` to only use the given
 // non-empty `ports`. Uses `info` to determine which values refer to ports.
 // Specifically, for each port `x` in the set of table entries, this
