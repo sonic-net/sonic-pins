@@ -16,6 +16,7 @@
 #define PINS_TESTS_SFLOW_SFLOW_UTIL_H_
 
 #include <cstdint>
+#include <string>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
@@ -59,12 +60,17 @@ absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
 
+// Sets sFlow interface enable and sample config and waits until it's converged
+// in state path. `interface` must be present.
+absl::Status SetSflowInterfaceConfig(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
+    bool enabled, int samping_rate, absl::Duration timeout = absl::Seconds(30));
+
 // Sets sFlow interface config and waits until it's converged in state path.
 // `interface` must be present.
-absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
-                                     absl::string_view interface, bool enabled,
-                                     int samping_rate,
-                                     absl::Duration timeout = absl::Seconds(5));
+absl::Status SetSflowInterfaceConfigEnable(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
+    bool enabled, absl::Duration timeout = absl::Seconds(5));
 
 // Verifies all sFlow-related config is consumed by switch by reading
 // corresponding gNMI state paths. Returns an FailedPreconditionError if
@@ -127,6 +133,11 @@ absl::StatusOr<int64_t> GetSflowInterfacePacketsSampledCounter(
 absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view collector_ip,
     int port_num);
+
+// Returns true if `ip1` and `ip2` are same IP addresses. Returns error if fails
+// to parse the string.
+absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
+                                        const std::string& ip2);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_

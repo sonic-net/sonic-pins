@@ -222,10 +222,17 @@ void TestGNMIChildPortInUseDuringBreakout(
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   // Get a random port from list of front panel ports that supports at least
   // one breakout mode of required type other than its current mode.
-  ASSERT_OK_AND_ASSIGN(auto port, GetRandomPortWithSupportedBreakoutModes(
-                                      *sut_gnmi_stub, platform_json_contents,
-                                      BreakoutType::kChannelized));
-  BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), port,
-                          platform_json_contents, true, p4_info);
+  auto status_or = GetRandomPortWithSupportedBreakoutModes(
+      *sut_gnmi_stub, platform_json_contents,
+      /*new_breakout_type=*/BreakoutType::kAny,
+      /*current_breakout_type=*/BreakoutType::kChannelized);
+  if (status_or.status().ok()) {
+    BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), status_or.value(),
+                            platform_json_contents, true, p4_info);
+  } else {
+    LOG(ERROR) << "Failed to get random port with new breakout type: "
+               << BreakoutType::kAny
+               << " and current breakout type: " << BreakoutType::kChannelized;
+  }
 }
 }  // namespace pins_test

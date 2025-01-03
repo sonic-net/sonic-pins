@@ -258,8 +258,6 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   return state.ApplyUpdate(update);
 }
 
-// TODO: b/322007061 - Remove function once built-in multicast group table can
-// be treated like any other table.
 // Installs a multicast group entry with and without replicas.
 absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
     absl::BitGen& gen, pdpi::P4RuntimeSession& session,
@@ -392,7 +390,7 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
 
     // Only omittable match fields can be disabled.
     bool has_a_disabled_fully_qualified_name = false;
-    for (const std::string& path : config.disabled_fully_qualified_names) {
+    for (const std::string& path : config.GetDisabledFullyQualifiedNames()) {
       has_a_disabled_fully_qualified_name =
           has_a_disabled_fully_qualified_name ||
           absl::StartsWith(path, table.preamble().name());
@@ -403,7 +401,7 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
       for (const std::string& description : omittable_match_descriptions) {
         LOG(INFO) << description;
       }
-      for (const std::string& path : config.disabled_fully_qualified_names) {
+      for (const std::string& path : config.GetDisabledFullyQualifiedNames()) {
         if (absl::StartsWith(path, table.preamble().name())) {
           LOG(INFO) << absl::Substitute(
               "   -  $0: Absent due to being disabled",
@@ -531,19 +529,20 @@ TEST_P(MatchActionCoverageTestFixture,
   FuzzerConfig config = GetParam().config;
   // If the ports in the FuzzerConfig are unset, get all valid ports from the
   // switch via gNMI.
-  if (config.ports.empty()) {
+  if (config.GetPorts().empty()) {
     ASSERT_OK_AND_ASSIGN(auto stub, testbed.Sut().CreateGnmiStub());
-    ASSERT_OK_AND_ASSIGN(config.ports,
+    ASSERT_OK_AND_ASSIGN(auto ports,
                          pins_test::GetMatchingP4rtPortIds(
                              *stub, pins_test::IsEnabledEthernetInterface));
+    config.SetPorts(std::move(ports));
   }
 
-  ASSERT_FALSE(config.ports.empty())
+  ASSERT_FALSE(config.GetPorts().empty())
       << "ports must be specified in the gNMI config pushed to the switch, but "
          "none were";
 
   // For this test, mutations are undesirable.
-  config.mutate_update_probability = 0;
+  config.SetMutateUpdateProbability(0);
 
   SwitchState state(config.GetIrP4Info());
   // Sets up the switch such that there is a possible valid entry per table.
@@ -556,10 +555,8 @@ TEST_P(MatchActionCoverageTestFixture,
                                                    state, testbed.Environment(),
                                                    GetParam().p4info));
 
-  // TODO: b/322007061 - Remove function once built-in multicast group table can
-  // be treated like any other table.
   // Generates and installs entries for the built-in multicast group table.
-  if (!config.disabled_fully_qualified_names.contains(
+  if (!config.GetDisabledFullyQualifiedNames().contains(
           pdpi::GetMulticastGroupTableName())) {
     EXPECT_OK(AddMulticastGroupEntryWithAndWithoutReplicas(
         gen, *p4rt_session, config, state, testbed.Environment(),

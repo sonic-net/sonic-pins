@@ -128,6 +128,52 @@ constexpr char cable_len_resp_optic_str[] =
          }
     )pb";
 
+constexpr char all_interfaces_req[] =
+    R"pb(prefix { origin: "openconfig" }
+         path { elem { name: "interfaces" } }
+         type: STATE)pb";
+constexpr char all_interfaces_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path { elem { name: "interfaces" } }
+             val {
+               json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":1,\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}},{\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":2,\"openconfig-platform-transceiver:transceiver\":\"Ethernet2\"}}]}}"
+             }
+           }
+         }
+    )pb";
+constexpr char all_components_req[] =
+    R"pb(prefix { origin: "openconfig" }
+         path { elem { name: "components" } }
+         type: STATE)pb";
+constexpr char all_components_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path { elem { name: "components" } }
+             val {
+               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CR4\"}}},{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CR4\"}}}]}}"
+             }
+           }
+         }
+    )pb";
+constexpr char all_sfpp_components_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path { elem { name: "components" } }
+             val {
+               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\"}}},{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\"}}}]}}"
+             }
+           }
+         }
+    )pb";
+
+
 class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -610,41 +656,58 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
                HasSubstr("Failed to get interface name to p4rt id map")));
 }
 
+
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetRandomPortWithSupportedBreakoutModesIntConversionFailure) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
-           path { elem { name: "interfaces" } }
-           type: STATE)pb",
-      &req));
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
-           path { elem { name: "interfaces" } }
-           type: STATE)pb",
-      &req));
-  gnmi::GetResponse resp;
+  const std::string platform_json_contents =
+      R"pb({
+             "interfaces": {
+               "Ethernet1/1/1": {
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet1/2/1": {
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet1/2/5": { "breakout_modes": "1x200G[100G,40G]" }
+             }
+           }
+      )pb";
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/X\",\"state\":{\"oper-status\":\"UP\"}}, {\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/X\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1,\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}},{\"name\":\"Ethernet1/2/X\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":2,\"openconfig-platform-transceiver:transceiver\":\"Ethernet2\"}}]}}"
                }
              }
            }
       )pb",
-      &resp));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      &interfaces_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
+                                                            &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
   EXPECT_THAT(pins_test::GetRandomPortWithSupportedBreakoutModes(
-                  *mock_gnmi_stub_ptr, ""),
+                  *mock_gnmi_stub_ptr, platform_json_contents),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Failed to convert string (X) to integer")));
 }
+
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetRandomPortWithSupportedBreakoutModesNoOperUpPortsFailure) {
@@ -662,33 +725,40 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              }
            }
       )pb";
-  gnmi::GetRequest req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
-           path { elem { name: "interfaces" } }
-           type: STATE)pb",
-      &req));
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
   gnmi::GetResponse resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"DOWN\",\"openconfig-p4rt:id\": 1}}, {\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"DOWN\",\"openconfig-p4rt:id\": 2}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"DOWN\",\"openconfig-p4rt:id\":1,\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}}, {\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"DOWN\",\"openconfig-p4rt:id\":2,\"openconfig-platform-transceiver:transceiver\":\"Ethernet2\"}}]}}"
                }
              }
            }
       )pb",
       &resp));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
+                                                            &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
   EXPECT_THAT(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents),
       StatusIs(absl::StatusCode::kInternal,
-               HasSubstr("No operationally up parent ports found on switch")));
+               HasSubstr(
+                   "No random interface with supported breakout modes found")));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -912,9 +982,8 @@ TEST_F(
               "Breakout modes not found for Ethernet1/1/1 in platform.json")));
 }
 
-TEST_F(
-    GNMIThinkitInterfaceUtilityTest,
-    TestGetRandomPortWithSupportedBreakoutModesNoSupportedBreakoutTypeFailure) {
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetRandomPortWithSupportedBreakoutModesNoSupportedNewBreakoutType) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   const std::string platform_json_contents =
       R"pb({
@@ -980,6 +1049,81 @@ TEST_F(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents,
           pins_test::BreakoutType::kChannelized),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr(
+                   "No random interface with supported breakout modes found")));
+}
+
+TEST_F(
+    GNMIThinkitInterfaceUtilityTest,
+    TestGetRandomPortWithSupportedBreakoutModesNoSupportedCurrentBreakoutType) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  const std::string platform_json_contents =
+      R"pb({
+             "interfaces": {
+               "Ethernet1/1/1": {
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet1/2/1": { "breakout_modes": "1x400G, 2x200G[100G,40G]" }
+             }
+           }
+      )pb";
+  gnmi::GetRequest req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(prefix { origin: "openconfig" }
+           path { elem { name: "interfaces" } }
+           type: STATE)pb",
+      &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path { elem { name: "interfaces" } }
+               val {
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
+               }
+             }
+           }
+      )pb",
+      &resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_req_1,
+                       currentBreakoutModeGetReq("1/1"));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_resp_1,
+                       currentBreakoutModeGetUnchannelizedResp("1/1"));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_req_2,
+                       currentBreakoutModeGetReq("1/2"));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_resp_2,
+                       currentBreakoutModeGetUnchannelizedResp("1/2"));
+  ON_CALL(*mock_gnmi_stub_ptr,
+          Get(_, EqualsProto(current_breakout_mode_get_req_1), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(current_breakout_mode_get_resp_1),
+                           Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr,
+          Get(_, EqualsProto(current_breakout_mode_get_req_2), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(current_breakout_mode_get_resp_2),
+                           Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_req_1,
+                       hardwarePortGetReq("Ethernet1/1/1"));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_resp_1,
+                       hardwarePortGetResp("Ethernet1/1/1", "1"));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(hardware_port_get_req_1), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(hardware_port_get_resp_1),
+                           Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_req_2,
+                       hardwarePortGetReq("Ethernet1/2/1"));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_resp_2,
+                       hardwarePortGetResp("Ethernet1/2/1", "2"));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(hardware_port_get_req_2), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(hardware_port_get_resp_2),
+                           Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      pins_test::GetRandomPortWithSupportedBreakoutModes(
+          *mock_gnmi_stub_ptr, platform_json_contents,
+          pins_test::BreakoutType::kAny, pins_test::BreakoutType::kChannelized),
       StatusIs(absl::StatusCode::kInternal,
                HasSubstr(
                    "No random interface with supported breakout modes found")));

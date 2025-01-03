@@ -65,6 +65,10 @@ absl::StatusOr<int64_t>
 GetPortSpeedInBitsPerSecond(const std::string &interface_name,
                             gnmi::gNMI::StubInterface &gnmi_stub);
 
+// Get configured port speed.
+absl::StatusOr<int64_t> GetPortSpeed(const std::string &interface_name,
+                                     gnmi::gNMI::StubInterface &gnmi_stub);
+
 // Set port MTU using gNMI.
 absl::Status SetPortMtu(int port_mtu, const std::string &interface_name,
                         gnmi::gNMI::StubInterface &gnmi_stub);
