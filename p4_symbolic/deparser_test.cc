@@ -16,44 +16,56 @@
 
 #include <memory>
 
+#include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/io.h"
+#include "gutil/proto.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_symbolic/parser.h"
 #include "p4_symbolic/sai/fields.h"
-#include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 namespace {
 
-class SaiDeparserTest : public testing::TestWithParam<sai::Instantiation> {
+class SaiDeparserTest : public testing::Test {
  public:
   void SetUp() override {
-    testing::TestWithParam<sai::Instantiation>::SetUp();
-    const auto config = sai::GetNonstandardForwardingPipelineConfig(
-        /*instantiation=*/GetParam(), sai::NonstandardPlatform::kP4Symbolic);
-    ASSERT_OK_AND_ASSIGN(
-        state_, EvaluateSaiPipeline(config, /*entries=*/{}, /*ports=*/{}));
+    constexpr absl::string_view p4info_path =
+        "p4_symbolic/testdata/parser/"
+        "sai_parser.p4info.pb.txt";
+    constexpr absl::string_view p4_config_path =
+        "p4_symbolic/testdata/parser/"
+        "sai_parser.config.json";
+    p4::v1::ForwardingPipelineConfig config;
+    ASSERT_OK(gutil::ReadProtoFromFile(p4info_path, config.mutable_p4info()));
+    ASSERT_OK_AND_ASSIGN(*config.mutable_p4_device_config(),
+                         gutil::ReadFile(std::string(p4_config_path)));
+
+    Z3Context(/*renew=*/true);
+    ASSERT_OK_AND_ASSIGN(ir::Dataplane dataplane,
+                         ParseToIr(config, /*table_entries=*/{}));
+    ASSERT_OK_AND_ASSIGN(state_, symbolic::EvaluateP4Program(dataplane));
   }
 
  protected:
   std::unique_ptr<symbolic::SolverState> state_;
 };
 
-TEST_P(SaiDeparserTest, DeparseIngressAndEgressHeadersWithoutConstraints) {
+TEST_F(SaiDeparserTest, DeparseIngressAndEgressHeadersWithoutConstraints) {
   ASSERT_EQ(state_->solver->check(), z3::check_result::sat);
   auto model = state_->solver->get_model();
   EXPECT_OK(DeparseIngressPacket(*state_, model).status());
   EXPECT_OK(DeparseEgressPacket(*state_, model).status());
 }
 
-TEST_P(SaiDeparserTest, VlanPacketParserIntegrationTest) {
+TEST_F(SaiDeparserTest, VlanPacketParserIntegrationTest) {
   // Add VLAN constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
@@ -75,7 +87,7 @@ TEST_P(SaiDeparserTest, VlanPacketParserIntegrationTest) {
   EXPECT_TRUE(packet.headers(1).has_vlan_header());
 }
 
-TEST_P(SaiDeparserTest, Ipv4UdpPacketParserIntegrationTest) {
+TEST_F(SaiDeparserTest, Ipv4UdpPacketParserIntegrationTest) {
   // Add IPv4 + UDP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
@@ -101,7 +113,7 @@ TEST_P(SaiDeparserTest, Ipv4UdpPacketParserIntegrationTest) {
   EXPECT_THAT(packet.payload(), testing::IsEmpty());
 }
 
-TEST_P(SaiDeparserTest, Ipv6TcpPacketParserIntegrationTest) {
+TEST_F(SaiDeparserTest, Ipv6TcpPacketParserIntegrationTest) {
   // Add IPv6 + TCP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
@@ -129,7 +141,7 @@ TEST_P(SaiDeparserTest, Ipv6TcpPacketParserIntegrationTest) {
   EXPECT_THAT(packet.payload(), testing::IsEmpty());
 }
 
-TEST_P(SaiDeparserTest, ArpPacketParserIntegrationTest) {
+TEST_F(SaiDeparserTest, ArpPacketParserIntegrationTest) {
   // Add ARP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
@@ -153,7 +165,7 @@ TEST_P(SaiDeparserTest, ArpPacketParserIntegrationTest) {
   EXPECT_THAT(packet.payload(), testing::IsEmpty());
 }
 
-TEST_P(SaiDeparserTest, IcmpPacketParserIntegrationTest) {
+TEST_F(SaiDeparserTest, IcmpPacketParserIntegrationTest) {
   // Add ICMP (+ no VLAN) constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
@@ -179,7 +191,7 @@ TEST_P(SaiDeparserTest, IcmpPacketParserIntegrationTest) {
   EXPECT_THAT(packet.payload(), testing::IsEmpty());
 }
 
-TEST_P(SaiDeparserTest, PacketInHeaderIsNeverParsedIntegrationTest) {
+TEST_F(SaiDeparserTest, PacketInHeaderIsNeverParsedIntegrationTest) {
   // Add packet_in constraint.
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
@@ -191,9 +203,6 @@ TEST_P(SaiDeparserTest, PacketInHeaderIsNeverParsedIntegrationTest) {
   // Should be unsatisfiable, because we never parse a packet-in header.
   EXPECT_EQ(state_->solver->check(), z3::check_result::unsat);
 }
-
-INSTANTIATE_TEST_SUITE_P(SaiDeparserTest, SaiDeparserTest,
-                         testing::ValuesIn(sai::AllSaiInstantiations()));
 
 }  // namespace
 }  // namespace p4_symbolic
