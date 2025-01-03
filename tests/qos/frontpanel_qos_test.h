@@ -28,10 +28,11 @@
 
 namespace pins_test {
 
-// Parameters used by the tests.
+// Parameters used by the tests. The fixture is *not* parameterized over a gNMI
+// config and assumes that the switch is preconfigured and the testbed ports
+// are up.
 struct QosTestParams {
-  thinkit::GenericTestbedInterface *testbed_interface;
-  std::string gnmi_config;
+  thinkit::GenericTestbedInterface* testbed_interface;
   p4::config::v1::P4Info p4info;
 };
 
