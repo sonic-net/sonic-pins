@@ -819,13 +819,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   dvaas::ArribaTestVector arriba_test_vector;
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
                    pdpi::ReadIrEntitiesSorted(*sut.p4rt));
-  for (const pdpi::IrEntity& ir_entity : entities.entities()) {
-    // TODO: Add support for other entity types.
-    if (ir_entity.has_table_entry()) {
-      *arriba_test_vector.mutable_ir_table_entries()->add_entries() =
-          ir_entity.table_entry();
-    }
-  }
+  *arriba_test_vector.mutable_ir_entities() = entities;
   for (auto& [id, test_vector] : test_vectors) {
     (*arriba_test_vector.mutable_packet_test_vector_by_id())[id] = test_vector;
   }
