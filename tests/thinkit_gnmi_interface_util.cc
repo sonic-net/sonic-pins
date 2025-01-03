@@ -228,7 +228,8 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
     const std::string& platform_json_contents,
     const BreakoutType new_breakout_type,
-    const BreakoutType current_breakout_type) {
+    const BreakoutType current_breakout_type,
+    const std::vector<absl::string_view>& allow_list) {
   // Get map of front panel port to oper-status on the switch.
   absl::flat_hash_map<std::string, std::string> interface_to_oper_status_map;
 
@@ -312,7 +313,6 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
       ASSIGN_OR_RETURN(auto is_channelized,
                        IsChannelizedBreakoutMode(curr_breakout_mode));
       if (!is_channelized) {
-        up_parent_port_list.erase(up_parent_port_list.begin() + index);
         continue;
       }
     }
