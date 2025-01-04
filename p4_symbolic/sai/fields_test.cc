@@ -20,7 +20,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
-#include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
@@ -32,8 +31,8 @@ TEST(GetSaiFields, CanGetIngressAndEgressFieldsForAllInstantiations) {
   for (auto instantiation : sai::AllSaiInstantiations()) {
     const auto config = sai::GetNonstandardForwardingPipelineConfig(
         instantiation, sai::NonstandardPlatform::kP4Symbolic);
-    ASSERT_OK_AND_ASSIGN(
-        auto state, EvaluateSaiPipeline(config, /*entries=*/{}, /*ports=*/{}));
+    ASSERT_OK_AND_ASSIGN(auto state, symbolic::EvaluateP4Program(
+                                         config, /*entries=*/{}, /*ports=*/{}));
     for (auto& headers :
          {state->context.ingress_headers, state->context.egress_headers}) {
       EXPECT_OK(GetSaiFields(headers).status());
@@ -44,8 +43,8 @@ TEST(GetSaiFields, CanGetIngressAndEgressFieldsForAllInstantiations) {
 TEST(GetUserMetadataFieldNameTest, FailsForNonExistingFields) {
   const auto config = sai::GetNonstandardForwardingPipelineConfig(
       sai::Instantiation::kMiddleblock, sai::NonstandardPlatform::kP4Symbolic);
-  ASSERT_OK_AND_ASSIGN(
-      auto state, EvaluateSaiPipeline(config, /*entries=*/{}, /*ports=*/{}));
+  ASSERT_OK_AND_ASSIGN(auto state, symbolic::EvaluateP4Program(
+                                       config, /*entries=*/{}, /*ports=*/{}));
   ASSERT_THAT(GetUserMetadataFieldName("dummy_nonexisting_field",
                                        state->context.ingress_headers),
               gutil::StatusIs(absl::StatusCode::kInternal));

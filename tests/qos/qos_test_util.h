@@ -199,6 +199,7 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
 // Reads all strictly prioritized queues belonging to the given scheduler policy
 // from the state paths, and returns their names in descending order of
 // priority.
+
 absl::StatusOr<std::vector<std::string>>
 GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);

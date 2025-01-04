@@ -1,10 +1,15 @@
+#define PLATFORM_P4SYMBOLIC
 #include <v1model.p4>
 #include "../common/headers.p4"
 
 struct headers_t {
+// TODO: Clean up once we have better solution to handle packet-in
+// across platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
   // Never extracted during parsing, but serialized during deparsing for packets
   // punted to the controller.
   packet_in_header_t packet_in_header;
+#endif
 
   // PacketOut header; extracted only for packets received from the controller.
   packet_out_header_t packet_out_header;
@@ -47,11 +52,27 @@ struct local_metadata_t {
   packet_rewrites_t packet_rewrites;
   bit<16> l4_src_port;
   bit<16> l4_dst_port;
-  bit<16> wcmp_selector_input;
+  bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;
   // GRE tunnel encap related fields.
   bool apply_tunnel_encap_at_egress;
   ipv6_addr_t tunnel_encap_src_ipv6;
   ipv6_addr_t tunnel_encap_dst_ipv6;
+  // mirroring data, we can't group them into a struct, because BMv2 doesn't
+  // support passing structs in clone3.
+  bool mirror_session_id_valid;
+  mirror_session_id_t mirror_session_id_value;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ipv4_addr_t mirroring_src_ip;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ipv4_addr_t mirroring_dst_ip;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ethernet_addr_t mirroring_src_mac;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ethernet_addr_t mirroring_dst_mac;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  bit<8> mirroring_ttl;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  bit<8> mirroring_tos;
 
   // Packet-in related fields, which we can't group into a struct, because BMv2
   // doesn't support passing structs in clone3.
@@ -59,11 +80,32 @@ struct local_metadata_t {
   // The value to be copied into the `ingress_port` field of packet_in_header on
   // punted packets.
   @field_list(PreservedFieldList.CLONE_I2E_PACKET_IN)
-  port_id_t packet_in_ingress_port;
+  bit<PORT_BITWIDTH> packet_in_ingress_port;
   // The value to be copied into the `target_egress_port` field of
   // packet_in_header on punted packets.
   @field_list(PreservedFieldList.CLONE_I2E_PACKET_IN)
-  port_id_t packet_in_target_egress_port;
+  bit<PORT_BITWIDTH> packet_in_target_egress_port;
+
+  MeterColor_t color;
+  // We consistently use local_metadata.ingress_port instead of
+  // standard_metadata.ingress_port in the P4 tables to ensure that the P4Info
+  // has port_id_t as the type for all fields that match on ports. This allows
+  // tools to treat ports specially (e.g. a fuzzer).
+  bit<9> ingress_port;
+  // The following field corresponds to SAI_ROUTE_ENTRY_ATTR_META_DATA/
+  // SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META.
+  route_metadata_t route_metadata;
+  // ACL metadata can be set with SAI_ACL_ACTION_TYPE_SET_ACL_META_DATA, and
+  // read from SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META.
+  acl_metadata_t acl_metadata;
+  // When controller sends a packet-out packet, the packet will be submitted to
+  // the ingress pipleine by default. But sometimes we want to skip the ingress
+  // pipeline for packet-out, and we cannot skip using the 'exit' statement as
+  // it is not supported in p4-symbolic yet: b/184062335. So we use this field
+  // as a workaround.
+  // TODO: Clean up this workaround after 'exit' is supported in
+  // p4-symbolic.
+  bool bypass_ingress;
 }
 
 parser packet_parser(packet_in packet, out headers_t headers,
@@ -80,6 +122,11 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.l4_src_port = 0;
     local_metadata.l4_dst_port = 0;
     local_metadata.wcmp_selector_input = 0;
+    local_metadata.mirror_session_id_valid = false;
+    local_metadata.color = MeterColor_t.GREEN;
+    local_metadata.ingress_port = standard_metadata.ingress_port;
+    local_metadata.route_metadata = 0;
+    local_metadata.bypass_ingress = false;
 
     transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
@@ -240,7 +287,11 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     // We always expect the packet_out_header to be invalid at the end of the
     // pipeline, so this line has no effect on the output packet.
     packet.emit(headers.packet_out_header);
+// TODO: Clean up once we have better solution to handle packet-in
+// across platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
     packet.emit(headers.packet_in_header);
+#endif
     packet.emit(headers.erspan_ethernet);
     packet.emit(headers.erspan_ipv4);
     packet.emit(headers.erspan_gre);
