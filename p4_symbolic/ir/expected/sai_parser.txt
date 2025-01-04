@@ -617,8 +617,16 @@ headers {
         bitwidth: 16
       }
     }
+    fields {
+      key: "unused_pad"
+      value {
+        name: "unused_pad"
+        bitwidth: 8
+      }
+    }
     ordered_fields_list: "ingress_port"
     ordered_fields_list: "target_egress_port"
+    ordered_fields_list: "unused_pad"
   }
 }
 headers {
@@ -660,7 +668,14 @@ headers {
       key: "_padding_0"
       value {
         name: "_padding_0"
-        bitwidth: 1
+        bitwidth: 6
+      }
+    }
+    fields {
+      key: "local_metadata_t._acl_metadata25"
+      value {
+        name: "local_metadata_t._acl_metadata25"
+        bitwidth: 8
       }
     }
     fields {
@@ -678,6 +693,27 @@ headers {
       }
     }
     fields {
+      key: "local_metadata_t._bypass_ingress26"
+      value {
+        name: "local_metadata_t._bypass_ingress26"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "local_metadata_t._color22"
+      value {
+        name: "local_metadata_t._color22"
+        bitwidth: 2
+      }
+    }
+    fields {
+      key: "local_metadata_t._ingress_port23"
+      value {
+        name: "local_metadata_t._ingress_port23"
+        bitwidth: 9
+      }
+    }
+    fields {
       key: "local_metadata_t._l4_dst_port7"
       value {
         name: "local_metadata_t._l4_dst_port7"
@@ -692,16 +728,72 @@ headers {
       }
     }
     fields {
-      key: "local_metadata_t._packet_in_ingress_port12"
+      key: "local_metadata_t._mirror_session_id_valid12"
       value {
-        name: "local_metadata_t._packet_in_ingress_port12"
+        name: "local_metadata_t._mirror_session_id_valid12"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "local_metadata_t._mirror_session_id_value13"
+      value {
+        name: "local_metadata_t._mirror_session_id_value13"
         bitwidth: 16
       }
     }
     fields {
-      key: "local_metadata_t._packet_in_target_egress_port13"
+      key: "local_metadata_t._mirroring_dst_ip15"
       value {
-        name: "local_metadata_t._packet_in_target_egress_port13"
+        name: "local_metadata_t._mirroring_dst_ip15"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "local_metadata_t._mirroring_dst_mac17"
+      value {
+        name: "local_metadata_t._mirroring_dst_mac17"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "local_metadata_t._mirroring_src_ip14"
+      value {
+        name: "local_metadata_t._mirroring_src_ip14"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "local_metadata_t._mirroring_src_mac16"
+      value {
+        name: "local_metadata_t._mirroring_src_mac16"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "local_metadata_t._mirroring_tos19"
+      value {
+        name: "local_metadata_t._mirroring_tos19"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "local_metadata_t._mirroring_ttl18"
+      value {
+        name: "local_metadata_t._mirroring_ttl18"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "local_metadata_t._packet_in_ingress_port20"
+      value {
+        name: "local_metadata_t._packet_in_ingress_port20"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t._packet_in_target_egress_port21"
+      value {
+        name: "local_metadata_t._packet_in_target_egress_port21"
         bitwidth: 16
       }
     }
@@ -717,6 +809,13 @@ headers {
       value {
         name: "local_metadata_t._packet_rewrites_src_mac4"
         bitwidth: 48
+      }
+    }
+    fields {
+      key: "local_metadata_t._route_metadata24"
+      value {
+        name: "local_metadata_t._route_metadata24"
+        bitwidth: 6
       }
     }
     fields {
@@ -773,8 +872,21 @@ headers {
     ordered_fields_list: "local_metadata_t._apply_tunnel_encap_at_egress9"
     ordered_fields_list: "local_metadata_t._tunnel_encap_src_ipv610"
     ordered_fields_list: "local_metadata_t._tunnel_encap_dst_ipv611"
-    ordered_fields_list: "local_metadata_t._packet_in_ingress_port12"
-    ordered_fields_list: "local_metadata_t._packet_in_target_egress_port13"
+    ordered_fields_list: "local_metadata_t._mirror_session_id_valid12"
+    ordered_fields_list: "local_metadata_t._mirror_session_id_value13"
+    ordered_fields_list: "local_metadata_t._mirroring_src_ip14"
+    ordered_fields_list: "local_metadata_t._mirroring_dst_ip15"
+    ordered_fields_list: "local_metadata_t._mirroring_src_mac16"
+    ordered_fields_list: "local_metadata_t._mirroring_dst_mac17"
+    ordered_fields_list: "local_metadata_t._mirroring_ttl18"
+    ordered_fields_list: "local_metadata_t._mirroring_tos19"
+    ordered_fields_list: "local_metadata_t._packet_in_ingress_port20"
+    ordered_fields_list: "local_metadata_t._packet_in_target_egress_port21"
+    ordered_fields_list: "local_metadata_t._color22"
+    ordered_fields_list: "local_metadata_t._ingress_port23"
+    ordered_fields_list: "local_metadata_t._route_metadata24"
+    ordered_fields_list: "local_metadata_t._acl_metadata25"
+    ordered_fields_list: "local_metadata_t._bypass_ingress26"
     ordered_fields_list: "_padding_0"
   }
 }
@@ -1773,6 +1885,72 @@ parsers {
             }
             hexstr_rvalue {
               value: "0x0000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._mirror_session_id_valid12"
+            }
+            expression_rvalue {
+              builtin_expression {
+                arguments {
+                  bool_value {
+                  }
+                }
+              }
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._color22"
+            }
+            hexstr_rvalue {
+              value: "0x00"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._ingress_port23"
+            }
+            field_rvalue {
+              header_name: "standard_metadata"
+              field_name: "ingress_port"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._route_metadata24"
+            }
+            hexstr_rvalue {
+              value: "0x00"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._bypass_ingress26"
+            }
+            expression_rvalue {
+              builtin_expression {
+                arguments {
+                  bool_value {
+                  }
+                }
+              }
             }
           }
         }

@@ -50,8 +50,8 @@ HexStringToZ3Bitvector(z3::context &context, const std::string &hex_string,
 
 // Turns the given z3 extracted value (as a string) to a uint64_t.
 // Z3 returns an extracted value as either a binary, hex, or decimal strings
-// dependening on the size of the value and the formatting flags it is
-// initialized with.
+// depending on the size of the value and the formatting flags it is initialized
+// with.
 // Note: This function assumes that the input is well-formatted and the result
 // fits in uint64_t (otherwise an exception will be thrown).
 uint64_t Z3ValueStringToInt(const std::string &value);

@@ -28,7 +28,7 @@
 #include "absl/base/macros.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "p4_symbolic/ir/ir.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/guarded_map.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -265,13 +265,14 @@ using TranslationPerType =
     absl::btree_map<std::string, values::TranslationData>;
 
 // Symbolically evaluates/interprets the given program against the given
-// entries for every table in that program, and the available physical ports
+// entries for every table in the program, and the available physical ports
 // on the switch. Optionally, for types that have @p4runtime_translate(_,
 // string) annotation, a static mapping between the P4RT values and the
 // underlying bitvector values may be provided. Otherwise, a mapping is
 // inferred dynamically for such types.
-absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
-    const ir::Dataplane &data_plane,
+absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
+    const p4::v1::ForwardingPipelineConfig &config,
+    const std::vector<p4::v1::TableEntry> &entries,
     const std::vector<int> &physical_ports = {},
     const TranslationPerType &translation_per_type = {});
 
