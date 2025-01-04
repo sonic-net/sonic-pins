@@ -1,7 +1,9 @@
 #include "tests/qos/qos_test_util.h"
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -17,6 +19,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/utils/json_utils.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "tests/qos/gnmi_parsers.h"
 
@@ -171,9 +174,12 @@ absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
     {
       ASSIGN_OR_RETURN(sut_link_up, CheckLinkUp(interface, gnmi_stub));
       if (sut_link_up) {
-        links.push_back({
+        ASSIGN_OR_RETURN(int64_t bit_per_second,
+                         GetPortSpeedInBitsPerSecond(interface, gnmi_stub));
+        links.push_back(IxiaLink{
             .ixia_interface = info.peer_interface_name,
             .sut_interface = interface,
+            .sut_interface_bits_per_second = bit_per_second,
         });
       }
     }
@@ -222,6 +228,30 @@ absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
     absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
   // TODO: Actually parse config -- hard-coded for now.
   return GetIpv4DscpToQueueMapping(port, gnmi_stub);
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
+GetQueueToIpv4DscpsMapping(absl::string_view port,
+                           gnmi::gNMI::StubInterface &gnmi_stub) {
+  absl::flat_hash_map<std::string, std::vector<int>> dscps_by_queue;
+  absl::flat_hash_map<int, std::string> queue_by_dscp;
+  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv4DscpToQueueMapping(port, gnmi_stub));
+  for (auto &[dscp, queue] : queue_by_dscp) {
+    dscps_by_queue[queue].push_back(dscp);
+  }
+  return dscps_by_queue;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
+GetQueueToIpv6DscpsMapping(absl::string_view port,
+                           gnmi::gNMI::StubInterface &gnmi_stub) {
+  absl::flat_hash_map<std::string, std::vector<int>> dscps_by_queue;
+  absl::flat_hash_map<int, std::string> queue_by_dscp;
+  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv6DscpToQueueMapping(port, gnmi_stub));
+  for (auto &[dscp, queue] : queue_by_dscp) {
+    dscps_by_queue[queue].push_back(dscp);
+  }
+  return dscps_by_queue;
 }
 
 absl::Status SetPortLoopbackMode(bool port_loopback,
@@ -274,6 +304,20 @@ GetSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
                          gnmi::gNMI::StubInterface &gnmi) {
   std::string path = SchedulerPolicyPath(scheduler_policy_name);
   return ReadGnmiPath(&gnmi, path, gnmi::GetRequest::CONFIG, "");
+}
+
+absl::StatusOr<openconfig::Qos::SchedulerPolicy>
+GetSchedulerPolicyConfigAsProto(absl::string_view scheduler_policy_name,
+                                gnmi::gNMI::StubInterface &gnmi) {
+  const std::string kPath = SchedulerPolicyPath(scheduler_policy_name);
+  const std::string kRoot = "openconfig-qos:scheduler-policy";
+  ASSIGN_OR_RETURN(const std::string kRawConfig,
+                   ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
+  ASSIGN_OR_RETURN(
+      openconfig::Qos::SchedulerPolicy proto_config,
+      gutil::ParseJsonAsProto<openconfig::Qos::SchedulerPolicy>(
+          StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
+  return proto_config;
 }
 
 absl::Status
@@ -394,6 +438,77 @@ absl::Status SetSchedulerPolicyParameters(
   }
 
   return absl::OkStatus();
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, int64_t>>
+GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
+                                 gnmi::gNMI::StubInterface &gnmi) {
+  // The mapping we're about to compute.
+  absl::flat_hash_map<std::string, int64_t> weight_by_queue_name;
+
+  ASSIGN_OR_RETURN(
+      const openconfig::Qos::SchedulerPolicy kSchedulerPolicy,
+      GetSchedulerPolicyConfigAsProto(scheduler_policy_name, gnmi));
+  for (const auto &scheduler : kSchedulerPolicy.schedulers().scheduler()) {
+    if (scheduler.config().priority() == "STRICT")
+      continue;
+    if (scheduler.inputs().input_size() == 0)
+      continue;
+    if (scheduler.inputs().input_size() > 1) {
+      return gutil::UnimplementedErrorBuilder()
+             << "scheduler with several inputs unsupported: "
+             << scheduler.DebugString();
+    }
+    const auto &input = scheduler.inputs().input(0);
+    const std::string &queue = input.config().queue();
+    const std::string &weight = input.config().weight();
+    if (bool success = absl::SimpleAtoi(weight, &weight_by_queue_name[queue]);
+        !success) {
+      return gutil::UnknownErrorBuilder()
+             << "unable to parse weight '" << weight << "' for queue '" << queue
+             << "' in scheduler of sequence " << scheduler.config().sequence()
+             << " in scheduler policy '" << scheduler_policy_name << "'";
+    }
+  }
+  return weight_by_queue_name;
+}
+
+absl::StatusOr<std::vector<std::string>>
+GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi) {
+  std::vector<std::string> strict_queues;
+
+  // Read and sort schedulers.
+  ASSIGN_OR_RETURN(
+      const openconfig::Qos::SchedulerPolicy kSchedulerPolicy,
+      GetSchedulerPolicyConfigAsProto(scheduler_policy_name, gnmi));
+  std::vector<openconfig::Qos::Scheduler> schedulers(
+      kSchedulerPolicy.schedulers().scheduler().begin(),
+      kSchedulerPolicy.schedulers().scheduler().end());
+  absl::c_sort(schedulers, [](const auto &a, const auto &b) -> bool {
+    return a.sequence() < b.sequence();
+  });
+
+  // Extract strictly prioritzed queues.
+  bool have_seen_weighted_scheduler = false;
+  for (const openconfig::Qos::Scheduler &scheduler : schedulers) {
+    if (scheduler.inputs().input_size() != 1) {
+      return gutil::UnimplementedErrorBuilder()
+             << "scheduler with none/several inputs unsupported: "
+             << scheduler.DebugString();
+    }
+    const auto &input = scheduler.inputs().input(0);
+    if (scheduler.config().priority() == "STRICT") {
+      if (have_seen_weighted_scheduler) {
+        return gutil::UnimplementedErrorBuilder()
+               << "found strict scheduler after weighted scheduler";
+      }
+      strict_queues.push_back(input.config().queue());
+    } else {
+      have_seen_weighted_scheduler = true;
+    }
+  }
+  return strict_queues;
 }
 
 }  // namespace pins_test
