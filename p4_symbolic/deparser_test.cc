@@ -25,7 +25,6 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_symbolic/parser.h"
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
@@ -49,9 +48,8 @@ class SaiDeparserTest : public testing::Test {
                          gutil::ReadFile(std::string(p4_config_path)));
 
     Z3Context(/*renew=*/true);
-    ASSERT_OK_AND_ASSIGN(ir::Dataplane dataplane,
-                         ParseToIr(config, /*table_entries=*/{}));
-    ASSERT_OK_AND_ASSIGN(state_, symbolic::EvaluateP4Program(dataplane));
+    ASSERT_OK_AND_ASSIGN(state_,
+                         symbolic::EvaluateP4Program(config, /*entries=*/{}));
   }
 
  protected:
