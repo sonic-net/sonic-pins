@@ -446,28 +446,12 @@ GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
   // The mapping we're about to compute.
   absl::flat_hash_map<std::string, int64_t> weight_by_queue_name;
 
-  ASSIGN_OR_RETURN(
-      const openconfig::Qos::SchedulerPolicy kSchedulerPolicy,
-      GetSchedulerPolicyConfigAsProto(scheduler_policy_name, gnmi));
-  for (const auto &scheduler : kSchedulerPolicy.schedulers().scheduler()) {
-    if (scheduler.config().priority() == "STRICT")
-      continue;
-    if (scheduler.inputs().input_size() == 0)
-      continue;
-    if (scheduler.inputs().input_size() > 1) {
-      return gutil::UnimplementedErrorBuilder()
-             << "scheduler with several inputs unsupported: "
-             << scheduler.DebugString();
-    }
-    const auto &input = scheduler.inputs().input(0);
-    const std::string &queue = input.config().queue();
-    const std::string &weight = input.config().weight();
-    if (bool success = absl::SimpleAtoi(weight, &weight_by_queue_name[queue]);
-        !success) {
-      return gutil::UnknownErrorBuilder()
-             << "unable to parse weight '" << weight << "' for queue '" << queue
-             << "' in scheduler of sequence " << scheduler.config().sequence()
-             << " in scheduler policy '" << scheduler_policy_name << "'";
+  ASSIGN_OR_RETURN(std::vector<QueueInfo> queues,
+                   GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+                       scheduler_policy_name, gnmi));
+  for (auto &queue : queues) {
+    if (queue.type == QueueType::kRoundRobin) {
+      weight_by_queue_name[queue.name] = queue.weight;
     }
   }
   return weight_by_queue_name;
@@ -477,6 +461,24 @@ absl::StatusOr<std::vector<std::string>>
 GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi) {
   std::vector<std::string> strict_queues;
+  ASSIGN_OR_RETURN(std::vector<QueueInfo> queues,
+                   GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+                       scheduler_policy_name, gnmi));
+  for (auto &queue : queues) {
+    if (queue.type == QueueType::kStrictlyPrioritized)
+      strict_queues.push_back(queue.name);
+  }
+  return strict_queues;
+}
+
+bool IsStrict(const openconfig::Qos::Scheduler &scheduler) {
+  return scheduler.config().priority() == "STRICT";
+}
+
+absl::StatusOr<std::vector<QueueInfo>>
+GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi) {
+  std::vector<QueueInfo> queues;
 
   // Read and sort schedulers.
   ASSIGN_OR_RETURN(
@@ -486,11 +488,16 @@ GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
       kSchedulerPolicy.schedulers().scheduler().begin(),
       kSchedulerPolicy.schedulers().scheduler().end());
   absl::c_sort(schedulers, [](const auto &a, const auto &b) -> bool {
+    // TODO: Remove this temporary workaround once strict queues
+    // are no longer inverted.
+    if (IsStrict(a) && IsStrict(b))
+      return a.sequence() > b.sequence();
     return a.sequence() < b.sequence();
   });
 
-  // Extract strictly prioritzed queues.
-  bool have_seen_weighted_scheduler = false;
+  // Extract queue info, and ensure strict queues come before round-robin
+  // queues.
+  bool have_seen_round_robin_scheduler = false;
   for (const openconfig::Qos::Scheduler &scheduler : schedulers) {
     if (scheduler.inputs().input_size() != 1) {
       return gutil::UnimplementedErrorBuilder()
@@ -498,17 +505,36 @@ GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
              << scheduler.DebugString();
     }
     const auto &input = scheduler.inputs().input(0);
-    if (scheduler.config().priority() == "STRICT") {
-      if (have_seen_weighted_scheduler) {
-        return gutil::UnimplementedErrorBuilder()
-               << "found strict scheduler after weighted scheduler";
+    const std::string &queue = input.config().queue();
+    const std::string &weight = input.config().weight();
+    QueueInfo &info = queues.emplace_back();
+    info = QueueInfo{
+        .name = queue,
+        .type = IsStrict(scheduler) ? QueueType::kStrictlyPrioritized
+                                    : QueueType::kRoundRobin,
+        .sequence = static_cast<int>(scheduler.sequence()),
+    };
+
+    // Extract weight, if relevant.
+    if (info.type == QueueType::kRoundRobin) {
+      have_seen_round_robin_scheduler = true;
+      bool parsed_weight = absl::SimpleAtoi(weight, &info.weight);
+      if (!parsed_weight) {
+        return gutil::UnknownErrorBuilder()
+               << "unable to parse weight '" << weight << "' for queue '"
+               << queue << "' in scheduler of sequence "
+               << scheduler.config().sequence() << " in scheduler policy '"
+               << scheduler_policy_name << "'";
       }
-      strict_queues.push_back(input.config().queue());
-    } else {
-      have_seen_weighted_scheduler = true;
+    }
+
+    // Ensure invariant.
+    if (IsStrict(scheduler) && have_seen_round_robin_scheduler) {
+      return gutil::UnimplementedErrorBuilder()
+             << "found strict scheduler after weighted scheduler";
     }
   }
-  return strict_queues;
+  return queues;
 }
 
 }  // namespace pins_test
