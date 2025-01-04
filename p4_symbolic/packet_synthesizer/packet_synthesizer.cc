@@ -78,9 +78,8 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
           egress_fields.local_metadata.mirror_session_id_valid == 1, model));
 
   // Get ingress port from the model.
-  ASSIGN_OR_RETURN(
-      std::string local_metadata_ingress_port,
-      p4_symbolic::ExtractLocalMetadataIngressPortFromModel(solver_state));
+  ASSIGN_OR_RETURN(std::string local_metadata_ingress_port,
+                   GetLocalMetadataIngressPortFromModel(solver_state));
 
   // TODO: p4-symbolic might miss that
   // local_metadata.ingress_port is p4runtime_translated. In such cases,
@@ -233,7 +232,7 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 
   // Evaluate P4 pipeline to get solver_state.
   ASSIGN_OR_RETURN(auto solver_state,
-                   p4_symbolic::EvaluateSaiPipeline(
+                   p4_symbolic::symbolic::EvaluateP4Program(
                        config, entries, physical_ports, translation_per_type));
 
   // TODO: Avoid generating packets that are always dropped.

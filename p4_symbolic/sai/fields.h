@@ -223,10 +223,9 @@ absl::StatusOr<std::string>
 GetUserMetadataFieldName(const std::string &field,
                          const symbolic::SymbolicPerPacketState &state);
 
-// The p4c compiler adds a special field ("$valid$") to each header
-// corresponding to its validity. This function returns a field reference (in
-// form of <header>.<field>) to the p4c generated validity field of the given
-// `header`.
+// P4-Symbolic adds a special field ("$valid$") to each header corresponding to
+// its validity. This function returns a field reference (in form of
+// <header>.<field>) to the validity field of the given `header`.
 // Note: This function does NOT check if the given header exists.
 std::string GetHeaderValidityFieldRef(absl::string_view header);
 

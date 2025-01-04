@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "p4_symbolic/sai/sai.h"
 
 #include <memory>
@@ -23,20 +24,12 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "gutil/status.h"
-#include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_symbolic/parser.h"
 #include "p4_symbolic/sai/fields.h"
-#include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
 
 namespace p4_symbolic {
 
-// Checks if the set of physical ports is the same as the set of numeric IDs
-// passed as the static mapping for "port_id_t".
 absl::Status CheckPhysicalPortAndPortIdTypeValueConsistency(
     const std::vector<int>& physical_ports,
     const symbolic::TranslationPerType& translation_per_type) {
@@ -58,7 +51,6 @@ absl::Status CheckPhysicalPortAndPortIdTypeValueConsistency(
   return absl::OkStatus();
 }
 
-// Adds partially static mapping for "vrf_id_t".
 absl::Status AddVrfIdTypeTranslation(
     symbolic::TranslationPerType& translation_per_type) {
   if (translation_per_type.contains(kVrfIdTypeName)) {
@@ -76,40 +68,20 @@ absl::Status AddVrfIdTypeTranslation(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateSaiPipeline(
-    const p4::v1::ForwardingPipelineConfig& config,
-    const std::vector<p4::v1::TableEntry>& entries,
-    const std::vector<int>& physical_ports,
-    symbolic::TranslationPerType translation_per_type) {
-  // Check inputs for consistency.
-  RETURN_IF_ERROR(CheckPhysicalPortAndPortIdTypeValueConsistency(
-      physical_ports, translation_per_type));
-
-  // Add translation for vrf_id_t.
-  RETURN_IF_ERROR(AddVrfIdTypeTranslation(translation_per_type));
-
-  ASSIGN_OR_RETURN(ir::Dataplane dataplane, ParseToIr(config, entries));
-  ASSIGN_OR_RETURN(std::unique_ptr<symbolic::SolverState> state,
-                   symbolic::EvaluateP4Program(dataplane, physical_ports,
-                                               translation_per_type));
-  return state;
-}
-
-absl::StatusOr<std::string> ExtractLocalMetadataIngressPortFromModel(
+absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
     const symbolic::SolverState& solver_state) {
   // We are interested in the value after parsing because the parser sets
   // `local_metadata.ingress_port = standard_metadata.ingress_port`. Also,
   // according to P4-16 spec, the metadata of the ingress packet may contain
   // arbitrary value before being initialized.
-  ASSIGN_OR_RETURN(
-      p4_symbolic::SaiFields parsed_fields,
-      p4_symbolic::GetSaiFields(solver_state.context.parsed_headers));
+  ASSIGN_OR_RETURN(SaiFields parsed_fields,
+                   GetSaiFields(solver_state.context.parsed_headers));
   ASSIGN_OR_RETURN(const std::string local_metadata_ingress_port_field_name,
-                   p4_symbolic::GetUserMetadataFieldName(
+                   GetUserMetadataFieldName(
                        "ingress_port", solver_state.context.parsed_headers));
   // Note: Do NOT directly use "local_metadata.ingress_port" as the field name
   // (see p4_symbolic::GetUserMetadataFieldName).
-  return TranslateValueToP4RT(
+  return symbolic::values::TranslateValueToP4RT(
       local_metadata_ingress_port_field_name,
       solver_state.solver->get_model()
           .eval(parsed_fields.local_metadata.ingress_port, true)
