@@ -55,10 +55,11 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
     std::optional<bool> should_be_dropped) {
   z3::model model = solver_state.solver->get_model();
   ASSIGN_OR_RETURN(std::string packet,
-                   DeparseIngressPacket(solver_state, model));
-  ASSIGN_OR_RETURN(const bool dropped,
-                   EvalZ3Bool(solver_state.context.trace.dropped, model));
-  if (should_be_dropped.has_value() && dropped != *should_be_dropped) {
+                   p4_symbolic::DeparseIngressPacket(solver_state, model));
+  ASSIGN_OR_RETURN(
+      const bool dropped,
+      p4_symbolic::EvalZ3Bool(solver_state.context.trace.dropped, model));
+  if (dropped != should_be_dropped) {
     return absl::FailedPreconditionError(absl::Substitute(
         "Z3 model's drop prediction ($0) is inconsistent with the expectation "
         "($1)",
@@ -233,8 +234,8 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 
   // Evaluate P4 pipeline to get solver_state.
   ASSIGN_OR_RETURN(auto solver_state,
-                   symbolic::EvaluateP4Program(config, entries, physical_ports,
-                                               translation_per_type));
+                   p4_symbolic::symbolic::EvaluateP4Program(
+                       config, entries, physical_ports, translation_per_type));
 
   // TODO: Avoid generating packets that are always dropped.
   RETURN_IF_ERROR(AddSanePacketConstraints(*solver_state));
