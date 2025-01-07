@@ -176,8 +176,29 @@ absl::StatusOr<absl::flat_hash_map<std::string, int64_t>>
 GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
                                  gnmi::gNMI::StubInterface &gnmi);
 
+enum class QueueType {
+  kStrictlyPrioritized,
+  kRoundRobin,
+};
+
+struct QueueInfo {
+  std::string name;
+  QueueType type;
+  // Priority -- queues with lower `sequence` number are scheduled first.
+  int sequence = 0;
+  // Meaningful only when `type == QueueType::kRoundRobin`.
+  int64_t weight = 0;
+};
+
+// Reads all queues belonging to the given scheduler policy and returns their
+// names and types in descending order of priority.
+absl::StatusOr<std::vector<QueueInfo>>
+GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
+
 // Reads all strictly prioritized queues belonging to the given scheduler policy
-// from the state paths, and returns them in descrending order of priority.
+// from the state paths, and returns their names in descending order of
+// priority.
 absl::StatusOr<std::vector<std::string>>
 GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
