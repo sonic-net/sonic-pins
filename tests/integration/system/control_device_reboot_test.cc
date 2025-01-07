@@ -86,6 +86,10 @@ TEST_P(ControlDeviceRebootTestFixture, TestControlDeviceReboot) {
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
                        GetTestbedWithRequirements(requirements));
 
+  // Connect to TestTracker for test status
+  generic_testbed->Environment().SetTestCaseID(
+      "3b8dc5fd-d5f9-4e8d-856f-9495c802d39f");
+
   LOG(INFO) << "Get all ports on control device connected to sut.";
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
