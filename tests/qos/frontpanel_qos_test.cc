@@ -14,6 +14,7 @@
 
 #include "tests/qos/frontpanel_qos_test.h"
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -22,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <string>
 #include <thread>  // NOLINT
 #include <tuple>
 #include <vector>
@@ -30,6 +32,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -793,6 +796,362 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   LOG(INFO) << "-- Test done -------------------------------------------------";
 }
 
+// The purpose of this test is to verify that strict queues are strictly
+// prioritized over all lower-priority queues.
+// We test one strict "queue under test" at a time by injecting two types of
+// traffic:
+// - Main traffic: IPv{4,6} packets targetting the strict queue, at >= 100%
+//   egress line rate.
+// - Background traffic: mixed IPv{4,6} packets targetting all queues, at 100%
+//   egress line rate overall.
+//
+// We then verify that the queue under test forwards traffic at a rate
+//   R = egress line rate - background traffic rate to higher priority queues
+//                        - sum of CIRs of other queues
+// where the CIRs are chosen low enough to be fully saturated by the background
+// traffic. We repeat this for CIRs = 0 and CIRs > 0.
+TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
+  LOG(INFO) << "-- Test started ----------------------------------------------";
+  LOG(INFO) << "obtaining testbed handle";
+  // Pick a testbed with SUT connected to an Ixia on 3 ports, so we can
+  // oversubscribe a switch egress port.
+  auto requirements = gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+      R"pb(
+        interface_requirements { count: 3 interface_mode: TRAFFIC_GENERATOR }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+
+  // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
+  // 1 for forwarding them back. We use the faster links for injecting packets
+  // so we can oversubsribe the egress port. We inject the traffic for the
+  // round-robin queues via one ingress port, and auxilliary traffic for a
+  // strictly-prioritized queue via another ingress port.
+  LOG(INFO) << "picking test packet links";
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
+  absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
+    return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
+  });
+  ASSERT_GE(ready_links.size(), 3)
+      << "Test requires at least 3 SUT ports connected to an Ixia";
+  const auto [kEgressLink, kIngressLink1, kIngressLink2] =
+      std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
+  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
+            kIngressLink1.sut_interface_bits_per_second);
+  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
+            kIngressLink2.sut_interface_bits_per_second);
+  const std::string kIxiaMainTrafficSrcPort = kIngressLink1.ixia_interface;
+  const std::string kIxiaBackgroundTrafficSrcPort =
+      kIngressLink2.ixia_interface;
+  const std::string kSutMainTrafficInPort = kIngressLink1.sut_interface;
+  const std::string kSutBackgroundTrafficInPort = kIngressLink2.sut_interface;
+  const std::string kSutEgressPort = kEgressLink.sut_interface;
+  const std::string kIxiaDstPort = kEgressLink.ixia_interface;
+  LOG(INFO) << absl::StrFormat(
+      "Test packet routes:"
+      "\n- Main traffic: "
+      "[Ixia: %s] == %.1f Gbps => [SUT: %s] -> [SUT: %s] == %.1f Gbps => "
+      "[Ixia: %s]"
+      "\n- Background traffic: "
+      "[Ixia: %s] == %.1f Gbps => [SUT: %s] -> [SUT: %s] == %.1f Gbps => "
+      "[Ixia: %s]",
+      kIxiaMainTrafficSrcPort,
+      kIngressLink1.sut_interface_bits_per_second / 1'000'000'000.,
+      kSutMainTrafficInPort, kSutEgressPort,
+      kEgressLink.sut_interface_bits_per_second / 1'000'000'000., kIxiaDstPort,
+      kIxiaBackgroundTrafficSrcPort,
+      kIngressLink2.sut_interface_bits_per_second / 1'000'000'000.,
+      kSutBackgroundTrafficInPort, kSutEgressPort,
+      kEgressLink.sut_interface_bits_per_second / 1'000'000'000., kIxiaDstPort);
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortSchedulerPolicy,
+      GetSchedulerPolicyNameByEgressPort(kSutEgressPort, *gnmi_stub));
+  absl::flat_hash_map<std::string, std::string> p4rt_id_by_interface;
+  ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface,
+                       GetAllInterfaceNameToPortId(*gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface, kSutEgressPort));
+
+  // Configure the switch to send all incomming packets out of the chosen egress
+  // port.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(
+      const sai::TableEntries kTableEntries,
+      ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
+  ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
+                                                     kTableEntries));
+  ASSERT_OK(InstallPdTableEntries(kTableEntries, GetParam().p4info, *sut_p4rt));
+
+  // Obtain queues and DSCPs for the queues.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<QueueInfo> kQueuesFromHighestToLowestPriority,
+      GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+          kSutEgressPortSchedulerPolicy, *gnmi_stub));
+  std::vector<QueueInfo> strict_queues_from_highest_to_lowest_priority;
+  for (auto &queue : kQueuesFromHighestToLowestPriority) {
+    if (queue.type == QueueType::kStrictlyPrioritized) {
+      strict_queues_from_highest_to_lowest_priority.push_back(queue);
+    }
+  }
+  if (strict_queues_from_highest_to_lowest_priority.empty()) {
+    GTEST_SKIP() << "no strict queues configured, nothing to test";
+  }
+  LOG(INFO)
+      << "Testing the following strict queues (highest to lowest priority): "
+      << absl::StrJoin(strict_queues_from_highest_to_lowest_priority, " > ",
+                       [](std::string *out, const auto &queue) {
+                         absl::StrAppend(out, queue.name);
+                       });
+  using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
+  ASSERT_OK_AND_ASSIGN(
+      const DscpsByQueueName kIpv4DscpsByQueueName,
+      GetQueueToIpv4DscpsMapping(kSutBackgroundTrafficInPort, *gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const DscpsByQueueName kIpv6DscpsByQueueName,
+      GetQueueToIpv6DscpsMapping(kSutBackgroundTrafficInPort, *gnmi_stub));
+
+  // Restore scheduler config at the end of the test, so we can freely modify.
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kInitialSchedulerConfig,
+      GetSchedulerPolicyConfig(kSutEgressPortSchedulerPolicy, *gnmi_stub));
+  const auto kRestoreSchedulerConfig = absl::Cleanup([&] {
+    EXPECT_OK(UpdateSchedulerPolicyConfig(kSutEgressPortSchedulerPolicy,
+                                          kInitialSchedulerConfig, *gnmi_stub))
+        << "failed to restore initial scheduler config -- switch config may be "
+           "corrupted, causing subsequent test to fail";
+  });
+
+  // Connect to Ixia and fix constant traffic parameters.
+  LOG(INFO) << "connecting to Ixia";
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle, ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kIxiaMainTrafficSrcPortHandle,
+      ixia::IxiaVport(kIxiaHandle, kIxiaMainTrafficSrcPort, *testbed));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kIxiaBackgroundTrafficSrcPortHandle,
+      ixia::IxiaVport(kIxiaHandle, kIxiaBackgroundTrafficSrcPort, *testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
+                       ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
+  const int kNumQueueus = kQueuesFromHighestToLowestPriority.size();
+  const int kNumRoundRobinQueues =
+      kNumQueueus - strict_queues_from_highest_to_lowest_priority.size();
+  const int kNumBackgroundTrafficItems = 2 * kNumQueueus; // IPv4 & IPv6
+  constexpr int kFrameSizeInBytes = 1514;
+  const int64_t kEgressLineRateInBytesPerSecond =
+      kEgressLink.sut_interface_bits_per_second / 8;
+  const int kEgressLineRateInFramesPerSecond =
+      .99 * kEgressLineRateInBytesPerSecond / kFrameSizeInBytes;
+  const int kFramesPerSecondPerTrafficItem =
+      kEgressLineRateInFramesPerSecond / kNumBackgroundTrafficItems;
+  const int64_t kBytesPerSecondPerTrafficItem =
+      kEgressLineRateInBytesPerSecond / kNumBackgroundTrafficItems;
+
+  // Main test, testing one strict queue under test at a time.
+  for (const QueueInfo &queue_under_test :
+       strict_queues_from_highest_to_lowest_priority) {
+    LOG(INFO) << "== QUEUE UNDER TEST: " << queue_under_test.name << " =======";
+    SCOPED_TRACE(absl::StrCat("queue under test: ", queue_under_test.name));
+
+    // We run the test in two variants:
+    // - Without CIRs. In this case, the strict queue under test competes
+    //   for egress bandwith only with higher prioritized strict queues.
+    // - With CIRs. In this case, the strict queue under test competes
+    //   for egress bandwith also with all queues with a CIR, since CIRs get
+    //   served first. We configure CIRs uniformly, for round robin queues only.
+    for (const double kCirsFractionOfEgressLineRate : {0., .40}) {
+      SCOPED_TRACE(absl::StrCat("CIR fraction of egress line rate: ",
+                                kCirsFractionOfEgressLineRate * 100, "%"));
+      // Set lower & upper queue bounds (CIRs/PIRs).
+      LOG(INFO) << "configuring scheduler parameters: CIRs = "
+                << kCirsFractionOfEgressLineRate * 100 << "% egress line rate";
+      absl::flat_hash_map<std::string, SchedulerParameters>
+          params_by_queue_name;
+      // We split the overall CIR uniformly among all round robin queues.
+      const int64_t kRoundRobinQueueCir = kCirsFractionOfEgressLineRate *
+                                          kEgressLineRateInBytesPerSecond /
+                                          kNumRoundRobinQueues;
+      for (const QueueInfo &queue : kQueuesFromHighestToLowestPriority) {
+        SchedulerParameters &params = params_by_queue_name[queue.name];
+        params.committed_information_rate =
+            queue.type == QueueType::kRoundRobin ? kRoundRobinQueueCir : 0;
+        params.peak_information_rate = kEgressLineRateInBytesPerSecond;
+      }
+      ASSERT_OK(SetSchedulerPolicyParameters(kSutEgressPortSchedulerPolicy,
+                                             params_by_queue_name, *gnmi_stub));
+
+      // Configure traffic.
+      LOG(INFO) << "configuring traffic";
+      std::vector<std::string> traffic_items;
+      absl::flat_hash_map<std::string, QueueInfo> queue_by_traffic_item_name;
+      auto delete_traffic_items = absl::Cleanup([&] {
+        LOG(INFO) << "deleting traffic items";
+        for (auto &traffic_item : traffic_items) {
+          EXPECT_OK(pins::TryUpToNTimes(3, absl::Seconds(1), [&] {
+            return ixia::DeleteTrafficItem(traffic_item, *testbed);
+          }));
+        }
+      });
+      for (bool ipv4 : {true, false}) {
+        const auto &kDscpsByQueueName =
+            ipv4 ? kIpv4DscpsByQueueName : kIpv6DscpsByQueueName;
+
+        // Configuring main traffic targetting queue under test.
+        {
+          ASSERT_THAT(
+              kDscpsByQueueName,
+              Contains(Pair(Eq(queue_under_test.name), Not(IsEmpty()))));
+          const int kDscp = kDscpsByQueueName.at(queue_under_test.name).at(0);
+          const std::string kTrafficName = absl::StrFormat(
+              "main traffic: %d MB/s of IPv%d packets/second with DSCP %d "
+              "targeting %s queue '%s'",
+              kEgressLineRateInBytesPerSecond / 1'000'000, ipv4 ? 4 : 6, kDscp,
+              queue_under_test.type == QueueType::kStrictlyPrioritized
+                  ? "strict"
+                  : "round-robin",
+              queue_under_test.name);
+          ixia::TrafficParameters traffic_params{
+              .frame_size_in_bytes = kFrameSizeInBytes,
+              // 50/50 for IPv4/IPv6.
+              .traffic_speed =
+                  ixia::FramesPerSecond{kEgressLineRateInFramesPerSecond / 2},
+          };
+          if (ipv4) {
+            traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
+                .priority = ixia::IpPriority{.dscp = kDscp},
+            };
+          } else {
+            traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
+                .priority = ixia::IpPriority{.dscp = kDscp},
+            };
+          }
+          ASSERT_OK_AND_ASSIGN(std::string traffic_item,
+                               ixia::SetUpTrafficItem(
+                                   kIxiaMainTrafficSrcPortHandle,
+                                   kIxiaDstPortHandle, kTrafficName, *testbed));
+          ASSERT_OK(ixia::SetTrafficParameters(traffic_item, traffic_params,
+                                               *testbed));
+          traffic_items.push_back(traffic_item);
+          queue_by_traffic_item_name[kTrafficName] = queue_under_test;
+        }
+
+        // Configure background traffic, for all queues including the queue
+        // under test.
+        for (const QueueInfo &queue : kQueuesFromHighestToLowestPriority) {
+          const auto &kDscpsByQueueName =
+              ipv4 ? kIpv4DscpsByQueueName : kIpv6DscpsByQueueName;
+          ASSERT_THAT(kDscpsByQueueName,
+                      Contains(Pair(Eq(queue.name), Not(IsEmpty()))));
+          const int kDscp = kDscpsByQueueName.at(queue.name).at(0);
+          const std::string kTrafficName = absl::StrFormat(
+              "background traffic: %d MB/s of IPv%d packets/second with DSCP "
+              "%d targeting %s queue '%s'",
+              kBytesPerSecondPerTrafficItem / 1'000'000, ipv4 ? 4 : 6, kDscp,
+              queue.type == QueueType::kStrictlyPrioritized ? "strict"
+                                                            : "round-robin",
+              queue.name);
+          ixia::TrafficParameters traffic_params{
+              .frame_size_in_bytes = kFrameSizeInBytes,
+              .traffic_speed =
+                  ixia::FramesPerSecond{kFramesPerSecondPerTrafficItem},
+          };
+          if (ipv4) {
+            traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
+                .priority = ixia::IpPriority{.dscp = kDscp},
+            };
+          } else {
+            traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
+                .priority = ixia::IpPriority{.dscp = kDscp},
+            };
+          }
+          ASSERT_OK_AND_ASSIGN(std::string traffic_item,
+                               ixia::SetUpTrafficItem(
+                                   kIxiaBackgroundTrafficSrcPortHandle,
+                                   kIxiaDstPortHandle, kTrafficName, *testbed));
+          ASSERT_OK(ixia::SetTrafficParameters(traffic_item, traffic_params,
+                                               *testbed));
+          traffic_items.push_back(traffic_item);
+          queue_by_traffic_item_name[kTrafficName] = queue;
+        }
+      }
+
+      // Run traffic for a while, then obtain stats.
+      LOG(INFO) << "starting traffic (" << traffic_items.size() << " items)";
+      // Occasionally the Ixia API cannot keep up and starting traffic fails,
+      // so we try up to 3 times.
+      ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+        return ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed);
+      }));
+      LOG(INFO) << "traffic started; sleeping for 3 seconds";
+      absl::SleepFor(absl::Seconds(3));
+      LOG(INFO) << "stopping traffic";
+      ASSERT_OK(ixia::StopTraffic(traffic_items, *testbed));
+
+      // Obtain traffic stats, and ensure queue under test got scheduled for
+      // expected percentage of traffic.
+      LOG(INFO) << "obtaining traffic stats";
+      ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
+                           ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+      LOG(INFO) << "validating traffic stats against expectation";
+      double bytes_per_second_received = 0;
+      for (auto &[traffic_item, stats] :
+           kTrafficStats.stats_by_traffic_item()) {
+        ASSERT_OK_AND_ASSIGN(
+            QueueInfo traffic_item_queue,
+            gutil::FindOrStatus(queue_by_traffic_item_name, traffic_item));
+        if (traffic_item_queue.name == queue_under_test.name) {
+          bytes_per_second_received += ixia::BytesPerSecondReceived(stats);
+        }
+      }
+      std::vector<std::string> higher_priority_queues;
+      for (const QueueInfo &queue :
+           strict_queues_from_highest_to_lowest_priority) {
+        if (queue.name == queue_under_test.name)
+          break;
+        higher_priority_queues.push_back(queue.name);
+      }
+      const double kBytesPerSecondToHigherPriorityQueues =
+          2 * higher_priority_queues.size() * kBytesPerSecondPerTrafficItem;
+      LOG(INFO) << "higher priority queues "
+                << absl::StrJoin(higher_priority_queues, ", ")
+                << " contest for " << kBytesPerSecondToHigherPriorityQueues
+                << " bytes/s of the egress line rate ("
+                << 100. * kBytesPerSecondToHigherPriorityQueues /
+                       kEgressLineRateInBytesPerSecond
+                << "%)";
+      LOG(INFO) << "lower priority queues with CIRs contest for "
+                << (kCirsFractionOfEgressLineRate *
+                    kEgressLineRateInBytesPerSecond)
+                << " bytes/s of the egress line rate ("
+                << kCirsFractionOfEgressLineRate * 100 << "%)";
+      const double kBytesPerSecondExpected =
+          (1 - kCirsFractionOfEgressLineRate) *
+              kEgressLineRateInBytesPerSecond -
+          kBytesPerSecondToHigherPriorityQueues;
+      const double kAbsoluteError =
+          bytes_per_second_received - kBytesPerSecondExpected;
+      const double kRelativeErrorPercent =
+          100. * kAbsoluteError / kBytesPerSecondExpected;
+      const double kAcceptableErrorPercent = 3;
+      LOG(INFO) << "received " << bytes_per_second_received
+                << " bytes/s from queue " << queue_under_test.name
+                << " (expected: " << kBytesPerSecondExpected
+                << "bytes/s, error: " << kRelativeErrorPercent << "%)";
+      EXPECT_LE(std::abs(kRelativeErrorPercent), kAcceptableErrorPercent)
+          << "expected to receive " << kBytesPerSecondExpected
+          << " bytes/s, but received " << bytes_per_second_received
+          << " bytes/s";
+    }
+  }
+  LOG(INFO) << "-- Test done -------------------------------------------------";
+}
+
 struct EcnTestPacketCounters {
   absl::Mutex mutex;
   int num_packets_punted ABSL_GUARDED_BY(mutex) = 0;
@@ -1345,5 +1704,309 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
       }
     }
   }
+}
+
+// The purpose of this test is to verify Buffer configuration applies
+// on egress port queues. The test will oversubscribe egress port with equal
+// traffic for different queues. At the end of the test we verify if
+// queues which are allocated more buffer transmit more packets.
+TEST_P(FrontpanelBufferTest, BufferCarving) {
+  LOG(INFO) << "---------------- Test started ---------------------";
+  switch (GetParam().config_to_be_tested) {
+  case kSharedStaticLimit:
+    LOG(INFO) << "Testing shared static limit";
+    break;
+  case kDedicatedBuffer:
+    LOG(INFO) << "Testing dedicated buffer";
+    break;
+  case kSharedAlpha:
+  default:
+    LOG(INFO) << "Testing shared alpha";
+  }
+  LOG(INFO) << "obtaining testbed handle";
+  // Pick a testbed with SUT connected to an Ixia on 3 ports, so we can
+  // oversubscribe a switch egress port.
+  auto requirements = gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+      R"pb(
+        interface_requirements { count: 3 interface_mode: TRAFFIC_GENERATOR }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+
+  // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
+  // 1 for forwarding them back. We use the faster links for injecting packets
+  // so we can oversubsribe the egress port.
+  LOG(INFO) << "picking test packet links";
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
+  absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
+    return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
+  });
+  ASSERT_GE(ready_links.size(), 3)
+      << "Test requires at least 3 SUT ports connected to an Ixia";
+  const auto [kEgressLink, kIngressLink1, kIngressLink2] =
+      std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
+  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
+            kIngressLink1.sut_interface_bits_per_second);
+  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
+            kIngressLink2.sut_interface_bits_per_second);
+  const std::string kIxiaIpv4SrcPort = kIngressLink1.ixia_interface;
+  const std::string kIxiaIpv6SrcPort = kIngressLink2.ixia_interface;
+  const std::string kIxiaDstPort = kEgressLink.ixia_interface;
+  const std::string kSutIpv4IngressPort = kIngressLink1.sut_interface;
+  const std::string kSutIpv6IngressPort = kIngressLink2.sut_interface;
+  const std::string kSutEgressPort = kEgressLink.sut_interface;
+  LOG(INFO) << absl::StrFormat(
+      "Test packet routes:"
+      "\n- IPv4: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]"
+      "\n- IPv6: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
+      kIxiaIpv4SrcPort, kSutIpv4IngressPort, kSutEgressPort, kIxiaDstPort,
+      kIxiaIpv6SrcPort, kSutIpv6IngressPort, kSutEgressPort, kIxiaDstPort);
+
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortBufferProfile,
+      GetBufferAllocationProfileByEgressPort(kSutEgressPort, *gnmi_stub));
+  LOG(INFO) << " Buffer Profile : " << kSutEgressPortBufferProfile;
+
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortSchedulerPolicy,
+      GetSchedulerPolicyNameByEgressPort(kSutEgressPort, *gnmi_stub));
+  absl::flat_hash_map<std::string, std::string> p4rt_id_by_interface;
+  ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface,
+                       GetAllInterfaceNameToPortId(*gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface, kSutEgressPort));
+
+  // Configure the switch to send all incomming packets out of the chosen egress
+  // port.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(
+      const sai::TableEntries kTableEntries,
+      ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
+  ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
+                                                     kTableEntries));
+
+  ASSERT_OK(InstallPdTableEntries(kTableEntries, GetParam().p4info, *sut_p4rt));
+
+  // Before we update the scheduler config, save the current config and
+  // prepare to restore it at the end of th test.
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kInitialSchedulerConfig,
+      GetSchedulerPolicyConfig(kSutEgressPortSchedulerPolicy, *gnmi_stub));
+  const auto kRestoreSchedulerConfig = absl::Cleanup([&] {
+    EXPECT_OK(UpdateSchedulerPolicyConfig(kSutEgressPortSchedulerPolicy,
+                                          kInitialSchedulerConfig, *gnmi_stub))
+        << "failed to restore initial scheduler config -- switch config may be "
+           "corrupted, causing subsequent test to fail";
+  });
+
+  // Queues under test.
+  const absl::flat_hash_map<std::string, BufferParameters> &
+      kBufferParametersByQueueName = GetParam().buffer_parameters_by_queue_name;
+  // Set lower & upper bounds (CIRs/PIRs) such that they don't effect
+  // scheduling, so we can focus on testing the buffer config.
+  LOG(INFO) << "configuring scheduler parameters";
+  {
+    absl::flat_hash_map<std::string, SchedulerParameters> params_by_queue_name;
+    for (auto &[queue_name, _] : kBufferParametersByQueueName) {
+      params_by_queue_name[queue_name].weight = 1;
+      params_by_queue_name[queue_name].committed_information_rate = 0;
+      // Limit peak rate to 10% of line rate so queue is always full.
+      params_by_queue_name[queue_name].peak_information_rate =
+          0.1 * kEgressLink.sut_interface_bits_per_second / 8;
+    }
+    ASSERT_OK(SetSchedulerPolicyParameters(kSutEgressPortSchedulerPolicy,
+                                           params_by_queue_name, *gnmi_stub));
+    // Dump initial and modified configs, to ease debugging.
+    ASSERT_OK(testbed->Environment().StoreTestArtifact(
+        absl::StrCat(kSutEgressPortSchedulerPolicy, "_before_update.json"),
+        FormatJsonBestEffort(kInitialSchedulerConfig)));
+    ASSERT_OK_AND_ASSIGN(
+        std::string updated_scheduler_config,
+        GetSchedulerPolicyConfig(kSutEgressPortSchedulerPolicy, *gnmi_stub));
+    ASSERT_OK(testbed->Environment().StoreTestArtifact(
+        absl::StrCat(kSutEgressPortSchedulerPolicy, "_after_update.json"),
+        FormatJsonBestEffort(updated_scheduler_config)));
+  }
+
+  // Before we update the buffer config, save the current config and
+  // prepare to restore it at the end of th test.
+  ASSERT_OK_AND_ASSIGN(const std::string kInitialBufferConfig,
+                       GetBufferAllocationProfileConfig(
+                           kSutEgressPortBufferProfile, *gnmi_stub));
+  const auto kRestoreBufferConfig = absl::Cleanup([&] {
+    EXPECT_OK(UpdateBufferAllocationProfileConfig(
+        kSutEgressPortBufferProfile, kInitialBufferConfig, *gnmi_stub))
+        << "failed to restore initial buffer config -- switch config may be "
+           "corrupted, causing subsequent test to fail";
+  });
+
+  LOG(INFO) << "configuring buffer parameters";
+  {
+    ASSERT_OK(SetBufferConfigParameters(
+        kSutEgressPortBufferProfile, kBufferParametersByQueueName, *gnmi_stub));
+    // Dump initial and modified configs, to ease debugging.
+    ASSERT_OK(testbed->Environment().StoreTestArtifact(
+        absl::StrCat(kSutEgressPortBufferProfile, "_before_update.json"),
+        FormatJsonBestEffort(kInitialBufferConfig)));
+    ASSERT_OK_AND_ASSIGN(std::string updated_buffer_config,
+                         GetBufferAllocationProfileConfig(
+                             kSutEgressPortBufferProfile, *gnmi_stub));
+    ASSERT_OK(testbed->Environment().StoreTestArtifact(
+        absl::StrCat(kSutEgressPortBufferProfile, "_after_update.json"),
+        FormatJsonBestEffort(updated_buffer_config)));
+  }
+
+  // Connect to Ixia and fix endpoints & parameters.
+  LOG(INFO) << "configuring Ixia traffic";
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle, ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kIxiaIpv4SrcPortHandle,
+      ixia::IxiaVport(kIxiaHandle, kIxiaIpv4SrcPort, *testbed));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kIxiaIpv6SrcPortHandle,
+      ixia::IxiaVport(kIxiaHandle, kIxiaIpv6SrcPort, *testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
+                       ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
+  constexpr int kFrameSizeInBytes = 1000;
+  const int kTotalFramesPerSecond =
+      kEgressLink.sut_interface_bits_per_second / (kFrameSizeInBytes * 8);
+  const int kNumTrafficItemsPerLink = kBufferParametersByQueueName.size();
+  const auto kTrafficItemSpeed =
+      ixia::FramesPerSecond{kTotalFramesPerSecond / kNumTrafficItemsPerLink};
+
+  // Figure out which DSCPs to use for each queue.
+  using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
+  ASSERT_OK_AND_ASSIGN(
+      const DscpsByQueueName kIpv4DscpsByQueueName,
+      GetQueueToIpv4DscpsMapping(kSutIpv4IngressPort, *gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const DscpsByQueueName kIpv6DscpsByQueueName,
+      GetQueueToIpv4DscpsMapping(kSutIpv4IngressPort, *gnmi_stub));
+
+  // Configue IPv4 and IPv6 traffic items to all queues under test.
+  std::vector<std::string> traffic_items;
+  absl::flat_hash_map<std::string, int64_t> buffer_config_by_traffic_item_name;
+  for (auto &[queue_name, buffer_config] : kBufferParametersByQueueName) {
+    // IPv4.
+    {
+      ASSERT_THAT(kIpv4DscpsByQueueName,
+                  Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
+      int dscp = kIpv4DscpsByQueueName.at(queue_name).at(0);
+      int config_value;
+      switch (GetParam().config_to_be_tested) {
+      case kSharedStaticLimit:
+        config_value = *buffer_config.shared_static_limit;
+        break;
+      case kDedicatedBuffer:
+        config_value = *buffer_config.dedicated_buffer;
+        break;
+      case kSharedAlpha:
+      default:
+        config_value = *buffer_config.dynamic_limit_scaling_factor;
+      }
+      std::string traffic_name = absl::StrFormat(
+          "IPv4 packets with DSCP %d targeting queue '%s' with config %d", dscp,
+          queue_name, config_value);
+      ASSERT_OK_AND_ASSIGN(std::string traffic_item,
+                           ixia::SetUpTrafficItem(kIxiaIpv4SrcPortHandle,
+                                                  kIxiaDstPortHandle,
+                                                  traffic_name, *testbed));
+      ASSERT_OK(ixia::SetTrafficParameters(
+          traffic_item,
+          ixia::TrafficParameters{
+              // Just send enough traffic to fill up buffer queues.
+              .frame_count = 100000,
+              .frame_size_in_bytes = kFrameSizeInBytes,
+              .traffic_speed = kTrafficItemSpeed,
+              .ip_parameters =
+                  ixia::Ipv4TrafficParameters{
+                      .priority = ixia::IpPriority{.dscp = dscp},
+                  },
+          },
+          *testbed));
+      traffic_items.push_back(traffic_item);
+      buffer_config_by_traffic_item_name[traffic_name] = config_value;
+    }
+    // IPv6.
+    {
+      ASSERT_THAT(kIpv6DscpsByQueueName,
+                  Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
+      int dscp = kIpv6DscpsByQueueName.at(queue_name).at(0);
+      int config_value;
+      switch (GetParam().config_to_be_tested) {
+      case kSharedStaticLimit:
+        config_value = *buffer_config.shared_static_limit;
+        break;
+      case kDedicatedBuffer:
+        config_value = *buffer_config.dedicated_buffer;
+        break;
+      case kSharedAlpha:
+      default:
+        config_value = *buffer_config.dynamic_limit_scaling_factor;
+      }
+      std::string traffic_name = absl::StrFormat(
+          "IPv6 packets with DSCP %d targeting queue '%s' with config %d", dscp,
+          queue_name, config_value);
+      ASSERT_OK_AND_ASSIGN(std::string traffic_item,
+                           ixia::SetUpTrafficItem(kIxiaIpv6SrcPortHandle,
+                                                  kIxiaDstPortHandle,
+                                                  traffic_name, *testbed));
+      ASSERT_OK(ixia::SetTrafficParameters(
+          traffic_item,
+          ixia::TrafficParameters{
+              .frame_count = 100'000,
+              .frame_size_in_bytes = kFrameSizeInBytes,
+              .traffic_speed = kTrafficItemSpeed,
+              .ip_parameters =
+                  ixia::Ipv6TrafficParameters{
+                      .priority = ixia::IpPriority{.dscp = dscp},
+                  },
+          },
+          *testbed));
+      traffic_items.push_back(traffic_item);
+      buffer_config_by_traffic_item_name[traffic_name] = config_value;
+    }
+  }
+
+  // Start traffic.
+  LOG(INFO) << "starting traffic";
+  ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
+
+  LOG(INFO) << "traffic started -- sleeping for 5 seconds";
+  absl::SleepFor(absl::Seconds(5));
+
+  // Obtain traffic stats, and ensure traffic got forwarded according to
+  // config.
+  ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
+                       ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+
+  absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
+  for (auto &[traffic_item_name, stats] :
+       Ordered(kTrafficStats.stats_by_traffic_item())) {
+    ASSERT_OK_AND_ASSIGN(int config,
+                         gutil::FindOrStatus(buffer_config_by_traffic_item_name,
+                                             traffic_item_name));
+
+    rx_frames_by_buffer_config[config] += stats.num_rx_frames();
+    LOG(INFO) << "Traffic item : " << traffic_item_name
+              << " Rx packets : " << stats.num_rx_frames();
+  }
+
+  int64_t lower_config_num_rx_frames = -1;
+  for (auto &[config, num_rx_frames] : Ordered(rx_frames_by_buffer_config)) {
+    LOG(INFO) << "Config: " << absl::StrFormat("%2d", config)
+              << " Num rx frames: " << num_rx_frames;
+    EXPECT_GT(num_rx_frames, lower_config_num_rx_frames);
+    lower_config_num_rx_frames = num_rx_frames;
+  }
+
+  LOG(INFO) << "---------------- Test done ---------------------";
 }
 }  // namespace pins_test

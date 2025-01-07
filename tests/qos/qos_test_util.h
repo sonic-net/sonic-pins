@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
@@ -157,6 +158,8 @@ struct SchedulerParameters {
   std::optional<int64_t> committed_burst_size;       // 'bc' in OpenConfig
   std::optional<int64_t> peak_information_rate;      // 'pir' in OpenConfig
   std::optional<int64_t> excess_burst_size;          // 'be' in OpenConfig
+
+  std::optional<int> weight;
 };
 
 // Updates parameters of the scheduler policy of the given name according to
@@ -176,11 +179,72 @@ absl::StatusOr<absl::flat_hash_map<std::string, int64_t>>
 GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
                                  gnmi::gNMI::StubInterface &gnmi);
 
+enum class QueueType {
+  kStrictlyPrioritized,
+  kRoundRobin,
+};
+
+struct QueueInfo {
+  std::string name;
+  QueueType type;
+  // Priority -- queues with lower `sequence` number are scheduled first.
+  int sequence = 0;
+  // Meaningful only when `type == QueueType::kRoundRobin`.
+  int64_t weight = 0;
+};
+
+// Reads all queues belonging to the given scheduler policy and returns their
+// names and types in descending order of priority.
+absl::StatusOr<std::vector<QueueInfo>>
+GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
+
 // Reads all strictly prioritized queues belonging to the given scheduler policy
-// from the state paths, and returns them in descrending order of priority.
+// from the state paths, and returns their names in descending order of
+// priority.
 absl::StatusOr<std::vector<std::string>>
 GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
+// Get queues for an egress port.
+absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
+
+// Reads the name of the buffer allocation profile applied
+// to the given egress port from the appropriate gNMI state path.
+absl::StatusOr<std::string>
+GetBufferAllocationProfileByEgressPort(absl::string_view egress_port,
+                                       gnmi::gNMI::StubInterface &gnmi);
+
+// Reads the config path of the buffer profile of the given name.
+// The config is returned unparsed as a raw JSON string.
+absl::StatusOr<std::string> GetBufferAllocationProfileConfig(
+    absl::string_view buffer_allocation_profile_name,
+    gnmi::gNMI::StubInterface &gnmi);
+
+// Updates the config path of the buffer profile of the given name.
+absl::Status UpdateBufferAllocationProfileConfig(
+    absl::string_view buffer_allocation_profile_name, absl::string_view config,
+    gnmi::gNMI::StubInterface &gnmi);
+
+// Queue buffer parameters.
+// All parameter are optional, only non-nullopt parameters take effect.
+struct BufferParameters {
+  std::optional<int> dedicated_buffer;
+  std::optional<bool> use_shared_buffer;
+  std::optional<std::string> shared_buffer_limit_type;
+  std::optional<int> dynamic_limit_scaling_factor;
+  std::optional<int> shared_static_limit;
+};
+
+// Updates parameters of the buffer profile of the given name according to
+// `params_by_queue_name` and waits for the updated config to converge, or times
+// out with an Unavailable error if the state does not converge within the given
+// `convergence_timeout`.
+absl::Status SetBufferConfigParameters(
+    absl::string_view buffer_allocation_profile,
+    absl::flat_hash_map<std::string, BufferParameters> params_by_queue_name,
+    gnmi::gNMI::StubInterface &gnmi,
+    absl::Duration convergence_timeout = absl::Seconds(10));
 
 }  // namespace pins_test
 
