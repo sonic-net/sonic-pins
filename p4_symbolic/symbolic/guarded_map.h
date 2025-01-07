@@ -57,6 +57,7 @@ class SymbolicGuardedMap {
   // By passing the headers definition, the constructor will fill the map with a
   // free symbolic variable per header field.
   static absl::StatusOr<SymbolicGuardedMap> CreateSymbolicGuardedMap(
+      z3::context &z3_context,
       const google::protobuf::Map<std::string, ir::HeaderType> &headers);
 
   SymbolicGuardedMap() = default;

@@ -106,7 +106,40 @@ class P4SymbolicComponentTest : public testing::Test {
           /*mask_known_failures=*/true);
 };
 
-TEST(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
+absl::StatusOr<std::string> GenerateSmtForSaiPiplelineWithSimpleEntries() {
+  const auto config = sai::GetNonstandardForwardingPipelineConfig(
+      sai::Instantiation::kMiddleblock, sai::NonstandardPlatform::kP4Symbolic);
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
+                   pdpi::CreateIrP4Info(config.p4info()));
+  auto pd_entries = ParseProtoOrDie<sai::TableEntries>(kTableEntries);
+  std::vector<p4::v1::TableEntry> pi_entries;
+  for (auto& pd_entry : pd_entries.entries()) {
+    ASSIGN_OR_RETURN(
+        pi_entries.emplace_back(),
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
+  }
+
+  ASSIGN_OR_RETURN(std::unique_ptr<symbolic::SolverState> solver,
+                   symbolic::EvaluateP4Program(config, pi_entries));
+  return solver->GetSolverSMT();
+}
+
+// Generate SMT constraints for the SAI pipeline from scratch multiple times and
+// make sure the results remain the same.
+TEST_F(P4SymbolicComponentTest,
+       DISABLED_ConstraintGenerationIsDeterministicForSai) {
+  constexpr int kNumberOfRuns = 5;
+  ASSERT_OK_AND_ASSIGN(const std::string reference_smt_formula,
+                       GenerateSmtForSaiPiplelineWithSimpleEntries());
+  for (int run = 0; run < kNumberOfRuns; ++run) {
+    LOG(INFO) << "Run " << run;
+    ASSERT_OK_AND_ASSIGN(const std::string smt_formula,
+                         GenerateSmtForSaiPiplelineWithSimpleEntries());
+    ASSERT_THAT(smt_formula, Eq(reference_smt_formula));
+  }
+}
+
+TEST_F(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // Some constants.
   auto env = thinkit::BazelTestEnvironment(/*mask_known_failures=*/false);
   const auto config = sai::GetNonstandardForwardingPipelineConfig(

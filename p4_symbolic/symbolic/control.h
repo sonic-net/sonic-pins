@@ -72,13 +72,13 @@ namespace control {
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
     const ir::Dataplane &data_plane, const std::string &pipeline_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+    z3::context &z3_context, const z3::expr &guard);
 
 // Evaluate the passed control construct.
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const ir::Dataplane &data_plane, const std::string &control_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+    z3::context &z3_context, const z3::expr &guard);
 
 } // namespace control
 } // namespace symbolic

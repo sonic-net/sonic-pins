@@ -111,17 +111,6 @@ absl::Status AppendHexCharStringToPDPIBitString(
 
 }  // namespace
 
-z3::context& Z3Context(bool renew) {
-  static z3::context* z3_context = new z3::context();
-
-  if (renew) {
-    delete z3_context;
-    z3_context = new z3::context();
-  }
-
-  return *z3_context;
-}
-
 absl::StatusOr<bool> EvalZ3Bool(const z3::expr& bool_expr,
                                 const z3::model& model) {
   // TODO: Ensure this doesn't crash by checking sort first.
