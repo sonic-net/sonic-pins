@@ -33,13 +33,18 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "artifacts/otg.grpc.pb.h"
+#include "artifacts/otg.pb.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
@@ -47,8 +52,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "lib/ixia_helper.h"
-#include "lib/ixia_helper.pb.h"
+#include "lib/utils/generic_testbed_utils.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -69,8 +73,11 @@
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/proto/generic_testbed.pb.h"
 
 namespace pins_test {
+
+using ::otg::Openapi;
 
 // Installs the given table `entries` using the given P4Runtime session,
 // respecting dependencies between entries by sequencing them into batches
@@ -181,14 +188,17 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
 
   // Pick 2 SUT ports connected to the Ixia, one for ingress and one for egress.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(std::vector<ixia::IxiaLink> ready_links,
-                       ixia::GetReadyIxiaLinks(*testbed, *gnmi_stub));
-  ASSERT_GE(ready_links.size(), 2)
+  ASSERT_OK_AND_ASSIGN(std::vector<InterfaceLink> up_links,
+                       GetUpLinks(GetAllTrafficGeneratorLinks, *testbed));
+  ASSERT_GE(up_links.size(), 2)
       << "Test requires at least 2 SUT ports connected to an Ixia";
-  const std::string kIxiaSrcPort = ready_links[0].ixia_interface;
-  const std::string kIxiaDstPort = ready_links[1].ixia_interface;
-  const std::string kSutIngressPort = ready_links[0].sut_interface;
-  const std::string kSutEgressPort = ready_links[1].sut_interface;
+  const std::string kIxiaSrcPort = up_links[0].peer_interface;
+  const std::string kIxiaDstPort = up_links[1].peer_interface;
+  const std::string kSutIngressPort = up_links[0].sut_interface;
+  const std::string kSutEgressPort = up_links[1].sut_interface;
+  const std::string kIxiaSrcLoc = up_links[0].peer_traffic_location;
+  const std::string kIxiaDstLoc = up_links[1].peer_traffic_location;
+  Openapi::StubInterface *traffic_client = testbed->GetTrafficClient();
   LOG(INFO) << absl::StrFormat(
       "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
       kIxiaSrcPort, kSutIngressPort, kSutEgressPort, kIxiaDstPort);
@@ -226,14 +236,18 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
   ASSERT_OK_AND_ASSIGN(
       const int64_t kSutIngressPortSpeedInBitsPerSecond,
       GetPortSpeedInBitsPerSecond(kSutIngressPort, *gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const otg::Layer1::Speed::Enum kSutIngressPortSpeed,
+      GetLayer1SpeedFromBitsPerSecond(kSutIngressPortSpeedInBitsPerSecond));
 
-  // Connect to Ixia and fix global parameters.
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
-                       ixia::ConnectToIxia(*testbed));
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaSrcPortHandle,
-                       ixia::IxiaVport(kIxiaHandle, kIxiaSrcPort, *testbed));
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
-                       ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
+  // Calculate the duration to send the traffic along with the duration to wait.
+  const int64_t kTestTrafficInBits =
+      kTestFrameCount * kTestFrameSizeInBytes * 8;
+  const double kLineRate =
+      kPercentageLineRate / 100.0 * kSutIngressPortSpeedInBitsPerSecond;
+  const absl::Duration kTrafficDuration =
+      absl::Seconds(kTestTrafficInBits / kLineRate);
+  const absl::Duration kWaitDuration = kTrafficDuration + absl::Seconds(120);
 
   // Run the test for IPv4 and then IPv6.
   for (bool is_ipv4 : {true, false}) {
@@ -248,56 +262,128 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
       LOG(INFO) << "Initial Counters for " << queue << ": " << counters;
     }
 
-    // Configure & start test packet flow.
+    //  Configure & start test packet flow.
+    otg::SetConfigRequest set_config_req;
+    otg::SetConfigResponse set_config_res;
+    grpc::ClientContext set_config_ctx;
+    otg::Config *config = set_config_req.mutable_config();
     const std::string kTrafficName =
         absl::StrCat((is_ipv4 ? "IPv4" : "IPv6"), " traffic at line rate");
     SCOPED_TRACE(kTrafficName);
-    ASSERT_OK_AND_ASSIGN(
-        const std::string kIxiaTrafficHandle,
-        ixia::SetUpTrafficItem(kIxiaSrcPortHandle, kIxiaDstPortHandle,
-                               kTrafficName, *testbed));
-    auto delete_traffic_item = absl::Cleanup([&, kIxiaTrafficHandle] {
-      ASSERT_OK(ixia::DeleteTrafficItem(kIxiaTrafficHandle, *testbed));
-    });
-    auto traffic_parameters = ixia::TrafficParameters{
-        .frame_count = kTestFrameCount,
-        .frame_size_in_bytes = kTestFrameSizeInBytes,
-        .traffic_speed = ixia::PercentOfMaxLineRate{kPercentageLineRate},
-    };
+
+    // Add traffic ports
+    otg::Port *src_port = config->add_ports();
+    otg::Port *dst_port = config->add_ports();
+    src_port->set_name(kIxiaSrcPort);
+    dst_port->set_name(kIxiaDstPort);
+    src_port->set_location(kIxiaSrcLoc);
+    dst_port->set_location(kIxiaDstLoc);
+
+    // Add ports to layer1
+    otg::Layer1 *layer1 = config->add_layer1();
+    layer1->set_name("ly");
+    layer1->add_port_names(kIxiaSrcPort);
+    layer1->add_port_names(kIxiaDstPort);
+    layer1->set_speed(kSutIngressPortSpeed);
+
+    // Create a flow
+    otg::Flow *flow = config->add_flows();
+    flow->set_name(kTrafficName);
+
+    // Set flow parameters
+    flow->mutable_tx_rx()->set_choice(otg::FlowTxRx::Choice::port);
+    flow->mutable_tx_rx()->mutable_port()->set_tx_name(kIxiaSrcPort);
+    flow->mutable_tx_rx()->mutable_port()->set_rx_name(kIxiaDstPort);
+
+    flow->mutable_size()->set_choice(otg::FlowSize::Choice::fixed);
+    flow->mutable_size()->set_fixed(kTestFrameSizeInBytes);
+
+    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
+    flow->mutable_rate()->set_percentage(kPercentageLineRate);
+
+    flow->mutable_duration()->set_choice(
+        otg::FlowDuration::Choice::fixed_seconds);
+    flow->mutable_duration()->mutable_fixed_seconds()->set_seconds(
+        absl::ToDoubleSeconds(kTrafficDuration));
+
+    // Craft packet (order of FlowHeaders determine order of packet headers on
+    // wire).
+    otg::FlowHeader *eth_packet = flow->add_packet();
+    eth_packet->set_choice(otg::FlowHeader::Choice::ethernet);
+    eth_packet->mutable_ethernet()->mutable_src()->set_choice(
+        otg::PatternFlowEthernetSrc::Choice::value);
+    eth_packet->mutable_ethernet()->mutable_dst()->set_choice(
+        otg::PatternFlowEthernetDst::Choice::value);
+    eth_packet->mutable_ethernet()->mutable_src()->set_value(
+        netaddr::MacAddress(2, 2, 2, 2, 2, 2).ToString());
+    eth_packet->mutable_ethernet()->mutable_dst()->set_value(
+        netaddr::MacAddress(0, 1, 2, 3, 4, 5).ToString());
+
     if (is_ipv4) {
-      traffic_parameters.ip_parameters = ixia::Ipv4TrafficParameters{
-          .src_ipv4 = netaddr::Ipv4Address(192, 168, 2, 1),
-          .dst_ipv4 = netaddr::Ipv4Address(172, 0, 0, 1),
-      };
+      otg::FlowHeader *ipv4 = flow->add_packet();
+      ipv4->set_choice(otg::FlowHeader::Choice::ipv4);
+      ipv4->mutable_ipv4()->mutable_src()->set_choice(
+          otg::PatternFlowIpv4Src::Choice::value);
+      ipv4->mutable_ipv4()->mutable_dst()->set_choice(
+          otg::PatternFlowIpv4Dst::Choice::value);
+      ipv4->mutable_ipv4()->mutable_src()->set_value(
+          netaddr::Ipv4Address(192, 168, 2, 1).ToString());
+      ipv4->mutable_ipv4()->mutable_dst()->set_value(
+          netaddr::Ipv4Address(172, 0, 0, 1).ToString());
     } else {
-      traffic_parameters.ip_parameters = ixia::Ipv6TrafficParameters{
-          .src_ipv6 = netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 1),
-          .dst_ipv6 = netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 1),
-      };
+      otg::FlowHeader *ipv6 = flow->add_packet();
+      ipv6->set_choice(otg::FlowHeader::Choice::ipv6);
+      ipv6->mutable_ipv6()->mutable_src()->set_choice(
+          otg::PatternFlowIpv6Src::Choice::value);
+      ipv6->mutable_ipv6()->mutable_dst()->set_choice(
+          otg::PatternFlowIpv6Dst::Choice::value);
+      ipv6->mutable_ipv6()->mutable_src()->set_value(
+          netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 1).ToString());
+      ipv6->mutable_ipv6()->mutable_dst()->set_value(
+          netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 1).ToString());
     }
+
+    // Set capture metrics
+    flow->mutable_metrics()->set_enable(true);
+    flow->mutable_metrics()->set_loss(false);
+    flow->mutable_metrics()->set_timestamps(true);
+    flow->mutable_metrics()->mutable_latency()->set_enable(true);
+    flow->mutable_metrics()->mutable_latency()->set_mode(
+        otg::FlowLatencyMetrics::Mode::cut_through);
+
+    ASSERT_OK(traffic_client->SetConfig(&set_config_ctx, set_config_req,
+                                        &set_config_res));
+
     LOG(INFO) << "Starting " << kTrafficName;
-    ASSERT_OK(ixia::SetTrafficParameters(kIxiaTrafficHandle, traffic_parameters,
-                                         *testbed));
-    // Occasionally the Ixia API cannot keep up and starting traffic fails,
-    // so we try up to 3 times.
-    ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
-      return ixia::StartTraffic(kIxiaTrafficHandle, kIxiaHandle, *testbed);
-    }));
+    otg::SetControlStateRequest set_state_req;
+    otg::SetControlStateResponse set_state_res;
+    grpc::ClientContext set_state_ctx;
 
-    // Calculate the duration taken to send the traffic in test parameters with
-    // a buffer.
-    const auto kTestTrafficInBits = kTestFrameCount * kTestFrameSizeInBytes * 8;
-    const auto kLineRate =
-        kPercentageLineRate * 0.01 * kSutIngressPortSpeedInBitsPerSecond;
-    const absl::Duration kTrafficDuration =
-        absl::Seconds(kTestTrafficInBits / kLineRate) + absl::Seconds(120);
-    LOG(INFO) << "Traffic started, waiting for " << kTrafficDuration
+    set_state_req.mutable_control_state()->set_choice(
+        otg::ControlState::Choice::traffic);
+    set_state_req.mutable_control_state()->mutable_traffic()->set_choice(
+        otg::StateTraffic::Choice::flow_transmit);
+    set_state_req.mutable_control_state()
+        ->mutable_traffic()
+        ->mutable_flow_transmit()
+        ->set_state(otg::StateTrafficFlowTransmit::State::start);
+    ASSERT_OK(traffic_client->SetControlState(&set_state_ctx, set_state_req,
+                                              &set_state_res));
+
+    LOG(INFO) << "Traffic started, waiting for " << kWaitDuration
               << " to complete";
-    absl::SleepFor(kTrafficDuration);
+    absl::SleepFor(kWaitDuration);
 
-    ASSERT_OK_AND_ASSIGN(
-        const ixia::TrafficItemStats kIxiaTrafficStats,
-        ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName, *testbed));
+    // Get traffic flow metrics.
+    otg::GetMetricsRequest get_metrics_req;
+    otg::GetMetricsResponse get_metrics_res;
+    grpc::ClientContext get_metrics_ctx;
+    get_metrics_req.mutable_metrics_request()->set_choice(
+        otg::MetricsRequest::Choice::flow);
+    get_metrics_req.mutable_metrics_request()->mutable_flow()->add_flow_names(
+        kTrafficName);
+    ASSERT_OK(traffic_client->GetMetrics(&get_metrics_ctx, get_metrics_req,
+                                         &get_metrics_res));
 
     // Log counters for all queues on the egress port after.
     for (const std::string queue :
@@ -307,11 +393,15 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
           GetGnmiQueueCounters(kSutEgressPort, queue, *gnmi_stub));
       LOG(INFO) << "Counters for " << queue << ": " << counters;
     }
-    EXPECT_EQ(kIxiaTrafficStats.num_tx_frames(),
-              kIxiaTrafficStats.num_rx_frames())
+
+    ASSERT_EQ(get_metrics_res.metrics_response().flow_metrics_size(), 1);
+
+    const otg::FlowMetric &traffic_stats =
+        get_metrics_res.metrics_response().flow_metrics(0);
+
+    EXPECT_EQ(traffic_stats.frames_tx(), traffic_stats.frames_rx())
         << "Tx and Rx frames are not the same. Packets lost: "
-        << kIxiaTrafficStats.num_tx_frames() - kIxiaTrafficStats.num_rx_frames()
-        << ". Stats: " << kIxiaTrafficStats.DebugString();
+        << traffic_stats.frames_tx() - traffic_stats.frames_rx();
 
     ASSERT_OK(SwitchReady(testbed->Sut()))
         << "Switch ready checks failed after traffic test";
