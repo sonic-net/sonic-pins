@@ -28,6 +28,7 @@
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
