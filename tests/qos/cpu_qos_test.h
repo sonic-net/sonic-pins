@@ -99,7 +99,7 @@ struct ParamsForTestsWithIxia {
   // This is be the minimum guaranteed bandwidth for control path to Tester in
   // the testbed. This is required to ensure the per queue rate limits to be
   // tested are within this guaranteed end to end bandwidth.
-  int control_plane_bandwidth_bps;
+  int control_plane_bandwidth_bytes_per_second;
 };
 
 class CpuQosTestWithIxia

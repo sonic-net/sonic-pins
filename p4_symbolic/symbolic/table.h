@@ -40,7 +40,8 @@ constexpr int kDefaultActionEntryIndex = -1;
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Dataplane &data_plane, const ir::Table &table,
     const std::vector<ir::TableEntry> &entries, SymbolicPerPacketState *state,
-    values::P4RuntimeTranslator *translator, const z3::expr &guard);
+    values::P4RuntimeTranslator *translator, z3::context &z3_context,
+    const z3::expr &guard);
 
 }  // namespace table
 }  // namespace symbolic

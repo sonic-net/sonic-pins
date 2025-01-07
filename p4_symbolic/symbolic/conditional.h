@@ -31,7 +31,7 @@ namespace conditional {
 absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const ir::Dataplane &data_plane, const ir::Conditional &conditional,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+    z3::context &z3_context, const z3::expr &guard);
 
 } // namespace conditional
 } // namespace symbolic

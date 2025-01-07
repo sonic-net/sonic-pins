@@ -30,7 +30,6 @@
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/v1model.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic::symbolic::parser {
@@ -218,10 +217,11 @@ constexpr absl::string_view kProgramWithTwoParsers = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForMoreThanOneParser) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithTwoParsers));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+                           z3_context, data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        "Invalid number of parsers: 2"));
 }
@@ -229,10 +229,11 @@ TEST(EvaluateParsers, ReturnsErrorForMoreThanOneParser) {
 TEST(EvaluateParsers, ReturnsErrorForLessThanOneParser) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(""));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+                           z3_context, data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        "Invalid number of parsers: 0"));
 }
@@ -257,11 +258,12 @@ constexpr absl::string_view kProgramWithUnknownParseState = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForUnknownParseState) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithUnknownParseState));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
+                           z3_context, data_plane.program.headers()));
   EXPECT_THAT(
-      EvaluateParsers(data_plane.program, ingress_headers),
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context),
       StatusIs(absl::StatusCode::kNotFound, "Parse state not found: unknown"));
 }
 
@@ -286,11 +288,12 @@ constexpr absl::string_view kProgramWithUnknownHeaderExtract = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForUnknownHeaderExtract) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithUnknownHeaderExtract));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
+                           z3_context, data_plane.program.headers()));
   EXPECT_THAT(
-      EvaluateParsers(data_plane.program, ingress_headers),
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context),
       StatusIs(absl::StatusCode::kNotFound, "Header not found: unknown"));
 }
 
@@ -315,12 +318,13 @@ constexpr absl::string_view kProgramExtractEthernet = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForNonFreeBitVectorHeaderField) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramExtractEthernet));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  ASSERT_OK(ingress_headers.Set("ethernet.dst_addr", Z3Context().bv_val(0, 48),
-                                Z3Context().bool_val(true)));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+                           z3_context, data_plane.program.headers()));
+  ASSERT_OK(ingress_headers.Set("ethernet.dst_addr", z3_context.bv_val(0, 48),
+                                z3_context.bool_val(true)));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        "Field 'ethernet.dst_addr' should be a free bit-vector. "
                        "Found: (ite true #x000000000000 ethernet.dst_addr)"));
@@ -352,11 +356,12 @@ constexpr absl::string_view kProgramWithUnknownFieldSet = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForUnknownFieldSet) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithUnknownFieldSet));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
+                           z3_context, data_plane.program.headers()));
   EXPECT_THAT(
-      EvaluateParsers(data_plane.program, ingress_headers),
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context),
       StatusIs(
           absl::StatusCode::kInvalidArgument,
           "Cannot assign to key \"ethernet.unknown\" in SymbolicGuardedMap!"));
@@ -388,11 +393,12 @@ constexpr absl::string_view kProgramWithLookaheadSet = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForUnimplementedLookaheadSet) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithLookaheadSet));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
+                           z3_context, data_plane.program.headers()));
   EXPECT_THAT(
-      EvaluateParsers(data_plane.program, ingress_headers),
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context),
       StatusIs(absl::StatusCode::kUnimplemented,
                "Lookahead R-values for set operations are not supported."));
 }
@@ -419,10 +425,11 @@ TEST(EvaluateParsers, ReturnsErrorForNonHeaderFieldTransitionKey) {
   ASSERT_OK_AND_ASSIGN(
       const ir::Dataplane data_plane,
       ParseProgramTextProto(kProgramWithNonHeaderFieldTransitionKey));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+                           z3_context, data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
               StatusIs(absl::StatusCode::kUnimplemented));
 }
 
@@ -450,10 +457,11 @@ TEST(EvaluateParsers, ReturnsErrorForUnknownFieldTransitionKey) {
   ASSERT_OK_AND_ASSIGN(
       const ir::Dataplane data_plane,
       ParseProgramTextProto(kProgramWithUnknownFieldTransitionKey));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+                           z3_context, data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        "Cannot find key \"un.known\" in SymbolicGuardedMap!"));
 }
@@ -495,10 +503,11 @@ constexpr absl::string_view kProgramWithDeadCodeTransition = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForDeadCodeTransition) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithDeadCodeTransition));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers),
+                           z3_context, data_plane.program.headers()));
+  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -529,11 +538,12 @@ constexpr absl::string_view kProgramWithNoTransitionKey = R"pb(
 TEST(EvaluateParsers, ReturnsErrorForNoTransitionKey) {
   ASSERT_OK_AND_ASSIGN(const ir::Dataplane data_plane,
                        ParseProgramTextProto(kProgramWithNoTransitionKey));
+  z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
+                           z3_context, data_plane.program.headers()));
   EXPECT_THAT(
-      EvaluateParsers(data_plane.program, ingress_headers),
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context),
       StatusIs(
           absl::StatusCode::kNotFound,
           "No transition key specified but hex string transitions exist."));
@@ -944,8 +954,7 @@ std::vector<ParserTestParam> GetParserTestInstances() {
 }
 
 TEST_P(EvaluateParsersTest, ValidateParsedHeadersSMTFormulae) {
-  // TODO: a workaround for using global Z3 context.
-  Z3Context(/*renew=*/true);
+  z3::context z3_context;
 
   // Parse the P4 program from IR text proto and evaluate the parsers.
   const ParserTestParam& param = GetParam();
@@ -953,27 +962,27 @@ TEST_P(EvaluateParsersTest, ValidateParsedHeadersSMTFormulae) {
                        ParseProgramTextProto(param.ir_program_text_proto));
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState ingress_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  ASSERT_OK(
-      v1model::InitializeIngressHeaders(data_plane.program, ingress_headers));
-  ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState parsed_headers,
-                       EvaluateParsers(data_plane.program, ingress_headers));
+                           z3_context, data_plane.program.headers()));
+  ASSERT_OK(v1model::InitializeIngressHeaders(data_plane.program,
+                                              ingress_headers, z3_context));
+  ASSERT_OK_AND_ASSIGN(
+      SymbolicPerPacketState parsed_headers,
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context));
 
   // Construct the expected parsed headers.
   ASSERT_OK_AND_ASSIGN(SymbolicPerPacketState expected_parsed_headers,
                        SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                           data_plane.program.headers()));
-  ASSERT_OK(v1model::InitializeIngressHeaders(data_plane.program,
-                                              expected_parsed_headers));
+                           z3_context, data_plane.program.headers()));
+  ASSERT_OK(v1model::InitializeIngressHeaders(
+      data_plane.program, expected_parsed_headers, z3_context));
   // Update the expected SMT formulae of certain fields specified by the test.
   for (const auto& [field_name, field] :
-       param.expected_symbolic_parsed_headers(Z3Context())) {
+       param.expected_symbolic_parsed_headers(z3_context)) {
     ASSERT_TRUE(expected_parsed_headers.ContainsKey(field_name));
     ASSERT_OK(expected_parsed_headers.UnguardedSet(field_name, field));
   }
 
-  std::unique_ptr<z3::solver> solver =
-      std::make_unique<z3::solver>(Z3Context());
+  auto solver = std::make_unique<z3::solver>(z3_context);
 
   // Check if the SMT formulae of the parsed headers are semantically the
   // same as the expected parsed headers.
@@ -983,7 +992,7 @@ TEST_P(EvaluateParsersTest, ValidateParsedHeadersSMTFormulae) {
                          expected_parsed_headers.Get(field_name));
     LOG(INFO) << "Check semantic equivalence for " << field_name << ": "
               << expected_value << " vs " << actual_value;
-    z3::expr_vector assumptions(Z3Context());
+    z3::expr_vector assumptions(z3_context);
     assumptions.push_back(expected_value != actual_value);
     EXPECT_EQ(solver->check(assumptions), z3::check_result::unsat);
   }
