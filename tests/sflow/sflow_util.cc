@@ -374,13 +374,13 @@ absl::StatusOr<std::string> UpdateQueueLimit(absl::string_view gnmi_config,
                 .get<std::string>();
         if (current_queue_name == queue_name) {
           std::string peak_rate = scheduler["two-rate-three-color"]["config"]
-                                           ["pins-qos:pir-pkts"]
+                                           ["google-pins-qos:pir-pkts"]
                                                .get<std::string>();
           LOG(INFO) << "Re-configuring Queue[" << current_queue_name
                     << "] rate from <" << peak_rate << "> to <" << queue_limit
                     << ">.";
           scheduler["two-rate-three-color"]["config"]
-                   ["pins-qos:pir-pkts"] = absl::StrCat(queue_limit);
+                   ["google-pins-qos:pir-pkts"] = absl::StrCat(queue_limit);
           break;
         }
       }
@@ -452,7 +452,7 @@ absl::Status VerifySflowQueueLimitState(gnmi::gNMI::StubInterface* gnmi_stub,
         pins_test::GetGnmiStatePathInfo(gnmi_stub, kQueueLimitStatePath,
                                         "openconfig-qos:state"));
     ASSIGN_OR_RETURN(const auto resp_json, json_yang::ParseJson(state_value));
-    if (resp_json["pins-qos:pir-pkts"] ==
+    if (resp_json["google-pins-qos:pir-pkts"] ==
         absl::StrCat(expected_queue_limit)) {
       return absl::OkStatus();
     }
