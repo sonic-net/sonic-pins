@@ -94,11 +94,12 @@
                 a!3)))
 (let ((a!5 (and true (and true (= a!4 (concat #b0000000 #b10)))))
       (a!6 (not (and true (= a!4 (concat #b0000000 #b10))))))
-  (ite true
-       (ite a!5
-            #b000000000
-            (ite (and true a!6 true) #b000000001 standard_metadata.egress_spec))
-       standard_metadata.egress_port)))))
+(let ((a!7 (ite a!5
+                #b000000000
+                (ite (and true a!6 true)
+                     #b000000001
+                     standard_metadata.egress_spec))))
+  (ite (not (= a!7 #b111111111)) a!7 standard_metadata.egress_port))))))
 (egress) standard_metadata.egress_rid: standard_metadata.egress_rid
 (egress) standard_metadata.egress_spec: (let ((a!1 (and true
                 (not (and true (= standard_metadata.ingress_port #b000000000)))
@@ -160,7 +161,7 @@
  (let ((?x79 (ite (and (and true (not $x70)) true) (_ bv1 9) standard_metadata.egress_spec)))
  (let (($x71 (and true $x70)))
  (let ((?x81 (ite $x71 (_ bv0 9) ?x79)))
- (let (($x88 (or (or (or false (= ?x81 (_ bv0 9))) (= ?x81 (_ bv1 9))) (= ?x81 (_ bv2 9)))))
+ (let (($x89 (or (or (or false (= ?x81 (_ bv0 9))) (= ?x81 (_ bv1 9))) (= ?x81 (_ bv2 9)))))
  (let (($x51 (= ?x81 (_ bv511 9))))
- (or $x51 $x88)))))))))))))))))))))
+ (or $x51 $x89)))))))))))))))))))))
 (check-sat)

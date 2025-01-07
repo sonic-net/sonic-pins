@@ -62,7 +62,7 @@
                      (and true (= standard_metadata.ingress_port #b000000000)))
                 #b000000001
                 (ite a!1 #b000000000 standard_metadata.egress_spec))))
-  (ite true a!2 standard_metadata.egress_port)))
+  (ite (not (= a!2 #b111111111)) a!2 standard_metadata.egress_port)))
 (egress) standard_metadata.egress_rid: standard_metadata.egress_rid
 (egress) standard_metadata.egress_spec: (let ((a!1 (and true
                 (not (and true (= standard_metadata.ingress_port #b000000000)))
@@ -97,7 +97,7 @@
  (let (($x28 (and true $x27)))
  (let (($x32 (and true $x28)))
  (let ((?x46 (ite $x32 (_ bv1 9) (ite (and $x34 $x31) (_ bv0 9) standard_metadata.egress_spec))))
- (let (($x52 (or (or false (= ?x46 (_ bv0 9))) (= ?x46 (_ bv1 9)))))
+ (let (($x53 (or (or false (= ?x46 (_ bv0 9))) (= ?x46 (_ bv1 9)))))
  (let (($x37 (= ?x46 (_ bv511 9))))
- (or $x37 $x52)))))))))))
+ (or $x37 $x53)))))))))))
 (check-sat)
