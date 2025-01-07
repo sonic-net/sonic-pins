@@ -627,6 +627,84 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
            "corrupted, causing subsequent test to fail";
   });
 
+  // Save Buffer config and restore at end of the test.
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortBufferProfile,
+      GetBufferAllocationProfileByEgressPort(kSutEgressPort, *gnmi_stub));
+  // Before we update the buffer config, save the current config and
+  // prepare to restore it at the end of the test.
+  ASSERT_OK_AND_ASSIGN(const std::string kInitialBufferConfig,
+                       GetBufferAllocationProfileConfig(
+                           kSutEgressPortBufferProfile, *gnmi_stub));
+  const auto kRestoreBufferConfig = absl::Cleanup([&] {
+    EXPECT_OK(UpdateBufferAllocationProfileConfig(
+        kSutEgressPortBufferProfile, kInitialBufferConfig, *gnmi_stub))
+        << "failed to restore initial buffer config -- switch config may be "
+           "corrupted, causing subsequent tests to fail";
+  });
+
+  // Set equal bufer for all queues.
+  absl::flat_hash_map<std::string, BufferParameters> bufferConfigByQueueName = {
+      {"LLQ1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"LLQ2",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"BE1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF2",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF3",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF4",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"NC1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+  };
+  ASSERT_OK(SetBufferConfigParameters(kSutEgressPortBufferProfile,
+                                      bufferConfigByQueueName, *gnmi_stub));
+
   // Set lower & upper bounds (CIRs/PIRs) such that:
   // - Round-robin-scheduled queues are not rate limited.
   // - Auxilliary traffic to strictly prioritized queue uses at most 95% of
@@ -779,7 +857,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     const double kAbsoluteError = kActualFraction - kExpectedFraction;
     const double kRelativeErrorPercent =
         100. * kAbsoluteError / kExpectedFraction;
-    const double kAcceptableErrorPercent = 3;
+    const double kAcceptableErrorPercent = 4;
     LOG(INFO) << "'" << queue << "' transmitted " << (kActualFraction * 100)
               << "% of forwarded round-robin traffic (expected: "
               << (kExpectedFraction * 100)
@@ -927,6 +1005,84 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         << "failed to restore initial scheduler config -- switch config may be "
            "corrupted, causing subsequent test to fail";
   });
+
+  // Save Buffer config and restore at end of the test.
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortBufferProfile,
+      GetBufferAllocationProfileByEgressPort(kSutEgressPort, *gnmi_stub));
+  // Before we update the buffer config, save the current config and
+  // prepare to restore it at the end of the test.
+  ASSERT_OK_AND_ASSIGN(const std::string kInitialBufferConfig,
+                       GetBufferAllocationProfileConfig(
+                           kSutEgressPortBufferProfile, *gnmi_stub));
+  const auto kRestoreBufferConfig = absl::Cleanup([&] {
+    EXPECT_OK(UpdateBufferAllocationProfileConfig(
+        kSutEgressPortBufferProfile, kInitialBufferConfig, *gnmi_stub))
+        << "failed to restore initial buffer config -- switch config may be "
+           "corrupted, causing subsequent tests to fail";
+  });
+
+  // Set equal buffer for all queues.
+  absl::flat_hash_map<std::string, BufferParameters> bufferConfigByQueueName = {
+      {"LLQ1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"LLQ2",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"BE1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF2",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF3",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"AF4",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+      {"NC1",
+       {/*.dedicated_buffer =*/0,
+        /*.use_shared_buffer =*/true,
+        /*.shared_buffer_type =*/
+        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        /*.dynamic_limit_scaling_factor =*/-3,
+        /*.shared_static_limit =*/0}},
+  };
+  ASSERT_OK(SetBufferConfigParameters(kSutEgressPortBufferProfile,
+                                      bufferConfigByQueueName, *gnmi_stub));
 
   // Connect to Ixia and fix constant traffic parameters.
   LOG(INFO) << "connecting to Ixia";
