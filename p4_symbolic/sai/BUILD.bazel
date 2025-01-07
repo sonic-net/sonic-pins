@@ -18,16 +18,35 @@ package(
 )
 
 cc_library(
-    name = "fields",
-    srcs = ["fields.cc"],
-    hdrs = ["fields.h"],
+    name = "sai",
+    srcs = ["sai.cc"],
+    hdrs = ["sai.h"],
     deps = [
         "//gutil:status",
-        "//p4_symbolic:z3_util",
         "//p4_symbolic/symbolic",
-        "@com_github_z3prover_z3//:api",
-	"@com_google_absl//absl/status",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "sai_test",
+    srcs = ["sai_test.cc"],
+    deps = [
+        ":sai",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "//p4_symbolic/symbolic",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_nonstandard_platforms_cc",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )

@@ -22,23 +22,26 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "gutil/status.h"
-#include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
 
 namespace p4_symbolic {
 
 absl::Status CheckPhysicalPortAndPortIdTypeValueConsistency(
-    const std::vector<int>& physical_ports,
-    const symbolic::TranslationPerType& translation_per_type) {
+    const std::vector<int> &physical_ports,
+    const symbolic::TranslationPerType &translation_per_type) {
   absl::flat_hash_set<uint64_t> physical_port_set(physical_ports.begin(),
                                                   physical_ports.end());
   absl::flat_hash_set<uint64_t> numeric_value_set;
   if (auto it = translation_per_type.find(kPortIdTypeName);
       it != translation_per_type.end()) {
-    for (const auto& [_, numeric_value] : it->second.static_mapping)
+    for (const auto &[_, numeric_value] : it->second.static_mapping)
       numeric_value_set.insert(numeric_value);
   }
 
@@ -52,7 +55,7 @@ absl::Status CheckPhysicalPortAndPortIdTypeValueConsistency(
 }
 
 absl::Status AddVrfIdTypeTranslation(
-    symbolic::TranslationPerType& translation_per_type) {
+    symbolic::TranslationPerType &translation_per_type) {
   if (translation_per_type.contains(kVrfIdTypeName)) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Did not expect user defined translation for ", kVrfIdTypeName));
@@ -68,23 +71,73 @@ absl::Status AddVrfIdTypeTranslation(
   return absl::OkStatus();
 }
 
+absl::StatusOr<std::string> GetUserMetadataFieldName(
+    absl::string_view field_name,
+    const symbolic::SymbolicPerPacketState &state) {
+  // Compute set of mangled field names that match the given field name.
+  std::vector<std::string> mangled_candidates;
+
+  // p4c seems to use the following template to name user metadata fields:
+  //
+  // - Until ~ 2022-11-01:
+  //   "scalars.userMetadata._<field name><a number>"
+  //
+  // - After ~ 2022-11-01:
+  //  "scalars.<user metadata typename>._<field name><a number>", where
+  //  <user metadata typename> is the header type name of the given
+  //  `header_name`.
+  //
+  // We look for names that match these templates.
+  // TODO: Remove the old prefix eventually when we no
+  // longer need backward compatibility.
+  std::vector<std::string> fully_qualified_field_prefixes;
+  fully_qualified_field_prefixes.reserve(2);
+  // Old prefix.
+  fully_qualified_field_prefixes.push_back(
+      absl::StrCat("scalars.userMetadata._", field_name));
+  // New prefix. Note that this is SAI-specific.
+  fully_qualified_field_prefixes.push_back(
+      absl::StrCat("scalars.local_metadata_t._", field_name));
+
+  for (const auto &[key, _] : state) {
+    for (absl::string_view prefix : fully_qualified_field_prefixes) {
+      if (absl::StartsWith(key, prefix) && key.length() > prefix.length() &&
+          absl::ascii_isdigit(key.at(prefix.length()))) {
+        mangled_candidates.push_back(key);
+      }
+    }
+  }
+
+  if (mangled_candidates.size() == 1) {
+    return mangled_candidates.back();
+  }
+
+  auto error = gutil::InternalErrorBuilder()
+               << "unable to disambiguate metadata field '" << field_name
+               << "': ";
+  if (mangled_candidates.empty()) {
+    return error << "no matching fields found in config: "
+                 << absl::StrJoin(state, "\n  - ",
+                                  [](std::string *out, const auto &key_value) {
+                                    absl::StrAppend(out, key_value.first);
+                                  });
+  }
+  return error << "several mangled fields in the config match:\n- "
+               << absl::StrJoin(mangled_candidates, "\n- ");
+}
+
 absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
-    const symbolic::SolverState& solver_state) {
-  // We are interested in the value after parsing because the parser sets
-  // `local_metadata.ingress_port = standard_metadata.ingress_port`. Also,
-  // according to P4-16 spec, the metadata of the ingress packet may contain
-  // arbitrary value before being initialized.
-  ASSIGN_OR_RETURN(SaiFields parsed_fields,
-                   GetSaiFields(solver_state.context.parsed_headers));
-  ASSIGN_OR_RETURN(const std::string local_metadata_ingress_port_field_name,
+    const symbolic::SolverState &solver_state) {
+  ASSIGN_OR_RETURN(std::string ingress_port_field_name,
                    GetUserMetadataFieldName(
                        "ingress_port", solver_state.context.parsed_headers));
-  // Note: Do NOT directly use "local_metadata.ingress_port" as the field name
-  // (see p4_symbolic::GetUserMetadataFieldName).
+  ASSIGN_OR_RETURN(
+      z3::expr ingress_port_expr,
+      solver_state.context.parsed_headers.Get(ingress_port_field_name));
   return symbolic::values::TranslateValueToP4RT(
-      local_metadata_ingress_port_field_name,
+      ingress_port_field_name,
       solver_state.solver->get_model()
-          .eval(parsed_fields.local_metadata.ingress_port, true)
+          .eval(ingress_port_expr, true)
           .to_string(),
       solver_state.translator);
 }
