@@ -18,12 +18,11 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
 #define P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
 
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
-#include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
@@ -63,11 +62,6 @@ constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 constexpr absl::string_view kParserErrorField =
     "standard_metadata.parser_error";
 
-// V1model's `mark_to_drop` primitive sets the `egress_spec` field to this
-// value to indicate the packet should be dropped at the end of ingress/egress
-// processing. See v1model.p4 for details.
-z3::expr EgressSpecDroppedValue();
-
 // The overall state of our symbolic solver/interpreter.
 // This is returned by our main analysis/interpration function, and is used
 // to find concrete test packets and for debugging.
@@ -81,7 +75,7 @@ class SolverState {
   SolverState(ir::P4Program program, ir::TableEntries entries)
       : program(std::move(program)),
         entries(std::move(entries)),
-        solver(std::make_unique<z3::solver>(Z3Context())) {}
+        solver(std::make_unique<z3::solver>(*context.z3_context)) {}
   SolverState(const SolverState &) = delete;
   SolverState(SolverState &&) = default;
   ~SolverState() {
@@ -104,7 +98,10 @@ class SolverState {
   // Maps the name of a table to a list of its entries.
   ir::TableEntries entries;
   // The symbolic context of our interpretation/analysis of the program,
-  // including symbolic handles on packet headers and its trace.
+  // including symbolic handles on packet headers and its trace. A new
+  // z3::context object is created within each symbolic context. Note that this
+  // has to precede the solver object so that the solver will be destroyed
+  // before the z3 context during destruction.
   SymbolicContext context;
   // Having the z3 solver defined here allows Z3 to remember interesting
   // deductions it made while solving for one particular assertion, and re-use

@@ -42,7 +42,7 @@ absl::Status EvaluateAction(const ir::Action &action,
                                 pdpi::IrActionInvocation::IrActionParam> &args,
                             SymbolicPerPacketState *state,
                             values::P4RuntimeTranslator *translator,
-                            const z3::expr &guard);
+                            z3::context &z3_context, const z3::expr &guard);
 
 // Internal functions used to Evaluate statements and expressions within an
 // action body. These are internal functions not used beyond this header and its
@@ -58,32 +58,36 @@ struct ActionContext {
 // appropriate function.
 absl::Status EvaluateStatement(const ir::Statement &statement,
                                SymbolicPerPacketState *state,
-                               ActionContext *context, const z3::expr &guard);
+                               ActionContext *context, z3::context &z3_context,
+                               const z3::expr &guard);
 
 // Constructs a symbolic expression for the assignment value, and either
 // constrains it in an enclosing assignment expression, or stores it in
 // the action scope.
-absl::Status
-EvaluateAssignmentStatement(const ir::AssignmentStatement &assignment,
-                            SymbolicPerPacketState *state,
-                            ActionContext *context, const z3::expr &guard);
+absl::Status EvaluateAssignmentStatement(
+    const ir::AssignmentStatement &assignment, SymbolicPerPacketState *state,
+    ActionContext *context, z3::context &z3_context, const z3::expr &guard);
 
 // Constructs a symbolic expression corresponding to this value, according
 // to its type.
 absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
                                         const SymbolicPerPacketState &state,
-                                        const ActionContext &context);
+                                        const ActionContext &context,
+                                        z3::context &z3_context);
 
 // Extract the field symbolic value from the symbolic state.
 absl::StatusOr<z3::expr> EvaluateFieldValue(
     const ir::FieldValue &field_value, const SymbolicPerPacketState &state);
 
 // Parse and format literal values as symbolic expression.
-absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr);
+absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr,
+                                        z3::context &z3_context);
 
-absl::StatusOr<z3::expr> EvaluateBool(const ir::BoolValue &bool_value);
+absl::StatusOr<z3::expr> EvaluateBool(const ir::BoolValue &bool_value,
+                                      z3::context &z3_context);
 
-absl::StatusOr<z3::expr> EvaluateString(const ir::StringValue &string_value);
+absl::StatusOr<z3::expr> EvaluateString(const ir::StringValue &string_value,
+                                        z3::context &z3_context);
 
 // Looks up the symbolic value of the variable in the action scope.
 absl::StatusOr<z3::expr> EvaluateVariable(const ir::Variable &variable,
@@ -91,10 +95,9 @@ absl::StatusOr<z3::expr> EvaluateVariable(const ir::Variable &variable,
 
 // Evaluate expression by recursively evaluating operands and applying the
 // symbolic version of the operator to them.
-absl::StatusOr<z3::expr>
-EvaluateRExpression(const ir::RExpression &expr,
-                    const SymbolicPerPacketState &state,
-                    const ActionContext &context);
+absl::StatusOr<z3::expr> EvaluateRExpression(
+    const ir::RExpression &expr, const SymbolicPerPacketState &state,
+    const ActionContext &context, z3::context &z3_context);
 
 } // namespace action
 } // namespace symbolic

@@ -43,8 +43,8 @@ public:
   PacketListener(pdpi::P4RuntimeSession *session,
                  P4rtProgrammingContext context,
                  sai::Instantiation instantiation,
-                 const absl::flat_hash_map<std::string, std::string>
-                     *interface_port_id_to_name);
+                 const absl::flat_hash_map<std::string, std::string>*
+                     interface_port_id_to_name);
 
   absl::Status HandlePacketsFor(absl::Duration duration,
                                 thinkit::PacketCallback callback_) override;
@@ -60,8 +60,8 @@ private:
   pdpi::P4RuntimeSession *session_;
   P4rtProgrammingContext context_;
   sai::Instantiation instantiation_;
-  const absl::flat_hash_map<std::string, std::string>
-      &interface_port_id_to_name_;
+  const absl::flat_hash_map<std::string, std::string>&
+      interface_port_id_to_name_;
 };
 
 } // namespace pins_test

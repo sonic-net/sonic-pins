@@ -18,6 +18,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -68,6 +69,21 @@ absl::Status PushGnmiAndWaitForConvergence(thinkit::Switch& thinkit_switch,
                                       gnmi_timeout);
 }
 
+// Wrapper around `TestGnoiSystemColdReboot` that ensures we don't ignore fatal
+// failures.
+absl::Status Reboot(thinkit::Switch& thinkit_switch) {
+  if (::testing::Test::HasFatalFailure()) {
+    return gutil::UnknownErrorBuilder()
+           << "skipping switch reboot due to pre-existing, fatal test failure";
+  }
+  TestGnoiSystemColdReboot(thinkit_switch);
+  if (::testing::Test::HasFatalFailure()) {
+    return gutil::UnknownErrorBuilder()
+           << "switch reboot failed with fatal error";
+  }
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
 CreateP4RuntimeSessionAndOptionallyPushP4Info(
     thinkit::Switch& thinkit_switch,
@@ -89,7 +105,7 @@ CreateP4RuntimeSessionAndOptionallyPushP4Info(
              "but I am asked to push a P4Info with the following diff:\n"
           << p4info_diff;
       RETURN_IF_ERROR(session->Finish());
-      TestGnoiSystemColdReboot(thinkit_switch);
+      RETURN_IF_ERROR(Reboot(thinkit_switch));
       // Reconnect after reboot.
       ASSIGN_OR_RETURN(
           session, pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));

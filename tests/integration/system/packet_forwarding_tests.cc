@@ -16,7 +16,6 @@
 
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -33,6 +32,7 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -55,6 +55,7 @@
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/control_device.h"
@@ -108,24 +109,6 @@ absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> P4InfoPush(
       testbed.Sut(), /*gnmi_config=*/std::nullopt, p4info);
 }
 
-// Sets up route from source port to destination port on sut.
-absl::Status SetupRoute(pdpi::P4RuntimeSession& p4_session, int src_port_id,
-                        int dst_port_id) {
-  RETURN_IF_ERROR(pins_test::basic_traffic::ProgramTrafficVrf(&p4_session,
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
-  
-  RETURN_IF_ERROR(
-      basic_traffic::ProgramRouterInterface(&p4_session, src_port_id,
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
-  
-  RETURN_IF_ERROR(
-      basic_traffic::ProgramRouterInterface(&p4_session, dst_port_id,
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
-  
-  return basic_traffic::ProgramIPv4Route(&p4_session, dst_port_id,
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock));
-}
-
 TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
   thinkit::TestRequirements requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
@@ -173,7 +156,8 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
           testbed->Sut(), sai::GetP4Info(sai::Instantiation::kMiddleblock)));
 
   // Set up a route between the source and destination interfaces.
-  ASSERT_OK(SetupRoute(*p4_session, source_port_id, destination_port_id));
+  ASSERT_OK_AND_ASSIGN(auto port_id_from_sut_interface,
+                       GetAllInterfaceNameToPortId(*stub));
 
   // Make test packet based on destination port ID.
   const auto test_packet =
@@ -199,7 +183,20 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
           << "failed to inject the packet.";
       LOG(INFO) << "SendPacket completed";
     }
-    absl::SleepFor(absl::Seconds(30));
+    ASSERT_OK(finalizer->HandlePacketsFor(
+        absl::Seconds(30),
+        [&](absl::string_view interface, absl::string_view packet) {
+          if (interface != destination_interface.peer_interface) {
+            return;
+          }
+          packetlib::Packet parsed_packet = packetlib::ParsePacket(packet);
+          if (!absl::StrContains(parsed_packet.payload(),
+                                 "Basic L3 test packet")) {
+            return;
+          }
+          absl::MutexLock lock(&mutex);
+          received_packets.push_back(std::string(packet));
+        }));
   }
   EXPECT_EQ(received_packets.size(), kPacketsToSend);
 }
