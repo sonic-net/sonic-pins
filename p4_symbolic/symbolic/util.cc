@@ -249,6 +249,10 @@ absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
   }
 }
 
+std::string GetHeaderValidityFieldName(absl::string_view header_name) {
+  return absl::StrCat(header_name, ".", kValidPseudoField);
+}
+
 }  // namespace util
 }  // namespace symbolic
 }  // namespace p4_symbolic
