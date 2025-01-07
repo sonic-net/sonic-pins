@@ -37,7 +37,6 @@
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 #include "p4_symbolic/packet_synthesizer/util.h"
-#include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -52,8 +51,8 @@ using ::p4_symbolic::symbolic::SolverState;
 // fields from the model. The packet payload will be set to the contents of
 // `packet_payload` parameter.
 absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
-    const p4_symbolic::symbolic::SolverState& solver_state,
-    absl::string_view packet_payload, bool should_be_dropped) {
+    const SolverState& solver_state, absl::string_view packet_payload,
+    std::optional<bool> should_be_dropped) {
   z3::model model = solver_state.solver->get_model();
   ASSIGN_OR_RETURN(std::string packet,
                    p4_symbolic::DeparseIngressPacket(solver_state, model));
@@ -66,16 +65,19 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
         "($1)",
         dropped ? "drop" : "no drop", should_be_dropped ? "drop" : "no drop"));
   }
+  ASSIGN_OR_RETURN(const bool got_cloned,
+                   EvalZ3Bool(solver_state.context.trace.got_cloned, model));
+
+  // Get mirrored from the model.
   ASSIGN_OR_RETURN(
-      const bool got_cloned,
-      p4_symbolic::EvalZ3Bool(solver_state.context.trace.got_cloned, model));
-  ASSIGN_OR_RETURN(
-      p4_symbolic::SaiFields egress_fields,
-      p4_symbolic::GetSaiFields(solver_state.context.egress_headers));
-  ASSIGN_OR_RETURN(
-      const bool mirrored,
-      p4_symbolic::EvalZ3Bool(
-          egress_fields.local_metadata.mirror_session_id_valid == 1, model));
+      std::string mirror_session_id_valid_field_name,
+      GetUserMetadataFieldName("mirror_session_id_valid",
+                               solver_state.context.egress_headers));
+  ASSIGN_OR_RETURN(z3::expr mirror_session_id_valid,
+                   solver_state.context.egress_headers.Get(
+                       mirror_session_id_valid_field_name));
+  ASSIGN_OR_RETURN(const bool mirrored,
+                   EvalZ3Bool(mirror_session_id_valid == 1, model));
 
   // Get ingress port from the model.
   ASSIGN_OR_RETURN(std::string local_metadata_ingress_port,
@@ -219,9 +221,9 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
                                           params.pi_entries().end());
   std::vector<int> physical_ports(params.physical_port().begin(),
                                   params.physical_port().end());
-  p4_symbolic::symbolic::TranslationPerType translation_per_type;
+  symbolic::TranslationPerType translation_per_type;
   for (const auto& [type_name, data] : params.translation_per_type()) {
-    p4_symbolic::symbolic::values::TranslationData translation;
+    symbolic::values::TranslationData translation;
     translation.dynamic_translation = data.dynamic_translation();
     for (const auto& mapping : data.static_mapping()) {
       translation.static_mapping.push_back(
@@ -370,4 +372,7 @@ absl::Status PacketSynthesizer::PrepareZ3SolverStack(
 
   return absl::OkStatus();
 }
+
+const SolverState& PacketSynthesizer::SolverState() { return solver_state_; }
+
 }  // namespace p4_symbolic::packet_synthesizer

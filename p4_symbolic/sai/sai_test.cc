@@ -101,8 +101,9 @@ TEST(GetLocalMetadataIngressPortFromModel, IngressPortIsAmongPassedValues) {
              })pb");
     std::vector<p4::v1::TableEntry> pi_entries;
     for (auto& pd_entry : pd_entries.entries()) {
-      ASSERT_OK_AND_ASSIGN(pi_entries.emplace_back(),
-                           pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
+      ASSERT_OK_AND_ASSIGN(
+          pi_entries.emplace_back(),
+          pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
     }
     symbolic::TranslationPerType translations;
     translations[kPortIdTypeName] = symbolic::values::TranslationData{

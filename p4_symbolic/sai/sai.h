@@ -40,8 +40,17 @@ absl::Status CheckPhysicalPortAndPortIdTypeValueConsistency(
 absl::Status AddVrfIdTypeTranslation(
     symbolic::TranslationPerType& translation_per_type);
 
-// Returns the concrete value of the field `local_metadata.ingress_port` right
-// after parser processing based on the given model.
+// Returns the mangled user metadata field name of the given `header_name` and
+// `field_name`. Note that this function is specific to SAI because it assumes
+// the local metadata header type name to be `local_metadata_t`.
+absl::StatusOr<std::string> GetUserMetadataFieldName(
+    absl::string_view field_name,
+    const symbolic::SymbolicPerPacketState& state);
+
+// Returns the concrete value of `local_metadata.ingress_port` given the
+// `solver_state`. Note that this function is specific to SAI because it assumes
+// the existence of `local_metadata_t` header type and that the header type has
+// a field called `ingress_port`.
 absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
     const symbolic::SolverState& solver_state);
 

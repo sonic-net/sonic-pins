@@ -202,6 +202,9 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
 absl::StatusOr<std::vector<std::string>>
 GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
+// Get queues for an egress port.
+absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
 
 }  // namespace pins_test
 
