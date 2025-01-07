@@ -17,9 +17,8 @@
 
 #include <vector>
 
-#include "absl/status/statusor.h"
 #include "p4_symbolic/ir/ir.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
 
 namespace p4_symbolic {
@@ -33,9 +32,10 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
 // Symbolically evaluates the parser, ingress, and egress pipelines of the given
 // P4 program with the given entries, assuming the program is written against V1
 // model.
-absl::StatusOr<SymbolicContext> EvaluateV1model(
-    const ir::Dataplane &data_plane, const std::vector<int> &physical_ports,
-    values::P4RuntimeTranslator &translator);
+absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
+                             const std::vector<int> &physical_ports,
+                             SymbolicContext &context,
+                             values::P4RuntimeTranslator &translator);
 
 }  // namespace v1model
 }  // namespace symbolic
