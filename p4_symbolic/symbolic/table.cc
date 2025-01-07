@@ -40,7 +40,6 @@
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"

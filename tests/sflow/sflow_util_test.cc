@@ -473,10 +473,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                         "sequence" : 0,
                         "two-rate-three-color" : {
                            "config" : {
-                              "pins-qos:bc-pkts" : 0,
-                              "pins-qos:be-pkts" : 256,
-                              "pins-qos:cir-pkts" : "0",
-                              "pins-qos:pir-pkts" : "16000"
+                              "google-pins-qos:bc-pkts" : 0,
+                              "google-pins-qos:be-pkts" : 256,
+                              "google-pins-qos:cir-pkts" : "0",
+                              "google-pins-qos:pir-pkts" : "16000"
                            }
                         }
                      },
@@ -501,10 +501,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                         "sequence" : 5,
                         "two-rate-three-color" : {
                            "config" : {
-                              "pins-qos:bc-pkts" : 0,
-                              "pins-qos:be-pkts" : 4,
-                              "pins-qos:cir-pkts" : "0",
-                              "pins-qos:pir-pkts" : "120"
+                              "google-pins-qos:bc-pkts" : 0,
+                              "google-pins-qos:be-pkts" : 4,
+                              "google-pins-qos:cir-pkts" : "0",
+                              "google-pins-qos:pir-pkts" : "120"
                            }
                         }
                      }
@@ -577,10 +577,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                 "sequence": 0,
                 "two-rate-three-color": {
                   "config": {
-                    "pins-qos:bc-pkts": 0,
-                    "pins-qos:be-pkts": 256,
-                    "pins-qos:cir-pkts": "0",
-                    "pins-qos:pir-pkts": "16000"
+                    "google-pins-qos:bc-pkts": 0,
+                    "google-pins-qos:be-pkts": 256,
+                    "google-pins-qos:cir-pkts": "0",
+                    "google-pins-qos:pir-pkts": "16000"
                   }
                 }
               },
@@ -605,10 +605,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                 "sequence": 5,
                 "two-rate-three-color": {
                   "config": {
-                    "pins-qos:bc-pkts": 0,
-                    "pins-qos:be-pkts": 4,
-                    "pins-qos:cir-pkts": "0",
-                    "pins-qos:pir-pkts": "1000"
+                    "google-pins-qos:bc-pkts": 0,
+                    "google-pins-qos:be-pkts": 4,
+                    "google-pins-qos:cir-pkts": "0",
+                    "google-pins-qos:pir-pkts": "1000"
                   }
                 }
               }
@@ -742,7 +742,7 @@ TEST(SflowUtilTest, UpdateQueueLimitSucceed) {
                      elem { name: "state" }
                    }
                    val {
-                     json_ietf_val: "{\"openconfig-qos:state\":{\"pins-qos:bc-pkts\":0,\"pins-qos:be-pkts\":4,\"pins-qos:cir-pkts\":\"0\",\"pins-qos:pir-pkts\":\"120\"}}"
+                     json_ietf_val: "{\"openconfig-qos:state\":{\"google-pins-qos:bc-pkts\":0,\"google-pins-qos:be-pkts\":4,\"google-pins-qos:cir-pkts\":\"0\",\"google-pins-qos:pir-pkts\":\"120\"}}"
                    }
                  }
                })pb")),

@@ -33,12 +33,12 @@
 namespace p4_symbolic {
 namespace symbolic {
 
-std::string SolverState::GetSolverSMT() const {
+std::string SolverState::GetSolverSMT() {
   if (!solver) return "";
   return solver->to_smt2();
 }
 
-std::string SolverState::GetHeadersAndSolverConstraintsSMT() const {
+std::string SolverState::GetHeadersAndSolverConstraintsSMT() {
   std::ostringstream result;
   for (const auto &[field_name, expression] : context.ingress_headers) {
     result << "(ingress) " << field_name << ": " << expression << std::endl;
@@ -67,23 +67,20 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
   // Parse the P4 config and entries into the P4-symbolic IR.
   ASSIGN_OR_RETURN(ir::Dataplane dataplane, ir::ParseToIr(config, entries));
 
-  // Use global context to define a solver.
-  std::unique_ptr<z3::solver> z3_solver =
-      std::make_unique<z3::solver>(Z3Context());
+  auto solver_state =
+      std::make_unique<SolverState>(dataplane.program, dataplane.entries);
+  SymbolicContext &context = solver_state->context;
+  values::P4RuntimeTranslator &translator = solver_state->translator;
 
-  // Initially, the p4runtime translator has empty state.
-  values::P4RuntimeTranslator translator;
-
-  // Initiate the p4runtime translator with statically translated types.
+  // Initialize the p4runtime translator with statically translated types.
   for (const auto &[type, translation] : translation_per_type) {
     translator.p4runtime_translation_allocators.emplace(
         type, values::IdAllocator(translation));
   }
 
   // Evaluate the main program, assuming it conforms to V1 model.
-  ASSIGN_OR_RETURN(
-      SymbolicContext context,
-      v1model::EvaluateV1model(dataplane, physical_ports, translator));
+  RETURN_IF_ERROR(
+      v1model::EvaluateV1model(dataplane, physical_ports, context, translator));
 
   // Restrict the value of all fields with (purely static, i.e.
   // dynamic_translation = false) P4RT translated types to what has been used in
@@ -99,15 +96,15 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
         constraint =
             constraint || (field_expr == static_cast<int>(numeric_value));
       }
-      z3_solver->add(constraint);
+      solver_state->solver->add(constraint);
     }
   }
 
   // Restrict ports to the available physical ports.
   // TODO: Support generating packet-out packets from the CPU port.
   if (physical_ports.empty()) {
-    z3_solver->add(context.ingress_port != kCpuPort);
-    z3_solver->add(context.ingress_port != kDropPort);
+    solver_state->solver->add(context.ingress_port != kCpuPort);
+    solver_state->solver->add(context.ingress_port != kDropPort);
   } else {
     z3::expr ingress_port_is_physical = Z3Context().bool_val(false);
     z3::expr egress_port_is_physical = Z3Context().bool_val(false);
@@ -117,20 +114,18 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
       egress_port_is_physical =
           egress_port_is_physical || context.egress_port == port;
     }
-    z3_solver->add(ingress_port_is_physical);
+    solver_state->solver->add(ingress_port_is_physical);
     // TODO: Lift this constraint, it should not be necessary and
     // prevents generation of packet-ins.
-    z3_solver->add(context.trace.dropped || egress_port_is_physical);
+    solver_state->solver->add(context.trace.dropped || egress_port_is_physical);
   }
 
   // Assemble and return result.
-  return std::make_unique<SolverState>(dataplane.program, dataplane.entries,
-                                       std::move(context), std::move(z3_solver),
-                                       std::move(translator));
+  return solver_state;
 }
 
 absl::StatusOr<std::optional<ConcreteContext>> Solve(
-    const SolverState &solver_state) {
+    SolverState &solver_state) {
   z3::check_result check_result = solver_state.solver->check();
   switch (check_result) {
     case z3::unsat:
