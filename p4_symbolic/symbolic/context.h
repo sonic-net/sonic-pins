@@ -15,11 +15,11 @@
 #ifndef PINS_P4_SYMBOLIC_SYMBOLIC_CONTEXT_H_
 #define PINS_P4_SYMBOLIC_SYMBOLIC_CONTEXT_H_
 
+#include <memory>
 #include <string>
 
 #include "absl/container/btree_map.h"
 #include "p4_symbolic/symbolic/guarded_map.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -83,7 +83,8 @@ struct ConcreteTrace {
 // Provides symbolic handles for the trace the symbolic packet is constrained
 // to take in the program.
 struct SymbolicTrace {
-  SymbolicTrace() : dropped(Z3Context()), got_cloned(Z3Context()) {}
+  SymbolicTrace(z3::context &z3_context)
+      : dropped(z3_context), got_cloned(z3_context) {}
 
   // Full table name to its symbolic match.
   // TODO: Rename to matches_by_table_name.
@@ -113,8 +114,17 @@ struct ConcreteContext {
 // Assertions are defined on a symbolic context.
 class SymbolicContext {
  public:
-  SymbolicContext() : ingress_port(Z3Context()), egress_port(Z3Context()) {}
+  SymbolicContext()
+      : z3_context(std::make_unique<z3::context>()),
+        ingress_port(*z3_context),
+        egress_port(*z3_context),
+        trace(*z3_context) {}
 
+  // The Z3 context for the symbolic evaluation.
+  // Note that this has to precede other z3 objects so that they will be
+  // destroyed before z3_context during destruction. The `unique_ptr` wrapper is
+  // required because `z3::context` has an implicitly-deleted move constructor.
+  std::unique_ptr<z3::context> z3_context;
   z3::expr ingress_port;
   z3::expr egress_port;
   SymbolicPerPacketState ingress_headers;

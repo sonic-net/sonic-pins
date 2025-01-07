@@ -8,697 +8,226 @@ subscribe {
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "admin-status"
-      }
+      elem { name: "state" }
+      elem { name: "admin-status" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "ethernet"
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "mac-address"
-      }
+      elem { name: "ethernet" }
+      elem { name: "state" }
+      elem { name: "mac-address" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "hardware-port"
-      }
+      elem { name: "state" }
+      elem { name: "hardware-port" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "health-indicator"
-      }
+      elem { name: "state" }
+      elem { name: "health-indicator" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "id"
-      }
+      elem { name: "state" }
+      elem { name: "id" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "oper-status"
-      }
+      elem { name: "state" }
+      elem { name: "oper-status" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "ethernet"
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "port-speed"
-      }
+      elem { name: "ethernet" }
+      elem { name: "state" }
+      elem { name: "port-speed" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "components"
-      }
+      elem { name: "components" }
       elem {
         name: "component"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "integrated-circuit"
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "node-id"
-      }
+      elem { name: "integrated-circuit" }
+      elem { name: "state" }
+      elem { name: "node-id" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "components"
-      }
+      elem { name: "components" }
       elem {
         name: "component"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "parent"
-      }
+      elem { name: "state" }
+      elem { name: "parent" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "components"
-      }
+      elem { name: "components" }
       elem {
         name: "component"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "oper-status"
-      }
+      elem { name: "state" }
+      elem { name: "oper-status" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "components"
-      }
+      elem { name: "components" }
       elem {
         name: "component"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "software-version"
-      }
+      elem { name: "state" }
+      elem { name: "software-version" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "components"
-      }
+      elem { name: "components" }
       elem {
         name: "component"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "software-module"
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "module-type"
-      }
+      elem { name: "software-module" }
+      elem { name: "state" }
+      elem { name: "module-type" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "system"
-      }
-      elem {
-        name: "alarms"
-      }
+      elem { name: "system" }
+      elem { name: "alarms" }
       elem {
         name: "alarm"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "id" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "severity"
-      }
+      elem { name: "state" }
+      elem { name: "severity" }
     }
     mode: ON_CHANGE
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "system" }
+      elem { name: "state" }
+      elem { name: "config-meta-data" }
+    }
+    mode: ON_CHANGE
+  }
+  subscription {
+    path {
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
+      elem { name: "ethernet" }
+      elem { name: "state" }
+      elem { name: "aggregate-id" }
+    }
+    mode: SAMPLE
+    sample_interval: 1000000000
+  }
+  subscription {
+    path {
+      elem { name: "interfaces" }
       elem {
-        name: "state"
+        name: "interface"
+        key { key: "name" value: "*" }
       }
+      elem { name: "aggregation" }
+      elem { name: "state" }
+      elem { name: "lag-speed" }
+    }
+    mode: ON_CHANGE
+  }
+  subscription {
+    path {
+      elem { name: "interfaces" }
       elem {
-        name: "counters"
+        name: "interface"
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "in-octets"
-      }
+      elem { name: "state" }
+      elem { name: "counters" }
     }
   }
   subscription {
     path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "in-unicast-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
+      elem { name: "qos" }
+      elem { name: "interfaces" }
       elem {
         name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "interface-id" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "in-broadcast-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "in-multicast-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "in-discards"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "in-errors"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "in-fcs-errors"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "out-unicast-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "out-broadcast-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "out-multicast-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "out-octets"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "out-discards"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "counters"
-      }
-      elem {
-        name: "out-errors"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "qos"
-      }
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "interface-id"
-          value: "*"
-        }
-      }
-      elem {
-        name: "output"
-      }
-      elem {
-        name: "queues"
-      }
+      elem { name: "output" }
+      elem { name: "queues" }
       elem {
         name: "queue"
-        key {
-          key: "name"
-          value: "*"
-        }
+        key { key: "name" value: "*" }
       }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "transmit-pkts"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "qos"
-      }
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "interface-id"
-          value: "*"
-        }
-      }
-      elem {
-        name: "output"
-      }
-      elem {
-        name: "queues"
-      }
-      elem {
-        name: "queue"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "transmit-octets"
-      }
-    }
-  }
-  subscription {
-    path {
-      elem {
-        name: "qos"
-      }
-      elem {
-        name: "interfaces"
-      }
-      elem {
-        name: "interface"
-        key {
-          key: "interface-id"
-          value: "*"
-        }
-      }
-      elem {
-        name: "output"
-      }
-      elem {
-        name: "queues"
-      }
-      elem {
-        name: "queue"
-        key {
-          key: "name"
-          value: "*"
-        }
-      }
-      elem {
-        name: "state"
-      }
-      elem {
-        name: "dropped-pkts"
-      }
+      elem { name: "state" }
     }
   }
   encoding: PROTO

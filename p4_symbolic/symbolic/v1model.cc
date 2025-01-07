@@ -21,7 +21,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -62,10 +62,11 @@ absl::Status CheckPhysicalPortsConformanceToV1Model(
   return absl::OkStatus();
 }
 
-absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state) {
+absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state,
+                                   z3::context &z3_context) {
   ASSIGN_OR_RETURN(z3::expr egress_spec,
                    state.Get("standard_metadata.egress_spec"));
-  return operators::Eq(egress_spec, EgressSpecDroppedValue());
+  return operators::Eq(egress_spec, EgressSpecDroppedValue(z3_context));
 }
 
 absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state) {
@@ -74,12 +75,17 @@ absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state) {
 
 }  // namespace
 
+z3::expr EgressSpecDroppedValue(z3::context &z3_context) {
+  return z3_context.bv_val(kDropPort, kPortBitwidth);
+}
+
 absl::Status InitializeIngressHeaders(const ir::P4Program &program,
-                                      SymbolicPerPacketState &ingress_headers) {
+                                      SymbolicPerPacketState &ingress_headers,
+                                      z3::context &z3_context) {
   // TODO: Consider initializing all metadata fields to 0.
 
   // Set the `$valid$` and `$extracted$` fields of all headers to false.
-  const z3::expr false_expr = Z3Context().bool_val(false);
+  const z3::expr false_expr = z3_context.bool_val(false);
   for (const auto &[header_name, _] : Ordered(program.headers())) {
     RETURN_IF_ERROR(ingress_headers.UnguardedSet(header_name, kValidPseudoField,
                                                  false_expr));
@@ -88,8 +94,8 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
   }
 
   // Set the `standard_metadata.parser_error` field to error.NoError.
-  ASSIGN_OR_RETURN(z3::expr no_error,
-                   parser::GetErrorCodeExpression(program, "NoError"));
+  ASSIGN_OR_RETURN(z3::expr no_error, parser::GetErrorCodeExpression(
+                                          program, "NoError", z3_context));
   RETURN_IF_ERROR(ingress_headers.UnguardedSet(kParserErrorField, no_error));
 
   return absl::OkStatus();
@@ -107,10 +113,10 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   // variable for each header field.
   ASSIGN_OR_RETURN(context.ingress_headers,
                    SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                       data_plane.program.headers()));
+                       *context.z3_context, data_plane.program.headers()));
   // Initialize the symbolic ingress packet before evaluation.
-  RETURN_IF_ERROR(
-      InitializeIngressHeaders(data_plane.program, context.ingress_headers));
+  RETURN_IF_ERROR(InitializeIngressHeaders(
+      data_plane.program, context.ingress_headers, *context.z3_context));
 
   // Evaluate all parsers in the P4 program.
   // If a parser error occurs, the `standard_metadata.parser_error` field will
@@ -119,7 +125,8 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   // will only yield 2 kinds of parser error, NoError and NoMatch.
   ASSIGN_OR_RETURN(
       context.parsed_headers,
-      parser::EvaluateParsers(data_plane.program, context.ingress_headers));
+      parser::EvaluateParsers(data_plane.program, context.ingress_headers,
+                              *context.z3_context));
 
   // Update the ingress_headers' valid fields to be parsed_headers' extracted
   // fields.
@@ -144,28 +151,30 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   ASSIGN_OR_RETURN(
       SymbolicTableMatches matches,
       control::EvaluatePipeline(data_plane, "ingress", &context.egress_headers,
-                                &translator,
-                                /*guard=*/Z3Context().bool_val(true)));
-  ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(context.egress_headers));
+                                &translator, *context.z3_context,
+                                /*guard=*/context.z3_context->bool_val(true)));
+  ASSIGN_OR_RETURN(z3::expr dropped,
+                   IsDropped(context.egress_headers, *context.z3_context));
 
   // Constrain egress_port to be equal to egress_spec.
   ASSIGN_OR_RETURN(z3::expr egress_spec,
                    context.egress_headers.Get("standard_metadata.egress_spec"));
   RETURN_IF_ERROR(
       context.egress_headers.Set("standard_metadata.egress_port", egress_spec,
-                                 /*guard=*/Z3Context().bool_val(true)));
+                                 /*guard=*/context.z3_context->bool_val(true)));
 
   // Evaluate the egress pipeline.
   ASSIGN_OR_RETURN(
       SymbolicTableMatches egress_matches,
       control::EvaluatePipeline(data_plane, "egress", &context.egress_headers,
-                                &translator,
+                                &translator, *context.z3_context,
                                 /*guard=*/!dropped));
   matches.merge(std::move(egress_matches));
 
   // Populate and build the symbolic context.
   context.trace.matched_entries = std::move(matches);
-  ASSIGN_OR_RETURN(context.trace.dropped, IsDropped(context.egress_headers));
+  ASSIGN_OR_RETURN(context.trace.dropped,
+                   IsDropped(context.egress_headers, *context.z3_context));
   ASSIGN_OR_RETURN(context.trace.got_cloned, GotCloned(context.egress_headers));
   ASSIGN_OR_RETURN(context.ingress_port, context.ingress_headers.Get(
                                              "standard_metadata.ingress_port"));

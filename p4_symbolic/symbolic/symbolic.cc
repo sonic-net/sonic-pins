@@ -22,12 +22,12 @@
 #include "absl/status/statusor.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
+#include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/parser.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -53,10 +53,6 @@ std::string SolverState::GetHeadersAndSolverConstraintsSMT() {
   }
   result << std::endl << "(solver constraints)" << std::endl << GetSolverSMT();
   return result.str();
-}
-
-z3::expr EgressSpecDroppedValue() {
-  return Z3Context().bv_val(kDropPort, kPortBitwidth);
 }
 
 absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
@@ -90,7 +86,7 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
     if (auto it = translation_per_type.find(type);
         it != translation_per_type.end() && !it->second.dynamic_translation) {
       ASSIGN_OR_RETURN(z3::expr field_expr, context.ingress_headers.Get(field));
-      z3::expr constraint = Z3Context().bool_val(false);
+      z3::expr constraint = context.z3_context->bool_val(false);
       for (const auto &[string_value, numeric_value] :
            it->second.static_mapping) {
         constraint =
@@ -106,8 +102,8 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
     solver_state->solver->add(context.ingress_port != kCpuPort);
     solver_state->solver->add(context.ingress_port != kDropPort);
   } else {
-    z3::expr ingress_port_is_physical = Z3Context().bool_val(false);
-    z3::expr egress_port_is_physical = Z3Context().bool_val(false);
+    z3::expr ingress_port_is_physical = context.z3_context->bool_val(false);
+    z3::expr egress_port_is_physical = context.z3_context->bool_val(false);
     for (int port : physical_ports) {
       ingress_port_is_physical =
           ingress_port_is_physical || context.ingress_port == port;

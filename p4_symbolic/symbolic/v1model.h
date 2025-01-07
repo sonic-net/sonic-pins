@@ -20,14 +20,21 @@
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
 namespace v1model {
 
+// V1model's `mark_to_drop` primitive sets the `egress_spec` field to
+// `kDropPort` to indicate the packet should be dropped at the end of
+// ingress/egress processing. See v1model.p4 for details.
+z3::expr EgressSpecDroppedValue(z3::context &z3_context);
+
 // Initializes the ingress headers to appropriate values.
 absl::Status InitializeIngressHeaders(const ir::P4Program &program,
-                                      SymbolicPerPacketState &ingress_headers);
+                                      SymbolicPerPacketState &ingress_headers,
+                                      z3::context &z3_context);
 
 // Symbolically evaluates the parser, ingress, and egress pipelines of the given
 // P4 program with the given entries, assuming the program is written against V1

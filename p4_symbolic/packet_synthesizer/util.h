@@ -18,7 +18,7 @@
 #include "absl/status/status.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 
-// This file contains varrious utility functions and classes used by packet
+// This file contains various utility functions and classes used by packet
 // synthesizer.
 
 namespace p4_symbolic::packet_synthesizer {

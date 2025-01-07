@@ -15,17 +15,15 @@
 #include "tests/integration/system/random_blackbox_events_tests.h"
 
 #include <functional>
-#include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>  //NOLINT
 #include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
@@ -47,6 +45,7 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/annotation_util.h"
@@ -63,6 +62,7 @@
 #include "sai_p4/fixed/roles.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
@@ -136,7 +136,6 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
                          pdpi::GetForwardingPipelineConfig(p4rt_session.get()));
     p4_info = std::move(*response.mutable_config()->mutable_p4info());
   }
-
   ASSERT_OK_AND_ASSIGN(
       p4_fuzzer::FuzzerConfig config,
       p4_fuzzer::FuzzerConfig::Create(
@@ -149,9 +148,10 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
                        .tables_for_which_to_not_exceed_resource_guarantees =
                            {"vrf_table", "mirror_session_table"},
                    }));
-  ASSERT_OK_AND_ASSIGN(auto p4rt_session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           testbed->Sut(), GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(
+      auto p4rt_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed->Sut(), /*gnmi_config=*/std::nullopt, std::move(p4_info)));
   {
     ScopedThread p4rt_fuzzer([&config,
                               &p4rt_session](const bool& time_to_exit) {
@@ -190,7 +190,7 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
       }
     });
 
-    // Send traffic and report discrepencies.
+    // Send traffic and report discrepancies.
     const auto test_packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
       headers {
         ethernet_header {

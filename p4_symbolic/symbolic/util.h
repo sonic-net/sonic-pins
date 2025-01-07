@@ -24,7 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "google/protobuf/map.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
@@ -35,12 +35,13 @@ namespace util {
 // Free (unconstrained) symbolic headers consisting of free symbolic variables
 // for every field in every header instance defined in the P4 program.
 absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
+    z3::context &z3_context,
     const google::protobuf::Map<std::string, ir::HeaderType> &headers);
 
 // Returns an symbolic table match containing default values.
 // The table match expression is false, the index is -1, and the value is
 // undefined.
-SymbolicTableMatch DefaultTableMatch();
+SymbolicTableMatch DefaultTableMatch(z3::context &z3_context);
 
 // Extract a concrete context by evaluating every component's corresponding
 // expression in the model.
@@ -52,10 +53,9 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
 // map has the value of `true_matches` if the condition is true, and the
 // value of `false_matches` otherwise.
 // The two maps must contain disjoint keys, otherwise an error is returned.
-absl::StatusOr<SymbolicTableMatches>
-MergeMatchesOnCondition(const z3::expr &condition,
-                        const SymbolicTableMatches &true_matches,
-                        const SymbolicTableMatches &false_matches);
+absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
+    const z3::expr &condition, const SymbolicTableMatches &true_matches,
+    const SymbolicTableMatches &false_matches, z3::context &z3_context);
 
 // Merges two maps of table matches into a single map. The two maps must contain
 // disjoint keys, otherwise an error is returned.

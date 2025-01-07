@@ -25,19 +25,20 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "gutil/status.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
 namespace operators {
 
+namespace {
+
 // Pads bitvector with padsize-many zero bits
 // will fail with a runtime error if bitvector is not of bv sort, use after
 // checking that the sort is correct.
 z3::expr Pad(const z3::expr &bitvector, int pad_size) {
   if (pad_size > 0) {
-    return z3::concat(Z3Context().bv_val(0, pad_size), bitvector);
+    return z3::concat(bitvector.ctx().bv_val(0, pad_size), bitvector);
   }
   return bitvector;
 }
@@ -55,6 +56,8 @@ z3::expr Suffix(const z3::expr &bitvector, unsigned int suffix_size) {
   }
   return bitvector;
 }
+
+}  // namespace
 
 // Check that the two expressions have compatible sorts, and return an
 // absl error otherwise.
@@ -124,13 +127,13 @@ absl::StatusOr<z3::expr> FreeVariable(const std::string &variable_base_name,
       absl::StrFormat("%s.%d", variable_base_name, counter++);
   switch (sort.sort_kind()) {
     case Z3_BOOL_SORT: {
-      return Z3Context().bool_const(variable_name.c_str());
+      return sort.ctx().bool_const(variable_name.c_str());
     }
     case Z3_INT_SORT: {
-      return Z3Context().int_const(variable_name.c_str());
+      return sort.ctx().int_const(variable_name.c_str());
     }
     case Z3_BV_SORT: {
-      return Z3Context().bv_const(variable_name.c_str(), sort.bv_size());
+      return sort.ctx().bv_const(variable_name.c_str(), sort.bv_size());
     }
     default:
       return absl::InvalidArgumentError(
@@ -293,17 +296,16 @@ absl::StatusOr<z3::expr> ToBoolSort(const z3::expr &a) {
   if (a.get_sort().is_bool()) {
     return a;
   } else if (a.get_sort().is_bv()) {
-    return Gte(a, Z3Context().bv_val(1, 1));
+    return Gte(a, a.ctx().bv_val(1, 1));
   } else if (a.get_sort().is_int()) {
-    return a >= Z3Context().int_val(1);
+    return a >= a.ctx().int_val(1);
   } else {
     return absl::InvalidArgumentError("Illegal conversion to bool sort");
   }
 }
 absl::StatusOr<z3::expr> ToBitVectorSort(const z3::expr &a, unsigned int size) {
   if (a.get_sort().is_bool()) {
-    z3::expr bits =
-        z3::ite(a, Z3Context().bv_val(1, 1), Z3Context().bv_val(0, 1));
+    z3::expr bits = z3::ite(a, a.ctx().bv_val(1, 1), a.ctx().bv_val(0, 1));
     return Pad(bits, size - 1);
   } else if (a.get_sort().is_bv()) {
     if (a.get_sort().bv_size() <= size) {

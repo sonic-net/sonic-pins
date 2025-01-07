@@ -27,8 +27,9 @@ namespace p4_symbolic {
 namespace symbolic {
 
 absl::StatusOr<SymbolicGuardedMap> SymbolicGuardedMap::CreateSymbolicGuardedMap(
+    z3::context &z3_context,
     const google::protobuf::Map<std::string, ir::HeaderType> &headers) {
-  ASSIGN_OR_RETURN(auto map, util::FreeSymbolicHeaders(headers));
+  ASSIGN_OR_RETURN(auto map, util::FreeSymbolicHeaders(z3_context, headers));
   return SymbolicGuardedMap(map);
 }
 

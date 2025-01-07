@@ -35,12 +35,12 @@ namespace conditional {
 absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const ir::Dataplane &data_plane, const ir::Conditional &conditional,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard) {
+    z3::context &z3_context, const z3::expr &guard) {
   // Evaluate the condition.
   action::ActionContext fake_context = {conditional.name(), {}};
-  ASSIGN_OR_RETURN(
-      z3::expr condition,
-      action::EvaluateRValue(conditional.condition(), *state, fake_context));
+  ASSIGN_OR_RETURN(z3::expr condition,
+                   action::EvaluateRValue(conditional.condition(), *state,
+                                          fake_context, z3_context));
   ASSIGN_OR_RETURN(z3::expr negated_condition, operators::Not(condition));
 
   // Build new guards for each branch.
@@ -60,17 +60,17 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
       SymbolicTableMatches if_matches,
       control::EvaluateControl(
           data_plane, get_next_control_for_branch(conditional.if_branch()),
-          state, translator, if_guard));
+          state, translator, z3_context, if_guard));
   ASSIGN_OR_RETURN(
       SymbolicTableMatches else_matches,
       control::EvaluateControl(
           data_plane, get_next_control_for_branch(conditional.else_branch()),
-          state, translator, else_guard));
+          state, translator, z3_context, else_guard));
 
   // Now we have two traces that need merging.
-  ASSIGN_OR_RETURN(
-      SymbolicTableMatches merged_matches,
-      util::MergeMatchesOnCondition(condition, if_matches, else_matches));
+  ASSIGN_OR_RETURN(SymbolicTableMatches merged_matches,
+                   util::MergeMatchesOnCondition(condition, if_matches,
+                                                 else_matches, z3_context));
 
   if (!conditional.optimized_symbolic_execution_info()
            .continue_to_merge_point()) {
@@ -84,7 +84,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
         control::EvaluateControl(
             data_plane,
             conditional.optimized_symbolic_execution_info().merge_point(),
-            state, translator, guard));
+            state, translator, z3_context, guard));
 
     // Merge the result of execution from the merge point with the result of
     // merged if/else branches.

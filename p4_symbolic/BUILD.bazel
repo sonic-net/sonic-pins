@@ -98,7 +98,6 @@ cc_test(
     deps = [
         ":deparser",
         ":test_util",
-        ":z3_util",
         "//gutil:status_matchers",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
