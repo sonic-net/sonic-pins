@@ -188,3 +188,45 @@ cc_library(
     ],
     alwayslink = True,
 )
+
+cc_library(
+    name = "alpm_miss_counter_tests",
+    testonly = 1,
+    srcs = [
+        "alpm_miss_counter_tests.cc",
+    ],
+    hdrs = [
+        "alpm_miss_counter_tests.h",
+    ],
+    deps = [
+        "//gutil:collections",
+        "//gutil:proto",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//lib/gnmi:gnmi_helper",
+        "//lib/validator:validator_lib",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:p4_runtime_session_extras",
+        "//p4_pdpi/netaddr:mac_address",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//tests/lib:switch_test_setup_helpers",
+        "//thinkit:control_device",
+        "//thinkit:generic_testbed",
+        "//thinkit:generic_testbed_fixture",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest",
+    ],
+    alwayslink = 1,
+)
+
