@@ -17,6 +17,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
@@ -354,10 +355,10 @@ absl::StatusOr<SlotPortLane> GetSlotPortLaneForPort(
   }
   auto slot_port_lane_str = port.substr(kEthernetLen);
   std::vector<std::string> values = absl::StrSplit(slot_port_lane_str, '/');
-  if (values.size() != 3) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Requested port (", port,
-                     ") does not have a valid format (EthernetX/Y/Z)"));
+  if (values.size() < kSlotPortLaneMinValues) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Requested port (", port,
+        ") does not have a valid format (EthernetX/Y/Z or EthernetX/Y)"));
   }
   SlotPortLane slot_port_lane;
   if (!absl::SimpleAtoi(values[kSlotIndex], &slot_port_lane.slot)) {
@@ -370,10 +371,15 @@ absl::StatusOr<SlotPortLane> GetSlotPortLaneForPort(
            << "Failed to convert string (" << values[kPortIndex]
            << ") to integer";
   }
-  if (!absl::SimpleAtoi(values[kLaneIndex], &slot_port_lane.lane)) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "Failed to convert string (" << values[kLaneIndex]
-           << ") to integer";
+  // Unchannelizable ports will not contain a lane number.
+  // Use default lane number of 1.
+  slot_port_lane.lane = 1;
+  if (values.size() == kSlotPortLaneMaxValues) {
+    if (!absl::SimpleAtoi(values[kLaneIndex], &slot_port_lane.lane)) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Failed to convert string (" << values[kLaneIndex]
+             << ") to integer";
+    }
   }
   return slot_port_lane;
 }
@@ -507,7 +513,7 @@ absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                   absl::string_view port) {
   // Get transceiver name for the port.
   auto state_path =
-      absl::StrCat("interfaces/interface[name=", port, "]/state/transceiver");
+      absl::StrFormat("interfaces/interface[name=%s]/state/transceiver", port);
   auto resp_parse_str = "openconfig-platform-transceiver:transceiver";
   ASSIGN_OR_RETURN(
       auto xcvrd_name,
@@ -517,27 +523,21 @@ absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
         << port);
   StripSymbolFromString(xcvrd_name, '\"');
 
-  // TODO: Replace with PMD type when supported.
-  // Get cable length for the port transceiver.
-  state_path =
-      absl::StrCat("components/component[name=", xcvrd_name,
-                   "]/transceiver/state/openconfig-platform-ext:cable-length");
-  resp_parse_str = "openconfig-platform-ext:cable-length";
+  state_path = absl::StrFormat(
+      "components/component[name=%s]/transceiver/state/ethernet-pmd",
+      xcvrd_name);
+  resp_parse_str = "openconfig-platform-transceiver:ethernet-pmd";
   ASSIGN_OR_RETURN(
-      auto cable_length_str,
+      auto ethernet_pmd,
       GetGnmiStatePathInfo(sut_gnmi_stub, state_path, resp_parse_str),
-      _ << "Failed to get GNMI state path value for cable-length for "
+      _ << "Failed to get GNMI state path value for ethernet-pmd for "
            "port "
         << port);
-  StripSymbolFromString(cable_length_str, '\"');
+  StripSymbolFromString(ethernet_pmd, '\"');
 
-  // Only cable lengths of copper ports are a positive value.
-  float cable_length;
-  if (!absl::SimpleAtof(cable_length_str, &cable_length)) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "Failed to convert string (" << cable_length_str << ") to float";
-  }
-  return (cable_length > 0);
+  // PMD state path value for copper ports ends in CR2/CR4/CR8.
+  auto pos = ethernet_pmd.find_last_of('_');
+  return (ethernet_pmd.substr(pos + 1, 2) == "CR");
 }
 
 absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(

@@ -38,6 +38,8 @@ inline constexpr char kEthernet[] = "Ethernet";
 const int kSlotIndex = 0;
 const int kPortIndex = 1;
 const int kLaneIndex = 2;
+const int kSlotPortLaneMinValues = 2;
+const int kSlotPortLaneMaxValues = 3;
 
 // PortBreakoutInfo contains physical channels and operational status for an
 // interface.

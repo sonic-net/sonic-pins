@@ -253,8 +253,11 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
                            absl::string_view payload) {
   LOG(INFO) << absl::StreamFormat("Sending %d packets with %s, %s to port %s.",
                                   packet_count, dst_mac, dst_ip, port_id);
-  ASSIGN_OR_RETURN(std::string packet, UdpPacket(dst_mac, dst_ip, payload));
+
   for (int i = 0; i < packet_count; ++i) {
+    ASSIGN_OR_RETURN(std::string packet,
+                     UdpPacket(dst_mac, dst_ip,
+                               absl::Substitute("[Packet:$0] $1", i, payload)));
     RETURN_IF_ERROR(InjectEgressPacket(port_id, packet, ir_p4info, &session));
   }
   return absl::OkStatus();
@@ -329,7 +332,7 @@ TEST_P(L3AdmitTestFixture,
       packetlib::Packet packet_in =
           packetlib::ParsePacket(response.packet().payload());
       if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          packet_in.payload() == kGoodPayload) {
+          absl::StrContains(packet_in.payload(), kGoodPayload)) {
         ++good_packet_count;
       } else if (response.update_case() ==
                      p4::v1::StreamMessageResponse::kPacket &&
@@ -412,7 +415,7 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
       packetlib::Packet packet_in =
           packetlib::ParsePacket(response.packet().payload());
       if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          packet_in.payload() == kGoodPayload) {
+          absl::StrContains(packet_in.payload(), kGoodPayload)) {
         ++good_packet_count;
       } else {
         LOG(WARNING) << "Unexpected response: " << response.DebugString();
@@ -503,7 +506,7 @@ TEST_P(L3AdmitTestFixture, DISABLED_L3AdmitCanUseInPortToRestrictMacAddresses) {
       packetlib::Packet packet_in =
           packetlib::ParsePacket(response.packet().payload());
       if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          packet_in.payload() == kGoodPayload) {
+          absl::StrContains(packet_in.payload(), kGoodPayload)) {
         ++good_packet_count;
       } else if (response.update_case() ==
                      p4::v1::StreamMessageResponse::kPacket &&
@@ -576,7 +579,7 @@ ASSERT_OK(
       packetlib::Packet packet_in =
           packetlib::ParsePacket(response.packet().payload());
       if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          packet_in.payload() == kGoodPayload) {
+          absl::StrContains(packet_in.payload(), kGoodPayload)) {
         ++good_packet_count;
       } else {
         LOG(WARNING) << "Unexpected response: " << response.DebugString();
@@ -682,7 +685,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
       packetlib::Packet packet_in =
           packetlib::ParsePacket(response.packet().payload());
       if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          packet_in.payload() == kGoodPayload) {
+          absl::StrContains(packet_in.payload(), kGoodPayload)) {
         ++good_packet_count;
       } else if (response.update_case() ==
                      p4::v1::StreamMessageResponse::kPacket &&

@@ -38,8 +38,8 @@ namespace {
 // The use of a template here is a hack to improve readability.
 // TODO: Move to p4-symbolic utility library.
 template <size_t num_bits>
-inline z3::expr Bitvector(uint64_t value) {
-  return p4_symbolic::Z3Context().bv_val(value, num_bits);
+inline z3::expr Bitvector(uint64_t value, z3::context& z3_context) {
+  return z3_context.bv_val(value, num_bits);
 }
 
 // TODO: Move to netaddr.
@@ -76,41 +76,57 @@ absl::StatusOr<std::vector<Ipv6Range>> GetUnicastIpv6Ranges() {
 }
 
 // TODO: Move to p4-symbolic utility library and add unit tests.
-absl::StatusOr<z3::expr> Ipv6PrefixLengthToZ3Mask(int prefix_length) {
+absl::StatusOr<z3::expr> Ipv6PrefixLengthToZ3Mask(int prefix_length,
+                                                  z3::context& z3_context) {
   if (prefix_length < 0 || prefix_length > 128) {
     return gutil::InvalidArgumentErrorBuilder()
            << "invalid IPv6 prefix length: " << prefix_length;
   }
   if (prefix_length > 64) {
-    return Bitvector<128>(0xFFFF'FFFF'FFFF'FFFFu).rotate_left(64) |
-           Bitvector<128>(0xFFFF'FFFF'FFFF'FFFFu << (128 - prefix_length));
+    return Bitvector<128>(0xFFFF'FFFF'FFFF'FFFFu, z3_context).rotate_left(64) |
+           Bitvector<128>(0xFFFF'FFFF'FFFF'FFFFu << (128 - prefix_length),
+                          z3_context);
   } else {
-    return Bitvector<128>(0xFFFF'FFFF'FFFF'FFFFu << (64 - prefix_length))
+    return Bitvector<128>(0xFFFF'FFFF'FFFF'FFFFu << (64 - prefix_length),
+                          z3_context)
         .rotate_left(64);
   }
 }
 
 // TODO: Move to p4-symbolic utility library.
 absl::StatusOr<z3::expr> Ipv6AddressToZ3Bitvector(
-    const netaddr::Ipv6Address& ipv6) {
+    const netaddr::Ipv6Address& ipv6, z3::context& z3_context) {
   std::bitset<128> bits = ipv6.ToBitset();
   uint64_t upper = (bits >> 64).to_ullong();
   uint64_t lower =
       (bits & std::bitset<128>(0xFFFF'FFFF'FFFF'FFFFu)).to_ullong();
-  return Bitvector<128>(upper).rotate_left(64) | Bitvector<128>(lower);
+  return Bitvector<128>(upper, z3_context).rotate_left(64) |
+         Bitvector<128>(lower, z3_context);
 }
 
 absl::StatusOr<z3::expr> IsIpv6UnicastAddress(z3::expr ipv6_address) {
-  z3::expr result = p4_symbolic::Z3Context().bool_val(false);
+  z3::context& z3_context = ipv6_address.ctx();
+  z3::expr result = z3_context.bool_val(false);
   ASSIGN_OR_RETURN(std::vector<Ipv6Range> ranges, GetUnicastIpv6Ranges());
   for (auto& range : ranges) {
-    ASSIGN_OR_RETURN(z3::expr value, Ipv6AddressToZ3Bitvector(range.value));
+    ASSIGN_OR_RETURN(z3::expr value,
+                     Ipv6AddressToZ3Bitvector(range.value, z3_context));
     ASSIGN_OR_RETURN(z3::expr mask,
-                     Ipv6PrefixLengthToZ3Mask(range.prefix_length));
+                     Ipv6PrefixLengthToZ3Mask(range.prefix_length, z3_context));
     result = result || ((ipv6_address & mask) == value);
   }
   return result;
 }
+
+absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
+                                              int bitwidth,
+                                              z3::context& z3_context) {
+  ASSIGN_OR_RETURN(const std::string bytes,
+                   pdpi::IrValueToNormalizedByteString(value, bitwidth));
+  const std::string hex_string = pdpi::ByteStringToHexString(bytes);
+  return HexStringToZ3Bitvector(z3_context, hex_string, bitwidth);
+}
+
 }  // namespace
 
 // TODO: We need extra constraints to avoid generating packets
@@ -119,6 +135,8 @@ absl::StatusOr<z3::expr> IsIpv6UnicastAddress(z3::expr ipv6_address) {
 // function would disappear.
 absl::Status AddSanePacketConstraints(
     p4_symbolic::symbolic::SolverState& state) {
+  z3::context& z3_context = *state.context.z3_context;
+
   // ======Ethernet constraints======
   ASSIGN_OR_RETURN(z3::expr ethernet_src_addr,
                    state.context.ingress_headers.Get("ethernet.src_addr"));
@@ -134,13 +152,14 @@ absl::Status AddSanePacketConstraints(
   // such packets still continue to hit the acl_ingress table and some of the
   // entries cause such packets to get punted. So we should not disallow the
   // generation of such packets.
-  state.solver->add((ethernet_src_addr & Bitvector<48>(0x03'00'00'00'00'00)) ==
-                    Bitvector<48>(0x02'00'00'00'00'00));
+  state.solver->add(
+      (ethernet_src_addr & Bitvector<48>(0x03'00'00'00'00'00, z3_context)) ==
+      Bitvector<48>(0x02'00'00'00'00'00, z3_context));
 
   for (auto& mac_address : {ethernet_src_addr, ethernet_dst_addr}) {
     // Require key parts of the address to be nonzero to avoid corner cases.
     auto nonzero_masks = std::vector({
-        Bitvector<48>(0x00'FF'FF'00'00'00),  // OUI
+        Bitvector<48>(0x00'FF'FF'00'00'00, z3_context),  // OUI
     });
     for (auto& nonzero_mask : nonzero_masks) {
       state.solver->add((mac_address & nonzero_mask) != 0);
@@ -156,15 +175,16 @@ absl::Status AddSanePacketConstraints(
                    state.context.ingress_headers.Get("ipv4.dst_addr"));
   // Avoid martian IP addresses.
   // https://tools.ietf.org/html/rfc1122#section-3.2.1.3
-  state.solver->add((ipv4_src_addr & Bitvector<32>(0xFF'00'00'00)) != 0);
+  state.solver->add(
+      (ipv4_src_addr & Bitvector<32>(0xFF'00'00'00, z3_context)) != 0);
   // Src IP address cannot be 255.255.255.255 (broadcast).
-  state.solver->add(ipv4_src_addr != Bitvector<32>(0xFF'FF'FF'FF));
+  state.solver->add(ipv4_src_addr != Bitvector<32>(0xFF'FF'FF'FF, z3_context));
   // Neither src nor dst IPv4 addresses can be 0.
-  state.solver->add(ipv4_src_addr != Bitvector<32>(0));
-  state.solver->add(ipv4_dst_addr != Bitvector<32>(0));
+  state.solver->add(ipv4_src_addr != Bitvector<32>(0, z3_context));
+  state.solver->add(ipv4_dst_addr != Bitvector<32>(0, z3_context));
   // Neither src nor dst IPv4 addresses can be 127.0.0.1 (loopback).
-  state.solver->add(ipv4_src_addr != Bitvector<32>(0x7F'00'00'01));
-  state.solver->add(ipv4_dst_addr != Bitvector<32>(0x7F'00'00'01));
+  state.solver->add(ipv4_src_addr != Bitvector<32>(0x7F'00'00'01, z3_context));
+  state.solver->add(ipv4_dst_addr != Bitvector<32>(0x7F'00'00'01, z3_context));
 
   // ======Ipv6 constraints======
   ASSIGN_OR_RETURN(z3::expr ipv6_src_addr,
@@ -177,11 +197,11 @@ absl::Status AddSanePacketConstraints(
     state.solver->add(constraint);
   }
   // Neither src nor dst IPv6 addresses can be 0.
-  state.solver->add(ipv6_src_addr != Bitvector<128>(0));
-  state.solver->add(ipv6_dst_addr != Bitvector<128>(0));
+  state.solver->add(ipv6_src_addr != Bitvector<128>(0, z3_context));
+  state.solver->add(ipv6_dst_addr != Bitvector<128>(0, z3_context));
   // Neither src nor dst IPv6 addresses can be ::1 (loopback).
-  state.solver->add(ipv6_src_addr != Bitvector<128>(1));
-  state.solver->add(ipv6_dst_addr != Bitvector<128>(1));
+  state.solver->add(ipv6_src_addr != Bitvector<128>(1, z3_context));
+  state.solver->add(ipv6_dst_addr != Bitvector<128>(1, z3_context));
 
   // ======VLAN constraints==========
   // TODO: Make unconditional when we no longer need
@@ -193,40 +213,34 @@ absl::Status AddSanePacketConstraints(
                      state.context.ingress_headers.Get("vlan.vlan_id"));
     // TODO: Consider testing the following VIDs when PacketIO is
     // properly modeled.
-    state.solver->add(vlan_id != Bitvector<12>(0xFFF));
-    state.solver->add(vlan_id != Bitvector<12>(0x001));
+    state.solver->add(vlan_id != Bitvector<12>(0xFFF, z3_context));
+    state.solver->add(vlan_id != Bitvector<12>(0x001, z3_context));
   }
 
   return absl::OkStatus();
-}
-
-absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
-                                              int bitwidth) {
-  ASSIGN_OR_RETURN(const std::string bytes,
-                   pdpi::IrValueToNormalizedByteString(value, bitwidth));
-  const std::string hex_string = pdpi::ByteStringToHexString(bytes);
-  return HexStringToZ3Bitvector(Z3Context(), hex_string, bitwidth);
 }
 
 // The following functions return Z3 constraints corresponding to `field`
 // matching the given pdpi::IrMatch value.
 absl::StatusOr<z3::expr> GetFieldMatchConstraints(z3::expr field, int bitwidth,
                                                   const pdpi::IrValue& match) {
-  ASSIGN_OR_RETURN(z3::expr value, IrValueToZ3Bitvector(match, bitwidth));
+  ASSIGN_OR_RETURN(z3::expr value,
+                   IrValueToZ3Bitvector(match, bitwidth, field.ctx()));
   return Eq(field, value);
 }
 absl::StatusOr<z3::expr> GetFieldMatchConstraints(
     z3::expr field, int bitwidth, const pdpi::IrMatch::IrLpmMatch& match) {
   ASSIGN_OR_RETURN(z3::expr value,
-                   IrValueToZ3Bitvector(match.value(), bitwidth));
+                   IrValueToZ3Bitvector(match.value(), bitwidth, field.ctx()));
   return PrefixEq(field, value,
                   static_cast<unsigned int>(match.prefix_length()));
 }
 absl::StatusOr<z3::expr> GetFieldMatchConstraints(
     z3::expr field, int bitwidth, const pdpi::IrMatch::IrTernaryMatch& match) {
   ASSIGN_OR_RETURN(z3::expr value,
-                   IrValueToZ3Bitvector(match.value(), bitwidth));
-  ASSIGN_OR_RETURN(z3::expr mask, IrValueToZ3Bitvector(match.mask(), bitwidth));
+                   IrValueToZ3Bitvector(match.value(), bitwidth, field.ctx()));
+  ASSIGN_OR_RETURN(z3::expr mask,
+                   IrValueToZ3Bitvector(match.mask(), bitwidth, field.ctx()));
   ASSIGN_OR_RETURN(z3::expr masked_field, BitAnd(field, mask));
   return Eq(masked_field, value);
 }

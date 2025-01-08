@@ -18,6 +18,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -36,13 +37,27 @@ namespace {
 constexpr absl::Duration kGnmiTimeoutDefault = absl::Minutes(3);
 constexpr char kPortNamedType[] = "port_id_t";
 
-absl::Status ClearTableEntries(
+// Only clears table entries if a P4RT session can be established.
+//
+// P4RT requires a device ID to be pushed over gNMI which is not enforced by
+// this helper function. Given that we can't know the switch's state in all
+// cases where this will be called, we default to best effort for clearing the
+// entries.
+absl::Status TryClearingTableEntries(
     thinkit::Switch& thinkit_switch,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(session.get()));
-  RETURN_IF_ERROR(session->Finish());
+  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> session =
+      pdpi::P4RuntimeSession::Create(thinkit_switch, metadata);
+  if (!session.ok()) {
+    LOG(WARNING)
+        << "P4RT session could not be established to clear tables. This is "
+           "expected if no gNMI config has been previously pushed: "
+        << session.status();
+    return absl::OkStatus();
+  }
+
+  RETURN_IF_ERROR(pdpi::ClearTableEntries(session.value().get()));
+  RETURN_IF_ERROR(session.value()->Finish());
   return absl::OkStatus();
 }
 
@@ -52,6 +67,21 @@ absl::Status PushGnmiAndWaitForConvergence(thinkit::Switch& thinkit_switch,
   RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch, gnmi_config));
   return WaitForGnmiPortIdConvergence(thinkit_switch, gnmi_config,
                                       gnmi_timeout);
+}
+
+// Wrapper around `TestGnoiSystemColdReboot` that ensures we don't ignore fatal
+// failures.
+absl::Status Reboot(thinkit::Switch& thinkit_switch) {
+  if (::testing::Test::HasFatalFailure()) {
+    return gutil::UnknownErrorBuilder()
+           << "skipping switch reboot due to pre-existing, fatal test failure";
+  }
+  TestGnoiSystemColdReboot(thinkit_switch);
+  if (::testing::Test::HasFatalFailure()) {
+    return gutil::UnknownErrorBuilder()
+           << "switch reboot failed with fatal error";
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
@@ -75,7 +105,7 @@ CreateP4RuntimeSessionAndOptionallyPushP4Info(
              "but I am asked to push a P4Info with the following diff:\n"
           << p4info_diff;
       RETURN_IF_ERROR(session->Finish());
-      TestGnoiSystemColdReboot(thinkit_switch);
+      RETURN_IF_ERROR(Reboot(thinkit_switch));
       // Reconnect after reboot.
       ASSIGN_OR_RETURN(
           session, pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
@@ -129,7 +159,7 @@ ConfigureSwitchAndReturnP4RuntimeSession(
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
   // Since the gNMI Config push relies on tables being cleared, we construct a
   // P4RuntimeSession and clear the tables first.
-  RETURN_IF_ERROR(ClearTableEntries(thinkit_switch, metadata));
+  RETURN_IF_ERROR(TryClearingTableEntries(thinkit_switch, metadata));
 
   if (gnmi_config.has_value()) {
     RETURN_IF_ERROR(

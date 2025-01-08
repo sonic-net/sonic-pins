@@ -16,7 +16,7 @@
 #define PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_
 
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -26,7 +26,8 @@ namespace parser {
 // Returns a Z3 bit-vector representing the `parser_error` field value of the
 // given `error_name`.
 absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
-                                                const std::string &error_name);
+                                                const std::string &error_name,
+                                                z3::context &z3_context);
 
 // Evaluates all parsers in the P4 program and returns a map of symbolic headers
 // that captures the effect of parser execution given the `ingress_headers`.
@@ -39,9 +40,9 @@ absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
 // set to the corresponding error code and the function returns immediately. The
 // current implementation may only result in 2 types of parser error, NoError
 // and NoMatch.
-absl::StatusOr<SymbolicPerPacketState>
-EvaluateParsers(const ir::P4Program &program,
-                const SymbolicPerPacketState &ingress_headers);
+absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
+    const ir::P4Program &program, const SymbolicPerPacketState &ingress_headers,
+    z3::context &z3_context);
 
 } // namespace parser
 } // namespace symbolic

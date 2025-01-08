@@ -67,6 +67,7 @@ absl::StatusOr<ir::HeaderField> GetFieldDefinition(
 }  // namespace
 
 absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
+    z3::context &z3_context,
     const google::protobuf::Map<std::string, ir::HeaderType> &headers) {
   // Loop over every header instance in the p4 program.
   // Find its type, and loop over every field in it, creating a symbolic free
@@ -80,7 +81,7 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
           absl::StrFormat("%s.%s", header_name, pseudo_field_name);
       // TODO: Set these fields to false while removing SAI parser
       // code.
-      z3::expr free_expr = Z3Context().bool_const(field_name.c_str());
+      z3::expr free_expr = z3_context.bool_const(field_name.c_str());
       symbolic_headers.insert({field_name, free_expr});
     }
 
@@ -94,7 +95,7 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
       std::string field_full_name =
           absl::StrFormat("%s.%s", header_name, field_name);
       z3::expr field_expression =
-          Z3Context().bv_const(field_full_name.c_str(), field.bitwidth());
+          z3_context.bv_const(field_full_name.c_str(), field.bitwidth());
       symbolic_headers.insert({field_full_name, field_expression});
     }
   }
@@ -102,16 +103,16 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
   // Initialize pseudo header fields.
   symbolic_headers.insert({
       std::string(kGotClonedPseudoField),
-      Z3Context().bool_val(false),
+      z3_context.bool_val(false),
   });
 
   return symbolic_headers;
 }
 
-SymbolicTableMatch DefaultTableMatch() {
+SymbolicTableMatch DefaultTableMatch(z3::context &z3_context) {
   return {
-      Z3Context().bool_val(false),  // No match yet!
-      Z3Context().int_val(-1)       // No match index.
+      z3_context.bool_val(false),  // No match yet!
+      z3_context.int_val(-1)       // No match index.
   };
 }
 
@@ -173,7 +174,7 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
 
 absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
     const z3::expr &condition, const SymbolicTableMatches &true_matches,
-    const SymbolicTableMatches &false_matches) {
+    const SymbolicTableMatches &false_matches, z3::context &z3_context) {
   SymbolicTableMatches merged;
 
   // Merge all tables matches in true_trace (including ones in both traces).
@@ -181,7 +182,7 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
     // Find match in other trace (or use default).
     const SymbolicTableMatch false_match = false_matches.contains(name)
                                                ? false_matches.at(name)
-                                               : DefaultTableMatch();
+                                               : DefaultTableMatch(z3_context);
 
     // Merge this match.
     ASSIGN_OR_RETURN(
@@ -205,7 +206,7 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
     }
 
     // Get the default match for the true branch.
-    const SymbolicTableMatch true_match = DefaultTableMatch();
+    const SymbolicTableMatch true_match = DefaultTableMatch(z3_context);
 
     // Merge this match.
     ASSIGN_OR_RETURN(

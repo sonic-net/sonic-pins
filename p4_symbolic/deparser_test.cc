@@ -29,7 +29,6 @@
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/test_util.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -55,7 +54,6 @@ class IPv4RoutingBasicTest : public testing::Test {
     ASSERT_OK_AND_ASSIGN(
         std::vector<p4::v1::TableEntry> entries,
         GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
-    Z3Context(/*renew=*/true);
     ASSERT_OK_AND_ASSIGN(state_, symbolic::EvaluateP4Program(config, entries));
   }
 
@@ -73,12 +71,12 @@ TEST_F(IPv4RoutingBasicTest, DeparseIngressAndEgressHeadersWithoutConstraints) {
 TEST_F(IPv4RoutingBasicTest, DeparseIngressHeaders1) {
   // Add constraints.
   {
+    z3::context &z3_context = *state_->context.z3_context;
     ASSERT_OK_AND_ASSIGN(
         z3::expr eth_dst_addr,
         state_->context.egress_headers.Get("ethernet.dstAddr"));
-    state_->solver->add(eth_dst_addr == Z3Context().bv_val(0, 48));
-    state_->solver->add(state_->context.egress_port ==
-                        Z3Context().bv_val(1, 9));
+    state_->solver->add(eth_dst_addr == z3_context.bv_val(0, 48));
+    state_->solver->add(state_->context.egress_port == z3_context.bv_val(1, 9));
 
     ASSERT_OK_AND_ASSIGN(
         z3::expr ipv4_valid,
@@ -105,13 +103,13 @@ TEST_F(IPv4RoutingBasicTest, DeparseIngressHeaders1) {
 TEST_F(IPv4RoutingBasicTest, DeparseIngressHeaders2) {
   // Add constraints.
   {
+    z3::context &z3_context = *state_->context.z3_context;
     ASSERT_OK_AND_ASSIGN(
         z3::expr eth_dst_addr,
         state_->context.egress_headers.Get("ethernet.dstAddr"));
     state_->solver->add(eth_dst_addr ==
-                        Z3Context().bv_val((22UL << 40) + 22, 48));
-    state_->solver->add(state_->context.egress_port ==
-                        Z3Context().bv_val(1, 9));
+                        z3_context.bv_val((22UL << 40) + 22, 48));
+    state_->solver->add(state_->context.egress_port == z3_context.bv_val(1, 9));
 
     ASSERT_OK_AND_ASSIGN(
         z3::expr ipv4_valid,
@@ -139,10 +137,11 @@ TEST_F(IPv4RoutingBasicTest, DeparseIngressHeaders2) {
 TEST_F(IPv4RoutingBasicTest, DeparseEgressHeaders) {
   // Add constraints.
   {
+    z3::context &z3_context = *state_->context.z3_context;
     ASSERT_OK_AND_ASSIGN(z3::expr ipv4_dst_addr,
                          state_->context.ingress_headers.Get("ipv4.dstAddr"));
     state_->solver->add(ipv4_dst_addr ==
-                        Z3Context().bv_val((10UL << 24) + 1, 32));
+                        z3_context.bv_val((10UL << 24) + 1, 32));
 
     ASSERT_OK_AND_ASSIGN(
         z3::expr ipv4_valid,
@@ -180,7 +179,6 @@ class SaiDeparserTest : public testing::Test {
     ASSERT_OK_AND_ASSIGN(
         p4::v1::ForwardingPipelineConfig config,
         ParseToForwardingPipelineConfig(bmv2_json_path, p4info_path));
-    Z3Context(/*renew=*/true);
     ASSERT_OK_AND_ASSIGN(state_,
                          symbolic::EvaluateP4Program(config, /*entries=*/{}));
   }

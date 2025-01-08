@@ -36,11 +36,11 @@ namespace p4_symbolic::symbolic::control {
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
     const ir::Dataplane &data_plane, const std::string &pipeline_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard) {
+    z3::context &z3_context, const z3::expr &guard) {
   if (auto it = data_plane.program.pipeline().find(pipeline_name);
       it != data_plane.program.pipeline().end()) {
     return EvaluateControl(data_plane, it->second.initial_control(), state,
-                           translator, guard);
+                           translator, z3_context, guard);
   }
   return gutil::InvalidArgumentErrorBuilder()
          << "cannot evaluate unknown pipeline: '" << pipeline_name << "'";
@@ -49,7 +49,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const ir::Dataplane &data_plane, const std::string &control_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard) {
+    z3::context &z3_context, const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!
   if (control_name == ir::EndOfPipeline()) return SymbolicTableMatches();
 
@@ -62,13 +62,13 @@ absl::StatusOr<SymbolicTableMatches> EvaluateControl(
       table_entries = data_plane.entries.at(control_name);
     }
     return table::EvaluateTable(data_plane, table, table_entries, state,
-                                translator, guard);
+                                translator, z3_context, guard);
   } else if (data_plane.program.conditionals().count(control_name) == 1) {
     // Conditional: let EvaluateConditional handle it.
     const ir::Conditional &conditional =
         data_plane.program.conditionals().at(control_name);
     return conditional::EvaluateConditional(data_plane, conditional, state,
-                                            translator, guard);
+                                            translator, z3_context, guard);
   } else {
     // Something else: unsupported.
     return absl::UnimplementedError(

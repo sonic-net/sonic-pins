@@ -24,6 +24,7 @@
 #include "gutil/collections.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic {
@@ -32,22 +33,24 @@ namespace action {
 
 absl::Status EvaluateStatement(const ir::Statement &statement,
                                SymbolicPerPacketState *state,
-                               ActionContext *context, const z3::expr &guard) {
+                               ActionContext *context, z3::context &z3_context,
+                               const z3::expr &guard) {
   switch (statement.statement_case()) {
     case ir::Statement::kAssignment: {
       return EvaluateAssignmentStatement(statement.assignment(), state, context,
-                                         guard);
+                                         z3_context, guard);
     }
     case ir::Statement::kClone: {
       // TODO: Add support for cloning.
       return state->Set(std::string(kGotClonedPseudoField),
-                        Z3Context().bool_val(true), guard);
+                        z3_context.bool_val(true), guard);
     }
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
       const std::string &header_name = statement.drop().header().header_name();
       RETURN_IF_ERROR(state->Set(absl::StrFormat("%s.egress_spec", header_name),
-                                 EgressSpecDroppedValue(), guard));
+                                 v1model::EgressSpecDroppedValue(z3_context),
+                                 guard));
       return absl::OkStatus();
     }
     case ir::Statement::kHash: {
@@ -84,11 +87,11 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
 // the action scope.
 absl::Status EvaluateAssignmentStatement(
     const ir::AssignmentStatement &assignment, SymbolicPerPacketState *state,
-    ActionContext *context, const z3::expr &guard) {
+    ActionContext *context, z3::context &z3_context, const z3::expr &guard) {
   // Evaluate RValue recursively, evaluate LValue in this function, then
   // assign RValue to the scope at LValue.
-  ASSIGN_OR_RETURN(z3::expr right,
-                   EvaluateRValue(assignment.right(), *state, *context));
+  ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(assignment.right(), *state,
+                                                  *context, z3_context));
 
   switch (assignment.left().lvalue_case()) {
     case ir::LValue::kFieldValue: {
@@ -115,25 +118,27 @@ absl::Status EvaluateAssignmentStatement(
 // to its type.
 absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
                                         const SymbolicPerPacketState &state,
-                                        const ActionContext &context) {
+                                        const ActionContext &context,
+                                        z3::context &z3_context) {
   switch (rvalue.rvalue_case()) {
     case ir::RValue::kFieldValue:
       return EvaluateFieldValue(rvalue.field_value(), state);
 
     case ir::RValue::kHexstrValue:
-      return EvaluateHexStr(rvalue.hexstr_value());
+      return EvaluateHexStr(rvalue.hexstr_value(), z3_context);
 
     case ir::RValue::kBoolValue:
-      return EvaluateBool(rvalue.bool_value());
+      return EvaluateBool(rvalue.bool_value(), z3_context);
 
     case ir::RValue::kStringValue:
-      return EvaluateString(rvalue.string_value());
+      return EvaluateString(rvalue.string_value(), z3_context);
 
     case ir::RValue::kVariableValue:
       return EvaluateVariable(rvalue.variable_value(), context);
 
     case ir::RValue::kExpressionValue:
-      return EvaluateRExpression(rvalue.expression_value(), state, context);
+      return EvaluateRExpression(rvalue.expression_value(), state, context,
+                                 z3_context);
 
     default:
       return absl::UnimplementedError(
@@ -149,7 +154,8 @@ absl::StatusOr<z3::expr> EvaluateFieldValue(
 }
 
 // Turns bmv2 values to Symbolic Expressions.
-absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr) {
+absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr,
+                                        z3::context &z3_context) {
   if (hexstr.negative()) {
     return absl::UnimplementedError(
         "Negative hex string values are not supported!");
@@ -157,15 +163,17 @@ absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr) {
 
   ASSIGN_OR_RETURN(pdpi::IrValue parsed_value,
                    values::ParseIrValue(hexstr.value()));
-  return HexStringToZ3Bitvector(Z3Context(), hexstr.value());
+  return HexStringToZ3Bitvector(z3_context, hexstr.value());
 }
 
-absl::StatusOr<z3::expr> EvaluateBool(const ir::BoolValue &bool_value) {
-  return Z3Context().bool_val(bool_value.value());
+absl::StatusOr<z3::expr> EvaluateBool(const ir::BoolValue &bool_value,
+                                      z3::context &z3_context) {
+  return z3_context.bool_val(bool_value.value());
 }
 
-absl::StatusOr<z3::expr> EvaluateString(const ir::StringValue &string_value) {
-  return Z3Context().string_val(string_value.value().c_str());
+absl::StatusOr<z3::expr> EvaluateString(const ir::StringValue &string_value,
+                                        z3::context &z3_context) {
+  return z3_context.string_val(string_value.value().c_str());
 }
 
 // Looks up the symbolic value of the variable in the action scope.
@@ -184,14 +192,14 @@ absl::StatusOr<z3::expr> EvaluateVariable(const ir::Variable &variable,
 // Recursively evaluate expressions.
 absl::StatusOr<z3::expr> EvaluateRExpression(
     const ir::RExpression &expr, const SymbolicPerPacketState &state,
-    const ActionContext &context) {
+    const ActionContext &context, z3::context &z3_context) {
   switch (expr.expression_case()) {
     case ir::RExpression::kBinaryExpression: {
       ir::BinaryExpression bin_expr = expr.binary_expression();
-      ASSIGN_OR_RETURN(z3::expr left,
-                       EvaluateRValue(bin_expr.left(), state, context));
-      ASSIGN_OR_RETURN(z3::expr right,
-                       EvaluateRValue(bin_expr.right(), state, context));
+      ASSIGN_OR_RETURN(z3::expr left, EvaluateRValue(bin_expr.left(), state,
+                                                     context, z3_context));
+      ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(bin_expr.right(), state,
+                                                      context, z3_context));
       switch (bin_expr.operation()) {
         case ir::BinaryExpression::PLUS:
           return operators::Plus(left, right);
@@ -236,8 +244,9 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
 
     case ir::RExpression::kUnaryExpression: {
       ir::UnaryExpression un_expr = expr.unary_expression();
-      ASSIGN_OR_RETURN(z3::expr operand,
-                       EvaluateRValue(un_expr.operand(), state, context));
+      ASSIGN_OR_RETURN(
+          z3::expr operand,
+          EvaluateRValue(un_expr.operand(), state, context, z3_context));
       switch (un_expr.operation()) {
         case ir::UnaryExpression::NOT:
           return operators::Not(operand);
@@ -253,12 +262,13 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
 
     case ir::RExpression::kTernaryExpression: {
       ir::TernaryExpression tern_expr = expr.ternary_expression();
-      ASSIGN_OR_RETURN(z3::expr condition,
-                       EvaluateRValue(tern_expr.condition(), state, context));
-      ASSIGN_OR_RETURN(z3::expr left,
-                       EvaluateRValue(tern_expr.left(), state, context));
-      ASSIGN_OR_RETURN(z3::expr right,
-                       EvaluateRValue(tern_expr.right(), state, context));
+      ASSIGN_OR_RETURN(
+          z3::expr condition,
+          EvaluateRValue(tern_expr.condition(), state, context, z3_context));
+      ASSIGN_OR_RETURN(z3::expr left, EvaluateRValue(tern_expr.left(), state,
+                                                     context, z3_context));
+      ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(tern_expr.right(), state,
+                                                      context, z3_context));
       return operators::Ite(condition, left, right);
     }
 
@@ -268,7 +278,7 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
       std::vector<z3::expr> args;
       for (const auto &arg_value : builtin_expr.arguments()) {
         ASSIGN_OR_RETURN(z3::expr arg,
-                         EvaluateRValue(arg_value, state, context));
+                         EvaluateRValue(arg_value, state, context, z3_context));
         args.push_back(arg);
       }
 
@@ -301,7 +311,7 @@ absl::Status EvaluateAction(const ir::Action &action,
                                 pdpi::IrActionInvocation::IrActionParam> &args,
                             SymbolicPerPacketState *state,
                             values::P4RuntimeTranslator *translator,
-                            const z3::expr &guard) {
+                            z3::context &z3_context, const z3::expr &guard) {
   // Construct this action's context.
   ActionContext context;
   context.action_name = action.action_definition().preamble().name();
@@ -329,7 +339,7 @@ absl::Status EvaluateAction(const ir::Action &action,
     ASSIGN_OR_RETURN(
         z3::expr parameter_value,
         values::FormatP4RTValue(
-            Z3Context(), /*field_name=*/"",
+            z3_context, /*field_name=*/"",
             param_definition->param().type_name().name(), arg.value(),
             param_definition->param().bitwidth(), translator));
     context.scope.insert({param_definition->param().name(), parameter_value});
@@ -337,7 +347,8 @@ absl::Status EvaluateAction(const ir::Action &action,
 
   // Iterate over the body in order, and evaluate each statement.
   for (const auto &statement : action.action_implementation().action_body()) {
-    RETURN_IF_ERROR(EvaluateStatement(statement, state, &context, guard));
+    RETURN_IF_ERROR(
+        EvaluateStatement(statement, state, &context, z3_context, guard));
   }
 
   return absl::OkStatus();
