@@ -69,11 +69,11 @@ absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
     const pdpi::IrP4Info& ir_p4_info) {
   ASSIGN_OR_RETURN(ArribaTestVector updated_arriba_test_vector,
                    GetUpdatedArribaTestVector(arriba_test_vector));
-  std::vector<pdpi::IrTableEntry> used_entries_list(
-      updated_arriba_test_vector.ir_table_entries().entries().begin(),
-      updated_arriba_test_vector.ir_table_entries().entries().end());
+  std::vector<pdpi::IrEntity> used_entities_list(
+      updated_arriba_test_vector.ir_entities().entities().begin(),
+      updated_arriba_test_vector.ir_entities().entities().end());
   ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
-                   pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
+                   pins_test::GetPortsUsed(ir_p4_info, used_entities_list));
 
   for (const auto& [_, packet_test_vector] :
        updated_arriba_test_vector.packet_test_vector_by_id()) {
