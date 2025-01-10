@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <functional>
+#include <future>  // NOLINT: third_party library.
 #include <memory>
 #include <optional>
 #include <string>
@@ -177,18 +178,29 @@ ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
     std::optional<std::string> gnmi_config,
     std::optional<p4::config::v1::P4Info> p4info,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
-  // TODO: Ideally, we would configure these in parallel instead.
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session1,
-                   ConfigureSwitchAndReturnP4RuntimeSession(
-                       thinkit_switch1, gnmi_config, p4info, metadata),
-                   _.SetPrepend() << "failed to configure switch '"
-                                  << thinkit_switch1.ChassisName() << "': ");
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session2,
-                   ConfigureSwitchAndReturnP4RuntimeSession(
-                       thinkit_switch2, gnmi_config, p4info, metadata),
-                   _.SetPrepend() << "failed to configure switch '"
-                                  << thinkit_switch2.ChassisName() << "': ");
-  return std::make_pair(std::move(session1), std::move(session2));
+  // We configure both switches in parallel, since it may require rebooting the
+  // switch which is costly.
+  using T = absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>;
+  T session1, session2;
+  {
+    std::future<T> future1 = std::async(std::launch::async, [&] {
+      return ConfigureSwitchAndReturnP4RuntimeSession(
+          thinkit_switch1, gnmi_config, p4info, metadata);
+    });
+    std::future<T> future2 = std::async(std::launch::async, [&] {
+      return ConfigureSwitchAndReturnP4RuntimeSession(
+          thinkit_switch2, gnmi_config, p4info, metadata);
+    });
+    session1 = future1.get();
+    session2 = future2.get();
+  }
+  RETURN_IF_ERROR(session1.status()).SetPrepend()
+      << "failed to configure switch '" << thinkit_switch1.ChassisName()
+      << "': ";
+  RETURN_IF_ERROR(session2.status()).SetPrepend()
+      << "failed to configure switch '" << thinkit_switch2.ChassisName()
+      << "': ";
+  return std::make_pair(std::move(*session1), std::move(*session2));
 }
 
 absl::Status MirrorSutP4rtPortIdConfigToControlSwitch(

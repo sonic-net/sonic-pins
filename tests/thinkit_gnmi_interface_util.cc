@@ -725,28 +725,17 @@ absl::Status ValidateBreakoutState(
 
   for (const auto& [port_name, breakout_info] : expected_port_info) {
     // Verify that the oper-status state path value is as expected.
+    auto expected_oper_status = breakout_info.oper_status;
+    StripSymbolFromString(expected_oper_status, '\"');
+    RETURN_IF_ERROR(pins_test::CheckInterfaceOperStateOverGnmi(
+        *sut_gnmi_stub, expected_oper_status, {port_name}));
+    // Verify that the physical-channels state path value is as expected.
     auto interface_state_path = absl::StrCat(
-        "interfaces/interface[name=", port_name, "]/state/oper-status");
-    auto response_parse_str = "openconfig-interfaces:oper-status";
+        "interfaces/interface[name=", port_name, "]/state/physical-channel");
+    auto response_parse_str =
+        "openconfig-platform-transceiver:physical-channel";
     ASSIGN_OR_RETURN(
         auto state_path_response,
-        GetGnmiStatePathInfo(sut_gnmi_stub, interface_state_path,
-                             response_parse_str),
-        _ << "Failed to get GNMI state path value for oper-status for "
-             "port "
-          << port_name);
-    if (!absl::StrContains(state_path_response, breakout_info.oper_status)) {
-      return gutil::InternalErrorBuilder().LogError()
-             << absl::StrCat("Port oper-status match failed for port ",
-                             port_name, ". got: ", state_path_response,
-                             ", want:", breakout_info.oper_status);
-    }
-    // Verify that the physical-channels state path value is as expected.
-    interface_state_path = absl::StrCat("interfaces/interface[name=", port_name,
-                                        "]/state/physical-channel");
-    response_parse_str = "openconfig-platform-transceiver:physical-channel";
-    ASSIGN_OR_RETURN(
-        state_path_response,
         GetGnmiStatePathInfo(sut_gnmi_stub, interface_state_path,
                              response_parse_str),
         _ << "Failed to get GNMI state path value for physical-channels for "
