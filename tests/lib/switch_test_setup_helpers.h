@@ -68,8 +68,7 @@ absl::Status WaitForEnabledInterfacesToBeUp(
         std::function<void(const openconfig::Interfaces &enabled_interfaces)>>
         on_failure = std::nullopt);
 
-// Gets a count of which P4runtime ports are used in `entries` and how
-// frequently.
+// Gets the set of P4 Runtime port IDs used in `entries`.
 absl::StatusOr<absl::btree_set<std::string>>
 GetPortsUsed(const pdpi::IrP4Info &info,
              std::vector<pdpi::IrTableEntry> entries);

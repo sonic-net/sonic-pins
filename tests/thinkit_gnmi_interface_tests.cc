@@ -180,6 +180,15 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   // Oper-status is expected to be down as breakout is applied on one side only.
   for (auto& port : new_breakout_info) {
     port.second.oper_status = kStateDown;
+    // For the logical ports that do not change on breakout, expect them to be
+    // operationally up.
+    auto it = orig_breakout_info.find(port.first);
+    if (it != orig_breakout_info.end()) {
+      if (it->second.physical_channels == port.second.physical_channels &&
+          it->second.breakout_speed == port.second.breakout_speed) {
+        port.second.oper_status = kStateUp;
+      }
+    }
   }
   ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, new_breakout_info,
                                   non_existing_port_list));

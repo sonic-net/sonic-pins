@@ -414,6 +414,10 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
     // Strip quotes from breakout mode string.
     StripSymbolFromString(mode, '\"');
     std::vector<std::string> values = absl::StrSplit(mode, 'x');
+    if (values.size() != 2) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Invalid breakout mode found: " << mode;
+    }
     int num_breakouts;
     if (!absl::SimpleAtoi(values[0], &num_breakouts)) {
       return gutil::InternalErrorBuilder().LogError()
