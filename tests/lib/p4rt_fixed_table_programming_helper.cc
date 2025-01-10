@@ -142,19 +142,19 @@ absl::StatusOr<p4::v1::Update> NeighborTableUpdate(
                          type: $0
                          entity {
                            table_entry {
-                             table_name: "router_interface_table"
+                             table_name: "neighbor_table"
                              matches {
                                name: "router_interface_id"
                                exact { str: "$1" }
                              }
+                             matches {
+                               name: "neighbor_id"
+                               exact { ipv6: "$2" }
+                             }
                              action {
-                               name: "set_port_and_src_mac"
+                               name: "set_dst_mac"
                                params {
-                                 name: "port"
-                                 value { str: "$2" }
-                               }
-                               params {
-                                 name: "src_mac"
+                                 name: "dst_mac"
                                  value { mac: "$3" }
                                }
                              }
@@ -177,20 +177,20 @@ absl::StatusOr<p4::v1::Update> NexthopTableUpdate(
                          type: $0
                          entity {
                            table_entry {
-                             table_name: "neighbor_table"
+                             table_name: "nexthop_table"
                              matches {
-                               name: "router_interface_id"
+                               name: "nexthop_id"
                                exact { str: "$1" }
                              }
-                             matches {
-                               name: "neighbor_id"
-                               exact { ipv6: "$2" }
-                             }
                              action {
-                               name: "set_dst_mac"
+                               name: "set_ip_nexthop"
                                params {
-                                 name: "dst_mac"
-                                 value { mac: "$3" }
+                                 name: "router_interface_id"
+                                 value { str: "$2" }
+                               }
+                               params {
+                                 name: "neighbor_id"
+                                 value { ipv6: "$3" }
                                }
                              }
                            }

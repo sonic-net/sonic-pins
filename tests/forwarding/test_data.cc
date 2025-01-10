@@ -40,7 +40,7 @@ std::vector<sai::TableEntry> CreateUpTo255GenericTableEntries(
               ip_protocol { value: "0x11" mask: "0xff" }
               l4_dst_port { value: "0x0043" mask: "0xffff" }
             }
-            action { trap { qos_queue: "0x1" } }
+            action { trap { qos_queue: "0x7" } }
             priority: 2040
           }
         )pb");

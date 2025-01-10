@@ -1,6 +1,7 @@
 #include "tests/mtu_tests/mtu_tests.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -15,8 +16,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -38,10 +37,13 @@
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "tests/forwarding/util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -133,14 +135,15 @@ void MtuRoutingTestFixture::SetUp() {
 
 absl::StatusOr<NumPkts> MtuRoutingTestFixture::SendTraffic(
     const int num_pkts, absl::string_view egress_port,
-    absl::string_view ingress_port, absl::string_view test_packet_str) {
+    absl::string_view ingress_port, absl::string_view test_packet_str,
+    std::optional<absl::Duration> packet_delay) {
   auto test_packet = gutil::ParseProtoOrDie<packetlib::Packet>(test_packet_str);
   ASSIGN_OR_RETURN(std::string test_packet_data,
                    packetlib::SerializePacket(test_packet));
 
   absl::Mutex mutex;
   std::vector<std::string> received_packets;
-  int i;
+  int i = 0;
   {
     ASSIGN_OR_RETURN(auto finalizer,
                      testbed_->ControlDevice().CollectPackets());
@@ -149,11 +152,12 @@ absl::StatusOr<NumPkts> MtuRoutingTestFixture::SendTraffic(
               << egress_port;
     LOG(INFO) << "Test packet data: " << test_packet_str;
 
-    for (i = 0; i < num_pkts; i++) {
-      RETURN_IF_ERROR(
-          testbed_->ControlDevice().SendPacket(egress_port, test_packet_data))
+    while (i < num_pkts || unlimited_pkts_) {
+      RETURN_IF_ERROR(testbed_->ControlDevice().SendPacket(
+          egress_port, test_packet_data, packet_delay))
           << "failed to inject the packet.";
       LOG(INFO) << "SendPacket completed";
+      i++;
     }
     RETURN_IF_ERROR(finalizer->HandlePacketsFor(
         absl::Seconds(30),
@@ -169,12 +173,41 @@ absl::StatusOr<NumPkts> MtuRoutingTestFixture::SendTraffic(
   return NumPkts{i, static_cast<int>(received_packets.size())};
 }
 
+void MtuRoutingTestFixture::StartUnlimitedTraffic(
+    const std::string &egress_port, const std::string &ingress_port,
+    const std::string &test_packet,
+    std::optional<absl::Duration> packet_delay) {
+  // Send unlimited packets packets to SUT.
+  // Set flag to allow sending unlimited packets to true.
+  unlimited_pkts_ = true;
+  LOG(INFO) << "Starting unlimited traffic.";
+  absl::Duration packet_delay_val;
+  if (packet_delay.has_value()) {
+    packet_delay_val = packet_delay.value();
+  }
+  traffic_thread_ = std::thread{[test_packet, this, &egress_port, &ingress_port,
+                                 packet_delay_val] {
+    ASSERT_OK_AND_ASSIGN(num_pkts_, SendTraffic(0, egress_port, ingress_port,
+                                                test_packet, packet_delay_val));
+  }};
+}
+
+absl::StatusOr<NumPkts> MtuRoutingTestFixture::StopUnlimitedTraffic() {
+  unlimited_pkts_ = false;
+  traffic_thread_.join();
+  LOG(INFO) << "Stopped unlimited traffic.";
+  LOG(INFO) << "Sent " << num_pkts_.sent << " packets, received "
+            << num_pkts_.received << " packets.";
+  return num_pkts_;
+}
+
 namespace {
 
 using ::testing::HasSubstr;
 
 constexpr absl::string_view kMtuRespParseStr = "openconfig-interfaces:mtu";
 constexpr int kDefaultMtu = 9194;
+constexpr int kMtu4500 = 4500;
 
 // Map of mtu to payload length for packets that are expected to be
 // successfully egressed out of port under test.
@@ -263,6 +296,63 @@ TEST_P(MtuRoutingTestFixture, MtuTest) {
                     test_packet));
     EXPECT_EQ(pkts.received, 50);
   }
+
+  // Restore original mtu values on port under test on SUT.
+  SetPortMtu(stub_.get(), destination_link_.sut_interface,
+             std::to_string(orig_mtu));
+}
+
+TEST_P(MtuRoutingTestFixture, VerifyTrafficWithMtuChangeTest) {
+  testbed_->Environment().SetTestCaseID("ae14bc06-be75-4e9b-8ff8-7defac538982");
+  // Get original mtu on port under test on SUT.
+  std::string if_state_path = absl::StrCat(
+      "interfaces/interface[name=", destination_link_.sut_interface,
+      "]/state/mtu");
+  ASSERT_OK_AND_ASSIGN(
+      std::string state_path_response,
+      GetGnmiStatePathInfo(stub_.get(), if_state_path, kMtuRespParseStr));
+  int orig_mtu;
+  ASSERT_TRUE(absl::SimpleAtoi(state_path_response, &orig_mtu));
+
+  // Set mtu to 4500 on port under test.
+  SetPortMtu(stub_.get(), destination_link_.sut_interface,
+             std::to_string(kMtu4500));
+
+  // Set up a route between the source and destination interfaces.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+          testbed_->Sut(), MtuRoutingTestFixture::GetParam().p4_info));
+  P4rtProgrammingContext p4rt_context(p4_session.get(),
+                                      pdpi::SetMetadataAndSendPiWriteRequest);
+  ASSERT_OK(SetupRoute(&p4rt_context));
+
+  // Send 4k size packet from peer switch to SUT to be routed out of port
+  // under test and set mtu to 9194 for port under test while traffic is
+  // being routed from it.
+  auto test_packet =
+      GenerateTestPacket(basic_traffic::PortIdToIP(sut_destination_port_id_),
+                         /*payload_len*/ 4000);
+  StartUnlimitedTraffic(
+      /*egress_port*/ source_link_.peer_interface,
+      /*ingress_port*/ destination_link_.peer_interface,
+      /*test_packet*/ test_packet,
+      /*packet_delay*/ absl::Duration(absl::Milliseconds(100)));
+
+  // Allow time for traffic to start in order to verify mtu change while
+  // traffic is running.
+  absl::SleepFor(absl::Seconds(5));
+  SetPortMtu(stub_.get(), destination_link_.sut_interface,
+             std::to_string(kDefaultMtu));
+
+  // Allow time to ensure there is no packet loss due to mtu change before
+  // stopping traffic.
+  absl::SleepFor(absl::Seconds(5));
+  ASSERT_OK_AND_ASSIGN(auto pkts, StopUnlimitedTraffic());
+
+  // Verify that all the packets are routed out of port under test indicating
+  // mtu change does not impact traffic.
+  EXPECT_EQ(pkts.sent, pkts.received);
 
   // Restore original mtu values on port under test on SUT.
   SetPortMtu(stub_.get(), destination_link_.sut_interface,
