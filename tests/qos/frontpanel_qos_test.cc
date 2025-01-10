@@ -80,7 +80,9 @@ using ::json_yang::FormatJsonBestEffort;
 using ::testing::Contains;
 using ::testing::Eq;
 using ::testing::Field;
+using ::testing::Ge;
 using ::testing::IsEmpty;
+using ::testing::Le;
 using ::testing::Not;
 using ::testing::Pair;
 using ::testing::ResultOf;
@@ -472,7 +474,14 @@ TEST_P(FrontpanelQosTest,
                                 "\nAfter :", ToString(final_counters)));
       EXPECT_THAT(delta_counters,
                   ResultOf(TotalPacketsForQueue,
-                           Eq(kIxiaTrafficStats.num_tx_frames())));
+                           Ge(kIxiaTrafficStats.num_tx_frames())));
+      // Protocol packets such as LLDP can be transmitted via queue during test.
+      // Add some tolerance to account for these packets.
+      constexpr int kMaxToleratedExtraPackets = 5;
+      EXPECT_THAT(
+          delta_counters,
+          ResultOf(TotalPacketsForQueue, Le(kIxiaTrafficStats.num_tx_frames() +
+                                            kMaxToleratedExtraPackets)));
       EXPECT_THAT(delta_counters, Field(&QueueCounters::num_packets_transmitted,
                                         Eq(kIxiaTrafficStats.num_rx_frames())));
     }

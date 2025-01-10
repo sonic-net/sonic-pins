@@ -22,7 +22,7 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
-namespace gpins {
+namespace pins {
 namespace {
 
 using ::gutil::StatusIs;
@@ -112,6 +112,7 @@ TEST_P(L3RouteProgrammingTest, NeighborId) {
                           /*dst_mac=*/"00:01:02:03:04:05"));
 
   EXPECT_THAT(pi_update, HasExactMatch("rid-1"));
+  EXPECT_THAT(pi_update, HasExactMatch("\001"));
   EXPECT_THAT(pi_update, HasActionParam("\001\002\003\004\005"));
 }
 
@@ -119,12 +120,23 @@ TEST_P(L3RouteProgrammingTest, NeighborIdFailsWithInvalidMacAddress) {
   EXPECT_THAT(
       pins::NeighborTableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
                           /*router_interface_id=*/"rid-1",
-                          /*neighbor_id=*/"peer-1",
+                          /*neighbor_id=*/"fe80::201:02ff:fe03:0405",
                           /*dst_mac=*/"invalid_format"),
       StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("Invalid MAC address")));
 }
 
+TEST_P(L3RouteProgrammingTest, NexthopId) {
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      NexthopTableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                         /*nexthop_id=*/"nexthop-2",
+                         /*router_interface_id=*/"rid-2",
+                         /*neighbor_id=*/"::1"));
+  EXPECT_THAT(pi_update, HasExactMatch("nexthop-2"));
+  EXPECT_THAT(pi_update, HasActionParam("rid-2"));
+  EXPECT_THAT(pi_update, HasActionParam("\001"));
+}
 
 TEST_P(L3RouteProgrammingTest, VrfTableAddFailsWithEmptyId) {
   EXPECT_THAT(
@@ -132,6 +144,7 @@ TEST_P(L3RouteProgrammingTest, VrfTableAddFailsWithEmptyId) {
                      /*vrf_id=*/""),
       StatusIs(absl::StatusCode::kInvalidArgument));
 }
+
 TEST_P(L3RouteProgrammingTest, Ipv4TableDoesNotRequireAnAction) {
   // The helper class will assume a default (e.g. drop).
   ASSERT_OK_AND_ASSIGN(
@@ -220,4 +233,4 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 }  // namespace
-}  // namespace gpins
+}  // namespace pins
