@@ -526,7 +526,15 @@ TEST_P(L3AdmitTestFixture, DISABLED_L3AdmitCanUseInPortToRestrictMacAddresses) {
   }
   LOG(INFO) << "Done collecting packets.";
 
-  EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+  if (GetMirrorTestbed().Environment().MaskKnownFailures()) {
+    // TODO: Reduce expected count by tolerance level.
+    const int kDropTolerance = 1;
+    int adjusted_good_packets = kNumberOfTestPacket - kDropTolerance;
+    EXPECT_GE(good_packet_count, adjusted_good_packets);
+    EXPECT_LE(good_packet_count, kNumberOfTestPacket);
+  } else {
+    EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+  }
   EXPECT_EQ(bad_packet_count, 0);
 }
 

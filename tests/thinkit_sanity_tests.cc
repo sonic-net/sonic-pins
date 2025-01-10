@@ -157,11 +157,6 @@ void TestGnmiGetAllOperation(thinkit::Switch& sut) {
   LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
 }
 
-void TestGnmiCheckInterfaceStateOperation(
-    thinkit::MirrorTestbed& testbed, absl::Span<const std::string> interfaces) {
-  EXPECT_OK(PortsUp(testbed.Sut(), interfaces));
-}
-
 void TestGnmiCheckAlarms(thinkit::MirrorTestbed& testbed) {
   EXPECT_OK(NoAlarms(testbed.Sut()));
 }
@@ -277,26 +272,6 @@ void TestGnmiConfigBlobSet(thinkit::Switch& sut) {
     EXPECT_THAT(element_speed_json->dump(), HasSubstr(if_speed_elem->second))
         << element_interface_state_json->find("name")->dump();
   }
-}
-
-void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
-                                                  absl::string_view if_name) {
-  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  std::string if_req = absl::StrCat("interfaces/interface[name=", if_name,
-                                    "]/state/oper-status");
-  ASSERT_OK_AND_ASSIGN(gnmi::GetRequest req,
-                       BuildGnmiGetRequest(if_req, gnmi::GetRequest::STATE));
-  LOG(INFO) << "Sending GET request: " << req.ShortDebugString();
-
-  gnmi::GetResponse resp;
-  grpc::ClientContext context;
-  ASSERT_OK(sut_gnmi_stub->Get(&context, req, &resp));
-  LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
-  ASSERT_OK_AND_ASSIGN(
-      std::string oper_response,
-      ParseGnmiGetResponse(resp, "openconfig-interfaces:oper-status"));
-  LOG(INFO) << "oper_respose: " << oper_response;
-  EXPECT_THAT(oper_response, HasSubstr(kStateUp));
 }
 
 //  Returns last boot time of SUT.
