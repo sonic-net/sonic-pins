@@ -19,24 +19,30 @@
 // (this file)
 //
 // TODO: Resolve whole save/restore thing wrt speed?
-//
+
 #include "tests/gnmi/ethcounter_ixia_test.h"
 
+#include <cstdint>
+#include <cwchar>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/strings/escaping.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/optional.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -44,20 +50,20 @@
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.h"
-#include "lib/p4rt/packet_listener.h"
-#include "lib/validator/validator_lib.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -394,6 +400,8 @@ absl::Status SetPortSpeed(absl::string_view port_speed, absl::string_view iface,
 
   return absl::OkStatus();
 }
+
+// TODO: Refactor to use gnmi_helper for stats.
 
 absl::StatusOr<uint64_t> GetGnmiStat(std::string stat_name,
                                      absl::string_view iface,

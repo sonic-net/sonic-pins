@@ -1141,6 +1141,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_OK(breakout_info.status());
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].physical_channels,
             "[0,1,2,3,4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "400G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1155,6 +1156,8 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
             "[0,1,2,3]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].physical_channels,
             "[4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "200G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].breakout_speed, "200G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1169,6 +1172,9 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
             "[0,1,2,3]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].physical_channels, "[4,5]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/7"].physical_channels, "[6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "200G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].breakout_speed, "100G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/7"].breakout_speed, "100G");
 }
 
 TEST_F(
@@ -1183,6 +1189,9 @@ TEST_F(
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/3"].physical_channels, "[2,3]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].physical_channels,
             "[4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "100G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/3"].breakout_speed, "100G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].breakout_speed, "200G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1194,6 +1203,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_OK(breakout_info.status());
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].physical_channels,
             "[0,1,2,3,4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "400G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1216,6 +1226,17 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode),
       StatusIs(absl::StatusCode::kInternal,
                HasSubstr("Failed to convert string (X) to integer")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetExpectedPortInfoForBreakoutModeInvalidModeFailure) {
+  const std::string port = "Ethernet1/1/1";
+  absl::string_view breakout_mode = "1";
+
+  EXPECT_THAT(
+      pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Invalid breakout mode found: 1")));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1790,53 +1811,25 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   expected_port_info["Ethernet1/1/1"] =
       pins_test::PortBreakoutInfo{"[0,1,2,3,4,5,6,7]", pins_test::kStateUp};
   std::vector<std::string> non_existing_port_list;
-  gnmi::GetRequest oper_status_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
-           path {
-             elem { name: "interfaces" }
-             elem {
-               name: "interface"
-               key { key: "name" value: "Ethernet1/1/1" }
-             }
-             elem { name: "state" }
-             elem { name: "oper-status" }
-           }
-           type: STATE)pb",
-      &oper_status_req));
-  gnmi::GetResponse oper_status_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(notification {
-             timestamp: 1632102697699213032
-             prefix { origin: "openconfig" }
-             update {
-               path {
-                 elem { name: "interfaces" }
-                 elem {
-                   name: "interface"
-                   key { key: "name" value: "Ethernet1/1/1" }
-                 }
-                 elem { name: "state" }
-                 elem { name: "oper-status" }
-               }
-               val {
-                 json_ietf_val: "{\"openconfig-interfaces:oper-status\":\"DOWN\"}"
-               }
-             }
-           })pb",
-      &oper_status_resp));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
-      .WillOnce(
-          DoAll(SetArgPointee<2>(oper_status_resp), Return(grpc::Status::OK)));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get)
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path { elem { name: "interfaces" } }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"DOWN\"}}]}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
   EXPECT_THAT(
       pins_test::ValidateBreakoutState(
           mock_gnmi_stub_ptr.get(), expected_port_info, non_existing_port_list),
-      StatusIs(
-          absl::StatusCode::kInternal,
-          HasSubstr(absl::StrCat(
-              "Port oper-status match failed for port Ethernet1/1/1. got: \"",
-              pins_test::kStateDown,
-              "\", want:", expected_port_info["Ethernet1/1/1"].oper_status))));
+      StatusIs(absl::StatusCode::kUnavailable,
+               HasSubstr("Some interfaces are not in the expected state UP")));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1847,41 +1840,6 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   expected_port_info["Ethernet1/1/1"] =
       pins_test::PortBreakoutInfo{"[0,1,2,3]", pins_test::kStateUp};
   std::vector<std::string> non_existing_port_list;
-  gnmi::GetRequest oper_status_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
-           path {
-             elem { name: "interfaces" }
-             elem {
-               name: "interface"
-               key { key: "name" value: "Ethernet1/1/1" }
-             }
-             elem { name: "state" }
-             elem { name: "oper-status" }
-           }
-           type: STATE)pb",
-      &oper_status_req));
-  gnmi::GetResponse oper_status_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(notification {
-             timestamp: 1632102697699213032
-             prefix { origin: "openconfig" }
-             update {
-               path {
-                 elem { name: "interfaces" }
-                 elem {
-                   name: "interface"
-                   key { key: "name" value: "Ethernet1/1/1" }
-                 }
-                 elem { name: "state" }
-                 elem { name: "oper-status" }
-               }
-               val {
-                 json_ietf_val: "{\"openconfig-interfaces:oper-status\":\"UP\"}"
-               }
-             }
-           })pb",
-      &oper_status_resp));
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(prefix { origin: "openconfig" }
@@ -1917,9 +1875,20 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              }
            })pb",
       &physical_channels_resp));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
-      .WillOnce(
-          DoAll(SetArgPointee<2>(oper_status_resp), Return(grpc::Status::OK)));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get)
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path { elem { name: "interfaces" } }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
   EXPECT_CALL(*mock_gnmi_stub_ptr,
               Get(_, EqualsProto(physical_channels_req), _))
       .WillOnce(DoAll(SetArgPointee<2>(physical_channels_resp),
@@ -2012,9 +1981,22 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              }
            })pb",
       &physical_channels_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get)
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path { elem { name: "interfaces" } }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
-      .Times(2)
-      .WillRepeatedly(
+      .WillOnce(
           DoAll(SetArgPointee<2>(oper_status_resp), Return(grpc::Status::OK)));
   EXPECT_CALL(*mock_gnmi_stub_ptr,
               Get(_, EqualsProto(physical_channels_req), _))
@@ -2035,41 +2017,6 @@ TEST_F(GNMIThinkitInterfaceUtilityTest, TestValidateBreakoutStateSuccess) {
   expected_port_info["Ethernet1/1/1"] =
       pins_test::PortBreakoutInfo{"[0,1,2,3,4,5,6,7]", pins_test::kStateUp};
   std::vector<std::string> non_existing_port_list{};
-  gnmi::GetRequest oper_status_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
-           path {
-             elem { name: "interfaces" }
-             elem {
-               name: "interface"
-               key { key: "name" value: "Ethernet1/1/1" }
-             }
-             elem { name: "state" }
-             elem { name: "oper-status" }
-           }
-           type: STATE)pb",
-      &oper_status_req));
-  gnmi::GetResponse oper_status_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(notification {
-             timestamp: 1632102697699213032
-             prefix { origin: "openconfig" }
-             update {
-               path {
-                 elem { name: "interfaces" }
-                 elem {
-                   name: "interface"
-                   key { key: "name" value: "Ethernet1/1/1" }
-                 }
-                 elem { name: "state" }
-                 elem { name: "oper-status" }
-               }
-               val {
-                 json_ietf_val: "{\"openconfig-interfaces:oper-status\":\"UP\"}"
-               }
-             }
-           })pb",
-      &oper_status_resp));
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(prefix { origin: "openconfig" }
@@ -2105,9 +2052,20 @@ TEST_F(GNMIThinkitInterfaceUtilityTest, TestValidateBreakoutStateSuccess) {
              }
            })pb",
       &physical_channels_resp));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
-      .WillOnce(
-          DoAll(SetArgPointee<2>(oper_status_resp), Return(grpc::Status::OK)));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get)
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path { elem { name: "interfaces" } }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
   EXPECT_CALL(*mock_gnmi_stub_ptr,
               Get(_, EqualsProto(physical_channels_req), _))
       .WillOnce(DoAll(SetArgPointee<2>(physical_channels_resp),

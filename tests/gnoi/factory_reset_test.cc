@@ -38,6 +38,9 @@
 namespace factory_reset {
 
 constexpr absl::Duration kFactoryResetWaitForDownTime = absl::Seconds(60);
+constexpr absl::Duration kPingReachabilityInterval = absl::Seconds(2);
+constexpr absl::Duration kPingTimeout = absl::Seconds(1);
+constexpr int kConsecutivePingsRequired = 3;
 constexpr absl::Duration kFactoryResetWaitForUpTime = absl::Minutes(25);
 constexpr absl::Duration kSshSessionTimeout = absl::Seconds(5);
 
@@ -45,11 +48,16 @@ void IssueGnoiFactoryResetAndValidateStatus(
     thinkit::Switch& sut, const gnoi::factory_reset::StartRequest& request,
     gnoi::factory_reset::StartResponse* response,
     grpc::Status expected_status) {
+  LOG(INFO) << "Issuing factory reset with parameters: "
+            << request.DebugString();
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_factory_reset_stub,
                        sut.CreateGnoiFactoryResetStub());
   grpc::ClientContext context;
   grpc::Status status =
       sut_gnoi_factory_reset_stub->Start(&context, request, response);
+  LOG(INFO) << "Factory reset status: " << status.error_code() << ", "
+            << status.error_message();
+  LOG(INFO) << "Factory reset response: " << response->DebugString();
   if (expected_status.ok()) {
     EXPECT_OK(status);
   } else {
@@ -66,11 +74,15 @@ void ValidateStackState(thinkit::Switch& sut,
 
   // Wait for system to become unreachable via ping - as that's the last thing
   // that goes down.
+  LOG(INFO) << "Starting polling for unreachability, now: " << absl::Now()
+            << " deadline: " << start_time + kFactoryResetWaitForDownTime;
   while (absl::Now() < (start_time + kFactoryResetWaitForDownTime)) {
-    if (!pins_test::Pingable(sut).ok()) {
+    if (!pins_test::Pingable(sut, kPingTimeout).ok()) {
       system_down = true;
       break;
     }
+    LOG(INFO) << "System still reachable at " << absl::Now() << " sleeping";
+    absl::SleepFor(kPingReachabilityInterval);
   }
   // Return failure if system did not go down.
   ASSERT_TRUE(system_down) << "System did not go down in "
@@ -82,6 +94,8 @@ void ValidateStackState(thinkit::Switch& sut,
       system_down = false;
       break;
     }
+    LOG(INFO) << "System still unreachable, sleeping";
+    absl::SleepFor(kPingReachabilityInterval);
   }
   // Return failure if system did not come up.
   ASSERT_FALSE(system_down)
@@ -120,9 +134,23 @@ void TestGnoiFactoryResetGnoiServerUnreachableFail(
   IssueGnoiFactoryResetAndValidateStatus(sut, request, &response);
   EXPECT_TRUE(response.has_reset_success());
 
-  absl::SleepFor(kFactoryResetWaitForDownTime);
-  ASSERT_TRUE(!pins_test::Pingable(sut).ok())
-      << "System did not go down in " << kFactoryResetWaitForDownTime;
+  LOG(INFO) << "Waiting for device to become unreachable";
+  absl::Time start = absl::Now();
+  int consecutive_unreachable_count = 0;
+  while (consecutive_unreachable_count < kConsecutivePingsRequired) {
+    if (pins_test::Pingable(sut, kPingTimeout).ok()) {
+      consecutive_unreachable_count = 0;
+    } else {
+      consecutive_unreachable_count++;
+    }
+    if (absl::Now() - start > kFactoryResetWaitForDownTime) {
+      FAIL() << "System did not go down in " << kFactoryResetWaitForDownTime;
+    }
+    LOG(INFO) << "System unreachable for " << consecutive_unreachable_count
+              << " consecutive pings";
+    absl::SleepFor(kPingReachabilityInterval);
+  }
+  LOG(INFO) << "Device became unreachable after: " << absl::Now() - start;
 
   // Wait until the switch goes down, send another request and expect a failure
   // due to gNOI server unreachable.
@@ -131,6 +159,7 @@ void TestGnoiFactoryResetGnoiServerUnreachableFail(
       grpc::Status(grpc::StatusCode::UNAVAILABLE,
                    "failed to connect to all addresses"));
 
+  LOG(INFO) << "Waiting for device to become reachable";
   absl::SleepFor(kFactoryResetWaitForUpTime);
   // Return failure if system did not come up.
   ASSERT_OK(pins_test::SwitchReady(sut, interfaces))

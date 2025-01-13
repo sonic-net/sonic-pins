@@ -107,14 +107,16 @@ void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
 // Mocks a P4RuntimeSession::Create call with a stub by constructing a
 // ReaderWriter mock stream and mocking an arbitration handshake. This function
 // does not perform any of these operations, it only sets up expectations.
-void MockP4RuntimeSessionCreate(
-    p4::v1::MockP4RuntimeStub& stub,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+[[nodiscard]] grpc::testing::MockClientReaderWriter<
+    p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse> &
+MockP4RuntimeSessionCreateAndReturnStreamChannel(
+    p4::v1::MockP4RuntimeStub &stub,
+    const pdpi::P4RuntimeSessionOptionalArgs &metadata) {
   // The ReaderWriter stream constructed from the stub. This needs to be
-  // malloced as it is automatically freed when the unique pointer that it will
-  // be wrapped in is freed. The stream is wrapped in StreamChannel, which is
-  // the method of the stub that calls StreamChannelRaw, but is not itself
-  // mocked.
+  // malloced as it is automatically freed when the unique pointer that it
+  // will be wrapped in is freed. The stream is wrapped in StreamChannel,
+  // which is the method of the stub that calls StreamChannelRaw, but is not
+  // itself mocked.
   auto* stream = new NiceMock<grpc::testing::MockClientReaderWriter<
       p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>>();
   EXPECT_CALL(stub, StreamChannelRaw).WillOnce(Return(stream));
@@ -135,6 +137,7 @@ void MockP4RuntimeSessionCreate(
             master_arbitration_update;
         return true;
       });
+  return *stream;
 }
 
 // Constructs a table entry using the predefined table id, kTableId, and action
@@ -222,8 +225,11 @@ void ExpectCallToClearTableEntries(
   EXPECT_CALL(mock_switch, CreateP4RuntimeStub()).WillOnce([=] {
     InSequence s;
     auto stub = std::make_unique<::p4::v1::MockP4RuntimeStub>();
-    MockP4RuntimeSessionCreate(*stub, metadata);
+    auto &stream_channel =
+        MockP4RuntimeSessionCreateAndReturnStreamChannel(*stub, metadata);
     MockClearTableEntries(*stub, p4info, metadata);
+    // From the call to Finish.
+    EXPECT_CALL(stream_channel, Read).WillOnce(Return(false));
     return stub;
   });
 }
@@ -309,7 +315,8 @@ void ExpectCallToCreateP4RuntimeSessionAndOptionallyPushP4Info(
   EXPECT_CALL(mock_switch, CreateP4RuntimeStub).WillOnce([=] {
     InSequence s;
     auto stub = absl::make_unique<StrictMock<p4::v1::MockP4RuntimeStub>>();
-    MockP4RuntimeSessionCreate(*stub, metadata);
+    // Ignore returned stream channel mock since we have no use for it.
+    (void)MockP4RuntimeSessionCreateAndReturnStreamChannel(*stub, metadata);
     if (p4info.has_value()) {
       // TODO: Test the path where `GetForwardingPipelineConfig`
       // returns a non-empty P4Info.

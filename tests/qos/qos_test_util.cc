@@ -198,7 +198,7 @@ ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config) {
   for (int dscp = 16; dscp <= 19; ++dscp) queue_by_dscp[dscp] = "AF2";
   queue_by_dscp[21] = "LLQ2";
   for (int dscp = 24; dscp <= 27; ++dscp) queue_by_dscp[dscp] = "AF3";
-  for (int dscp = 32; dscp <= 35; ++dscp) queue_by_dscp[dscp] = "AF4";
+  for (int dscp = 32; dscp <= 39; ++dscp) queue_by_dscp[dscp] = "AF4";
   for (int dscp = 48; dscp <= 59; ++dscp) queue_by_dscp[dscp] = "NC1";
   return queue_by_dscp;
 }
@@ -212,16 +212,7 @@ ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config) {
 absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
     absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
   // TODO: Actually parse config -- hard-coded for now.
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  for (int dscp = 0; dscp < 64; ++dscp) queue_by_dscp[dscp] = "BE1";
-  for (int dscp = 8; dscp <= 11; ++dscp) queue_by_dscp[dscp] = "AF1";
-  queue_by_dscp[13] = "LLQ1";
-  for (int dscp = 16; dscp <= 19; ++dscp) queue_by_dscp[dscp] = "AF2";
-  queue_by_dscp[21] = "LLQ2";
-  for (int dscp = 24; dscp <= 27; ++dscp) queue_by_dscp[dscp] = "AF3";
-  for (int dscp = 32; dscp <= 35; ++dscp) queue_by_dscp[dscp] = "AF4";
-  for (int dscp = 48; dscp <= 59; ++dscp) queue_by_dscp[dscp] = "NC1";
-  return queue_by_dscp;
+  return ParseIpv4DscpToQueueMapping(/*gnmi_config=*/"");
 }
 
 absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
@@ -252,24 +243,6 @@ GetQueueToIpv6DscpsMapping(absl::string_view port,
     dscps_by_queue[queue].push_back(dscp);
   }
   return dscps_by_queue;
-}
-
-absl::Status SetPortLoopbackMode(bool port_loopback,
-                                 absl::string_view interface_name,
-                                 gnmi::gNMI::StubInterface &gnmi_stub) {
-  std::string config_path = absl::StrCat(
-      "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
-  std::string config_json;
-  if (port_loopback) {
-    config_json = "{\"openconfig-interfaces:loopback-mode\":true}";
-  } else {
-    config_json = "{\"openconfig-interfaces:loopback-mode\":false}";
-  }
-
-  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
-      &gnmi_stub, config_path, GnmiSetType::kUpdate, config_json));
-
-  return absl::OkStatus();
 }
 
 absl::StatusOr<std::string>
