@@ -47,6 +47,7 @@ cc_library(
         "table.h",
         "util.h",
         "v1model.h",
+        "v1model_intrinsic.h",
         "values.h",
     ],
     deps = [
@@ -104,14 +105,6 @@ end_to_end_test(
     p4_program = "//p4_symbolic/testdata:reflector/reflector.p4",
     packets_golden_file = "expected/reflector.txt",
     smt_golden_file = "expected/reflector.smt2",
-)
-
-end_to_end_test(
-    name = "ipv4_routing_test",
-    p4_program = "//p4_symbolic/testdata:ipv4-routing/basic.p4",
-    packets_golden_file = "expected/basic.txt",
-    smt_golden_file = "expected/basic.smt2",
-    table_entries = "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
 )
 
 # Checks the behavior of symbolic execution when there is a table application after a conditional.

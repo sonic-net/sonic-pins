@@ -266,6 +266,7 @@ absl::StatusOr<uint64_t> GetAlpmMissStat(gnmi::gNMI::StubInterface& gnmi_stub) {
   return GetGnmiStats(gnmi_stub, state_path, resp_parse_str);
 }
 
+
 absl::StatusOr<bool> DoesPlatformSupportAlpm(
     gnmi::gNMI::StubInterface& gnmi_stub) {
   std::string state_path =
