@@ -406,7 +406,7 @@ TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteHit) {
   ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
                        DoesPlatformSupportAlpm(*sut_gnmi_stub_));
   if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_Alpm SUT.";
+    GTEST_SKIP() << "Test is not supported on non_ALPM SUT.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
