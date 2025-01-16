@@ -205,7 +205,6 @@ cc_library(
     srcs = ["l3_admit_test.cc"],
     hdrs = ["l3_admit_test.h"],
     deps = [
-	":mirror_blackbox_test_fixture",
         ":util",
         "//gutil:proto",
         "//gutil:status_matchers",
@@ -215,16 +214,17 @@ cc_library(
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "//sai_p4/instantiations/google:instantiations",
-        "//sai_p4/instantiations/google:sai_p4info_cc",
         "//tests/lib:p4info_helper",
 	"//tests/lib:p4rt_fixed_table_programming_helper",
         "//tests/lib:packet_in_helper",
+        "//tests/lib:switch_test_setup_helpers",
         "//thinkit:mirror_testbed_fixture",
+        "//thinkit:switch",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
@@ -347,4 +347,12 @@ cc_library(
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_google_googletest//:gtest",
     ],
+)
+
+cc_library(
+    name = "packet_at_port",
+    hdrs = [
+        "packet_at_port.h",
+    ],
+    deps = ["@com_google_absl//absl/strings"],
 )

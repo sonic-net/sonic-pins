@@ -15,28 +15,52 @@
 #define PINS_TESTS_FORWARDING_L3_ADMIT_TEST_H_
 
 #include <memory>
+#include <optional>
+#include <tuple>
 
+#include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
-#include "tests/forwarding/mirror_blackbox_test_fixture.h"
-#include "tests/lib/packet_in_helper.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "gmock/gmock.h"
 
 namespace pins {
 
-class L3AdmitTestFixture : public pins_test::MirrorBlackboxTestFixture {
- protected:
-  void TearDown() override {
-    // MirrorBlackboxTestFixture unnecessarily clears tables at TearDown. This
-    // is not harmful for other tests but is problematic for l3_admit_tests
-    // since the P4RT session to the controller is closed during the tests (see
-    // lib/packet_in_helper.h). Therefore, We bypass table clearance in
-    // TearDown.
-    MirrorTestbedFixture::TearDown();
+struct L3AdmitTestParams {
+  thinkit::MirrorTestbedInterface *testbed_interface;
+  p4::config::v1::P4Info p4info;
+};
+
+// This test assumes that the switch is set up with a gNMI config.
+class L3AdmitTestFixture : public testing::TestWithParam<L3AdmitTestParams> {
+protected:
+  void SetUp() override {
+    GetParam().testbed_interface->SetUp();
+
+    // Initialize the connection and clear table entries for the SUT and Control
+    // switch.
+    ASSERT_OK_AND_ASSIGN(
+        std::tie(sut_p4rt_session_, control_switch_p4rt_session_),
+        pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+            GetParam().testbed_interface->GetMirrorTestbed().Sut(),
+            GetParam().testbed_interface->GetMirrorTestbed().ControlSwitch(),
+            /*gnmi_config=*/std::nullopt, GetParam().p4info));
+
+    ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(GetParam().p4info));
   }
+
+  void TearDown() override { GetParam().testbed_interface->TearDown(); }
+
+  ~L3AdmitTestFixture() override { delete GetParam().testbed_interface; }
+
+  // This test runs on a mirror testbed setup so we open a P4RT connection to
+  // both switches.
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
+  std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session_;
+
+  pdpi::IrP4Info ir_p4info_;
 };
 
 } // namespace pins
