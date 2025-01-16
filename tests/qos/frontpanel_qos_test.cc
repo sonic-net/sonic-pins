@@ -198,6 +198,203 @@ ConstructEntriesToForwardAllTrafficToGivenPort(absl::string_view p4rt_port_id) {
       kNeighborId, p4rt_port_id));
 }
 
+// Returns a set of table entries that will cause a switch to forward all L3
+// packets arriving at one of the two given ingress ports out of the given
+// loopback port and also program a flow to punt ECN marked packets which are
+// looped back to the CPU. Specific Requirements:
+// - L3 admit entries to match on in ports as we do not want to reforward looped
+// back packets
+// - Punt all ECN marked packets which are looped back from egress port.
+absl::StatusOr<sai::TableEntries>
+ConstructEntriesToForwardAllTrafficToLoopbackPortAndCopyEcnPacketsToCPU(
+    absl::string_view p4rt_out_port_id, absl::string_view p4rt_in_port1_id,
+    absl::string_view p4rt_in_port2_id) {
+  // By convention, we use link local IPv6 addresses as neighbor IDs.
+  const std::string kNeighborId =
+      netaddr::MacAddress(2, 2, 2, 2, 2, 2).ToLinkLocalIpv6Address().ToString();
+  // L3 admit packets coming in only on the ingress ports. We do not want to
+  // reforward looped back packets.
+  return gutil::ParseTextProto<sai::TableEntries>(absl::Substitute(
+      R"pb(
+        entries {
+          l3_admit_table_entry {
+            match { in_port { value: "$2" } }
+            action { admit_to_l3 {} }
+            priority: 1
+          }
+        }
+        entries {
+          l3_admit_table_entry {
+            match { in_port { value: "$3" } }
+            action { admit_to_l3 {} }
+            priority: 1
+          }
+        }
+        entries {
+          acl_pre_ingress_table_entry {
+            match {}  # Wildcard.
+            action { set_vrf { vrf_id: "vrf" } }
+            priority: 1
+          }
+        }
+        entries {
+          vrf_table_entry {
+            match { vrf_id: "vrf" }
+            action { no_action {} }
+          }
+        }
+        entries {
+          ipv4_table_entry {
+            match { vrf_id: "vrf" }
+            action { set_nexthop_id { nexthop_id: "nexthop" } }
+          }
+        }
+        entries {
+          ipv6_table_entry {
+            match { vrf_id: "vrf" }
+            action { set_nexthop_id { nexthop_id: "nexthop" } }
+          }
+        }
+        entries {
+          nexthop_table_entry {
+            match { nexthop_id: "nexthop" }
+            action {
+              set_ip_nexthop { router_interface_id: "rif" neighbor_id: "$0" }
+            }
+          }
+        }
+        entries {
+          router_interface_table_entry {
+            match { router_interface_id: "rif" }
+            action {
+              set_port_and_src_mac { port: "$1" src_mac: "66:55:44:33:22:11" }
+            }
+          }
+        }
+        entries {
+          neighbor_table_entry {
+            match { router_interface_id: "rif" neighbor_id: "$0" }
+            action { set_dst_mac { dst_mac: "02:02:02:02:02:02" } }
+          }
+        }
+        entries {
+          acl_ingress_table_entry {
+            match {
+              dst_mac { value: "02:02:02:02:02:02" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ip { value: "0x1" }
+              ecn { value: "0x3" mask: "0x3" }
+            }
+            action { acl_copy { qos_queue: "2" } }
+            priority: 1
+          }
+        }
+      )pb",
+      kNeighborId, p4rt_out_port_id, p4rt_in_port1_id, p4rt_in_port2_id));
+}
+
+// Structure represents SUTs connections to Ixia.
+// The QoS tests expects 2 Ixia `ingress_links` connected to Ixia to which
+// traffic will be injected in order to oversubscribe the single `egress_link`.
+struct IxiaLinks {
+  ixia::IxiaLink ingress_links[2];
+  ixia::IxiaLink egress_link;
+};
+
+// Function returns Ixia connections to use for ingress and egress traffic
+// If the device ports are specified as part of test parameters passed in,
+// the function will use those ports to fetch Ixia link information,
+// else we will try and find 2 Ixia links for ingress and 1 for egress such
+// that ingress ports have speed at least that of egress port.
+absl::StatusOr<IxiaLinks>
+GetIxiaLinks(thinkit::GenericTestbed &testbed,
+             gnmi::gNMI::StubInterface &gnmi_stub,
+             const pins_test::QosTestParams &qos_params) {
+  IxiaLinks links;
+
+  if (qos_params.ingress_ports[0].empty() ||
+      qos_params.ingress_ports[1].empty() ||
+      qos_params.egress_port_under_test.empty()) {
+    // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
+    // 1 for forwarding them back. We use the faster links for injecting packets
+    // so we can oversubsribe the egress port.
+    LOG(INFO) << "picking test packet links";
+    ASSIGN_OR_RETURN(std::vector<ixia::IxiaLink> ready_links,
+                     ixia::GetReadyIxiaLinks(testbed, gnmi_stub));
+    absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
+      return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
+    });
+    RET_CHECK(ready_links.size() >= 3)
+        << "Test requires at least 3 SUT ports connected to an Ixia";
+    const auto [kEgressLink, kIngressLink1, kIngressLink2] =
+        std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
+    RET_CHECK(kEgressLink.sut_interface_bits_per_second <=
+              kIngressLink1.sut_interface_bits_per_second);
+    RET_CHECK(kEgressLink.sut_interface_bits_per_second <=
+              kIngressLink2.sut_interface_bits_per_second);
+    links.ingress_links[0] = kIngressLink1;
+    links.ingress_links[1] = kIngressLink2;
+    links.egress_link = kEgressLink;
+  } else {
+    ASSIGN_OR_RETURN(
+        links.ingress_links[0],
+        ixia::GetIxiaLink(testbed, gnmi_stub, qos_params.ingress_ports[0]));
+    ASSIGN_OR_RETURN(
+        links.ingress_links[1],
+        ixia::GetIxiaLink(testbed, gnmi_stub, qos_params.ingress_ports[1]));
+    ASSIGN_OR_RETURN(links.egress_link,
+                     ixia::GetIxiaLink(testbed, gnmi_stub,
+                                       qos_params.egress_port_under_test));
+  }
+  return links;
+}
+
+// Like the function above but overloaded for BufferTestParams
+absl::StatusOr<IxiaLinks>
+GetIxiaLinks(thinkit::GenericTestbed &testbed,
+             gnmi::gNMI::StubInterface &gnmi_stub,
+             const pins_test::BufferTestParams &qos_params) {
+  IxiaLinks links;
+
+  if (qos_params.default_params.ingress_ports[0].empty() ||
+      qos_params.default_params.ingress_ports[1].empty() ||
+      qos_params.default_params.egress_port_under_test.empty()) {
+    // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
+    // 1 for forwarding them back. We use the faster links for injecting packets
+    // so we can oversubsribe the egress port.
+    LOG(INFO) << "picking test packet links";
+    ASSIGN_OR_RETURN(std::vector<ixia::IxiaLink> ready_links,
+                     ixia::GetReadyIxiaLinks(testbed, gnmi_stub));
+    absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
+      return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
+    });
+    RET_CHECK(ready_links.size() >= 3)
+        << "Test requires at least 3 SUT ports connected to an Ixia";
+    const auto [kEgressLink, kIngressLink1, kIngressLink2] =
+        std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
+    RET_CHECK(kEgressLink.sut_interface_bits_per_second <=
+              kIngressLink1.sut_interface_bits_per_second);
+    RET_CHECK(kEgressLink.sut_interface_bits_per_second <=
+              kIngressLink2.sut_interface_bits_per_second);
+    links.ingress_links[0] = kIngressLink1;
+    links.ingress_links[1] = kIngressLink2;
+    links.egress_link = kEgressLink;
+  } else {
+    ASSIGN_OR_RETURN(
+        links.ingress_links[0],
+        ixia::GetIxiaLink(testbed, gnmi_stub,
+                          qos_params.default_params.ingress_ports[0]));
+    ASSIGN_OR_RETURN(
+        links.ingress_links[1],
+        ixia::GetIxiaLink(testbed, gnmi_stub,
+                          qos_params.default_params.ingress_ports[1]));
+    ASSIGN_OR_RETURN(
+        links.egress_link,
+        ixia::GetIxiaLink(testbed, gnmi_stub,
+                          qos_params.default_params.egress_port_under_test));
+  }
+  return links;
+}
+
 // The purpose of this test is to verify that:
 // - Incoming IP packets are mapped to queues according to their DSCP.
 // - Queue peak information rates (PIRs) are enforced.
@@ -223,14 +420,16 @@ TEST_P(FrontpanelQosTest,
   // Pick 2 SUT ports connected to the Ixia, one for receiving test packets and
   // one for forwarding them back.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
-                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
-  ASSERT_GE(ready_links.size(), 2)
-      << "Test requires at least 2 SUT ports connected to an Ixia";
-  const std::string kIxiaSrcPort = ready_links[0].ixia_interface;
-  const std::string kIxiaDstPort = ready_links[1].ixia_interface;
-  const std::string kSutIngressPort = ready_links[0].sut_interface;
-  const std::string kSutEgressPort = ready_links[1].sut_interface;
+  // Get Ixia connected links.
+  ASSERT_OK_AND_ASSIGN(IxiaLinks links,
+                       GetIxiaLinks(*testbed, *gnmi_stub, GetParam()));
+
+  const std::string &kSutIngressPort = links.ingress_links[0].sut_interface;
+  const std::string &kSutEgressPort = links.egress_link.sut_interface;
+
+  const std::string &kIxiaSrcPort = links.ingress_links[0].ixia_interface;
+  const std::string &kIxiaDstPort = links.egress_link.ixia_interface;
+
   LOG(INFO) << absl::StrFormat(
       "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
       kIxiaSrcPort, kSutIngressPort, kSutEgressPort, kIxiaDstPort);
@@ -519,25 +718,19 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   // strictly-prioritized queue via another ingress port.
   LOG(INFO) << "picking test packet links";
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
-                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
-  absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
-    return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
-  });
-  ASSERT_GE(ready_links.size(), 3)
-      << "Test requires at least 3 SUT ports connected to an Ixia";
-  const auto [kEgressLink, kIngressLink1, kIngressLink2] =
-      std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
-  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
-            kIngressLink1.sut_interface_bits_per_second);
-  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
-            kIngressLink2.sut_interface_bits_per_second);
-  const std::string kIxiaMainSrcPort = kIngressLink1.ixia_interface;
-  const std::string kIxiaAuxiliarySrcPort = kIngressLink2.ixia_interface;
-  const std::string kSutMainIngressPort = kIngressLink1.sut_interface;
-  const std::string kSutAuxiliayIngressPort = kIngressLink2.sut_interface;
-  const std::string kSutEgressPort = kEgressLink.sut_interface;
-  const std::string kIxiaDstPort = kEgressLink.ixia_interface;
+  // Get Ixia connected links.
+  ASSERT_OK_AND_ASSIGN(IxiaLinks links,
+                       GetIxiaLinks(*testbed, *gnmi_stub, GetParam()));
+
+  const std::string &kSutMainIngressPort = links.ingress_links[0].sut_interface;
+  const std::string &kSutAuxiliayIngressPort =
+      links.ingress_links[1].sut_interface;
+  const std::string &kSutEgressPort = links.egress_link.sut_interface;
+  const std::string &kIxiaMainSrcPort = links.ingress_links[0].ixia_interface;
+  const std::string &kIxiaAuxiliarySrcPort =
+      links.ingress_links[1].ixia_interface;
+  const std::string &kIxiaDstPort = links.egress_link.ixia_interface;
+
   LOG(INFO) << absl::StrFormat(
       "Test packet routes:"
       "\n- Main traffic: "
@@ -547,13 +740,14 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
       "[Ixia: %s] == %.1f Gbps => [SUT: %s] -> [SUT: %s] == %.1f Gbps => "
       "[Ixia: %s]",
       kIxiaMainSrcPort,
-      kIngressLink1.sut_interface_bits_per_second / 1'000'000'000.,
+      links.ingress_links[0].sut_interface_bits_per_second / 1'000'000'000.,
       kSutMainIngressPort, kSutEgressPort,
-      kEgressLink.sut_interface_bits_per_second / 1'000'000'000., kIxiaDstPort,
-      kIxiaAuxiliarySrcPort,
-      kIngressLink2.sut_interface_bits_per_second / 1'000'000'000.,
+      links.egress_link.sut_interface_bits_per_second / 1'000'000'000.,
+      kIxiaDstPort, kIxiaAuxiliarySrcPort,
+      links.ingress_links[1].sut_interface_bits_per_second / 1'000'000'000.,
       kSutAuxiliayIngressPort, kSutEgressPort,
-      kEgressLink.sut_interface_bits_per_second / 1'000'000'000., kIxiaDstPort);
+      links.egress_link.sut_interface_bits_per_second / 1'000'000'000.,
+      kIxiaDstPort);
   ASSERT_OK_AND_ASSIGN(
       const std::string kSutEgressPortSchedulerPolicy,
       GetSchedulerPolicyNameByEgressPort(kSutEgressPort, *gnmi_stub));
@@ -721,7 +915,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   LOG(INFO) << "configuring scheduler parameters";
   // Rates are in bytes/second.
   const int64_t kEgressLineRateInBytesPerSecond =
-      kEgressLink.sut_interface_bits_per_second / 8;
+      links.egress_link.sut_interface_bits_per_second / 8;
   const int64_t kStrictlyPrioritizedPir = .95 * kEgressLineRateInBytesPerSecond;
   {
     absl::flat_hash_map<std::string, SchedulerParameters> params_by_queue_name;
@@ -917,26 +1111,20 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
   // strictly-prioritized queue via another ingress port.
   LOG(INFO) << "picking test packet links";
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
-                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
-  absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
-    return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
-  });
-  ASSERT_GE(ready_links.size(), 3)
-      << "Test requires at least 3 SUT ports connected to an Ixia";
-  const auto [kEgressLink, kIngressLink1, kIngressLink2] =
-      std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
-  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
-            kIngressLink1.sut_interface_bits_per_second);
-  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
-            kIngressLink2.sut_interface_bits_per_second);
-  const std::string kIxiaMainTrafficSrcPort = kIngressLink1.ixia_interface;
-  const std::string kIxiaBackgroundTrafficSrcPort =
-      kIngressLink2.ixia_interface;
-  const std::string kSutMainTrafficInPort = kIngressLink1.sut_interface;
-  const std::string kSutBackgroundTrafficInPort = kIngressLink2.sut_interface;
-  const std::string kSutEgressPort = kEgressLink.sut_interface;
-  const std::string kIxiaDstPort = kEgressLink.ixia_interface;
+  // Get Ixia connected links.
+  ASSERT_OK_AND_ASSIGN(IxiaLinks links,
+                       GetIxiaLinks(*testbed, *gnmi_stub, GetParam()));
+
+  const std::string &kSutMainTrafficInPort =
+      links.ingress_links[0].sut_interface;
+  const std::string &kSutBackgroundTrafficInPort =
+      links.ingress_links[1].sut_interface;
+  const std::string &kSutEgressPort = links.egress_link.sut_interface;
+  const std::string &kIxiaMainTrafficSrcPort =
+      links.ingress_links[0].ixia_interface;
+  const std::string &kIxiaBackgroundTrafficSrcPort =
+      links.ingress_links[1].ixia_interface;
+  const std::string &kIxiaDstPort = links.egress_link.ixia_interface;
   LOG(INFO) << absl::StrFormat(
       "Test packet routes:"
       "\n- Main traffic: "
@@ -946,13 +1134,14 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
       "[Ixia: %s] == %.1f Gbps => [SUT: %s] -> [SUT: %s] == %.1f Gbps => "
       "[Ixia: %s]",
       kIxiaMainTrafficSrcPort,
-      kIngressLink1.sut_interface_bits_per_second / 1'000'000'000.,
+      links.ingress_links[0].sut_interface_bits_per_second / 1'000'000'000.,
       kSutMainTrafficInPort, kSutEgressPort,
-      kEgressLink.sut_interface_bits_per_second / 1'000'000'000., kIxiaDstPort,
-      kIxiaBackgroundTrafficSrcPort,
-      kIngressLink2.sut_interface_bits_per_second / 1'000'000'000.,
+      links.egress_link.sut_interface_bits_per_second / 1'000'000'000.,
+      kIxiaDstPort, kIxiaBackgroundTrafficSrcPort,
+      links.ingress_links[1].sut_interface_bits_per_second / 1'000'000'000.,
       kSutBackgroundTrafficInPort, kSutEgressPort,
-      kEgressLink.sut_interface_bits_per_second / 1'000'000'000., kIxiaDstPort);
+      links.egress_link.sut_interface_bits_per_second / 1'000'000'000.,
+      kIxiaDstPort);
   ASSERT_OK_AND_ASSIGN(
       const std::string kSutEgressPortSchedulerPolicy,
       GetSchedulerPolicyNameByEgressPort(kSutEgressPort, *gnmi_stub));
@@ -1110,7 +1299,7 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
   const int kNumBackgroundTrafficItems = 2 * kNumQueueus; // IPv4 & IPv6
   constexpr int kFrameSizeInBytes = 1514;
   const int64_t kEgressLineRateInBytesPerSecond =
-      kEgressLink.sut_interface_bits_per_second / 8;
+      links.egress_link.sut_interface_bits_per_second / 8;
   const int kEgressLineRateInFramesPerSecond =
       .99 * kEgressLineRateInBytesPerSecond / kFrameSizeInBytes;
   const int kFramesPerSecondPerTrafficItem =
@@ -1329,144 +1518,6 @@ void ResetEcnTestPacketCounters(EcnTestPacketCounters &packet_receive_info) {
   packet_receive_info.num_packets_ecn_marked = 0;
 }
 
-// Set up the switch to forward inbound packets to the egress port using
-// default route in VRF. The rules will forward all matching packets matching
-// source MAC address to the egress port specified.
-//
-// Also set up a Copy rule to CPU to punt egress packets to test for
-// any inspection.
-//
-absl::Status SetUpForwardingAndCopyEgressToCpu(
-    absl::string_view out_port, absl::string_view source_mac,
-    absl::string_view dest_mac, const p4::config::v1::P4Info &p4info,
-    pdpi::P4RuntimeSession &p4_session) {
-  constexpr absl::string_view kVrfId = "vrf-80";
-  constexpr absl::string_view kRifOutId = "router-interface";
-  constexpr absl::string_view kNextHopId = "nexthop-1";
-  constexpr absl::string_view kNeighborIdv6 = "fe80::002:02ff:fe02:0202";
-  const absl::string_view kNeighborId = kNeighborIdv6;
-
-  std::vector<sai::TableEntry> pd_entries;
-  ASSIGN_OR_RETURN(pd_entries.emplace_back(),
-                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-                       R"pb(
-                         vrf_table_entry {
-                           match { vrf_id: "$0" }
-                           action { no_action {} }
-                         })pb",
-                       kVrfId)));
-   ASSIGN_OR_RETURN(
-      pd_entries.emplace_back(),
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            router_interface_table_entry {
-              match { router_interface_id: "$0" }
-              action {
-                set_port_and_src_mac { port: "$1" src_mac: "66:55:44:33:22:11" }
-              }
-            }
-          )pb",
-          kRifOutId, out_port)));
-
-   ASSIGN_OR_RETURN(
-      pd_entries.emplace_back(),
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            neighbor_table_entry {
-              match { router_interface_id: "$0" neighbor_id: "$1" }
-              action { set_dst_mac { dst_mac: "02:02:02:02:02:02" } }
-            }
-          )pb",
-          kRifOutId, kNeighborId)));
-
-   ASSIGN_OR_RETURN(
-      pd_entries.emplace_back(),
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            nexthop_table_entry {
-              match { nexthop_id: "$2" }
-              action {
-                set_ip_nexthop { router_interface_id: "$0" neighbor_id: "$1" }
-              }
-            }
-          )pb",
-          kRifOutId, kNeighborId, kNextHopId)));
-
-   ASSIGN_OR_RETURN(pd_entries.emplace_back(),
-                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-                       R"pb(
-                         ipv4_table_entry {
-                           match { vrf_id: "$0" }
-                           action { set_nexthop_id { nexthop_id: "$1" } }
-                         }
-                       )pb",
-                       kVrfId, kNextHopId)));
-
-   ASSIGN_OR_RETURN(pd_entries.emplace_back(),
-                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-                       R"pb(
-                         ipv6_table_entry {
-                           match { vrf_id: "$0" }
-                           action { set_nexthop_id { nexthop_id: "$1" } }
-                         }
-                       )pb",
-                       kVrfId, kNextHopId)));
-
-   ASSIGN_OR_RETURN(
-      pd_entries.emplace_back(),
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            acl_pre_ingress_table_entry {
-              match { src_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" } }
-              action { set_vrf { vrf_id: "$1" } }
-              priority: 1
-            }
-          )pb",
-          source_mac, kVrfId)));
-
-   ASSIGN_OR_RETURN(pd_entries.emplace_back(),
-                    gutil::ParseTextProto<sai::TableEntry>(
-                        R"pb(
-            acl_ingress_table_entry {
-              match {
-                dst_mac { value: "02:02:02:02:02:02" mask: "ff:ff:ff:ff:ff:ff" }
-                is_ip { value: "0x1" }
-                ecn { value: "0x3" mask: "0x3" }
-              }
-              action { acl_copy { qos_queue: "2" } }
-              priority: 1
-            }
-          )pb"));
-
-   ASSIGN_OR_RETURN(
-      pd_entries.emplace_back(),
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            l3_admit_table_entry {
-              match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
-              action { admit_to_l3 {} }
-              priority: 1
-            }
-          )pb",
-          dest_mac)));
-
-   // Clear table entries
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
-
-    ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
-  std::vector<p4::v1::TableEntry> pi_entries;
-  for (const auto &pd_entry : pd_entries) {
-    ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
-                     pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry),
-                     _.SetPrepend()
-                         << "Failed in PD table conversion to PI, entry: "
-                         << pd_entry.DebugString() << " error: ");
-    pi_entries.push_back(pi_entry);
-  }
-
-  return (pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries));
-}
-
 bool IsEcnMarked(const packetlib::Packet &packet) {
   if (packet.headers_size() >= 2 &&
       ((packet.headers(1).has_ipv4_header() &&
@@ -1562,22 +1613,24 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
 
   // Get Ixia connected links.
-  const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
-      interface_info = testbed->GetSutInterfaceInfo();
-  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
-                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
-  ASSERT_GE(ready_links.size(), 3)
-      << "Test requires at least 3 SUT ports connected to an Ixia";
+  ASSERT_OK_AND_ASSIGN(IxiaLinks links,
+                       GetIxiaLinks(*testbed, *gnmi_stub, GetParam()));
 
-  const std::string kIxiaTxPort1 = ready_links[0].ixia_interface;
-  const std::string kSutInPort1 = ready_links[0].sut_interface;
-  
-  const std::string kIxiaTxPort2 = ready_links[1].ixia_interface;
-  const std::string kSutInPort2 = ready_links[1].sut_interface;
+  const std::string &kSutInPort1 = links.ingress_links[0].sut_interface;
+  const std::string &kIxiaTxPort1 = links.ingress_links[0].ixia_interface;
 
-  const std::string kIxiaRxPort = ready_links[2].ixia_interface;
-  const std::string kSutOutPort = ready_links[2].sut_interface;
-      
+  const std::string &kSutInPort2 = links.ingress_links[1].sut_interface;
+  const std::string &kIxiaTxPort2 = links.ingress_links[1].ixia_interface;
+
+  const std::string &kSutOutPort = links.egress_link.sut_interface;
+  const std::string &kIxiaRxPort = links.egress_link.ixia_interface;
+
+  LOG(INFO) << absl::StrFormat(
+      "Test packet route: [Ixia: %s]/[Ixia: %s] => [SUT: %s]/[SUT: %s] -> "
+      "[SUT: %s] => [Ixia: %s]",
+      kIxiaTxPort1, kIxiaTxPort2, kSutInPort1, kSutInPort2, kSutOutPort,
+      kIxiaRxPort);
+
   // Set the egress port to loopback mode
   // Configure the switch egress port as loopback as we want to loopback the
   // egress packets to test receiver for inspecting the packets.
@@ -1704,9 +1757,19 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   const std::string kDefaultQueueName = "BE1";
 
   // Set up the switch to forward inbound packets to the egress port
-  ASSERT_OK(SetUpForwardingAndCopyEgressToCpu(
-      kSutOutPortId, kSourceMac.ToString(), kDestMac.ToString(),
-      GetParam().p4info, *sut_p4_session));
+  // Configure the switch to send all incoming packets out of the chosen egress
+  // port.
+  ASSERT_OK_AND_ASSIGN(
+      const sai::TableEntries kTableEntries,
+      ConstructEntriesToForwardAllTrafficToLoopbackPortAndCopyEcnPacketsToCPU(
+          /*p4rt_out_port_id=*/kSutOutPortId,
+          /*p4rt_in_port1_id=*/kSutInPort1Id,
+          /*p4rt_in_port2_id=*/kSutInPort2Id));
+  ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
+                                                     kTableEntries));
+
+  ASSERT_OK(
+      InstallPdTableEntries(kTableEntries, GetParam().p4info, *sut_p4_session));
 
   // Test ECN marking for IPv4 then IPv6 traffic.
   for (bool is_ipv4 : {false, true}) {
@@ -1877,32 +1940,24 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
       )pb");
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<thinkit::GenericTestbed> testbed,
-      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+      GetParam().default_params.testbed_interface->GetTestbedWithRequirements(
+          requirements));
 
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
   // so we can oversubsribe the egress port.
   LOG(INFO) << "picking test packet links";
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
-                       GetReadyIxiaLinks(*testbed, *gnmi_stub));
-  absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
-    return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
-  });
-  ASSERT_GE(ready_links.size(), 3)
-      << "Test requires at least 3 SUT ports connected to an Ixia";
-  const auto [kEgressLink, kIngressLink1, kIngressLink2] =
-      std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
-  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
-            kIngressLink1.sut_interface_bits_per_second);
-  ASSERT_LE(kEgressLink.sut_interface_bits_per_second,
-            kIngressLink2.sut_interface_bits_per_second);
-  const std::string kIxiaIpv4SrcPort = kIngressLink1.ixia_interface;
-  const std::string kIxiaIpv6SrcPort = kIngressLink2.ixia_interface;
-  const std::string kIxiaDstPort = kEgressLink.ixia_interface;
-  const std::string kSutIpv4IngressPort = kIngressLink1.sut_interface;
-  const std::string kSutIpv6IngressPort = kIngressLink2.sut_interface;
-  const std::string kSutEgressPort = kEgressLink.sut_interface;
+  // Get Ixia connected links.
+  ASSERT_OK_AND_ASSIGN(IxiaLinks links,
+                       GetIxiaLinks(*testbed, *gnmi_stub, GetParam()));
+
+  const std::string &kSutIpv4IngressPort = links.ingress_links[0].sut_interface;
+  const std::string &kSutIpv6IngressPort = links.ingress_links[1].sut_interface;
+  const std::string &kSutEgressPort = links.egress_link.sut_interface;
+  const std::string &kIxiaIpv4SrcPort = links.ingress_links[0].ixia_interface;
+  const std::string &kIxiaIpv6SrcPort = links.ingress_links[1].ixia_interface;
+  const std::string &kIxiaDstPort = links.egress_link.ixia_interface;
   LOG(INFO) << absl::StrFormat(
       "Test packet routes:"
       "\n- IPv4: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]"
@@ -1927,17 +1982,18 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
   // Configure the switch to send all incomming packets out of the chosen egress
   // port.
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
-      ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+                       ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed->Sut(), /*gnmi_config=*/std::nullopt,
+                           GetParam().default_params.p4info));
   ASSERT_OK_AND_ASSIGN(
       const sai::TableEntries kTableEntries,
       ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
   ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
                                                      kTableEntries));
 
-  ASSERT_OK(InstallPdTableEntries(kTableEntries, GetParam().p4info, *sut_p4rt));
+  ASSERT_OK(InstallPdTableEntries(kTableEntries,
+                                  GetParam().default_params.p4info, *sut_p4rt));
 
   // Before we update the scheduler config, save the current config and
   // prepare to restore it at the end of th test.
@@ -1964,7 +2020,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
       params_by_queue_name[queue_name].committed_information_rate = 0;
       // Limit peak rate to 10% of line rate so queue is always full.
       params_by_queue_name[queue_name].peak_information_rate =
-          0.1 * kEgressLink.sut_interface_bits_per_second / 8;
+          0.1 * links.egress_link.sut_interface_bits_per_second / 8;
     }
     ASSERT_OK(SetSchedulerPolicyParameters(kSutEgressPortSchedulerPolicy,
                                            params_by_queue_name, *gnmi_stub));
@@ -2021,7 +2077,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
                        ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
   constexpr int kFrameSizeInBytes = 1000;
   const int kTotalFramesPerSecond =
-      kEgressLink.sut_interface_bits_per_second / (kFrameSizeInBytes * 8);
+      links.egress_link.sut_interface_bits_per_second / (kFrameSizeInBytes * 8);
   const int kNumTrafficItemsPerLink = kBufferParametersByQueueName.size();
   const auto kTrafficItemSpeed =
       ixia::FramesPerSecond{kTotalFramesPerSecond / kNumTrafficItemsPerLink};
