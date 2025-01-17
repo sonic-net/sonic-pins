@@ -24,7 +24,6 @@
 
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/qos/qos_test_util.h"
-#include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 
 namespace pins_test {
@@ -32,9 +31,19 @@ namespace pins_test {
 // Parameters used by the tests. The fixture is *not* parameterized over a gNMI
 // config and assumes that the switch is preconfigured and the testbed ports
 // are up.
+// We can optionally pass in `ingress_ports` and `egress_port_under_test` if
+// we would like the test to use specific ports.
+// `ingress_ports`: 2 Ingress port connected to traffic generator for injecting
+//  traffic
+// `egress_port_under_test`: Egress port under test to validate egress QoS.
+// Each `ingress_port` speed needs to be at least the speed of `egress_port`
+// as the tests require oversubscription of egress port.
+
 struct QosTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
   p4::config::v1::P4Info p4info;
+  std::string ingress_ports[2];
+  std::string egress_port_under_test;
 };
 
 class FrontpanelQosTest : public testing::TestWithParam<QosTestParams> {
@@ -52,8 +61,7 @@ enum BufferConfigToBeTested {
 
 // Parameters used by the tests.
 struct BufferTestParams {
-  thinkit::GenericTestbedInterface *testbed_interface;
-  p4::config::v1::P4Info p4info;
+  QosTestParams default_params;
   // Buffer configurations to be applied on queues before test is run.
   absl::flat_hash_map<std::string, BufferParameters>
       buffer_parameters_by_queue_name;
@@ -62,9 +70,15 @@ struct BufferTestParams {
 
 class FrontpanelBufferTest : public testing::TestWithParam<BufferTestParams> {
 protected:
-  void SetUp() override { GetParam().testbed_interface->SetUp(); }
-  void TearDown() override { GetParam().testbed_interface->TearDown(); }
-  ~FrontpanelBufferTest() override { delete GetParam().testbed_interface; }
+  void SetUp() override {
+    GetParam().default_params.testbed_interface->SetUp();
+  }
+  void TearDown() override {
+    GetParam().default_params.testbed_interface->TearDown();
+  }
+  ~FrontpanelBufferTest() override {
+    delete GetParam().default_params.testbed_interface;
+  }
 };
 } // namespace pins_test
 
