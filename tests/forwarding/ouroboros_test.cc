@@ -37,10 +37,11 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/dataplane_validation.h"
+#include "dvaas/packet_injection.h"
+#include "dvaas/switch_api.h"
+#include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
-#include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -64,17 +65,17 @@
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "tests/forwarding/test_vector.h"
-#include "tests/forwarding/test_vector.pb.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
 
-using ::dvaas::Switch;
+using ::dvaas::SwitchApi;
 using ::p4_fuzzer::FuzzerConfig;
 
 // -- Auxiliary functions ------------------------------------------------------
@@ -86,8 +87,8 @@ std::string CreateHeader(absl::string_view title) {
 
 // Reads table entries on `sut` and outputs them into an artifact given by
 // `artifact_name`.
-absl::Status OutputTableEntriesToArtifact(Switch& sut,
-                                          thinkit::TestEnvironment& environment,
+absl::Status OutputTableEntriesToArtifact(SwitchApi &sut,
+                                          thinkit::TestEnvironment &environment,
                                           absl::string_view artifact_name,
                                           int iteration) {
   RETURN_IF_ERROR(environment.AppendToTestArtifact(
@@ -102,19 +103,17 @@ absl::Status OutputTableEntriesToArtifact(Switch& sut,
 // Augments the given FuzzerConfig to fit the `sut` and Ouroboros Test by
 // replacing the IrP4Info and available ports with those read from the switch
 // and setting mutation probability to 0.
-absl::Status AugmentFuzzerConfig(Switch& sut, FuzzerConfig& fuzzer_config) {
+absl::Status AugmentFuzzerConfig(SwitchApi &sut, FuzzerConfig &fuzzer_config) {
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
                    pdpi::GetForwardingPipelineConfig(sut.p4rt.get()));
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info,
-                   pdpi::CreateIrP4Info(response.config().p4info()));
 
-  fuzzer_config.info = ir_info;
-  ASSIGN_OR_RETURN(fuzzer_config.ports,
+  RETURN_IF_ERROR(fuzzer_config.SetP4Info(response.config().p4info()));
+  ASSIGN_OR_RETURN(auto port_ids,
                    pins_test::GetMatchingP4rtPortIds(
                        *sut.gnmi, pins_test::IsEnabledEthernetInterface));
-  fuzzer_config.mutate_update_probability = 0.0;
-  // Our validator, BMv2, does not support empty action profile groups.
-  fuzzer_config.no_empty_action_profile_groups = true;
+  fuzzer_config.SetPorts(port_ids);
+  fuzzer_config.SetMutateUpdateProbability(0.0);
+  fuzzer_config.SetNoEmptyActionProfileGroups(true);
   return absl::OkStatus();
 }
 
@@ -122,12 +121,13 @@ absl::Status AugmentFuzzerConfig(Switch& sut, FuzzerConfig& fuzzer_config) {
 // `gnmi_config` and `p4info` (if given). Mirrors the SUTs interfaces on the
 // control switch and waits for them to be Up.
 // Returns a configured (SUT, Control Switch) pair.
-absl::StatusOr<std::pair<Switch, Switch>> ConfigureMirrorTestbed(
-    thinkit::MirrorTestbed& testbed, std::optional<std::string> gnmi_config,
-    std::optional<p4::config::v1::P4Info> p4info) {
+absl::StatusOr<std::pair<SwitchApi, SwitchApi>>
+ConfigureMirrorTestbed(thinkit::MirrorTestbed &testbed,
+                       std::optional<std::string> gnmi_config,
+                       std::optional<p4::config::v1::P4Info> p4info) {
   // Configure both switches and set up gNMI and P4Runtime sessions to them.
-  Switch sut;
-  Switch control_switch;
+  SwitchApi sut;
+  SwitchApi control_switch;
   ASSIGN_OR_RETURN(sut.gnmi, testbed.Sut().CreateGnmiStub());
   ASSIGN_OR_RETURN(control_switch.gnmi,
                    testbed.ControlSwitch().CreateGnmiStub());
@@ -155,11 +155,11 @@ absl::StatusOr<std::pair<Switch, Switch>> ConfigureMirrorTestbed(
 
 // Generates updates to switch state using the P4-Fuzzer and sends them to the
 // switch.
-absl::Status FuzzSwitchState(absl::BitGen& gen, Switch& sut,
-                             thinkit::TestEnvironment& environment,
-                             int iteration, const FuzzerConfig& fuzzer_config,
+absl::Status FuzzSwitchState(absl::BitGen &gen, SwitchApi &sut,
+                             thinkit::TestEnvironment &environment,
+                             int iteration, const FuzzerConfig &fuzzer_config,
                              int min_num_updates,
-                             p4_fuzzer::SwitchState& state) {
+                             p4_fuzzer::SwitchState &state) {
   int num_updates = 0;
   int num_fuzzing_cycles = 0;
   while (num_updates < min_num_updates) {
@@ -222,7 +222,7 @@ TEST_P(
       pins_test::GetInterfacesAsProto(*control_gnmi_stub,
                                       gnmi::GetRequest::CONFIG));
 
-  Switch sut, control_switch;
+  SwitchApi sut, control_switch;
   ASSERT_OK_AND_ASSIGN(std::tie(sut, control_switch),
                        ConfigureMirrorTestbed(testbed, GetParam().gnmi_config,
                                               GetParam().config.p4info()));
@@ -238,7 +238,7 @@ TEST_P(
 
   FuzzerConfig fuzzer_config = GetParam().fuzzer_config;
   ASSERT_OK(AugmentFuzzerConfig(sut, fuzzer_config));
-  p4_fuzzer::SwitchState fuzzer_switch_state(fuzzer_config.info);
+  p4_fuzzer::SwitchState fuzzer_switch_state(fuzzer_config.GetIrP4Info());
 
   absl::BitGen gen;
 
@@ -264,26 +264,24 @@ TEST_P(
         sut, environment, /*artifact_name=*/"ouroboros_table_entries.txt",
         iteration));
 
-    ASSERT_OK_AND_ASSIGN(
-        dvaas::ValidationResult validation_result_unused,
-        GetParam().validator->ValidateDataplane(
-            sut, control_switch, /*params=*/
-            dvaas::DataplaneValidationParams{
-                .ignored_fields_for_validation =
-                    GetParam().ignored_fields_for_validation,
-                .ignored_metadata_for_validation =
-                    GetParam().ignored_packetin_metadata_for_validation,
-                .artifact_prefix = "ouroboros",
-                .get_artifact_header =
-                    [=]() {
-                      return CreateHeader(
-                          absl::StrCat("Iteration ", iteration));
-                    },
-                .max_packets_to_send_per_second =
-                    GetParam().max_packets_to_send_per_second,
-            }));
-    // Mark that the validation result is currently unused.
-    (void)validation_result_unused;
+    // Configure `get_artifact_header` for current iteration.
+    dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
+    dvaas_params.get_artifact_header = [=]() {
+      std::string iteration_header =
+          CreateHeader(absl::StrCat("Iteration ", iteration));
+      if (dvaas_params.get_artifact_header.has_value()) {
+        return absl::StrCat(iteration_header,
+                            (*dvaas_params.get_artifact_header)());
+      } else {
+        return iteration_header;
+      }
+    };
+
+    ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
+                         GetParam().validator->ValidateDataplane(
+                             sut, control_switch, dvaas_params));
+    validation_result.LogStatistics();
+    ASSERT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 
     last_iteration_time = absl::Now() - iteration_start_time;
   }
