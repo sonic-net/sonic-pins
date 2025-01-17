@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
+#     https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This package contains the interfaces, structs, and enums to be used in PINs NSF tests.
+# This package implements the various flow programmers for PINs NSF tests.
 
 package(
     default_visibility = ["//visibility:public"],
@@ -20,43 +20,34 @@ package(
 )
 
 cc_library(
-    name = "flow_programmer",
+    name = "static_programmer",
     testonly = True,
-    hdrs = ["flow_programmer.h"],
+    hdrs = ["static_programmer.h"],
     deps = [
+        "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//thinkit:generic_testbed",
         "@com_google_absl//absl/status",
     ],
 )
 
 cc_library(
-    name = "traffic_helper",
-    hdrs = ["traffic_helper.h"],
+    name = "fuzzer_replay_programmer",
+    testonly = True,
+    hdrs = ["fuzzer_replay_programmer.h"],
     deps = [
+        "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//thinkit:generic_testbed",
         "@com_google_absl//absl/status",
     ],
 )
 
 cc_library(
-    name = "component_validator",
+    name = "replay_programmer",
     testonly = True,
-    hdrs = ["component_validator.h"],
+    hdrs = ["replay_programmer.h"],
     deps = [
+        "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//thinkit:generic_testbed",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
-    ],
-)
-
-cc_library(
-    name = "test_params",
-    testonly = True,
-    hdrs = ["test_params.h"],
-    deps = [
-        ":component_validator",
-        ":flow_programmer",
-        ":traffic_helper",
-        "//thinkit:generic_testbed_fixture",
     ],
 )

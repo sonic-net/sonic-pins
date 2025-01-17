@@ -12,29 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_TRAFFIC_HELPERS_OTG_HELPER_H_
-#define PINS_TESTS_INTEGRATION_SYSTEM_NSF_TRAFFIC_HELPERS_OTG_HELPER_H_
+#ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_FLOW_PROGRAMMERS_FUZZER_REPLAY_PROGRAMMER_H_
+#define PINS_TESTS_INTEGRATION_SYSTEM_NSF_FLOW_PROGRAMMERS_FUZZER_REPLAY_PROGRAMMER_H_
 
 #include "absl/status/status.h"
-#include "tests/integration/system/nsf/interfaces/traffic_helper.h"
+#include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test {
 
-class OtgHelper : public TrafficHelper {
+class FuzzerReplayProgrammer : public FlowProgrammer {
  public:
-  absl::Status StartTraffic(thinkit::GenericTestbed& testbed) override {
+  absl::Status ProgramFlows(IpVersion ip_version, Protocol protocol,
+                            thinkit::GenericTestbed& testbed) override {
     return absl::OkStatus();
   };
-  absl::Status StopTraffic(thinkit::GenericTestbed& testbed) override {
-    return absl::OkStatus();
-  };
-  absl::Status ValidateTraffic(int error_margin,
-                               thinkit::GenericTestbed& testbed) override {
+  absl::Status ClearFlows(thinkit::GenericTestbed& testbed) override {
     return absl::OkStatus();
   };
 };
 
 }  // namespace pins_test
 
-#endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_TRAFFIC_HELPERS_OTG_HELPER_H_
+#endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_FLOW_PROGRAMMERS_FUZZER_REPLAY_PROGRAMMER_H_
