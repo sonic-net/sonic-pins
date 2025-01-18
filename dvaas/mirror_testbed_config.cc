@@ -20,6 +20,7 @@
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
+#include "absl/strings/substitute.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/test_artifact_writer.h"
 #include "lib/gnmi/gnmi_helper.h"

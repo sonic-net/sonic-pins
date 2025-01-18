@@ -99,6 +99,17 @@ struct PacketInjectionParams {
   // TODO: Replace with parameter to tolerate SUT disconnections
   // rather than ignoring all packet-ins.
   bool enable_sut_packet_in_collection = true;
+  // Maximum time expected it takes to receive output packets either from SUT
+  // or control switch in response to an injected input packet. Beyond that,
+  // the input packet might be considered dropped.
+  absl::Duration max_expected_packet_in_flight_duration = absl::Seconds(3);
+  // Maximum number of packets that are in flight at any given time. Packet
+  // injection and collection are done in batches of this size. If not
+  // specified, the batch size is equal to the number of test vectors (all of
+  // them are injected as one batch). Note that the assumptions about the
+  // number of in-flight packets is based on the value of
+  // `max_expected_packet_in_flight_duration`.
+  std::optional<int> max_in_flight_packets = std::nullopt;
 };
 
 // Injects a packet to the control switch egress with a packet injection delay
