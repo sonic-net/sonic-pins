@@ -28,7 +28,7 @@ ingress_headers:
 $got_cloned$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
-h1.f1 = #x01
+h1.f1 = #x02
 h1.f2 = #x00
 h1.f3 = #x00
 h1.f4 = #x00
@@ -64,7 +64,7 @@ parsed_headers:
 $got_cloned$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
-h1.f1 = #x01
+h1.f1 = #x02
 h1.f2 = #x00
 h1.f3 = #x00
 h1.f4 = #x00
@@ -100,7 +100,7 @@ egress_headers:
 $got_cloned$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
-h1.f1 = #x01
+h1.f1 = #x02
 h1.f2 = #x00
 h1.f3 = #x00
 h1.f4 = #x00
