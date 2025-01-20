@@ -26,12 +26,24 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace v1model {
 
+// Standard metadata header name.
+constexpr absl::string_view kStandardMetadataHeaderName = "standard_metadata";
+
+// 32-bit bit-vector field in standard metadata indicating whether there is a
+// parser error. The error code is defined in core.p4 and can be extended by the
+// P4 program. 0 means no error.
+constexpr absl::string_view kParserErrorField =
+    "standard_metadata.parser_error";
+
 // V1model's `mark_to_drop` primitive sets the `egress_spec` field to
 // `kDropPort` to indicate the packet should be dropped at the end of
 // ingress/egress processing. See v1model.p4 for details.
 z3::expr EgressSpecDroppedValue(z3::context &z3_context);
 
 // Initializes the ingress headers to appropriate values.
+// Here we initialize all standard metadata fields to zero for the ingress
+// packet. Local (user) metadata fields are intentionally left uninitialized
+// to align with the standard.
 absl::Status InitializeIngressHeaders(const ir::P4Program &program,
                                       SymbolicPerPacketState &ingress_headers,
                                       z3::context &z3_context);

@@ -37,15 +37,19 @@ namespace symbolic {
 // A port reserved to encode dropping packets.
 // The value is arbitrary; we choose the same value as BMv2:
 // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#standard-metadata
-constexpr int kDropPort = 511; // 2^9 - 1.
+constexpr int kDropPort = 511;  // 2^9 - 1.
+
 // An arbitrary port we reserve for the CPU port (for PacketIO packets).
-constexpr int kCpuPort = 510; // 2^9 - 2.
+constexpr int kCpuPort = 510;  // 2^9 - 2.
+
+// Bit-width of port numbers.
 constexpr int kPortBitwidth = 9;
 
 // Boolean pseudo header field that is initialized to false, set to true when
 // the header is extracted, and set to true/false when `setValid`/`setInvalid`
 // is called, respectively.
 constexpr absl::string_view kValidPseudoField = "$valid$";
+
 // Boolean pseudo header field denoting that the header has been extracted by
 // the parser. It is initialized to false and set to true when the header is
 // extracted. This is necessary to distinguish between headers extracted and
@@ -53,14 +57,10 @@ constexpr absl::string_view kValidPseudoField = "$valid$";
 // example, a `packet_in` header may be set to valid but should never be
 // extracted from the input packet.
 constexpr absl::string_view kExtractedPseudoField = "$extracted$";
+
 // Boolean pseudo header field that is set to true by p4-symbolic if the packet
 // gets cloned. Not an actual header field, but convenient for analysis.
 constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
-// 32-bit bit-vector field in standard metadata indicating whether there is a
-// parser error. The error code is defined in core.p4 and can be extended by the
-// P4 program. 0 means no error.
-constexpr absl::string_view kParserErrorField =
-    "standard_metadata.parser_error";
 
 // The overall state of our symbolic solver/interpreter.
 // This is returned by our main analysis/interpration function, and is used

@@ -597,7 +597,6 @@ TEST_P(FrontpanelQosTest,
 
   constexpr int64_t kSpeed400g = 400000000000;
   constexpr int64_t kSpeed200g = 200000000000;
-  // Toggle speed to add coverage for b/246290651.
   if (kSutEgressPortSpeedInBitsPerSecond != kSpeed200g) {
     ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g), kSutEgressPort,
                                           *gnmi_stub));
