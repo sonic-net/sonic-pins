@@ -14,13 +14,21 @@
 
 #include "p4_symbolic/symbolic/v1model.h"
 
+#include <array>
+#include <string>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/substitute.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/v1model_intrinsic.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -28,6 +36,68 @@ namespace symbolic {
 namespace v1model {
 
 namespace {
+
+// Initializes standard metadata fields to zero, except for `ingress_port`,
+// `egress_port`, and `packet_length`.
+absl::Status InitializeStandardMetadata(const ir::P4Program &program,
+                                        SymbolicPerPacketState &headers,
+                                        z3::context &z3_context) {
+  // Check if the standard metadata header exists.
+  auto it = program.headers().find(kStandardMetadataHeaderName);
+  if (it == program.headers().end()) {
+    return gutil::InternalErrorBuilder()
+           << "Header '" << kStandardMetadataHeaderName
+           << "' not found in P4 program.";
+  }
+
+  const google::protobuf::Map<std::string, ir::HeaderField>
+      &standard_metadata_fields = it->second.fields();
+
+  // List of standard metadata fields to be initialized to zero. See
+  // https://github.com/p4lang/p4c/blob/main/p4include/v1model.p4 for the full
+  // list of fields.
+  static constexpr std::array kFieldsToBeInitialized = {
+      // The ingress port should not be fixed.
+      // "ingress_port",
+      "egress_spec",
+      // TODO: Whenever `egress_port` is initialized to zero,
+      // `packet_util_production_test` fails. It would be helpful to understand
+      // why that's the case.
+      // "egress_port",
+      "instance_type",
+      // TODO: Packet length depends on the validity of headers.
+      // "packet_length",
+      "enq_timestamp",
+      "enq_qdepth",
+      "deq_timedelta",
+      "deq_qdepth",
+      "ingress_global_timestamp",
+      "egress_global_timestamp",
+      "mcast_grp",
+      "egress_rid",
+      "checksum_error",
+      "parser_error",
+      "priority",
+  };
+
+  // Initialize the listed standard metadata fields to zero.
+  for (const absl::string_view field_name : kFieldsToBeInitialized) {
+    auto it = standard_metadata_fields.find(field_name);
+    if (it == standard_metadata_fields.end()) {
+      return gutil::InternalErrorBuilder()
+             << "Field '" << field_name << "' not found in standard metadata.";
+    }
+
+    std::string field_full_name =
+        absl::StrFormat("%s.%s", kStandardMetadataHeaderName, field_name);
+    z3::expr zero = z3_context.bv_val(
+        (field_name == "instance_type" ? PKT_INSTANCE_TYPE_NORMAL : 0),
+        it->second.bitwidth());
+    RETURN_IF_ERROR(headers.UnguardedSet(field_full_name, zero));
+  }
+
+  return absl::OkStatus();
+}
 
 absl::Status CheckPhysicalPortsConformanceToV1Model(
     const std::vector<int> &physical_ports) {
@@ -82,7 +152,8 @@ z3::expr EgressSpecDroppedValue(z3::context &z3_context) {
 absl::Status InitializeIngressHeaders(const ir::P4Program &program,
                                       SymbolicPerPacketState &ingress_headers,
                                       z3::context &z3_context) {
-  // TODO: Consider initializing all metadata fields to 0.
+  RETURN_IF_ERROR(
+      InitializeStandardMetadata(program, ingress_headers, z3_context));
 
   // Set the `$valid$` and `$extracted$` fields of all headers to false.
   const z3::expr false_expr = z3_context.bool_val(false);
@@ -92,11 +163,6 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
     RETURN_IF_ERROR(ingress_headers.UnguardedSet(
         header_name, kExtractedPseudoField, false_expr));
   }
-
-  // Set the `standard_metadata.parser_error` field to error.NoError.
-  ASSIGN_OR_RETURN(z3::expr no_error, parser::GetErrorCodeExpression(
-                                          program, "NoError", z3_context));
-  RETURN_IF_ERROR(ingress_headers.UnguardedSet(kParserErrorField, no_error));
 
   return absl::OkStatus();
 }
