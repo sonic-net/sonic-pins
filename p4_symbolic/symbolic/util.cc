@@ -17,17 +17,25 @@
 #include "p4_symbolic/symbolic/util.h"
 
 #include <string>
+#include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
+#include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -35,33 +43,27 @@ namespace util {
 
 namespace {
 
-// Extract the header field definition of a `field_ref` from the given P4
-// `program`.
+// Extracts the header field definition based on the given `header_name` and
+// `field_name` from the given P4 `program`.
 absl::StatusOr<ir::HeaderField> GetFieldDefinition(
-    const ir::P4Program &program, absl::string_view field_ref) {
-  // Split the field reference into header and field names.
-  std::vector<std::string> split = absl::StrSplit(field_ref, '.');
-  if (split.size() != 2) {
-    return absl::InvalidArgumentError(
-        absl::Substitute("Expected <header>.<field> got '$0'", field_ref));
-  }
-  const std::string &header_name = split[0];
-  const std::string &field_name = split[1];
-
+    const ir::P4Program &program, absl::string_view header_name,
+    absl::string_view field_name) {
   // Extract the header definition from the program.
-  if (!program.headers().contains(header_name)) {
-    return absl::InvalidArgumentError(
-        absl::Substitute("Unexpected header instance'$0'", header_name));
+  auto header_it = program.headers().find(header_name);
+  if (header_it == program.headers().end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unexpected header instance '" << header_name << "'";
   }
-  const p4_symbolic::ir::HeaderType &header_def =
-      program.headers().at(header_name);
+  const p4_symbolic::ir::HeaderType &header = header_it->second;
 
   // Extract the field definition from the header definition.
-  if (!header_def.fields().contains(field_name)) {
-    return absl::InvalidArgumentError(absl::Substitute(
-        "Unexpected field'$0' in header '$1'", field_name, header_name));
+  auto field_it = header.fields().find(field_name);
+  if (field_it == header.fields().end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unexpected field '" << field_name << "' in header '"
+           << header_name << "'";
   }
-  return header_def.fields().at(field_name);
+  return field_it->second;
 }
 
 }  // namespace
@@ -238,14 +240,27 @@ absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
   return merged;
 }
 
-absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
+absl::StatusOr<int> GetFieldBitwidth(absl::string_view qualified_field_name,
                                      const ir::P4Program &program) {
-  if (absl::EndsWith(field_name, symbolic::kValidPseudoField) ||
-      absl::EndsWith(field_name, symbolic::kExtractedPseudoField)) {
+  // Split the fully qualified field name into header and field names.
+  std::vector<std::string> split = absl::StrSplit(qualified_field_name, '.');
+  if (split.size() != 2) {
+    return absl::InvalidArgumentError(absl::Substitute(
+        "Expected <header>.<field> got '$0'", qualified_field_name));
+  }
+  return GetFieldBitwidth(/*header_name=*/split[0], /*field_name=*/split[1],
+                          program);
+}
+
+absl::StatusOr<int> GetFieldBitwidth(absl::string_view header_name,
+                                     absl::string_view field_name,
+                                     const ir::P4Program &program) {
+  if (field_name == symbolic::kValidPseudoField ||
+      field_name == symbolic::kExtractedPseudoField) {
     return 1;
   } else {
     ASSIGN_OR_RETURN(const ir::HeaderField field_definition,
-                     GetFieldDefinition(program, field_name));
+                     GetFieldDefinition(program, header_name, field_name));
     return field_definition.bitwidth();
   }
 }
