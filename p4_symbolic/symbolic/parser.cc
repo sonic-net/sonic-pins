@@ -14,16 +14,21 @@
 
 #include "p4_symbolic/symbolic/parser.h"
 
+#include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/action.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -43,7 +48,7 @@ namespace {
 absl::Status EvaluateExtractParserOperation(
     const ir::P4Program &program,
     const ir::ParserOperation::Extract &extract_op,
-    SymbolicPerPacketState &state, z3::context &z3_context,
+    SymbolicPerPacketState &headers, z3::context &z3_context,
     const z3::expr &guard) {
   // The extracted header must exists.
   const std::string &header_name = extract_op.header().header_name();
@@ -53,16 +58,16 @@ absl::Status EvaluateExtractParserOperation(
   }
 
   // Set the "valid" and "extracted" fields of the header to `guard`.
-  RETURN_IF_ERROR(state.Set(header_name, kValidPseudoField,
-                            z3_context.bool_val(true), guard));
-  RETURN_IF_ERROR(state.Set(header_name, kExtractedPseudoField,
-                            z3_context.bool_val(true), guard));
+  RETURN_IF_ERROR(headers.Set(header_name, kValidPseudoField,
+                              z3_context.bool_val(true), guard));
+  RETURN_IF_ERROR(headers.Set(header_name, kExtractedPseudoField,
+                              z3_context.bool_val(true), guard));
 
   // Verify if all fields of the header are single, free bit-vector variables.
   for (const auto &[field_name, ir_field] : Ordered(it->second.fields())) {
     std::string field_full_name =
         absl::StrFormat("%s.%s", header_name, field_name);
-    ASSIGN_OR_RETURN(const z3::expr &field, state.Get(field_full_name));
+    ASSIGN_OR_RETURN(const z3::expr &field, headers.Get(field_full_name));
     if (field.to_string() != field_full_name || !field.is_bv() ||
         field.get_sort().bv_size() !=
             static_cast<unsigned int>(ir_field.bitwidth())) {
@@ -78,11 +83,12 @@ absl::Status EvaluateExtractParserOperation(
 // Constructs a symbolic expression corresponding to the given R-value of the
 // set operation.
 absl::StatusOr<z3::expr> EvaluateSetOperationRValue(
-    const ir::ParserOperation::Set &set_op, const SymbolicPerPacketState &state,
-    const action::ActionContext &context, z3::context &z3_context) {
+    const ir::ParserOperation::Set &set_op,
+    const SymbolicPerPacketState &headers, const action::ActionContext &context,
+    z3::context &z3_context) {
   switch (set_op.rvalue_case()) {
     case ir::ParserOperation::Set::RvalueCase::kFieldRvalue: {
-      return action::EvaluateFieldValue(set_op.field_rvalue(), state);
+      return action::EvaluateFieldValue(set_op.field_rvalue(), headers);
     }
     case ir::ParserOperation::Set::RvalueCase::kHexstrRvalue: {
       return action::EvaluateHexStr(set_op.hexstr_rvalue(), z3_context);
@@ -92,7 +98,7 @@ absl::StatusOr<z3::expr> EvaluateSetOperationRValue(
              << "Lookahead R-values for set operations are not supported.";
     }
     case ir::ParserOperation::Set::RvalueCase::kExpressionRvalue: {
-      return action::EvaluateRExpression(set_op.expression_rvalue(), state,
+      return action::EvaluateRExpression(set_op.expression_rvalue(), headers,
                                          context, z3_context);
     }
     default: {
@@ -105,29 +111,29 @@ absl::StatusOr<z3::expr> EvaluateSetOperationRValue(
 
 // Evaluates the given "set" parser operation.
 absl::Status EvaluateSetParserOperation(const ir::ParserOperation::Set &set_op,
-                                        SymbolicPerPacketState &state,
+                                        SymbolicPerPacketState &headers,
                                         const action::ActionContext &context,
                                         z3::context &z3_context,
                                         const z3::expr &guard) {
   // Get the field name of the L-value and the expression of the R-value.
   const ir::FieldValue &field_value = set_op.lvalue();
   ASSIGN_OR_RETURN(z3::expr rvalue, EvaluateSetOperationRValue(
-                                        set_op, state, context, z3_context));
+                                        set_op, headers, context, z3_context));
   // Set the header field to the symbolic expression.
-  RETURN_IF_ERROR(state.Set(field_value.header_name(), field_value.field_name(),
-                            rvalue, guard));
+  RETURN_IF_ERROR(headers.Set(field_value.header_name(),
+                              field_value.field_name(), rvalue, guard));
   return absl::OkStatus();
 }
 
 // Evaluates the given "primitive" parser operation.
 absl::Status EvaluatePrimitiveParserOperation(
     const ir::ParserOperation::Primitive &primitive,
-    SymbolicPerPacketState &state, action::ActionContext &context,
+    SymbolicPerPacketState &headers, action::ActionContext &context,
     z3::context &z3_context, const z3::expr &guard) {
   switch (primitive.statement_case()) {
     case ir::ParserOperation::Primitive::StatementCase::kAssignment: {
-      return action::EvaluateAssignmentStatement(primitive.assignment(), &state,
-                                                 &context, z3_context, guard);
+      return action::EvaluateAssignmentStatement(
+          primitive.assignment(), &headers, &context, z3_context, guard);
     }
     default: {
       return gutil::UnimplementedErrorBuilder()
@@ -143,21 +149,21 @@ absl::Status EvaluatePrimitiveParserOperation(
 // Evaluates the given parser operation.
 absl::Status EvaluateParserOperation(const ir::P4Program &program,
                                      const ir::ParserOperation &op,
-                                     SymbolicPerPacketState &state,
+                                     SymbolicPerPacketState &headers,
                                      action::ActionContext &context,
                                      z3::context &z3_context,
                                      const z3::expr &guard) {
   switch (op.operation_case()) {
     case ir::ParserOperation::OperationCase::kExtract: {
-      return EvaluateExtractParserOperation(program, op.extract(), state,
+      return EvaluateExtractParserOperation(program, op.extract(), headers,
                                             z3_context, guard);
     }
     case ir::ParserOperation::OperationCase::kSet: {
-      return EvaluateSetParserOperation(op.set(), state, context, z3_context,
+      return EvaluateSetParserOperation(op.set(), headers, context, z3_context,
                                         guard);
     }
     case ir::ParserOperation::OperationCase::kPrimitive: {
-      return EvaluatePrimitiveParserOperation(op.primitive(), state, context,
+      return EvaluatePrimitiveParserOperation(op.primitive(), headers, context,
                                               z3_context, guard);
     }
     default: {
@@ -205,7 +211,7 @@ absl::StatusOr<z3::expr> ConstructHexStringMatchCondition(
 // independently regardless of whether the transition key in the given
 // `parse_state` matches another transition or not.
 absl::StatusOr<std::vector<z3::expr>> ConstructMatchConditions(
-    const ir::ParseState &parse_state, const SymbolicPerPacketState &state,
+    const ir::ParseState &parse_state, const SymbolicPerPacketState &headers,
     z3::context &z3_context, const z3::expr &guard) {
   // Collect all transition key fields to construct the transition key.
   z3::expr_vector key_fields(z3_context);
@@ -222,7 +228,7 @@ absl::StatusOr<std::vector<z3::expr>> ConstructMatchConditions(
     const ir::FieldValue &field_value = key_field.field();
     ASSIGN_OR_RETURN(
         z3::expr key_field_expr,
-        state.Get(field_value.header_name(), field_value.field_name()));
+        headers.Get(field_value.header_name(), field_value.field_name()));
     key_fields.push_back(std::move(key_field_expr));
   }
 
@@ -357,19 +363,19 @@ absl::StatusOr<std::string> GetNextState(
 
 absl::Status SetParserError(const ir::P4Program &program,
                             z3::context &z3_context,
-                            SymbolicPerPacketState &state,
+                            SymbolicPerPacketState &headers,
                             const std::string &error_name,
                             const z3::expr &guard) {
   ASSIGN_OR_RETURN(z3::expr error_code,
                    GetErrorCodeExpression(program, error_name, z3_context));
-  return state.Set(v1model::kParserErrorField, std::move(error_code), guard);
+  return headers.Set(v1model::kParserErrorField, std::move(error_code), guard);
 }
 
 // Evaluates the parse state with the given `state_name` in the given parser.
 absl::Status EvaluateParseState(const ir::P4Program &program,
                                 const ir::Parser &parser,
                                 const std::string &state_name,
-                                SymbolicPerPacketState &state,
+                                SymbolicPerPacketState &headers,
                                 z3::context &z3_context,
                                 const z3::expr &guard) {
   // Base case. We got to the end of the parser execution path.
@@ -405,14 +411,14 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
   // Evaluate the parser operations in this parse state.
   action::ActionContext fake_context = {state_name, {}};
   for (const ir::ParserOperation &op : parse_state.parser_ops()) {
-    RETURN_IF_ERROR(EvaluateParserOperation(program, op, state, fake_context,
+    RETURN_IF_ERROR(EvaluateParserOperation(program, op, headers, fake_context,
                                             z3_context, guard));
   }
 
   // Construct the match condition of each transition.
   ASSIGN_OR_RETURN(
       std::vector<z3::expr> match_conditions,
-      ConstructMatchConditions(parse_state, state, z3_context, guard));
+      ConstructMatchConditions(parse_state, headers, z3_context, guard));
   // Construct the transition guard of each transition.
   std::vector<z3::expr> transition_guards =
       ConstructTransitionGuards(match_conditions, guard);
@@ -425,7 +431,7 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
     ASSIGN_OR_RETURN(std::string next_state,
                      GetNextState(parse_state.transitions(i)));
     if (next_state != merge_point) {
-      RETURN_IF_ERROR(EvaluateParseState(program, parser, next_state, state,
+      RETURN_IF_ERROR(EvaluateParseState(program, parser, next_state, headers,
                                          z3_context, transition_guards[i]));
     }
   }
@@ -453,7 +459,7 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
     // state" in this case will be the end of parser, so there is no need to do
     // anything else. The fall-through guard should be sufficient to ensure that
     // if the fall-through guard is true, no other transitions will happen.
-    RETURN_IF_ERROR(SetParserError(program, z3_context, state, "NoMatch",
+    RETURN_IF_ERROR(SetParserError(program, z3_context, headers, "NoMatch",
                                    fall_through_guard));
 
     // If a fall-through is possible, the `merge_point_guard` should be the
@@ -466,7 +472,7 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
   // different path.
   if (parse_state.optimized_symbolic_execution_info()
           .continue_to_merge_point()) {
-    return EvaluateParseState(program, parser, merge_point, state, z3_context,
+    return EvaluateParseState(program, parser, merge_point, headers, z3_context,
                               merge_point_guard);
   } else {
     return absl::OkStatus();
