@@ -17,6 +17,7 @@
 #include <memory>
 #include <vector>
 
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
@@ -30,9 +31,13 @@
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
+#include "tests/integration/system/nsf/milestone.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+
+ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
+          "The NSF milestone to test.");
 
 namespace pins_test {
 

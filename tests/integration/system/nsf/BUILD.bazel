@@ -41,6 +41,7 @@ cc_library(
     srcs = ["upgrade_test.cc"],
     hdrs = ["upgrade_test.h"],
     deps = [
+        ":milestone",
         ":util",
         "//gutil:status_matchers",
         "//gutil:testing",
@@ -54,8 +55,20 @@ cc_library(
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "milestone",
+    srcs = ["milestone.cc"],
+    hdrs = ["milestone.h"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
     ],
 )
