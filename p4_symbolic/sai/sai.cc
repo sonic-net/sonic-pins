@@ -14,6 +14,8 @@
 
 #include "p4_symbolic/sai/sai.h"
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
@@ -21,14 +23,17 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "gutil/status.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 
@@ -133,12 +138,14 @@ absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
   ASSIGN_OR_RETURN(
       z3::expr ingress_port_expr,
       solver_state.context.parsed_headers.Get(ingress_port_field_name));
-  return symbolic::values::TranslateValueToP4RT(
-      ingress_port_field_name,
-      solver_state.solver->get_model()
-          .eval(ingress_port_expr, true)
-          .to_string(),
-      solver_state.translator);
+  ASSIGN_OR_RETURN(auto translated_value,
+                   symbolic::values::TranslateZ3ValueStringToP4RT(
+                       solver_state.solver->get_model()
+                           .eval(ingress_port_expr, true)
+                           .to_string(),
+                       ingress_port_field_name,
+                       /*type_name=*/std::nullopt, solver_state.translator));
+  return translated_value.first;
 }
 
 }  // namespace p4_symbolic
