@@ -34,3 +34,28 @@ cc_library(
         "@com_google_absl//absl/types:span",
     ],
 )
+
+cc_library(
+    name = "upgrade_test",
+    testonly = True,
+    srcs = ["upgrade_test.cc"],
+    hdrs = ["upgrade_test.h"],
+    deps = [
+        ":util",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//tests/integration/system/nsf/interfaces:component_validator",
+        "//tests/integration/system/nsf/interfaces:flow_programmer",
+        "//tests/integration/system/nsf/interfaces:test_params",
+        "//tests/integration/system/nsf/interfaces:traffic_helper",
+        "//thinkit:generic_testbed",
+        "//thinkit:generic_testbed_fixture",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
