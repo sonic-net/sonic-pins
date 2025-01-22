@@ -188,9 +188,9 @@ absl::StatusOr<z3::expr> EvaluateConcreteMatch(
   auto GetZ3Value =
       [&field_name, &pi_match,
        &state](const pdpi::IrValue &value) -> absl::StatusOr<z3::expr> {
-    return values::FormatP4RTValue(field_name, pi_match.type_name().name(),
-                                   value, pi_match.bitwidth(),
-                                   *state.context.z3_context, state.translator);
+    return values::FormatP4RTValue(
+        value, field_name, pi_match.type_name().name(), pi_match.bitwidth(),
+        *state.context.z3_context, state.translator);
   };
 
   absl::Status mismatch =

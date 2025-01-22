@@ -105,8 +105,7 @@ struct ConcreteContext {
   ConcretePerPacketState egress_headers;
   ConcreteTrace trace;  // Expected trace in the program.
 
-  std::string to_string() const;
-  std::string to_string(bool verbose) const;
+  std::string to_string(bool verbose = false) const;
 };
 
 // The symbolic context within our analysis.

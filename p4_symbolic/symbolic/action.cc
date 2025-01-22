@@ -14,6 +14,7 @@
 
 #include "p4_symbolic/symbolic/action.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -346,10 +347,10 @@ absl::Status EvaluateConcreteAction(
                      gutil::FindPtrOrStatus(parameters, arg_name));
     ASSIGN_OR_RETURN(
         z3::expr parameter_value,
-        values::FormatP4RTValue(
-            /*field_name=*/"", param_definition->param().type_name().name(),
-            arg.value(), param_definition->param().bitwidth(),
-            *state.context.z3_context, state.translator));
+        values::FormatP4RTValue(arg.value(), /*field_name=*/std::nullopt,
+                                param_definition->param().type_name().name(),
+                                param_definition->param().bitwidth(),
+                                *state.context.z3_context, state.translator));
     context.scope.insert({param_definition->param().name(), parameter_value});
   }
 
