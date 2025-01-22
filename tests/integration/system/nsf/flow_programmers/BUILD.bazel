@@ -40,14 +40,3 @@ cc_library(
         "@com_google_absl//absl/status",
     ],
 )
-
-cc_library(
-    name = "replay_programmer",
-    testonly = True,
-    hdrs = ["replay_programmer.h"],
-    deps = [
-        "//tests/integration/system/nsf/interfaces:flow_programmer",
-        "//thinkit:generic_testbed",
-        "@com_google_absl//absl/status",
-    ],
-)

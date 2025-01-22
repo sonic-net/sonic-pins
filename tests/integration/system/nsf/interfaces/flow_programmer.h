@@ -20,19 +20,14 @@
 
 namespace pins_test {
 
-enum class IpVersion { kIpv4, kIpv6 };
-enum class Protocol { kTcp, kUdp };
-
 // Interface to program or clear flows on the SUT of the given `testbed` during
 // NSF integration tests.
 class FlowProgrammer {
  public:
   virtual ~FlowProgrammer() = default;
 
-  // Programs a predefined flow on the SUT based on the given IP version and
-  // protocol.
-  virtual absl::Status ProgramFlows(IpVersion ip_version, Protocol protocol,
-                                    thinkit::GenericTestbed& testbed) = 0;
+  // Programs a predefined flow on the SUT.
+  virtual absl::Status ProgramFlows(thinkit::GenericTestbed& testbed) = 0;
 
   // Clears all flows on the SUT.
   virtual absl::Status ClearFlows(thinkit::GenericTestbed& testbed) = 0;

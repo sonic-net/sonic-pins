@@ -20,12 +20,13 @@
 #include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
-#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
@@ -43,55 +44,49 @@ namespace pins_test {
 
 using ::p4::v1::ReadResponse;
 
+// Since the validation is while the traffic is in progress, error margin needs
+// to be defined.
 constexpr int kErrorPercentage = 1;
+constexpr absl::Duration kTrafficRunDuration = absl::Seconds(600);
 
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
   traffic_helper_ = GetParam().create_traffic_helper();
   testbed_interface_ = GetParam().create_testbed_interface();
   component_validators_ = GetParam().create_component_validators();
-  testbed_interface_->SetUp();
+  ssh_client_ = GetParam().create_ssh_client();
+  SetupTestbed(testbed_interface_);
+  ASSERT_OK_AND_ASSIGN(testbed_, GetTestbed(testbed_interface_));
 }
-void NsfUpgradeTest::TearDown() { testbed_interface_->TearDown(); }
+void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
 // Assumption: Valid config (gNMI and P4Info) has been pushed (to avoid
 // duplicate config push)
 absl::Status NsfUpgradeTest::NsfUpgrade(absl::string_view prev_version,
                                         absl::string_view version) {
-  // Pick a testbed with SUT connected to an Ixia on 2 ports, one ingress and
-  // one egress port.
-  auto requirements = gutil::ParseProtoOrDie<thinkit::TestRequirements>(
-      R"pb(
-        interface_requirements { count: 2 interface_mode: TRAFFIC_GENERATOR }
-      )pb");
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<thinkit::GenericTestbed> testbed,
-      testbed_interface_->GetTestbedWithRequirements(requirements));
+  thinkit::GenericTestbed& testbed =
+      *std::get<std::unique_ptr<thinkit::GenericTestbed>>(testbed_);
 
-  RETURN_IF_ERROR(ValidateSwitchState(prev_version));
+  RETURN_IF_ERROR(ValidateSutState(prev_version, testbed, *ssh_client_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
                                      component_validators_, prev_version,
-                                     *testbed));
+                                     testbed));
   RETURN_IF_ERROR(CaptureDbState());
 
-  // P4 Snapshot before programming flows and starting the
-  // traffic.
+  // P4 Snapshot before programming flows and starting the traffic.
   ReadResponse snapshot1 = TakeP4FlowSnapshot();
 
-  // Program all the flows
-  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(IpVersion::kIpv4,
-                                                 Protocol::kTcp, *testbed));
+  // Program all the flows.
+  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(testbed));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowProgram,
                                      component_validators_, prev_version,
-                                     *testbed));
+                                     testbed));
 
-  RETURN_IF_ERROR(traffic_helper_->StartTraffic(*testbed));
+  RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStartTraffic,
                                      component_validators_, prev_version,
-                                     *testbed));
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, *testbed));
-  // Since the validation is while the traffic is in progress,
-  // error margin needs to be defined.
+                                     testbed));
+
 
   // P4 Snapshot before Upgrade and NSF reboot.
   ReadResponse snapshot2 = TakeP4FlowSnapshot();
@@ -99,49 +94,44 @@ absl::Status NsfUpgradeTest::NsfUpgrade(absl::string_view prev_version,
   // Perform Upgrade
   RETURN_IF_ERROR(Upgrade(version));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnUpgrade,
-                                     component_validators_, version, *testbed));
+                                     component_validators_, version, testbed));
 
-  // Perform NSF Reboot
-  RETURN_IF_ERROR(NsfReboot(version));
+  // Perform NSF Reboot.
+  RETURN_IF_ERROR(NsfReboot(testbed, *ssh_client_));
+  RETURN_IF_ERROR(WaitForReboot(testbed, *ssh_client_));
+
+  // Perform validations after reboot is completed.
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
-                                     component_validators_, version, *testbed));
-
-  RETURN_IF_ERROR(ValidateSwitchState(version));
+                                     component_validators_, version, testbed));
+  RETURN_IF_ERROR(ValidateSutState(version, testbed, *ssh_client_));
   RETURN_IF_ERROR(ValidateDbState());
 
   // P4 Snapshot after upgrade and NSF reboot.
   ReadResponse snapshot3 = TakeP4FlowSnapshot();
 
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, *testbed));
-  RETURN_IF_ERROR(PushConfig(version));  // Push the newer config
-
-  RETURN_IF_ERROR(ValidateSwitchState(version));
+  // Push the new config and validate.
+  RETURN_IF_ERROR(PushConfig(version));
+  RETURN_IF_ERROR(ValidateSutState(version, testbed, *ssh_client_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
-                                     component_validators_, version, *testbed));
+                                     component_validators_, version, testbed));
+
+  // Wait for transmission duration.
+  LOG(INFO) << "Wait for " << kTrafficRunDuration << " for transmit completion";
+  absl::SleepFor(kTrafficRunDuration);
 
   // Stop and validate traffic
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, *testbed));
-  RETURN_IF_ERROR(traffic_helper_->StopTraffic(*testbed));
+  RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed));
 
-  // For now, we validate traffic only after stopping traffic. Ideally we
-  // would want to validate traffic while injection is in progress to narrow
-  // down when the traffic loss occurred (i.e. before reboot, during reboot or
-  // after reconciliation). Although this is possible in OTG traffic
-  // generators, DVaaS traffic generator for now does not support traffic
-  // validation until only after stopping the traffic. This is a good-to-have
-  // feature and we will update the skeleton to validate traffic while
-  // injection is ongoing once this feature is available in DVaaS (more
-  // details).
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, *testbed));
+  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, testbed));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
-                                     component_validators_, version, *testbed));
+                                     component_validators_, version, testbed));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
-  // testbeds)
-  RETURN_IF_ERROR(flow_programmer_->ClearFlows(*testbed));
+  // testbeds).
+  RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed));
 
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowCleanup,
-                                     component_validators_, version, *testbed));
+                                     component_validators_, version, testbed));
 
   ReadResponse snapshot4 = TakeP4FlowSnapshot();
 

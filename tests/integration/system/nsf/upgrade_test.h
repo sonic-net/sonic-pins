@@ -25,7 +25,8 @@
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
-#include "thinkit/generic_testbed_fixture.h"
+#include "tests/integration/system/nsf/util.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -38,11 +39,12 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   absl::Status NsfUpgrade(absl::string_view prev_version,
                           absl::string_view version);
 
- private:
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;
-  std::unique_ptr<thinkit::GenericTestbedInterface> testbed_interface_;
+  TestbedInterface testbed_interface_;
+  Testbed testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
+  std::unique_ptr<thinkit::SSHClient> ssh_client_;
 };
 
 }  // namespace pins_test
