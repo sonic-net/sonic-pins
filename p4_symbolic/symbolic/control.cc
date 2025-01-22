@@ -20,55 +20,49 @@
 
 #include "p4_symbolic/symbolic/control.h"
 
-#include <vector>
+#include <string>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "gutil/status.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/conditional.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
+#include "z3++.h"
 
 namespace p4_symbolic::symbolic::control {
 
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
-    const ir::Dataplane &data_plane, const std::string &pipeline_name,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    z3::context &z3_context, const z3::expr &guard) {
-  if (auto it = data_plane.program.pipeline().find(pipeline_name);
-      it != data_plane.program.pipeline().end()) {
-    return EvaluateControl(data_plane, it->second.initial_control(), state,
-                           translator, z3_context, guard);
+    const std::string &pipeline_name, SolverState &state,
+    SymbolicPerPacketState *headers, const z3::expr &guard) {
+  if (auto it = state.program.pipeline().find(pipeline_name);
+      it != state.program.pipeline().end()) {
+    return EvaluateControl(it->second.initial_control(), state, headers, guard);
   }
   return gutil::InvalidArgumentErrorBuilder()
          << "cannot evaluate unknown pipeline: '" << pipeline_name << "'";
 }
 
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
-    const ir::Dataplane &data_plane, const std::string &control_name,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    z3::context &z3_context, const z3::expr &guard) {
+    const std::string &control_name, SolverState &state,
+    SymbolicPerPacketState *headers, const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!
   if (control_name == ir::EndOfPipeline()) return SymbolicTableMatches();
 
   // Find out what type of control we need to evaluate.
-  if (data_plane.program.tables().count(control_name) == 1) {
+  if (state.program.tables().contains(control_name)) {
     // Table: call EvaluateTable on table and its entries.
-    const ir::Table &table = data_plane.program.tables().at(control_name);
-    std::vector<ir::TableEntry> table_entries;
-    if (data_plane.entries.count(control_name) == 1) {
-      table_entries = data_plane.entries.at(control_name);
-    }
-    return table::EvaluateTable(data_plane, table, table_entries, state,
-                                translator, z3_context, guard);
-  } else if (data_plane.program.conditionals().count(control_name) == 1) {
+    const ir::Table &table = state.program.tables().at(control_name);
+    return table::EvaluateTable(table, state, headers, guard);
+  } else if (state.program.conditionals().contains(control_name)) {
     // Conditional: let EvaluateConditional handle it.
     const ir::Conditional &conditional =
-        data_plane.program.conditionals().at(control_name);
-    return conditional::EvaluateConditional(data_plane, conditional, state,
-                                            translator, z3_context, guard);
+        state.program.conditionals().at(control_name);
+    return conditional::EvaluateConditional(conditional, state, headers, guard);
   } else {
     // Something else: unsupported.
     return absl::UnimplementedError(

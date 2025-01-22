@@ -18,13 +18,18 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
 #define P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
 
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -72,9 +77,8 @@ constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 // many times.
 class SolverState {
  public:
-  SolverState(ir::P4Program program, ir::TableEntries entries)
+  SolverState(ir::P4Program program)
       : program(std::move(program)),
-        entries(std::move(entries)),
         solver(std::make_unique<z3::solver>(*context.z3_context)) {}
   SolverState(const SolverState &) = delete;
   SolverState(SolverState &&) = default;
@@ -95,8 +99,6 @@ class SolverState {
 
   // The IR of the p4 program being analyzed.
   ir::P4Program program;
-  // Maps the name of a table to a list of its entries.
-  ir::TableEntries entries;
   // The symbolic context of our interpretation/analysis of the program,
   // including symbolic handles on packet headers and its trace. A new
   // z3::context object is created within each symbolic context. Note that this
@@ -134,7 +136,19 @@ using TranslationPerType =
 // string) annotation, a static mapping between the P4RT values and the
 // underlying bitvector values may be provided. Otherwise, a mapping is
 // inferred dynamically for such types.
-absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
+// The given `entries` may contain symbolic or concrete table entries.
+absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
+    const ir::P4Program &program, const ir::TableEntries &entries,
+    const std::vector<int> &physical_ports = {},
+    const TranslationPerType &translation_per_type = {});
+
+// Symbolically evaluates/interprets the given program against the given
+// entries for every table in the program, and the available physical ports
+// on the switch. Optionally, for types that have @p4runtime_translate(_,
+// string) annotation, a static mapping between the P4RT values and the
+// underlying bitvector values may be provided. Otherwise, a mapping is
+// inferred dynamically for such types.
+absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
     const p4::v1::ForwardingPipelineConfig &config,
     const std::vector<p4::v1::TableEntry> &entries,
     const std::vector<int> &physical_ports = {},
@@ -142,12 +156,12 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.
-absl::StatusOr<std::optional<ConcreteContext>> Solve(SolverState &solver_state);
+absl::StatusOr<std::optional<ConcreteContext>> Solve(SolverState &state);
 absl::StatusOr<std::optional<ConcreteContext>> Solve(
-    SolverState &solver_state, const Assertion &assertion);
+    SolverState &state, const Assertion &assertion);
 
 // Dumps the underlying SMT program for debugging.
-std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
+std::string DebugSMT(const std::unique_ptr<SolverState> &state,
                      const Assertion &assertion);
 
 } // namespace symbolic
