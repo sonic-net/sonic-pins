@@ -119,6 +119,35 @@ absl::Status InitializeTableEntries(SolverState &state,
     }
   }
 
+  // For each symbolic table entry object in each table, create respective
+  // symbolic variables and add corresponding constraints as Z3 assertions.
+  for (auto &[table_name, table_entries] : state.context.table_entries) {
+    ASSIGN_OR_RETURN(const ir::Table *table,
+                     GetIrTable(state.program, table_name));
+
+    for (TableEntry &entry : table_entries) {
+      // Skip concrete table entries.
+      if (entry.IsConcrete()) continue;
+
+      // Initialize the symbolic match fields of the current entry.
+      RETURN_IF_ERROR(InitializeSymbolicMatches(
+          entry, *table, state.program, *state.context.z3_context,
+          *state.solver, state.translator));
+
+      // Entries with symbolic action sets are not supported for now.
+      if (table->table_definition().has_action_profile_id()) {
+        return gutil::UnimplementedErrorBuilder()
+               << "Table entries with symbolic action sets are not supported "
+                  "at the moment.";
+      }
+
+      // Initialize the symbolic actions of the current entry.
+      RETURN_IF_ERROR(InitializeSymbolicActions(
+          entry, *table, state.program, *state.context.z3_context,
+          *state.solver, state.translator));
+    }
+  }
+
   return absl::OkStatus();
 }
 
