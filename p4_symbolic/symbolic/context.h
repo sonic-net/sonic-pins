@@ -20,6 +20,7 @@
 
 #include "absl/container/btree_map.h"
 #include "p4_symbolic/symbolic/guarded_map.h"
+#include "p4_symbolic/symbolic/table_entry.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -130,6 +131,7 @@ class SymbolicContext {
   SymbolicPerPacketState ingress_headers;
   SymbolicPerPacketState parsed_headers;
   SymbolicPerPacketState egress_headers;
+  TableEntries table_entries;
   SymbolicTrace trace;
 };
 

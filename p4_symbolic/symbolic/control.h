@@ -59,9 +59,9 @@
 
 #include <string>
 
-#include "p4_symbolic/ir/ir.h"
+#include "absl/status/statusor.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -70,15 +70,13 @@ namespace control {
 
 // Evaluate the passed pipeline.
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
-    const ir::Dataplane &data_plane, const std::string &pipeline_name,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    z3::context &z3_context, const z3::expr &guard);
+    const std::string &pipeline_name, SolverState &state,
+    SymbolicPerPacketState *headers, const z3::expr &guard);
 
 // Evaluate the passed control construct.
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
-    const ir::Dataplane &data_plane, const std::string &control_name,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    z3::context &z3_context, const z3::expr &guard);
+    const std::string &control_name, SolverState &state,
+    SymbolicPerPacketState *headers, const z3::expr &guard);
 
 } // namespace control
 } // namespace symbolic

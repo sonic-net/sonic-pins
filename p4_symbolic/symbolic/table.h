@@ -21,13 +21,10 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_TABLE_H_
 #define P4_SYMBOLIC_SYMBOLIC_TABLE_H_
 
-#include <vector>
-
 #include "absl/status/statusor.h"
-#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -38,9 +35,7 @@ namespace table {
 constexpr int kDefaultActionEntryIndex = -1;
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
-    const ir::Dataplane &data_plane, const ir::Table &table,
-    const std::vector<ir::TableEntry> &entries, SymbolicPerPacketState *state,
-    values::P4RuntimeTranslator *translator, z3::context &z3_context,
+    const ir::Table &table, SolverState &state, SymbolicPerPacketState *headers,
     const z3::expr &guard);
 
 }  // namespace table
