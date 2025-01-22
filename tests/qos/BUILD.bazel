@@ -57,6 +57,7 @@ cc_library(
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/forwarding:util",
         "//tests/lib:switch_test_setup_helpers",
+        "//tests/sflow:sflow_util",
         "//thinkit:control_device",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",

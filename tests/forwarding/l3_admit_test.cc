@@ -200,8 +200,14 @@ absl::Status AddL3Route(pdpi::P4RuntimeSession& session,
 absl::Status AdmitL3Route(pdpi::P4RuntimeSession& session,
                           const pdpi::IrP4Info& ir_p4info,
                           const L3AdmitOptions& options) {
-  LOG(INFO) << "Admiting L3 packets with DST MAC: " << options.dst_mac.first
-            << " & " << options.dst_mac.second;
+  if (options.in_port.has_value()) {
+    LOG(INFO) << "Admiting only L3 packets on port " << *options.in_port
+              << " with DST MAC: " << options.dst_mac.first << " & "
+              << options.dst_mac.second;
+  } else {
+    LOG(INFO) << "Admiting all L3 packets with DST MAC: "
+              << options.dst_mac.first << " & " << options.dst_mac.second;
+  }
   p4::v1::WriteRequest write_request;
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),

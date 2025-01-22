@@ -58,17 +58,7 @@ protected:
     // control switch means it will arrive on the same port ID on the SUT. To
     // achieve this, we mirror the SUTs OpenConfig interfaces <-> P4RT Port ID
     // mapping to the control switch.
-    ASSERT_OK_AND_ASSIGN(
-        std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
-        testbed.Sut().CreateGnmiStub());
-    ASSERT_OK_AND_ASSIGN(const pins_test::openconfig::Interfaces sut_interfaces,
-                         pins_test::GetInterfacesAsProto(
-                             *sut_gnmi_stub, gnmi::GetRequest::CONFIG));
-    ASSERT_OK_AND_ASSIGN(
-        std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
-        testbed.ControlSwitch().CreateGnmiStub());
-    ASSERT_OK(
-        pins_test::SetInterfaceP4rtIds(*control_gnmi_stub, sut_interfaces));
+    ASSERT_OK(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
 
     ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(GetParam().p4info));
   }

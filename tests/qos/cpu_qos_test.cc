@@ -39,9 +39,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/util/json_util.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/overload.h"
 #include "gutil/proto.h"
@@ -73,11 +71,14 @@
 #include "tests/qos/gnmi_parsers.h"
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
+#include "tests/sflow/sflow_util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -1369,6 +1370,18 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
+  // Disable sFlow since it would interfere with the test results.
+  ASSERT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), /*enabled=*/false));
+
+  absl::Cleanup cleanup([&] {
+    // Restore sflow enable config.
+    ASSERT_OK_AND_ASSIGN(bool sflow_enabled,
+                         pins::IsSflowConfigEnabled(GetParam().gnmi_config));
+    EXPECT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), sflow_enabled))
+        << "failed to restore sflow configuration -- switch config may be "
+           "corrupted, causing subsequent test to fail";
+  });
+
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
   const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
@@ -1609,8 +1622,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
           rate_received_in_bytes_per_second,
           flow_rate_limit_in_bytes_per_second * (1 - kTolerancePercent / 100));
     }
-  }  // for each queue.
-
+  } // for each queue.
 }
 
 }  // namespace

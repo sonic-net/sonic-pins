@@ -55,15 +55,17 @@ namespace {
 
 using ::nlohmann::json;
 using ::testing::HasSubstr;
+using ::testing::Not;
 
 }  // namespace
 
-void BreakoutDuringPortInUse(thinkit::Switch& sut,
-                             gnmi::gNMI::StubInterface* sut_gnmi_stub,
+void BreakoutDuringPortInUse(thinkit::Switch &sut,
+                             gnmi::gNMI::StubInterface *sut_gnmi_stub,
                              RandomPortBreakoutInfo port_info,
-                             const std::string& platform_json_contents,
-                             bool test_child_port_in_use,
-                             const p4::config::v1::P4Info& p4_info) {
+                             absl::string_view platform_json_contents,
+                             absl::string_view port_in_use,
+                             const p4::config::v1::P4Info &p4_info,
+                             const bool expect_breakout_failure) {
   // Get the original breakout info on the port.
   // This contains the state values of physical channels and
   // operational status information for ports in original breakout mode.
@@ -80,23 +82,11 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
                                                          kStateUp, {p.first}));
   }
 
-  // Determine port to install router interface on.
-  auto in_use_port = port_info.port_name;
-  if (test_child_port_in_use) {
-    for (const auto& p : orig_breakout_info) {
-      if (p.first != port_info.port_name) {
-        in_use_port = p.first;
-        break;
-      }
-    }
-    ASSERT_NE(in_use_port, port_info.port_name);
-  }
-
   // Get the p4rt port index of the port on which to install router interface.
   ASSERT_OK_AND_ASSIGN(auto port_id_by_interface,
                        GetAllInterfaceNameToPortId(*sut_gnmi_stub));
   ASSERT_OK_AND_ASSIGN(std::string in_use_port_index_value,
-                       gutil::FindOrStatus(port_id_by_interface, in_use_port));
+                       gutil::FindOrStatus(port_id_by_interface, port_in_use));
   int in_use_port_index;
   ASSERT_TRUE(absl::SimpleAtoi(in_use_port_index_value, &in_use_port_index));
 
@@ -125,7 +115,7 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
                        pdpi::PartialPdTableEntryToPiTableEntry(pdpi::IrP4Info(), pd_entry));
 
-  LOG(INFO) << "Installing router interface on port " << in_use_port
+  LOG(INFO) << "Installing router interface on port " << port_in_use
             << " on SUT";
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4_session.get(), pi_entry));
 
@@ -139,45 +129,48 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
                                             port_info.port_name,
                                             port_info.supported_breakout_mode));
 
-  // Apply breakout config on port. Expect the set operation to fail
-  // since the port/its child is in use.
-  LOG(INFO) << "Configuring breakout mode " << port_info.supported_breakout_mode
-            << " on port " << port_info.port_name << " on DUT";
-  auto status = sut_gnmi_stub->Set(&context, req, &resp);
-  ASSERT_NE(status.ok(), true);
-  EXPECT_THAT(status.error_message(),
-              HasSubstr(absl::StrCat(
-                  "SET failed: YangToDb_port_breakout_subtree_xfmr: port ",
-                  in_use_port, " is in use")));
-
   // Get expected port information for new breakout mode.
   ASSERT_OK_AND_ASSIGN(
       auto new_breakout_info,
       GetExpectedPortInfoForBreakoutMode(port_info.port_name,
                                          port_info.supported_breakout_mode));
-  auto non_existing_port_list = GetNonExistingPortsAfterBreakout(
-      orig_breakout_info, new_breakout_info, false);
-  // Verify breakout related state paths.
-  ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, orig_breakout_info,
-                                  non_existing_port_list));
 
-  // Delete the created router interface on the port using P4 interface.
-  LOG(INFO) << "Deleting router interface on SUT";
-  ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
+  // Apply breakout config on port.
+  LOG(INFO) << "Configuring breakout mode " << port_info.supported_breakout_mode
+            << " on port " << port_info.port_name << " on DUT";
+  auto status = sut_gnmi_stub->Set(&context, req, &resp);
+  if (expect_breakout_failure) {
+    // Expect the set operation to fail since the port/its child is in use.
+    ASSERT_THAT(status, Not(gutil::IsOk()));
+    EXPECT_THAT(status.error_message(),
+                HasSubstr(absl::StrCat(
+                    "SET failed: YangToDb_port_breakout_subtree_xfmr: port ",
+                    port_in_use, " is in use")));
+    auto non_existing_port_list = GetNonExistingPortsAfterBreakout(
+        orig_breakout_info, new_breakout_info, false);
+    // Verify breakout related state paths.
+    ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, orig_breakout_info,
+                                    non_existing_port_list));
 
-  // Retry port breakout.
-  grpc::ClientContext context2;
-  status = sut_gnmi_stub->Set(&context2, req, &resp);
-  ASSERT_EQ(status.ok(), true);
+    // Delete the created router interface on the port using P4 interface.
+    LOG(INFO) << "Deleting router interface on SUT";
+    ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
+
+    // Retry port breakout.
+    grpc::ClientContext context2;
+    status = sut_gnmi_stub->Set(&context2, req, &resp);
+  }
+  ASSERT_OK(status);
 
   // Wait for breakout config to go through.
   // TODO: Investigate changing to polling loop.
   absl::SleepFor(absl::Seconds(60));
 
   // Verify that the config is successfully applied now.
-  non_existing_port_list = GetNonExistingPortsAfterBreakout(
+  auto non_existing_port_list = GetNonExistingPortsAfterBreakout(
       orig_breakout_info, new_breakout_info, true);
-  // Oper-status is expected to be down as breakout is applied on one side only.
+  // Oper-status is expected to be down as breakout is applied on one side
+  // only.
   for (auto& port : new_breakout_info) {
     port.second.oper_status = kStateDown;
     // For the logical ports that do not change on breakout, expect them to be
@@ -223,7 +216,9 @@ void TestGNMIParentPortInUseDuringBreakout(
                                       *sut_gnmi_stub, platform_json_contents,
                                       BreakoutType::kAny));
   BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), port,
-                          platform_json_contents, false, p4_info);
+                          platform_json_contents,
+                          /*port_in_use=*/port.port_name, p4_info,
+                          /*expect_breakout_failure=*/true);
 }
 
 void TestGNMIChildPortInUseDuringBreakout(
@@ -232,17 +227,60 @@ void TestGNMIChildPortInUseDuringBreakout(
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   // Get a random port from list of front panel ports that supports at least
   // one breakout mode of required type other than its current mode.
-  auto status_or = GetRandomPortWithSupportedBreakoutModes(
+  auto port = GetRandomPortWithSupportedBreakoutModes(
       *sut_gnmi_stub, platform_json_contents,
       /*new_breakout_type=*/BreakoutType::kAny,
       /*current_breakout_type=*/BreakoutType::kChannelized);
-  if (status_or.status().ok()) {
-    BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), status_or.value(),
-                            platform_json_contents, true, p4_info);
+  // Get a child port to install the router interface on.
+  // Get the original breakout info on the port.
+  // This contains the state values of physical channels and
+  // operational status information for ports in original breakout mode.
+  if (port.ok()) {
+    ASSERT_OK_AND_ASSIGN(auto orig_breakout_info,
+                         GetBreakoutStateInfoForPort(sut_gnmi_stub.get(),
+                                                     port->port_name,
+                                                     port->curr_breakout_mode));
+    std::string port_in_use;
+    for (const auto &p : orig_breakout_info) {
+      if (p.first != port->port_name) {
+        port_in_use = p.first;
+        break;
+      }
+    }
+    ASSERT_FALSE(port_in_use.empty());
+    BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), *port,
+                            platform_json_contents, port_in_use, p4_info,
+                            /*expect_breakout_failure=*/true);
   } else {
     LOG(ERROR) << "Failed to get random port with new breakout type: "
                << BreakoutType::kAny
                << " and current breakout type: " << BreakoutType::kChannelized;
   }
+}
+
+void TestGNMIOtherMasterPortInUseDuringBreakout(
+    thinkit::Switch &sut, std::string &platform_json_contents,
+    const p4::config::v1::P4Info &p4_info) {
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  // Get a random port from list of front panel ports that supports at least
+  // one breakout mode of required type other than its current mode.
+  ASSERT_OK_AND_ASSIGN(auto port, GetRandomPortWithSupportedBreakoutModes(
+                                      *sut_gnmi_stub, platform_json_contents,
+                                      BreakoutType::kAny));
+  // Get another random port from list of front panel ports to install router
+  // interface on.
+  auto platform_json = json::parse(platform_json_contents);
+  auto interfaces_json = platform_json.find(kInterfaces);
+  interfaces_json->erase(port.port_name);
+  auto updated_platform_json_contents = platform_json.dump();
+
+  ASSERT_OK_AND_ASSIGN(
+      auto port_in_use,
+      GetRandomPortWithSupportedBreakoutModes(
+          *sut_gnmi_stub, updated_platform_json_contents, BreakoutType::kAny));
+  BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), port,
+                          platform_json_contents, port_in_use.port_name,
+                          p4_info,
+                          /*expect_breakout_failure=*/false);
 }
 }  // namespace pins_test
