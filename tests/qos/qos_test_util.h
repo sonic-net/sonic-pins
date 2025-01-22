@@ -56,49 +56,6 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
 // Get total packets (transmitted + dropped) for port queue.
 int64_t TotalPacketsForQueue(const QueueCounters &counters);
 
-// Set port speed using gNMI.
-absl::Status SetPortSpeedInBitsPerSecond(const std::string &port_speed,
-                                         const std::string &iface,
-                                         gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Get configured port speed.
-absl::StatusOr<int64_t>
-GetPortSpeedInBitsPerSecond(const std::string &interface_name,
-                            gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Get configured port speed.
-absl::StatusOr<int64_t> GetPortSpeed(const std::string &interface_name,
-                                     gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Set port MTU using gNMI.
-absl::Status SetPortMtu(int port_mtu, const std::string &interface_name,
-                        gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Set a port in loopback mode.
-absl::Status SetPortLoopbackMode(bool port_loopback,
-                                 absl::string_view interface_name,
-                                 gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Check if switch port link is up.
-absl::StatusOr<bool> CheckLinkUp(const std::string &iface,
-                                 gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Structure represents a link between SUT and Ixia.
-// This is represented by Ixia interface name and the SUT's gNMI interface
-// name.
-struct IxiaLink {
-  std::string ixia_interface;
-  std::string sut_interface;
-  // Speed of the SUT interface in bits/second.
-  int64_t sut_interface_bits_per_second = 0;
-};
-
-// Go over the connections and return vector of connections
-// whose links are up.
-absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
-    thinkit::GenericTestbed &generic_testbed,
-    gnmi::gNMI::StubInterface &gnmi_stub);
-
 // Parse IPv4 DSCP to queue mapping from gnmi configuration.
 absl::StatusOr<absl::flat_hash_map<int, std::string>>
 ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config);

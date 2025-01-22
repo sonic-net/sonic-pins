@@ -44,6 +44,7 @@ struct QosTestParams {
   p4::config::v1::P4Info p4info;
   std::string ingress_ports[2];
   std::string egress_port_under_test;
+  std::string name;
 };
 
 class FrontpanelQosTest : public testing::TestWithParam<QosTestParams> {

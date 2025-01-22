@@ -18,8 +18,11 @@
 // Produces test packets that hit every row in the P4 program tables.
 
 #include <iostream>
-#include <map>
+#include <memory>
+#include <optional>
+#include <sstream>
 #include <string>
+#include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
@@ -27,9 +30,12 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
+#include "google/protobuf/message_lite.h"
 #include "gutil/io.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/test_util.h"
 
@@ -54,21 +60,23 @@ absl::StatusOr<std::string> GetConcretePacketsCoveringAllTableEntries(
 
   // Loop over tables in a deterministic order for output consistency
   // (important for CI tests).
-  for (const auto &[name, table] : Ordered(solver_state.program.tables())) {
+  for (const auto &[table_name, table] :
+       Ordered(solver_state.program.tables())) {
     int row_count = 0;
-    if (solver_state.entries.count(name) > 0) {
-      row_count = static_cast<int>(solver_state.entries.at(name).size());
+    if (solver_state.context.table_entries.count(table_name) > 0) {
+      row_count = static_cast<int>(
+          solver_state.context.table_entries.at(table_name).size());
     }
 
     for (int i = -1; i < row_count; i++) {
-      std::string banner =
-          "Finding packet for table " + name + " and row " + std::to_string(i);
+      std::string banner = "Finding packet for table " + table_name +
+                           " and row " + std::to_string(i);
       result << std::string(kColumnSize, '=') << std::endl
              << banner << std::endl
              << std::string(kColumnSize, '=') << std::endl;
 
       p4_symbolic::symbolic::Assertion table_entry_assertion =
-          [name = name,
+          [name = table_name,
            i](const p4_symbolic::symbolic::SymbolicContext &symbolic_context) {
             const p4_symbolic::symbolic::SymbolicTableMatch &match =
                 symbolic_context.trace.matched_entries.at(name);

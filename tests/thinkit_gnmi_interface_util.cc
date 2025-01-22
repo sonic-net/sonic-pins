@@ -23,15 +23,16 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "re2/re2.h"
 #include "tests/thinkit_util.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -544,10 +545,40 @@ absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
   return (ethernet_pmd.substr(pos + 1, 2) == "CR");
 }
 
-absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
-    absl::string_view port, const int id, absl::string_view breakout_speed,
-    const bool is_copper_port) {
+absl::StatusOr<uint32_t>
+ComputePortIDForPort(gnmi::gNMI::StubInterface *sut_gnmi_stub,
+                     absl::string_view port) {
+  // Try to get currently configured id for the port from the switch.
+  std::string if_state_path =
+      absl::StrCat("interfaces/interface[name=", port, "]/state/id");
+  std::string resp_parse_str = "openconfig-interfaces:id";
+  uint32_t id;
+  auto state_path_response =
+      GetGnmiStatePathInfo(sut_gnmi_stub, if_state_path, resp_parse_str);
+  if (state_path_response.ok() && !state_path_response.value().empty()) {
+    if (!absl::SimpleAtoi(state_path_response.value(), &id)) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Failed to convert string (" << state_path_response.value()
+             << ") to integer";
+    }
+    return id;
+  }
+  // Generate ID same as that used by controller, if not found on switch.
+  ASSIGN_OR_RETURN(auto is_parent, IsParentPort(port));
+  ASSIGN_OR_RETURN(auto slot_port_lane, GetSlotPortLaneForPort(port));
+  // Port ID is same as port index/parent port number for parent ports.
+  if (is_parent) {
+    return slot_port_lane.port;
+  }
+  // Port ID is computed for child ports using
+  // (laneIndex*512 + parentPortNumber + 1)
+  return (slot_port_lane.lane * 512 + slot_port_lane.port + 1);
+}
 
+absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
+    gnmi::gNMI::StubInterface *sut_gnmi_stub, absl::string_view port,
+    absl::string_view breakout_speed, const bool is_copper_port) {
+  ASSIGN_OR_RETURN(auto id, ComputePortIDForPort(sut_gnmi_stub, port));
   auto interface_config = absl::Substitute(
       R"pb({
              "config": {
@@ -555,7 +586,8 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
                "loopback-mode": false,
                "mtu": 9216,
                "name": "$0",
-               "type": "iana-if-type:ethernetCsmacd"
+               "type": "iana-if-type:ethernetCsmacd",
+               "id": $2
              },
              "name": "$0",
              "openconfig-if-ethernet:ethernet": {
@@ -573,7 +605,7 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
              }
            }
       )pb",
-      port, breakout_speed);
+      port, breakout_speed, id);
   if (is_copper_port) {
     interface_config = absl::Substitute(
         R"pb({
@@ -582,7 +614,8 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
                  "loopback-mode": false,
                  "mtu": 9216,
                  "name": "$0",
-                 "type": "iana-if-type:ethernetCsmacd"
+                 "type": "iana-if-type:ethernetCsmacd",
+                 "id": $2
                },
                "name": "$0",
                "openconfig-if-ethernet:ethernet": {
@@ -603,7 +636,7 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
                }
              }
         )pb",
-        port, breakout_speed);
+        port, breakout_speed, id);
   }
   return interface_config;
 }
@@ -652,10 +685,10 @@ absl::StatusOr<std::string> GetBreakoutModeConfigJson(
       auto port =
           absl::StrCat(kEthernet, slot_port_lane.slot, "/", slot_port_lane.port,
                        "/", std::to_string(curr_lane_number));
-      ASSIGN_OR_RETURN(
-          auto interface_config,
-          GenerateInterfaceBreakoutConfig(port, curr_lane_number,
-                                          breakout_speed, is_copper_port));
+      ASSIGN_OR_RETURN(auto interface_config,
+                       GenerateInterfaceBreakoutConfig(sut_gnmi_stub, port,
+                                                       breakout_speed,
+                                                       is_copper_port));
       interface_configs.push_back(interface_config);
       int offset = max_channels_in_group / num_breakouts;
       curr_lane_number += offset;
@@ -801,5 +834,14 @@ absl::StatusOr<bool> IsParentPort(absl::string_view port) {
   ASSIGN_OR_RETURN(auto slot_port_lane, GetSlotPortLaneForPort(port));
   // Lane number for a master port is always 1.
   return slot_port_lane.lane == 1;
+}
+
+// Returns an EK_PHYSICAL_PORT name given an EK_PORT name.
+absl::StatusOr<std::string> DeriveEkPhysicalPort(absl::string_view ek_port) {
+  int slot;
+  int port;
+  RET_CHECK(RE2::FullMatch(ek_port, R"(\w+(\d+)\/(\d+)(\/\d+)*)", &slot, &port))
+      << "no match found for " << ek_port;
+  return absl::StrCat("phy-", slot, "/", port);
 }
 }  // namespace pins_test

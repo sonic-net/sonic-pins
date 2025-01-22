@@ -43,7 +43,7 @@ TEST_P(SmokeTestFixture, SessionsAreNonNull) {
   ASSERT_NE(&GetControlP4RuntimeSession(), nullptr);
 }
 
-TEST_P(SmokeTestFixture, AclTableAddDeleteOkButModifyFails) {
+TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
   const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
         updates {
@@ -117,11 +117,8 @@ TEST_P(SmokeTestFixture, AclTableAddDeleteOkButModifyFails) {
     }
   } while (!pi_read_response.entities(0).table_entry().has_counter_data());
 
-  // To avoid any test failures during the submission process (test running with
-  // the pre-7.1 image), skip this check for now.
-  // ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
-  //                                                   pi_modify));
-
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
+                                                   pi_modify));
   // Delete works.
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(&GetSutP4RuntimeSession(),
                                                    pi_delete));

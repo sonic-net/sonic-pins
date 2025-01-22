@@ -19,6 +19,7 @@
 #include <complex>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -26,6 +27,7 @@
 #include <string>
 #include <thread>  // NOLINT
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -53,6 +55,7 @@
 #include "lib/ixia_helper.h"
 #include "lib/ixia_helper.pb.h"
 #include "lib/utils/json_utils.h"
+#include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
@@ -71,6 +74,7 @@
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/mirror_testbed.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -93,22 +97,48 @@ template <class T> std::string ToString(const T &t) {
   return ss.str();
 }
 
-// Connects to Ixia on the given testbed and returns a string handle identifying
-// the connection (aka "topology ref").
-absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed) {
-  ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
-  ASSIGN_OR_RETURN(std::vector<IxiaLink> ready_links,
-                   GetReadyIxiaLinks(testbed, *gnmi_stub));
-  if (ready_links.empty()) {
-    return gutil::UnavailableErrorBuilder() << "no Ixia-to-SUT link up";
+// Type of an object that performs some cleanup logic in its destructor.
+using Cleanup = decltype(absl::Cleanup{std::function<void()>()});
+
+// Modifies the buffer config of the given `egress_port` such that all ports
+// fairly share all space dynamically, and return a `Cleanup` object that
+// restores the previous config when the object is destructed.
+absl::StatusOr<Cleanup> ConfigureFairBufferConfigForPortUntilEndOfScope(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi) {
+  ASSIGN_OR_RETURN(const std::string kBufferProfileName,
+                   GetBufferAllocationProfileByEgressPort(egress_port, gnmi));
+
+  // Before we update the buffer config, save the current config and
+  // prepare to restore it.
+  ASSIGN_OR_RETURN(const std::string kInitialBufferConfig,
+                   GetBufferAllocationProfileConfig(kBufferProfileName, gnmi));
+  Cleanup cleanup = absl::Cleanup(std::function([=, &gnmi] {
+    EXPECT_OK(UpdateBufferAllocationProfileConfig(kBufferProfileName,
+                                                  kInitialBufferConfig, gnmi))
+        << "failed to restore initial buffer config -- switch config may be "
+           "corrupted, causing subsequent tests to fail";
+  }));
+
+  // Set fair buffer config.
+  absl::flat_hash_map<std::string, BufferParameters>
+      buffer_config_by_queue_name;
+  // TODO: Read queue names from switch instead of
+  // hard-coding them here.
+  for (absl::string_view queue_name :
+       {"LLQ1", "LLQ2", "BE1", "AF1", "AF2", "AF3", "AF4", "NC1"}) {
+    buffer_config_by_queue_name[queue_name] = BufferParameters{
+        .dedicated_buffer = 0,
+        .use_shared_buffer = true,
+        .shared_buffer_limit_type =
+            "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+        .dynamic_limit_scaling_factor = -3,
+        .shared_static_limit = 0,
+    };
   }
-  absl::string_view ixia_interface = ready_links[0].ixia_interface;
-  ASSIGN_OR_RETURN(ixia::IxiaPortInfo ixia_port_info,
-                   ixia::ExtractPortInfo(ixia_interface));
-  ASSIGN_OR_RETURN(
-      std::string ixia_connection_handle,
-      pins_test::ixia::IxiaConnect(ixia_port_info.hostname, testbed));
-  return ixia_connection_handle;
+  RETURN_IF_ERROR(SetBufferConfigParameters(kBufferProfileName,
+                                            buffer_config_by_queue_name, gnmi));
+
+  return std::move(cleanup);
 }
 
 // Installs the given table `entries` using the given P4Runtime session,
@@ -395,6 +425,20 @@ GetIxiaLinks(thinkit::GenericTestbed &testbed,
   return links;
 }
 
+// Returns a function that logs port debug information for both switches in a
+// mirror testbed if the ports are down.
+std::function<void()>
+MakeLogPortDebugInfoFunction(thinkit::GenericTestbed &testbed,
+                             absl::Span<const std::string> enabled_interfaces) {
+  return [&testbed, enabled_interfaces] {
+    if (absl::Status sut_port_status =
+            pins_test::PortsUp(testbed.Sut(), enabled_interfaces);
+        !sut_port_status.ok()) {
+      LOG(WARNING) << sut_port_status;
+    }
+  };
+}
+
 // The purpose of this test is to verify that:
 // - Incoming IP packets are mapped to queues according to their DSCP.
 // - Queue peak information rates (PIRs) are enforced.
@@ -544,11 +588,38 @@ TEST_P(FrontpanelQosTest,
       FormatJsonBestEffort(updated_scheduler_config)));
 
   // Connect to Ixia and fix global parameters.
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle, ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
+                       ixia::ConnectToIxia(*testbed));
   ASSERT_OK_AND_ASSIGN(const std::string kIxiaSrcPortHandle,
                        ixia::IxiaVport(kIxiaHandle, kIxiaSrcPort, *testbed));
   ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
                        ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
+
+  constexpr int64_t kSpeed400g = 400000000000;
+  constexpr int64_t kSpeed200g = 200000000000;
+  if (kSutEgressPortSpeedInBitsPerSecond != kSpeed200g) {
+    ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g), kSutEgressPort,
+                                          *gnmi_stub));
+    ASSERT_OK(SetPortSpeedInBitsPerSecond(
+        PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
+        *gnmi_stub));
+  } else {
+    ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed400g), kSutEgressPort,
+                                          *gnmi_stub));
+    ASSERT_OK(SetPortSpeedInBitsPerSecond(
+        PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
+        *gnmi_stub));
+  }
+
+  std::vector<std::string> required_interfaces = {kSutEgressPort};
+  // Wait for all enabled interfaces to be up before sending packets.
+  ASSERT_OK(pins_test::OnFailure(
+      pins_test::WaitForCondition(pins_test::PortsUp, absl::Minutes(10),
+                                  testbed->Sut(), required_interfaces,
+                                  /*with_healthz=*/false),
+      MakeLogPortDebugInfoFunction(*testbed, required_interfaces)))
+      << "all required ports must be initialized on the SUT before sending "
+         "test packets";
 
   // Actual testing -- inject test IPv4 and IPv6 packets for each DSCP, and
   // check the behavior is as eexpted.
@@ -674,15 +745,18 @@ TEST_P(FrontpanelQosTest,
       EXPECT_THAT(delta_counters,
                   ResultOf(TotalPacketsForQueue,
                            Ge(kIxiaTrafficStats.num_tx_frames())));
-      // Protocol packets such as LLDP can be transmitted via queue during test.
-      // Add some tolerance to account for these packets.
+      // Protocol packets such as LLDP/NDv6 can be transmitted via queue during
+      // test. Add some tolerance to account for these packets.
       constexpr int kMaxToleratedExtraPackets = 5;
       EXPECT_THAT(
           delta_counters,
           ResultOf(TotalPacketsForQueue, Le(kIxiaTrafficStats.num_tx_frames() +
                                             kMaxToleratedExtraPackets)));
       EXPECT_THAT(delta_counters, Field(&QueueCounters::num_packets_transmitted,
-                                        Eq(kIxiaTrafficStats.num_rx_frames())));
+                                        Ge(kIxiaTrafficStats.num_rx_frames())));
+      EXPECT_THAT(delta_counters, Field(&QueueCounters::num_packets_transmitted,
+                                        Le(kIxiaTrafficStats.num_rx_frames() +
+                                           kMaxToleratedExtraPackets)));
     }
   }
   LOG(INFO) << "-- Test done -------------------------------------------------";
@@ -830,83 +904,11 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
            "corrupted, causing subsequent test to fail";
   });
 
-  // Save Buffer config and restore at end of the test.
-  ASSERT_OK_AND_ASSIGN(
-      const std::string kSutEgressPortBufferProfile,
-      GetBufferAllocationProfileByEgressPort(kSutEgressPort, *gnmi_stub));
-  // Before we update the buffer config, save the current config and
-  // prepare to restore it at the end of the test.
-  ASSERT_OK_AND_ASSIGN(const std::string kInitialBufferConfig,
-                       GetBufferAllocationProfileConfig(
-                           kSutEgressPortBufferProfile, *gnmi_stub));
-  const auto kRestoreBufferConfig = absl::Cleanup([&] {
-    EXPECT_OK(UpdateBufferAllocationProfileConfig(
-        kSutEgressPortBufferProfile, kInitialBufferConfig, *gnmi_stub))
-        << "failed to restore initial buffer config -- switch config may be "
-           "corrupted, causing subsequent tests to fail";
-  });
-
-  // Set equal bufer for all queues.
-  absl::flat_hash_map<std::string, BufferParameters> bufferConfigByQueueName = {
-      {"LLQ1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"LLQ2",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"BE1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF2",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF3",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF4",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"NC1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-  };
-  ASSERT_OK(SetBufferConfigParameters(kSutEgressPortBufferProfile,
-                                      bufferConfigByQueueName, *gnmi_stub));
+  // Configure fair buffer profile (until the end of the test) so we can ignore
+  // buffer carving effects.
+  ASSERT_OK_AND_ASSIGN(Cleanup restore_buffer_config,
+                       ConfigureFairBufferConfigForPortUntilEndOfScope(
+                           kSutEgressPort, *gnmi_stub));
 
   // Set lower & upper bounds (CIRs/PIRs) such that:
   // - Round-robin-scheduled queues are not rate limited.
@@ -942,7 +944,8 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 
   // Connect to Ixia and fix some parameters.
   LOG(INFO) << "configuring Ixia traffic";
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle, ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
+                       ixia::ConnectToIxia(*testbed));
   ASSERT_OK_AND_ASSIGN(
       const std::string kIxiaMainSrcPortHandle,
       ixia::IxiaVport(kIxiaHandle, kIxiaMainSrcPort, *testbed));
@@ -1204,87 +1207,16 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
            "corrupted, causing subsequent test to fail";
   });
 
-  // Save Buffer config and restore at end of the test.
-  ASSERT_OK_AND_ASSIGN(
-      const std::string kSutEgressPortBufferProfile,
-      GetBufferAllocationProfileByEgressPort(kSutEgressPort, *gnmi_stub));
-  // Before we update the buffer config, save the current config and
-  // prepare to restore it at the end of the test.
-  ASSERT_OK_AND_ASSIGN(const std::string kInitialBufferConfig,
-                       GetBufferAllocationProfileConfig(
-                           kSutEgressPortBufferProfile, *gnmi_stub));
-  const auto kRestoreBufferConfig = absl::Cleanup([&] {
-    EXPECT_OK(UpdateBufferAllocationProfileConfig(
-        kSutEgressPortBufferProfile, kInitialBufferConfig, *gnmi_stub))
-        << "failed to restore initial buffer config -- switch config may be "
-           "corrupted, causing subsequent tests to fail";
-  });
-
-  // Set equal buffer for all queues.
-  absl::flat_hash_map<std::string, BufferParameters> bufferConfigByQueueName = {
-      {"LLQ1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"LLQ2",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"BE1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF2",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF3",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"AF4",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-      {"NC1",
-       {/*.dedicated_buffer =*/0,
-        /*.use_shared_buffer =*/true,
-        /*.shared_buffer_type =*/
-        "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
-        /*.dynamic_limit_scaling_factor =*/-3,
-        /*.shared_static_limit =*/0}},
-  };
-  ASSERT_OK(SetBufferConfigParameters(kSutEgressPortBufferProfile,
-                                      bufferConfigByQueueName, *gnmi_stub));
+  // Configure fair buffer profile (until the end of the test) so we can ignore
+  // buffer carving effects.
+  ASSERT_OK_AND_ASSIGN(Cleanup restore_buffer_config,
+                       ConfigureFairBufferConfigForPortUntilEndOfScope(
+                           kSutEgressPort, *gnmi_stub));
 
   // Connect to Ixia and fix constant traffic parameters.
   LOG(INFO) << "connecting to Ixia";
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle, ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
+                       ixia::ConnectToIxia(*testbed));
   ASSERT_OK_AND_ASSIGN(
       const std::string kIxiaMainTrafficSrcPortHandle,
       ixia::IxiaVport(kIxiaHandle, kIxiaMainTrafficSrcPort, *testbed));
@@ -2066,7 +1998,8 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
   // Connect to Ixia and fix endpoints & parameters.
   LOG(INFO) << "configuring Ixia traffic";
-  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle, ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
+                       ixia::ConnectToIxia(*testbed));
   ASSERT_OK_AND_ASSIGN(
       const std::string kIxiaIpv4SrcPortHandle,
       ixia::IxiaVport(kIxiaHandle, kIxiaIpv4SrcPort, *testbed));

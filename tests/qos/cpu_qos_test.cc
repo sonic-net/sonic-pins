@@ -715,6 +715,21 @@ TEST_P(CpuQosTestWithoutIxia,
         << "for injected test packet: " << packet.DebugString();
     initial_cpu_queue_state = cpu_queue_state;
   }
+
+  // Ensure tha the switch did not punt packets to the controller via P4RT.
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::StreamMessageResponse> pi_responses,
+                       sut_p4rt_session->ReadStreamChannelResponsesAndFinish());
+  for (const auto &pi_response : pi_responses) {
+    sai::PacketIn pd_packet;
+    EXPECT_OK(pdpi::PiPacketInToPd(ir_p4info, pi_response.packet(), &pd_packet))
+        << "where packet = " << pi_response.packet().DebugString();
+    ADD_FAILURE() << "SUT punted the following packet to the controller "
+                     "via P4Runtime: "
+                  << (pd_packet.ByteSizeLong() == 0 // Translation failed.
+                          ? pi_response.packet().DebugString()
+                          : pd_packet.DebugString());
+  }
+
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
 
@@ -840,38 +855,15 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_acl_entry));
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
 
-  struct VlanTestPacketCounters {
-    absl::Mutex mutex;
-    int num_vlan_packets_received ABSL_GUARDED_BY(mutex) = 0;
-  };
+  for (packetlib::Packet &test_packet : test_packets) {
+    // Start from fresh P4RT session.
+    ASSERT_OK_AND_ASSIGN(sut_p4rt_session, pdpi::P4RuntimeSession::Create(sut));
 
-  VlanTestPacketCounters packet_receive_info;
-  PacketInReceiver sut_packet_receiver(
-      *sut_p4rt_session, [&](const p4::v1::StreamMessageResponse pi_response) {
-        sai::StreamMessageResponse pd_response;
-        ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
-                                                    &pd_response))
-            << " packet in PI to PD failed: " << pi_response.DebugString();
-        ASSERT_TRUE(pd_response.has_packet())
-            << " received unexpected stream message for packet in: "
-            << pd_response.DebugString();
-        packetlib::Packet packet =
-            packetlib::ParsePacket(pd_response.packet().payload());
-        EXPECT_EQ(packet.headers(1).vlan_header().vlan_identifier(),
-                  ipv4_packet.headers(1).vlan_header().vlan_identifier());
-        absl::MutexLock lock(&packet_receive_info.mutex);
-        packet_receive_info.num_vlan_packets_received++;
-      });
-
-  for (auto test_packet : test_packets) {
-    {
-      absl::MutexLock lock(&packet_receive_info.mutex);
-      packet_receive_info.num_vlan_packets_received = 0;
-    }
-
+    // Send packets.
+    ASSERT_OK(packetlib::PadPacketToMinimumSize(test_packet));
+    ASSERT_OK(packetlib::UpdateAllComputedFields(test_packet));
     ASSERT_OK_AND_ASSIGN(const std::string raw_packet,
                          packetlib::SerializePacket(test_packet));
-
     const int kPacketCount = 10;
     for (int iter = 0; iter < kPacketCount; iter++) {
       ASSERT_OK(pins::InjectEgressPacket(
@@ -880,15 +872,26 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
           /*packet_delay=*/std::nullopt));
     }
 
-    ASSERT_OK(pins::TryUpToNTimes(10, /*delay=*/absl::Seconds(1), [&] {
-      absl::MutexLock lock(&packet_receive_info.mutex);
-      if (packet_receive_info.num_vlan_packets_received == kPacketCount) {
-        return absl::OkStatus();
-      }
-      return absl::InternalError(absl::StrCat(
-          "Received packets: ", packet_receive_info.num_vlan_packets_received,
-          "Expected packets", kPacketCount));
-    }));
+    // Verify we receive expected packets back.
+    absl::SleepFor(absl::Seconds(1));
+    int num_vlan_packets_received = 0;
+    ASSERT_OK_AND_ASSIGN(
+        std::vector<p4::v1::StreamMessageResponse> pi_responses,
+        sut_p4rt_session->ReadStreamChannelResponsesAndFinish());
+    for (const auto &pi_response : pi_responses) {
+      sai::StreamMessageResponse pd_response;
+      ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
+                                                  &pd_response))
+          << " packet in PI to PD failed: " << pi_response.DebugString();
+      ASSERT_TRUE(pd_response.has_packet())
+          << " received unexpected stream message for packet in: "
+          << pd_response.DebugString();
+      packetlib::Packet punted_packet =
+          packetlib::ParsePacket(pd_response.packet().payload());
+      EXPECT_THAT(punted_packet, EqualsProto(test_packet));
+      num_vlan_packets_received += 1;
+    }
+    EXPECT_EQ(num_vlan_packets_received, kPacketCount);
   }
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
