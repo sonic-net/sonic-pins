@@ -80,8 +80,42 @@ absl::Status InitializeTableEntries(SolverState &state,
     // For each IR entry, create a table entry object.
     for (size_t index = 0; index < per_table_ir_entries.size(); ++index) {
       ir::TableEntry &ir_entry = per_table_ir_entries[index];
-      state.context.table_entries[table_name].push_back(
-          TableEntry(index, std::move(ir_entry)));
+      TableEntry entry(index, std::move(ir_entry));
+      if (!entry.IsConcrete() && !entry.IsSymbolic()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "A table entry must be either concrete or symbolic. Found: "
+               << entry.GetPdpiIrTableEntry().DebugString();
+      }
+      state.context.table_entries[table_name].push_back(std::move(entry));
+    }
+  }
+
+  // For each symbolic table entry object in each table, create respective
+  // symbolic variables and add corresponding constraints as Z3 assertions.
+  for (auto &[table_name, table_entries] : state.context.table_entries) {
+    ASSIGN_OR_RETURN(const ir::Table *table,
+                     GetIrTable(state.program, table_name));
+
+    for (TableEntry &entry : table_entries) {
+      // Skip concrete table entries.
+      if (entry.IsConcrete()) continue;
+
+      // Initialize the symbolic match fields of the current entry.
+      RETURN_IF_ERROR(InitializeSymbolicMatches(
+          entry, *table, state.program, *state.context.z3_context,
+          *state.solver, state.translator));
+
+      // Entries with symbolic action sets are not supported for now.
+      if (table->table_definition().has_action_profile_id()) {
+        return gutil::UnimplementedErrorBuilder()
+               << "Table entries with symbolic action sets are not supported "
+                  "at the moment.";
+      }
+
+      // Initialize the symbolic actions of the current entry.
+      RETURN_IF_ERROR(InitializeSymbolicActions(
+          entry, *table, state.program, *state.context.z3_context,
+          *state.solver, state.translator));
     }
   }
 

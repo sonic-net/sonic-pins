@@ -29,21 +29,12 @@
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/table_entry.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
 namespace action {
-
-// Symbolically evaluates the given action on the given symbolic parameters.
-// This produces a symbolic expression on the symbolic parameters that is
-// semantically equivalent to the behavior of the action on its concrete
-// parameters.
-absl::Status EvaluateAction(const ir::Action &action,
-                            const google::protobuf::RepeatedPtrField<
-                                pdpi::IrActionInvocation::IrActionParam> &args,
-                            SolverState &state, SymbolicPerPacketState *headers,
-                            const z3::expr &guard);
 
 // Internal functions used to Evaluate statements and expressions within an
 // action body. These are internal functions not used beyond this header and its
@@ -58,7 +49,7 @@ struct ActionContext {
 // Performs a switch case over support statement types and call the
 // appropriate function.
 absl::Status EvaluateStatement(const ir::Statement &statement,
-                               SymbolicPerPacketState *state,
+                               SymbolicPerPacketState &headers,
                                ActionContext *context, z3::context &z3_context,
                                const z3::expr &guard);
 
@@ -66,19 +57,19 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
 // constrains it in an enclosing assignment expression, or stores it in
 // the action scope.
 absl::Status EvaluateAssignmentStatement(
-    const ir::AssignmentStatement &assignment, SymbolicPerPacketState *state,
+    const ir::AssignmentStatement &assignment, SymbolicPerPacketState &headers,
     ActionContext *context, z3::context &z3_context, const z3::expr &guard);
 
 // Constructs a symbolic expression corresponding to this value, according
 // to its type.
 absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
-                                        const SymbolicPerPacketState &state,
+                                        const SymbolicPerPacketState &headers,
                                         const ActionContext &context,
                                         z3::context &z3_context);
 
 // Extract the field symbolic value from the symbolic state.
 absl::StatusOr<z3::expr> EvaluateFieldValue(
-    const ir::FieldValue &field_value, const SymbolicPerPacketState &state);
+    const ir::FieldValue &field_value, const SymbolicPerPacketState &headers);
 
 // Parse and format literal values as symbolic expression.
 absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr,
@@ -97,8 +88,26 @@ absl::StatusOr<z3::expr> EvaluateVariable(const ir::Variable &variable,
 // Evaluate expression by recursively evaluating operands and applying the
 // symbolic version of the operator to them.
 absl::StatusOr<z3::expr> EvaluateRExpression(
-    const ir::RExpression &expr, const SymbolicPerPacketState &state,
+    const ir::RExpression &expr, const SymbolicPerPacketState &headers,
     const ActionContext &context, z3::context &z3_context);
+
+// Symbolically evaluates the given `action` based on the given concrete
+// parameters in `args`.
+// This applies the action with concrete parameters on the symbolic `headers`.
+absl::Status EvaluateConcreteAction(
+    const ir::Action &action,
+    const google::protobuf::RepeatedPtrField<
+        pdpi::IrActionInvocation::IrActionParam> &args,
+    SolverState &state, SymbolicPerPacketState &headers, const z3::expr &guard);
+
+// Symbolically evaluates the given `action` based on the given symbolic
+// parameters of the given `entry`.
+// This applies the action with symbolic parameters on the symbolic `headers`.
+absl::Status EvaluateSymbolicAction(const ir::Action &action,
+                                    const TableEntry &entry, SolverState &state,
+                                    SymbolicPerPacketState &headers,
+                                    const z3::expr &guard);
+
 
 } // namespace action
 } // namespace symbolic
