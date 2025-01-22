@@ -21,11 +21,13 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
 namespace p4_symbolic::symbolic {
@@ -138,6 +140,28 @@ using TableEntries = absl::btree_map<std::string, std::vector<TableEntry>>;
 absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
     const ir::Table &table, int priority = 0,
     std::optional<size_t> prefix_length = std::nullopt);
+
+// Creates symbolic variables and adds constraints for each field match of the
+// given `entry` in the given `table`. We don't create symbolic variables for
+// omitted matches as the omitted matches are treated as explicit wildcards
+// based on the P4Runtime specification. If those symbolic variables are needed
+// later, calling the `GetMatchValues` function will automatically create the
+// corresponding variables for the entry match.
+absl::Status InitializeSymbolicMatches(const TableEntry &entry,
+                                       const ir::Table &table,
+                                       const ir::P4Program &program,
+                                       z3::context &z3_context,
+                                       z3::solver &solver,
+                                       values::P4RuntimeTranslator &translator);
+
+// Creates symbolic variables and adds constraints for the given `entry`, for
+// each action and each action parameter in the given `table`.
+absl::Status InitializeSymbolicActions(const TableEntry &entry,
+                                       const ir::Table &table,
+                                       const ir::P4Program &program,
+                                       z3::context &z3_context,
+                                       z3::solver &solver,
+                                       values::P4RuntimeTranslator &translator);
 
 }  // namespace p4_symbolic::symbolic
 
