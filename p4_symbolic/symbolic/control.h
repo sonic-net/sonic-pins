@@ -71,12 +71,12 @@ namespace control {
 // Evaluate the passed pipeline.
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
     const std::string &pipeline_name, SolverState &state,
-    SymbolicPerPacketState *headers, const z3::expr &guard);
+    SymbolicPerPacketState &headers, const z3::expr &guard);
 
 // Evaluate the passed control construct.
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const std::string &control_name, SolverState &state,
-    SymbolicPerPacketState *headers, const z3::expr &guard);
+    SymbolicPerPacketState &headers, const z3::expr &guard);
 
 } // namespace control
 } // namespace symbolic

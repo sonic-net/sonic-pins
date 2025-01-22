@@ -87,6 +87,7 @@ absl::Status NsfUpgradeTest::NsfUpgrade(absl::string_view prev_version,
                                      component_validators_, prev_version,
                                      testbed));
 
+
   // P4 Snapshot before Upgrade and NSF reboot.
   ReadResponse snapshot2 = TakeP4FlowSnapshot();
 

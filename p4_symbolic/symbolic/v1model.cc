@@ -221,7 +221,7 @@ absl::Status EvaluateV1model(SolverState &state,
   // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
   ASSIGN_OR_RETURN(
       SymbolicTableMatches matches,
-      control::EvaluatePipeline("ingress", state, &context.egress_headers,
+      control::EvaluatePipeline("ingress", state, context.egress_headers,
                                 /*guard=*/context.z3_context->bool_val(true)));
   ASSIGN_OR_RETURN(z3::expr dropped,
                    IsDropped(context.egress_headers, *context.z3_context));
@@ -237,7 +237,7 @@ absl::Status EvaluateV1model(SolverState &state,
   // Evaluate the egress pipeline.
   ASSIGN_OR_RETURN(
       SymbolicTableMatches egress_matches,
-      control::EvaluatePipeline("egress", state, &context.egress_headers,
+      control::EvaluatePipeline("egress", state, context.egress_headers,
                                 /*guard=*/!dropped));
   matches.merge(std::move(egress_matches));
 

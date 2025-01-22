@@ -16,7 +16,9 @@
 
 #include "p4_symbolic/symbolic/util.h"
 
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
@@ -128,21 +130,27 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
   // Extract the ingress, parsed, and egress headers.
   ConcretePerPacketState ingress_headers;
   for (const auto &[name, expr] : context.ingress_headers) {
-    ASSIGN_OR_RETURN(ingress_headers[name],
-                     values::TranslateValueToP4RT(
-                         name, model.eval(expr, true).to_string(), translator));
+    ASSIGN_OR_RETURN(auto translated_value,
+                     values::TranslateZ3ValueStringToP4RT(
+                         model.eval(expr, true).to_string(), name,
+                         /*type_name=*/std::nullopt, translator));
+    ingress_headers[name] = std::move(translated_value.first);
   }
   ConcretePerPacketState parsed_headers;
   for (const auto &[name, expr] : context.parsed_headers) {
-    ASSIGN_OR_RETURN(parsed_headers[name],
-                     values::TranslateValueToP4RT(
-                         name, model.eval(expr, true).to_string(), translator));
+    ASSIGN_OR_RETURN(auto translated_value,
+                     values::TranslateZ3ValueStringToP4RT(
+                         model.eval(expr, true).to_string(), name,
+                         /*type_name=*/std::nullopt, translator));
+    parsed_headers[name] = std::move(translated_value.first);
   }
   ConcretePerPacketState egress_headers;
   for (const auto &[name, expr] : context.egress_headers) {
-    ASSIGN_OR_RETURN(egress_headers[name],
-                     values::TranslateValueToP4RT(
-                         name, model.eval(expr, true).to_string(), translator));
+    ASSIGN_OR_RETURN(auto translated_value,
+                     values::TranslateZ3ValueStringToP4RT(
+                         model.eval(expr, true).to_string(), name,
+                         /*type_name=*/std::nullopt, translator));
+    egress_headers[name] = std::move(translated_value.first);
   }
 
   // Extract the trace (matches on every table).

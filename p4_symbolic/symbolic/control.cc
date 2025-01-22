@@ -38,7 +38,7 @@ namespace p4_symbolic::symbolic::control {
 
 absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
     const std::string &pipeline_name, SolverState &state,
-    SymbolicPerPacketState *headers, const z3::expr &guard) {
+    SymbolicPerPacketState &headers, const z3::expr &guard) {
   if (auto it = state.program.pipeline().find(pipeline_name);
       it != state.program.pipeline().end()) {
     return EvaluateControl(it->second.initial_control(), state, headers, guard);
@@ -49,7 +49,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
 
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const std::string &control_name, SolverState &state,
-    SymbolicPerPacketState *headers, const z3::expr &guard) {
+    SymbolicPerPacketState &headers, const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!
   if (control_name == ir::EndOfPipeline()) return SymbolicTableMatches();
 

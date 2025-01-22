@@ -14,6 +14,7 @@
 
 #include "p4_symbolic/symbolic/action.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,11 +27,13 @@
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/table_entry.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
@@ -41,41 +44,41 @@ namespace symbolic {
 namespace action {
 
 absl::Status EvaluateStatement(const ir::Statement &statement,
-                               SymbolicPerPacketState *state,
+                               SymbolicPerPacketState &headers,
                                ActionContext *context, z3::context &z3_context,
                                const z3::expr &guard) {
   switch (statement.statement_case()) {
     case ir::Statement::kAssignment: {
-      return EvaluateAssignmentStatement(statement.assignment(), state, context,
-                                         z3_context, guard);
+       return EvaluateAssignmentStatement(statement.assignment(), headers,
+                                         context, z3_context, guard);
     }
     case ir::Statement::kClone: {
       // TODO: Add support for cloning.
-      return state->Set(std::string(kGotClonedPseudoField),
-                        z3_context.bool_val(true), guard);
+      return headers.Set(std::string(kGotClonedPseudoField),
+                         z3_context.bool_val(true), guard);
     }
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
       const std::string &header_name = statement.drop().header().header_name();
-      RETURN_IF_ERROR(state->Set(absl::StrFormat("%s.egress_spec", header_name),
-                                 v1model::EgressSpecDroppedValue(z3_context),
-                                 guard));
+      RETURN_IF_ERROR(
+          headers.Set(absl::StrFormat("%s.egress_spec", header_name),
+                      v1model::EgressSpecDroppedValue(z3_context), guard));
       return absl::OkStatus();
     }
     case ir::Statement::kHash: {
       const ir::FieldValue &field = statement.hash().field();
       std::string field_name =
           absl::StrFormat("%s.%s", field.header_name(), field.field_name());
-      if (!state->ContainsKey(field_name)) {
+      if (!headers.ContainsKey(field_name)) {
         return absl::NotFoundError(absl::StrCat(
             "Action ", context->action_name, " hashes to unknown header field ",
             field.DebugString()));
       }
-      ASSIGN_OR_RETURN(z3::expr old_value, state->Get(field_name));
+      ASSIGN_OR_RETURN(z3::expr old_value, headers.Get(field_name));
       ASSIGN_OR_RETURN(
           z3::expr free_variable,
           operators::FreeVariable(field_name, old_value.get_sort()));
-      RETURN_IF_ERROR(state->Set(field_name, free_variable, guard));
+      RETURN_IF_ERROR(headers.Set(field_name, free_variable, guard));
       return absl::OkStatus();
     }
     case ir::Statement::kExit: {
@@ -95,18 +98,18 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
 // constrains it in an enclosing assignment expression, or stores it in
 // the action scope.
 absl::Status EvaluateAssignmentStatement(
-    const ir::AssignmentStatement &assignment, SymbolicPerPacketState *state,
+    const ir::AssignmentStatement &assignment, SymbolicPerPacketState &headers,
     ActionContext *context, z3::context &z3_context, const z3::expr &guard) {
   // Evaluate RValue recursively, evaluate LValue in this function, then
   // assign RValue to the scope at LValue.
-  ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(assignment.right(), *state,
+  ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(assignment.right(), headers,
                                                   *context, z3_context));
 
   switch (assignment.left().lvalue_case()) {
     case ir::LValue::kFieldValue: {
       const ir::FieldValue &field_value = assignment.left().field_value();
-      RETURN_IF_ERROR(state->Set(field_value.header_name(),
-                                 field_value.field_name(), right, guard));
+      RETURN_IF_ERROR(headers.Set(field_value.header_name(),
+                                  field_value.field_name(), right, guard));
       return absl::OkStatus();
     }
 
@@ -126,12 +129,12 @@ absl::Status EvaluateAssignmentStatement(
 // Constructs a symbolic expression corresponding to this value, according
 // to its type.
 absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
-                                        const SymbolicPerPacketState &state,
+                                        const SymbolicPerPacketState &headers,
                                         const ActionContext &context,
                                         z3::context &z3_context) {
   switch (rvalue.rvalue_case()) {
     case ir::RValue::kFieldValue:
-      return EvaluateFieldValue(rvalue.field_value(), state);
+      return EvaluateFieldValue(rvalue.field_value(), headers);
 
     case ir::RValue::kHexstrValue:
       return EvaluateHexStr(rvalue.hexstr_value(), z3_context);
@@ -146,7 +149,7 @@ absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
       return EvaluateVariable(rvalue.variable_value(), context);
 
     case ir::RValue::kExpressionValue:
-      return EvaluateRExpression(rvalue.expression_value(), state, context,
+      return EvaluateRExpression(rvalue.expression_value(), headers, context,
                                  z3_context);
 
     default:
@@ -158,8 +161,8 @@ absl::StatusOr<z3::expr> EvaluateRValue(const ir::RValue &rvalue,
 
 // Extract the field symbolic value from the symbolic state.
 absl::StatusOr<z3::expr> EvaluateFieldValue(
-    const ir::FieldValue &field_value, const SymbolicPerPacketState &state) {
-  return state.Get(field_value.header_name(), field_value.field_name());
+    const ir::FieldValue &field_value, const SymbolicPerPacketState &headers) {
+  return headers.Get(field_value.header_name(), field_value.field_name());
 }
 
 // Turns bmv2 values to Symbolic Expressions.
@@ -200,14 +203,14 @@ absl::StatusOr<z3::expr> EvaluateVariable(const ir::Variable &variable,
 
 // Recursively evaluate expressions.
 absl::StatusOr<z3::expr> EvaluateRExpression(
-    const ir::RExpression &expr, const SymbolicPerPacketState &state,
+    const ir::RExpression &expr, const SymbolicPerPacketState &headers,
     const ActionContext &context, z3::context &z3_context) {
   switch (expr.expression_case()) {
     case ir::RExpression::kBinaryExpression: {
       ir::BinaryExpression bin_expr = expr.binary_expression();
-      ASSIGN_OR_RETURN(z3::expr left, EvaluateRValue(bin_expr.left(), state,
+      ASSIGN_OR_RETURN(z3::expr left, EvaluateRValue(bin_expr.left(), headers,
                                                      context, z3_context));
-      ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(bin_expr.right(), state,
+      ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(bin_expr.right(), headers,
                                                       context, z3_context));
       switch (bin_expr.operation()) {
         case ir::BinaryExpression::PLUS:
@@ -255,7 +258,7 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
       ir::UnaryExpression un_expr = expr.unary_expression();
       ASSIGN_OR_RETURN(
           z3::expr operand,
-          EvaluateRValue(un_expr.operand(), state, context, z3_context));
+          EvaluateRValue(un_expr.operand(), headers, context, z3_context));
       switch (un_expr.operation()) {
         case ir::UnaryExpression::NOT:
           return operators::Not(operand);
@@ -273,11 +276,12 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
       ir::TernaryExpression tern_expr = expr.ternary_expression();
       ASSIGN_OR_RETURN(
           z3::expr condition,
-          EvaluateRValue(tern_expr.condition(), state, context, z3_context));
-      ASSIGN_OR_RETURN(z3::expr left, EvaluateRValue(tern_expr.left(), state,
+          EvaluateRValue(tern_expr.condition(), headers, context, z3_context));
+      ASSIGN_OR_RETURN(z3::expr left, EvaluateRValue(tern_expr.left(), headers,
                                                      context, z3_context));
-      ASSIGN_OR_RETURN(z3::expr right, EvaluateRValue(tern_expr.right(), state,
-                                                      context, z3_context));
+      ASSIGN_OR_RETURN(
+          z3::expr right,
+          EvaluateRValue(tern_expr.right(), headers, context, z3_context));
       return operators::Ite(condition, left, right);
     }
 
@@ -286,8 +290,8 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
       // Evaluate arguments.
       std::vector<z3::expr> args;
       for (const auto &arg_value : builtin_expr.arguments()) {
-        ASSIGN_OR_RETURN(z3::expr arg,
-                         EvaluateRValue(arg_value, state, context, z3_context));
+         ASSIGN_OR_RETURN(z3::expr arg, EvaluateRValue(arg_value, headers,
+                                                      context, z3_context));
         args.push_back(arg);
       }
 
@@ -311,15 +315,12 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
   }
 }
 
-// Symbolically evaluates the given action on the given symbolic parameters.
-// This produces a symbolic expression on the symbolic parameters that is
-// semantically equivalent to the behavior of the action on its concrete
-// parameters.
-absl::Status EvaluateAction(const ir::Action &action,
-                            const google::protobuf::RepeatedPtrField<
-                                pdpi::IrActionInvocation::IrActionParam> &args,
-                            SolverState &state, SymbolicPerPacketState *headers,
-                            const z3::expr &guard) {
+absl::Status EvaluateConcreteAction(
+    const ir::Action &action,
+    const google::protobuf::RepeatedPtrField<
+        pdpi::IrActionInvocation::IrActionParam> &args,
+    SolverState &state, SymbolicPerPacketState &headers,
+    const z3::expr &guard) {
   // Construct this action's context.
   ActionContext context;
   context.action_name = action.action_definition().preamble().name();
@@ -346,10 +347,10 @@ absl::Status EvaluateAction(const ir::Action &action,
                      gutil::FindPtrOrStatus(parameters, arg_name));
     ASSIGN_OR_RETURN(
         z3::expr parameter_value,
-        values::FormatP4RTValue(
-            /*field_name=*/"", param_definition->param().type_name().name(),
-            arg.value(), param_definition->param().bitwidth(),
-            *state.context.z3_context, state.translator));
+        values::FormatP4RTValue(arg.value(), /*field_name=*/std::nullopt,
+                                param_definition->param().type_name().name(),
+                                param_definition->param().bitwidth(),
+                                *state.context.z3_context, state.translator));
     context.scope.insert({param_definition->param().name(), parameter_value});
   }
 
@@ -360,6 +361,37 @@ absl::Status EvaluateAction(const ir::Action &action,
   }
 
   return absl::OkStatus();
+}
+
+absl::Status EvaluateSymbolicAction(const ir::Action &action,
+                                    const TableEntry &entry, SolverState &state,
+                                    SymbolicPerPacketState &headers,
+                                    const z3::expr &guard) {
+  // At this point the table must exists because otherwise an absl error would
+  // have been returned upon initializing the table entries, so no exception
+  // will be thrown.
+  const ir::Table &table = state.program.tables().at(entry.GetTableName());
+
+// Construct the action's context.
+  ActionContext context;
+  context.action_name = action.action_definition().preamble().name();
+
+// Add the symbolic action parameters to scope.
+  for (const auto &[param_name, _] :
+       Ordered(action.action_definition().params_by_name())) {
+    ASSIGN_OR_RETURN(z3::expr param_value,
+                     entry.GetActionParameter(param_name, action, table,
+                                              *state.context.z3_context));
+    context.scope.insert({param_name, param_value});
+  }
+
+// Iterate over the body in order, and evaluate each statement.
+  for (const auto &statement : action.action_implementation().action_body()) {
+    RETURN_IF_ERROR(EvaluateStatement(statement, headers, &context,
+                                      *state.context.z3_context, guard));
+  }
+
+ return absl::OkStatus();
 }
 
 }  // namespace action
