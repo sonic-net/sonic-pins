@@ -24,6 +24,7 @@ cc_library(
     deps = [
         "//gutil:status",
         "//p4_symbolic/symbolic",
+        "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

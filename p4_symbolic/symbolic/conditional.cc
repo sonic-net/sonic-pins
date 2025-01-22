@@ -37,12 +37,12 @@ namespace conditional {
 
 absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const ir::Conditional &conditional, SolverState &state,
-    SymbolicPerPacketState *headers, const z3::expr &guard) {
+    SymbolicPerPacketState &headers, const z3::expr &guard) {
   // Evaluate the condition.
   action::ActionContext fake_context = {conditional.name(), {}};
   ASSIGN_OR_RETURN(
       z3::expr condition,
-      action::EvaluateRValue(conditional.condition(), *headers, fake_context,
+      action::EvaluateRValue(conditional.condition(), headers, fake_context,
                              *state.context.z3_context));
   ASSIGN_OR_RETURN(z3::expr negated_condition, operators::Not(condition));
 

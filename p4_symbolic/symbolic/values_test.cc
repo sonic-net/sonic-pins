@@ -35,16 +35,17 @@ TEST(TranslateValueToP4RT, ReverseTranslatedValuesAreEqualToTheOriginalOnes) {
     pdpi::IrValue ir_value;
     ir_value.set_str(id);
     ASSERT_OK_AND_ASSIGN(
-        z3::expr expr, FormatP4RTValue(kFieldName, kFieldType, ir_value,
+        z3::expr expr, FormatP4RTValue(ir_value, kFieldName, kFieldType,
                                        /*bitwidth=*/0, z3_context, translator));
     z3_value_to_id[expr.to_string()] = id;
   }
 
   // Check that the reverse translation is as expected.
   for (const auto& [z3_value, expected_id] : z3_value_to_id) {
-    ASSERT_OK_AND_ASSIGN(
-        const std::string actual_id,
-        TranslateValueToP4RT(kFieldName, z3_value, translator));
+    ASSERT_OK_AND_ASSIGN(const auto translated_value,
+                         TranslateZ3ValueStringToP4RT(z3_value, kFieldName,
+                                                      kFieldType, translator));
+    const std::string& actual_id = translated_value.first;
     ASSERT_THAT(actual_id, testing::Eq(expected_id));
   }
 }
@@ -58,7 +59,7 @@ TEST(FormatP4RTValue, WorksFor64BitIPv6) {
                            R"pb(ipv6: "0000:ffff:ffff:ffff::")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
-      FormatP4RTValue(kFieldName, kFieldType, ir_value,
+      FormatP4RTValue(ir_value, kFieldName, kFieldType,
                       /*bitwidth=*/64, z3_context, translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0x0000'ffff'ffff'ffffULL);
 }
@@ -70,7 +71,7 @@ TEST(FormatP4RTValue, WorksForIpv4) {
                                           R"pb(ipv4: "127.0.0.1")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
-      FormatP4RTValue(kFieldName, kFieldType, ir_value,
+      FormatP4RTValue(ir_value, kFieldName, kFieldType,
                       /*bitwidth=*/32, z3_context, translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0x7f000001);
 }
@@ -82,7 +83,7 @@ TEST(FormatP4RTValue, WorksForMac) {
                                           R"pb(mac: "01:02:03:04:05:06")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
-      FormatP4RTValue(kFieldName, kFieldType, ir_value,
+      FormatP4RTValue(ir_value, kFieldName, kFieldType,
                       /*bitwidth=*/48, z3_context, translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0x01'02'03'04'05'06ULL);
 }
@@ -94,7 +95,7 @@ TEST(FormatP4RTValue, WorksForHexString) {
                                           R"pb(hex_str: "0xabcd")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
-      FormatP4RTValue(kFieldName, kFieldType, ir_value,
+      FormatP4RTValue(ir_value, kFieldName, kFieldType,
                       /*bitwidth=*/16, z3_context, translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0xabcd);
 }
@@ -104,7 +105,7 @@ TEST(FormatP4RTValue, FailsForStringWithNonZeroBitwidth) {
   z3::context z3_context;
   ASSERT_OK_AND_ASSIGN(auto ir_value, gutil::ParseTextProto<pdpi::IrValue>(
                                           R"pb(str: "dummy_value")pb"));
-  ASSERT_THAT(FormatP4RTValue(kFieldName, kFieldType, ir_value,
+  ASSERT_THAT(FormatP4RTValue(ir_value, kFieldName, kFieldType,
                               /*bitwidth=*/16, z3_context, translator),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }

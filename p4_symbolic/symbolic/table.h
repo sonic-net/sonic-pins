@@ -35,7 +35,7 @@ namespace table {
 constexpr int kDefaultActionEntryIndex = -1;
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
-    const ir::Table &table, SolverState &state, SymbolicPerPacketState *headers,
+    const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
     const z3::expr &guard);
 
 }  // namespace table

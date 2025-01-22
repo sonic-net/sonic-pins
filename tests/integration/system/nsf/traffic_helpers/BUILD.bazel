@@ -33,10 +33,17 @@ cc_library(
 cc_library(
     name = "otg_helper",
     testonly = True,
+    srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
     deps = [
+        "//gutil:status",
+        "//lib/utils:generic_testbed_utils",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
         "//thinkit:generic_testbed",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_otg_models//:otg_cc_proto",
+        "@com_github_otg_models//:otg_grpc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
     ],
 )

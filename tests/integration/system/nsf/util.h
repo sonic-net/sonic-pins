@@ -16,21 +16,41 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UTIL_H_
 
 #include <memory>
+#include <variant>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/generic_testbed_fixture.h"
+#include "thinkit/mirror_testbed.h"
+#include "thinkit/mirror_testbed_fixture.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
+
+using Testbed = std::variant<std::unique_ptr<thinkit::GenericTestbed>,
+                             std::unique_ptr<thinkit::MirrorTestbed>>;
+using TestbedInterface =
+    std::variant<std::unique_ptr<thinkit::GenericTestbedInterface>,
+                 std::unique_ptr<thinkit::MirrorTestbedInterface>>;
+
+absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
+
+void SetupTestbed(TestbedInterface& testbed_interface);
+
+void TearDownTestbed(TestbedInterface& testbed_interface);
 
 absl::Status InstallRebootPushConfig(absl::string_view version);
 
 // Validates P4, gNMI, SSH connections and port status along with validating the
-// Stack version.
-absl::Status ValidateSwitchState(absl::string_view version);
+// Stack version of the SUT.
+absl::Status ValidateSutState(absl::string_view version,
+                              thinkit::GenericTestbed& testbed,
+                              thinkit::SSHClient& ssh_client);
 
 absl::Status ValidateComponents(
     absl::Status (ComponentValidator::*validate)(absl::string_view,
@@ -40,7 +60,11 @@ absl::Status ValidateComponents(
 
 absl::Status Upgrade(absl::string_view version);
 
-absl::Status NsfReboot(absl::string_view version);
+absl::Status NsfReboot(thinkit::GenericTestbed& testbed,
+                       thinkit::SSHClient& ssh_client);
+
+absl::Status WaitForReboot(thinkit::GenericTestbed& testbed,
+                           thinkit::SSHClient& ssh_client);
 
 absl::Status PushConfig(absl::string_view version);
 

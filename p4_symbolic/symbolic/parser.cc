@@ -133,7 +133,7 @@ absl::Status EvaluatePrimitiveParserOperation(
   switch (primitive.statement_case()) {
     case ir::ParserOperation::Primitive::StatementCase::kAssignment: {
       return action::EvaluateAssignmentStatement(
-          primitive.assignment(), &headers, &context, z3_context, guard);
+          primitive.assignment(), headers, &context, z3_context, guard);
     }
     default: {
       return gutil::UnimplementedErrorBuilder()

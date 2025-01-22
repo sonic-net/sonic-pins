@@ -23,8 +23,7 @@ namespace pins_test {
 
 class StaticProgrammer : public FlowProgrammer {
  public:
-  absl::Status ProgramFlows(IpVersion ip_version, Protocol protocol,
-                            thinkit::GenericTestbed& testbed) override {
+  absl::Status ProgramFlows(thinkit::GenericTestbed& testbed) override {
     return absl::OkStatus();
   };
   absl::Status ClearFlows(thinkit::GenericTestbed& testbed) override {
