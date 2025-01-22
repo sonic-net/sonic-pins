@@ -491,26 +491,22 @@ void VerifyOperStatusOnSetOfSutInterfaces(gnmi::gNMI::StubInterface& gnmi_stub,
   }
 }
 
-absl::Status ValidateControlSwitchPortsUp(
-    thinkit::ControlDevice& control_device,
-    const std::vector<std::string>& interfaces) {
-  ASSIGN_OR_RETURN(
-      const auto up_interfaces,
-      control_device.GetUpLinks(absl::Span<const std::string>(interfaces)));
+absl::Status ValidatePortsUp(
+    thinkit::Switch& sut, thinkit::ControlDevice& control_device,
+    const std::vector<std::string>& sut_interfaces,
+    const std::vector<std::string>& control_device_interfaces) {
+  absl::Status sut_ports_up_status =
+      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces));
+  absl::Status control_switch_ports_up_status = control_device.ValidatePortsUp(
+      absl::Span<const std::string>(control_device_interfaces));
 
-  std::vector<std::string> down_interfaces;
-  for (const std::string& interface : interfaces) {
-    if (!up_interfaces.contains(interface)) {
-      down_interfaces.push_back(interface);
-    }
+  if (sut_ports_up_status.ok() && control_switch_ports_up_status.ok()) {
+    return absl::OkStatus();
   }
 
-  if (!down_interfaces.empty()) {
-    return absl::InternalError(
-        absl::StrCat("Some interfaces are not up on control switch: ",
-                     absl::StrJoin(down_interfaces, "\n")));
-  }
-  return absl::OkStatus();
+  EXPECT_OK(sut_ports_up_status);
+  EXPECT_OK(control_switch_ports_up_status);
+  return absl::InternalError("PortsUp validation failed.");
 }
 
 std::vector<std::string> SelectNInterfacesFromList(
@@ -864,11 +860,9 @@ TEST_P(BertTest, StartBertSucceeds) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
   thinkit::Switch& sut = generic_testbed_->Sut();
-  ASSERT_OK(
-      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
-
   thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
-  ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 
   // Select 2 operational state "up" ports.
   sut_test_interfaces_ = absl::GetFlag(FLAGS_interfaces);
@@ -1031,9 +1025,9 @@ TEST_P(BertTest, StartBertSucceeds) {
                               HasSubstr("exists"))))
         << "Response: " << bert_response.ShortDebugString();
   }
+
   ASSERT_OK(
-      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
-  ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 }
 
 // Runs the BERT test on current maximum allowed number of interfaces. During
@@ -1047,11 +1041,9 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
   thinkit::Switch& sut = generic_testbed_->Sut();
-  ASSERT_OK(
-      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
-
   thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
-  ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 
   // Get all the interfaces that are operational status "UP".
   sut_test_interfaces_ = sut_interfaces_;
@@ -1180,8 +1172,7 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   absl::SleepFor(kPortsUpWaitTime);
 
   ASSERT_OK(
-      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
-  ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 }
 
 // Run BERT on a port. Issue StopBERT on the SUT port, this causes BERT to
@@ -1192,11 +1183,9 @@ TEST_P(BertTest, StopBertSucceeds) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
   thinkit::Switch& sut = generic_testbed_->Sut();
-  ASSERT_OK(
-      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
-
   thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
-  ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 
   // Select one operational state "up" port.
   std::string interface = absl::GetFlag(FLAGS_interface);
@@ -1350,8 +1339,7 @@ TEST_P(BertTest, StopBertSucceeds) {
   }
 
   ASSERT_OK(
-      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
-  ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 }
 
 }  // namespace bert

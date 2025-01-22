@@ -176,5 +176,9 @@ absl::StatusOr<bool> IsParentPort(absl::string_view port);
 // channelized or no.
 absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode);
 
+// Returns an EK_PHYSICAL_PORT name given an EK_PORT name.
+// For example, the call below would return "phy-1/2".
+//   DeriveEkPhysicalPort("Ethernet1/2/5")
+absl::StatusOr<std::string> DeriveEkPhysicalPort(absl::string_view ek_port);
 }  // namespace pins_test
 #endif  // PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_

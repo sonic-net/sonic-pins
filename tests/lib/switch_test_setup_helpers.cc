@@ -29,6 +29,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir_tools.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/thinkit_sanity_tests.h"
 
 namespace pins_test {
@@ -59,14 +60,6 @@ absl::Status TryClearingTableEntries(
   RETURN_IF_ERROR(pdpi::ClearTableEntries(session.value().get()));
   RETURN_IF_ERROR(session.value()->Finish());
   return absl::OkStatus();
-}
-
-absl::Status PushGnmiAndWaitForConvergence(thinkit::Switch& thinkit_switch,
-                                           const std::string& gnmi_config,
-                                           absl::Duration gnmi_timeout) {
-  RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch, gnmi_config));
-  return WaitForGnmiPortIdConvergence(thinkit_switch, gnmi_config,
-                                      gnmi_timeout);
 }
 
 // Wrapper around `TestGnoiSystemColdReboot` that ensures we don't ignore fatal
@@ -162,13 +155,21 @@ ConfigureSwitchAndReturnP4RuntimeSession(
   RETURN_IF_ERROR(TryClearingTableEntries(thinkit_switch, metadata));
 
   if (gnmi_config.has_value()) {
-    RETURN_IF_ERROR(
-        PushGnmiAndWaitForConvergence(thinkit_switch, *gnmi_config,
-                                      /*gnmi_timeout=*/kGnmiTimeoutDefault));
+    RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch, *gnmi_config));
   }
 
-  return CreateP4RuntimeSessionAndOptionallyPushP4Info(thinkit_switch, p4info,
-                                                       metadata);
+  ASSIGN_OR_RETURN(auto p4rt_session,
+                   CreateP4RuntimeSessionAndOptionallyPushP4Info(
+                       thinkit_switch, p4info, metadata));
+
+  // Ensure that the P4RT port IDs configured on the switch are reflected in the
+  // state before returning.
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
+                   thinkit_switch.CreateGnmiStub());
+  RETURN_IF_ERROR(
+      WaitForGnmiPortIdConvergence(*gnmi_stub,
+                                   /*gnmi_timeout=*/kGnmiTimeoutDefault));
+  return p4rt_session;
 }
 
 absl::StatusOr<std::pair<std::unique_ptr<pdpi::P4RuntimeSession>,
