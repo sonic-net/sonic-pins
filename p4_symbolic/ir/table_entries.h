@@ -19,9 +19,9 @@
 #define P4_SYMBOLIC_IR_TABLE_ENTRIES_H_
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -31,8 +31,13 @@
 namespace p4_symbolic {
 namespace ir {
 
-// Table entries by table name.
-using TableEntries = std::unordered_map<std::string, std::vector<TableEntry>>;
+// IR table entries keyed by table name.
+// An ordered map is required because in `InitializeTableEntries` we loop
+// through each table entry of each table to construct the symbolic variables
+// and constraints of the symbolic table entries. If the map were to be
+// unordered, the resulting order of symbolic variables and the SMT formulae
+// will be nondeterministic.
+using TableEntries = absl::btree_map<std::string, std::vector<TableEntry>>;
 
 // Returns table entries in P4-Symbolic IR, keyed by table name.
 absl::StatusOr<TableEntries> ParseTableEntries(

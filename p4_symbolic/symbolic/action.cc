@@ -14,18 +14,27 @@
 
 #include "p4_symbolic/symbolic/action.h"
 
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
+#include "gutil/status.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/v1model.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -309,9 +318,8 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
 absl::Status EvaluateAction(const ir::Action &action,
                             const google::protobuf::RepeatedPtrField<
                                 pdpi::IrActionInvocation::IrActionParam> &args,
-                            SymbolicPerPacketState *state,
-                            values::P4RuntimeTranslator *translator,
-                            z3::context &z3_context, const z3::expr &guard) {
+                            SolverState &state, SymbolicPerPacketState *headers,
+                            const z3::expr &guard) {
   // Construct this action's context.
   ActionContext context;
   context.action_name = action.action_definition().preamble().name();
@@ -339,16 +347,16 @@ absl::Status EvaluateAction(const ir::Action &action,
     ASSIGN_OR_RETURN(
         z3::expr parameter_value,
         values::FormatP4RTValue(
-            z3_context, /*field_name=*/"",
-            param_definition->param().type_name().name(), arg.value(),
-            param_definition->param().bitwidth(), translator));
+            /*field_name=*/"", param_definition->param().type_name().name(),
+            arg.value(), param_definition->param().bitwidth(),
+            *state.context.z3_context, state.translator));
     context.scope.insert({param_definition->param().name(), parameter_value});
   }
 
   // Iterate over the body in order, and evaluate each statement.
   for (const auto &statement : action.action_implementation().action_body()) {
-    RETURN_IF_ERROR(
-        EvaluateStatement(statement, state, &context, z3_context, guard));
+    RETURN_IF_ERROR(EvaluateStatement(statement, headers, &context,
+                                      *state.context.z3_context, guard));
   }
 
   return absl::OkStatus();

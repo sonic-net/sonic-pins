@@ -20,12 +20,11 @@
 
 #include "p4_symbolic/symbolic/values.h"
 
-#include <locale>
-#include <optional>
-#include <sstream>
-#include <vector>
+#include <cstdint>
+#include <string>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -44,6 +43,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -75,18 +75,17 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
   }
 }
 
-absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
-                                         const std::string &field_name,
+absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
                                          const std::string &type_name,
                                          const pdpi::IrValue &value,
-                                         int bitwidth,
-                                         P4RuntimeTranslator *translator) {
+                                         int bitwidth, z3::context &context,
+                                         P4RuntimeTranslator &translator) {
   switch (value.format_case()) {
     case pdpi::IrValue::kStr: {
       // Mark that this field is a string translatable field, and map it
       // to its custom type name (e.g. vrf_id => vrf_t).
       if (!field_name.empty()) {
-        translator->fields_p4runtime_type[field_name] = type_name;
+        translator.fields_p4runtime_type[field_name] = type_name;
       }
 
       // Must translate the string into a bitvector according to the field type.
@@ -94,13 +93,13 @@ absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
       
       // If there is no IdAllocator for the given type (implying no static
       // mapping was provided), create a new dynamic IdAllocator.
-      translator->p4runtime_translation_allocators.try_emplace(
+      translator.p4runtime_translation_allocators.try_emplace(
           type_name, IdAllocator(TranslationData{
                          .static_mapping = {},
                          .dynamic_translation = true,
                      }));
       IdAllocator &allocator =
-          translator->p4runtime_translation_allocators.at(type_name);
+          translator.p4runtime_translation_allocators.at(type_name);
 
       ASSIGN_OR_RETURN(uint64_t int_value, allocator.AllocateId(string_value));
       if (bitwidth == 0) {
@@ -114,7 +113,7 @@ absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
       return context.bv_val(int_value, bitwidth);
     }
     default: {
-      if (translator->fields_p4runtime_type.count(field_name)) {
+      if (translator.fields_p4runtime_type.count(field_name)) {
         return absl::InvalidArgumentError(absl::StrCat(
             "A table entry provides a non-string value ", value.DebugString(),
             "to a string translated field", field_name));

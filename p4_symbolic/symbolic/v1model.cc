@@ -16,15 +16,20 @@
 
 #include <array>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/control.h"
+#include "p4_symbolic/symbolic/guarded_map.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -167,10 +172,10 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
   return absl::OkStatus();
 }
 
-absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
-                             const std::vector<int> &physical_ports,
-                             SymbolicContext &context,
-                             values::P4RuntimeTranslator &translator) {
+absl::Status EvaluateV1model(SolverState &state,
+                             const std::vector<int> &physical_ports) {
+  SymbolicContext &context = state.context;
+
   // Check input physical ports.
   RETURN_IF_ERROR(CheckPhysicalPortsConformanceToV1Model(physical_ports));
 
@@ -179,10 +184,10 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   // variable for each header field.
   ASSIGN_OR_RETURN(context.ingress_headers,
                    SymbolicGuardedMap::CreateSymbolicGuardedMap(
-                       *context.z3_context, data_plane.program.headers()));
+                       *context.z3_context, state.program.headers()));
   // Initialize the symbolic ingress packet before evaluation.
   RETURN_IF_ERROR(InitializeIngressHeaders(
-      data_plane.program, context.ingress_headers, *context.z3_context));
+      state.program, context.ingress_headers, *context.z3_context));
 
   // Evaluate all parsers in the P4 program.
   // If a parser error occurs, the `standard_metadata.parser_error` field will
@@ -191,12 +196,12 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   // will only yield 2 kinds of parser error, NoError and NoMatch.
   ASSIGN_OR_RETURN(
       context.parsed_headers,
-      parser::EvaluateParsers(data_plane.program, context.ingress_headers,
+      parser::EvaluateParsers(state.program, context.ingress_headers,
                               *context.z3_context));
 
   // Update the ingress_headers' valid fields to be parsed_headers' extracted
   // fields.
-  for (const auto &[header_name, _] : Ordered(data_plane.program.headers())) {
+  for (const auto &[header_name, _] : Ordered(state.program.headers())) {
     ASSIGN_OR_RETURN(
         z3::expr extracted,
         context.parsed_headers.Get(header_name, kExtractedPseudoField));
@@ -216,8 +221,7 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
   ASSIGN_OR_RETURN(
       SymbolicTableMatches matches,
-      control::EvaluatePipeline(data_plane, "ingress", &context.egress_headers,
-                                &translator, *context.z3_context,
+      control::EvaluatePipeline("ingress", state, &context.egress_headers,
                                 /*guard=*/context.z3_context->bool_val(true)));
   ASSIGN_OR_RETURN(z3::expr dropped,
                    IsDropped(context.egress_headers, *context.z3_context));
@@ -233,8 +237,7 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
   // Evaluate the egress pipeline.
   ASSIGN_OR_RETURN(
       SymbolicTableMatches egress_matches,
-      control::EvaluatePipeline(data_plane, "egress", &context.egress_headers,
-                                &translator, *context.z3_context,
+      control::EvaluatePipeline("egress", state, &context.egress_headers,
                                 /*guard=*/!dropped));
   matches.merge(std::move(egress_matches));
 
