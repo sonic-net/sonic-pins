@@ -100,6 +100,7 @@ TEST_F(IPv4RoutingTableEntriesTest, SymbolicEntryWithGetterFunctions) {
       CreateSymbolicIrTableEntry(table, priority, prefix_length));
   TableEntry entry(entry_index, std::move(ir_entry));
 
+
   // Test all basic getter functions.
   EXPECT_EQ(entry.GetIndex(), entry_index);
   EXPECT_FALSE(entry.IsConcrete());
@@ -160,6 +161,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionInvocationVariablesOfSymbolicEntry) {
   TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test the symbolic variables of the symbolic action invocations.
+
   for (const auto &action_ref : table.table_definition().entry_actions()) {
     const std::string &action_name = action_ref.action().preamble().name();
     ASSERT_OK_AND_ASSIGN(z3::expr action_invocation,
