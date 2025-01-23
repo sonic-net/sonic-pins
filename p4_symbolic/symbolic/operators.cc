@@ -19,13 +19,16 @@
 
 #include "p4_symbolic/symbolic/operators.h"
 
+#include <string>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "gutil/status.h"
 #include "z3++.h"
+#include "z3_api.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -236,6 +239,13 @@ absl::StatusOr<z3::expr> BitNeg(const z3::expr &a) { return ~a; }
 // since our semantics do not allow arbitrary extraction to smaller sizes, but
 // do allow arbitrary padding.
 absl::StatusOr<z3::expr> BitAnd(const z3::expr &a, const z3::expr &b) {
+  // Coerce bool to bit<1>.
+  if (a.is_bool() && b.is_bv() && b.get_sort().bv_size() == 1) {
+    return z3::ite(a, b, a.ctx().bv_val(0, 1));
+  }
+  if (b.is_bool() && a.is_bv() && a.get_sort().bv_size() == 1) {
+    return z3::ite(b, a, b.ctx().bv_val(0, 1));
+  }
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndExtract(a, b));
   auto &[a_expr, b_expr] = pair;

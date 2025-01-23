@@ -50,8 +50,11 @@ cc_library(
         "//p4_pdpi/string_encodings:hex_string",
         "@com_github_z3prover_z3//:api",
         "@com_gnu_gmp//:gmp",
+        "@com_google_absl//absl/numeric:int128",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
     ],
 )
 
@@ -116,6 +119,11 @@ cc_test(
     srcs = ["z3_util_test.cc"],
     deps = [
         ":z3_util",
+        "//gutil:status_matchers",
+        "//p4_pdpi/string_encodings:bit_string",
+        "@com_github_z3prover_z3//:api",
+        "@com_google_absl//absl/numeric:int128",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
 )

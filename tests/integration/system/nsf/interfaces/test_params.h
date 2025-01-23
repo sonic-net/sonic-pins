@@ -23,7 +23,8 @@
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
-#include "thinkit/generic_testbed_fixture.h"
+#include "tests/integration/system/nsf/util.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -35,10 +36,10 @@ struct NsfTestParams {
   std::string name;
   std::function<std::unique_ptr<FlowProgrammer>()> create_flow_programmer;
   std::function<std::unique_ptr<TrafficHelper>()> create_traffic_helper;
-  std::function<std::unique_ptr<thinkit::GenericTestbedInterface>()>
-      create_testbed_interface;
+  std::function<TestbedInterface()> create_testbed_interface;
   std::function<std::vector<std::unique_ptr<ComponentValidator>>()>
       create_component_validators;
+  std::function<std::unique_ptr<thinkit::SSHClient>()> create_ssh_client;
 };
 
 }  // namespace pins_test

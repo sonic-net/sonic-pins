@@ -57,6 +57,7 @@ cc_library(
         ":component_validator",
         ":flow_programmer",
         ":traffic_helper",
-        "//thinkit:generic_testbed_fixture",
+        "//tests/integration/system/nsf:util",
+        "//thinkit:ssh_client",
     ],
 )

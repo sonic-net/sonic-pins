@@ -594,7 +594,7 @@ TEST_P(FrontpanelQosTest,
   ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
                        ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
 
-  constexpr int64_t kSpeed400g = 400000000000;
+  constexpr int64_t kSpeed100g = 100000000000;
   constexpr int64_t kSpeed200g = 200000000000;
   if (kSutEgressPortSpeedInBitsPerSecond != kSpeed200g) {
     ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g), kSutEgressPort,
@@ -603,7 +603,7 @@ TEST_P(FrontpanelQosTest,
         PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
         *gnmi_stub));
   } else {
-    ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed400g), kSutEgressPort,
+    ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g), kSutEgressPort,
                                           *gnmi_stub));
     ASSERT_OK(SetPortSpeedInBitsPerSecond(
         PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,

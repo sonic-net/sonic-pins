@@ -14,7 +14,15 @@
 #ifndef PINS_P4_SYMBOLIC_Z3_UTIL_H_
 #define PINS_P4_SYMBOLIC_Z3_UTIL_H_
 
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+#include "absl/numeric/int128.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
 #include "z3++.h"
 
@@ -22,14 +30,35 @@ namespace p4_symbolic {
 
 // -- Evaluation ---------------------------------------------------------------
 
-absl::StatusOr<bool> EvalZ3Bool(const z3::expr &bool_expr,
-                                const z3::model &model);
+// Evaluates the given `bool_expr` to a boolean value based on the given
+// `model`. Returns an error if the given expression is not a boolean
+// expression.
+absl::StatusOr<bool> EvalZ3Bool(const z3::expr& bool_expr,
+                                const z3::model& model);
 
-absl::StatusOr<int> EvalZ3Int(const z3::expr &int_expr, const z3::model &model);
+// Evaluates the given `int_expr` to an integer value based on the given
+// `model`. Returns an error if the given expression is not an integer
+// expression.
+absl::StatusOr<int> EvalZ3Int(const z3::expr& int_expr, const z3::model& model);
 
+// Evaluates the given `bv_expr` bit-vector and appends the value to the
+// `output` bit-string based on the given `model`. Returns an error if the given
+// expression is not a bit-vector.
 absl::Status EvalAndAppendZ3BitvectorToBitString(pdpi::BitString& output,
                                                  const z3::expr& bv_expr,
                                                  const z3::model& model);
+
+// Evaluates the given `bv_expr` bit-vector to uint64_t based on the given
+// `model`. Returns an error if the given expression is not a bit-vector or if
+// the size is over 64 bits.
+absl::StatusOr<uint64_t> EvalZ3BitvectorToUInt64(const z3::expr& bv_expr,
+                                                 const z3::model& model);
+
+// Evaluates the given `bv_expr` bit-vector to absl::uint128 based on the given
+// `model`. Returns an error if the given expression is not a bit-vector or if
+// the size is over 128 bits.
+absl::StatusOr<absl::uint128> EvalZ3BitvectorToUInt128(const z3::expr& bv_expr,
+                                                       const z3::model& model);
 
 // -- Constructing Z3 expressions ----------------------------------------------
 
@@ -49,6 +78,14 @@ HexStringToZ3Bitvector(z3::context &context, const std::string &hex_string,
 // Note: This function assumes that the input is well-formatted and the result
 // fits in uint64_t (otherwise an exception will be thrown).
 uint64_t Z3ValueStringToInt(const std::string &value);
+
+// Appends exactly `num_bits` bits to the `result` PDPI bit string from the
+// evaluated Z3 string `value`. Returns an error if the `value` is not a valid
+// Z3 bit-vector value (i.e., if it is not a hex string starting with "#x" and
+// not a binary bit string starting with "#b").
+absl::Status AppendZ3ValueStringToBitString(pdpi::BitString& result,
+                                            absl::string_view value,
+                                            size_t num_bits);
 
 // == END OF PUBLIC INTERFACE ==================================================
 

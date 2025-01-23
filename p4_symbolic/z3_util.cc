@@ -14,12 +14,25 @@
 
 #include "p4_symbolic/z3_util.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+#include "absl/numeric/int128.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/types/optional.h"
 #include "gmpxx.h"
 #include "gutil/status.h"
+#include "p4_pdpi/string_encodings/bit_string.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "z3++.h"
+#include "z3_api.h"
 
 namespace p4_symbolic {
 
@@ -113,25 +126,32 @@ absl::Status AppendHexCharStringToPDPIBitString(
 
 absl::StatusOr<bool> EvalZ3Bool(const z3::expr& bool_expr,
                                 const z3::model& model) {
-  // TODO: Ensure this doesn't crash by checking sort first.
-  auto value = model.eval(bool_expr, true).bool_value();
+  if (!bool_expr.is_bool()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected a boolean expression, found '" << bool_expr << "'";
+  }
+
+  auto value = model.eval(bool_expr, /*model_completion=*/true).bool_value();
   switch (value) {
     case Z3_L_FALSE:
       return false;
     case Z3_L_TRUE:
       return true;
     default:
-      break;
+      return gutil::InternalErrorBuilder()
+             << "boolean expression '" << bool_expr
+             << "' evaluated to unexpected Boolean value " << value;
   }
-  return gutil::InternalErrorBuilder()
-         << "boolean expression '" << bool_expr
-         << "' evaluated to unexpected Boolean value " << value;
 }
 
 absl::StatusOr<int> EvalZ3Int(const z3::expr& int_expr,
                               const z3::model& model) {
-  // TODO: Ensure this doesn't crash by checking sort first.
-  return model.eval(int_expr, true).get_numeral_int();
+  if (!int_expr.is_int()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected an integer expression, found '" << int_expr << "'";
+  }
+
+  return model.eval(int_expr, /*model_completion=*/true).get_numeral_int();
 }
 
 absl::Status EvalAndAppendZ3BitvectorToBitString(pdpi::BitString& output,
@@ -142,22 +162,73 @@ absl::Status EvalAndAppendZ3BitvectorToBitString(pdpi::BitString& output,
            << "Expected a bitvector, found '" << bv_expr << "'";
   }
 
-  const std::string field_value =
+  const std::string value =
       model.eval(bv_expr, /*model_completion=*/true).to_string();
-  absl::string_view field_value_view = field_value;
+  return AppendZ3ValueStringToBitString(output, value,
+                                        bv_expr.get_sort().bv_size());
+}
 
-  if (absl::ConsumePrefix(&field_value_view, "#x")) {
-    RETURN_IF_ERROR(AppendHexCharStringToPDPIBitString(
-        output, field_value_view, bv_expr.get_sort().bv_size()));
-  } else if (absl::ConsumePrefix(&field_value_view, "#b")) {
-    RETURN_IF_ERROR(AppendBitCharStringToPDPIBitString(
-        output, field_value_view, bv_expr.get_sort().bv_size()));
-  } else {
+absl::StatusOr<uint64_t> EvalZ3BitvectorToUInt64(const z3::expr& bv_expr,
+                                                 const z3::model& model) {
+  if (!bv_expr.is_bv()) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Invalid Z3 bitvector value '" << field_value << "'";
+           << "Expected a bitvector, found '" << bv_expr << "'";
   }
 
-  return absl::OkStatus();
+  if (bv_expr.get_sort().bv_size() > 64) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected a bitvector within 64 bits, found "
+           << bv_expr.get_sort().bv_size() << " bits";
+  }
+
+  const std::string value =
+      model.eval(bv_expr, /*model_completion=*/true).to_string();
+  return Z3ValueStringToInt(value);
+}
+
+absl::StatusOr<absl::uint128> EvalZ3BitvectorToUInt128(const z3::expr& bv_expr,
+                                                       const z3::model& model) {
+  if (!bv_expr.is_bv()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected a bitvector, found '" << bv_expr << "'";
+  }
+
+  if (bv_expr.get_sort().bv_size() > 128) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected a bitvector within 128 bits, found "
+           << bv_expr.get_sort().bv_size() << " bits";
+  }
+
+  const std::string value_string =
+      model.eval(bv_expr, /*model_completion=*/true).to_string();
+  absl::string_view value = value_string;
+  absl::uint128 result;
+
+  if (absl::ConsumePrefix(&value, "#x")) {
+    if (!absl::SimpleHexAtoi(value, &result)) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unable to convert hex string '" << value << "' to uint128";
+    }
+  } else if (absl::ConsumePrefix(&value, "#b")) {
+    uint64_t hi = 0;
+    uint64_t lo = 0;
+
+    if (value.size() > 64) {
+      hi = std::stoull(std::string(value.substr(0, value.size() - 64)),
+                       /*idx=*/nullptr, /*base=*/2);
+      lo = std::stoull(std::string(value.substr(value.size() - 64)),
+                       /*idx=*/nullptr, /*base=*/2);
+    } else {
+      lo = std::stoull(std::string(value), /*idx=*/nullptr, /*base=*/2);
+    }
+
+    result = absl::MakeUint128(hi, lo);
+  } else {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid Z3 bitvector value '" << value << "'";
+  }
+
+  return result;
 }
 
 absl::StatusOr<z3::expr> HexStringToZ3Bitvector(z3::context& context,
@@ -189,6 +260,23 @@ uint64_t Z3ValueStringToInt(const std::string& value) {
     // Must be a base 10 number.
     return std::stoull(value, /*idx=*/nullptr, /*base=*/10);
   }
+}
+
+absl::Status AppendZ3ValueStringToBitString(pdpi::BitString& result,
+                                            absl::string_view value,
+                                            size_t num_bits) {
+  if (absl::ConsumePrefix(&value, "#x")) {
+    RETURN_IF_ERROR(
+        AppendHexCharStringToPDPIBitString(result, value, num_bits));
+  } else if (absl::ConsumePrefix(&value, "#b")) {
+    RETURN_IF_ERROR(
+        AppendBitCharStringToPDPIBitString(result, value, num_bits));
+  } else {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid Z3 bitvector value '" << value << "'";
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace p4_symbolic

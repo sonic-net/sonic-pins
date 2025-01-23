@@ -512,6 +512,9 @@ message SymbolicTableEntry {
   //     https://p4.org/p4-spec/p4runtime/v1.3.0/P4Runtime-Spec.html#sec-match-format
   //   - To specify a symbolic match, provide a concrete match name without any
   //     values.
+  //   - For the prefix lengths in symbolic LPM matches, any negative value
+  //     denotes a symbolic prefix length and a non-negative value represents a
+  //     concrete prefix length value.
   //   - The `priority` must be concrete. It must be strictly positive if there
   //     are range, ternary, or optional matches, and must be zero if there are
   //     only LPM or exact matches.

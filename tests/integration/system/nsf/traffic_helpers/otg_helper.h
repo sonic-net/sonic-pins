@@ -23,16 +23,10 @@ namespace pins_test {
 
 class OtgHelper : public TrafficHelper {
  public:
-  absl::Status StartTraffic(thinkit::GenericTestbed& testbed) override {
-    return absl::OkStatus();
-  };
-  absl::Status StopTraffic(thinkit::GenericTestbed& testbed) override {
-    return absl::OkStatus();
-  };
+  absl::Status StartTraffic(thinkit::GenericTestbed& testbed) override;
+  absl::Status StopTraffic(thinkit::GenericTestbed& testbed) override;
   absl::Status ValidateTraffic(int error_margin,
-                               thinkit::GenericTestbed& testbed) override {
-    return absl::OkStatus();
-  };
+                               thinkit::GenericTestbed& testbed) override;
 };
 
 }  // namespace pins_test

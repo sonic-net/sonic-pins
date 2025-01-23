@@ -803,8 +803,8 @@ absl::Status ValidateBreakoutState(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::string> GetPortIndex(
-    const std::string& platform_json_contents, absl::string_view port) {
+absl::StatusOr<std::string>
+GetPortIndex(absl::string_view platform_json_contents, absl::string_view port) {
   // Get interfaces from platform.json.
   const auto platform_json = json::parse(platform_json_contents);
   const auto interfaces_json = platform_json.find(kInterfaces);
