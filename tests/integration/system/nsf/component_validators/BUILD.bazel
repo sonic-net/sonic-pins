@@ -29,7 +29,7 @@ cc_library(
     hdrs = ["sai_validator.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:component_validator",
-        "//thinkit:generic_testbed",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -42,7 +42,7 @@ cc_library(
     hdrs = ["swss_validator.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:component_validator",
-        "//thinkit:generic_testbed",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -55,7 +55,7 @@ cc_library(
     hdrs = ["syncd_validator.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:component_validator",
-        "//thinkit:generic_testbed",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",

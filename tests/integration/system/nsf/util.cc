@@ -14,10 +14,12 @@
 
 #include "tests/integration/system/nsf/util.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -32,12 +34,15 @@
 #include "gutil/overload.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
@@ -45,6 +50,11 @@
 namespace pins_test {
 namespace {
 
+using ::gnoi::system::RebootMethod;
+using ::gnoi::system::RebootMethod_Name;
+using ::gnoi::system::RebootRequest;
+using ::gnoi::system::RebootResponse;
+using ::grpc::ClientContext;
 using ::p4::v1::ReadResponse;
 
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
@@ -150,6 +160,21 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
       GetSwitchStateString(state), elapsed_time, validator_status.message()));
 }
 
+// Reboot the SUT using the given reboot `method`.
+absl::Status Reboot(RebootMethod method, Testbed& testbed) {
+  thinkit::Switch& sut = GetSut(testbed);
+  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
+  RebootRequest request;
+  request.set_method(method);
+  request.set_message(
+      absl::StrCat("Performing ", RebootMethod_Name(method), " Reboot"));
+  RebootResponse response;
+  ClientContext context;
+
+  return gutil::GrpcStatusToAbslStatus(
+      sut_gnoi_system_stub->Reboot(&context, request, &response));
+}
+
 }  // namespace
 
 void SetupTestbed(TestbedInterface& testbed_interface) {
@@ -196,63 +221,117 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
           },
           [&](std::unique_ptr<thinkit::MirrorTestbedInterface>& testbed)
               -> absl::StatusOr<Testbed> {
-            return absl::UnimplementedError(
-                "MirrorTestbedInterface not implemented");
+            return absl::UnimplementedError("MirrorTestbed not implemented");
           }},
       testbed_interface);
 }
 
-absl::Status InstallRebootPushConfig(absl::string_view version) {
+thinkit::Switch& GetSut(Testbed& testbed) {
+  return std::visit(
+      gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+                          -> thinkit::Switch& { return testbed->Sut(); },
+                      [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed)
+                          -> thinkit::Switch& { return testbed->Sut(); }},
+      testbed);
+}
+
+absl::Status ImageCopy(const std::string& image_label, Testbed& testbed,
+                       thinkit::SSHClient& ssh_client) {
   return absl::OkStatus();
 }
 
-absl::Status ValidateSutState(absl::string_view version,
-                              thinkit::GenericTestbed& testbed,
+absl::Status InstallRebootPushConfig(const std::string& image_label,
+                                     const std::string& gnmi_config,
+                                     Testbed& testbed,
+                                     thinkit::SSHClient& ssh_client) {
+  RETURN_IF_ERROR(ImageCopy(image_label, testbed, ssh_client));
+
+  RETURN_IF_ERROR(Reboot(RebootMethod::COLD, testbed));
+
+  return PushConfig(gnmi_config, testbed, ssh_client);
+}
+
+absl::Status ValidateSutState(absl::string_view version, Testbed& testbed,
                               thinkit::SSHClient& ssh_client) {
-  return RunReadyValidations(testbed.Sut(), ssh_client,
-                             GetConnectedInterfacesForSut(testbed),
-                             /*check_interfaces_state=*/true,
-                             /*with_healthz=*/true);
+  return std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed) {
+            return RunReadyValidations(testbed->Sut(), ssh_client,
+                                       GetConnectedInterfacesForSut(*testbed),
+                                       /*check_interfaces_state=*/true,
+                                       /*with_healthz=*/true);
+          },
+          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed) {
+            // TODO: Implement RunReadyValidations for Mirror
+            // testbed scenario.
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed);
 }
 
 absl::Status ValidateComponents(
-    absl::Status (ComponentValidator::*validate)(absl::string_view,
-                                                 thinkit::GenericTestbed&),
+    absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed&),
     const absl::Span<const std::unique_ptr<ComponentValidator>> validators,
-    absl::string_view version, thinkit::GenericTestbed& testbed) {
+    absl::string_view version, Testbed& testbed) {
   for (const std::unique_ptr<ComponentValidator>& validator : validators) {
     RETURN_IF_ERROR((std::invoke(validate, validator, version, testbed)));
   }
   return absl::OkStatus();
 }
 
-absl::Status Upgrade(absl::string_view version) { return absl::OkStatus(); }
-
-absl::Status NsfReboot(thinkit::GenericTestbed& testbed,
-                       thinkit::SSHClient& ssh_client) {
-  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub,
-                   testbed.Sut().CreateGnoiSystemStub());
-  gnoi::system::RebootRequest gnoi_request;
-  gnoi_request.set_method(gnoi::system::RebootMethod::NSF);
-  gnoi_request.set_message("Performing NSF Reboot");
-  gnoi::system::RebootResponse gnoi_response;
-  grpc::ClientContext grpc_context;
-
-  return gutil::GrpcStatusToAbslStatus(sut_gnoi_system_stub->Reboot(
-      &grpc_context, gnoi_request, &gnoi_response));
+absl::Status NsfReboot(Testbed& testbed) {
+  return Reboot(RebootMethod::NSF, testbed);
 }
 
-absl::Status WaitForReboot(thinkit::GenericTestbed& testbed,
-                           thinkit::SSHClient& ssh_client) {
+absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client) {
   // Wait for switch to go down and come back up.
-  RETURN_IF_ERROR(WaitForSwitchState(testbed.Sut(), SwitchState::kDown,
-                                     kTurnDownTimeout, ssh_client));
+  thinkit::Switch& sut = GetSut(testbed);
 
-  return WaitForSwitchState(testbed.Sut(), SwitchState::kReady, kTurnUpTimeout,
-                            ssh_client, GetConnectedInterfacesForSut(testbed));
+  return std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> absl::Status {
+            RETURN_IF_ERROR(WaitForSwitchState(sut, SwitchState::kDown,
+                                               kTurnDownTimeout, ssh_client));
+
+            return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
+                                      ssh_client,
+                                      GetConnectedInterfacesForSut(*testbed));
+          },
+          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed)
+              -> absl::Status {
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed);
 }
 
-absl::Status PushConfig(absl::string_view version) { return absl::OkStatus(); }
+absl::Status PushConfig(const std::string& gnmi_config, Testbed& testbed,
+                        thinkit::SSHClient& ssh_client) {
+  std::vector<std::string> interfaces;
+  RETURN_IF_ERROR(std::visit(
+      gutil::Overload{
+          [&interfaces](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> absl::Status {
+            interfaces = GetConnectedInterfacesForSut(*testbed);
+            return absl::OkStatus();
+          },
+          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed)
+              -> absl::Status {
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed));
+
+  // Wait for SSH and containers to be up before pushing config.
+  RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client));
+
+  // Push Config.
+  thinkit::Switch& sut = GetSut(testbed);
+  RETURN_IF_ERROR(PushGnmiConfig(sut, gnmi_config));
+
+  LOG(INFO) << "Verifying config push on " << sut.ChassisName();
+  return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
+                            ssh_client, interfaces);
+}
 
 ReadResponse TakeP4FlowSnapshot() { return ReadResponse(); }
 
@@ -261,8 +340,15 @@ absl::Status CompareP4FlowSnapshots(const ReadResponse& a,
   return absl::OkStatus();
 }
 
-absl::Status CaptureDbState() { return absl::OkStatus(); }
+absl::Status CaptureDbState() {
+  // TODO: Implement gNMI state path capture for comparison later.
+  return absl::OkStatus();
+}
 
-absl::Status ValidateDbState() { return absl::OkStatus(); }
+absl::Status ValidateDbState() {
+  // TODO: Implement gNMI state path validation for comparison of
+  // the various state paths before and after NSF Upgrade/Reboot.
+  return absl::OkStatus();
+}
 
 }  // namespace pins_test

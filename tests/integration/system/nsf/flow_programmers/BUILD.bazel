@@ -25,7 +25,7 @@ cc_library(
     hdrs = ["static_programmer.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:flow_programmer",
-        "//thinkit:generic_testbed",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "@com_google_absl//absl/status",
     ],
 )
@@ -36,7 +36,7 @@ cc_library(
     hdrs = ["fuzzer_replay_programmer.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:flow_programmer",
-        "//thinkit:generic_testbed",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "@com_google_absl//absl/status",
     ],
 )

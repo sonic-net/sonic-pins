@@ -16,21 +16,25 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_FLOW_PROGRAMMER_H_
 
 #include "absl/status/status.h"
-#include "thinkit/generic_testbed.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 
 namespace pins_test {
 
 // Interface to program or clear flows on the SUT of the given `testbed` during
 // NSF integration tests.
+//
+// Note: The caller is responsible for ensuring that exact same testbed is
+// passed throughout the test.
 class FlowProgrammer {
  public:
   virtual ~FlowProgrammer() = default;
 
-  // Programs a predefined flow on the SUT.
-  virtual absl::Status ProgramFlows(thinkit::GenericTestbed& testbed) = 0;
+  // Programs a predefined flow on the SUT based on the given IP version and
+  // protocol.
+  virtual absl::Status ProgramFlows(Testbed& testbed) = 0;
 
   // Clears all flows on the SUT.
-  virtual absl::Status ClearFlows(thinkit::GenericTestbed& testbed) = 0;
+  virtual absl::Status ClearFlows(Testbed& testbed) = 0;
 };
 
 }  // namespace pins_test

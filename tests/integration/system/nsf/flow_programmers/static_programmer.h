@@ -17,16 +17,16 @@
 
 #include "absl/status/status.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
-#include "thinkit/generic_testbed.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 
 namespace pins_test {
 
 class StaticProgrammer : public FlowProgrammer {
  public:
-  absl::Status ProgramFlows(thinkit::GenericTestbed& testbed) override {
+  absl::Status ProgramFlows(Testbed& testbed) override {
     return absl::OkStatus();
   };
-  absl::Status ClearFlows(thinkit::GenericTestbed& testbed) override {
+  absl::Status ClearFlows(Testbed& testbed) override {
     return absl::OkStatus();
   };
 };
