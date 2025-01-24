@@ -36,7 +36,8 @@ message TableReachabilityCriteria {
 
 // Criteria for the output behavior for the synthesized packet.
 message OutputCriteria {
-  // Whether the packet must get dropped.
+  // If true, the packet must get dropped. If false, the packet must get
+  // forwarded.
   bool drop_expected = 1;
 }
 
@@ -61,6 +62,13 @@ message PayloadCriteria {
   string payload = 1;
 }
 
+// Criteria on the port on which a packet should appear.
+message PortCriteria {
+  // In P4-Symbolic, this is also referred to as "physical port".
+  int32 v1model_port = 1;
+  // TODO: Support P4RT port names.
+}
+
 // The coverage criteria for (single) packet synthesis. All fields are optional.
 // If a criterion is not provided, no constraints for that criterion will be
 // added.
@@ -70,9 +78,15 @@ message PacketSynthesisCriteria {
   TableReachabilityCriteria table_reachability_criteria = 3;
   TableEntryReachabilityCriteria table_entry_reachability_criteria = 4;
   PayloadCriteria payload_criteria = 5;
+  PortCriteria ingress_port_criteria = 6;
 }
 
 // Contains a single (type of) criteria.
+// This is mostly an implementation detail (not visible to the clients): a
+// handy struct enabling us to programmatically specify the order of
+// fields in PacketSynthesisCriteria (to define the order of their respective Z3
+// frames) and to project PacketSynthesisCriteria messages to each individual
+// variant. See PacketSynthesizer::PrepareZ3SolverStack for more details.
 message CriteriaVariant {
   oneof criteria {
     OutputCriteria output_criteria = 1;
@@ -80,5 +94,6 @@ message CriteriaVariant {
     TableReachabilityCriteria table_reachability_criteria = 3;
     TableEntryReachabilityCriteria table_entry_reachability_criteria = 4;
     PayloadCriteria payload_criteria = 5;
+    PortCriteria ingress_port_criteria = 6;
   }
 }
