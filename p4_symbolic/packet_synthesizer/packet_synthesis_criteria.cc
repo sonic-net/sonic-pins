@@ -58,6 +58,12 @@ absl::StatusOr<CriteriaVariant> GetCriteriaVariant(
             criteria.payload_criteria();
       }
       break;
+    case CriteriaVariant::kIngressPortCriteria:
+      if (criteria.has_ingress_port_criteria()) {
+        *criteria_variant.mutable_ingress_port_criteria() =
+            criteria.ingress_port_criteria();
+      }
+      break;
     default:
       return gutil::InvalidArgumentErrorBuilder()
              << "Unexpected criteria case " << criteria_case;

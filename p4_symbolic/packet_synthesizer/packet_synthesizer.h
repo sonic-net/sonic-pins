@@ -85,6 +85,7 @@ public:
       CriteriaVariant::kInputPacketHeaderCriteria,
       CriteriaVariant::kTableReachabilityCriteria,
       CriteriaVariant::kTableEntryReachabilityCriteria,
+      CriteriaVariant::kIngressPortCriteria,
   };
 
 private:

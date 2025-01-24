@@ -113,5 +113,20 @@ TEST(GetCriteriaVariantTest, YieldsCorrectVariantForPayloadCriteria) {
               IsOkAndHolds(EqualsProto(expected_variant)));
 }
 
+TEST(GetCriteriaVariantTest, YieldsCorrectVariantForIngressPortCriteria) {
+  auto ingress_port_criteria =
+      gutil::ParseProtoOrDie<PortCriteria>(R"pb(v1model_port: 5)pb");
+
+  PacketSynthesisCriteria criteria;
+  *criteria.mutable_ingress_port_criteria() = ingress_port_criteria;
+
+  CriteriaVariant expected_variant;
+  *expected_variant.mutable_ingress_port_criteria() = ingress_port_criteria;
+
+  ASSERT_THAT(
+      GetCriteriaVariant(criteria, CriteriaVariant::kIngressPortCriteria),
+      IsOkAndHolds(EqualsProto(expected_variant)));
+}
+
 }  // namespace
 }  // namespace p4_symbolic::packet_synthesizer
