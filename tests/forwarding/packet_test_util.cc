@@ -14,8 +14,12 @@
 
 #include "tests/forwarding/packet_test_util.h"
 
-namespace pins {
+#include <algorithm>
+#include <limits>
+
 #include "p4_pdpi/netaddr/ipv6_address.h"
+
+namespace pins {
 
 using ::packetlib::EthernetHeader;
 using ::packetlib::IpDscp;
@@ -35,8 +39,12 @@ using ::packetlib::UdpHeader;
 using ::packetlib::UdpPort;
 
 namespace {
-constexpr uint64_t kBaseDstMac = 234;
+// Choose a base DstMac that is far enough away from the base SrcMac to minimize
+// collision between the address spaces.
+constexpr uint64_t kBaseDstMac = 100234;
+constexpr uint64_t kBaseSrcMac = 123;
 constexpr uint64_t kMacAddrSize = static_cast<uint64_t>(1) << (48);
+constexpr uint64_t kHopLimitRange = 256 - 3; // Minimum hop limit is 3.
 
 // Base IPv4 address for generating the outer IP header for packets that are not
 // supposed to be decapped.
@@ -110,6 +118,29 @@ uint32_t GetIthL4Port(int i, uint32_t base) {
 
 }  // namespace
 
+const std::vector<PacketField> &AllPacketFields() {
+  static const auto *const kPacketFields = new std::vector<PacketField>({
+      PacketField::kEthernetSrc,
+      PacketField::kEthernetDst,
+      PacketField::kIpSrc,
+      PacketField::kIpDst,
+      PacketField::kHopLimit,
+      PacketField::kDscp,
+      PacketField::kFlowLabelLower16,
+      PacketField::kFlowLabelUpper4,
+      PacketField::kInnerIpSrc,
+      PacketField::kInnerIpDst,
+      PacketField::kInnerHopLimit,
+      PacketField::kInnerDscp,
+      PacketField::kInnerFlowLabelLower16,
+      PacketField::kInnerFlowLabelUpper4,
+      PacketField::kL4SrcPort,
+      PacketField::kL4DstPort,
+      PacketField::kInputPort,
+  });
+  return *kPacketFields;
+}
+
 // Clears the received packet output vector and the packet statistics counters.
 void TestData::ClearReceivedPackets() {
   absl::MutexLock lock(&mutex);
@@ -150,6 +181,49 @@ bool IsValidTestConfiguration(const TestConfiguration& config) {
   return true;
 }
 
+// Returns the number of values available within the packet field.
+int Range(const TestConfiguration &config) {
+  // GenerateIthPacket takes in an int index. Any field with 31 or more bits
+  // may be limited by the int range before the header field range.
+  static constexpr int kInt32Range =
+      std::min(static_cast<uint64_t>(std::numeric_limits<int>::max()),
+               static_cast<uint64_t>(1) << 32);
+  static constexpr int kInt64Range =
+      std::min(static_cast<uint64_t>(std::numeric_limits<int>::max()),
+               std::numeric_limits<uint64_t>::max());
+  static constexpr int kEthernetRange = std::min(
+      static_cast<uint64_t>(std::numeric_limits<int>::max()), kMacAddrSize);
+  switch (config.field) {
+  case PacketField::kEthernetSrc:
+  case PacketField::kEthernetDst:
+    return kEthernetRange;
+  case PacketField::kIpSrc:
+  case PacketField::kIpDst:
+  case PacketField::kInnerIpSrc:
+  case PacketField::kInnerIpDst:
+    return config.ipv4 ? kInt32Range : kInt64Range;
+  case PacketField::kHopLimit:
+  case PacketField::kInnerHopLimit:
+    return kHopLimitRange;
+  case PacketField::kDscp:
+    return 1 << 6;
+  case PacketField::kFlowLabelLower16:
+  case PacketField::kInnerFlowLabelLower16:
+    return 1 << 16;
+  case PacketField::kFlowLabelUpper4:
+  case PacketField::kInnerFlowLabelUpper4:
+    return 1 << 4;
+  case PacketField::kL4SrcPort:
+  case PacketField::kL4DstPort:
+    return kMaxPorts;
+  // Not used by the packet generator
+  case PacketField::kInputPort:
+  case PacketField::kInnerDscp:
+    return 1;
+  }
+  return 0; // Not reachable.
+}
+
 // Returns the ith destination MAC that is used when varying that field.
 netaddr::MacAddress GetIthDstMac(int i) {
   return netaddr::MacAddress(std::bitset<48>(kBaseDstMac + i % kMacAddrSize));
@@ -177,7 +251,6 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
     const TestConfiguration& config, int index) {
   constexpr uint64_t kDefaultSrcIpUpper = 0x0001000200030004;
   constexpr uint64_t kDefaultDstIpUpper = 0x0002000300040005;
-  constexpr uint64_t kDefaultSrcMac = 123;
 
   packetlib::Packet packet;
   const auto& field = config.field;
@@ -185,11 +258,10 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
   EthernetHeader* eth = packet.add_headers()->mutable_ethernet_header();
 
   eth->set_ethernet_source(
-      netaddr::MacAddress(std::bitset<48>(kDefaultSrcMac)).ToString());
+      netaddr::MacAddress(std::bitset<48>(kBaseSrcMac)).ToString());
   if (field == PacketField::kEthernetSrc) {
     eth->set_ethernet_source(
-        netaddr::MacAddress(
-            std::bitset<48>(kDefaultSrcMac + index % kMacAddrSize))
+        netaddr::MacAddress(std::bitset<48>(kBaseSrcMac + index % kMacAddrSize))
             .ToString());
   }
   eth->set_ethernet_destination(
@@ -202,9 +274,13 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
   {
     uint8_t hop_limit = 32;
     // Avoid hop_limit of 0,1,2 to avoid drops.
-    if (field == PacketField::kHopLimit) hop_limit = 3 + (index % (256 - 3));
+    if (field == PacketField::kHopLimit)
+      hop_limit = 3 + (index % kHopLimitRange);
 
-    uint8_t dscp = index % static_cast<uint8_t>(1 << 6);
+    uint8_t dscp = 10;
+    if (field == PacketField::kDscp) {
+      dscp = index % static_cast<uint8_t>(1 << 6);
+    }
 
     int next_protocol = IPPROTO_UDP;
     if (config.encapped)
@@ -270,7 +346,7 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
     uint8_t inner_hop_limit = 33;
     // Avoid hop_limit of 0,1,2 to avoid drops.
     if (field == PacketField::kInnerHopLimit)
-      inner_hop_limit = 3 + (index % (256 - 3));
+      inner_hop_limit = 3 + (index % kHopLimitRange);
 
     uint8_t inner_dscp = index % static_cast<uint8_t>(1 << 6);
 
@@ -354,4 +430,4 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
   return packet;
 }
 
-}  // namespace pins
+} // namespace pins
