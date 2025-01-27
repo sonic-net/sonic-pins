@@ -23,9 +23,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/map.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -45,9 +46,8 @@ SymbolicTableMatch DefaultTableMatch(z3::context &z3_context);
 
 // Extract a concrete context by evaluating every component's corresponding
 // expression in the model.
-absl::StatusOr<ConcreteContext> ExtractFromModel(
-    const SymbolicContext &context, z3::model model,
-    const values::P4RuntimeTranslator &translator);
+absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
+                                                 const SolverState &state);
 
 // Merges two maps of table matches into a single map. A field in the returned
 // map has the value of `true_matches` if the condition is true, and the
@@ -76,6 +76,16 @@ absl::StatusOr<int> GetFieldBitwidth(absl::string_view header_name,
 
 // Returns the full valid field name of the given header.
 std::string GetHeaderValidityFieldName(absl::string_view header_name);
+
+// Returns the header field name of the match with the given `match_name` in the
+// given `table`.
+absl::StatusOr<std::string> GetFieldNameFromMatch(absl::string_view match_name,
+                                                  const ir::Table &table);
+
+// Returns the match field definition with the given `match_name` in the given
+// `table`.
+absl::StatusOr<pdpi::IrMatchFieldDefinition> GetMatchDefinition(
+    absl::string_view match_name, const ir::Table &table);
 
 }  // namespace util
 }  // namespace symbolic

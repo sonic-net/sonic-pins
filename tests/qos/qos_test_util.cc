@@ -1,5 +1,7 @@
 #include "tests/qos/qos_test_util.h"
 
+#include <array>
+
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -7,7 +9,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -15,7 +16,6 @@
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/utils/json_utils.h"
@@ -337,6 +337,18 @@ absl::Status SetSchedulerPolicyParameters(
   return absl::OkStatus();
 }
 
+absl::Status ReplaceCpuSchedulerPolicyParametersForAllQueues(
+    gnmi::gNMI::StubInterface &gnmi_stub, SchedulerParameters scheduler_param) {
+  ASSIGN_OR_RETURN(std::string scheduler_policy_name,
+                   GetSchedulerPolicyNameByEgressPort("CPU", gnmi_stub));
+  absl::flat_hash_map<std::string, SchedulerParameters> scheduler_params;
+  for (absl::string_view queue_name : kAllQueuesNames) {
+    scheduler_params[queue_name] = scheduler_param;
+  }
+  return SetSchedulerPolicyParameters(scheduler_policy_name, scheduler_params,
+                                      gnmi_stub);
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, int64_t>>
 GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
                                  gnmi::gNMI::StubInterface &gnmi) {
@@ -587,6 +599,88 @@ absl::Status SetBufferConfigParameters(
   //         << convergence_timeout << "; diff:\n"
   //         << config_state_diff;
   // }
+  return absl::OkStatus();
+}
+
+absl::Status DisablePuntRateLimits(gnmi::gNMI::StubInterface &gnmi_stub) {
+  // Effectively Disabling punt rate limiting on both control switch and SUT
+  // by setting both committed and peak information rate to 1 million pkt/s and
+  // both committed and excess burst rate to 1'000 pkts.
+  constexpr int64_t k1Million = 1'000'000;
+  constexpr int64_t k1Thousand = 1'000;
+  SchedulerParameters scheduler_params = SchedulerParameters{
+      .committed_information_rate = k1Million,
+      .committed_burst_size = k1Thousand,
+      .peak_information_rate = k1Million,
+      .excess_burst_size = k1Thousand,
+  };
+  RETURN_IF_ERROR(ReplaceCpuSchedulerPolicyParametersForAllQueues(
+      gnmi_stub, scheduler_params));
+  return absl::OkStatus();
+}
+
+absl::Status
+UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
+                                      int buffer_size) {
+  absl::flat_hash_map<std::string, BufferParameters>
+      buffer_config_by_queue_name;
+  for (absl::string_view queue_name : kAllQueuesNames) {
+    buffer_config_by_queue_name[queue_name] = BufferParameters{
+        .dedicated_buffer = 0,
+        .use_shared_buffer = true,
+        .shared_buffer_limit_type = "openconfig-qos:STATIC",
+        .dynamic_limit_scaling_factor = 0,
+        .shared_static_limit = buffer_size,
+    };
+  }
+  ASSIGN_OR_RETURN(const std::string buffer_profile_name,
+                   GetBufferAllocationProfileByEgressPort("CPU", gnmi_stub));
+  RETURN_IF_ERROR(SetBufferConfigParameters(
+      buffer_profile_name, buffer_config_by_queue_name, gnmi_stub));
+  return absl::OkStatus();
+}
+
+absl::Status
+EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
+                                      thinkit::MirrorTestbed &testbed) {
+  std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub;
+  switch (role) {
+  case SwitchRoleToDisablePuntFlowQoS::kSwitchUnderTest: {
+    ASSIGN_OR_RETURN(gnmi_stub, testbed.Sut().CreateGnmiStub());
+    break;
+  }
+  case SwitchRoleToDisablePuntFlowQoS::kControlSwitch: {
+    ASSIGN_OR_RETURN(gnmi_stub, testbed.ControlSwitch().CreateGnmiStub());
+    break;
+  }
+  }
+  std::string switch_role_name = SwtichRoleToDisableQoSToString(role);
+
+  ASSIGN_OR_RETURN(auto gnmi_config_before_qos_and_buffer_change,
+                   pins_test::GetGnmiConfig(*gnmi_stub));
+  RETURN_IF_ERROR(testbed.Environment().StoreTestArtifact(
+      absl::StrCat(switch_role_name,
+                   "_gnmi_config_before_qos_and_buffer_change.pb.txt"),
+      gnmi_config_before_qos_and_buffer_change));
+  RETURN_IF_ERROR(pins_test::DisablePuntRateLimits(*gnmi_stub));
+  LOG(INFO) << "Disabling punt rate limits complete for " << switch_role_name;
+
+  // The default buffer size for CPU on most switches is 18'432. We use 4x of
+  // the current value to prevent packet loss.
+  constexpr int kBufferSizeForCpuInBype = 18432 * 4;
+  RETURN_IF_ERROR(pins_test::UpdateBufferAllocationForAllCpuQueues(
+      *gnmi_stub, kBufferSizeForCpuInBype));
+
+  LOG(INFO) << "Update buffer allocation for all CPU queues complete for "
+            << switch_role_name << ". All CPU queues now have "
+            << kBufferSizeForCpuInBype << " bytes for their buffers.";
+
+  ASSIGN_OR_RETURN(auto gnmi_config_after_qos_and_buffer_change,
+                   pins_test::GetGnmiConfig(*gnmi_stub));
+  RETURN_IF_ERROR(testbed.Environment().StoreTestArtifact(
+      absl::StrCat(switch_role_name,
+                   "_gnmi_config_after_qos_and_buffer_change.pb.txt"),
+      gnmi_config_after_qos_and_buffer_change));
   return absl::OkStatus();
 }
 

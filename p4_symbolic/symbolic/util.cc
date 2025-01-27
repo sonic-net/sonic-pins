@@ -31,10 +31,12 @@
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/table_entry.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
@@ -120,45 +122,64 @@ SymbolicTableMatch DefaultTableMatch(z3::context &z3_context) {
   };
 }
 
-absl::StatusOr<ConcreteContext> ExtractFromModel(
-    const SymbolicContext &context, z3::model model,
-    const values::P4RuntimeTranslator &translator) {
+absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
+                                                 const SolverState &state) {
   // Extract ports.
-  std::string ingress_port = model.eval(context.ingress_port, true).to_string();
-  std::string egress_port = model.eval(context.egress_port, true).to_string();
+  std::string ingress_port =
+      model.eval(state.context.ingress_port, true).to_string();
+  std::string egress_port =
+      model.eval(state.context.egress_port, true).to_string();
 
   // Extract the ingress, parsed, and egress headers.
   ConcretePerPacketState ingress_headers;
-  for (const auto &[name, expr] : context.ingress_headers) {
+  for (const auto &[name, expr] : state.context.ingress_headers) {
     ASSIGN_OR_RETURN(auto translated_value,
                      values::TranslateZ3ValueStringToP4RT(
                          model.eval(expr, true).to_string(), name,
-                         /*type_name=*/std::nullopt, translator));
+                         /*type_name=*/std::nullopt, state.translator));
     ingress_headers[name] = std::move(translated_value.first);
   }
   ConcretePerPacketState parsed_headers;
-  for (const auto &[name, expr] : context.parsed_headers) {
+  for (const auto &[name, expr] : state.context.parsed_headers) {
     ASSIGN_OR_RETURN(auto translated_value,
                      values::TranslateZ3ValueStringToP4RT(
                          model.eval(expr, true).to_string(), name,
-                         /*type_name=*/std::nullopt, translator));
+                         /*type_name=*/std::nullopt, state.translator));
     parsed_headers[name] = std::move(translated_value.first);
   }
   ConcretePerPacketState egress_headers;
-  for (const auto &[name, expr] : context.egress_headers) {
+  for (const auto &[name, expr] : state.context.egress_headers) {
     ASSIGN_OR_RETURN(auto translated_value,
                      values::TranslateZ3ValueStringToP4RT(
                          model.eval(expr, true).to_string(), name,
-                         /*type_name=*/std::nullopt, translator));
+                         /*type_name=*/std::nullopt, state.translator));
     egress_headers[name] = std::move(translated_value.first);
   }
 
+  // Extract the table entries.
+  TableEntries concrete_entries;
+  for (const auto &[table_name, entries_per_table] :
+       state.context.table_entries) {
+    for (const TableEntry &entry : entries_per_table) {
+      if (entry.IsSymbolic()) {
+        ASSIGN_OR_RETURN(TableEntry concrete_entry,
+                         ExtractConcreteEntryFromModel(
+                             entry, model, state.program, state.translator,
+                             *state.context.z3_context));
+        concrete_entries[table_name].push_back(std::move(concrete_entry));
+      } else {
+        concrete_entries[table_name].push_back(entry);
+      }
+    }
+  }
+
   // Extract the trace (matches on every table).
-  ASSIGN_OR_RETURN(bool dropped, EvalZ3Bool(context.trace.dropped, model));
+  ASSIGN_OR_RETURN(bool dropped,
+                   EvalZ3Bool(state.context.trace.dropped, model));
   ASSIGN_OR_RETURN(bool got_cloned,
-                   EvalZ3Bool(context.trace.got_cloned, model));
+                   EvalZ3Bool(state.context.trace.got_cloned, model));
   absl::btree_map<std::string, ConcreteTableMatch> matched_entries;
-  for (const auto &[table, match] : context.trace.matched_entries) {
+  for (const auto &[table, match] : state.context.trace.matched_entries) {
     ASSIGN_OR_RETURN(bool matched, EvalZ3Bool(match.matched, model));
     ASSIGN_OR_RETURN(int entry_index, EvalZ3Int(match.entry_index, model));
     matched_entries[table] = ConcreteTableMatch{
@@ -168,14 +189,15 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
   }
 
   return ConcreteContext{
-      .ingress_port = ingress_port,
-      .egress_port = egress_port,
-      .ingress_headers = ingress_headers,
-      .parsed_headers = parsed_headers,
-      .egress_headers = egress_headers,
+      .ingress_port = std::move(ingress_port),
+      .egress_port = std::move(egress_port),
+      .ingress_headers = std::move(ingress_headers),
+      .parsed_headers = std::move(parsed_headers),
+      .egress_headers = std::move(egress_headers),
+      .table_entries = std::move(concrete_entries),
       .trace =
           ConcreteTrace{
-              .matched_entries = matched_entries,
+              .matched_entries = std::move(matched_entries),
               .dropped = dropped,
               .got_cloned = got_cloned,
           },
@@ -275,6 +297,40 @@ absl::StatusOr<int> GetFieldBitwidth(absl::string_view header_name,
 
 std::string GetHeaderValidityFieldName(absl::string_view header_name) {
   return absl::StrCat(header_name, ".", kValidPseudoField);
+}
+
+// Returns the header field name of the match with the given `match_name` in the
+// given `table`.
+absl::StatusOr<std::string> GetFieldNameFromMatch(absl::string_view match_name,
+                                                  const ir::Table &table) {
+  const auto &match_name_to_field =
+      table.table_implementation().match_name_to_field();
+  auto it = match_name_to_field.find(match_name);
+  if (it == match_name_to_field.end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Match '" << match_name
+           << "' not found in the implementation of table '"
+           << table.table_definition().preamble().name() << "'";
+  }
+  const ir::FieldValue &matched_field = it->second;
+  return absl::StrFormat("%s.%s", matched_field.header_name(),
+                         matched_field.field_name());
+}
+
+// Returns the match field definition with the given `match_name` in the given
+// `table`.
+absl::StatusOr<pdpi::IrMatchFieldDefinition> GetMatchDefinition(
+    absl::string_view match_name, const ir::Table &table) {
+  const auto &match_fields_by_name =
+      table.table_definition().match_fields_by_name();
+  auto it = match_fields_by_name.find(match_name);
+  if (it == match_fields_by_name.end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Match '" << match_name
+           << "' not found in the definition of table '"
+           << table.table_definition().preamble().name() << "'";
+  }
+  return it->second;
 }
 
 }  // namespace util

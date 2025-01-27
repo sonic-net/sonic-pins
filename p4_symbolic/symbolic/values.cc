@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/container/btree_set.h"
 #include "absl/numeric/bits.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -120,7 +121,7 @@ absl::StatusOr<z3::expr> FormatP4RTValue(
 }
 
 absl::StatusOr<std::pair<std::string, bool>> TranslateZ3ValueStringToP4RT(
-    const std::string &value, const std::string &field_name,
+    const std::string &value, const std::optional<std::string> &field_name,
     const std::optional<std::string> &type_name,
     const P4RuntimeTranslator &translator, std::optional<pdpi::Format> format) {
   // Use `type_name` as the default field type.
@@ -129,9 +130,11 @@ absl::StatusOr<std::pair<std::string, bool>> TranslateZ3ValueStringToP4RT(
 
   // If `field_name` is found in the mapping to P4Runtime translated field
   // types, use the field type based on the `field_name`.
-  if (auto it = translator.fields_p4runtime_type.find(field_name);
-      it != translator.fields_p4runtime_type.end()) {
-    field_type = it->second;
+  if (field_name.has_value() && !field_name->empty()) {
+    if (auto it = translator.fields_p4runtime_type.find(*field_name);
+        it != translator.fields_p4runtime_type.end()) {
+      field_type = it->second;
+    }
   }
 
   // Get the allocator based on the field type.
@@ -158,15 +161,16 @@ absl::StatusOr<std::pair<std::string, bool>> TranslateZ3ValueStringToP4RT(
   uint64_t int_value = Z3ValueStringToInt(value);
   ASSIGN_OR_RETURN(std::string p4rt_value, allocator.IdToString(int_value),
                    _.SetPrepend()
-                       << "Failed to translate dataplane value of field '"
-                       << field_name << "' to P4Runtime representation: ");
+                       << "Failed to translate dataplane value of type '"
+                       << field_type << "' to P4Runtime representation: ");
   return std::make_pair(p4rt_value, true);
 }
 
 absl::StatusOr<pdpi::IrValue> TranslateZ3ValueStringToIrValue(
-    const std::string &value, int bitwidth, const std::string &field_name,
-    const std::string &type_name, const P4RuntimeTranslator &translator,
-    const pdpi::Format &format) {
+    const std::string &value, int bitwidth,
+    const std::optional<std::string> &field_name,
+    const std::optional<std::string> &type_name,
+    const P4RuntimeTranslator &translator, const pdpi::Format &format) {
   ASSIGN_OR_RETURN(auto translated_value,
                    values::TranslateZ3ValueStringToP4RT(
                        value, field_name, type_name, translator, format));
@@ -250,6 +254,18 @@ absl::StatusOr<std::string> IdAllocator::IdToString(uint64_t value) const {
     return gutil::InternalErrorBuilder()
            << "Cannot translate bitvector '" << value << "' to a string value.";
   }
+}
+
+absl::btree_set<uint64_t> IdAllocator::GetAllocatedIds() const {
+  absl::btree_set<uint64_t> translated_ids;
+  for (const auto &[id, string_value] : id_to_string_map_) {
+    translated_ids.insert(id);
+  }
+  return translated_ids;
+}
+
+bool IdAllocator::IsDynamicAllocationEnabled() const {
+  return translation_data_.dynamic_translation;
 }
 
 }  // namespace values
