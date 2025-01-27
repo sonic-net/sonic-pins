@@ -17,7 +17,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "thinkit/generic_testbed.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 
 namespace pins_test {
 
@@ -50,52 +50,50 @@ class ComponentValidator {
   virtual ~ComponentValidator() = default;
 
   // Called before starting every NSF test.
-  virtual absl::Status OnInit(absl::string_view version,
-                              thinkit::GenericTestbed& testbed) {
+  virtual absl::Status OnInit(absl::string_view version, Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after programming flows on SUT.
   virtual absl::Status OnFlowProgram(absl::string_view version,
-                                     thinkit::GenericTestbed& testbed) {
+                                     Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after starting traffic from the Control Device or the Traffic
   // Generator in the testbed.
   virtual absl::Status OnStartTraffic(absl::string_view version,
-                                      thinkit::GenericTestbed& testbed) {
+                                      Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after an upgrade is performed on the SUT.
-  virtual absl::Status OnUpgrade(absl::string_view version,
-                                 thinkit::GenericTestbed& testbed) {
+  virtual absl::Status OnUpgrade(absl::string_view version, Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after a successful NSF reboot of the SUT.
   virtual absl::Status OnNsfReboot(absl::string_view version,
-                                   thinkit::GenericTestbed& testbed) {
+                                   Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after pushing config on the SUT.
   virtual absl::Status OnConfigPush(absl::string_view version,
-                                    thinkit::GenericTestbed& testbed) {
+                                    Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after stopping traffic from the Control Device or the Traffic
   // Generator in the testbed.
   virtual absl::Status OnStopTraffic(absl::string_view version,
-                                     thinkit::GenericTestbed& testbed) {
+                                     Testbed& testbed) {
     return absl::OkStatus();
   }
 
   // Called after clearing up flows from the SUT.
   virtual absl::Status OnFlowCleanup(absl::string_view version,
-                                     thinkit::GenericTestbed& testbed) {
+                                     Testbed& testbed) {
     return absl::OkStatus();
   }
 };
