@@ -28,7 +28,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
-#include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
@@ -224,19 +223,22 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(SolverState &state) {
   z3::check_result check_result = state.solver->check();
   switch (check_result) {
     case z3::unsat:
-    case z3::unknown:
+    case z3::unknown: {
       return absl::nullopt;
+    }
 
-    case z3::sat:
-      z3::model packet_model = state.solver->get_model();
+    case z3::sat: {
+      z3::model model = state.solver->get_model();
       ASSIGN_OR_RETURN(ConcreteContext result,
-                       util::ExtractFromModel(state.context, packet_model,
-                                              state.translator));
+                       util::ExtractFromModel(model, state));
       return result;
+    }
+
+    default: {
+      return gutil::InternalErrorBuilder()
+             << "Invalid Z3 check() result: " << check_result;
+    }
   }
-  LOG(DFATAL) << "invalid Z3 check() result: "
-              << static_cast<int>(check_result);
-  return absl::nullopt;
 }
 
 absl::StatusOr<std::optional<ConcreteContext>> Solve(

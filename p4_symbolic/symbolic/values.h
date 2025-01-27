@@ -143,7 +143,7 @@ absl::StatusOr<z3::expr> FormatP4RTValue(
 // for the actual translation. Otherwise (e.g., for action parameters or entry
 // field matches that provide a type name), `type_name` is used instead.
 absl::StatusOr<std::pair<std::string, bool>> TranslateZ3ValueStringToP4RT(
-    const std::string &value, const std::string &field_name,
+    const std::string &value, const std::optional<std::string> &field_name,
     const std::optional<std::string> &type_name,
     const P4RuntimeTranslator &translator,
     std::optional<pdpi::Format> format = std::nullopt);
@@ -158,9 +158,10 @@ absl::StatusOr<std::pair<std::string, bool>> TranslateZ3ValueStringToP4RT(
 // for the actual translation. Otherwise (e.g., for action parameters or entry
 // field matches that provide a type name), `type_name` is used instead.
 absl::StatusOr<pdpi::IrValue> TranslateZ3ValueStringToIrValue(
-    const std::string &value, int bitwidth, const std::string &field_name,
-    const std::string &type_name, const P4RuntimeTranslator &translator,
-    const pdpi::Format &format);
+    const std::string &value, int bitwidth,
+    const std::optional<std::string> &field_name,
+    const std::optional<std::string> &type_name,
+    const P4RuntimeTranslator &translator, const pdpi::Format &format);
 
 } // namespace values
 } // namespace symbolic
