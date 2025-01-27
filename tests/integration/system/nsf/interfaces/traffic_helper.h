@@ -16,7 +16,7 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_TRAFFIC_HELPER_H_
 
 #include "absl/status/status.h"
-#include "thinkit/generic_testbed.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 
 namespace pins_test {
 
@@ -28,15 +28,15 @@ class TrafficHelper {
 
   // Starts traffic with a predefined traffic configuration from a Control
   // Device or Traffic Generator in the testbed.
-  virtual absl::Status StartTraffic(thinkit::GenericTestbed& testbed) = 0;
+  virtual absl::Status StartTraffic(Testbed& testbed) = 0;
 
   // Stops traffic in the testbed.
-  virtual absl::Status StopTraffic(thinkit::GenericTestbed& testbed) = 0;
+  virtual absl::Status StopTraffic(Testbed& testbed) = 0;
 
   // Validates traffic in the testbed.
   // Needs to be called *after* `StopTraffic()` is called.
   virtual absl::Status ValidateTraffic(int error_percentage,
-                                       thinkit::GenericTestbed& testbed) = 0;
+                                       Testbed& testbed) = 0;
 };
 
 }  // namespace pins_test

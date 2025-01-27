@@ -31,10 +31,10 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "tests/integration/system/nsf/milestone.h"
 #include "tests/integration/system/nsf/util.h"
-#include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 
 ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
@@ -47,7 +47,7 @@ using ::p4::v1::ReadResponse;
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
 constexpr int kErrorPercentage = 1;
-constexpr absl::Duration kTrafficRunDuration = absl::Seconds(600);
+constexpr absl::Duration kTrafficRunDuration = absl::Minutes(15);
 
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
@@ -64,79 +64,76 @@ void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 // duplicate config push)
 absl::Status NsfUpgradeTest::NsfUpgrade(absl::string_view prev_version,
                                         absl::string_view version) {
-  thinkit::GenericTestbed& testbed =
-      *std::get<std::unique_ptr<thinkit::GenericTestbed>>(testbed_);
-
-  RETURN_IF_ERROR(ValidateSutState(prev_version, testbed, *ssh_client_));
+  RETURN_IF_ERROR(ValidateSutState(prev_version, testbed_, *ssh_client_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
                                      component_validators_, prev_version,
-                                     testbed));
+                                     testbed_));
   RETURN_IF_ERROR(CaptureDbState());
 
   // P4 Snapshot before programming flows and starting the traffic.
-  ReadResponse snapshot1 = TakeP4FlowSnapshot();
+  ReadResponse p4flow_snapshot1 = TakeP4FlowSnapshot();
 
   // Program all the flows.
-  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(testbed));
+  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(testbed_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowProgram,
                                      component_validators_, prev_version,
-                                     testbed));
+                                     testbed_));
 
-  RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed));
+  RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStartTraffic,
                                      component_validators_, prev_version,
-                                     testbed));
+                                     testbed_));
 
 
   // P4 Snapshot before Upgrade and NSF reboot.
-  ReadResponse snapshot2 = TakeP4FlowSnapshot();
+  ReadResponse p4flow_snapshot2 = TakeP4FlowSnapshot();
 
-  // Perform Upgrade
+  // Copy image to the switch for installation.
   RETURN_IF_ERROR(Upgrade(version));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnUpgrade,
-                                     component_validators_, version, testbed));
+                                     component_validators_, version, testbed_));
 
   // Perform NSF Reboot.
-  RETURN_IF_ERROR(NsfReboot(testbed, *ssh_client_));
-  RETURN_IF_ERROR(WaitForReboot(testbed, *ssh_client_));
+  RETURN_IF_ERROR(NsfReboot(testbed_, *ssh_client_));
+  RETURN_IF_ERROR(WaitForReboot(testbed_, *ssh_client_));
 
   // Perform validations after reboot is completed.
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
-                                     component_validators_, version, testbed));
-  RETURN_IF_ERROR(ValidateSutState(version, testbed, *ssh_client_));
+                                     component_validators_, version, testbed_));
+  RETURN_IF_ERROR(ValidateSutState(version, testbed_, *ssh_client_));
   RETURN_IF_ERROR(ValidateDbState());
 
   // P4 Snapshot after upgrade and NSF reboot.
-  ReadResponse snapshot3 = TakeP4FlowSnapshot();
+  ReadResponse p4flow_snapshot3 = TakeP4FlowSnapshot();
 
   // Push the new config and validate.
   RETURN_IF_ERROR(PushConfig(version));
-  RETURN_IF_ERROR(ValidateSutState(version, testbed, *ssh_client_));
+  RETURN_IF_ERROR(ValidateSutState(version, testbed_, *ssh_client_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
-                                     component_validators_, version, testbed));
+                                     component_validators_, version, testbed_));
 
   // Wait for transmission duration.
   LOG(INFO) << "Wait for " << kTrafficRunDuration << " for transmit completion";
   absl::SleepFor(kTrafficRunDuration);
 
   // Stop and validate traffic
-  RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed));
+  RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed_));
 
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, testbed));
+  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(kErrorPercentage, testbed_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
-                                     component_validators_, version, testbed));
+                                     component_validators_, version, testbed_));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
   // testbeds).
-  RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed));
+  RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed_));
 
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowCleanup,
-                                     component_validators_, version, testbed));
+                                     component_validators_, version, testbed_));
 
-  ReadResponse snapshot4 = TakeP4FlowSnapshot();
+  ReadResponse p4flow_snapshot4 = TakeP4FlowSnapshot();
 
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(snapshot1, snapshot4));
-  return CompareP4FlowSnapshots(snapshot2, snapshot3);
+  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
+  return CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3);
 }
 
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
