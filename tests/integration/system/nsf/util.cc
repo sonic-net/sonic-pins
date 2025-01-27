@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -36,8 +37,10 @@
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
@@ -196,30 +199,46 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
           },
           [&](std::unique_ptr<thinkit::MirrorTestbedInterface>& testbed)
               -> absl::StatusOr<Testbed> {
-            return absl::UnimplementedError(
-                "MirrorTestbedInterface not implemented");
+            return absl::UnimplementedError("MirrorTestbed not implemented");
           }},
       testbed_interface);
+}
+
+thinkit::Switch& GetSut(Testbed& testbed) {
+  return std::visit(
+      gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+                          -> thinkit::Switch& { return testbed->Sut(); },
+                      [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed)
+                          -> thinkit::Switch& { return testbed->Sut(); }},
+      testbed);
 }
 
 absl::Status InstallRebootPushConfig(absl::string_view version) {
   return absl::OkStatus();
 }
 
-absl::Status ValidateSutState(absl::string_view version,
-                              thinkit::GenericTestbed& testbed,
+absl::Status ValidateSutState(absl::string_view version, Testbed& testbed,
                               thinkit::SSHClient& ssh_client) {
-  return RunReadyValidations(testbed.Sut(), ssh_client,
-                             GetConnectedInterfacesForSut(testbed),
-                             /*check_interfaces_state=*/true,
-                             /*with_healthz=*/true);
+  return std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed) {
+            return RunReadyValidations(testbed->Sut(), ssh_client,
+                                       GetConnectedInterfacesForSut(*testbed),
+                                       /*check_interfaces_state=*/true,
+                                       /*with_healthz=*/true);
+          },
+          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed) {
+            // TODO: Implement RunReadyValidations for Mirror
+            // testbed scenario.
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed);
 }
 
 absl::Status ValidateComponents(
-    absl::Status (ComponentValidator::*validate)(absl::string_view,
-                                                 thinkit::GenericTestbed&),
+    absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed&),
     const absl::Span<const std::unique_ptr<ComponentValidator>> validators,
-    absl::string_view version, thinkit::GenericTestbed& testbed) {
+    absl::string_view version, Testbed& testbed) {
   for (const std::unique_ptr<ComponentValidator>& validator : validators) {
     RETURN_IF_ERROR((std::invoke(validate, validator, version, testbed)));
   }
@@ -228,10 +247,9 @@ absl::Status ValidateComponents(
 
 absl::Status Upgrade(absl::string_view version) { return absl::OkStatus(); }
 
-absl::Status NsfReboot(thinkit::GenericTestbed& testbed,
-                       thinkit::SSHClient& ssh_client) {
-  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub,
-                   testbed.Sut().CreateGnoiSystemStub());
+absl::Status NsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client) {
+  thinkit::Switch& sut = GetSut(testbed);
+  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
   gnoi::system::RebootRequest gnoi_request;
   gnoi_request.set_method(gnoi::system::RebootMethod::NSF);
   gnoi_request.set_message("Performing NSF Reboot");
@@ -242,14 +260,26 @@ absl::Status NsfReboot(thinkit::GenericTestbed& testbed,
       &grpc_context, gnoi_request, &gnoi_response));
 }
 
-absl::Status WaitForReboot(thinkit::GenericTestbed& testbed,
-                           thinkit::SSHClient& ssh_client) {
+absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client) {
   // Wait for switch to go down and come back up.
-  RETURN_IF_ERROR(WaitForSwitchState(testbed.Sut(), SwitchState::kDown,
-                                     kTurnDownTimeout, ssh_client));
+  thinkit::Switch& sut = GetSut(testbed);
 
-  return WaitForSwitchState(testbed.Sut(), SwitchState::kReady, kTurnUpTimeout,
-                            ssh_client, GetConnectedInterfacesForSut(testbed));
+  return std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> absl::Status {
+            RETURN_IF_ERROR(WaitForSwitchState(sut, SwitchState::kDown,
+                                               kTurnDownTimeout, ssh_client));
+
+            return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
+                                      ssh_client,
+                                      GetConnectedInterfacesForSut(*testbed));
+          },
+          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed)
+              -> absl::Status {
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed);
 }
 
 absl::Status PushConfig(absl::string_view version) { return absl::OkStatus(); }
@@ -261,8 +291,15 @@ absl::Status CompareP4FlowSnapshots(const ReadResponse& a,
   return absl::OkStatus();
 }
 
-absl::Status CaptureDbState() { return absl::OkStatus(); }
+absl::Status CaptureDbState() {
+  // TODO: Implement gNMI state path capture for comparison later.
+  return absl::OkStatus();
+}
 
-absl::Status ValidateDbState() { return absl::OkStatus(); }
+absl::Status ValidateDbState() {
+  // TODO: Implement gNMI state path validation for comparison of
+  // the various state paths before and after NSF Upgrade/Reboot.
+  return absl::OkStatus();
+}
 
 }  // namespace pins_test

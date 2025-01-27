@@ -163,6 +163,13 @@ absl::Status InitializeSymbolicActions(const TableEntry &entry,
                                        z3::solver &solver,
                                        values::P4RuntimeTranslator &translator);
 
+// Returns a concrete table entry extracted from the given `symbolic_entry`
+// based on the given `model` and `translator`.
+absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
+    const TableEntry &symbolic_entry, const z3::model &model,
+    const ir::P4Program &program, const values::P4RuntimeTranslator &translator,
+    z3::context &z3_context);
+
 }  // namespace p4_symbolic::symbolic
 
 #endif  // PINS_P4_SYMBOLIC_SYMBOLIC_TABLE_ENTRY_H_

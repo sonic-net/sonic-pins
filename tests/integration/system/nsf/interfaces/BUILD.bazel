@@ -20,20 +20,33 @@ package(
 )
 
 cc_library(
+    name = "testbed",
+    testonly = True,
+    hdrs = ["testbed.h"],
+    deps = [
+        "//thinkit:generic_testbed",
+        "//thinkit:generic_testbed_fixture",
+        "//thinkit:mirror_testbed",
+        "//thinkit:mirror_testbed_fixture",
+    ],
+)
+
+cc_library(
     name = "flow_programmer",
     testonly = True,
     hdrs = ["flow_programmer.h"],
     deps = [
-        "//thinkit:generic_testbed",
+        ":testbed",
         "@com_google_absl//absl/status",
     ],
 )
 
 cc_library(
     name = "traffic_helper",
+    testonly = True,
     hdrs = ["traffic_helper.h"],
     deps = [
-        "//thinkit:generic_testbed",
+        ":testbed",
         "@com_google_absl//absl/status",
     ],
 )
@@ -43,7 +56,7 @@ cc_library(
     testonly = True,
     hdrs = ["component_validator.h"],
     deps = [
-        "//thinkit:generic_testbed",
+        ":testbed",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
     ],
@@ -56,8 +69,8 @@ cc_library(
     deps = [
         ":component_validator",
         ":flow_programmer",
+        ":testbed",
         ":traffic_helper",
-        "//tests/integration/system/nsf:util",
         "//thinkit:ssh_client",
     ],
 )

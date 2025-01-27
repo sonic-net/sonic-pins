@@ -22,8 +22,8 @@
 
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
-#include "tests/integration/system/nsf/util.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {

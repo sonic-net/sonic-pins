@@ -16,17 +16,21 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
 
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/numeric/bits.h"
+#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -36,6 +40,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic::symbolic {
@@ -44,13 +49,56 @@ using MatchType = p4::config::v1::MatchField::MatchType;
 
 namespace {
 
-// A static mapping between the PI match type to the type string.
-const absl::flat_hash_map<MatchType, std::string> match_type_to_str = {
-    {MatchType::MatchField_MatchType_EXACT, "exact"},
-    {MatchType::MatchField_MatchType_LPM, "lpm"},
-    {MatchType::MatchField_MatchType_TERNARY, "ternary"},
-    {MatchType::MatchField_MatchType_OPTIONAL, "optional"},
-};
+// Evaluates and returns the PDPI IR value for the `bv_expr` of a match field.
+absl::StatusOr<pdpi::IrValue> EvalZ3BitvectorToIrValue(
+    const z3::expr &bv_expr, const z3::model &model,
+    const std::optional<std::string> &field_name, const std::string &type_name,
+    const pdpi::Format &format, const values::P4RuntimeTranslator &translator) {
+  int bitwidth = bv_expr.get_sort().bv_size();
+  const std::string value =
+      model.eval(bv_expr, /*model_completion=*/true).to_string();
+  return values::TranslateZ3ValueStringToIrValue(value, bitwidth, field_name,
+                                                 type_name, translator, format);
+}
+
+// Evaluates the given bit-vector and converts it to prefix length. Returns an
+// error if the evaluated value is not a valid prefix-length mask.
+absl::StatusOr<unsigned int> EvalZ3BitvectorToPrefixLength(
+    const z3::expr &bv_expr, const z3::model &model) {
+  // Check if the size of the bit-vector is within 128 bits.
+  size_t bitwidth = bv_expr.get_sort().bv_size();
+  if (bitwidth > 128) {
+    return gutil::UnimplementedErrorBuilder()
+           << "Only values representable with 128-bit unsigned integers are "
+              "currently supported for prefix lengths. Found bit-width: "
+           << bitwidth;
+  }
+
+  ASSIGN_OR_RETURN(absl::uint128 int_value,
+                   EvalZ3BitvectorToUInt128(bv_expr, model));
+
+  // Note that (uint128(1) << 128) != 0. Here we handle the corner case
+  // separately.
+  absl::uint128 mask;
+  if (bitwidth == 128) {
+    mask = absl::Uint128Max();
+  } else {
+    mask = (absl::uint128(1) << bitwidth) - 1;
+  }
+
+  // Check if `int_value` is of the form 1*0*.
+  if (((~int_value) & (~int_value + 1) & mask) != 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Bit-vector value '" << int_value
+           << "' is not a valid prefix length.";
+  }
+
+  absl::uint128 suffix = ~int_value & mask;
+  uint64_t low64 = absl::Uint128Low64(suffix);
+  uint64_t high64 = absl::Uint128High64(suffix);
+  int suffix_length = absl::bit_width(low64) + absl::bit_width(high64);
+  return bitwidth - suffix_length;
+}
 
 // Translates the given `value` read from the `match` of an entry in the given
 // `table` into a Z3 expression.
@@ -356,6 +404,14 @@ const pdpi::IrTableEntry &TableEntry::GetPdpiIrTableEntry() const {
 absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
     absl::string_view match_name, const ir::Table &table,
     const ir::P4Program &program) const {
+  // A static mapping between the PI match type to the type string.
+  static const absl::flat_hash_map<MatchType, std::string> match_type_to_str = {
+      {MatchType::MatchField_MatchType_EXACT, "exact"},
+      {MatchType::MatchField_MatchType_LPM, "lpm"},
+      {MatchType::MatchField_MatchType_TERNARY, "ternary"},
+      {MatchType::MatchField_MatchType_OPTIONAL, "optional"},
+  };
+
   // Check if the match exists in the table definition.
   if (!table.table_definition().match_fields_by_name().contains(match_name)) {
     return gutil::NotFoundErrorBuilder()
@@ -739,6 +795,183 @@ absl::Status InitializeSymbolicActions(
   }
 
   return absl::OkStatus();
+}
+
+// Returns a concrete table entry extracted from the given `symbolic_entry`
+// based on the given `model` and `translator`.
+absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
+    const TableEntry &entry, const z3::model &model,
+    const ir::P4Program &program, const values::P4RuntimeTranslator &translator,
+    z3::context &z3_context) {
+  if (entry.IsConcrete()) {
+    // Return the input entry if it is already concrete.
+    return entry;
+  } else if (!entry.IsSymbolic()) {
+    // Check if the input entry is symbolic.
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Attempting to extract from an entry that is neither concrete "
+              "nor symbolic.";
+  }
+
+  // Check if the table specified by the symbolic entry exists.
+  const std::string &table_name = entry.GetTableName();
+  auto it = program.tables().find(table_name);
+  if (it == program.tables().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Table '" << table_name << "' not found.";
+  }
+  const ir::Table &table = it->second;
+
+  // Get the symbolic sketch.
+  const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
+
+  // Construct the concrete IR entry.
+  // By assigning the symbolic sketch to the concrete IR entry, we keep things
+  // that are not under the control of P4-Symbolic intact (e.g., table_name,
+  // priority, meter_config, counter_data, meter_counter_data,
+  // controller_metadata).
+  ir::TableEntry ir_entry;
+  pdpi::IrTableEntry &pdpi_ir_entry = *ir_entry.mutable_concrete_entry();
+  pdpi_ir_entry = sketch;
+  pdpi_ir_entry.clear_matches();
+  pdpi_ir_entry.clear_action();
+  pdpi_ir_entry.clear_action_set();
+
+  // Set matches.
+  for (const pdpi::IrMatch &symbolic_match : sketch.matches()) {
+    bool wildcard = false;
+    pdpi::IrMatch concrete_match;
+
+    // Set match name.
+    const std::string &match_name = symbolic_match.name();
+    concrete_match.set_name(match_name);
+
+    // Evaluate and set match values.
+    ASSIGN_OR_RETURN(
+        SymbolicMatchVariables match_variables,
+        entry.GetMatchValues(match_name, table, program, z3_context));
+    ASSIGN_OR_RETURN(std::string field_name,
+                     util::GetFieldNameFromMatch(match_name, table));
+    ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_definition,
+                     util::GetMatchDefinition(match_name, table));
+    const std::string &type_name =
+        match_definition.match_field().type_name().name();
+    ASSIGN_OR_RETURN(pdpi::IrValue value,
+                     EvalZ3BitvectorToIrValue(
+                         match_variables.value, model, field_name, type_name,
+                         match_definition.format(), translator));
+
+    switch (match_variables.match_type) {
+      case MatchType::MatchField_MatchType_EXACT: {
+        *concrete_match.mutable_exact() = std::move(value);
+        break;
+      }
+      case MatchType::MatchField_MatchType_LPM: {
+        *concrete_match.mutable_lpm()->mutable_value() = std::move(value);
+        ASSIGN_OR_RETURN(int prefix_length, EvalZ3BitvectorToPrefixLength(
+                                                match_variables.mask, model));
+        concrete_match.mutable_lpm()->set_prefix_length(prefix_length);
+        if (prefix_length == 0) wildcard = true;
+        break;
+      }
+      case MatchType::MatchField_MatchType_TERNARY: {
+        ASSIGN_OR_RETURN(pdpi::IrValue mask,
+                         EvalZ3BitvectorToIrValue(
+                             match_variables.mask, model, field_name, type_name,
+                             match_definition.format(), translator));
+        *concrete_match.mutable_ternary()->mutable_value() = std::move(value);
+        *concrete_match.mutable_ternary()->mutable_mask() = std::move(mask);
+        ASSIGN_OR_RETURN(absl::uint128 mask_value,
+                         EvalZ3BitvectorToUInt128(match_variables.mask, model));
+        if (mask_value == 0) wildcard = true;
+        break;
+      }
+      case MatchType::MatchField_MatchType_OPTIONAL: {
+        *concrete_match.mutable_optional()->mutable_value() = std::move(value);
+        ASSIGN_OR_RETURN(int prefix_length, EvalZ3BitvectorToPrefixLength(
+                                                match_variables.mask, model));
+        const size_t bitwidth = match_variables.value.get_sort().bv_size();
+        if (prefix_length != 0 && prefix_length != bitwidth) {
+          return gutil::InternalErrorBuilder()
+                 << "The mask must be either all-1s or all-0s for optional "
+                    "matches. Found prefix length "
+                 << prefix_length;
+        }
+        if (prefix_length == 0) wildcard = true;
+        break;
+      }
+      default: {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Invalid match type, must be one of [exact, lpm, ternary, "
+                  "optional]. Found: "
+               << match_variables.match_type;
+      }
+    }
+
+    if (!wildcard) {
+      *pdpi_ir_entry.add_matches() = std::move(concrete_match);
+    }
+  }
+
+  // Check if the table is a WCMP table.
+  if (table.table_definition().has_action_profile_id()) {
+    return gutil::UnimplementedErrorBuilder()
+           << "Table entries with symbolic action sets are not supported "
+              "at the moment.";
+  }
+
+  // Set the invoked action of the entry.
+  std::optional<std::string> previous_action_applied;
+
+  for (const auto &action_ref : table.table_definition().entry_actions()) {
+    const std::string &action_name = action_ref.action().preamble().name();
+    ASSIGN_OR_RETURN(z3::expr action_invocation,
+                     entry.GetActionInvocation(action_name, table, z3_context));
+    ASSIGN_OR_RETURN(bool action_applied, EvalZ3Bool(action_invocation, model));
+    if (!action_applied) continue;
+
+    // Make sure only one action is applied for each entry.
+    if (previous_action_applied) {
+      return gutil::InternalErrorBuilder()
+             << "More than one action is applied for an entry in a non-WCMP "
+                "table: '"
+             << *previous_action_applied << "' and '" << action_name << "'";
+    }
+    previous_action_applied = action_name;
+
+    // Check and get the action in P4-Symbolic IR.
+    auto it = program.actions().find(action_name);
+    if (it == program.actions().end()) {
+      return gutil::NotFoundErrorBuilder()
+             << "Action '" << action_name << "' not found.";
+    }
+    const ir::Action &action = it->second;
+
+    // Set action name.
+    pdpi_ir_entry.mutable_action()->set_name(action_name);
+
+    // Set action parameters.
+    for (const auto &[param_name, param_definition] :
+         Ordered(action.action_definition().params_by_name())) {
+      // Set action parameter name.
+      pdpi::IrActionInvocation::IrActionParam &ir_param =
+          *pdpi_ir_entry.mutable_action()->add_params();
+      ir_param.set_name(param_name);
+      // Set action parameter value.
+      ASSIGN_OR_RETURN(
+          z3::expr param,
+          entry.GetActionParameter(param_name, action, table, z3_context));
+      ASSIGN_OR_RETURN(
+          pdpi::IrValue value,
+          EvalZ3BitvectorToIrValue(param, model, /*field_name=*/std::nullopt,
+                                   param_definition.param().type_name().name(),
+                                   param_definition.format(), translator));
+      *ir_param.mutable_value() = std::move(value);
+    }
+  }
+
+  // Build and return the concrete table entry.
+  return TableEntry(entry.GetIndex(), ir_entry);
 }
 
 }  // namespace p4_symbolic::symbolic

@@ -24,8 +24,8 @@ cc_library(
     testonly = True,
     hdrs = ["dvaas_helper.h"],
     deps = [
+        "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
-        "//thinkit:generic_testbed",
         "@com_google_absl//absl/status",
     ],
 )
@@ -36,10 +36,13 @@ cc_library(
     srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
     deps = [
+        "//gutil:overload",
         "//gutil:status",
         "//lib/utils:generic_testbed_utils",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
         "//thinkit:generic_testbed",
+        "//thinkit:mirror_testbed",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",

@@ -16,17 +16,16 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_TRAFFIC_HELPERS_OTG_HELPER_H_
 
 #include "absl/status/status.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
-#include "thinkit/generic_testbed.h"
 
 namespace pins_test {
 
 class OtgHelper : public TrafficHelper {
  public:
-  absl::Status StartTraffic(thinkit::GenericTestbed& testbed) override;
-  absl::Status StopTraffic(thinkit::GenericTestbed& testbed) override;
-  absl::Status ValidateTraffic(int error_margin,
-                               thinkit::GenericTestbed& testbed) override;
+  absl::Status StartTraffic(Testbed& testbed) override;
+  absl::Status StopTraffic(Testbed& testbed) override;
+  absl::Status ValidateTraffic(int error_margin, Testbed& testbed) override;
 };
 
 }  // namespace pins_test
