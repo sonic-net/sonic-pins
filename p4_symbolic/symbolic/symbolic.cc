@@ -121,6 +121,106 @@ absl::Status InitializeTableEntries(SolverState &state,
   return absl::OkStatus();
 }
 
+// Adds solver constraint to restrict the statically translated given `value` of
+// the given type `type_name` based on the valid values in the given
+// `translator`.
+void AddConstraintForStaticallyTranslatedValue(
+    const z3::expr &value, const std::string &type_name,
+    const values::P4RuntimeTranslator &translator, z3::context &z3_context,
+    z3::solver &solver) {
+  auto it = translator.p4runtime_translation_allocators.find(type_name);
+  if (it == translator.p4runtime_translation_allocators.end() ||
+      it->second.IsDynamicAllocationEnabled())
+    return;
+
+  z3::expr constraint = z3_context.bool_val(false);
+  for (const auto &valid_value : it->second.GetAllocatedIds()) {
+    constraint = constraint || (value == static_cast<int>(valid_value));
+  }
+  solver.add(constraint);
+}
+
+// Adds solver constraints to restrict the statically translated values (e.g.,
+// values of the type `port_id_t` in SAI-P4) to only the mapped values in the
+// translator.
+absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
+  // Restrict the value of all header fields with (purely static, i.e.
+  // dynamic_translation = false) P4Runtime translated types to what has been
+  // used in the translator.
+  for (const auto &[field, type] :
+       Ordered(state.translator.fields_p4runtime_type)) {
+    ASSIGN_OR_RETURN(z3::expr value, state.context.ingress_headers.Get(field));
+    AddConstraintForStaticallyTranslatedValue(value, type, state.translator,
+                                              *state.context.z3_context,
+                                              *state.solver);
+  }
+  // Restrict the symbolic variable value of all symbolic table entries with
+  // (purely static) P4Runtime translated types to what has been used in the
+  // translator.
+  for (const auto &[table_name, entries_per_table] :
+       state.context.table_entries) {
+    ASSIGN_OR_RETURN(const ir::Table *table,
+                     GetIrTable(state.program, table_name));
+    for (const TableEntry &entry : entries_per_table) {
+      if (!entry.IsSymbolic()) continue;
+      const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
+
+      // Constrain the symbolic variables for entry matches.
+      for (const pdpi::IrMatch &symbolic_match : sketch.matches()) {
+        const std::string &match_name = symbolic_match.name();
+        ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_definition,
+                         util::GetMatchDefinition(match_name, *table));
+        std::string type_name =
+            match_definition.match_field().type_name().name();
+        if (type_name.empty()) {
+          // If the match definition does not specify the type name, use the
+          // matched header field name to get the type name based on the
+          // translator mapping. This seems to happen for matches on locally
+          // defined variables.
+          ASSIGN_OR_RETURN(std::string field_name,
+                           util::GetFieldNameFromMatch(match_name, *table));
+          auto it = state.translator.fields_p4runtime_type.find(field_name);
+          if (it != state.translator.fields_p4runtime_type.end())
+            type_name = it->second;
+        }
+        ASSIGN_OR_RETURN(SymbolicMatchVariables match_variables,
+                         entry.GetMatchValues(match_name, *table, state.program,
+                                              *state.context.z3_context));
+        AddConstraintForStaticallyTranslatedValue(
+            match_variables.value, type_name, state.translator,
+            *state.context.z3_context, *state.solver);
+      }
+
+      // Constrain the symbolic variables for action parameters.
+      for (const auto &action_ref : table->table_definition().entry_actions()) {
+        const std::string &action_name = action_ref.action().preamble().name();
+
+        // Check and get the action in P4-Symbolic IR.
+        auto it = state.program.actions().find(action_name);
+        if (it == state.program.actions().end()) {
+          return gutil::NotFoundErrorBuilder()
+                 << "Action '" << action_name << "' not found.";
+        }
+        const ir::Action &action = it->second;
+
+        for (const auto &[param_name, param_definition] :
+             Ordered(action.action_definition().params_by_name())) {
+          const std::string &type_name =
+              param_definition.param().type_name().name();
+          ASSIGN_OR_RETURN(z3::expr param,
+                           entry.GetActionParameter(param_name, action, *table,
+                                                    *state.context.z3_context));
+          AddConstraintForStaticallyTranslatedValue(
+              param, type_name, state.translator, *state.context.z3_context,
+              *state.solver);
+        }
+      }
+    }
+  }
+
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 std::string SolverState::GetSolverSMT() {
@@ -165,24 +265,11 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
   // Evaluate the main program, assuming it conforms to V1 model.
   RETURN_IF_ERROR(v1model::EvaluateV1model(*state, physical_ports));
 
-  // Restrict the value of all fields with (purely static, i.e.
-  // dynamic_translation = false) P4RT translated types to what has been used in
-  // TranslationPerType. This should be done after the symbolic execution since
-  // P4Symbolic does not initially know which fields have translated types.
-  for (const auto &[field, type] :
-       Ordered(state->translator.fields_p4runtime_type)) {
-    if (auto it = translation_per_type.find(type);
-        it != translation_per_type.end() && !it->second.dynamic_translation) {
-      ASSIGN_OR_RETURN(z3::expr field_expr, context.ingress_headers.Get(field));
-      z3::expr constraint = context.z3_context->bool_val(false);
-      for (const auto &[string_value, numeric_value] :
-           it->second.static_mapping) {
-        constraint =
-            constraint || (field_expr == static_cast<int>(numeric_value));
-      }
-      state->solver->add(constraint);
-    }
-  }
+  // Restrict the symbolic variables of statically translated types to only the
+  // translated values. This should be done after the symbolic execution since
+  // P4-Symbolic does not initially know which header fields have translated
+  // types.
+  RETURN_IF_ERROR(AddConstraintsForStaticallyTranslatedValues(*state));
 
   // Restrict ports to the available physical ports.
   // TODO: Support generating packet-out packets from the CPU port.

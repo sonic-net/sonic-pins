@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
 #include "p4_pdpi/ir.pb.h"
 #include "z3++.h"
@@ -71,7 +72,13 @@ public:
   // which it was allocated.
   absl::StatusOr<std::string> IdToString(uint64_t value) const;
 
-private:
+  // Returns the set of translated IDs.
+  absl::btree_set<uint64_t> GetAllocatedIds() const;
+
+  // Returns whether dynamic allocation is enabled.
+  bool IsDynamicAllocationEnabled() const;
+
+ private:
   // A mapping from string values to bitvector values.
   std::unordered_map<std::string, uint64_t> string_to_id_map_;
 

@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/container/btree_set.h"
 #include "absl/numeric/bits.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -253,6 +254,18 @@ absl::StatusOr<std::string> IdAllocator::IdToString(uint64_t value) const {
     return gutil::InternalErrorBuilder()
            << "Cannot translate bitvector '" << value << "' to a string value.";
   }
+}
+
+absl::btree_set<uint64_t> IdAllocator::GetAllocatedIds() const {
+  absl::btree_set<uint64_t> translated_ids;
+  for (const auto &[id, string_value] : id_to_string_map_) {
+    translated_ids.insert(id);
+  }
+  return translated_ids;
+}
+
+bool IdAllocator::IsDynamicAllocationEnabled() const {
+  return translation_data_.dynamic_translation;
 }
 
 }  // namespace values
