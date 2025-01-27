@@ -13,7 +13,7 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
-#include "thinkit/generic_testbed.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 
 namespace pins_test {
@@ -23,6 +23,26 @@ namespace pins_test {
 // Empirically, for PINS, queue counters currently seem to get updated every
 // 10 seconds.
 constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(25);
+
+// TODO read the queue names from the switch instead of using
+// hand-coded names.
+constexpr std::array<absl::string_view, 8> kAllQueuesNames = {
+    "LLQ1", "LLQ2", "BE1", "AF1", "AF2", "AF3", "AF4", "NC1"};
+
+enum class SwitchRoleToDisablePuntFlowQoS {
+  kControlSwitch,
+  kSwitchUnderTest,
+};
+
+inline std::string
+SwtichRoleToDisableQoSToString(SwitchRoleToDisablePuntFlowQoS role) {
+  switch (role) {
+  case SwitchRoleToDisablePuntFlowQoS::kControlSwitch:
+    return "control_switch";
+  case SwitchRoleToDisablePuntFlowQoS::kSwitchUnderTest:
+    return "switch_under_test";
+  }
+}
 
 // These are the counters we track in these tests.
 struct QueueCounters {
@@ -129,6 +149,10 @@ absl::Status SetSchedulerPolicyParameters(
     gnmi::gNMI::StubInterface &gnmi,
     absl::Duration convergence_timeout = absl::Seconds(10));
 
+// Updates all CPU queues' scheduler policy parameters with `scheduler_params`.
+absl::Status UpdateSchedulerPolicyParametersForAllCpuQueues(
+    gnmi::gNMI::StubInterface &gnmi_stub, SchedulerParameters scheduler_params);
+
 // Reads the weights of all round-robin schedulers belonging to the given
 // scheduler policy from the state path, and returns them keyed by the name of
 // the queue they apply to.
@@ -203,6 +227,23 @@ absl::Status SetBufferConfigParameters(
     absl::flat_hash_map<std::string, BufferParameters> params_by_queue_name,
     gnmi::gNMI::StubInterface &gnmi,
     absl::Duration convergence_timeout = absl::Seconds(10));
+
+// Disables punt rate limits on all CPU queues for the switch `gnmi_stub`
+// connects to.
+absl::Status DisablePuntRateLimits(gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Updates buffer allocation profile for all CPU queues with `buffer_size` for
+// the switch `gnmi_stub` connects to.
+absl::Status
+UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
+                                      int buffer_size);
+
+// Disables QoS limits for punting for switch with `role`.
+// Scheduler policies and buffer allocation will be set to very high value to
+// effectively remove limits for punting.
+absl::Status
+EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
+                                      thinkit::MirrorTestbed &testbed);
 
 }  // namespace pins_test
 
