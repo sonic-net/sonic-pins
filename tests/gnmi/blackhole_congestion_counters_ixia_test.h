@@ -21,7 +21,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "lib/utils/generic_testbed_utils.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"

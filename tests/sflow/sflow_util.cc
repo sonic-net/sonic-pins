@@ -38,8 +38,8 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
-#include "p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
 #include "re2/re2.h"
 #include "thinkit/ssh_client.h"
 

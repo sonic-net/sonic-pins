@@ -28,7 +28,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_fuzzer/fuzzer.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 

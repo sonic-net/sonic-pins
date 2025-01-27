@@ -29,8 +29,8 @@
 #include "absl/types/optional.h"
 #include "gmpxx.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/string_encodings/bit_string.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
+#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 #include "z3++.h"
 #include "z3_api.h"
 

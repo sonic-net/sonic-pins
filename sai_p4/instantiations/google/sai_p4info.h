@@ -5,7 +5,7 @@
 
 #include "absl/status/statusor.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
 namespace sai {

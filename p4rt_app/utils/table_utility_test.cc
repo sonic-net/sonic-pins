@@ -22,8 +22,8 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"  // NOLINT
-#include "p4_pdpi/ir.pb.h"
+#include "gutil/gutil/status_matchers.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace p4rt_app {
 namespace {

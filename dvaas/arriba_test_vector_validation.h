@@ -25,7 +25,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 
 namespace dvaas {
 

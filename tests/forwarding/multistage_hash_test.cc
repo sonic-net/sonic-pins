@@ -29,9 +29,10 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/hash_statistics_util.h"

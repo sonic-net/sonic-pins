@@ -28,8 +28,8 @@
 #include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "thinkit/test_environment.h"
 
 namespace pins {

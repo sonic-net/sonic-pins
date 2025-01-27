@@ -142,12 +142,12 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
                                          << response.ShortDebugString();
   }
   // TODO Enable this check once p4rt app supports role.
-  // if (response.arbitration().role().name() != session->role_) {
-  //   return gutil::InternalErrorBuilder() << "Received role doesn't match: "
-  //                                        << response.ShortDebugString();
-  // }
-  // If we want to ensure that this session has become primary, then we check,
-  // returning the error that we get in the response otherwise.
+  //  if (response.arbitration().role().name() != session->role_) {
+  //    return gutil::InternalErrorBuilder() << "Received role doesn't match: "
+  //                                         << response.ShortDebugString();
+  //  }
+  //  If we want to ensure that this session has become primary, then we check,
+  //  returning the error that we get in the response otherwise.
   if (error_if_not_primary) {
     RETURN_IF_ERROR(gutil::ToAbslStatus(response.arbitration().status()))
             .SetPrepend()
@@ -271,6 +271,26 @@ P4RuntimeSession::GetForwardingPipelineConfig(
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
       stub_->GetForwardingPipelineConfig(&context, request, &response)));
   return response;
+}
+
+bool P4RuntimeSession::StreamChannelRead(
+    p4::v1::StreamMessageResponse& response,
+    std::optional<absl::Duration> timeout) {
+  absl::MutexLock lock(&stream_read_lock_);
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty() || !is_stream_up_;
+  };
+  if (timeout.has_value()) {
+    stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), *timeout);
+  } else {
+    stream_read_lock_.Await(absl::Condition(&cond));
+  }
+  if (!stream_messages_.empty()) {
+    response = stream_messages_.front();
+    stream_messages_.pop();
+    return true;
+  }
+  return false;
 }
 
 bool P4RuntimeSession::StreamChannelWrite(

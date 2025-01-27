@@ -18,7 +18,7 @@
 // P4InfoVerificationSchema objects.
 
 #include "absl/status/statusor.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.pb.h"
 
 namespace p4rt_app {

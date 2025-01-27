@@ -36,12 +36,12 @@
 #include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_pdpi/netaddr/mac_address.h"
-#include "p4_pdpi/packetlib/bit_widths.h"
-#include "p4_pdpi/packetlib/packetlib.h"
-#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
+#include "p4_infra/p4_pdpi/packetlib/bit_widths.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace pins_test {
 namespace packetgen {

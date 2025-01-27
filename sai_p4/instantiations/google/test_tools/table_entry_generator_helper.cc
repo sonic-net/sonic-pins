@@ -21,10 +21,10 @@
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 
 namespace sai {
 namespace {

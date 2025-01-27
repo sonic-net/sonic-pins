@@ -1,0 +1,153 @@
+load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+cc_library(
+    name = "byte_string",
+    srcs = ["byte_string.cc"],
+    hdrs = ["byte_string.h"],
+    deps = [
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "byte_string_test",
+    srcs = ["byte_string_test.cc"],
+    deps = [
+        ":byte_string",
+        ":safe",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "safe",
+    srcs = ["safe.cc"],
+    hdrs = ["safe.h"],
+)
+
+cc_library(
+    name = "bit_string",
+    srcs = ["bit_string.cc"],
+    hdrs = ["bit_string.h"],
+    deps = [
+        ":hex_string",
+        "//gutil/gutil:status",
+        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
+        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
+        "//p4_infra/p4_pdpi/netaddr:mac_address",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "bit_string_test",
+    srcs = ["bit_string_test.cc"],
+    deps = [
+        ":bit_string",
+        "//gutil/gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "readable_byte_string",
+    srcs = ["readable_byte_string.cc"],
+    hdrs = ["readable_byte_string.h"],
+    deps = [
+        ":bit_string",
+        ":hex_string",
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "readable_byte_string_test",
+    srcs = ["readable_byte_string_test.cc"],
+    deps = [
+        ":readable_byte_string",
+        "//gutil/gutil:status_matchers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "hex_string",
+    srcs = ["hex_string.cc"],
+    hdrs = ["hex_string.h"],
+    deps = [
+        "//p4_infra/p4_pdpi/string_encodings:byte_string",
+        "//p4_infra/p4_pdpi/string_encodings:safe",
+        "@com_google_absl//absl/log",
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "hex_string_test_runner",
+    srcs = ["hex_string_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":hex_string",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+cmd_diff_test(
+    name = "hex_string_test",
+    actual_cmd = "$(execpath :hex_string_test_runner)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:hex_string.expected",
+    tools = [
+        ":hex_string_test_runner",
+    ],
+)
+
+cc_library(
+    name = "decimal_string",
+    srcs = ["decimal_string.cc"],
+    hdrs = ["decimal_string.h"],
+    deps = [
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "decimal_string_test_runner",
+    srcs = ["decimal_string_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":decimal_string",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+cmd_diff_test(
+    name = "decimal_string_test",
+    actual_cmd = "$(execpath :decimal_string_test_runner)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:decimal_string.expected",
+    tools = [
+        ":decimal_string_test_runner",
+    ],
+)

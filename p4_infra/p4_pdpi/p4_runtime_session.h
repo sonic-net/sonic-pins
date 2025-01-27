@@ -21,7 +21,7 @@
 #include <optional>
 #include <queue>
 #include <string>
-#include <thread>  // NOLINT: third_party code.
+#include <thread>
 #include <vector>
 
 #include "absl/base/attributes.h"
@@ -211,7 +211,13 @@ class P4RuntimeSession {
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
-
+  // Thread-safe wrapper around the stream channel's `Read` method.
+  // It blocks until the stream message queue is non-empty, the
+  // stream channel is closed, or (if specified) the `timeout` is expired .
+  ABSL_MUST_USE_RESULT bool StreamChannelRead(
+      p4::v1::StreamMessageResponse& response,
+      std::optional<absl::Duration> timeout = std::nullopt)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
       const p4::v1::StreamMessageRequest& request)

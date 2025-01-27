@@ -23,7 +23,7 @@
 #include "absl/status/statusor.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "thinkit/generic_testbed.h"

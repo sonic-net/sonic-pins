@@ -18,7 +18,7 @@
 // This file contains common IrTableEntry definitions and generators for testing
 // against SAI P4 programs.
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace pins {
 

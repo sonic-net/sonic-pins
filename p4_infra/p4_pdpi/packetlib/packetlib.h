@@ -96,7 +96,7 @@ absl::StatusOr<std::string> RawSerializePacket(const Packet& packet);
 // or invalid.
 absl::StatusOr<bool> UpdateMissingComputedFields(Packet& packet);
 
-// Like `UpdateMissingComputedFields`, but also overwrites computed fields
+// Like `UpdateMissingComputedFields`, but also overwrites comuted fields
 // that are already present.
 absl::StatusOr<bool> UpdateAllComputedFields(Packet& packet);
 
@@ -148,7 +148,6 @@ absl::StatusOr<int> Ipv4HeaderChecksum(Ipv4Header header);
 // we are using tunnels (e.g. PSP).
 absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
                                                      int udp_header_index);
-
 // Computes the 16-bit ICMP checksum for the given `packet` and
 // `icmp_header_index`.
 // The header at the given index must be an ICMP header, and it must be preceded

@@ -20,7 +20,7 @@
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 

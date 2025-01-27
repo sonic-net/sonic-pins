@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package dvaas;
 
-import "p4_pdpi/ir.proto";
+import "p4_infra/p4_pdpi/ir.proto";
 
 // A proto representation of the trace of a packet through a P4 packet
 // processor.

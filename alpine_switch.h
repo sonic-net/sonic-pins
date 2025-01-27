@@ -3,13 +3,15 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "grpc/grpc.h"
 #include "grpcpp/support/channel_arguments.h"
 #include "lib/basic_switch.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+
 namespace pins_test {
 template <class CreateStubPolicy>
 class AlpineSwitch : public BasicSwitch<CreateStubPolicy> {

@@ -1,0 +1,438 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("//gutil/gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+p4_library(
+    name = "main_p4info",
+    src = "//p4_infra/p4_pdpi/testing/testdata:main.p4",
+    p4info_out = "main-p4info.pb.txt",
+)
+
+p4_pd_proto(
+    name = "main_p4_pd",
+    src = "main-p4info.pb.txt",
+    out = "main_p4_pd.proto",
+    format = False,
+    package = "pdpi",
+)
+
+# This P4Info is to be used for tests that require PD fields that may not be
+# present in the P4Info. In practice, this can happen if a unified P4Info
+# consisting of P4Infos for different roles is used to translate entries
+# to PD.
+p4_library(
+    name = "union_main_p4info",
+    src = "//p4_infra/p4_pdpi/testing/testdata:main.p4",
+    extra_args = "-DPDPI_EXTRA_MATCH_FIELD",
+    p4info_out = "union-main-p4info.pb.txt",
+)
+
+p4_pd_proto(
+    name = "union_main_p4_pd",
+    src = "union-main-p4info.pb.txt",
+    out = "union_main_p4_pd.proto",
+    format = False,
+    package = "pdpi",
+)
+
+proto_library(
+    name = "union_main_p4_pd_proto",
+    srcs = ["union_main_p4_pd.proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "union_main_p4_pd_cc_proto",
+    deps = [":union_main_p4_pd_proto"],
+)
+
+cc_library(
+    name = "test_p4info_cc",
+    srcs = ["test_p4info.cc"],
+    hdrs = ["test_p4info.h"],
+    deps = [
+        ":test_p4info_embed",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+# Auxiliary target, see go/totw/128.
+cc_embed_data(
+    name = "test_p4info_embed",
+    srcs = ["main-p4info.pb.txt"],
+    cc_file_output = "test_p4info_embed.cc",
+    cpp_namespace = "pdpi",
+    h_file_output = "test_p4info_embed.h",
+)
+
+proto_library(
+    name = "main_p4_pd_proto",
+    srcs = ["main_p4_pd.proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "main_p4_pd_cc_proto",
+    deps = [":main_p4_pd_proto"],
+)
+
+diff_test(
+    name = "main_pd_test",
+    actual = "main_p4_pd.proto",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:main_p4_pd.expected",
+)
+
+cc_library(
+    name = "test_helper",
+    testonly = True,
+    hdrs = ["test_helper.h"],
+    deps = [
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:translation_options",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "mock_p4_runtime_server",
+    testonly = True,
+    hdrs = ["mock_p4_runtime_server.h"],
+    deps = [
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "sequencing_test_runner",
+    srcs = ["sequencing_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_pdpi:sequencing",
+        "@com_github_p4lang_p4_constraints//gutils:status_matchers",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cmd_diff_test(
+    name = "sequencing_test",
+    actual_cmd = "$(execpath :sequencing_test_runner) $(location :main-p4info.pb.txt)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:sequencing.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":sequencing_test_runner",
+    ],
+)
+
+cc_test(
+    name = "sequencing_util_test_runner",
+    srcs = ["sequencing_util_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_pdpi:sequencing_util",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "sequencing_util_test",
+    actual_cmd = "$(execpath :sequencing_util_test_runner) ",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:sequencing_util.expected",
+    tools = [":sequencing_util_test_runner"],
+)
+
+cc_test(
+    name = "references_test_runner",
+    srcs = ["references_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_pdpi:references",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "references_test",
+    actual_cmd = "$(execpath :references_test_runner) ",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:references.expected",
+    tools = [":references_test_runner"],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "info_test_runner",
+    srcs = ["info_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":test_helper",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "info_test",
+    actual_cmd = "$(execpath :info_test_runner) $(location :main-p4info.pb.txt)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:info.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":info_test_runner",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "rpc_test_runner",
+    srcs = ["rpc_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_pdpi:translation_options",
+        "@com_google_absl//absl/log",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googleapis//google/rpc:status_cc_proto",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cmd_diff_test(
+    name = "rpc_test",
+    actual_cmd = "$(execpath :rpc_test_runner)  $(location :main-p4info.pb.txt)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:rpc.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":rpc_test_runner",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "packet_io_test_runner",
+    srcs = ["packet_io_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "@com_google_absl//absl/log",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "packet_io_test",
+    actual_cmd = "$(execpath :packet_io_test_runner) $(location :main-p4info.pb.txt)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:packet_io.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":packet_io_test_runner",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "table_entry_test_runner",
+    srcs = ["table_entry_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":test_helper",
+        ":union_main_p4_pd_cc_proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_pdpi:translation_options",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "table_entry_test",
+    actual_cmd = "$(execpath :table_entry_test_runner) $(location :main-p4info.pb.txt)",
+    expected = "//p4_infra/p4_pdpi/testing/testdata:table_entry.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":table_entry_test_runner",
+    ],
+)
+
+cc_test(
+    name = "helper_function_test",
+    srcs = ["helper_function_test.cc"],
+    deps = [
+        "main_p4_pd_cc_proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
+        "//p4_infra/p4_pdpi:pd",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "table_entry_gunit_test",
+    srcs = ["table_entry_gunit_test.cc"],
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_p4info_cc",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_pdpi:translation_options",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "mock_p4_runtime_server_test",
+    srcs = ["mock_p4_runtime_server_test.cc"],
+    deps = [
+        ":mock_p4_runtime_server",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

@@ -40,7 +40,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/sonic/packetio_interface.h"

@@ -47,11 +47,11 @@
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/names.h"
-#include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_pdpi/sequencing.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/names.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_pdpi/sequencing.h"
 #include "proto/gnmi/gnmi.pb.h"
 // TODO: A temporary dependence on SAI to mask a bug. Ideally, safe
 // to remove in April 2024.

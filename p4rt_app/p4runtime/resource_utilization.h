@@ -21,9 +21,9 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/entity_keys.h"
-#include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/entity_update.h"
+#include "p4_infra/p4_pdpi/entity_keys.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace p4rt_app {
 

@@ -4572,6 +4572,7 @@ payload: "ABCDABCDABCDABCDABCD"
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in PspHeader headers[3]: reserved0: Must be 0x0, but was 0x1 instead.
+- in PspHeader headers[3]: reserved1: Must be 0x1, but was 0x0 instead.
 
 PadPacketToMinimumSize(packet) = false
 
@@ -4579,3 +4580,4 @@ UpdateMissingComputedFields(packet) = false
 
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in PspHeader headers[3]: reserved0: Must be 0x0, but was 0x1 instead.
+- in PspHeader headers[3]: reserved1: Must be 0x1, but was 0x0 instead.

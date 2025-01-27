@@ -240,7 +240,7 @@ message PsampHeader {
 }
 
 // Precision Time Protocol header (RFC 1588-2008)
-// message PspHeader (https://github.com/google/psp)
+// message PspHeader
 message PspHeader {
   string next_header = 1;
   string header_ext_length = 2;

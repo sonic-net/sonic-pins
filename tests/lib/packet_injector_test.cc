@@ -24,9 +24,9 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/p4_runtime_session_mocking.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
 
 namespace pins_test {
 namespace {

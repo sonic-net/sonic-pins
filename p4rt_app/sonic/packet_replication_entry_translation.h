@@ -19,8 +19,8 @@
 
 #include "absl/status/statusor.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/rediscommand.h"
 

@@ -131,6 +131,7 @@ class NetworkAddress {
     return ToPaddedByteString() >= other.ToPaddedByteString();
   }
 
+  // Hashing (https://abseil.io/docs/cpp/guides/hash).
   template <typename H>
   friend H AbslHashValue(H h, const T& address) {
     return H::combine(std::move(h), address.bits_);

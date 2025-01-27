@@ -28,7 +28,6 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"

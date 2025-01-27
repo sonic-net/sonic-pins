@@ -25,8 +25,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/switch_state.h"
-#include "p4_pdpi/entity_keys.h"
-#include "p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/entity_keys.h"
+#include "p4_infra/p4_pdpi/ir.h"
 
 namespace p4_fuzzer {
 

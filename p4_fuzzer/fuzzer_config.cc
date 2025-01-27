@@ -16,10 +16,10 @@
 #include "gutil/gutil/status.h"
 #include "p4_constraints/ast.h"
 #include "p4_constraints/backend/constraint_info.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/ir_properties.h"
-#include "p4_pdpi/reference_annotations.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir_properties.h"
+#include "p4_infra/p4_pdpi/reference_annotations.h"
 
 namespace p4_fuzzer {
 namespace {

@@ -26,7 +26,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "tests/lib/switch_test_setup_helpers.h"

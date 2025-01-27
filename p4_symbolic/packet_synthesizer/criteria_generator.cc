@@ -23,7 +23,7 @@
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"

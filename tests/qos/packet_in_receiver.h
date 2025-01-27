@@ -5,7 +5,8 @@
 
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+
 namespace pins_test {
 
 // Packet receiver thread to receive punted packets from switch over a P4

@@ -19,7 +19,7 @@ package dvaas;
 import "dvaas/test_vector.proto";
 import "google/protobuf/any.proto";
 import "p4/config/v1/p4info.proto";
-import "p4_pdpi/ir.proto";
+import "p4_infra/p4_pdpi/ir.proto";
 
 message DvaasRegressionTestProto {
   PacketTestVector test_vector = 1;

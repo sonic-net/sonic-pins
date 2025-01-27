@@ -2331,6 +2331,30 @@ referenced_by_multicast_replica_table_entry {
 --- Unreachable entries from roots (output):
 referenced_by_multicast_replica_table_entry {
   match {
+    port: "port_1"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Not Garbage because of primary replica"
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_2"
+    instance: "0x0032"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Not Garbage because of backup replica"
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
     port: "port_12"
     instance: "0x0031"
   }

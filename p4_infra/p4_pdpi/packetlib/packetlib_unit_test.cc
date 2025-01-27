@@ -872,6 +872,7 @@ TEST(PacketLib,
   Packet parsed_packet =
       ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
   EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+
   EXPECT_THAT(parsed_packet, EqualsProto(packet));
 }
 

@@ -777,8 +777,6 @@ void Ipv6AddressInvalidReasons(absl::string_view address,
         field, ": invalid format: ", parsed_address.status().message()));
   }
 }
-
-// As described in https://datatracker.ietf.org/doc/html/rfc2460#section-4.2.
 void HopByHopOptionsInvalidOptionsAndPadding(
     absl::string_view options_and_padding, const std::string& error_prefix,
     std::vector<std::string>& output) {
@@ -805,7 +803,7 @@ void HopByHopOptionsInvalidOptionsAndPadding(
     }
     int option_data_length = static_cast<int>(byte_string->at(++i));
     // Option's data length exceeds the remaining bytes.
-    if (option_data_length > byte_string->size() - i) {
+    if (option_data_length >= byte_string->size() - i) {
       output.push_back(absl::StrCat(
           error_prefix, "expected data length exceeds the remaining bytes: ",
           option_data_length, " > ", byte_string->size() - i));
@@ -1143,7 +1141,6 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
       }
     }
   }
-
   // Check computed field: checksum.
   if (!checksum_invalid) {
     if (absl::StatusOr<std::optional<int>> checksum =
@@ -1607,15 +1604,13 @@ void PspHeaderInvalidReasons(const PspHeader& header,
                                   "reserved0: Must be 0x0, but was ",
                                   header.reserved0(), " instead."));
   }
-
-  // TODO: b/348412303 - enable once DVaaS handles invalid packets correctly.
-  // bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
-  //     header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
-  // if (!reserved1_invalid && header.reserved1() != "0x1") {
-  //   output.push_back(absl::StrCat(field_prefix,
-  //                                 "reserved1: Must be 0x1, but was ",
-  //                                 header.reserved1(), " instead."));
-  // }
+  bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
+      header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
+  if (!reserved1_invalid && header.reserved1() != "0x1") {
+    output.push_back(absl::StrCat(field_prefix,
+                                  "reserved1: Must be 0x1, but was ",
+                                  header.reserved1(), " instead."));
+  }
 }
 
 }  // namespace
@@ -2360,7 +2355,6 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           ASSIGN_OR_RETURN(std::optional<int> checksum,
                            UdpHeaderChecksum(packet, header_index),
                            _.SetPrepend() << error_prefix << "checksum: ");
-
           // If UdpHeaderChecksum returns a value then we will always use that
           // expected value. If it did not return a value that means the
           // checksum can be anything. So we take into consideration the current

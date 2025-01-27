@@ -41,7 +41,7 @@ class PacketlibParsingTest : public testing::Test {
   std::string ByteStringToTest() const {
     auto byte_string =
         pdpi::ReadableByteStringToByteString(readable_byte_string_);
-    CHECK_OK(byte_string);  // CRASH OK
+    CHECK_OK(byte_string.status());  // CRASH OK
     return *byte_string;
   }
 
@@ -72,7 +72,7 @@ TEST_F(PacketlibParsingTest, CanUpdateAndParseThePacket) {
   packet.clear_reason_not_fully_parsed();
   packet.clear_reasons_invalid();
 
-  LOG(INFO) << "Updated packet: " << packet;
+  LOG(INFO) << "Updated packet: " << packet.DebugString();
   EXPECT_OK(ValidatePacket(packet));
 }
 
@@ -104,7 +104,7 @@ TEST_F(PacketlibProtoPacketTest, UpdatedPacketIsAValid) {
   ASSERT_OK(PadPacketToMinimumSize(packet));
   ASSERT_OK(UpdateAllComputedFields(packet));
 
-  LOG(INFO) << "Updated packet: " << packet;
+  LOG(INFO) << "Updated packet: " << packet.DebugString();
   EXPECT_OK(ValidatePacket(packet));
 }
 

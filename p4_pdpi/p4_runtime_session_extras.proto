@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package pdpi;
-
-import "p4/v1/p4runtime.proto";
-
-message PiEntities {
-  repeated p4.v1.Entity entities = 1;
-}

@@ -14,7 +14,6 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
-
 #include <string>
 #include <thread>
 #include <vector>
@@ -32,7 +31,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
