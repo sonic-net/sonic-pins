@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Placeholder: load py_binary
 load("//p4_symbolic/bmv2:test.bzl", "bmv2_protobuf_parsing_test")
 
 package(

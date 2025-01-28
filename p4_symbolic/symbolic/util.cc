@@ -166,9 +166,12 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
                          ExtractConcreteEntryFromModel(
                              entry, model, state.program, state.translator,
                              *state.context.z3_context));
+        concrete_entry.ConvertToTableAndActionAliases(state.program);
         concrete_entries[table_name].push_back(std::move(concrete_entry));
       } else {
-        concrete_entries[table_name].push_back(entry);
+        TableEntry concrete_entry(entry);
+        concrete_entry.ConvertToTableAndActionAliases(state.program);
+        concrete_entries[table_name].push_back(std::move(concrete_entry));
       }
     }
   }
@@ -299,8 +302,6 @@ std::string GetHeaderValidityFieldName(absl::string_view header_name) {
   return absl::StrCat(header_name, ".", kValidPseudoField);
 }
 
-// Returns the header field name of the match with the given `match_name` in the
-// given `table`.
 absl::StatusOr<std::string> GetFieldNameFromMatch(absl::string_view match_name,
                                                   const ir::Table &table) {
   const auto &match_name_to_field =
@@ -317,8 +318,6 @@ absl::StatusOr<std::string> GetFieldNameFromMatch(absl::string_view match_name,
                          matched_field.field_name());
 }
 
-// Returns the match field definition with the given `match_name` in the given
-// `table`.
 absl::StatusOr<pdpi::IrMatchFieldDefinition> GetMatchDefinition(
     absl::string_view match_name, const ir::Table &table) {
   const auto &match_fields_by_name =
@@ -331,6 +330,16 @@ absl::StatusOr<pdpi::IrMatchFieldDefinition> GetMatchDefinition(
            << table.table_definition().preamble().name() << "'";
   }
   return it->second;
+}
+
+absl::StatusOr<const ir::Table *> GetIrTable(const ir::P4Program &program,
+                                             absl::string_view table_name) {
+  auto it = program.tables().find(table_name);
+  if (it == program.tables().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Table '" << table_name << "' not found";
+  }
+  return &it->second;
 }
 
 }  // namespace util

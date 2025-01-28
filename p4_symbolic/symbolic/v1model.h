@@ -24,9 +24,10 @@
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "z3++.h"
 
-namespace p4_symbolic {
-namespace symbolic {
-namespace v1model {
+namespace p4_symbolic::symbolic::v1model {
+
+// The bitwdith of the `standard_metadata.mcast_grp` field in V1Model.
+static constexpr int kMcastGrpBitwidth = 16;
 
 // Standard metadata header name.
 constexpr absl::string_view kStandardMetadataHeaderName = "standard_metadata";
@@ -56,8 +57,6 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
 absl::Status EvaluateV1model(SolverState &state,
                              const std::vector<int> &physical_ports);
 
-}  // namespace v1model
-}  // namespace symbolic
-}  // namespace p4_symbolic
+}  // namespace p4_symbolic::symbolic::v1model
 
 #endif  // P4_SYMBOLIC_SYMBOLIC_V1MODEL_H_

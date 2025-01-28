@@ -50,8 +50,15 @@ struct ActionContext {
 // appropriate function.
 absl::Status EvaluateStatement(const ir::Statement &statement,
                                SymbolicPerPacketState &headers,
-                               ActionContext *context, z3::context &z3_context,
+                               SolverState &state, ActionContext *context,
                                const z3::expr &guard);
+
+// Assigns the values of all header fields of the RHS header instance to the
+// corresponding header fields of the LHS header instance. Returns an error if
+// the headers have different header types.
+absl::Status EvaluateHeaderAssignmentStatement(
+    const ir::HeaderAssignmentStatement &statement,
+    SymbolicPerPacketState &headers, SolverState &state, const z3::expr &guard);
 
 // Constructs a symbolic expression for the assignment value, and either
 // constrains it in an enclosing assignment expression, or stores it in

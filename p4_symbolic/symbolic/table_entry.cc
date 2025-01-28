@@ -132,8 +132,8 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
   switch (variables.match_type) {
     case p4::config::v1::MatchField::EXACT: {
       // For exact matches, the mask bit-vector must be all-1s.
-      int bitwidth = variables.mask.get_sort().bv_size();
-      z3::expr all_ones = z3_context.bv_val((1UL << bitwidth) - 1, bitwidth);
+      unsigned int bitwidth = variables.mask.get_sort().bv_size();
+      z3::expr all_ones = z3_context.bv_val(1, 1).repeat(bitwidth);
       ASSIGN_OR_RETURN(z3::expr mask_constraint,
                        operators::Eq(variables.mask, all_ones));
       solver.add(mask_constraint);
@@ -142,7 +142,7 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
     case p4::config::v1::MatchField::LPM: {
       // For LPM matches, the mask bit-vector must comply with the LPM format.
       // I.e. (~lpm_mask) & (~lpm_mask + 1) == 0
-      int bitwidth = variables.mask.get_sort().bv_size();
+      unsigned int bitwidth = variables.mask.get_sort().bv_size();
       ASSIGN_OR_RETURN(z3::expr negated_mask,
                        operators::BitNeg(variables.mask));
       ASSIGN_OR_RETURN(
@@ -158,8 +158,8 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
     case p4::config::v1::MatchField::OPTIONAL: {
       // For optional matches, the mask bit-vector must be either all-1s
       // (present) or all-0s (don't-care).
-      int bitwidth = variables.mask.get_sort().bv_size();
-      z3::expr all_ones = z3_context.bv_val((1UL << bitwidth) - 1, bitwidth);
+      unsigned int bitwidth = variables.mask.get_sort().bv_size();
+      z3::expr all_ones = z3_context.bv_val(1, 1).repeat(bitwidth);
       z3::expr all_zeroes = z3_context.bv_val(0, bitwidth);
       ASSIGN_OR_RETURN(z3::expr mask_is_all_ones,
                        operators::Eq(variables.mask, all_ones));
@@ -653,6 +653,44 @@ absl::StatusOr<z3::expr> TableEntry::GetActionParameter(
                              action_param.bitwidth);
 }
 
+void TableEntry::ConvertToTableAndActionAliases(const ir::P4Program &program) {
+  // Check if the table specified by the table name exists.
+  const std::string &table_name = GetTableName();
+  auto it = program.tables().find(table_name);
+  // If the table cannot be found with the table name, it may have been
+  // converted to the alias already.
+  if (it == program.tables().end()) return;
+  const ir::Table &table = it->second;
+
+  pdpi::IrTableEntry &pdpi_ir_entry =
+      IsConcrete() ? *ir_entry_.mutable_concrete_entry()
+                   : *ir_entry_.mutable_symbolic_entry()->mutable_sketch();
+
+  // Set table name that is compatible with PDPI.
+  pdpi_ir_entry.set_table_name(table.table_definition().preamble().alias());
+
+  // Set action name that is compatible with PDPI.
+  auto convert_action_name = [&program](
+                                 pdpi::IrActionInvocation &action_invocation) {
+    const std::string &action_name = action_invocation.name();
+    auto it = program.actions().find(action_name);
+    // If the action cannot be found with the action name, it may have been
+    // converted to the alias already.
+    if (it == program.actions().end()) return;
+    const ir::Action &action = it->second;
+    action_invocation.set_name(action.action_definition().preamble().alias());
+  };
+
+  if (pdpi_ir_entry.has_action()) {
+    convert_action_name(*pdpi_ir_entry.mutable_action());
+  } else if (pdpi_ir_entry.has_action_set()) {
+    for (pdpi::IrActionSetInvocation &action :
+         *pdpi_ir_entry.mutable_action_set()->mutable_actions()) {
+      convert_action_name(*action.mutable_action());
+    }
+  }
+}
+
 absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
     const ir::Table &table, int priority, std::optional<size_t> prefix_length) {
   // Build a symbolic table entry in P4-Symbolic IR.
@@ -815,12 +853,8 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
 
   // Check if the table specified by the symbolic entry exists.
   const std::string &table_name = entry.GetTableName();
-  auto it = program.tables().find(table_name);
-  if (it == program.tables().end()) {
-    return gutil::NotFoundErrorBuilder()
-           << "Table '" << table_name << "' not found.";
-  }
-  const ir::Table &table = it->second;
+  ASSIGN_OR_RETURN(const ir::Table *table,
+                   util::GetIrTable(program, table_name));
 
   // Get the symbolic sketch.
   const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
@@ -849,11 +883,11 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
     // Evaluate and set match values.
     ASSIGN_OR_RETURN(
         SymbolicMatchVariables match_variables,
-        entry.GetMatchValues(match_name, table, program, z3_context));
+        entry.GetMatchValues(match_name, *table, program, z3_context));
     ASSIGN_OR_RETURN(std::string field_name,
-                     util::GetFieldNameFromMatch(match_name, table));
+                     util::GetFieldNameFromMatch(match_name, *table));
     ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_definition,
-                     util::GetMatchDefinition(match_name, table));
+                     util::GetMatchDefinition(match_name, *table));
     const std::string &type_name =
         match_definition.match_field().type_name().name();
     ASSIGN_OR_RETURN(pdpi::IrValue value,
@@ -914,7 +948,7 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
   }
 
   // Check if the table is a WCMP table.
-  if (table.table_definition().has_action_profile_id()) {
+  if (table->table_definition().has_action_profile_id()) {
     return gutil::UnimplementedErrorBuilder()
            << "Table entries with symbolic action sets are not supported "
               "at the moment.";
@@ -923,10 +957,11 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
   // Set the invoked action of the entry.
   std::optional<std::string> previous_action_applied;
 
-  for (const auto &action_ref : table.table_definition().entry_actions()) {
+  for (const auto &action_ref : table->table_definition().entry_actions()) {
     const std::string &action_name = action_ref.action().preamble().name();
-    ASSIGN_OR_RETURN(z3::expr action_invocation,
-                     entry.GetActionInvocation(action_name, table, z3_context));
+    ASSIGN_OR_RETURN(
+        z3::expr action_invocation,
+        entry.GetActionInvocation(action_name, *table, z3_context));
     ASSIGN_OR_RETURN(bool action_applied, EvalZ3Bool(action_invocation, model));
     if (!action_applied) continue;
 
@@ -960,7 +995,7 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
       // Set action parameter value.
       ASSIGN_OR_RETURN(
           z3::expr param,
-          entry.GetActionParameter(param_name, action, table, z3_context));
+          entry.GetActionParameter(param_name, action, *table, z3_context));
       ASSIGN_OR_RETURN(
           pdpi::IrValue value,
           EvalZ3BitvectorToIrValue(param, model, /*field_name=*/std::nullopt,
