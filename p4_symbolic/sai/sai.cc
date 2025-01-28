@@ -30,8 +30,13 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "gutil/status.h"
+#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
@@ -146,6 +151,176 @@ absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
                        ingress_port_field_name,
                        /*type_name=*/std::nullopt, solver_state.translator));
   return translated_value.first;
+}
+
+absl::Status AddConstraintsForP4ConstraintsAnnotations(
+    symbolic::SolverState &state) {
+  RETURN_IF_ERROR(AddConstraintsToForbidVrfZero(state));
+  RETURN_IF_ERROR(AddConstraintsForAclPreIngressTable(state));
+  return absl::OkStatus();
+}
+
+absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState &state) {
+  // Restrict the values of all header fields with type `vrf_id_t` to non-zero.
+  for (const auto &[field_name, type_name] :
+       Ordered(state.translator.fields_p4runtime_type)) {
+    if (type_name == kVrfIdTypeName) {
+      ASSIGN_OR_RETURN(z3::expr value,
+                       state.context.ingress_headers.Get(field_name));
+      state.solver->add(value != 0);
+    }
+  }
+
+  // Restrict the values of all symbolic variables of type `vrf_id_t` in table
+  // entries to non-zero.
+  for (const auto &[table_name, entries_per_table] :
+       state.context.table_entries) {
+    ASSIGN_OR_RETURN(const ir::Table *table,
+                     symbolic::util::GetIrTable(state.program, table_name));
+    for (const symbolic::TableEntry &entry : entries_per_table) {
+      if (!entry.IsSymbolic()) continue;
+      const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
+
+      // Constrain the symbolic variables for entry matches.
+      for (const pdpi::IrMatch &symbolic_match : sketch.matches()) {
+        const std::string &match_name = symbolic_match.name();
+        ASSIGN_OR_RETURN(
+            pdpi::IrMatchFieldDefinition match_definition,
+            symbolic::util::GetMatchDefinition(match_name, *table));
+        // Get the match field type name.
+        std::string type_name =
+            match_definition.match_field().type_name().name();
+        // If the match field type is not populated in the match definition, get
+        // the type name based on the matched field name if the matched field is
+        // a translated type.
+        if (type_name.empty()) {
+          ASSIGN_OR_RETURN(
+              std::string field_name,
+              symbolic::util::GetFieldNameFromMatch(match_name, *table));
+          auto it = state.translator.fields_p4runtime_type.find(field_name);
+          if (it != state.translator.fields_p4runtime_type.end())
+            type_name = it->second;
+        }
+
+        if (type_name == kVrfIdTypeName) {
+          ASSIGN_OR_RETURN(
+              symbolic::SymbolicMatchVariables match_variables,
+              entry.GetMatchValues(match_name, *table, state.program,
+                                   *state.context.z3_context));
+          state.solver->add(match_variables.value != 0);
+        }
+      }
+
+      // Constrain the symbolic variables for action parameters.
+      for (const auto &action_ref : table->table_definition().entry_actions()) {
+        const std::string &action_name = action_ref.action().preamble().name();
+
+        // Check and get the action in P4-Symbolic IR.
+        auto it = state.program.actions().find(action_name);
+        if (it == state.program.actions().end()) {
+          return gutil::NotFoundErrorBuilder()
+                 << "Action '" << action_name << "' not found.";
+        }
+        const ir::Action &action = it->second;
+
+        for (const auto &[param_name, param_definition] :
+             Ordered(action.action_definition().params_by_name())) {
+          const std::string &type_name =
+              param_definition.param().type_name().name();
+
+          if (type_name == kVrfIdTypeName) {
+            ASSIGN_OR_RETURN(z3::expr param, entry.GetActionParameter(
+                                                 param_name, action, *table,
+                                                 *state.context.z3_context));
+            state.solver->add(param != 0);
+          }
+        }
+      }
+    }
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState &state) {
+  constexpr absl::string_view kAclPreIngressTableName =
+      "ingress.acl_pre_ingress.acl_pre_ingress_table";
+  auto it = state.context.table_entries.find(kAclPreIngressTableName);
+  if (it == state.context.table_entries.end()) {
+    return absl::OkStatus();
+  }
+
+  ASSIGN_OR_RETURN(
+      const ir::Table *table,
+      symbolic::util::GetIrTable(state.program, kAclPreIngressTableName));
+
+  for (const auto &entry : it->second) {
+    if (!entry.IsSymbolic()) continue;
+    z3::expr_vector constraints(*state.context.z3_context);
+
+    // Obtain symbolic variables.
+    ASSIGN_OR_RETURN(auto dscp,
+                     entry.GetMatchValues("dscp", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto dst_ip,
+                     entry.GetMatchValues("dst_ip", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto dst_ipv6,
+                     entry.GetMatchValues("dst_ipv6", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto ecn,
+                     entry.GetMatchValues("ecn", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto in_port,
+                     entry.GetMatchValues("in_port", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto is_ip,
+                     entry.GetMatchValues("is_ip", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto is_ipv4,
+                     entry.GetMatchValues("is_ipv4", *table, state.program,
+                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto is_ipv6,
+                     entry.GetMatchValues("is_ipv6", *table, state.program,
+                                          *state.context.z3_context));
+
+    // dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    constraints.push_back(
+        dscp.mask == 0 ||
+        (is_ip.value == 1 || is_ipv4.value == 1 || is_ipv6.value == 1));
+    // ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    constraints.push_back(
+        ecn.mask == 0 ||
+        (is_ip.value == 1 || is_ipv4.value == 1 || is_ipv6.value == 1));
+    // dst_ip::mask != 0 -> is_ipv4 == 1;
+    constraints.push_back(dst_ip.mask == 0 || is_ipv4.value == 1);
+    // dst_ipv6::mask != 0 -> is_ipv6 == 1;
+    constraints.push_back(dst_ipv6.mask == 0 || is_ipv6.value == 1);
+    // is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    constraints.push_back(is_ip.mask == 0 ||
+                          (is_ipv4.mask == 0 && is_ipv6.mask == 0));
+    // is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    constraints.push_back(is_ipv4.mask == 0 ||
+                          (is_ip.mask == 0 && is_ipv6.mask == 0));
+    // is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    constraints.push_back(is_ipv6.mask == 0 ||
+                          (is_ip.mask == 0 && is_ipv4.mask == 0));
+    // is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    constraints.push_back(is_ipv4.mask == 0 || is_ipv4.value == 1);
+    // is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    constraints.push_back(is_ipv6.mask == 0 || is_ipv6.value == 1);
+    // ::priority < 0x7fffffff;
+    if (entry.GetPdpiIrTableEntry().priority() >= 0x7fffffff) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Invalid priority '" << entry.GetPdpiIrTableEntry().priority()
+             << "' for entry #" << entry.GetIndex() << " in table "
+             << kAclPreIngressTableName;
+    }
+
+    state.solver->add(constraints);
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace p4_symbolic

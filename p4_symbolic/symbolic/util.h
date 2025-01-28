@@ -87,6 +87,12 @@ absl::StatusOr<std::string> GetFieldNameFromMatch(absl::string_view match_name,
 absl::StatusOr<pdpi::IrMatchFieldDefinition> GetMatchDefinition(
     absl::string_view match_name, const ir::Table &table);
 
+// Returns a pointer to the P4-Symbolic IR table with the given `table_name`
+// from the `program` IR. The returned pointer would not be null when the status
+// is ok.
+absl::StatusOr<const ir::Table *> GetIrTable(const ir::P4Program &program,
+                                             absl::string_view table_name);
+
 }  // namespace util
 }  // namespace symbolic
 }  // namespace p4_symbolic

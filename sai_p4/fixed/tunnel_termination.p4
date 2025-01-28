@@ -78,20 +78,12 @@ control tunnel_termination(inout headers_t headers,
       headers.ipv6.setInvalid();
       if (headers.inner_ipv4.isValid()) {
         headers.ethernet.ether_type = ETHERTYPE_IPV4;
-        // TODO: Support header assignment in
-        // p4-symbolic and remove this guard.
-#ifndef PLATFORM_P4SYMBOLIC
         headers.ipv4 = headers.inner_ipv4;
-#endif
         headers.inner_ipv4.setInvalid();
       }
       if (headers.inner_ipv6.isValid()) {
         headers.ethernet.ether_type = ETHERTYPE_IPV6;
-        // TODO: Support header assignment in
-        // p4-symbolic and remove this guard.
-#ifndef PLATFORM_P4SYMBOLIC
         headers.ipv6 = headers.inner_ipv6;
-#endif
         headers.inner_ipv6.setInvalid();
       }
     }
