@@ -36,6 +36,7 @@
 #include "p4_symbolic/deparser.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 #include "p4_symbolic/packet_synthesizer/util.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -184,6 +185,15 @@ absl::Status AddConstraintsForInputPacketHeader(const HeaderCriteria& criteria,
   return absl::OkStatus();
 }
 
+// Adds logical assertions corresponding to the given `criteria` (for packet
+// ingress port) to `solver_state`.
+absl::Status AddConstraintsForIngressPort(const PortCriteria& criteria,
+                                          SolverState& solver_state) {
+  solver_state.solver->add(solver_state.context.ingress_port ==
+                           criteria.v1model_port());
+  return absl::OkStatus();
+}
+
 // The following functions add logical assertions to the current solver state
 // corresponding to the given `criteria`.
 absl::Status AddConstraints(const OutputCriteria& criteria,
@@ -282,9 +292,13 @@ absl::Status PacketSynthesizer::PushSolverFrame() {
 }
 
 absl::Status PacketSynthesizer::PopSolverFrames(int n) {
-  if (n < 1) {
+  if (n < 0) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Expected positive number of frames, got ", n));
+        absl::StrCat("Expected non-negative number of frames to pop, got ", n));
+  }
+  if (n == 0) {
+    LOG(WARNING)
+        << "Received duplicate consecutive requests, popping 0 frames.";
   }
 
   for (int i = 0; i < n; i++) {
@@ -328,9 +342,15 @@ absl::Status PacketSynthesizer::AddFrameForCriteria(
         return AddConstraints(criteria.table_entry_reachability_criteria(),
                               solver_state_);
       break;
+    case CriteriaVariant::kIngressPortCriteria:
+      if (criteria.has_ingress_port_criteria())
+        return AddConstraintsForIngressPort(criteria.ingress_port_criteria(),
+                                            solver_state_);
+      break;
     default:
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unsupported criteria case " << criteria.ShortDebugString();
+              << "Unsupported criteria case " << criteria_case << " for "
+             << criteria.ShortDebugString();
   }
 
   return absl::OkStatus();

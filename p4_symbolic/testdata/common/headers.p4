@@ -160,16 +160,7 @@ header gre_t {
 // The field list numbers used in @field_list annotations to identify the fields
 // that need to be preserved during clone/recirculation/etc. operations.
 enum bit<8> PreservedFieldList {
-  CLONE_I2E_MIRRORING = 8w1,
-  // We implement packet-in in SAI P4 by using the replication engine to make a
-  // clone of the punted packet and then send the clone to the controller. But
-  // the standard metadata of the packet clone will be empty, that's a problem
-  // because the controller needs to know the ingress port and expected egress
-  // port of the punted packet. To solve this problem, we save the targeted
-  // egress port and ingress port of the punted packet in local metadata and use
-  // clone_preserving_field_list to preserve these local metadata fields when
-  // cloning the punted packet.
-  CLONE_I2E_PACKET_IN = 8w2
+  MIRROR_AND_PACKET_IN_COPY= 8w1
 };
 
 // -- Translated Types ---------------------------------------------------------

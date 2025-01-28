@@ -107,12 +107,6 @@ absl::Status InitializeStandardMetadata(const ir::P4Program &program,
 absl::Status CheckPhysicalPortsConformanceToV1Model(
     const std::vector<int> &physical_ports) {
   for (const int port : physical_ports) {
-    if (port == kDropPort) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "cannot use physical port " << kDropPort
-             << " as p4-symbolic reserves it to encode dropping a packet; see "
-                "the documentation of `mark_to_drop` in v1mode1.p4 for details";
-    }
     if (port < 0 || port >= 512) {
       return absl::InvalidArgumentError(absl::Substitute(
           "Cannot use the value $0 as a physical port as the value does not "
@@ -121,10 +115,10 @@ absl::Status CheckPhysicalPortsConformanceToV1Model(
           port));
     }
     if (port == kDropPort) {
-      return absl::InvalidArgumentError(
-          absl::Substitute("Cannot use the value $0 as a physical port as the "
-                           "value is reserved for dropping packets.",
-                           port));
+      return gutil::InvalidArgumentErrorBuilder()
+             << "cannot use physical port " << kDropPort
+             << " as p4-symbolic reserves it to encode dropping a packet; see "
+                "the documentation of `mark_to_drop` in v1mode1.p4 for details";
     }
     if (port == kCpuPort) {
       return absl::InvalidArgumentError(

@@ -56,6 +56,8 @@ namespace table {
 
 namespace {
 
+using MatchType = ::p4::config::v1::MatchField::MatchType;
+
 // Sort the given table entries by priority.
 // The priority depends on the match types.
 // If the table matches contain at least one ternary or optional match, the
@@ -419,6 +421,36 @@ absl::Status EvaluateTableEntryAction(const ir::Table &table,
 }
 
 }  // namespace
+
+TableEntryPriorityType GetTableEntryPriorityType(const ir::Table &table) {
+  for (const auto &[match_name, match_definition] :
+       table.table_definition().match_fields_by_name()) {
+    const auto &pi_match = match_definition.match_field();
+    switch (pi_match.match_type()) {
+      case MatchType::MatchField_MatchType_RANGE:
+      case MatchType::MatchField_MatchType_TERNARY:
+      case MatchType::MatchField_MatchType_OPTIONAL: {
+        return TableEntryPriorityType::kPositivePriority;
+      }
+      case MatchType::MatchField_MatchType_LPM: {
+        // Currently the P4 compiler does not allow more than one LPM match in a
+        // table, so assuming there is at most one LPM match, it is sufficient
+        // to return `kLpmWithZeroOrMoreExacts` here. Otherwise, we will need to
+        // count the number of LPM matches.
+        // Reference:
+        // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported.
+        return TableEntryPriorityType::kPriorityZeroWithSingleLpm;
+      }
+      default: {
+        // Exact or some other unsupported type, no need to do anything here.
+        // For unsupported types, an absl error will be returned during symbolic
+        // evaluation.
+        break;
+      }
+    }
+  }
+  return TableEntryPriorityType::kPriorityZero;
+}
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
