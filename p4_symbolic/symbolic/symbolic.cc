@@ -26,7 +26,6 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -47,19 +46,6 @@ namespace p4_symbolic {
 namespace symbolic {
 
 namespace {
-
-// Returns a pointer to the P4-Symbolic IR table with the given `table_name`
-// from the `program` IR. The returned pointer would not be null when the status
-// is ok.
-absl::StatusOr<const ir::Table *> GetIrTable(const ir::P4Program &program,
-                                             absl::string_view table_name) {
-  auto it = program.tables().find(table_name);
-  if (it == program.tables().end()) {
-    return gutil::NotFoundErrorBuilder()
-           << "Table '" << table_name << "' not found";
-  }
-  return &it->second;
-}
 
 // Initializes the table entry objects in the symbolic context based on the
 // given `ir_entries`. For symbolic table entries, symbolic variables and their
@@ -93,7 +79,7 @@ absl::Status InitializeTableEntries(SolverState &state,
   // symbolic variables and add corresponding constraints as Z3 assertions.
   for (auto &[table_name, table_entries] : state.context.table_entries) {
     ASSIGN_OR_RETURN(const ir::Table *table,
-                     GetIrTable(state.program, table_name));
+                     util::GetIrTable(state.program, table_name));
 
     for (TableEntry &entry : table_entries) {
       // Skip concrete table entries.
@@ -160,7 +146,7 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
   for (const auto &[table_name, entries_per_table] :
        state.context.table_entries) {
     ASSIGN_OR_RETURN(const ir::Table *table,
-                     GetIrTable(state.program, table_name));
+                     util::GetIrTable(state.program, table_name));
     for (const TableEntry &entry : entries_per_table) {
       if (!entry.IsSymbolic()) continue;
       const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
