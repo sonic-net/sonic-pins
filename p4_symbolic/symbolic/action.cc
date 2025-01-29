@@ -34,6 +34,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
@@ -45,24 +46,33 @@ namespace action {
 
 absl::Status EvaluateStatement(const ir::Statement &statement,
                                SymbolicPerPacketState &headers,
-                               ActionContext *context, z3::context &z3_context,
+                               SolverState &state, ActionContext *context,
                                const z3::expr &guard) {
   switch (statement.statement_case()) {
     case ir::Statement::kAssignment: {
-       return EvaluateAssignmentStatement(statement.assignment(), headers,
-                                         context, z3_context, guard);
+      return EvaluateAssignmentStatement(statement.assignment(), headers,
+                                         context, *state.context.z3_context,
+                                         guard);
     }
     case ir::Statement::kClone: {
       // TODO: Add support for cloning.
       return headers.Set(std::string(kGotClonedPseudoField),
-                         z3_context.bool_val(true), guard);
+                         state.context.z3_context->bool_val(true), guard);
     }
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
-      const std::string &header_name = statement.drop().header().header_name();
-      RETURN_IF_ERROR(
-          headers.Set(absl::StrFormat("%s.egress_spec", header_name),
-                      v1model::EgressSpecDroppedValue(z3_context), guard));
+      z3::context &z3_context = *state.context.z3_context;
+      absl::string_view standard_metadata =
+          statement.drop().header().header_name();
+      RETURN_IF_ERROR(headers.Set(standard_metadata, "egress_spec",
+                                  v1model::EgressSpecDroppedValue(z3_context),
+                                  guard));
+      ASSIGN_OR_RETURN(int mcast_grp_width,
+                       util::GetFieldBitwidth(standard_metadata, "mcast_grp",
+                                              state.program));
+      RETURN_IF_ERROR(headers.Set(standard_metadata, "mcast_grp",
+                                  z3_context.bv_val(0, mcast_grp_width),
+                                  guard));
       return absl::OkStatus();
     }
     case ir::Statement::kHash: {
@@ -86,12 +96,67 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
       LOG(ERROR) << "exit statement ignored since it is unsupported";
       return absl::OkStatus();
     }
+    case ir::Statement::kHeaderAssignment: {
+      return EvaluateHeaderAssignmentStatement(statement.header_assignment(),
+                                               headers, state, guard);
+    }
     case ir::Statement::STATEMENT_NOT_SET:
       break;
   }
   return absl::UnimplementedError(absl::StrCat(
       "Action ", context->action_name, " contains unsupported statement ",
       statement.DebugString()));
+}
+
+absl::Status EvaluateHeaderAssignmentStatement(
+    const ir::HeaderAssignmentStatement &statement,
+    SymbolicPerPacketState &headers, SolverState &state,
+    const z3::expr &guard) {
+  const std::string &left_header_name = statement.left().header_name();
+  const std::string &right_header_name = statement.right().header_name();
+  auto left_it = state.program.headers().find(left_header_name);
+  auto right_it = state.program.headers().find(right_header_name);
+  if (left_it == state.program.headers().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Header '" << left_header_name << "' not found";
+  }
+  if (right_it == state.program.headers().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Header '" << right_header_name << "' not found";
+  }
+  const ir::HeaderType &left_header = left_it->second;
+  const ir::HeaderType &right_header = right_it->second;
+
+  // Check the two headers have the same header type.
+  if (left_header.id() != right_header.id()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Headers '" << left_header_name << "' and '" << right_header_name
+           << "' have different header types. Header assignments expect the "
+              "same header type.";
+  }
+
+  // Assign the value of each header field from right to left.
+  for (const std::string &field_name : right_header.ordered_fields_list()) {
+    // Check if the `field_name` also exists in the left header.
+    if (!left_header.fields().contains(field_name)) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Field '" << field_name << "' not found in header '"
+             << left_header_name << "' during header assignment.";
+    }
+
+    ASSIGN_OR_RETURN(z3::expr right_value,
+                     headers.Get(right_header_name, field_name));
+    RETURN_IF_ERROR(
+        headers.Set(left_header_name, field_name, right_value, guard));
+  }
+
+  // Assign the header validity from right to left.
+  ASSIGN_OR_RETURN(z3::expr right_valid,
+                   headers.Get(right_header_name, kValidPseudoField));
+  RETURN_IF_ERROR(
+      headers.Set(left_header_name, kValidPseudoField, right_valid, guard));
+
+  return absl::OkStatus();
 }
 
 // Constructs a symbolic expression for the assignment value, and either
@@ -335,11 +400,11 @@ absl::Status EvaluateConcreteAction(
                      " called with incompatible number of parameters"));
   }
 
-  // Find each parameter value in arguments by argument name. We should not rely
-  // on argument order matching param definition order, because the P4 runtime
-  // spec does not enforce this assumption in implementations, and furthermore
-  // the spec explicitly states that read entries do not have to preserve the
-  // order of repeated fields in written entries.
+  // Find each parameter value in arguments by argument name. We should not
+  // rely on argument order matching param definition order, because the P4
+  // runtime spec does not enforce this assumption in implementations, and
+  // furthermore the spec explicitly states that read entries do not have to
+  // preserve the order of repeated fields in written entries.
   for (const auto &arg : args) {
     absl::string_view arg_name = arg.name();
     ASSIGN_OR_RETURN(const pdpi::IrActionDefinition::IrActionParamDefinition
@@ -356,8 +421,8 @@ absl::Status EvaluateConcreteAction(
 
   // Iterate over the body in order, and evaluate each statement.
   for (const auto &statement : action.action_implementation().action_body()) {
-    RETURN_IF_ERROR(EvaluateStatement(statement, headers, &context,
-                                      *state.context.z3_context, guard));
+    RETURN_IF_ERROR(
+        EvaluateStatement(statement, headers, state, &context, guard));
   }
 
   return absl::OkStatus();
@@ -387,8 +452,8 @@ absl::Status EvaluateSymbolicAction(const ir::Action &action,
 
 // Iterate over the body in order, and evaluate each statement.
   for (const auto &statement : action.action_implementation().action_body()) {
-    RETURN_IF_ERROR(EvaluateStatement(statement, headers, &context,
-                                      *state.context.z3_context, guard));
+    RETURN_IF_ERROR(
+        EvaluateStatement(statement, headers, state, &context, guard));
   }
 
  return absl::OkStatus();

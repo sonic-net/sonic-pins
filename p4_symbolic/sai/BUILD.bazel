@@ -23,6 +23,9 @@ cc_library(
     hdrs = ["sai.h"],
     deps = [
         "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/internal:ordered_map",
+        "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/container:flat_hash_set",

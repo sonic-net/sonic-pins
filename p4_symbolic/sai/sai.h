@@ -21,6 +21,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 
 namespace p4_symbolic {
@@ -54,6 +55,25 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
 absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
     const symbolic::SolverState& solver_state);
 
-} // namespace p4_symbolic
+// Adds solver constraints for entry restrictions.
+// Right now only the entry restrictions of "vrf_table" and
+// "acl_pre_ingress_table" are implemented.
+// TODO: Note that this is for testing only and is not needed once
+// P4-Constraints is integrated with P4-Symbolic.
+absl::Status AddConstraintsForP4ConstraintsAnnotations(
+    symbolic::SolverState& state);
 
-#endif  // PINS_INFRA_P4_SYMBOLIC_SAI_SAI_H_
+// Adds solver constraints for each symbolic variable of type "vrf_id_t" to
+// avoid synthesizing values of VRF 0.
+// TODO: Note that this is for testing only and is not needed once
+// P4-Constraints is integrated with P4-Symbolic.
+absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState& state);
+
+// Adds solver constraints for "acl_pre_ingress_table".
+// TODO: Note that this is for testing only and is not needed once
+// P4-Constraints is integrated with P4-Symbolic.
+absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState& state);
+
+}  // namespace p4_symbolic
+
+#endif  // PINS_P4_SYMBOLIC_SAI_SAI_H_

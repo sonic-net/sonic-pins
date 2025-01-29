@@ -413,6 +413,8 @@ enum StatementOp {
   remove_header = 5;
   // Terminating the execution of all blocks currently executing.
   exit = 6;
+  // Assign a header instance to another of the same type.
+  assign_header = 7;
 }
 
 // This specifies the exact expressions that are supported by our ir.
