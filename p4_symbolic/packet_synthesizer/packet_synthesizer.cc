@@ -282,9 +282,13 @@ absl::Status PacketSynthesizer::PushSolverFrame() {
 }
 
 absl::Status PacketSynthesizer::PopSolverFrames(int n) {
-  if (n < 1) {
+  if (n < 0) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Expected positive number of frames, got ", n));
+        absl::StrCat("Expected non-negative number of frames to pop, got ", n));
+  }
+  if (n == 0) {
+    LOG(WARNING)
+        << "Received duplicate consecutive requests, popping 0 frames.";
   }
 
   for (int i = 0; i < n; i++) {

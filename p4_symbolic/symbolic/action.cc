@@ -34,6 +34,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
@@ -60,10 +61,18 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
     }
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
-      const std::string &header_name = statement.drop().header().header_name();
-      RETURN_IF_ERROR(headers.Set(
-          absl::StrFormat("%s.egress_spec", header_name),
-          v1model::EgressSpecDroppedValue(*state.context.z3_context), guard));
+      z3::context &z3_context = *state.context.z3_context;
+      absl::string_view standard_metadata =
+          statement.drop().header().header_name();
+      RETURN_IF_ERROR(headers.Set(standard_metadata, "egress_spec",
+                                  v1model::EgressSpecDroppedValue(z3_context),
+                                  guard));
+      ASSIGN_OR_RETURN(int mcast_grp_width,
+                       util::GetFieldBitwidth(standard_metadata, "mcast_grp",
+                                              state.program));
+      RETURN_IF_ERROR(headers.Set(standard_metadata, "mcast_grp",
+                                  z3_context.bv_val(0, mcast_grp_width),
+                                  guard));
       return absl::OkStatus();
     }
     case ir::Statement::kHash: {
