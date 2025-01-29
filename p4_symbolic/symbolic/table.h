@@ -31,8 +31,25 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace table {
 
+// Determines how table entries are prioritized based on the table match types.
+enum class TableEntryPriorityType {
+  kPositivePriority,           // The table has a range, ternary, or optional
+                               // match, where the entry priority field must be
+                               // positive.
+  kPriorityZeroWithSingleLpm,  // The table has no range, ternary, or optional
+                               // matches, and has exactly one LPM match with
+                               // zero or more exact matches. The entry priority
+                               // field must be zero and the prefix length of
+                               // the LPM match must be positive.
+  kPriorityZero,               // None of the above. (I.e., the table has only
+                               // exact matches.) The entry priority field must
+                               // be zero.
+};
+
 // P4-Symbolic models the default action as an entry with index -1.
 constexpr int kDefaultActionEntryIndex = -1;
+
+TableEntryPriorityType GetTableEntryPriorityType(const ir::Table &table);
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
