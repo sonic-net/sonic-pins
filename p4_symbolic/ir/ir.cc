@@ -36,6 +36,7 @@
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/cfg.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -65,14 +66,15 @@ absl::StatusOr<bmv2::StatementOp> StatementOpToEnum(const std::string &op) {
   static const std::unordered_map<std::string, bmv2::StatementOp> op_table = {
       {"assign", bmv2::StatementOp::assign},
       {"mark_to_drop", bmv2::StatementOp::mark_to_drop},
-      {"clone_ingress_pkt_to_egress",  // clone3(...)
+      {"clone_ingress_pkt_to_egress", // clone3(...)
        bmv2::StatementOp::clone_ingress_pkt_to_egress},
-      {"modify_field_with_hash_based_offset",  // hash(...)
+      {"modify_field_with_hash_based_offset", // hash(...)
        bmv2::StatementOp::modify_field_with_hash_based_offset},
-      {"add_header",  // hdr.SetValid()
+      {"add_header", // hdr.SetValid()
        bmv2::StatementOp::add_header},
-      {"remove_header",  // hdr.SetInvalid()
+      {"remove_header", // hdr.SetInvalid()
        bmv2::StatementOp::remove_header},
+      {"assign_header", bmv2::StatementOp::assign_header},
       {"exit", bmv2::StatementOp::exit}};
 
   if (op_table.count(op) != 1) {
@@ -658,6 +660,32 @@ absl::StatusOr<Statement> ExtractStatement(
       // remove_header.
       assignment.mutable_right()->mutable_bool_value()->set_value(
           op_case == bmv2::StatementOp::add_header);
+      return statement;
+    }
+
+    case bmv2::StatementOp::assign_header: {
+      HeaderAssignmentStatement &header_assignment =
+          *statement.mutable_header_assignment();
+      const google::protobuf::Value &params =
+          action_primitive.fields().at("parameters");
+      if (!params.has_list_value() || params.list_value().values_size() != 2) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Header assignment must contain 2 parameters, found "
+               << action_primitive.DebugString();
+      }
+
+      ASSIGN_OR_RETURN(RValue left, ExtractRValue(params.list_value().values(0),
+                                                  parameter_map));
+      ASSIGN_OR_RETURN(
+          RValue right,
+          ExtractRValue(params.list_value().values(1), parameter_map));
+      if (!left.has_header_value() || !right.has_header_value()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Header assignment must be passed header instances, found "
+               << action_primitive.DebugString();
+      }
+      header_assignment.set_allocated_left(left.release_header_value());
+      header_assignment.set_allocated_right(right.release_header_value());
       return statement;
     }
 
