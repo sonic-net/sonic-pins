@@ -109,6 +109,10 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
   return failures;
 }
 
+PacketTestOutcomes ValidationResult::GetRawPacketTestOutcomes() const {
+  return test_outcomes_;
+}
+
 bool ValidationResult::PacketSynthesizerTimedOut() const {
   return packet_synthesis_result_.packet_synthesis_timed_out;
 }
