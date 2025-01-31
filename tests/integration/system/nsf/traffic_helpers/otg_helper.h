@@ -25,7 +25,7 @@ class OtgHelper : public TrafficHelper {
  public:
   absl::Status StartTraffic(Testbed& testbed) override;
   absl::Status StopTraffic(Testbed& testbed) override;
-  absl::Status ValidateTraffic(int error_margin, Testbed& testbed) override;
+  absl::Status ValidateTraffic(Testbed& testbed, int error_percentage) override;
 };
 
 }  // namespace pins_test

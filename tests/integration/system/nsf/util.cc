@@ -14,6 +14,7 @@
 
 #include "tests/integration/system/nsf/util.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -33,6 +34,7 @@
 #include "gutil/overload.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -48,6 +50,11 @@
 namespace pins_test {
 namespace {
 
+using ::gnoi::system::RebootMethod;
+using ::gnoi::system::RebootMethod_Name;
+using ::gnoi::system::RebootRequest;
+using ::gnoi::system::RebootResponse;
+using ::grpc::ClientContext;
 using ::p4::v1::ReadResponse;
 
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
@@ -153,6 +160,21 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
       GetSwitchStateString(state), elapsed_time, validator_status.message()));
 }
 
+// Reboot the SUT using the given reboot `method`.
+absl::Status Reboot(RebootMethod method, Testbed& testbed) {
+  thinkit::Switch& sut = GetSut(testbed);
+  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
+  RebootRequest request;
+  request.set_method(method);
+  request.set_message(
+      absl::StrCat("Performing ", RebootMethod_Name(method), " Reboot"));
+  RebootResponse response;
+  ClientContext context;
+
+  return gutil::GrpcStatusToAbslStatus(
+      sut_gnoi_system_stub->Reboot(&context, request, &response));
+}
+
 }  // namespace
 
 void SetupTestbed(TestbedInterface& testbed_interface) {
@@ -213,8 +235,20 @@ thinkit::Switch& GetSut(Testbed& testbed) {
       testbed);
 }
 
-absl::Status InstallRebootPushConfig(absl::string_view version) {
+absl::Status ImageCopy(const std::string& image_label, Testbed& testbed,
+                       thinkit::SSHClient& ssh_client) {
   return absl::OkStatus();
+}
+
+absl::Status InstallRebootPushConfig(const std::string& image_label,
+                                     const std::string& gnmi_config,
+                                     Testbed& testbed,
+                                     thinkit::SSHClient& ssh_client) {
+  RETURN_IF_ERROR(ImageCopy(image_label, testbed, ssh_client));
+
+  RETURN_IF_ERROR(Reboot(RebootMethod::COLD, testbed));
+
+  return PushConfig(gnmi_config, testbed, ssh_client);
 }
 
 absl::Status ValidateSutState(absl::string_view version, Testbed& testbed,
@@ -245,19 +279,8 @@ absl::Status ValidateComponents(
   return absl::OkStatus();
 }
 
-absl::Status Upgrade(absl::string_view version) { return absl::OkStatus(); }
-
-absl::Status NsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client) {
-  thinkit::Switch& sut = GetSut(testbed);
-  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
-  gnoi::system::RebootRequest gnoi_request;
-  gnoi_request.set_method(gnoi::system::RebootMethod::NSF);
-  gnoi_request.set_message("Performing NSF Reboot");
-  gnoi::system::RebootResponse gnoi_response;
-  grpc::ClientContext grpc_context;
-
-  return gutil::GrpcStatusToAbslStatus(sut_gnoi_system_stub->Reboot(
-      &grpc_context, gnoi_request, &gnoi_response));
+absl::Status NsfReboot(Testbed& testbed) {
+  return Reboot(RebootMethod::NSF, testbed);
 }
 
 absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client) {
@@ -282,7 +305,33 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client) {
       testbed);
 }
 
-absl::Status PushConfig(absl::string_view version) { return absl::OkStatus(); }
+absl::Status PushConfig(const std::string& gnmi_config, Testbed& testbed,
+                        thinkit::SSHClient& ssh_client) {
+  std::vector<std::string> interfaces;
+  RETURN_IF_ERROR(std::visit(
+      gutil::Overload{
+          [&interfaces](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> absl::Status {
+            interfaces = GetConnectedInterfacesForSut(*testbed);
+            return absl::OkStatus();
+          },
+          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed)
+              -> absl::Status {
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed));
+
+  // Wait for SSH and containers to be up before pushing config.
+  RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client));
+
+  // Push Config.
+  thinkit::Switch& sut = GetSut(testbed);
+  RETURN_IF_ERROR(PushGnmiConfig(sut, gnmi_config));
+
+  LOG(INFO) << "Verifying config push on " << sut.ChassisName();
+  return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
+                            ssh_client, interfaces);
+}
 
 ReadResponse TakeP4FlowSnapshot() { return ReadResponse(); }
 
