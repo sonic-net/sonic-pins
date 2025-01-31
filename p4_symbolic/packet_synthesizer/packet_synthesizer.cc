@@ -52,19 +52,19 @@ using ::p4_symbolic::symbolic::SolverState;
 // fields from the model. The packet payload will be set to the contents of
 // `packet_payload` parameter.
 absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
-    const SolverState& solver_state, absl::string_view packet_payload,
-    std::optional<bool> should_be_dropped) {
+    const p4_symbolic::symbolic::SolverState& solver_state,
+    absl::string_view packet_payload, std::optional<bool> should_be_dropped) {
   z3::model model = solver_state.solver->get_model();
   ASSIGN_OR_RETURN(std::string packet,
                    p4_symbolic::DeparseIngressPacket(solver_state, model));
   ASSIGN_OR_RETURN(
       const bool dropped,
       p4_symbolic::EvalZ3Bool(solver_state.context.trace.dropped, model));
-  if (dropped != should_be_dropped) {
+  if (should_be_dropped.has_value() && dropped != *should_be_dropped) {
     return absl::FailedPreconditionError(absl::Substitute(
         "Z3 model's drop prediction ($0) is inconsistent with the expectation "
         "($1)",
-        dropped ? "drop" : "no drop", should_be_dropped ? "drop" : "no drop"));
+        dropped ? "drop" : "no drop", *should_be_dropped ? "drop" : "no drop"));
   }
   ASSIGN_OR_RETURN(const bool got_cloned,
                    EvalZ3Bool(solver_state.context.trace.got_cloned, model));
@@ -269,10 +269,13 @@ absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(
 
   // Solve the constraints and generate the packet if satisfiable.
   if (solver_state_.solver->check() == z3::check_result::sat) {
+    std::optional<bool> drop_expected;
+    if (criteria.has_output_criteria())
+      drop_expected = criteria.output_criteria().drop_expected();
     ASSIGN_OR_RETURN(*result.mutable_synthesized_packet(),
                      SynthesizePacketFromZ3Model(
                          solver_state_, criteria.payload_criteria().payload(),
-                         criteria.output_criteria().drop_expected()));
+                         drop_expected));
   }
 
   VLOG(1) << absl::Substitute("SynthesizePacket finished in $0 for\n$1",

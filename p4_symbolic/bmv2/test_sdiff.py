@@ -63,8 +63,9 @@ def sdiff(actual, expected, path):
 
     if isinstance(actual, dict):
       for k in actual.keys():
-        status, rpath = sdiff(actual[k], expected.get(k, None),
-                              "%s/%s" % (path, str(k)))
+        status, rpath = sdiff(
+            actual[k], expected.get(k, None), "%s/%s" % (path, str(k))
+        )
         if not status:
           return (status, rpath)
       return (True, "")
@@ -85,7 +86,7 @@ def main():
 
   status, path = sdiff(actual, expected, "")
   if not status:
-    sys.exit("not subset diff! Error at path \"%s\"" % path)
+    sys.exit('not subset diff! Error at path "%s"' % path)
 
 
 if __name__ == "__main__":

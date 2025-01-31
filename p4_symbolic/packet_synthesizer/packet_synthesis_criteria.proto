@@ -72,6 +72,7 @@ message PortCriteria {
 // The coverage criteria for (single) packet synthesis. All fields are optional.
 // If a criterion is not provided, no constraints for that criterion will be
 // added.
+// LINT.IfChange
 message PacketSynthesisCriteria {
   OutputCriteria output_criteria = 1;
   HeaderCriteria input_packet_header_criteria = 2;
@@ -80,6 +81,10 @@ message PacketSynthesisCriteria {
   PayloadCriteria payload_criteria = 5;
   PortCriteria ingress_port_criteria = 6;
 }
+// LINT.ThenChange(
+//  :criteria_variant,
+//  packet_synthesis_criteria.cc:set_criteria_variant
+// )
 
 // Contains a single (type of) criteria.
 // This is mostly an implementation detail (not visible to the clients): a
@@ -87,6 +92,7 @@ message PacketSynthesisCriteria {
 // fields in PacketSynthesisCriteria (to define the order of their respective Z3
 // frames) and to project PacketSynthesisCriteria messages to each individual
 // variant. See PacketSynthesizer::PrepareZ3SolverStack for more details.
+// LINT.IfChange(criteria_variant)
 message CriteriaVariant {
   oneof criteria {
     OutputCriteria output_criteria = 1;
@@ -97,3 +103,4 @@ message CriteriaVariant {
     PortCriteria ingress_port_criteria = 6;
   }
 }
+// LINT.ThenChange()
