@@ -22,6 +22,9 @@ namespace pins_test {
 
 // Interface to program or clear flows on the SUT of the given `testbed` during
 // NSF integration tests.
+//
+// Note: The caller is responsible for ensuring that exact same testbed is
+// passed throughout the test.
 class FlowProgrammer {
  public:
   virtual ~FlowProgrammer() = default;

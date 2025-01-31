@@ -29,15 +29,23 @@
 
 namespace pins_test {
 
-absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
-
-thinkit::Switch& GetSut(Testbed& testbed);
-
 void SetupTestbed(TestbedInterface& testbed_interface);
 
 void TearDownTestbed(TestbedInterface& testbed_interface);
 
-absl::Status InstallRebootPushConfig(absl::string_view version);
+absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
+
+thinkit::Switch& GetSut(Testbed& testbed);
+
+// Performs image copy on the inactive side using gNOI.
+// Note: This doesn't involve a reboot.
+absl::Status ImageCopy(const std::string& image_label, Testbed& testbed,
+                       thinkit::SSHClient& ssh_client);
+
+absl::Status InstallRebootPushConfig(const std::string& image_label,
+                                     const std::string& gnmi_config,
+                                     Testbed& testbed,
+                                     thinkit::SSHClient& ssh_client);
 
 // Validates P4, gNMI, SSH connections and port status along with validating the
 // Stack version of the SUT.
@@ -49,15 +57,13 @@ absl::Status ValidateComponents(
     absl::Span<const std::unique_ptr<ComponentValidator>> validators,
     absl::string_view version, Testbed& testbed);
 
-// Performs image copy on the inactive side using gNOI.
-// Note: This doesn't involve a reboot.
-absl::Status Upgrade(absl::string_view version);
-
-absl::Status NsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client);
+// Performs NSF Reboot on the SUT in the given testbed.
+absl::Status NsfReboot(Testbed& testbed);
 
 absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client);
 
-absl::Status PushConfig(absl::string_view version);
+absl::Status PushConfig(const std::string& gnmi_config, Testbed& testbed,
+                        thinkit::SSHClient& ssh_client);
 
 p4::v1::ReadResponse TakeP4FlowSnapshot();
 
