@@ -17,10 +17,11 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/container/btree_map.h"
+#include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/guarded_map.h"
-#include "p4_symbolic/symbolic/table_entry.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -105,7 +106,9 @@ struct ConcreteContext {
   ConcretePerPacketState egress_headers;
   std::string serialized_ingress_headers;
   std::string serialized_egress_headers;
-  TableEntries table_entries;
+  // We use an ordered map to ensure deterministic traversals.
+  absl::btree_map<std::string, std::vector<ir::ConcreteTableEntry>>
+      table_entries;
   ConcreteTrace trace;  // Expected trace in the program.
 
   std::string to_string(bool verbose = false) const;
@@ -133,7 +136,7 @@ class SymbolicContext {
   SymbolicPerPacketState ingress_headers;
   SymbolicPerPacketState parsed_headers;
   SymbolicPerPacketState egress_headers;
-  TableEntries table_entries;
+  ir::TableEntries table_entries;
   SymbolicTrace trace;
 };
 
