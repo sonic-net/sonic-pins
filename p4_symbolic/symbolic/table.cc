@@ -30,6 +30,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -87,8 +88,8 @@ using MatchType = ::p4::config::v1::MatchField::MatchType;
 // - BMv2 - simple_switch.md
 //   https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported
 //
-std::vector<TableEntry> SortEntries(const ir::Table &table,
-                                    const std::vector<TableEntry> &entries) {
+std::vector<ir::TableEntry> SortEntries(
+    const ir::Table &table, const std::vector<ir::TableEntry> &entries) {
   if (entries.empty()) return {};
 
   // Find which *definition* of priority we should use by looking at the
@@ -117,29 +118,31 @@ std::vector<TableEntry> SortEntries(const ir::Table &table,
   }
 
   // The output array.
-  std::vector<TableEntry> sorted_entries(entries);
+  std::vector<ir::TableEntry> sorted_entries(entries);
 
   // The sort comparator depends on the match types.
-  std::function<bool(const TableEntry &, const TableEntry &)> comparator;
+  std::function<bool(const ir::TableEntry &, const ir::TableEntry &)>
+      comparator;
   if (has_ternary_or_optional) {
     // Sort by explicit priority.
     // Entries with numerically larger priority precede others.
-    comparator = [](const TableEntry &entry1, const TableEntry &entry2) {
-      return entry1.GetPdpiIrTableEntry().priority() >
-             entry2.GetPdpiIrTableEntry().priority();
+    comparator = [](const ir::TableEntry &entry1,
+                    const ir::TableEntry &entry2) {
+      return ir::GetPriority(entry1) > ir::GetPriority(entry2);
     };
   } else if (lpm_match_name.has_value()) {
     // Sort by prefix length.
     // Entries with numerically larger prefix length precede others.
-    comparator = [&lpm_match_name](const TableEntry &entry1,
-                                   const TableEntry &entry2) {
+    comparator = [&lpm_match_name](const ir::TableEntry &entry1,
+                                   const ir::TableEntry &entry2) {
       auto is_lpm_match =
           [&lpm_match_name](const pdpi::IrMatch &match) -> bool {
         return match.name() == *lpm_match_name;
       };
 
-      auto get_prefix_length = [&is_lpm_match](const TableEntry &entry) -> int {
-        auto &matches = entry.GetPdpiIrTableEntry().matches();
+      auto get_prefix_length =
+          [&is_lpm_match](const ir::TableEntry &entry) -> int {
+        auto &matches = ir::GetMatches(entry);
         auto it = std::find_if(matches.begin(), matches.end(), is_lpm_match);
         return it == matches.end() ? 0 : it->lpm().prefix_length();
       };
@@ -159,14 +162,12 @@ std::vector<TableEntry> SortEntries(const ir::Table &table,
 // Analyzes a single symbolic match of a table entry.
 // Constructs a symbolic expression that semantically corresponds to the given
 // symbolic match.
-absl::StatusOr<z3::expr> EvaluateSymbolicMatch(absl::string_view match_name,
-                                               const z3::expr &field_value,
-                                               const TableEntry &entry,
-                                               const ir::Table &table,
-                                               SolverState &state) {
+absl::StatusOr<z3::expr> EvaluateSymbolicMatch(
+    const ir::SymbolicTableEntry &entry, absl::string_view match_name,
+    const z3::expr &field_value, const ir::Table &table, SolverState &state) {
   ASSIGN_OR_RETURN(SymbolicMatchVariables variables,
-                   entry.GetMatchValues(match_name, table, state.program,
-                                        *state.context.z3_context));
+                   GetSymbolicMatch(entry, match_name, table, state.program,
+                                    *state.context.z3_context));
   ASSIGN_OR_RETURN(z3::expr masked_field,
                    operators::BitAnd(field_value, variables.mask));
   return operators::Eq(masked_field, variables.value);
@@ -254,7 +255,7 @@ absl::StatusOr<z3::expr> EvaluateConcreteMatch(
 // Constructs a symbolic expression that is true if and only if this entry
 // is matched on.
 absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
-    const ir::Table &table, const TableEntry &entry, SolverState &state,
+    const ir::Table &table, const ir::TableEntry &entry, SolverState &state,
     const SymbolicPerPacketState &headers) {
   const std::string &table_name = table.table_definition().preamble().name();
   const google::protobuf::Map<std::string, ::p4_symbolic::ir::FieldValue>
@@ -269,7 +270,7 @@ absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
 
   // TODO: Consider sorting the matches before evaluating them to
   // ensure equivalent entries produce the same formulae.
-  for (const pdpi::IrMatch &ir_match : entry.GetPdpiIrTableEntry().matches()) {
+  for (const pdpi::IrMatch &ir_match : ir::GetMatches(entry)) {
     const std::string &match_name = ir_match.name();
 
     // Check if the match exists in the table definition.
@@ -305,14 +306,23 @@ absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
 
     // Evaluate the condition of the specific match.
     z3::expr match_expression(*state.context.z3_context);
-    if (entry.IsSymbolic()) {
-      ASSIGN_OR_RETURN(
-          match_expression,
-          EvaluateSymbolicMatch(match_name, field_value, entry, table, state));
-    } else {
-      ASSIGN_OR_RETURN(match_expression,
-                       EvaluateConcreteMatch(ir_match, pi_match, field_name,
-                                             field_value, state));
+    switch (entry.entry_case()) {
+      case ir::TableEntry::kConcreteEntry: {
+        ASSIGN_OR_RETURN(match_expression,
+                         EvaluateConcreteMatch(ir_match, pi_match, field_name,
+                                               field_value, state));
+        break;
+      }
+      case ir::TableEntry::kSymbolicEntry: {
+        ASSIGN_OR_RETURN(
+            match_expression,
+            EvaluateSymbolicMatch(entry.symbolic_entry(), match_name,
+                                  field_value, table, state));
+        break;
+      }
+      case ir::TableEntry::ENTRY_NOT_SET:
+        return gutil::InvalidArgumentErrorBuilder()
+               << "invalid table entry: " << absl::StrCat(entry);
     }
 
     ASSIGN_OR_RETURN(match_condition,
@@ -339,7 +349,7 @@ absl::Status EvaluateSingeConcreteAction(const pdpi::IrActionInvocation &action,
 }
 
 absl::Status EvaluateSingleSymbolicAction(absl::string_view action_name,
-                                          const TableEntry &entry,
+                                          const ir::SymbolicTableEntry &entry,
                                           SolverState &state,
                                           SymbolicPerPacketState &headers,
                                           const z3::expr &guard) {
@@ -358,66 +368,82 @@ absl::Status EvaluateSingleSymbolicAction(absl::string_view action_name,
 // Constructs a symbolic expressions that represents the action invocation
 // corresponding to this entry.
 absl::Status EvaluateTableEntryAction(const ir::Table &table,
-                                      const TableEntry &entry,
+                                      const ir::TableEntry &entry,
                                       SolverState &state,
                                       SymbolicPerPacketState &headers,
                                       const z3::expr &guard) {
-  const pdpi::IrTableEntry &ir_entry = entry.GetPdpiIrTableEntry();
-
-  if (entry.IsSymbolic()) {
-    // Entries with symbolic action sets are not supported for now.
-    if (table.table_definition().has_action_profile_id()) {
-      return gutil::UnimplementedErrorBuilder()
-             << "Table entries with symbolic action sets are not supported "
-                "at the moment.";
-    }
-
-    // Evaluate each symbolic action of a symbolic table entry.
-    for (const pdpi::IrActionReference &action_ref :
-         table.table_definition().entry_actions()) {
-      absl::string_view action_name = action_ref.action().preamble().name();
-      ASSIGN_OR_RETURN(z3::expr action_is_applied,
-                       entry.GetActionInvocation(action_name, table,
-                                                 *state.context.z3_context));
-      RETURN_IF_ERROR(EvaluateSingleSymbolicAction(
-          action_name, entry, state, headers, guard && action_is_applied));
-    }
-  } else {
-    // Evaluate the concrete action or action set of a concrete table entry.
-    if (ir_entry.has_action()) {
-      RETURN_IF_ERROR(
-          EvaluateSingeConcreteAction(ir_entry.action(), state, headers, guard))
-              .SetPrepend()
-          << "In table entry '" << ir_entry.ShortDebugString() << "':";
-    } else if (ir_entry.has_action_set()) {
-      auto &action_set = ir_entry.action_set().actions();
-      // For action sets, we introduce a new free integer variable "selector"
-      // whose value determines which action is executed: to a first
-      // approximation, action i is executed iff `selector == i`.
-      std::string selector_name =
-          absl::StrFormat("action selector for entry #%d of table '%s'",
-                          entry.GetIndex(), ir_entry.table_name());
-      z3::expr selector =
-          state.context.z3_context->int_const(selector_name.c_str());
-      z3::expr unselected = state.context.z3_context->bool_val(true);
-      for (int i = 0; i < action_set.size(); ++i) {
-        auto &action = action_set.at(i).action();
-        bool is_last_action = i == action_set.size() - 1;
-        z3::expr selected = is_last_action ? unselected : (selector == i);
-        unselected = unselected && !selected;
-        RETURN_IF_ERROR(EvaluateSingeConcreteAction(action, state, headers,
-                                                    guard && selected))
-                .SetPrepend()
-            << "In table entry '" << ir_entry.ShortDebugString() << "':";
+  switch (entry.entry_case()) {
+    case ir::TableEntry::kConcreteEntry: {
+      const pdpi::IrTableEntry &ir_entry =
+          entry.concrete_entry().pdpi_ir_entry();
+      switch (ir_entry.type_case()) {
+        case pdpi::IrTableEntry::kAction: {
+          RETURN_IF_ERROR(EvaluateSingeConcreteAction(ir_entry.action(), state,
+                                                      headers, guard))
+                  .SetPrepend()
+              << "In table entry '" << ir_entry.ShortDebugString() << "':";
+          return absl::OkStatus();
+        }
+        case pdpi::IrTableEntry::kActionSet: {
+          auto &action_set = ir_entry.action_set().actions();
+          // For action sets, we introduce a new free integer variable
+          // "selector" whose value determines which action is executed: to a
+          // first approximation, action i is executed iff `selector == i`.
+          std::string selector_name =
+              absl::StrFormat("action selector for entry #%d of table '%s'",
+                              ir::GetIndex(entry), ir_entry.table_name());
+          z3::expr selector =
+              state.context.z3_context->int_const(selector_name.c_str());
+          z3::expr unselected = state.context.z3_context->bool_val(true);
+          for (int i = 0; i < action_set.size(); ++i) {
+            auto &action = action_set.at(i).action();
+            bool is_last_action = i == action_set.size() - 1;
+            z3::expr selected = is_last_action ? unselected : (selector == i);
+            unselected = unselected && !selected;
+            RETURN_IF_ERROR(EvaluateSingeConcreteAction(action, state, headers,
+                                                        guard && selected))
+                    .SetPrepend()
+                << "In table entry '" << ir_entry.ShortDebugString() << "':";
+          }
+          return absl::OkStatus();
+        }
+        default:
+          return gutil::InvalidArgumentErrorBuilder()
+                 << "unexpected or missing action in table entry: "
+                 << ir_entry.DebugString();
       }
-    } else {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "unexpected or missing action in table entry: "
-             << ir_entry.DebugString();
     }
-  }
+    case ir::TableEntry::kSymbolicEntry: {
+      const ir::SymbolicTableEntry &symbolic_entry = entry.symbolic_entry();
 
-  return absl::OkStatus();
+      // Entries with symbolic action sets are not supported for now.
+      if (table.table_definition().has_action_profile_id()) {
+        return gutil::UnimplementedErrorBuilder()
+               << "Table entries with symbolic action sets are not supported "
+                  "at the moment.";
+      }
+
+      // Evaluate each symbolic action of a symbolic table entry.
+      for (const pdpi::IrActionReference &action_ref :
+           table.table_definition().entry_actions()) {
+        absl::string_view action_name = action_ref.action().preamble().name();
+        ASSIGN_OR_RETURN(
+            z3::expr action_is_applied,
+            GetSymbolicActionInvocation(symbolic_entry, action_name, table,
+                                        *state.context.z3_context));
+        RETURN_IF_ERROR(
+            EvaluateSingleSymbolicAction(action_name, symbolic_entry, state,
+                                         headers, guard && action_is_applied));
+      }
+
+      return absl::OkStatus();
+    }
+    case ir::TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  return gutil::InvalidArgumentErrorBuilder()
+         << "unexpected or missing action in table entry: "
+         << absl::StrCat(entry);
 }
 
 }  // namespace
@@ -458,7 +484,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   const std::string &table_name = table.table_definition().preamble().name();
 
   // Sort entries by priority deduced from match types.
-  std::vector<TableEntry> sorted_entries;
+  std::vector<ir::TableEntry> sorted_entries;
   if (auto it = state.context.table_entries.find(table_name);
       it != state.context.table_entries.end()) {
     sorted_entries = SortEntries(table, it->second);
@@ -534,19 +560,17 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   }
 
   // Build a TableEntry object for the default entry.
-  ir::TableEntry ir_default_entry;
-  ir_default_entry.mutable_concrete_entry()->mutable_action()->set_name(
-      table.table_implementation().default_action());
+  ir::TableEntry default_entry;
+  default_entry.mutable_concrete_entry()->set_index(kDefaultActionEntryIndex);
+  auto &default_action = *default_entry.mutable_concrete_entry()
+                              ->mutable_pdpi_ir_entry()
+                              ->mutable_action();
+  default_action.set_name(table.table_implementation().default_action());
   for (const std::string &parameter_value :
        table.table_implementation().default_action_parameters()) {
-    ASSIGN_OR_RETURN(*(ir_default_entry.mutable_concrete_entry()
-                           ->mutable_action()
-                           ->add_params()
-                           ->mutable_value()),
+    ASSIGN_OR_RETURN(*default_action.add_params()->mutable_value(),
                      values::ParseIrValue(parameter_value));
   }
-  TableEntry default_entry(kDefaultActionEntryIndex,
-                           std::move(ir_default_entry));
 
   // Start with the default entry
   z3::expr match_index =
@@ -556,8 +580,9 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
 
   // Continue evaluating each table entry in reverse priority
   for (int row = sorted_entries.size() - 1; row >= 0; row--) {
-    const TableEntry &entry = sorted_entries.at(row);
-    z3::expr row_symbol = state.context.z3_context->int_val(entry.GetIndex());
+    const ir::TableEntry &entry = sorted_entries.at(row);
+    z3::expr row_symbol =
+        state.context.z3_context->int_val(ir::GetIndex(entry));
 
     // The condition used in the big if_else_then construct.
     ASSIGN_OR_RETURN(z3::expr entry_match,

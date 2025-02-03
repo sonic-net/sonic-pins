@@ -25,6 +25,7 @@ cc_library(
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/internal:ordered_map",
+        "//p4_symbolic/ir",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
         "@com_github_z3prover_z3//:api",

@@ -34,8 +34,10 @@
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -48,6 +50,28 @@ namespace p4_symbolic::symbolic {
 using MatchType = p4::config::v1::MatchField::MatchType;
 
 namespace {
+
+// Contains the symbolic variable names and bit-width of the symbolic match of a
+// table entry.
+struct SymbolicMatchInfo {
+  p4::config::v1::MatchField::MatchType match_type;
+  int bitwidth;
+  // Value variable name of the symbolic match. It looks like
+  // "<table_name>_entry_<index>_<match_name>_<match_type>_value".
+  std::string value_variable_name;
+  // Value variable name of the symbolic match. It looks like
+  // "<table_name>_entry_<index>_<match_name>_<match_type>_mask".
+  std::string mask_variable_name;
+};
+
+// Contains the symbolic variable name and bit-width of the symbolic action
+// parameter of a table entry.
+struct SymbolicActionParameterInfo {
+  // Variable name of the symbolic action parameter. It looks like
+  // "<table_name>_entry_<index>_<action_name>_<param_name>".
+  std::string variable_name;
+  int bitwidth;
+};
 
 // Evaluates and returns the PDPI IR value for the `bv_expr` of a match field.
 absl::StatusOr<pdpi::IrValue> EvalZ3BitvectorToIrValue(
@@ -379,31 +403,9 @@ absl::Status AddConstraintsForConcretePartsOfSymbolicAction(
   return absl::OkStatus();
 }
 
-}  // namespace
-
-TableEntry::TableEntry(int index, ir::TableEntry ir_entry)
-    : index_(index), ir_entry_(std::move(ir_entry)) {}
-
-int TableEntry::GetIndex() const { return index_; }
-bool TableEntry::IsConcrete() const { return ir_entry_.has_concrete_entry(); }
-bool TableEntry::IsSymbolic() const { return ir_entry_.has_symbolic_entry(); }
-
-const std::string &TableEntry::GetTableName() const {
-  return GetPdpiIrTableEntry().table_name();
-}
-
-const ir::TableEntry &TableEntry::GetP4SymbolicIrTableEntry() const {
-  return ir_entry_;
-}
-
-const pdpi::IrTableEntry &TableEntry::GetPdpiIrTableEntry() const {
-  if (IsConcrete()) return ir_entry_.concrete_entry();
-  return ir_entry_.symbolic_entry().sketch();
-}
-
-absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
-    absl::string_view match_name, const ir::Table &table,
-    const ir::P4Program &program) const {
+absl::StatusOr<SymbolicMatchInfo> GetSymbolicMatchInfo(
+    const ir::SymbolicTableEntry &symbolic_entry, absl::string_view match_name,
+    const ir::Table &table, const ir::P4Program &program) {
   // A static mapping between the PI match type to the type string.
   static const absl::flat_hash_map<MatchType, std::string> match_type_to_str = {
       {MatchType::MatchField_MatchType_EXACT, "exact"},
@@ -416,7 +418,7 @@ absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
   if (!table.table_definition().match_fields_by_name().contains(match_name)) {
     return gutil::NotFoundErrorBuilder()
            << "Match '" << match_name << "' not found in table '"
-           << GetTableName() << "'";
+           << ir::GetTableName(symbolic_entry) << "'";
   }
 
   const p4::config::v1::MatchField &pi_match_field = table.table_definition()
@@ -433,16 +435,9 @@ absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
            << pi_match_field.DebugString();
   }
 
-  // Return an error if this is a fully concrete entry.
-  if (IsConcrete()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Entry " << GetIndex() << " of table '" << GetTableName()
-           << "' is not symbolic.";
-  }
-
   // If the specified match of this entry is an explicit wildcard, return an
   // error and no symbolic variable should be created.
-  const auto &entry_matches = GetPdpiIrTableEntry().matches();
+  const auto &entry_matches = ir::GetMatches(symbolic_entry);
   auto ir_match_it =
       std::find_if(entry_matches.begin(), entry_matches.end(),
                    [&match_name](const pdpi::IrMatch &match) -> bool {
@@ -451,8 +446,8 @@ absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
   if (ir_match_it == entry_matches.end()) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Match '" << match_name
-           << "' is an explicit wildcard. The match is omitted in the IR table"
-              " entry. To specify a symbolic match, please set the match name"
+           << "' is an explicit wildcard. The match is omitted in the IR table "
+              "entry.To specify a symbolic match, please set the match name "
               " while leaving other fields unset.";
   }
 
@@ -461,7 +456,8 @@ absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
   if (it == table.table_implementation().match_name_to_field().end()) {
     return gutil::NotFoundErrorBuilder()
            << "Match '" << match_name
-           << "' not found in implementation of table '" << GetTableName()
+           << "' not found in implementation of table '"
+           << ir::GetTableName(symbolic_entry)
            << "'. Found: " << table.DebugString();
   }
   ASSIGN_OR_RETURN(int bitwidth,
@@ -473,16 +469,16 @@ absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
   if (pi_match_field.bitwidth() != 0 && pi_match_field.bitwidth() != bitwidth) {
     return gutil::InternalErrorBuilder()
            << "Bit-width of match '" << match_name << "' in table '"
-           << GetTableName()
+           << ir::GetTableName(symbolic_entry)
            << "' is inconsistent between the definition and implementation.";
   }
 
   // Construct and return the variable names with the following template:
   // "<table_name>_entry_<index>_<match_name>_<match_type>_(value|mask)"
   const auto &match_type = pi_match_field.match_type();
-  std::string name_prefix =
-      absl::StrCat(GetTableName(), "_entry_", GetIndex(), "_", match_name, "_",
-                   match_type_to_str.at(match_type), "_");
+  std::string name_prefix = absl::StrCat(
+      ir::GetTableName(symbolic_entry), "_entry_", symbolic_entry.index(), "_",
+      match_name, "_", match_type_to_str.at(match_type), "_");
   return SymbolicMatchInfo{
       .match_type = match_type,
       .bitwidth = bitwidth,
@@ -491,8 +487,12 @@ absl::StatusOr<SymbolicMatchInfo> TableEntry::GetSymbolicMatchInfo(
   };
 }
 
-absl::StatusOr<std::string> TableEntry::GetActionChoiceSymbolicVariableName(
-    absl::string_view action_name, const ir::Table &table) const {
+// Returns the symbolic variable name of the action invocation with the given
+// `action_name`. Returns an error if the given `action_name` is not found in
+// the table definition.
+absl::StatusOr<std::string> GetActionChoiceSymbolicVariableName(
+    const ir::SymbolicTableEntry &symbolic_entry, absl::string_view action_name,
+    const ir::Table &table) {
   // Check if the action exists in the table definition based on the given
   // `action_name`.
   auto action_ref_it = std::find_if(
@@ -505,26 +505,22 @@ absl::StatusOr<std::string> TableEntry::GetActionChoiceSymbolicVariableName(
   if (action_ref_it == table.table_definition().entry_actions().end()) {
     return gutil::NotFoundErrorBuilder()
            << "Action '" << action_name << "' not found in table '"
-           << GetTableName() << "'";
-  }
-
-  // Return an error if this is a fully concrete entry.
-  if (IsConcrete()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Entry " << GetIndex() << " of table '" << GetTableName()
-           << "' is not symbolic.";
+           << ir::GetTableName(symbolic_entry) << "'";
   }
 
   // Construct and return the variable name with the following template:
   // "<table_name>_entry_<index>_<action_name>_$chosen$"
-  return absl::StrCat(GetTableName(), "_entry_", GetIndex(), "_", action_name,
-                      "_$chosen$");
+  return absl::StrCat(ir::GetTableName(symbolic_entry), "_entry_",
+                      symbolic_entry.index(), "_", action_name, "_$chosen$");
 }
 
-absl::StatusOr<SymbolicActionParameterInfo>
-TableEntry::GetSymbolicActionParameterInfo(absl::string_view param_name,
-                                           const ir::Action &action,
-                                           const ir::Table &table) const {
+// Returns the symbolic variable name and the bit-width of the action
+// parameter with the given `action_name` and `param_name`. Returns an error if
+// the given `action_name` and `param_name` are not found in the table and
+// action definition.
+absl::StatusOr<SymbolicActionParameterInfo> GetSymbolicActionParameterInfo(
+    const ir::SymbolicTableEntry &symbolic_entry, absl::string_view param_name,
+    const ir::Action &action, const ir::Table &table) {
   const absl::string_view action_name =
       action.action_definition().preamble().name();
 
@@ -540,14 +536,7 @@ TableEntry::GetSymbolicActionParameterInfo(absl::string_view param_name,
   if (action_ref_it == table.table_definition().entry_actions().end()) {
     return gutil::NotFoundErrorBuilder()
            << "Action '" << action_name << "' not found in table '"
-           << GetTableName() << "'";
-  }
-
-  // Return an error if this is a fully concrete entry.
-  if (IsConcrete()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Entry " << GetIndex() << " of table '" << GetTableName()
-           << "' is not symbolic.";
+           << ir::GetTableName(symbolic_entry) << "'";
   }
 
   // Check if the parameter with the given `param_name` exists in the action
@@ -584,27 +573,24 @@ TableEntry::GetSymbolicActionParameterInfo(absl::string_view param_name,
   // Construct and return the variable name and its bit-width with the following
   // template:
   // "<table_name>_entry_<index>_<action_name>_<param_name>"
-  std::string variable_name = absl::StrCat(
-      GetTableName(), "_entry_", GetIndex(), "_", action_name, "_", param_name);
   return SymbolicActionParameterInfo{
-      .variable_name = variable_name,
+      .variable_name = absl::StrCat(ir::GetTableName(symbolic_entry), "_entry_",
+                                    symbolic_entry.index(), "_", action_name,
+                                    "_", param_name),
       .bitwidth = bitwidth,
   };
 }
 
-absl::StatusOr<SymbolicMatchVariables> TableEntry::GetMatchValues(
-    absl::string_view match_name, const ir::Table &table,
-    const ir::P4Program &program, z3::context &z3_context) const {
-  // Return an error if this is a fully concrete entry.
-  if (IsConcrete()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Entry " << GetIndex() << " of table '" << GetTableName()
-           << "' is not symbolic.";
-  }
+}  // namespace
 
+absl::StatusOr<SymbolicMatchVariables> GetSymbolicMatch(
+    const ir::SymbolicTableEntry &symbolic_entry, absl::string_view match_name,
+    const ir::Table &table, const ir::P4Program &program,
+    z3::context &z3_context) {
   // Get symbolic variable names.
-  ASSIGN_OR_RETURN(SymbolicMatchInfo match,
-                   GetSymbolicMatchInfo(match_name, table, program));
+  ASSIGN_OR_RETURN(
+      SymbolicMatchInfo match,
+      GetSymbolicMatchInfo(symbolic_entry, match_name, table, program));
 
   // Construct and return the symbolic variables as Z3 expressions.
   return SymbolicMatchVariables{
@@ -616,91 +602,41 @@ absl::StatusOr<SymbolicMatchVariables> TableEntry::GetMatchValues(
   };
 }
 
-absl::StatusOr<z3::expr> TableEntry::GetActionInvocation(
-    absl::string_view action_name, const ir::Table &table,
-    z3::context &z3_context) const {
-  // Return an error if this is a fully concrete entry.
-  if (IsConcrete()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Entry " << GetIndex() << " of table '" << GetTableName()
-           << "' is not symbolic.";
-  }
-
+absl::StatusOr<z3::expr> GetSymbolicActionInvocation(
+    const ir::SymbolicTableEntry &symbolic_entry, absl::string_view action_name,
+    const ir::Table &table, z3::context &z3_context) {
   // Get symbolic variable names.
-  ASSIGN_OR_RETURN(std::string variable_name,
-                   GetActionChoiceSymbolicVariableName(action_name, table));
+  ASSIGN_OR_RETURN(
+      std::string variable_name,
+      GetActionChoiceSymbolicVariableName(symbolic_entry, action_name, table));
 
   // Construct and return the symbolic variable as a Z3 expression.
   return z3_context.bool_const(variable_name.c_str());
 }
 
-absl::StatusOr<z3::expr> TableEntry::GetActionParameter(
-    absl::string_view param_name, const ir::Action &action,
-    const ir::Table &table, z3::context &z3_context) const {
-  // Return an error if this is a fully concrete entry.
-  if (IsConcrete()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Entry " << GetIndex() << " of table '" << GetTableName()
-           << "' is not symbolic.";
-  }
-
+absl::StatusOr<z3::expr> GetSymbolicActionParameter(
+    const ir::SymbolicTableEntry &symbolic_entry, absl::string_view param_name,
+    const ir::Action &action, const ir::Table &table, z3::context &z3_context) {
   // Get symbolic variable names.
-  ASSIGN_OR_RETURN(auto action_param,
-                   GetSymbolicActionParameterInfo(param_name, action, table));
+  ASSIGN_OR_RETURN(SymbolicActionParameterInfo action_param,
+                   GetSymbolicActionParameterInfo(symbolic_entry, param_name,
+                                                  action, table));
 
   // Construct and return the symbolic variable as a Z3 expression.
   return z3_context.bv_const(action_param.variable_name.c_str(),
                              action_param.bitwidth);
 }
 
-void TableEntry::ConvertToTableAndActionAliases(const ir::P4Program &program) {
-  // Check if the table specified by the table name exists.
-  const std::string &table_name = GetTableName();
-  auto it = program.tables().find(table_name);
-  // If the table cannot be found with the table name, it may have been
-  // converted to the alias already.
-  if (it == program.tables().end()) return;
-  const ir::Table &table = it->second;
-
-  pdpi::IrTableEntry &pdpi_ir_entry =
-      IsConcrete() ? *ir_entry_.mutable_concrete_entry()
-                   : *ir_entry_.mutable_symbolic_entry()->mutable_sketch();
-
-  // Set table name that is compatible with PDPI.
-  pdpi_ir_entry.set_table_name(table.table_definition().preamble().alias());
-
-  // Set action name that is compatible with PDPI.
-  auto convert_action_name = [&program](
-                                 pdpi::IrActionInvocation &action_invocation) {
-    const std::string &action_name = action_invocation.name();
-    auto it = program.actions().find(action_name);
-    // If the action cannot be found with the action name, it may have been
-    // converted to the alias already.
-    if (it == program.actions().end()) return;
-    const ir::Action &action = it->second;
-    action_invocation.set_name(action.action_definition().preamble().alias());
-  };
-
-  if (pdpi_ir_entry.has_action()) {
-    convert_action_name(*pdpi_ir_entry.mutable_action());
-  } else if (pdpi_ir_entry.has_action_set()) {
-    for (pdpi::IrActionSetInvocation &action :
-         *pdpi_ir_entry.mutable_action_set()->mutable_actions()) {
-      convert_action_name(*action.mutable_action());
-    }
-  }
-}
-
-absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
-    const ir::Table &table, int priority, std::optional<size_t> prefix_length) {
+absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
+    int table_entry_index, const ir::Table &table,
+    const TableEntryPriorityParams &priority_params) {
   // Build a symbolic table entry in P4-Symbolic IR.
-  ir::TableEntry ir_entry;
-  pdpi::IrTableEntry &sketch =
-      *ir_entry.mutable_symbolic_entry()->mutable_sketch();
+  ir::SymbolicTableEntry result;
+  result.set_index(table_entry_index);
 
   // Set table name.
   const std::string &table_name = table.table_definition().preamble().name();
-  sketch.set_table_name(table_name);
+  result.mutable_sketch()->set_table_name(table_name);
 
   bool has_ternary_or_optional = false;
   pdpi::IrMatch *lpm_match = nullptr;
@@ -708,8 +644,8 @@ absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
   for (const auto &[match_name, match_definition] :
        Ordered(table.table_definition().match_fields_by_name())) {
     // Set match name.
-    pdpi::IrMatch *ir_match = sketch.add_matches();
-    ir_match->set_name(match_name);
+    pdpi::IrMatch &ir_match = *result.mutable_sketch()->add_matches();
+    ir_match.set_name(match_name);
 
     const auto &pi_match = match_definition.match_field();
     switch (pi_match.match_type()) {
@@ -719,7 +655,7 @@ absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
         break;
       }
       case MatchType::MatchField_MatchType_LPM: {
-        lpm_match = ir_match;
+        lpm_match = &ir_match;
         break;
       }
       default: {
@@ -731,32 +667,33 @@ absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
   }
 
   // Set prefix length for single-LPM tables.
-  if (!has_ternary_or_optional && lpm_match) {
-    if (!prefix_length.has_value()) {
+  if (!has_ternary_or_optional && lpm_match != nullptr) {
+    if (!priority_params.prefix_length.has_value()) {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Prefix length must be provided for tables with a single LPM "
+             << "Prefix length must be provided for tables with a single LPM"
                 "match.";
     }
-    lpm_match->mutable_lpm()->set_prefix_length(*prefix_length);
+    lpm_match->mutable_lpm()->set_prefix_length(*priority_params.prefix_length);
   }
 
   // Set priority.
-  if (has_ternary_or_optional && priority <= 0) {
+  if (has_ternary_or_optional && priority_params.priority <= 0) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Priority must be greater than 0 for tables with ternary or "
               "optional matches. Found: "
-           << priority;
+           << priority_params.priority;
   }
-  sketch.set_priority(has_ternary_or_optional ? priority : 0);
+  result.mutable_sketch()->set_priority(
+      has_ternary_or_optional ? priority_params.priority : 0);
 
-  return ir_entry;
+  return result;
 }
 
 absl::Status InitializeSymbolicMatches(
-    const TableEntry &entry, const ir::Table &table,
+    const ir::SymbolicTableEntry &symbolic_entry, const ir::Table &table,
     const ir::P4Program &program, z3::context &z3_context, z3::solver &solver,
     values::P4RuntimeTranslator &translator) {
-  for (const pdpi::IrMatch &match : entry.GetPdpiIrTableEntry().matches()) {
+  for (const pdpi::IrMatch &match : ir::GetMatches(symbolic_entry)) {
     if (match.name().empty()) {
       return gutil::InvalidArgumentErrorBuilder()
              << "The match name must not be empty. Found: "
@@ -764,9 +701,9 @@ absl::Status InitializeSymbolicMatches(
     }
 
     // Create symbolic variables for the symbolic match.
-    ASSIGN_OR_RETURN(
-        SymbolicMatchVariables variables,
-        entry.GetMatchValues(match.name(), table, program, z3_context));
+    ASSIGN_OR_RETURN(SymbolicMatchVariables variables,
+                     GetSymbolicMatch(symbolic_entry, match.name(), table,
+                                      program, z3_context));
     // Add various constraints for the symbolic match.
     RETURN_IF_ERROR(
         AddMatchTypeConstraintsForSymbolicMatch(variables, z3_context, solver));
@@ -778,7 +715,7 @@ absl::Status InitializeSymbolicMatches(
 }
 
 absl::Status InitializeSymbolicActions(
-    const TableEntry &entry, const ir::Table &table,
+    const ir::SymbolicTableEntry &symbolic_entry, const ir::Table &table,
     const ir::P4Program &program, z3::context &z3_context, z3::solver &solver,
     values::P4RuntimeTranslator &translator) {
   absl::btree_map<std::string, z3::expr> action_choices_by_name;
@@ -800,15 +737,16 @@ absl::Status InitializeSymbolicActions(
 
     // Create a symbolic variable for the action invocation.
     ASSIGN_OR_RETURN(z3::expr action_invocation,
-                     entry.GetActionInvocation(action_name, table, z3_context));
+                     GetSymbolicActionInvocation(symbolic_entry, action_name,
+                                                 table, z3_context));
     action_choices_by_name.insert_or_assign(action_name, action_invocation);
 
     // Create a symbolic variable for each action parameter.
     for (const auto &[param_name, param_definition] :
          Ordered(action.action_definition().params_by_name())) {
-      ASSIGN_OR_RETURN(
-          z3::expr action_param,
-          entry.GetActionParameter(param_name, action, table, z3_context));
+      ASSIGN_OR_RETURN(z3::expr action_param,
+                       GetSymbolicActionParameter(symbolic_entry, param_name,
+                                                  action, table, z3_context));
       action_params_by_name[action_name].insert_or_assign(param_name,
                                                           action_param);
     }
@@ -820,16 +758,21 @@ absl::Status InitializeSymbolicActions(
 
   // Add equality constraints for the symbolic actions if concrete values are
   // specified.
-  const pdpi::IrTableEntry &ir_entry = entry.GetPdpiIrTableEntry();
-  if (ir_entry.has_action()) {
-    RETURN_IF_ERROR(AddConstraintsForConcretePartsOfSymbolicAction(
-        ir_entry.action(), action_choices_by_name, action_params_by_name,
-        program, z3_context, solver, translator));
-  } else if (ir_entry.has_action_set()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Action set should not be specified in a direct match table. "
-              "Found: "
-           << ir_entry.DebugString();
+  switch (symbolic_entry.sketch().type_case()) {
+    case pdpi::IrTableEntry::kAction: {
+      RETURN_IF_ERROR(AddConstraintsForConcretePartsOfSymbolicAction(
+          symbolic_entry.sketch().action(), action_choices_by_name,
+          action_params_by_name, program, z3_context, solver, translator));
+      break;
+    }
+    case pdpi::IrTableEntry::kActionSet: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Action set should not be specified in a direct match table. "
+                "Found: "
+             << symbolic_entry.DebugString();
+    }
+    case pdpi::IrTableEntry::TYPE_NOT_SET:
+      break;
   }
 
   return absl::OkStatus();
@@ -837,42 +780,31 @@ absl::Status InitializeSymbolicActions(
 
 // Returns a concrete table entry extracted from the given `symbolic_entry`
 // based on the given `model` and `translator`.
-absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
-    const TableEntry &entry, const z3::model &model,
+absl::StatusOr<ir::ConcreteTableEntry> ExtractConcreteEntryFromModel(
+    const ir::SymbolicTableEntry &entry, const z3::model &model,
     const ir::P4Program &program, const values::P4RuntimeTranslator &translator,
     z3::context &z3_context) {
-  if (entry.IsConcrete()) {
-    // Return the input entry if it is already concrete.
-    return entry;
-  } else if (!entry.IsSymbolic()) {
-    // Check if the input entry is symbolic.
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Attempting to extract from an entry that is neither concrete "
-              "nor symbolic.";
-  }
+  ir::ConcreteTableEntry result;
+  result.set_index(entry.index());
 
   // Check if the table specified by the symbolic entry exists.
-  const std::string &table_name = entry.GetTableName();
+  const std::string &table_name = ir::GetTableName(entry);
   ASSIGN_OR_RETURN(const ir::Table *table,
                    util::GetIrTable(program, table_name));
 
-  // Get the symbolic sketch.
-  const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
-
-  // Construct the concrete IR entry.
+  // Construct the concrete PDPI IR entry.
   // By assigning the symbolic sketch to the concrete IR entry, we keep things
   // that are not under the control of P4-Symbolic intact (e.g., table_name,
   // priority, meter_config, counter_data, meter_counter_data,
   // controller_metadata).
-  ir::TableEntry ir_entry;
-  pdpi::IrTableEntry &pdpi_ir_entry = *ir_entry.mutable_concrete_entry();
-  pdpi_ir_entry = sketch;
-  pdpi_ir_entry.clear_matches();
-  pdpi_ir_entry.clear_action();
-  pdpi_ir_entry.clear_action_set();
+  pdpi::IrTableEntry &result_entry = *result.mutable_pdpi_ir_entry();
+  result_entry = entry.sketch();
+  result_entry.clear_matches();
+  result_entry.clear_action();
+  result_entry.clear_action_set();
 
   // Set matches.
-  for (const pdpi::IrMatch &symbolic_match : sketch.matches()) {
+  for (const pdpi::IrMatch &symbolic_match : entry.sketch().matches()) {
     bool wildcard = false;
     pdpi::IrMatch concrete_match;
 
@@ -883,7 +815,7 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
     // Evaluate and set match values.
     ASSIGN_OR_RETURN(
         SymbolicMatchVariables match_variables,
-        entry.GetMatchValues(match_name, *table, program, z3_context));
+        GetSymbolicMatch(entry, match_name, *table, program, z3_context));
     ASSIGN_OR_RETURN(std::string field_name,
                      util::GetFieldNameFromMatch(match_name, *table));
     ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_definition,
@@ -943,7 +875,7 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
     }
 
     if (!wildcard) {
-      *pdpi_ir_entry.add_matches() = std::move(concrete_match);
+      *result_entry.add_matches() = std::move(concrete_match);
     }
   }
 
@@ -961,7 +893,7 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
     const std::string &action_name = action_ref.action().preamble().name();
     ASSIGN_OR_RETURN(
         z3::expr action_invocation,
-        entry.GetActionInvocation(action_name, *table, z3_context));
+        GetSymbolicActionInvocation(entry, action_name, *table, z3_context));
     ASSIGN_OR_RETURN(bool action_applied, EvalZ3Bool(action_invocation, model));
     if (!action_applied) continue;
 
@@ -983,19 +915,19 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
     const ir::Action &action = it->second;
 
     // Set action name.
-    pdpi_ir_entry.mutable_action()->set_name(action_name);
+    result_entry.mutable_action()->set_name(action_name);
 
     // Set action parameters.
     for (const auto &[param_name, param_definition] :
          Ordered(action.action_definition().params_by_name())) {
       // Set action parameter name.
       pdpi::IrActionInvocation::IrActionParam &ir_param =
-          *pdpi_ir_entry.mutable_action()->add_params();
+          *result_entry.mutable_action()->add_params();
       ir_param.set_name(param_name);
       // Set action parameter value.
-      ASSIGN_OR_RETURN(
-          z3::expr param,
-          entry.GetActionParameter(param_name, action, *table, z3_context));
+      ASSIGN_OR_RETURN(z3::expr param,
+                       GetSymbolicActionParameter(entry, param_name, action,
+                                                  *table, z3_context));
       ASSIGN_OR_RETURN(
           pdpi::IrValue value,
           EvalZ3BitvectorToIrValue(param, model, /*field_name=*/std::nullopt,
@@ -1006,7 +938,7 @@ absl::StatusOr<TableEntry> ExtractConcreteEntryFromModel(
   }
 
   // Build and return the concrete table entry.
-  return TableEntry(entry.GetIndex(), ir_entry);
+  return result;
 }
 
 }  // namespace p4_symbolic::symbolic

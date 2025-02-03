@@ -111,13 +111,13 @@ absl::Status EvaluateConcreteAction(
 // parameters of the given `entry`.
 // This applies the action with symbolic parameters on the symbolic `headers`.
 absl::Status EvaluateSymbolicAction(const ir::Action &action,
-                                    const TableEntry &entry, SolverState &state,
+                                    const ir::SymbolicTableEntry &entry,
+                                    SolverState &state,
                                     SymbolicPerPacketState &headers,
                                     const z3::expr &guard);
 
+}  // namespace action
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-} // namespace action
-} // namespace symbolic
-} // namespace p4_symbolic
-
-#endif // P4_SYMBOLIC_SYMBOLIC_ACTION_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_ACTION_H_

@@ -14,8 +14,12 @@
 
 #include "p4_symbolic/ir/table_entries.h"
 
+#include <utility>
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -31,7 +35,7 @@ absl::Status UseFullyQualifiedTableName(const pdpi::IrP4Info &p4info,
   auto &alias = entry.table_name();
   RET_CHECK(p4info.tables_by_name().count(alias) == 1)
       << "where alias = '" << alias << "' and IR table entry =\n"
-      << entry.DebugString();
+      << absl::StrCat(entry);
   auto &full_name = p4info.tables_by_name().at(alias).preamble().name();
   entry.set_table_name(full_name);
   return absl::OkStatus();
@@ -64,7 +68,7 @@ absl::Status UseFullyQualifiedNamesInEntry(const pdpi::IrP4Info &info,
   }
   return gutil::InvalidArgumentErrorBuilder()
          << "unexpected or missing action in table entry: "
-         << entry.DebugString();
+         << absl::StrCat(entry);
 }
 
 }  // namespace
@@ -76,12 +80,18 @@ absl::StatusOr<TableEntries> ParseTableEntries(
   // pdpi.ir.IrTableEntry.
   TableEntries output;
   for (const p4::v1::TableEntry &pi_entry : entries) {
-    ASSIGN_OR_RETURN(pdpi::IrTableEntry pdpi_entry,
+    ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_entry,
                      pdpi::PiTableEntryToIr(p4info, pi_entry));
-    RETURN_IF_ERROR(UseFullyQualifiedNamesInEntry(p4info, pdpi_entry));
-    TableEntry table_entry;
-    *table_entry.mutable_concrete_entry() = pdpi_entry;
-    output[pdpi_entry.table_name()].push_back(table_entry);
+    // TODO: Consider removing this function call if we switch to
+    // using aliases as table/action names in P4-Symbolic.
+    RETURN_IF_ERROR(UseFullyQualifiedNamesInEntry(p4info, ir_entry));
+
+    std::vector<TableEntry> &output_entries = output[ir_entry.table_name()];
+    int index = output_entries.size();
+    ConcreteTableEntry &output_entry =
+        *output_entries.emplace_back().mutable_concrete_entry();
+    output_entry.set_index(index);
+    *output_entry.mutable_pdpi_ir_entry() = std::move(ir_entry);
   }
   return output;
 }
