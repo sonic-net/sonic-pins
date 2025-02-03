@@ -14,6 +14,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -44,6 +45,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -74,6 +76,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -119,6 +122,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #xff
@@ -149,6 +153,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #xff
@@ -179,6 +184,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #xff
@@ -224,6 +230,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #xff
@@ -254,6 +261,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #xff
@@ -284,6 +292,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #xff
@@ -329,6 +338,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #xff
@@ -359,6 +369,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #xff
@@ -389,6 +400,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #xff
@@ -434,6 +446,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -464,6 +477,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -494,6 +508,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -539,6 +554,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -569,6 +585,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -599,6 +616,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -644,6 +662,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -674,6 +693,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -704,6 +724,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -749,6 +770,7 @@ tbl_table_hit_2l83 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -779,6 +801,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f
@@ -809,6 +832,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x7f

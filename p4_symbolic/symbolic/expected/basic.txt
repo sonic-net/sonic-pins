@@ -16,6 +16,7 @@ MyIngress.ipv4_lpm => was matched on entry 0
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -59,6 +60,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -102,6 +104,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -156,6 +159,7 @@ MyIngress.ipv4_lpm => was matched on entry 1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -199,6 +203,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -242,6 +247,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -296,6 +302,7 @@ MyIngress.ipv4_lpm => was matched on entry 2
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -339,6 +346,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -382,6 +390,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x00000000000a
@@ -436,6 +445,7 @@ MyIngress.ipv4_lpm => was matched on entry 3
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -479,6 +489,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x000000000000
@@ -522,6 +533,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dstAddr = #x160000000016
