@@ -35,7 +35,7 @@
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/table.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/test_util.h"
 #include "p4_symbolic/z3_util.h"
@@ -75,8 +75,11 @@ class SymbolicTableEntriesIPv4BasicTest : public testing::Test {
 };
 
 TEST_F(SymbolicTableEntriesIPv4BasicTest, OneSymbolicEntryPerTable) {
-  constexpr int priority = 0;
-  constexpr int prefix_length = 16;
+  constexpr int kTableEntryIndex = 0;
+  constexpr auto kTieBrakers = ir::TableEntryPriorityParams{
+      .priority = 0,
+      .prefix_length = 16,
+  };
 
   // Remove all existing concrete table entries.
   ir_entries_.clear();
@@ -86,9 +89,8 @@ TEST_F(SymbolicTableEntriesIPv4BasicTest, OneSymbolicEntryPerTable) {
     // Skip tables that are not in the original P4 program.
     if (table.table_definition().preamble().id() == 0) continue;
     ASSERT_OK_AND_ASSIGN(
-        ir::TableEntry ir_entry,
-        symbolic::CreateSymbolicIrTableEntry(table, priority, prefix_length));
-    ir_entries_[table_name].push_back(std::move(ir_entry));
+        *ir_entries_[table_name].emplace_back().mutable_symbolic_entry(),
+        ir::CreateSymbolicIrTableEntry(kTableEntryIndex, table, kTieBrakers));
   }
 
   // Symbolically evaluate the program with symbolic table entries.
@@ -119,7 +121,7 @@ TEST_F(SymbolicTableEntriesIPv4BasicTest, OneSymbolicEntryPerTable) {
         "input_table_entries.textproto", banner));
     for (const auto& entry : entries) {
       EXPECT_OK(artifact_writer_.AppendToTestArtifact(
-          "input_table_entries.textproto", entry.GetP4SymbolicIrTableEntry()));
+          "input_table_entries.textproto", entry));
     }
   }
   EXPECT_OK(
@@ -163,8 +165,7 @@ TEST_F(SymbolicTableEntriesIPv4BasicTest, OneSymbolicEntryPerTable) {
         "concrete_table_entries.textproto", banner));
     for (const auto& entry : entries) {
       EXPECT_OK(artifact_writer_.AppendToTestArtifact(
-          "concrete_table_entries.textproto",
-          entry.GetP4SymbolicIrTableEntry()));
+           "concrete_table_entries.textproto", entry));
     }
   }
 

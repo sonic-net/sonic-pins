@@ -29,11 +29,12 @@
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -57,6 +58,10 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
     case ir::Statement::kClone: {
       // TODO: Add support for cloning.
       return headers.Set(std::string(kGotClonedPseudoField),
+                         state.context.z3_context->bool_val(true), guard);
+    }
+    case ir::Statement::kRecirculate: {
+      return headers.Set(std::string(kGotRecirculatedPseudoField),
                          state.context.z3_context->bool_val(true), guard);
     }
     case ir::Statement::kDrop: {
@@ -355,7 +360,7 @@ absl::StatusOr<z3::expr> EvaluateRExpression(
       // Evaluate arguments.
       std::vector<z3::expr> args;
       for (const auto &arg_value : builtin_expr.arguments()) {
-         ASSIGN_OR_RETURN(z3::expr arg, EvaluateRValue(arg_value, headers,
+        ASSIGN_OR_RETURN(z3::expr arg, EvaluateRValue(arg_value, headers,
                                                       context, z3_context));
         args.push_back(arg);
       }
@@ -429,34 +434,35 @@ absl::Status EvaluateConcreteAction(
 }
 
 absl::Status EvaluateSymbolicAction(const ir::Action &action,
-                                    const TableEntry &entry, SolverState &state,
+                                    const ir::SymbolicTableEntry &entry,
+                                    SolverState &state,
                                     SymbolicPerPacketState &headers,
                                     const z3::expr &guard) {
   // At this point the table must exists because otherwise an absl error would
   // have been returned upon initializing the table entries, so no exception
   // will be thrown.
-  const ir::Table &table = state.program.tables().at(entry.GetTableName());
+  const ir::Table &table = state.program.tables().at(ir::GetTableName(entry));
 
-// Construct the action's context.
+  // Construct the action's context.
   ActionContext context;
   context.action_name = action.action_definition().preamble().name();
 
-// Add the symbolic action parameters to scope.
+  // Add the symbolic action parameters to scope.
   for (const auto &[param_name, _] :
        Ordered(action.action_definition().params_by_name())) {
-    ASSIGN_OR_RETURN(z3::expr param_value,
-                     entry.GetActionParameter(param_name, action, table,
-                                              *state.context.z3_context));
+    ASSIGN_OR_RETURN(z3::expr param_value, GetSymbolicActionParameter(
+                                               entry, param_name, action, table,
+                                               *state.context.z3_context));
     context.scope.insert({param_name, param_value});
   }
 
-// Iterate over the body in order, and evaluate each statement.
+  // Iterate over the body in order, and evaluate each statement.
   for (const auto &statement : action.action_implementation().action_body()) {
     RETURN_IF_ERROR(
         EvaluateStatement(statement, headers, state, &context, guard));
   }
 
- return absl::OkStatus();
+  return absl::OkStatus();
 }
 
 }  // namespace action
