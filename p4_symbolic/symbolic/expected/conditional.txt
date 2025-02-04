@@ -12,6 +12,7 @@ MyIngress.t_3 => was matched on entry 0
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000001
@@ -41,6 +42,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000001
@@ -70,6 +72,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000002
@@ -112,6 +115,7 @@ MyIngress.t_3 => was matched on entry 0
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000001
@@ -141,6 +145,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000001
@@ -170,6 +175,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000002
@@ -218,6 +224,7 @@ MyIngress.t_3 => was matched on entry 0
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = false
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000001
@@ -247,6 +254,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000001
@@ -276,6 +284,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 ethernet.$extracted$ = true
 ethernet.$valid$ = true
 ethernet.dst_addr = #x000000000002

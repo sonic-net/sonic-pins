@@ -13,9 +13,8 @@ absl::StatusOr<p4::v1::ForwardingPipelineConfig>
 ParseToForwardingPipelineConfig(absl::string_view bmv2_json_path,
                                 absl::string_view p4info_path);
 
-absl::StatusOr<std::vector<p4::v1::TableEntry>>
-GetPiTableEntriesFromPiUpdatesProtoTextFile(
-    absl::string_view table_entries_path);
+absl::StatusOr<std::vector<p4::v1::Entity>>
+GetPiEntitiesFromPiUpdatesProtoTextFile(absl::string_view table_entries_path);
 
 }  // namespace p4_symbolic
 
