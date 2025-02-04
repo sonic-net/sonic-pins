@@ -41,7 +41,7 @@ using TableEntries = absl::btree_map<std::string, std::vector<TableEntry>>;
 
 // Returns table entries in P4-Symbolic IR, keyed by table name.
 absl::StatusOr<TableEntries> ParseTableEntries(
-    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::TableEntry> entries);
+    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::Entity> entities);
 
 } // namespace ir
 } // namespace p4_symbolic

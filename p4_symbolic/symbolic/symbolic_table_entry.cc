@@ -734,7 +734,8 @@ absl::StatusOr<ir::ConcreteTableEntry> ExtractConcreteEntryFromModel(
   // that are not under the control of P4-Symbolic intact (e.g., table_name,
   // priority, meter_config, counter_data, meter_counter_data,
   // controller_metadata).
-  pdpi::IrTableEntry &result_entry = *result.mutable_pdpi_ir_entry();
+  pdpi::IrTableEntry &result_entry =
+      *result.mutable_pdpi_ir_entity()->mutable_table_entry();
   result_entry = entry.sketch();
   result_entry.clear_matches();
   result_entry.clear_action();

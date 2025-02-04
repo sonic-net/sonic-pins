@@ -35,6 +35,7 @@ message TranslationData {
 // PacketSynthesizer to build the initial SMT formula.
 message PacketSynthesisParams {
   p4.v1.ForwardingPipelineConfig pipeline_config = 1;
+  // TODO: Add support for entities that are not table entries.
   repeated p4.v1.TableEntry pi_entries = 2;
   repeated int32 physical_port = 3;
   map<string, TranslationData> translation_per_type = 4;

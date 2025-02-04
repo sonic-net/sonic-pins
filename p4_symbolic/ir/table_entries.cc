@@ -14,15 +14,19 @@
 
 #include "p4_symbolic/ir/table_entries.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
 #include "gutil/status.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/names.h"
 #include "p4_symbolic/ir/ir.pb.h"
 
 namespace p4_symbolic {
@@ -71,27 +75,38 @@ absl::Status UseFullyQualifiedNamesInEntry(const pdpi::IrP4Info &info,
          << absl::StrCat(entry);
 }
 
+absl::Status UseFullyQualifiedNamesInEntity(const pdpi::IrP4Info &info,
+                                            pdpi::IrEntity &entity) {
+  switch (entity.entity_case()) {
+    case pdpi::IrEntity::kTableEntry:
+      return UseFullyQualifiedNamesInEntry(info, *entity.mutable_table_entry());
+    default:
+      return absl::OkStatus();
+  }
+}
+
 }  // namespace
 
 absl::StatusOr<TableEntries> ParseTableEntries(
-    const pdpi::IrP4Info &p4info,
-    absl::Span<const p4::v1::TableEntry> entries) {
+    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::Entity> entities) {
   // Use pdpi to transform each plain p4.v1.TableEntry to the pd representation
   // pdpi.ir.IrTableEntry.
   TableEntries output;
-  for (const p4::v1::TableEntry &pi_entry : entries) {
-    ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_entry,
-                     pdpi::PiTableEntryToIr(p4info, pi_entry));
+  for (const p4::v1::Entity &pi_entity : entities) {
+    ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity,
+                     pdpi::PiEntityToIr(p4info, pi_entity));
     // TODO: Consider removing this function call if we switch to
     // using aliases as table/action names in P4-Symbolic.
-    RETURN_IF_ERROR(UseFullyQualifiedNamesInEntry(p4info, ir_entry));
+    RETURN_IF_ERROR(UseFullyQualifiedNamesInEntity(p4info, ir_entity));
+    ASSIGN_OR_RETURN(std::string table_name,
+                     pdpi::EntityToTableName(ir_entity));
 
-    std::vector<TableEntry> &output_entries = output[ir_entry.table_name()];
+    std::vector<TableEntry> &output_entries = output[std::move(table_name)];
     int index = output_entries.size();
     ConcreteTableEntry &output_entry =
         *output_entries.emplace_back().mutable_concrete_entry();
     output_entry.set_index(index);
-    *output_entry.mutable_pdpi_ir_entry() = std::move(ir_entry);
+    *output_entry.mutable_pdpi_ir_entity() = std::move(ir_entity);
   }
   return output;
 }

@@ -270,11 +270,11 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
 
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
     const p4::v1::ForwardingPipelineConfig &config,
-    const std::vector<p4::v1::TableEntry> &entries,
+    const std::vector<p4::v1::Entity> &entities,
     const std::vector<int> &physical_ports,
     const TranslationPerType &translation_per_type) {
   // Parse the P4 config and concrete PI entries into the P4-symbolic IR.
-  ASSIGN_OR_RETURN(ir::Dataplane dataplane, ir::ParseToIr(config, entries));
+  ASSIGN_OR_RETURN(ir::Dataplane dataplane, ir::ParseToIr(config, entities));
   return EvaluateP4Program(dataplane.program, dataplane.entries, physical_ports,
                            translation_per_type);
 }
