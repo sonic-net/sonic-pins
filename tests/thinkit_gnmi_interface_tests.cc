@@ -269,15 +269,18 @@ void TestGNMIOtherMasterPortInUseDuringBreakout(
                                       BreakoutType::kAny));
   // Get another random port from list of front panel ports to install router
   // interface on.
-  auto platform_json = json::parse(platform_json_contents);
-  auto interfaces_json = platform_json.find(kInterfaces);
-  interfaces_json->erase(port.port_name);
-  auto updated_platform_json_contents = platform_json.dump();
+  std::vector<absl::string_view> allow_list;
+  absl::flat_hash_map<std::string, std::string> interfaces_map;
+  ASSERT_OK_AND_ASSIGN(interfaces_map, GetInterfaceToOperStatusMapOverGnmi(
+                                           *sut_gnmi_stub,
+                                           /*timeout=*/absl::Seconds(60)));
+  interfaces_map.erase(port.port_name);
+  for (const auto& p : interfaces_map) allow_list.push_back(p.first);
 
-  ASSERT_OK_AND_ASSIGN(
-      auto port_in_use,
-      GetRandomPortWithSupportedBreakoutModes(
-          *sut_gnmi_stub, updated_platform_json_contents, BreakoutType::kAny));
+  ASSERT_OK_AND_ASSIGN(auto port_in_use,
+                       GetRandomPortWithSupportedBreakoutModes(
+                           *sut_gnmi_stub, platform_json_contents,
+                           BreakoutType::kAny, BreakoutType::kAny, allow_list));
   BreakoutDuringPortInUse(sut, sut_gnmi_stub.get(), port,
                           platform_json_contents, port_in_use.port_name,
                           p4_info,
