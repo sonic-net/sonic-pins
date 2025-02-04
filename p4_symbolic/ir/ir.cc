@@ -14,17 +14,12 @@
 
 #include "p4_symbolic/ir/ir.h"
 
-#include <fstream>
 #include <memory>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -33,16 +28,19 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "glog/logging.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/names.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/cfg.h"
 #include "p4_symbolic/ir/ir.pb.h"
 
-namespace p4_symbolic {
-namespace ir {
+namespace p4_symbolic::ir {
 
 namespace {
 
@@ -66,16 +64,18 @@ absl::StatusOr<bmv2::StatementOp> StatementOpToEnum(const std::string &op) {
   static const std::unordered_map<std::string, bmv2::StatementOp> op_table = {
       {"assign", bmv2::StatementOp::assign},
       {"mark_to_drop", bmv2::StatementOp::mark_to_drop},
-      {"clone_ingress_pkt_to_egress", // clone3(...)
+      {"clone_ingress_pkt_to_egress",  // clone3(...)
        bmv2::StatementOp::clone_ingress_pkt_to_egress},
-      {"modify_field_with_hash_based_offset", // hash(...)
+      {"modify_field_with_hash_based_offset",  // hash(...)
        bmv2::StatementOp::modify_field_with_hash_based_offset},
-      {"add_header", // hdr.SetValid()
+      {"add_header",  // hdr.SetValid()
        bmv2::StatementOp::add_header},
-      {"remove_header", // hdr.SetInvalid()
+      {"remove_header",  // hdr.SetInvalid()
        bmv2::StatementOp::remove_header},
       {"assign_header", bmv2::StatementOp::assign_header},
-      {"exit", bmv2::StatementOp::exit}};
+      {"exit", bmv2::StatementOp::exit},
+      {"recirculate", bmv2::StatementOp::recirculate},
+  };
 
   if (op_table.count(op) != 1) {
     return absl::UnimplementedError(
@@ -290,14 +290,17 @@ absl::StatusOr<TernaryExpression> ExtractTernaryExpression(
     const google::protobuf::Struct &bmv2_expression,
     const std::vector<std::string> &variables) {
   if (bmv2_expression.fields().count("left") != 1 ||
-      bmv2_expression.fields().count("condition") != 1) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("TernaryExpression must contain 'left', and 'condition' ",
-                     bmv2_expression.DebugString()));
+      (bmv2_expression.fields().count("cond") != 1 &&
+       bmv2_expression.fields().count("condition") != 1)) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "TernaryExpression must contain 'left', and 'condition'/'cond' ",
+        bmv2_expression.DebugString()));
   }
 
   const google::protobuf::Value &condition =
-      bmv2_expression.fields().at("condition");
+      bmv2_expression.fields().contains("condition")
+          ? bmv2_expression.fields().at("condition")
+          : bmv2_expression.fields().at("cond");
   const google::protobuf::Value &left = bmv2_expression.fields().at("left");
   const google::protobuf::Value &right = bmv2_expression.fields().at("right");
 
@@ -629,7 +632,10 @@ absl::StatusOr<Statement> ExtractStatement(
       statement.mutable_clone();
       return statement;
     }
-
+    case bmv2::StatementOp::recirculate: {
+      statement.mutable_recirculate();
+      return statement;
+    }
     case bmv2::StatementOp::add_header:
     case bmv2::StatementOp::remove_header: {
       const google::protobuf::Value &params =
@@ -722,7 +728,7 @@ absl::StatusOr<Action> ExtractAction(
   }
 
   // Parse every statement in body.
-  // When encoutering a parameter, look it up in the parameter map.
+  // When encountering a parameter, look it up in the parameter map.
   for (const google::protobuf::Struct &primitive : bmv2_action.primitives()) {
     ASSIGN_OR_RETURN(*action_impl->add_action_body(),
                      ExtractStatement(primitive, parameter_map),
@@ -1274,8 +1280,7 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   // not fully qualified names.
   std::unordered_map<std::string, const pdpi::IrActionDefinition &>
       actions_by_qualified_name;
-  const auto &pdpi_actions = pdpi.actions_by_name();
-  for (const auto &[_, action] : pdpi_actions) {
+  for (const auto &[_, action] : pdpi.actions_by_name()) {
     const std::string &name = action.preamble().name();
     actions_by_qualified_name.insert({name, action});
   }
@@ -1337,11 +1342,13 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
     tables_by_qualified_name.insert({name, table});
   }
 
-  // Translate tables.
+  // Translate pipelines.
   for (const auto &pipeline : bmv2.pipelines()) {
     ir::Pipeline &ir_pipeline = (*output.mutable_pipeline())[pipeline.name()];
     ir_pipeline.set_name(pipeline.name());
     ir_pipeline.set_initial_control(Bmv2ToIrControlName(pipeline.init_table()));
+
+    // Translate tables.
     for (const bmv2::Table &bmv2_table : pipeline.tables()) {
       const std::string &table_name = bmv2_table.name();
 
@@ -1440,5 +1447,124 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   return output;
 }
 
-}  // namespace ir
-}  // namespace p4_symbolic
+absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
+    int table_entry_index, const ir::Table &table,
+    const TableEntryPriorityParams &priority_params) {
+  // Build a symbolic table entry in P4-Symbolic IR.
+  ir::SymbolicTableEntry result;
+  result.set_index(table_entry_index);
+
+  // Set table name.
+  const std::string &table_name = table.table_definition().preamble().name();
+  result.mutable_sketch()->set_table_name(table_name);
+
+  bool has_ternary_or_optional = false;
+  pdpi::IrMatch *lpm_match = nullptr;
+
+  for (const auto &[match_name, match_definition] :
+       Ordered(table.table_definition().match_fields_by_name())) {
+    // Set match name.
+    pdpi::IrMatch &ir_match = *result.mutable_sketch()->add_matches();
+    ir_match.set_name(match_name);
+
+    const auto &pi_match = match_definition.match_field();
+    switch (pi_match.match_type()) {
+      case p4::config::v1::MatchField::TERNARY:
+      case p4::config::v1::MatchField::OPTIONAL: {
+        has_ternary_or_optional = true;
+        break;
+      }
+      case p4::config::v1::MatchField::LPM: {
+        lpm_match = &ir_match;
+        break;
+      }
+      default: {
+        // Exact or some other unsupported type, no need to do anything here.
+        // An absl error will be returned during symbolic evaluation.
+        break;
+      }
+    }
+  }
+
+  // Set prefix length for single-LPM tables.
+  if (!has_ternary_or_optional && lpm_match != nullptr) {
+    if (!priority_params.prefix_length.has_value()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Prefix length must be provided for tables with a single LPM"
+                "match.";
+    }
+    lpm_match->mutable_lpm()->set_prefix_length(*priority_params.prefix_length);
+  }
+
+  // Set priority.
+  if (has_ternary_or_optional && priority_params.priority <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Priority must be greater than 0 for tables with ternary or "
+              "optional matches. Found: "
+           << priority_params.priority;
+  }
+  result.mutable_sketch()->set_priority(
+      has_ternary_or_optional ? priority_params.priority : 0);
+
+  return result;
+}
+
+int GetIndex(const TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry:
+      return entry.concrete_entry().index();
+    case TableEntry::kSymbolicEntry:
+      return entry.symbolic_entry().index();
+    case TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  LOG(ERROR) << "p4_symbolic::ir::TableEntry of unknown type: "
+             << absl::StrCat(entry);
+  return 0;
+}
+
+std::string GetTableName(const TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry:
+      return GetTableName(entry.concrete_entry());
+    case TableEntry::kSymbolicEntry:
+      return GetTableName(entry.symbolic_entry());
+    case TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  LOG(ERROR) << "p4_symbolic::ir::TableEntry of unknown type: "
+             << absl::StrCat(entry);
+  return "<invalid>";
+}
+std::string GetTableName(const ConcreteTableEntry &entry) {
+  absl::StatusOr<std::string> table_name =
+      pdpi::EntityToTableName(entry.pdpi_ir_entity());
+  return table_name.ok() ? std::move(*table_name) : "<invalid>";
+}
+std::string GetTableName(const SymbolicTableEntry &entry) {
+  return entry.sketch().table_name();
+}
+
+int GetPriority(const TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry: {
+      const pdpi::IrEntity &entity = entry.concrete_entry().pdpi_ir_entity();
+      switch (entity.entity_case()) {
+        case pdpi::IrEntity::kTableEntry:
+          return entity.table_entry().priority();
+        case pdpi::IrEntity::kPacketReplicationEngineEntry:
+          return 0;
+        case pdpi::IrEntity::ENTITY_NOT_SET:
+          return 0;
+      }
+      break;
+    }
+    case TableEntry::kSymbolicEntry:
+      return entry.symbolic_entry().sketch().priority();
+    case TableEntry::ENTRY_NOT_SET:
+      return 0;
+  }
+  return 0;
+}
+
+}  // namespace p4_symbolic::ir

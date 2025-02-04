@@ -96,7 +96,7 @@ constexpr absl::string_view kTableEntries = R"pb(
   }
 )pb";
 
-class P4SymbolicComponentTest : public testing::Test {
+class P4SymbolicIntegrationTest : public testing::Test {
  public:
   thinkit::TestEnvironment& Environment() { return *environment_; }
 
@@ -112,21 +112,17 @@ absl::StatusOr<std::string> GenerateSmtForSaiPiplelineWithSimpleEntries() {
   ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
                    pdpi::CreateIrP4Info(config.p4info()));
   auto pd_entries = ParseProtoOrDie<sai::TableEntries>(kTableEntries);
-  std::vector<p4::v1::TableEntry> pi_entries;
-  for (auto& pd_entry : pd_entries.entries()) {
-    ASSIGN_OR_RETURN(
-        pi_entries.emplace_back(),
-        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
-  }
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
+                   pdpi::PdTableEntriesToPiEntities(ir_p4info, pd_entries));
 
   ASSIGN_OR_RETURN(std::unique_ptr<symbolic::SolverState> solver,
-                   symbolic::EvaluateP4Program(config, pi_entries));
+                   symbolic::EvaluateP4Program(config, pi_entities));
   return solver->GetSolverSMT();
 }
 
 // Generate SMT constraints for the SAI pipeline from scratch multiple times and
 // make sure the results remain the same.
-TEST_F(P4SymbolicComponentTest,
+TEST_F(P4SymbolicIntegrationTest,
        DISABLED_ConstraintGenerationIsDeterministicForSai) {
   constexpr int kNumberOfRuns = 5;
   ASSERT_OK_AND_ASSIGN(const std::string reference_smt_formula,
@@ -139,7 +135,7 @@ TEST_F(P4SymbolicComponentTest,
   }
 }
 
-TEST_F(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
+TEST_F(P4SymbolicIntegrationTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // Some constants.
   auto env = thinkit::BazelTestEnvironment(/*mask_known_failures=*/false);
   const auto config = sai::GetNonstandardForwardingPipelineConfig(
@@ -152,11 +148,8 @@ TEST_F(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // Prepare hard-coded table entries.
   auto pd_entries = ParseProtoOrDie<sai::TableEntries>(kTableEntries);
   EXPECT_OK(env.StoreTestArtifact("pd_entries.textproto", pd_entries));
-  std::vector<p4::v1::TableEntry> pi_entries;
-  for (auto& pd_entry : pd_entries.entries()) {
-    ASSERT_OK_AND_ASSIGN(pi_entries.emplace_back(),
-                         pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
-  }
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                       pdpi::PdTableEntriesToPiEntities(ir_p4info, pd_entries));
 
   std::vector<int> ports = {1, 2, 3, 4, 5};
   LOG(INFO) << "building model (this may take a while) ...";

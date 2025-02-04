@@ -227,8 +227,8 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 
   // Extract data from params.
   const p4::v1::ForwardingPipelineConfig& config = params.pipeline_config();
-  std::vector<p4::v1::TableEntry> entries(params.pi_entries().begin(),
-                                          params.pi_entries().end());
+  std::vector<p4::v1::Entity> entities(params.pi_entities().begin(),
+                                       params.pi_entities().end());
   std::vector<int> physical_ports(params.physical_port().begin(),
                                   params.physical_port().end());
   symbolic::TranslationPerType translation_per_type;
@@ -244,8 +244,8 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 
   // Evaluate P4 pipeline to get solver_state.
   ASSIGN_OR_RETURN(auto solver_state,
-                   p4_symbolic::symbolic::EvaluateP4Program(
-                       config, entries, physical_ports, translation_per_type));
+                   symbolic::EvaluateP4Program(config, entities, physical_ports,
+                                               translation_per_type));
 
   // TODO: Avoid generating packets that are always dropped.
   RETURN_IF_ERROR(AddSanePacketConstraints(*solver_state));
