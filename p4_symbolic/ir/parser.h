@@ -27,7 +27,7 @@ namespace p4_symbolic::ir {
 
 absl::StatusOr<Dataplane> ParseToIr(
     const p4::v1::ForwardingPipelineConfig &config,
-    absl::Span<const p4::v1::TableEntry> table_entries);
+    absl::Span<const p4::v1::Entity> entities);
 
 }  // namespace p4_symbolic::ir
 

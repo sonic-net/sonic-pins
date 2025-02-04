@@ -63,11 +63,10 @@ class IPv4RoutingTableEntriesTest : public testing::Test {
     ASSERT_OK_AND_ASSIGN(
         p4::v1::ForwardingPipelineConfig config,
         ParseToForwardingPipelineConfig(bmv2_json_path, p4info_path));
-    ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::TableEntry> pi_entries,
-        GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
+    ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                         GetPiEntitiesFromPiUpdatesProtoTextFile(entries_path));
     ASSERT_OK_AND_ASSIGN(ir::Dataplane dataplane,
-                         ir::ParseToIr(config, pi_entries));
+                         ir::ParseToIr(config, pi_entities));
     state_ = std::make_unique<SolverState>(dataplane.program);
     ir_entries_ = std::move(dataplane.entries);
   }

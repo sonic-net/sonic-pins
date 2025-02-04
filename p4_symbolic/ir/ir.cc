@@ -35,6 +35,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/names.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/cfg.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -1508,30 +1509,6 @@ absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
   return result;
 }
 
-const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(const ir::TableEntry &entry) {
-  switch (entry.entry_case()) {
-    case TableEntry::kConcreteEntry:
-      return entry.concrete_entry().pdpi_ir_entry();
-    case TableEntry::kSymbolicEntry:
-      return entry.symbolic_entry().sketch();
-    case TableEntry::ENTRY_NOT_SET:
-      break;
-  }
-  LOG(FATAL)  // Crash ok: test infra.
-      << "p4_symbolic::ir::TableEntry of unknown type: " << absl::StrCat(entry);
-}
-
-namespace {
-const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(
-    const ir::SymbolicTableEntry &entry) {
-  return entry.sketch();
-}
-const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(
-    const ConcreteTableEntry &entry) {
-  return entry.pdpi_ir_entry();
-}
-}  // namespace
-
 int GetIndex(const TableEntry &entry) {
   switch (entry.entry_case()) {
     case TableEntry::kConcreteEntry:
@@ -1546,37 +1523,48 @@ int GetIndex(const TableEntry &entry) {
   return 0;
 }
 
-const std::string &GetTableName(const TableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).table_name();
+std::string GetTableName(const TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry:
+      return GetTableName(entry.concrete_entry());
+    case TableEntry::kSymbolicEntry:
+      return GetTableName(entry.symbolic_entry());
+    case TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  LOG(ERROR) << "p4_symbolic::ir::TableEntry of unknown type: "
+             << absl::StrCat(entry);
+  return "<invalid>";
 }
-const std::string &GetTableName(const ConcreteTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).table_name();
+std::string GetTableName(const ConcreteTableEntry &entry) {
+  absl::StatusOr<std::string> table_name =
+      pdpi::EntityToTableName(entry.pdpi_ir_entity());
+  return table_name.ok() ? std::move(*table_name) : "<invalid>";
 }
-const std::string &GetTableName(const SymbolicTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).table_name();
+std::string GetTableName(const SymbolicTableEntry &entry) {
+  return entry.sketch().table_name();
 }
 
 int GetPriority(const TableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).priority();
-}
-int GetPriority(const ConcreteTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).priority();
-}
-int GetPriority(const SymbolicTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).priority();
-}
-
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
-    const TableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).matches();
-}
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
-    const ConcreteTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).matches();
-}
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
-    const SymbolicTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).matches();
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry: {
+      const pdpi::IrEntity &entity = entry.concrete_entry().pdpi_ir_entity();
+      switch (entity.entity_case()) {
+        case pdpi::IrEntity::kTableEntry:
+          return entity.table_entry().priority();
+        case pdpi::IrEntity::kPacketReplicationEngineEntry:
+          return 0;
+        case pdpi::IrEntity::ENTITY_NOT_SET:
+          return 0;
+      }
+      break;
+    }
+    case TableEntry::kSymbolicEntry:
+      return entry.symbolic_entry().sketch().priority();
+    case TableEntry::ENTRY_NOT_SET:
+      return 0;
+  }
+  return 0;
 }
 
 }  // namespace p4_symbolic::ir

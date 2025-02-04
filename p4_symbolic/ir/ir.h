@@ -92,15 +92,13 @@ absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
 // Useful as a unique ID in formula generation and in user-facing messages.
 int GetIndex(const TableEntry& entry);
 
-const std::string& GetTableName(const TableEntry& entry);
-const std::string& GetTableName(const ConcreteTableEntry& entry);
-const std::string& GetTableName(const SymbolicTableEntry& entry);
+std::string GetTableName(const TableEntry& entry);
+std::string GetTableName(const ConcreteTableEntry& entry);
+std::string GetTableName(const SymbolicTableEntry& entry);
 
 // The priority of the given table entry, or 0 if the table doesn't support
 // priorities.
 int GetPriority(const TableEntry &entry);
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &
-GetMatches(const TableEntry &entry);
 
 }  // namespace p4_symbolic::ir
 
