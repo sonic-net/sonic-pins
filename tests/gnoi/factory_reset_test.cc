@@ -37,7 +37,9 @@
 
 namespace factory_reset {
 
-constexpr absl::Duration kFactoryResetWaitForDownTime = absl::Seconds(60);
+// TODO: investigate why shutdown time is increasing and revert
+// to 60s if possible.
+constexpr absl::Duration kFactoryResetWaitForDownTime = absl::Seconds(75);
 constexpr absl::Duration kPingReachabilityInterval = absl::Seconds(2);
 constexpr absl::Duration kPingTimeout = absl::Seconds(1);
 constexpr int kConsecutivePingsRequired = 3;
