@@ -14,12 +14,12 @@
 
 #include "tests/forwarding/smoke_test.h"
 
+#include <optional>
+
 #include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -32,6 +32,9 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/test_data.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
+#include "tests/lib/switch_test_setup_helpers.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -288,9 +291,11 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 // properly clear the table entries of a table.
 TEST_P(SmokeTestFixture, EnsureClearTables) {
   // Sets up initial session.
-  ASSERT_OK_AND_ASSIGN(auto session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           GetMirrorTestbed().Sut(),  p4_info()));
+  ASSERT_OK_AND_ASSIGN(
+      auto session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          GetMirrorTestbed().Sut(), /*gnmi_config=*/std::nullopt, p4_info()));
+
   // The table should be clear after setup.
   ASSERT_OK(pdpi::CheckNoTableEntries(session.get()));
   // Sets up an example table entry.
@@ -316,11 +321,12 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
   ASSERT_OK(
       pdpi::InstallPiTableEntries(session.get(), 
 	      sai::GetIrP4Info(sai::Instantiation::kMiddleblock), {pi_entry}));
-  
-  ASSERT_OK_AND_ASSIGN(auto session2,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           GetMirrorTestbed().Sut(), p4_info()));
-  
+
+  ASSERT_OK_AND_ASSIGN(
+      auto session2,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          GetMirrorTestbed().Sut(), /*gnmi_config=*/std::nullopt, p4_info()));
+
   // The table should be clear for both sessions after setting up a new session.
   ASSERT_OK(pdpi::CheckNoTableEntries(session.get()));
   ASSERT_OK(pdpi::CheckNoTableEntries(session2.get()));

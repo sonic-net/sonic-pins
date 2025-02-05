@@ -27,7 +27,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
-#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
@@ -39,27 +38,22 @@
 #include "absl/types/span.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
-#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/p4rt_port.h"
+#include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
-#include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "re2/re2.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
@@ -70,6 +64,8 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 // Tests for the watchport functionality in Action Profile Group operation.
 
 namespace pins {
@@ -230,7 +226,8 @@ absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session,
 // traffic is received, since that is excluded from the traffic forwarding
 // members in the group.
 absl::StatusOr<std::vector<GroupMember>> CreateGroupMembers(
-    int group_size, absl::Span<const int> controller_port_ids) {
+    int group_size,
+    absl::Span<const pins_test::P4rtPortId> controller_port_ids) {
   if (group_size + /*input_port=*/1 > controller_port_ids.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Not enough members: ", controller_port_ids.size(),
@@ -242,8 +239,10 @@ absl::StatusOr<std::vector<GroupMember>> CreateGroupMembers(
        i++) {
     // Add port ids except for the default input port id.
     if (i != kDefaultInputPortIndex) {
-      members.push_back(
-          pins::GroupMember{.weight = 0, .port = controller_port_ids[i]});
+      members.push_back(pins::GroupMember{
+          .weight = 0,
+          .port = static_cast<int>(
+              controller_port_ids[i].GetOpenConfigEncoding())});
     }
   }
 
@@ -290,12 +289,12 @@ absl::Status ProgramL3Admit(pdpi::P4RuntimeSession& p4_session,
 
 // Sends N packets from the control switch to sut at a rate of 500 packets/sec.
 absl::Status SendNPacketsToSut(int num_packets,
-                               const TestConfiguration& test_config,
+                               const TestConfiguration &test_config,
                                absl::Span<const GroupMember> members,
-                               absl::Span<const int> port_ids,
-                               const pdpi::IrP4Info& ir_p4info,
-                               pdpi::P4RuntimeSession& p4_session,
-                               thinkit::TestEnvironment& test_environment) {
+                               absl::Span<const pins_test::P4rtPortId> port_ids,
+                               const pdpi::IrP4Info &ir_p4info,
+                               pdpi::P4RuntimeSession &p4_session,
+                               thinkit::TestEnvironment &test_environment) {
   const absl::Time start_time = absl::Now();
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to 500 packets per second.
@@ -304,7 +303,7 @@ absl::Status SendNPacketsToSut(int num_packets,
 
     // Vary the port on which to send the packet if the hash field selected is
     // input port.
-    int port = port_ids[kDefaultInputPortIndex];
+    pins_test::P4rtPortId port = port_ids[kDefaultInputPortIndex];
     if (test_config.field == PacketField::kInputPort) {
       port = port_ids[i % members.size()];
     }
@@ -312,13 +311,12 @@ absl::Status SendNPacketsToSut(int num_packets,
     ASSIGN_OR_RETURN(packetlib::Packet packet,
                      pins::GenerateIthPacket(test_config, i));
     ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
-    ASSIGN_OR_RETURN(std::string port_string, pdpi::IntToDecimalString(port));
-    RETURN_IF_ERROR(InjectEgressPacket(port_string, raw_packet, ir_p4info,
-                                       &p4_session,
+    RETURN_IF_ERROR(InjectEgressPacket(port.GetP4rtEncoding(), raw_packet,
+                                       ir_p4info, &p4_session,
                                        /*packet_delay=*/std::nullopt));
 
     dvaas::Packet p;
-    p.set_port(port_string);
+    p.set_port(port.GetP4rtEncoding());
     *p.mutable_parsed() = packet;
     p.set_hex(absl::BytesToHexString(raw_packet));
     // Save log of packets.
@@ -415,6 +413,35 @@ absl::Status VerifyInterfaceState(gnmi::gNMI::StubInterface& gnmi_stub,
   return absl::OkStatus();
 }
 
+// Verifies the given interface's desired admin status is reflected in the
+// state path.
+absl::Status VerifyInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                       absl::string_view if_name,
+                                       InterfaceState desired_state) {
+  return VerifyInterfaceState(gnmi_stub, if_name, kAdminStatusPathMatch,
+                              desired_state);
+}
+
+// Verifies the given interface's desired oper status is reflected in the
+// state path and collects port debug data for failed UP state.
+absl::Status VerifyInterfaceOperState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                      thinkit::MirrorTestbed& testbed,
+                                      absl::string_view if_name,
+                                      InterfaceState desired_state) {
+  absl::Status oper_status = VerifyInterfaceState(
+      gnmi_stub, if_name, kOperStatusPathMatch, desired_state);
+  // Collect port debug data if interface did not come UP.
+  if (!oper_status.ok() && desired_state == InterfaceState::kUp) {
+    const std::vector<std::string> interface = {std::string(if_name)};
+    absl::Status sut_port_up = pins_test::PortsUp(testbed.Sut(), interface);
+    LOG_IF(WARNING, !sut_port_up.ok()) << sut_port_up;
+    absl::Status control_port_up =
+        pins_test::PortsUp(testbed.ControlSwitch(), interface);
+    LOG_IF(WARNING, !control_port_up.ok()) << control_port_up;
+  }
+  return oper_status;
+}
+
 // Sets the admin state of the interface to UP/DOWN using GNMI config path.
 // Queries the  state path to verify if the desired state is achieved or not.
 absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
@@ -437,8 +464,7 @@ absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
   RETURN_IF_ERROR(SetGnmiConfigPath(
       &gnmi_stub, if_admin_config_path, pins_test::GnmiSetType::kUpdate,
       absl::Substitute("{\"enabled\":$0}", config_value)));
-  return VerifyInterfaceState(gnmi_stub, if_name, kAdminStatusPathMatch,
-                              admin_state);
+  return VerifyInterfaceAdminState(gnmi_stub, if_name, admin_state);
 }
 
 // Checks if the switch is in critical state.
@@ -582,7 +608,10 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -672,7 +701,10 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -737,8 +769,9 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
         SetInterfaceAdminState(*control_gnmi_stub_, port_name, operation));
 
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, port_name,
-                                   kOperStatusPathMatch, operation));
+    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                       GetParam().testbed->GetMirrorTestbed(),
+                                       port_name, operation));
 
     // Wait for the membership changes to be processed.
     absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -799,7 +832,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
   thinkit::TestEnvironment& environment = testbed.Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -866,8 +902,9 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
                                    InterfaceState::kDown));
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, port_name,
-                                 kOperStatusPathMatch, InterfaceState::kDown));
+  ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                     GetParam().testbed->GetMirrorTestbed(),
+                                     port_name, InterfaceState::kDown));
 
   // Wait for the membership changes to be processed.
   absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -919,7 +956,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = 1;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -985,8 +1025,9 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
         SetInterfaceAdminState(*control_gnmi_stub_, port_name, operation));
 
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, port_name,
-                                   kOperStatusPathMatch, operation));
+    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                       GetParam().testbed->GetMirrorTestbed(),
+                                       port_name, operation));
 
     // Wait for the membership changes to be processed.
     absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -1045,7 +1086,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -1105,8 +1149,9 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                    InterfaceState::kDown));
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
-                                 kOperStatusPathMatch, InterfaceState::kDown));
+  ASSERT_OK(VerifyInterfaceOperState(
+      *sut_gnmi_stub_, GetParam().testbed->GetMirrorTestbed(),
+      selected_port_name, InterfaceState::kDown));
 
   // Send Modify request to remove the down member from the group.
   members.erase(members.begin() + random_member_index);
@@ -1117,8 +1162,9 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                    InterfaceState::kUp));
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
-                                 kOperStatusPathMatch, InterfaceState::kUp));
+  ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                     GetParam().testbed->GetMirrorTestbed(),
+                                     selected_port_name, InterfaceState::kUp));
 
   // Wait for the membership changes to be processed.
   absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -1171,7 +1217,11 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -1189,8 +1239,9 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                    InterfaceState::kDown));
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
-                                 kOperStatusPathMatch, InterfaceState::kDown));
+  ASSERT_OK(VerifyInterfaceOperState(
+      *sut_gnmi_stub_, GetParam().testbed->GetMirrorTestbed(),
+      selected_port_name, InterfaceState::kDown));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
@@ -1240,8 +1291,9 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
                                      operation));
 
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceState(*sut_gnmi_stub_, selected_port_name,
-                                   kOperStatusPathMatch, operation));
+    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                       GetParam().testbed->GetMirrorTestbed(),
+                                       selected_port_name, operation));
 
     // Wait for the membership changes to be processed.
     absl::SleepFor(kDurationToWaitForMembershipUpdates);

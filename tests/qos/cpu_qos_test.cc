@@ -370,8 +370,6 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
                        pdpi::CreateIrP4Info(p4info));
 
   // Configure mirror testbed.
-  EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
-                                                      GetParam().gnmi_config));
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -380,6 +378,13 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
       std::tie(sut_p4rt_session, control_p4rt_session),
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           sut, control_device, GetParam().gnmi_config, p4info));
+
+  // Store gNMI config for debugging purposes.
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*sut_gnmi_stub));
+  EXPECT_OK(Testbed().Environment().StoreTestArtifact("sut_gnmi_config.json",
+                                                      sut_gnmi_config));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -643,9 +648,6 @@ TEST_P(CpuQosTestWithoutIxia,
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Configure mirror testbed.
-  EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
-                                                      GetParam().gnmi_config));
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -654,6 +656,13 @@ TEST_P(CpuQosTestWithoutIxia,
       std::tie(sut_p4rt_session, control_p4rt_session),
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           sut, control_device, GetParam().gnmi_config, p4info));
+
+  // Store gNMI config for debugging purposes.
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*sut_gnmi_stub));
+  EXPECT_OK(Testbed().Environment().StoreTestArtifact("sut_gnmi_config.json",
+                                                      sut_gnmi_config));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -665,7 +674,7 @@ TEST_P(CpuQosTestWithoutIxia,
   using IpAddresses =
       std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>;
   ASSERT_OK_AND_ASSIGN(IpAddresses loopback_ips,
-                       ParseLoopbackIps(GetParam().gnmi_config));
+                       ParseLoopbackIps(sut_gnmi_config));
 
   // Read CPU queue state prior to injecting test packets. The state should
   // remain unchanged when we inject test packets.
@@ -901,6 +910,10 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
 TEST_P(CpuQosTestWithoutIxia, TrafficToLoopbackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
 
+  // Check that a test packet generator function is specified.
+  ASSERT_TRUE(static_cast<bool>(GetParam().test_packet_generator_function))
+      << "missing required parameter `test_packet_generator_function`";
+
   // Setup: the testbed consists of a SUT connected to a control device
   // that allows us to send and receive packets to/from the SUT.
   thinkit::Switch &sut = Testbed().Sut();
@@ -911,8 +924,6 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopbackIpGetsMappedToCorrectQueues) {
                        pdpi::CreateIrP4Info(p4info));
 
   // Configure mirror testbed.
-  EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
-                                                      GetParam().gnmi_config));
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
     std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -922,16 +933,25 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopbackIpGetsMappedToCorrectQueues) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           sut, control_device, GetParam().gnmi_config, p4info));
 
+  // Store gNMI config for debugging purposes.
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*sut_gnmi_stub));
+  EXPECT_OK(Testbed().Environment().StoreTestArtifact("sut_gnmi_config.json",
+                                                      sut_gnmi_config));
+
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
                        PickSutToControlDeviceLinkThatsUp(Testbed()));
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  ASSERT_FALSE(GetParam().test_packets.empty())
+  std::vector<PacketAndExpectedTargetQueue> test_packets =
+      GetParam().test_packet_generator_function(sut_gnmi_config);
+  ASSERT_FALSE(test_packets.empty())
       << "No packets to test, maybe no loopback IP is configured on switch?";
 
-  for (PacketAndExpectedTargetQueue test_packet : GetParam().test_packets) {
+  for (const PacketAndExpectedTargetQueue &test_packet : test_packets) {
     std::string_view target_queue = test_packet.target_queue;
     SCOPED_TRACE(absl::StrCat("Packet: ", test_packet.packet_name,
                               ", Target queue: ", target_queue));

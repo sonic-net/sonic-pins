@@ -18,6 +18,7 @@
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -260,7 +261,8 @@ TEST(RewritePortsForTableEntriesTest, EmptyEntriesSucceeds) {
       sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter);
   std::vector<pdpi::IrTableEntry> entries;
   EXPECT_OK(RewritePortsInTableEntries(
-      fbr_info, /*ports=*/std::vector<std::string>{"1"}, entries));
+      fbr_info,
+      /*ports=*/P4rtPortId::MakeVectorFromOpenConfigEncodings({1}), entries));
 }
 
 TEST(RewritePortsForTableEntriesTest, GnmiConfigWorks) {
