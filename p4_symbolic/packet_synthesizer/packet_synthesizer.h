@@ -137,7 +137,9 @@ private:
   // packet synthesis criteria. If a part of the criteria is changed, the frames
   // from the lowest changing criteria upward get popped and frames (and
   // constraints) corresponding to the new values get pushed.
-  absl::Status PrepareZ3SolverStack(const PacketSynthesisCriteria &criteria);
+  // In a successfull run, returns the number of stack frames that got modified.
+  absl::StatusOr<int> PrepareZ3SolverStack(
+      const PacketSynthesisCriteria& criteria);
 };
 
 } // namespace p4_symbolic::packet_synthesizer

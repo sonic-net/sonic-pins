@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_symbolic/deparser.h"
+#include "p4_symbolic/symbolic/deparser.h"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"

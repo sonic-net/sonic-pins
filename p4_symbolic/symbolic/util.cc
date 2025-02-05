@@ -34,6 +34,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table_entry.h"
@@ -160,6 +161,11 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
     egress_headers[name] = std::move(translated_value.first);
   }
 
+  ASSIGN_OR_RETURN(std::string serialized_ingress_headers,
+                   DeparseIngressPacket(state, model));
+  ASSIGN_OR_RETURN(std::string serialized_egress_headers,
+                   DeparseEgressPacket(state, model));
+
   // Extract the table entries.
   TableEntries concrete_entries;
   for (const auto &[table_name, entries_per_table] :
@@ -201,6 +207,8 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
       .ingress_headers = std::move(ingress_headers),
       .parsed_headers = std::move(parsed_headers),
       .egress_headers = std::move(egress_headers),
+      .serialized_ingress_headers = std::move(serialized_ingress_headers),
+      .serialized_egress_headers = std::move(serialized_egress_headers),
       .table_entries = std::move(concrete_entries),
       .trace =
           ConcreteTrace{
