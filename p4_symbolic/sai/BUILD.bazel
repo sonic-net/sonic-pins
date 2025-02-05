@@ -40,7 +40,9 @@ cc_test(
     srcs = ["sai_test.cc"],
     deps = [
         ":sai",
+        "//gutil:proto",
         "//gutil:status_matchers",
+        "//gutil:test_artifact_writer",
         "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:pd",
@@ -49,6 +51,7 @@ cc_test(
         "//sai_p4/instantiations/google:sai_nonstandard_platforms_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",

@@ -328,6 +328,7 @@ message Statement {
     HashStatement hash = 5;
     ExitStatement exit = 6;
     HeaderAssignmentStatement header_assignment = 7;
+    RecirculateStatement recirculate = 8;
   }
 }
 
@@ -350,6 +351,14 @@ message CloneStatement {
   // 1. We only support one version of cloning: ingree to egress
   // 2. The session id is not know at parsing time.
   // 3. We do not support clone calls preserving custom fields.
+}
+
+// A statement recirculating egress packet to ingress, corresponds to
+// `recirculate`.
+message RecirculateStatement {
+  // We do not care about the arguments to recirculate as we do not currently
+  // fully model recirculation. We only set the kGotRecirculated pseudo field
+  // to true when recirculate is called.
 }
 
 // Hashing statement to modify a selected field based on a hash calculation.

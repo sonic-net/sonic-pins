@@ -18,6 +18,7 @@ tbl_program92 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -44,6 +45,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -70,6 +72,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -109,6 +112,7 @@ tbl_program92 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -135,6 +139,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -161,6 +166,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -206,6 +212,7 @@ tbl_program92 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -232,6 +239,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -258,6 +266,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -297,6 +306,7 @@ tbl_program92 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -323,6 +333,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -349,6 +360,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -388,6 +400,7 @@ tbl_program92 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -414,6 +427,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -440,6 +454,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -479,6 +494,7 @@ tbl_program92 => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -505,6 +521,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
@@ -531,6 +548,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000

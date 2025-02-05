@@ -59,6 +59,10 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
       return headers.Set(std::string(kGotClonedPseudoField),
                          state.context.z3_context->bool_val(true), guard);
     }
+    case ir::Statement::kRecirculate: {
+      return headers.Set(std::string(kGotRecirculatedPseudoField),
+                         state.context.z3_context->bool_val(true), guard);
+    }
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
       z3::context &z3_context = *state.context.z3_context;
