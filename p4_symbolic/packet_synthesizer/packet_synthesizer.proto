@@ -55,6 +55,23 @@ message SynthesizedPacket {
 message PacketSynthesisResult {
   // If empty, it means the input criteria was not satifiable.
   SynthesizedPacket synthesized_packet = 1;
+  // Includes various information about the synthesis process itself, useful for
+  // debugging and performance measurement.
+  Metadata metadata = 2;
+
+  message Metadata {
+    // The number of Z3 solver stack frames modified during the call to
+    // `PrepareZ3SolverStack`.
+    int64 z3_solver_stack_popped_frame_count = 1;
+    // The time spent in `PrepareZ3SolverStack`.
+    int64 z3_solver_stack_preparation_time_ms = 2;
+    // The time spent in Z3's `solver.check`.
+    int64 z3_solver_time_ms = 3;
+    // The time spent in `SynthesizePacketFromZ3Model`.
+    int64 z3_model_eval_time_ms = 4;
+    // The end to end time spent in `PacketSynthesizer::SynthesizePacket`.
+    int64 synthesize_packet_overall_time_ms = 5;
+  }
 }
 
 // Input and output of PacketSynthesizer::SynthesizePacket.

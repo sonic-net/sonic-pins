@@ -108,3 +108,21 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "criteria_generator",
+    srcs = ["criteria_generator.cc"],
+    hdrs = ["criteria_generator.h"],
+    deps = [
+        ":coverage_goal_cc_proto",
+        ":packet_synthesis_criteria",
+        ":packet_synthesis_criteria_cc_proto",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_symbolic/ir:ir_cc_proto",
+        "//p4_symbolic/symbolic",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
