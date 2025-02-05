@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_symbolic/deparser.h"
+#include "p4_symbolic/symbolic/deparser.h"
 
+#include <string>
+
+#include "absl/status/statusor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/status.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 

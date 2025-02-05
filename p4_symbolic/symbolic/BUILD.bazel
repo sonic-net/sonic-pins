@@ -26,6 +26,7 @@ cc_library(
         "conditional.cc",
         "context.cc",
         "control.cc",
+        "deparser.cc",
         "guarded_map.cc",
         "operators.cc",
         "parser.cc",
@@ -41,6 +42,7 @@ cc_library(
         "conditional.h",
         "context.h",
         "control.h",
+        "deparser.h",
         "guarded_map.h",
         "operators.h",
         "parser.h",
@@ -173,6 +175,31 @@ cc_test(
         "//gutil:testing",
         "//p4_symbolic/ir:ir_cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "deparser_test",
+    srcs = ["deparser_test.cc"],
+    data = [
+        "//p4_symbolic/testdata:ipv4-routing/basic.config.json",
+        "//p4_symbolic/testdata:ipv4-routing/basic.p4info.pb.txt",
+        "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
+        "//p4_symbolic/testdata:parser/sai_parser.config.json",
+        "//p4_symbolic/testdata:parser/sai_parser.p4info.pb.txt",
+    ],
+    deps = [
+        ":symbolic",
+        "//gutil:status_matchers",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_symbolic:test_util",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_github_z3prover_z3//:api",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )

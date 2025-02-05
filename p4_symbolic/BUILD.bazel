@@ -59,22 +59,6 @@ cc_library(
 )
 
 cc_library(
-    name = "deparser",
-    srcs = ["deparser.cc"],
-    hdrs = ["deparser.h"],
-    deps = [
-        ":z3_util",
-        "//gutil:status",
-        "//p4_pdpi/string_encodings:bit_string",
-        "//p4_symbolic/ir:ir_cc_proto",
-        "//p4_symbolic/symbolic",
-        "@com_github_z3prover_z3//:api",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_protobuf//:protobuf",
-    ],
-)
-
-cc_library(
     name = "test_util",
     testonly = False,
     srcs = ["test_util.cc"],
@@ -86,31 +70,6 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_test(
-    name = "deparser_test",
-    srcs = ["deparser_test.cc"],
-    data = [
-        "//p4_symbolic/testdata:ipv4-routing/basic.config.json",
-        "//p4_symbolic/testdata:ipv4-routing/basic.p4info.pb.txt",
-        "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
-        "//p4_symbolic/testdata:parser/sai_parser.config.json",
-        "//p4_symbolic/testdata:parser/sai_parser.p4info.pb.txt",
-    ],
-    deps = [
-        ":deparser",
-        ":test_util",
-        "//gutil:status_matchers",
-        "//p4_pdpi/packetlib",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "//p4_symbolic/symbolic",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_github_z3prover_z3//:api",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
     ],
 )
 
