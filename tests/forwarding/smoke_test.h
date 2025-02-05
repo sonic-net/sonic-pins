@@ -20,7 +20,21 @@
 
 namespace pins_test {
 
-class SmokeTestFixture : public MirrorBlackboxTestFixture {};
+struct SmokeTestParams {
+  // Using a shared_ptr because parameterized tests require objects to be
+  // copyable.
+  std::shared_ptr<thinkit::MirrorTestbedInterface> mirror_testbed;
+  // The test assumes that the switch is pre-configured if no `gnmi_config` is
+  // given (default), or otherwise pushes the given config before starting.
+  std::optional<std::string> gnmi_config;
+  p4::config::v1::P4Info p4info;
+};
+
+class SmokeTestFixture : public testing::TestWithParam<SmokeTestParams> {
+ public:
+  void SetUp() override { GetParam().mirror_testbed->SetUp(); }
+  void TearDown() override { GetParam().mirror_testbed->TearDown(); }
+};
 
 }  // namespace pins_test
 
