@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef P4_SYMBOLIC_DEPARSER_H_
-#define P4_SYMBOLIC_DEPARSER_H_
+#ifndef P4_SYMBOLIC_SYMBOLIC_DEPARSER_H_
+#define P4_SYMBOLIC_SYMBOLIC_DEPARSER_H_
 
 #include <string>
 
@@ -35,4 +35,4 @@ absl::StatusOr<std::string> DeparseEgressPacket(
 
 }  // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_DEPARSER_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_DEPARSER_H_

@@ -103,6 +103,8 @@ struct ConcreteContext {
   ConcretePerPacketState ingress_headers;
   ConcretePerPacketState parsed_headers;
   ConcretePerPacketState egress_headers;
+  std::string serialized_ingress_headers;
+  std::string serialized_egress_headers;
   TableEntries table_entries;
   ConcreteTrace trace;  // Expected trace in the program.
 

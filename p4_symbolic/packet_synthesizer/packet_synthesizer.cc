@@ -29,11 +29,13 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "glog/logging.h"
+#include "google/protobuf/duration.pb.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
-#include "p4_symbolic/deparser.h"
+#include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
@@ -261,14 +263,28 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(
     const PacketSynthesisCriteria& criteria) {
   PacketSynthesisResult result;
-  Timer timer;
+
+  // Timer to keep end to end time spent in this function.
+  Timer overall_timer;
+  // Timer used for granular measurement of time spent on the main steps of this
+  // function (gets reset after each step).
+  Timer granular_timer;
 
   // Add synthesized packet criterion as Z3 assertions. Modify the incremental
   // solver stack accordingly.
-  RETURN_IF_ERROR(PrepareZ3SolverStack(criteria));
+  ASSIGN_OR_RETURN(const int popped_frame_count,
+                   PrepareZ3SolverStack(criteria));
+  result.mutable_metadata()->set_z3_solver_stack_popped_frame_count(
+      popped_frame_count);
+  result.mutable_metadata()->set_z3_solver_stack_preparation_time_ms(
+      absl::ToInt64Milliseconds(granular_timer.GetDurationAndReset()));
 
   // Solve the constraints and generate the packet if satisfiable.
-  if (solver_state_.solver->check() == z3::check_result::sat) {
+  z3::check_result check_result = solver_state_.solver->check();
+  result.mutable_metadata()->set_z3_solver_time_ms(
+      absl::ToInt64Milliseconds(granular_timer.GetDurationAndReset()));
+
+  if (check_result == z3::check_result::sat) {
     std::optional<bool> drop_expected;
     if (criteria.has_output_criteria())
       drop_expected = criteria.output_criteria().drop_expected();
@@ -277,9 +293,13 @@ absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(
                          solver_state_, criteria.payload_criteria().payload(),
                          drop_expected));
   }
+  result.mutable_metadata()->set_z3_model_eval_time_ms(
+      absl::ToInt64Milliseconds(granular_timer.GetDurationAndReset()));
 
+  result.mutable_metadata()->set_synthesize_packet_overall_time_ms(
+      absl::ToInt64Milliseconds(overall_timer.GetDuration()));
   VLOG(1) << absl::Substitute("SynthesizePacket finished in $0 for\n$1",
-                              absl::FormatDuration(timer.GetDuration()),
+                              absl::FormatDuration(overall_timer.GetDuration()),
                               criteria.ShortDebugString());
   return result;
 }
@@ -359,7 +379,7 @@ absl::Status PacketSynthesizer::AddFrameForCriteria(
   return absl::OkStatus();
 }
 
-absl::Status PacketSynthesizer::PrepareZ3SolverStack(
+absl::StatusOr<int> PacketSynthesizer::PrepareZ3SolverStack(
     const PacketSynthesisCriteria& criteria) {
   // Find the first index from which the stack needs to be poped. This is
   // essentially the first index in which the currently encoded criteria is
@@ -393,7 +413,7 @@ absl::Status PacketSynthesizer::PrepareZ3SolverStack(
 
   current_criteria_ = criteria;
 
-  return absl::OkStatus();
+  return kSolverFrameStackOrder.size() - pop_index;
 }
 
 const SolverState& PacketSynthesizer::SolverState() { return solver_state_; }
