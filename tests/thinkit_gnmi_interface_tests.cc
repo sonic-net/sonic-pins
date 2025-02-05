@@ -185,25 +185,6 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
   }
   ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, new_breakout_info,
                                   non_existing_port_list));
-
-  // Restore original port breakout config on port under test.
-  ASSERT_OK(GetBreakoutModeConfigFromString(req, sut_gnmi_stub, port_index,
-                                            port_info.port_name,
-                                            port_info.curr_breakout_mode));
-
-  LOG(INFO) << "Restoring original breakout mode "
-            << port_info.curr_breakout_mode << " on port "
-            << port_info.port_name << " on DUT";
-  grpc::ClientContext context3;
-  ASSERT_OK(sut_gnmi_stub->Set(&context3, req, &resp));
-  // TODO: Investigate changing to polling loop.
-  absl::SleepFor(absl::Seconds(60));
-
-  // Verify that the config is successfully applied.
-  non_existing_port_list = GetNonExistingPortsAfterBreakout(
-      orig_breakout_info, new_breakout_info, false);
-  ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, orig_breakout_info,
-                                  non_existing_port_list));
 }
 
 void TestGNMIParentPortInUseDuringBreakout(
