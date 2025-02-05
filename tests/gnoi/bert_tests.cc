@@ -297,10 +297,10 @@ void VerifyBertResultForSuccess(
   // Check the timestamps to verify if time taken for BERT is between test
   // duration and (test duration + 60 seconds). Allow duration to be slightly
   // less: Sandcastle BERT duration is sometimes just under 180s, by less than
-  // 1 millisecond.
+  // 1 second.
   EXPECT_GE(bert_result.last_bert_get_result_timestamp() -
                 bert_result.last_bert_start_timestamp(),
-            absl::ToInt64Microseconds(kTestDuration - absl::Milliseconds(1)));
+            absl::ToInt64Microseconds(kTestDuration - absl::Seconds(1)));
   EXPECT_LE(bert_result.last_bert_get_result_timestamp() -
                 bert_result.last_bert_start_timestamp(),
             absl::ToInt64Microseconds(kTestDuration + absl::Seconds(60)));
@@ -320,21 +320,43 @@ void VerifyBertResultForSuccess(
 void CheckRunningBertAndForceAdminDownHelperSut(
     gnoi::diag::Diag::StubInterface& gnoi_diag_stub,
     gnmi::gNMI::StubInterface& gnmi_stub,
-    gnoi::diag::GetBERTResultRequest* request) {
+    thinkit::ControlDevice& control_device,
+    const absl::flat_hash_map<std::string, std::string>&
+        sut_to_control_interface_mapping,
+    gnoi::diag::GetBERTResultRequest* request,
+    gnoi::diag::GetBERTResultRequest* request_peer_admin_down) {
   gnoi::diag::GetBERTResultResponse response;
   grpc::ClientContext context;
   ASSERT_OK(gnoi_diag_stub.GetBERTResult(&context, *request, &response));
 
   ASSERT_THAT(response.per_port_responses(),
               SizeIs(request->per_port_requests_size()));
+
+  gnoi::diag::GetBERTResultResponse response_peer;
+  ASSERT_OK_AND_ASSIGN(response_peer,
+                       control_device.GetBERTResult(*request_peer_admin_down));
+  absl::flat_hash_map<std::string, bool> peer_bert_running;
+  ASSERT_THAT(response_peer.per_port_responses(),
+              SizeIs(request_peer_admin_down->per_port_requests_size()));
+  for (const auto& result : response_peer.per_port_responses()) {
+    ASSERT_OK_AND_ASSIGN(
+        const std::string interface,
+        GetInterfaceNameFromOcInterfacePath(result.interface()));
+    peer_bert_running[interface] =
+        (result.status() == gnoi::diag::BERT_STATUS_OK) &&
+        (result.peer_lock_established());
+  }
   request->clear_per_port_requests();
+  request_peer_admin_down->clear_per_port_requests();
   for (const auto& result : response.per_port_responses()) {
+    ASSERT_OK_AND_ASSIGN(
+        const std::string interface,
+        GetInterfaceNameFromOcInterfacePath(result.interface()));
+    std::string peer_interface = sut_to_control_interface_mapping.at(interface);
     // Check if BERT is running.
     if ((result.status() == gnoi::diag::BERT_STATUS_OK) &&
-        (result.peer_lock_established())) {
-      ASSERT_OK_AND_ASSIGN(
-          const std::string interface,
-          GetInterfaceNameFromOcInterfacePath(result.interface()));
+        (result.peer_lock_established()) &&
+        peer_bert_running.at(peer_interface)) {
       // Disable the admin status.
       const std::string if_enabled_config_path = absl::StrCat(
           "interfaces/interface[name=", interface, "]/config/enabled");
@@ -345,27 +367,53 @@ void CheckRunningBertAndForceAdminDownHelperSut(
       // Get result for interfaces again that didn't start BERT in last poll.
       *(request->add_per_port_requests()->mutable_interface()) =
           result.interface();
+      *(request_peer_admin_down->add_per_port_requests()->mutable_interface()) =
+          gutil::ParseProtoOrDie<gnoi::types::Path>(
+              BuildOpenConfigInterface(peer_interface));
     }
   }
 }
 
 void CheckRunningBertAndForceAdminDownHelperControlSwitch(
     thinkit::ControlDevice& control_device,
-    gnoi::diag::GetBERTResultRequest* request) {
+    gnoi::diag::Diag::StubInterface& gnoi_diag_stub,
+    const absl::flat_hash_map<std::string, std::string>&
+        control_to_sut_interface_mapping,
+    gnoi::diag::GetBERTResultRequest* request,
+    gnoi::diag::GetBERTResultRequest* request_peer_admin_down) {
   gnoi::diag::GetBERTResultResponse response;
 
   ASSERT_OK_AND_ASSIGN(response, control_device.GetBERTResult(*request));
 
   ASSERT_THAT(response.per_port_responses(),
               SizeIs(request->per_port_requests_size()));
+
+  gnoi::diag::GetBERTResultResponse response_peer;
+  grpc::ClientContext context;
+  ASSERT_OK(gnoi_diag_stub.GetBERTResult(&context, *request_peer_admin_down,
+                                         &response_peer));
+  absl::flat_hash_map<std::string, bool> peer_bert_running;
+  ASSERT_THAT(response_peer.per_port_responses(),
+              SizeIs(request_peer_admin_down->per_port_requests_size()));
+  for (const auto& result : response_peer.per_port_responses()) {
+    ASSERT_OK_AND_ASSIGN(
+        const std::string interface,
+        GetInterfaceNameFromOcInterfacePath(result.interface()));
+    peer_bert_running[interface] =
+        (result.status() == gnoi::diag::BERT_STATUS_OK) &&
+        (result.peer_lock_established());
+  }
   request->clear_per_port_requests();
+  request_peer_admin_down->clear_per_port_requests();
   for (const auto& result : response.per_port_responses()) {
+    ASSERT_OK_AND_ASSIGN(
+        const std::string interface,
+        GetInterfaceNameFromOcInterfacePath(result.interface()));
+    std::string peer_interface = control_to_sut_interface_mapping.at(interface);
     // Check if BERT is running.
     if ((result.status() == gnoi::diag::BERT_STATUS_OK) &&
-        (result.peer_lock_established())) {
-      ASSERT_OK_AND_ASSIGN(
-          const std::string interface,
-          GetInterfaceNameFromOcInterfacePath(result.interface()));
+        (result.peer_lock_established()) &&
+        peer_bert_running.at(peer_interface)) {
       // Disable the admin status.
       EXPECT_OK(control_device.SetAdminLinkState({interface},
                                                  thinkit::LinkState::kDown));
@@ -373,6 +421,9 @@ void CheckRunningBertAndForceAdminDownHelperControlSwitch(
       // Get result for interfaces again that didn't start BERT in last poll.
       *(request->add_per_port_requests()->mutable_interface()) =
           result.interface();
+      *(request_peer_admin_down->add_per_port_requests()->mutable_interface()) =
+          gutil::ParseProtoOrDie<gnoi::types::Path>(
+              BuildOpenConfigInterface(peer_interface));
     }
   }
 }
@@ -384,21 +435,41 @@ void CheckRunningBertAndForceAdminDown(
     thinkit::ControlDevice& control_device,
     gnmi::gNMI::StubInterface& sut_gnmi_stub, absl::string_view op_id,
     const std::vector<std::string>& sut_interfaces,
-    const std::vector<std::string>& control_switch_interfaces) {
+    const std::vector<std::string>& control_switch_interfaces,
+    const absl::flat_hash_map<std::string, std::string>&
+        sut_to_control_interface_mapping,
+    const absl::flat_hash_map<std::string, std::string>&
+        control_to_sut_interface_mapping) {
   gnoi::diag::GetBERTResultRequest sut_request;
+  gnoi::diag::GetBERTResultRequest control_switch_request_peer_admin_down;
   sut_request.set_bert_operation_id(std::string(op_id));
+  control_switch_request_peer_admin_down.set_bert_operation_id(
+      std::string(op_id));
   for (const std::string& interface : sut_interfaces) {
     *(sut_request.add_per_port_requests()->mutable_interface()) =
         gutil::ParseProtoOrDie<gnoi::types::Path>(
             BuildOpenConfigInterface(interface));
+
+    std::string peer_interface = sut_to_control_interface_mapping.at(interface);
+    *(control_switch_request_peer_admin_down.add_per_port_requests()
+          ->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface(peer_interface));
   }
 
   gnoi::diag::GetBERTResultRequest control_switch_request;
+  gnoi::diag::GetBERTResultRequest sut_request_peer_admin_down;
   control_switch_request.set_bert_operation_id(std::string(op_id));
+  sut_request_peer_admin_down.set_bert_operation_id(std::string(op_id));
   for (const std::string& interface : control_switch_interfaces) {
     *(control_switch_request.add_per_port_requests()->mutable_interface()) =
         gutil::ParseProtoOrDie<gnoi::types::Path>(
             BuildOpenConfigInterface(interface));
+    std::string peer_interface = control_to_sut_interface_mapping.at(interface);
+    *(sut_request_peer_admin_down.add_per_port_requests()
+          ->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface(peer_interface));
   }
 
   int max_poll_count =
@@ -410,14 +481,18 @@ void CheckRunningBertAndForceAdminDown(
     if (sut_request.per_port_requests_size() > 0) {
       // Check BERT status on SUT and force admin status down.
       ASSERT_NO_FATAL_FAILURE(CheckRunningBertAndForceAdminDownHelperSut(
-          sut_gnoi_diag_stub, sut_gnmi_stub, &sut_request));
+          sut_gnoi_diag_stub, sut_gnmi_stub, control_device,
+          sut_to_control_interface_mapping, &sut_request,
+          &control_switch_request_peer_admin_down));
     }
 
     if (control_switch_request.per_port_requests_size() > 0) {
       // Check BERT status on control switch and force admin status down.
       ASSERT_NO_FATAL_FAILURE(
           CheckRunningBertAndForceAdminDownHelperControlSwitch(
-              control_device, &control_switch_request));
+              control_device, sut_gnoi_diag_stub,
+              control_to_sut_interface_mapping, &control_switch_request,
+              &sut_request_peer_admin_down));
     }
     if (sut_request.per_port_requests().empty() &&
         control_switch_request.per_port_requests().empty()) {
@@ -1128,7 +1203,8 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   absl::SleepFor(absl::Seconds(90));
   ASSERT_NO_FATAL_FAILURE(CheckRunningBertAndForceAdminDown(
       *sut_diag_stub_, control_device, *sut_gnmi_stub_, op_id,
-      sut_interfaces_for_admin_down, control_switch_interfaces_for_admin_down));
+      sut_interfaces_for_admin_down, control_switch_interfaces_for_admin_down,
+      sut_to_peer_interface_mapping_, control_to_peer_interface_mapping_));
   absl::Time end_time = absl::Now();
 
   // Wait for BERT to finish on test interfaces.

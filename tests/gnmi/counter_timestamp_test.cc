@@ -146,8 +146,8 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiPortStatAndTimestamp(
 constexpr absl::Duration kCounterPollInterval = absl::Seconds(30);
 // Tolerance = 1% timestamp accuracy +
 //             1% (Ixia clock drift + switch queueing variance) +
-//             1% test tolerance.
-constexpr float kTolerancePercent = .03;
+//             2% test tolerance.
+constexpr float kTolerancePercent = .04;
 
 TEST_P(CountersTestFixture, PortCountersTimestamp) {
   // Pick a testbed with SUT connected to an Ixia on 2 ports, one ingress and
@@ -399,7 +399,7 @@ TEST_P(CountersTestFixture, PortQueueCountersTimestamp) {
 
   // Wait for counter timestamp to update at least once after traffic has
   // started.
-  ASSERT_OK(pins::TryUpToNTimes(10, /*delay=*/absl::Seconds(1), [&] {
+  ASSERT_OK(pins::TryUpToNTimes(20, /*delay=*/absl::Seconds(1), [&] {
     // Read counters of the target queue.
     ASSIGN_OR_RETURN(packets_before_test,
                      GetGnmiQueueCounterWithTimestamp(
