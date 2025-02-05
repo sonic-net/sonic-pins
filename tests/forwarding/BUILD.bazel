@@ -82,6 +82,21 @@ cc_library(
 )
 
 cc_library(
+    name = "configure_mirror_testbed_test",
+    testonly = True,
+    srcs = ["configure_mirror_testbed_test.cc"],
+    hdrs = ["configure_mirror_testbed_test.h"],
+    deps = [
+        "//gutil:status_matchers",
+        "//tests/lib:switch_test_setup_helpers",
+        "//thinkit:mirror_testbed_fixture",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_googletest//:gtest",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
     name = "smoke_test",
     testonly = True,
     srcs = ["smoke_test.cc"],
