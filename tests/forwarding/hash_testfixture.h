@@ -22,8 +22,10 @@
 #include "absl/base/thread_annotations.h"
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -33,7 +35,6 @@
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "thinkit/mirror_testbed_fixture.h"
-#include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 
 namespace pins_test {
@@ -108,8 +109,17 @@ public:
   void SendPacketsAndRecordResultsPerTestConfig(
       const TestConfigurationMap &test_configs,
       const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
-      int num_packets,
+      const P4rtPortId &ingress_port_id, int num_packets,
       absl::node_hash_map<std::string, TestData> &output_record);
+  void SendPacketsAndRecordResultsPerTestConfig(
+      const TestConfigurationMap &test_configs,
+      const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
+      int num_packets,
+      absl::node_hash_map<std::string, TestData> &output_record) {
+    SendPacketsAndRecordResultsPerTestConfig(test_configs, p4info, test_stage,
+                                             DefaultIngressPort(), num_packets,
+                                             output_record);
+  }
 
   // Initializes the forwarding pipeline to forward all packets to the provided
   // group members distributed according to their weight.
@@ -130,20 +140,29 @@ public:
     return ForwardAllPacketsToMembers(p4info, members);
   }
 
+  // Returns the default ingress port for SendPacket requests.
+  const P4rtPortId &DefaultIngressPort() const { return *PortIds().begin(); }
+
   // Returns the port IDs available to this test.
-  const absl::btree_set<P4rtPortId> &PortIds() { return port_ids_; }
+  const absl::btree_set<P4rtPortId> &PortIds() const { return port_ids_; }
+
+  // Returns the gNMI interface for a given port ID.
+  absl::StatusOr<std::string>
+  GnmiInterfaceName(const P4rtPortId &port_id) const;
+
+  // Returns the P4Info from the requested switch. If the forwarding pipeline is
+  // not configured, returns an empty protobuf.
+  absl::StatusOr<p4::config::v1::P4Info> GetSutP4Info();
+  absl::StatusOr<p4::config::v1::P4Info> GetControlSwitchP4Info();
 
 protected:
   // Send and receive packets for a particular test config. Save the resulting
   // test data.
   void SendAndReceivePackets(const pdpi::IrP4Info &ir_p4info,
-                             absl::string_view record_prefix, int num_packets,
+                             absl::string_view record_prefix,
+                             const P4rtPortId &ingress_port_id, int num_packets,
                              const pins::TestConfiguration &test_config,
                              TestData &test_data);
-
-  // Returns true if the target switch has no P4Info or has the P4Info
-  // associated with the test parameter (p4_info()).
-  absl::StatusOr<bool> HasDefaultOrNoP4Info(thinkit::Switch &target);
 
 private:
   // Set of interfaces to hash against. There is a 1:1 mapping of interfaces_ to
@@ -152,6 +171,8 @@ private:
 
   // Set of port IDs to hash against.
   absl::btree_set<P4rtPortId> port_ids_;
+  // A map of port IDs to interface names.
+  absl::flat_hash_map<P4rtPortId, std::string> port_ids_to_interfaces_;
 };
 
 // Return the list of all packet TestConfigurations to be tested. Each

@@ -25,6 +25,7 @@
 #include "gutil/proto.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -45,10 +46,13 @@ constexpr char kOutputHeader[] =
     "------\n";
 
 std::string TestHeader(absl::string_view test_name,
-                       absl::Span<const std::string> ports) {
-  return absl::StrCat(kBanner, test_name, "\n",
-                      "Available ports: ", absl::StrJoin(ports, ","), "\n",
-                      kBanner);
+                       absl::Span<const pins_test::P4rtPortId> ports) {
+  return absl::StrCat(
+      kBanner, test_name, "\n",
+      // TODO: Remove absl::StreamFormatter when we update to a new
+      // LTS branch of Abseil.
+      "Available ports: ", absl::StrJoin(ports, ",", absl::StreamFormatter()),
+      "\n", kBanner);
 }
 
 void CompareTableEntry(const pdpi::IrTableEntry& original_entry,
@@ -77,7 +81,7 @@ void CompareTableEntries(
 struct PortRewriterTestCase {
   const pdpi::IrP4Info& info;
   std::string test_name;
-  std::vector<std::string> new_ports_available;
+  std::vector<pins_test::P4rtPortId> new_ports_available;
   std::vector<pdpi::IrTableEntry> original_entries;
 };
 
@@ -108,8 +112,9 @@ int main(int argc, char** argv) {
 
   test_cases.push_back(PortRewriterTestCase{
       .info = sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter),
-      .test_name = "1,2,some_port -> a_port",
-      .new_ports_available = {"a_port"},
+      .test_name = "1,2,3 -> 4",
+      .new_ports_available =
+          pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({4}),
       .original_entries = TableEntriesFromProtos({
           R"pb(
             table_name: "router_interface_table"
@@ -156,7 +161,7 @@ int main(int argc, char** argv) {
                   }
                 }
                 weight: 1
-                watch_port: "some_port"
+                watch_port: "3"
               }
             }
           )pb",
@@ -166,7 +171,8 @@ int main(int argc, char** argv) {
   test_cases.push_back(PortRewriterTestCase{
       .info = sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter),
       .test_name = "1 -> Exactly one of {2,3}",
-      .new_ports_available = {"2", "3"},
+      .new_ports_available =
+          pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({2, 3}),
       .original_entries = TableEntriesFromProtos({
           R"pb(
             table_name: "router_interface_table"
@@ -223,7 +229,8 @@ int main(int argc, char** argv) {
   test_cases.push_back(PortRewriterTestCase{
       .info = sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter),
       .test_name = "Unchanged due to only existing ports",
-      .new_ports_available = {"2", "3"},
+      .new_ports_available =
+          pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({2, 3}),
       .original_entries = TableEntriesFromProtos({
           R"pb(
             table_name: "router_interface_table"
@@ -280,7 +287,8 @@ int main(int argc, char** argv) {
   test_cases.push_back(PortRewriterTestCase{
       .info = sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter),
       .test_name = "All unchanged due to no ports",
-      .new_ports_available = {"1"},
+      .new_ports_available =
+          pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({1}),
       .original_entries = TableEntriesFromProtos({
           R"pb(
             table_name: "neighbor_table"
@@ -359,10 +367,10 @@ int main(int argc, char** argv) {
 
   test_cases.push_back(PortRewriterTestCase{
       .info = sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter),
-      .test_name =
-          "Roughly even number of 1, 2, and 'a_port', with existing 'a_port' "
-          "and port-less entries unchanged",
-      .new_ports_available = {"1", "2", "a_port"},
+      .test_name = "Roughly even number of 1, 2, and 3, with existing 3 "
+                   "and port-less entries unchanged",
+      .new_ports_available =
+          pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({1, 2, 3}),
       .original_entries = TableEntriesFromProtos({
           R"pb(
             table_name: "neighbor_table"
@@ -392,7 +400,7 @@ int main(int argc, char** argv) {
               name: "set_port_and_src_mac"
               params {
                 name: "port"
-                value { str: "a_port" }
+                value { str: "3" }
               }
               params {
                 name: "src_mac"

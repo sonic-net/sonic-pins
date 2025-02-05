@@ -1,6 +1,6 @@
 ================================================================================
-1,2,some_port -> a_port
-Available ports: a_port
+1,2,3 -> 4
+Available ports: 4
 ================================================================================
 -- ORIGINAL ENTRY --------------------------------------------------------------
 table_name: "router_interface_table"
@@ -26,7 +26,7 @@ action {
   }
 }
 -- MODIFICATIONS ---------------------------------------------------------------
-modified: action.params[0].value.str: "1" -> "a_port"
+modified: action.params[0].value.str: "1" -> "4"
 
 -- ORIGINAL ENTRY --------------------------------------------------------------
 table_name: "wcmp_group_table"
@@ -61,12 +61,12 @@ action_set {
       }
     }
     weight: 1
-    watch_port: "some_port"
+    watch_port: "3"
   }
 }
 -- MODIFICATIONS ---------------------------------------------------------------
-modified: action_set.actions[0].watch_port: "2" -> "a_port"
-modified: action_set.actions[1].watch_port: "some_port" -> "a_port"
+modified: action_set.actions[0].watch_port: "2" -> "4"
+modified: action_set.actions[1].watch_port: "3" -> "4"
 
 ================================================================================
 1 -> Exactly one of {2,3}
@@ -317,7 +317,7 @@ action {
 -- MODIFICATIONS ---------------------------------------------------------------
 NONE
 
-tests/lib/switch_test_setup_helpers_golden_test_runner.cc:87: Failure
+tests/lib/switch_test_setup_helpers_golden_test_runner.cc:91: Failure
 Value of: pins_test::RewritePortsInTableEntries( test_case.info, test_case.new_ports_available, entries_to_rewrite)
 Expected: is OK
   Actual: NOT_FOUND: Key not found: 'mirror_with_psamp_encapsulation' (of type absl::lts_20230802::Status)

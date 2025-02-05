@@ -56,6 +56,8 @@ public:
         sut_interfaces_.push_back(interface);
         peer_interfaces_.push_back(info.peer_interface_name);
         sut_to_peer_interface_mapping_[interface] = info.peer_interface_name;
+        control_to_peer_interface_mapping_[info.peer_interface_name] =
+            interface;
       }
     }
   }
@@ -88,6 +90,9 @@ protected:
   std::vector<std::string> peer_test_interfaces_;
   // A mapping of SUT interface and its peer interface on control switch.
   absl::flat_hash_map<std::string, std::string> sut_to_peer_interface_mapping_;
+  // A mapping of control switch interface and its peer interface on SUT.
+  absl::flat_hash_map<std::string, std::string>
+      control_to_peer_interface_mapping_;
 };
 
 } // namespace bert

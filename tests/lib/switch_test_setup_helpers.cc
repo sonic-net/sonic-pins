@@ -18,12 +18,12 @@
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -31,6 +31,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/thinkit_sanity_tests.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -117,13 +118,18 @@ CreateP4RuntimeSessionAndOptionallyPushP4Info(
 
 // Uses the `port_map` to remap any P4runtime ports in `entries`.
 absl::Status RewritePortsInTableEntries(
-    const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry>& entries,
-    const absl::flat_hash_map<std::string, std::string>& port_map) {
+    const pdpi::IrP4Info &info, std::vector<pdpi::IrTableEntry> &entries,
+    const absl::flat_hash_map<P4rtPortId, P4rtPortId> &port_map) {
   p4::config::v1::P4NamedType port_type;
   port_type.set_name(kPortNamedType);
   RETURN_IF_ERROR(pdpi::TransformValuesOfType(
-      info, port_type, entries, [&](absl::string_view old_port) {
-        return gutil::FindOrStatus(port_map, std::string(old_port));
+      info, port_type, entries,
+      [&](absl::string_view old_string_port) -> absl::StatusOr<std::string> {
+        ASSIGN_OR_RETURN(P4rtPortId old_port,
+                         P4rtPortId::MakeFromP4rtEncoding(old_string_port));
+        ASSIGN_OR_RETURN(P4rtPortId new_port,
+                         gutil::FindOrStatus(port_map, old_port));
+        return new_port.GetP4rtEncoding();
       }));
 
   // Watch ports do not have a named type, but we still consider them ports so
@@ -133,8 +139,12 @@ absl::Status RewritePortsInTableEntries(
     if (entry.has_action_set()) {
       for (auto& action : *entry.mutable_action_set()->mutable_actions()) {
         if (!action.watch_port().empty()) {
-          ASSIGN_OR_RETURN(*action.mutable_watch_port(),
-                           gutil::FindOrStatus(port_map, action.watch_port()));
+          ASSIGN_OR_RETURN(
+              P4rtPortId old_watch_port,
+              P4rtPortId::MakeFromP4rtEncoding(action.watch_port()));
+          ASSIGN_OR_RETURN(P4rtPortId new_watch_port,
+                           gutil::FindOrStatus(port_map, old_watch_port));
+          *action.mutable_watch_port() = new_watch_port.GetP4rtEncoding();
         }
       }
     }
@@ -273,16 +283,20 @@ absl::Status WaitForEnabledInterfacesToBeUp(
 }
 
 // Gets every P4runtime port used in `entries`.
-absl::StatusOr<absl::btree_set<std::string>> GetPortsUsed(
-    const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry> entries) {
-  absl::btree_set<std::string> ports;
+absl::StatusOr<absl::btree_set<P4rtPortId>>
+GetPortsUsed(const pdpi::IrP4Info &info,
+             std::vector<pdpi::IrTableEntry> entries) {
+  absl::btree_set<P4rtPortId> ports;
   p4::config::v1::P4NamedType port_type;
   port_type.set_name(kPortNamedType);
-  RETURN_IF_ERROR(pdpi::TransformValuesOfType(info, port_type, entries,
-                                              [&](absl::string_view port) {
-                                                ports.insert(std::string(port));
-                                                return std::string(port);
-                                              }));
+  RETURN_IF_ERROR(pdpi::VisitValuesOfType(
+      info, port_type, entries,
+      /*visitor=*/[&](absl::string_view string_port) -> absl::Status {
+        ASSIGN_OR_RETURN(P4rtPortId port,
+                         P4rtPortId::MakeFromP4rtEncoding(string_port));
+        ports.insert(port);
+        return absl::OkStatus();
+      }));
 
   // Watch ports do not have a named type, but we still consider them ports so
   // we have to deal with them specifically rather than using the generic
@@ -291,7 +305,9 @@ absl::StatusOr<absl::btree_set<std::string>> GetPortsUsed(
     if (entry.has_action_set()) {
       for (const auto& action : entry.action_set().actions()) {
         if (!action.watch_port().empty()) {
-          ports.insert(action.watch_port());
+          ASSIGN_OR_RETURN(P4rtPortId port, P4rtPortId::MakeFromP4rtEncoding(
+                                                action.watch_port()));
+          ports.insert(port);
         }
       }
     }
@@ -302,23 +318,24 @@ absl::StatusOr<absl::btree_set<std::string>> GetPortsUsed(
 
 // Remaps ports in a round-robin fashion, but starts by fixing those that are
 // both used in `entries` and in `ports`.
-absl::Status RewritePortsInTableEntries(
-    const pdpi::IrP4Info& info, absl::Span<const std::string> new_ports,
-    std::vector<pdpi::IrTableEntry>& entries) {
+absl::Status
+RewritePortsInTableEntries(const pdpi::IrP4Info &info,
+                           absl::Span<const P4rtPortId> new_ports,
+                           std::vector<pdpi::IrTableEntry> &entries) {
   if (new_ports.empty()) {
     return absl::InvalidArgumentError("`new_ports` may not be empty");
   }
 
   // We get the ports used in the original entries so we can preserve any that
   // exist in both, and then remap them in a round-robin fashion.
-  ASSIGN_OR_RETURN(absl::btree_set<std::string> ports_used_originally,
+  ASSIGN_OR_RETURN(absl::btree_set<P4rtPortId> ports_used_originally,
                    GetPortsUsed(info, entries));
 
-  absl::flat_hash_map<std::string, std::string> old_to_new_port_id;
+  absl::flat_hash_map<P4rtPortId, P4rtPortId> old_to_new_port_id;
   // Queue of which new port to map an old port to next.
-  std::deque<std::string> new_port_queue;
+  std::deque<P4rtPortId> new_port_queue;
 
-  for (const auto& new_port : new_ports) {
+  for (const P4rtPortId &new_port : new_ports) {
     if (ports_used_originally.contains(new_port)) {
       // Make sure that existing ports are preserved and add them to the back of
       // the queue for balancing.
@@ -333,7 +350,7 @@ absl::Status RewritePortsInTableEntries(
   for (const auto& old_port : ports_used_originally) {
     // If a port is already mapped, we should not remap it.
     if (old_to_new_port_id.contains(old_port)) continue;
-    const std::string new_port = new_port_queue.front();
+    const P4rtPortId &new_port = new_port_queue.front();
     old_to_new_port_id[old_port] = new_port;
     new_port_queue.pop_front();
     new_port_queue.push_back(new_port);
@@ -353,9 +370,29 @@ absl::Status RewritePortsInTableEntries(
         "given gnmi_config had no valid port ids");
   }
 
-  std::vector<std::string> new_ports(valid_port_ids_set.begin(),
-                                     valid_port_ids_set.end());
+  std::vector<P4rtPortId> new_ports;
+  new_ports.reserve(valid_port_ids_set.size());
+  for (const std::string &port_id : valid_port_ids_set) {
+    ASSIGN_OR_RETURN(new_ports.emplace_back(),
+                     P4rtPortId::MakeFromP4rtEncoding(port_id));
+  }
+
   return RewritePortsInTableEntries(info, new_ports, entries);
+}
+
+absl::Status RewritePortsInTableEntriesToEnabledEthernetPorts(
+    const pdpi::IrP4Info &info, gnmi::gNMI::StubInterface &gnmi_stub,
+    std::vector<pdpi::IrTableEntry> &entries) {
+  ASSIGN_OR_RETURN(std::vector<P4rtPortId> valid_port_ids,
+                   pins_test::GetMatchingP4rtPortIds(
+                       gnmi_stub, pins_test::IsEnabledEthernetInterface));
+
+  if (valid_port_ids.empty()) {
+    return absl::InvalidArgumentError(
+        "no enabled, ethernet ports were mapped on the switch");
+  }
+
+  return RewritePortsInTableEntries(info, valid_port_ids, entries);
 }
 
 }  // namespace pins_test
