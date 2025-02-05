@@ -112,6 +112,10 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
       std::string(kGotClonedPseudoField),
       z3_context.bool_val(false),
   });
+  symbolic_headers.insert({
+      std::string(kGotRecirculatedPseudoField),
+      z3_context.bool_val(false),
+  });
 
   return symbolic_headers;
 }
