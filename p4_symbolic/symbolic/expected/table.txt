@@ -16,6 +16,7 @@ MyIngress.ports_exact => was matched on entry 0
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 standard_metadata.$extracted$ = false
@@ -40,6 +41,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 standard_metadata.$extracted$ = false
@@ -64,6 +66,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 standard_metadata.$extracted$ = false
@@ -99,6 +102,7 @@ MyIngress.ports_exact => was matched on entry 1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 standard_metadata.$extracted$ = false
@@ -123,6 +127,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 standard_metadata.$extracted$ = false
@@ -147,6 +152,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 standard_metadata.$extracted$ = false

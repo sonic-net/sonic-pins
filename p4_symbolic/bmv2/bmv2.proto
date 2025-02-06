@@ -415,6 +415,8 @@ enum StatementOp {
   exit = 6;
   // Assign a header instance to another of the same type.
   assign_header = 7;
+  // Recirculate the packet.
+  recirculate = 8;
 }
 
 // This specifies the exact expressions that are supported by our ir.

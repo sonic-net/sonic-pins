@@ -75,7 +75,9 @@ absl::StatusOr<bmv2::StatementOp> StatementOpToEnum(const std::string &op) {
       {"remove_header", // hdr.SetInvalid()
        bmv2::StatementOp::remove_header},
       {"assign_header", bmv2::StatementOp::assign_header},
-      {"exit", bmv2::StatementOp::exit}};
+      {"exit", bmv2::StatementOp::exit},
+      {"recirculate", bmv2::StatementOp::recirculate},
+  };
 
   if (op_table.count(op) != 1) {
     return absl::UnimplementedError(
@@ -290,14 +292,17 @@ absl::StatusOr<TernaryExpression> ExtractTernaryExpression(
     const google::protobuf::Struct &bmv2_expression,
     const std::vector<std::string> &variables) {
   if (bmv2_expression.fields().count("left") != 1 ||
-      bmv2_expression.fields().count("condition") != 1) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("TernaryExpression must contain 'left', and 'condition' ",
-                     bmv2_expression.DebugString()));
+      (bmv2_expression.fields().count("cond") != 1 &&
+       bmv2_expression.fields().count("condition") != 1)) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "TernaryExpression must contain 'left', and 'condition'/'cond' ",
+        bmv2_expression.DebugString()));
   }
 
   const google::protobuf::Value &condition =
-      bmv2_expression.fields().at("condition");
+      bmv2_expression.fields().contains("condition")
+          ? bmv2_expression.fields().at("condition")
+          : bmv2_expression.fields().at("cond");
   const google::protobuf::Value &left = bmv2_expression.fields().at("left");
   const google::protobuf::Value &right = bmv2_expression.fields().at("right");
 
@@ -629,7 +634,10 @@ absl::StatusOr<Statement> ExtractStatement(
       statement.mutable_clone();
       return statement;
     }
-
+    case bmv2::StatementOp::recirculate: {
+      statement.mutable_recirculate();
+      return statement;
+    }
     case bmv2::StatementOp::add_header:
     case bmv2::StatementOp::remove_header: {
       const google::protobuf::Value &params =
