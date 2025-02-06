@@ -84,7 +84,7 @@ GenerateSynthesisCriteriaFor(const EntryCoverageGoal& goal,
     bool table_is_empty = true;
     auto it = solver_state.context.table_entries.find(table_name);
     if (it != solver_state.context.table_entries.end()) {
-      const std::vector<symbolic::TableEntry>& entries = it->second;
+      const std::vector<ir::TableEntry>& entries = it->second;
       if (!entries.empty()) table_is_empty = false;
       for (int i = 0; i < entries.size(); i++) {
         criteria.mutable_table_entry_reachability_criteria()->set_match_index(

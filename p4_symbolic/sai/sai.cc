@@ -17,8 +17,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <type_traits>
-#include <unordered_set>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -32,6 +30,7 @@
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -177,12 +176,13 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState &state) {
        state.context.table_entries) {
     ASSIGN_OR_RETURN(const ir::Table *table,
                      symbolic::util::GetIrTable(state.program, table_name));
-    for (const symbolic::TableEntry &entry : entries_per_table) {
-      if (!entry.IsSymbolic()) continue;
-      const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
+    for (const ir::TableEntry &entry : entries_per_table) {
+      if (!entry.has_symbolic_entry()) continue;
+      const ir::SymbolicTableEntry &symbolic_entry = entry.symbolic_entry();
 
       // Constrain the symbolic variables for entry matches.
-      for (const pdpi::IrMatch &symbolic_match : sketch.matches()) {
+      for (const pdpi::IrMatch &symbolic_match :
+           symbolic_entry.sketch().matches()) {
         const std::string &match_name = symbolic_match.name();
         ASSIGN_OR_RETURN(
             pdpi::IrMatchFieldDefinition match_definition,
@@ -203,10 +203,10 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState &state) {
         }
 
         if (type_name == kVrfIdTypeName) {
-          ASSIGN_OR_RETURN(
-              symbolic::SymbolicMatchVariables match_variables,
-              entry.GetMatchValues(match_name, *table, state.program,
-                                   *state.context.z3_context));
+          ASSIGN_OR_RETURN(symbolic::SymbolicMatchVariables match_variables,
+                           symbolic::GetSymbolicMatch(
+                               symbolic_entry, match_name, *table,
+                               state.program, *state.context.z3_context));
           state.solver->add(match_variables.value != 0);
         }
       }
@@ -229,9 +229,10 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState &state) {
               param_definition.param().type_name().name();
 
           if (type_name == kVrfIdTypeName) {
-            ASSIGN_OR_RETURN(z3::expr param, entry.GetActionParameter(
-                                                 param_name, action, *table,
-                                                 *state.context.z3_context));
+            ASSIGN_OR_RETURN(z3::expr param,
+                             symbolic::GetSymbolicActionParameter(
+                                 symbolic_entry, param_name, action, *table,
+                                 *state.context.z3_context));
             state.solver->add(param != 0);
           }
         }
@@ -255,34 +256,40 @@ absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState &state) {
       symbolic::util::GetIrTable(state.program, kAclPreIngressTableName));
 
   for (const auto &entry : it->second) {
-    if (!entry.IsSymbolic()) continue;
+    if (!entry.has_symbolic_entry()) continue;
+    const ir::SymbolicTableEntry &symbolic_entry = entry.symbolic_entry();
     z3::expr_vector constraints(*state.context.z3_context);
 
     // Obtain symbolic variables.
-    ASSIGN_OR_RETURN(auto dscp,
-                     entry.GetMatchValues("dscp", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto dst_ip,
-                     entry.GetMatchValues("dst_ip", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto dst_ipv6,
-                     entry.GetMatchValues("dst_ipv6", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto ecn,
-                     entry.GetMatchValues("ecn", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto in_port,
-                     entry.GetMatchValues("in_port", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto is_ip,
-                     entry.GetMatchValues("is_ip", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto is_ipv4,
-                     entry.GetMatchValues("is_ipv4", *table, state.program,
-                                          *state.context.z3_context));
-    ASSIGN_OR_RETURN(auto is_ipv6,
-                     entry.GetMatchValues("is_ipv6", *table, state.program,
-                                          *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto dscp, symbolic::GetSymbolicMatch(
+                                    symbolic_entry, "dscp", *table,
+                                    state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto dst_ip,
+        symbolic::GetSymbolicMatch(symbolic_entry, "dst_ip", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto dst_ipv6,
+        symbolic::GetSymbolicMatch(symbolic_entry, "dst_ipv6", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto ecn, symbolic::GetSymbolicMatch(
+                                   symbolic_entry, "ecn", *table, state.program,
+                                   *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto in_port,
+        symbolic::GetSymbolicMatch(symbolic_entry, "in_port", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto is_ip, symbolic::GetSymbolicMatch(
+                                     symbolic_entry, "is_ip", *table,
+                                     state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto is_ipv4,
+        symbolic::GetSymbolicMatch(symbolic_entry, "is_ipv4", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto is_ipv6,
+        symbolic::GetSymbolicMatch(symbolic_entry, "is_ipv6", *table,
+                                   state.program, *state.context.z3_context));
 
     // dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     constraints.push_back(
@@ -310,10 +317,11 @@ absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState &state) {
     // is_ipv6::mask != 0 -> (is_ipv6 == 1);
     constraints.push_back(is_ipv6.mask == 0 || is_ipv6.value == 1);
     // ::priority < 0x7fffffff;
-    if (entry.GetPdpiIrTableEntry().priority() >= 0x7fffffff) {
+    if (int priority = ir::GetPriority(symbolic_entry);
+        priority >= 0x7fffffff) {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Invalid priority '" << entry.GetPdpiIrTableEntry().priority()
-             << "' for entry #" << entry.GetIndex() << " in table "
+             << "Invalid priority '" << priority << "' for entry #"
+             << symbolic_entry.index() << " in table "
              << kAclPreIngressTableName;
     }
 
