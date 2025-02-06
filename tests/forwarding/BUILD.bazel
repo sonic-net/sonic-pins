@@ -226,6 +226,44 @@ cc_library(
 )
 
 cc_library(
+    name = "hash_statistics_util",
+    testonly = True,
+    srcs = [
+        "hash_statistics_util.cc",
+    ],
+    hdrs = [
+        "hash_statistics_util.h",
+    ],
+    deps = [
+        ":group_programming_util",
+        ":hash_testfixture",
+        "//gutil:collections",
+        "//gutil:status",
+        "@boost//:bimap",
+        "@boost//:graph",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "hash_statistics_util_test",
+    srcs = ["hash_statistics_util_test.cc"],
+    deps = [
+        ":group_programming_util",
+        ":hash_statistics_util",
+        ":hash_testfixture",
+        "//gutil:status_matchers",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "ouroboros_test",
     testonly = True,
     srcs = ["ouroboros_test.cc"],

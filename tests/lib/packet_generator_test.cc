@@ -20,11 +20,13 @@
 #include <cctype>
 #include <iterator>
 #include <limits>
+#include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
@@ -40,8 +42,10 @@ namespace {
 
 using ::gutil::EqualsProto;
 using ::gutil::IsOk;
+using ::testing::Each;
 using ::testing::ElementsAre;
 using ::testing::Eq;
+using ::testing::Le;
 using ::testing::Not;
 using ::testing::Property;
 using ::testing::ValuesIn;
@@ -342,6 +346,12 @@ TEST(PacketGenerator, PacketsMatchesIndividualPacketResultsWithOffset) {
               testing::Pointwise(PointwiseEqualsProto(), individual_packets));
 }
 
+TEST(PacketGenerator, NonVariableGeneratorHasRangeOfOne) {
+  ASSERT_OK_AND_ASSIGN(PacketGenerator generator,
+                       PacketGenerator::Create(Ipv4PacketOptions()));
+  EXPECT_EQ(generator.NumPossiblePackets(), 1);
+}
+
 class PacketGeneratorOptions : public testing::TestWithParam<Options> {};
 
 TEST_P(PacketGeneratorOptions, AreAllValidOrInvalid) {
@@ -544,21 +554,41 @@ INSTANTIATE_TEST_SUITE_P(PacketGeneratorTest, SingleFieldOptions,
 
 class SingleOrDoubleFieldOptions : public testing::TestWithParam<Options> {};
 
+TEST_P(SingleOrDoubleFieldOptions, GeneratorRangeMatchesVariableRange) {
+  const Options options = GetParam();
+  std::vector<int> ranges_from_options;
+  for (const Field field : options.variables) {
+    if (InnerIpFields().contains(field)) {
+      ranges_from_options.push_back(Range(field, *options.inner_ip_type));
+    } else {
+      ranges_from_options.push_back(Range(field, options.ip_type));
+    }
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto generator, PacketGenerator::Create(options));
+  if (ranges_from_options.size() == 1) {
+    EXPECT_EQ(generator.NumPossiblePackets(), ranges_from_options[0]);
+  } else {
+    EXPECT_THAT(ranges_from_options, Each(Le(generator.NumPossiblePackets())));
+  }
+}
+
 TEST_P(SingleOrDoubleFieldOptions, CreatesDifferentPackets) {
   ASSERT_OK_AND_ASSIGN(auto generator, PacketGenerator::Create(GetParam()));
   std::vector<std::string> packet_descriptions;
   std::set<std::string> packet_contents;
-  constexpr int kNumPackets = 4;
-  for (int i = 0; i < kNumPackets; ++i) {
+  int num_packets = std::min(1000, generator.NumPossiblePackets());
+  ASSERT_GT(num_packets, 0);
+  for (int i = 0; i < num_packets; ++i) {
+    SCOPED_TRACE(absl::Substitute("Failed packet $0 of $1", i, num_packets));
     packetlib::Packet packet = generator.Packet(i);
     packet.set_payload("");  // Only check the header.
     packet_descriptions.push_back(packet.ShortDebugString());
     ASSERT_OK_AND_ASSIGN(std::string raw_packet,
                          packetlib::SerializePacket(packet));
-    packet_contents.insert(std::move(raw_packet));
+    EXPECT_FALSE(packet_contents.count(raw_packet))
+        << "Duplicate packet: " << packet.ShortDebugString();
   }
-  EXPECT_EQ(packet_contents.size(), kNumPackets)
-      << "Expected packets: " << absl::StrJoin(packet_descriptions, "\n");
 }
 
 TEST_P(SingleOrDoubleFieldOptions, GeneratesAValidPacketAtAnyIndex) {
