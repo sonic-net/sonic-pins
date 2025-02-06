@@ -1,4 +1,5 @@
 (ingress) $got_cloned$: false
+(ingress) $got_recirculated$: false
 (ingress) scalars.$extracted$: false
 (ingress) scalars.$valid$: false
 (ingress) scalars._padding_0: scalars._padding_0
@@ -24,6 +25,7 @@
 (ingress) standard_metadata.priority: #b000
 
 (parsed) $got_cloned$: false
+(parsed) $got_recirculated$: false
 (parsed) scalars.$extracted$: false
 (parsed) scalars.$valid$: false
 (parsed) scalars._padding_0: scalars._padding_0
@@ -49,6 +51,7 @@
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
+(egress) $got_recirculated$: false
 (egress) scalars.$extracted$: false
 (egress) scalars.$valid$: false
 (egress) scalars._padding_0: scalars._padding_0

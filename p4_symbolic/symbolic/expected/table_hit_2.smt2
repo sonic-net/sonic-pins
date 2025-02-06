@@ -1,4 +1,5 @@
 (ingress) $got_cloned$: false
+(ingress) $got_recirculated$: false
 (ingress) h1.$extracted$: false
 (ingress) h1.$valid$: (ite true true false)
 (ingress) h1.f1: h1.f1
@@ -28,6 +29,7 @@
 (ingress) standard_metadata.priority: #b000
 
 (parsed) $got_cloned$: false
+(parsed) $got_recirculated$: false
 (parsed) h1.$extracted$: (ite true true false)
 (parsed) h1.$valid$: (ite true true false)
 (parsed) h1.f1: h1.f1
@@ -57,6 +59,7 @@
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
+(egress) $got_recirculated$: false
 (egress) h1.$extracted$: (ite true true false)
 (egress) h1.$valid$: (ite true true false)
 (egress) h1.f1: h1.f1

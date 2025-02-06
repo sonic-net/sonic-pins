@@ -1,4 +1,5 @@
 (ingress) $got_cloned$: false
+(ingress) $got_recirculated$: false
 (ingress) ethernet.$extracted$: false
 (ingress) ethernet.$valid$: (ite true true false)
 (ingress) ethernet.dst_addr: ethernet.dst_addr
@@ -27,6 +28,7 @@
 (ingress) standard_metadata.priority: #b000
 
 (parsed) $got_cloned$: false
+(parsed) $got_recirculated$: false
 (parsed) ethernet.$extracted$: (ite true true false)
 (parsed) ethernet.$valid$: (ite true true false)
 (parsed) ethernet.dst_addr: ethernet.dst_addr
@@ -55,6 +57,7 @@
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
+(egress) $got_recirculated$: false
 (egress) ethernet.$extracted$: (ite true true false)
 (egress) ethernet.$valid$: (ite true true false)
 (egress) ethernet.dst_addr: (ite (and true true (= ethernet.dst_addr #x000000000001))
