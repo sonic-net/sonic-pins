@@ -35,6 +35,7 @@
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "tests/gnmi/util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
@@ -45,43 +46,6 @@ namespace {
 
 using ::gutil::IsOkAndHolds;
 using ::testing::Contains;
-
-constexpr char kEnabledFalse[] = "{\"enabled\":false}";
-constexpr char kEnabledTrue[] = "{\"enabled\":true}";
-
-absl::Status SetAdminStatus(gnmi::gNMI::StubInterface* gnmi_stub,
-                            absl::string_view if_name,
-                            absl::string_view if_status) {
-  std::string enable_status;
-  if (if_status == "UP") {
-    enable_status = kEnabledTrue;
-  } else if (if_status == "DOWN") {
-    enable_status = kEnabledFalse;
-  } else {
-    return absl::InvalidArgumentError("Interface status invalid.");
-  }
-
-  // Enable/Disable front panel port.
-  LOG(INFO) << "Set front panel port " << if_name << " status: " << if_status;
-  const std::string if_enabled_config_path =
-      absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
-  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
-      gnmi_stub, if_enabled_config_path, GnmiSetType::kUpdate, enable_status));
-  absl::SleepFor(absl::Seconds(15));
-
-  // Verifies /interfaces/interface[name=<port>]/state/admin-status = UP/DOWN.
-  std::string if_state_path =
-      absl::StrCat("interfaces/interface[name=", if_name, "]/state");
-  std::string resp_parse_str = "openconfig-interfaces:state";
-  ASSIGN_OR_RETURN(
-      std::string state_path_response,
-      GetGnmiStatePathInfo(gnmi_stub, if_state_path, resp_parse_str));
-  if (!absl::StrContains(state_path_response, if_status)) {
-    return absl::InternalError(
-        absl::StrCat("Unable to set admin status: ", if_status));
-  }
-  return absl::OkStatus();
-}
 
 }  // namespace
 
