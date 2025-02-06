@@ -127,6 +127,48 @@ SymbolicTableMatch DefaultTableMatch(z3::context &z3_context) {
   };
 }
 
+// Translates the table and action names back to the aliases.
+// This should be called when synthesizing concrete entries used on other
+// target platforms. PDPI maps are keyed by the alias names. This function
+// makes the table entry compatible with PDPI formats.
+// TODO: Consider removing this function if we switch to using
+// aliases as table/action names in P4-Symbolic.
+void ConvertFullyQualifiedNamesToAliases(ir::ConcreteTableEntry &entry,
+                                         const ir::P4Program &program) {
+  pdpi::IrTableEntry &pdpi_ir_entry = *entry.mutable_pdpi_ir_entry();
+
+// Check if the table specified by the table name exists.
+  auto it = program.tables().find(pdpi_ir_entry.table_name());
+  // If the table cannot be found with the table name, it may have been
+  // converted to the alias already.
+  if (it == program.tables().end()) return;
+  const ir::Table &table = it->second;
+
+// Set table name that is compatible with PDPI.
+  pdpi_ir_entry.set_table_name(table.table_definition().preamble().alias());
+
+// Set action name that is compatible with PDPI.
+  auto convert_action_name = [&program](
+                                 pdpi::IrActionInvocation &action_invocation) {
+    const std::string &action_name = action_invocation.name();
+    auto it = program.actions().find(action_name);
+    // If the action cannot be found with the action name, it may have been
+    // converted to the alias already.
+    if (it == program.actions().end()) return;
+    const ir::Action &action = it->second;
+    action_invocation.set_name(action.action_definition().preamble().alias());
+  };
+
+if (pdpi_ir_entry.has_action()) {
+    convert_action_name(*pdpi_ir_entry.mutable_action());
+  } else if (pdpi_ir_entry.has_action_set()) {
+    for (pdpi::IrActionSetInvocation &action :
+         *pdpi_ir_entry.mutable_action_set()->mutable_actions()) {
+      convert_action_name(*action.mutable_action());
+    }
+  }
+}
+
 absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
                                                  const SolverState &state) {
   // Extract ports.
@@ -167,22 +209,32 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(const z3::model &model,
                    DeparseEgressPacket(state, model));
 
   // Extract the table entries.
-  TableEntries concrete_entries;
+  absl::btree_map<std::string, std::vector<ir::ConcreteTableEntry>>
+      concrete_entries;
   for (const auto &[table_name, entries_per_table] :
        state.context.table_entries) {
-    for (const TableEntry &entry : entries_per_table) {
-      if (entry.IsSymbolic()) {
-        ASSIGN_OR_RETURN(TableEntry concrete_entry,
-                         ExtractConcreteEntryFromModel(
-                             entry, model, state.program, state.translator,
-                             *state.context.z3_context));
-        concrete_entry.ConvertToTableAndActionAliases(state.program);
-        concrete_entries[table_name].push_back(std::move(concrete_entry));
-      } else {
-        TableEntry concrete_entry(entry);
-        concrete_entry.ConvertToTableAndActionAliases(state.program);
-        concrete_entries[table_name].push_back(std::move(concrete_entry));
+    for (const ir::TableEntry &entry : entries_per_table) {
+      ir::ConcreteTableEntry &concrete_entry =
+          concrete_entries[table_name].emplace_back();
+      switch (entry.entry_case()) {
+        case ir::TableEntry::kConcreteEntry: {
+          concrete_entry = entry.concrete_entry();
+          break;
+        }
+        case ir::TableEntry::kSymbolicEntry: {
+          ASSIGN_OR_RETURN(concrete_entry,
+                           ExtractConcreteEntryFromModel(
+                               entry.symbolic_entry(), model, state.program,
+                               state.translator, *state.context.z3_context));
+          break;
+        }
+        case ir::TableEntry::ENTRY_NOT_SET: {
+          return gutil::InvalidArgumentErrorBuilder()
+                 << "invalid entry in table '" << table_name
+                 << "': " << absl::StrCat(entry);
+        }
       }
+      ConvertFullyQualifiedNamesToAliases(concrete_entry, state.program);
     }
   }
 

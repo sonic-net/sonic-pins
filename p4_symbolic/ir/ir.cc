@@ -14,17 +14,12 @@
 
 #include "p4_symbolic/ir/ir.h"
 
-#include <fstream>
 #include <memory>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -33,6 +28,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "glog/logging.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -41,8 +37,7 @@
 #include "p4_symbolic/ir/cfg.h"
 #include "p4_symbolic/ir/ir.pb.h"
 
-namespace p4_symbolic {
-namespace ir {
+namespace p4_symbolic::ir {
 
 namespace {
 
@@ -66,13 +61,13 @@ absl::StatusOr<bmv2::StatementOp> StatementOpToEnum(const std::string &op) {
   static const std::unordered_map<std::string, bmv2::StatementOp> op_table = {
       {"assign", bmv2::StatementOp::assign},
       {"mark_to_drop", bmv2::StatementOp::mark_to_drop},
-      {"clone_ingress_pkt_to_egress", // clone3(...)
+      {"clone_ingress_pkt_to_egress",  // clone3(...)
        bmv2::StatementOp::clone_ingress_pkt_to_egress},
-      {"modify_field_with_hash_based_offset", // hash(...)
+      {"modify_field_with_hash_based_offset",  // hash(...)
        bmv2::StatementOp::modify_field_with_hash_based_offset},
-      {"add_header", // hdr.SetValid()
+      {"add_header",  // hdr.SetValid()
        bmv2::StatementOp::add_header},
-      {"remove_header", // hdr.SetInvalid()
+      {"remove_header",  // hdr.SetInvalid()
        bmv2::StatementOp::remove_header},
       {"assign_header", bmv2::StatementOp::assign_header},
       {"exit", bmv2::StatementOp::exit},
@@ -730,7 +725,7 @@ absl::StatusOr<Action> ExtractAction(
   }
 
   // Parse every statement in body.
-  // When encoutering a parameter, look it up in the parameter map.
+  // When encountering a parameter, look it up in the parameter map.
   for (const google::protobuf::Struct &primitive : bmv2_action.primitives()) {
     ASSIGN_OR_RETURN(*action_impl->add_action_body(),
                      ExtractStatement(primitive, parameter_map),
@@ -1282,8 +1277,7 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   // not fully qualified names.
   std::unordered_map<std::string, const pdpi::IrActionDefinition &>
       actions_by_qualified_name;
-  const auto &pdpi_actions = pdpi.actions_by_name();
-  for (const auto &[_, action] : pdpi_actions) {
+  for (const auto &[_, action] : pdpi.actions_by_name()) {
     const std::string &name = action.preamble().name();
     actions_by_qualified_name.insert({name, action});
   }
@@ -1345,11 +1339,13 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
     tables_by_qualified_name.insert({name, table});
   }
 
-  // Translate tables.
+  // Translate pipelines.
   for (const auto &pipeline : bmv2.pipelines()) {
     ir::Pipeline &ir_pipeline = (*output.mutable_pipeline())[pipeline.name()];
     ir_pipeline.set_name(pipeline.name());
     ir_pipeline.set_initial_control(Bmv2ToIrControlName(pipeline.init_table()));
+
+    // Translate tables.
     for (const bmv2::Table &bmv2_table : pipeline.tables()) {
       const std::string &table_name = bmv2_table.name();
 
@@ -1448,5 +1444,75 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   return output;
 }
 
-}  // namespace ir
-}  // namespace p4_symbolic
+const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(const ir::TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry:
+      return entry.concrete_entry().pdpi_ir_entry();
+    case TableEntry::kSymbolicEntry:
+      return entry.symbolic_entry().sketch();
+    case TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  LOG(FATAL)  // Crash ok: test infra.
+      << "p4_symbolic::ir::TableEntry of unknown type: " << absl::StrCat(entry);
+}
+
+namespace {
+const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(
+    const ir::SymbolicTableEntry &entry) {
+  return entry.sketch();
+}
+const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(
+    const ConcreteTableEntry &entry) {
+  return entry.pdpi_ir_entry();
+}
+}  // namespace
+
+int GetIndex(const TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry:
+      return entry.concrete_entry().index();
+    case TableEntry::kSymbolicEntry:
+      return entry.symbolic_entry().index();
+    case TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  LOG(ERROR) << "p4_symbolic::ir::TableEntry of unknown type: "
+             << absl::StrCat(entry);
+  return 0;
+}
+
+const std::string &GetTableName(const TableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).table_name();
+}
+const std::string &GetTableName(const ConcreteTableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).table_name();
+}
+const std::string &GetTableName(const SymbolicTableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).table_name();
+}
+
+int GetPriority(const TableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).priority();
+}
+int GetPriority(const ConcreteTableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).priority();
+}
+int GetPriority(const SymbolicTableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).priority();
+}
+
+const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
+    const TableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).matches();
+}
+const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
+    const ConcreteTableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).matches();
+}
+const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
+    const SymbolicTableEntry &entry) {
+  return GetPdpiIrEntryOrSketch(entry).matches();
+}
+
+}  // namespace p4_symbolic::ir

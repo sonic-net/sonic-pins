@@ -26,6 +26,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -52,63 +53,45 @@ namespace {
 // corresponding constraints will be created within the given solver context.
 absl::Status InitializeTableEntries(SolverState &state,
                                     ir::TableEntries ir_entries) {
-  // Create table entry objects for both concrete and symbolic entries.
-  for (auto &[table_name, per_table_ir_entries] : ir_entries) {
-    // Check that the table entries do not exist for the table.
-    if (auto it = state.context.table_entries.find(table_name);
-        it != state.context.table_entries.end() && !it->second.empty()) {
-      return gutil::InternalErrorBuilder()
-             << "Expected no table entry for table '" << table_name
-             << "'. Found: " << it->second.size() << " entries.";
-    }
-
-    // For each IR entry, create a table entry object.
-    for (size_t index = 0; index < per_table_ir_entries.size(); ++index) {
-      ir::TableEntry &ir_entry = per_table_ir_entries[index];
-      TableEntry entry(index, std::move(ir_entry));
-      if (!entry.IsConcrete() && !entry.IsSymbolic()) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "A table entry must be either concrete or symbolic. Found: "
-               << entry.GetPdpiIrTableEntry().DebugString();
-      }
-      state.context.table_entries[table_name].push_back(std::move(entry));
-    }
-  }
-
   // For each symbolic table entry object in each table, create respective
   // symbolic variables and add corresponding constraints as Z3 assertions.
-  for (auto &[table_name, table_entries] : state.context.table_entries) {
+  for (auto &[table_name, table_entries] : ir_entries) {
     ASSIGN_OR_RETURN(const ir::Table *table,
                      util::GetIrTable(state.program, table_name));
-
-    for (TableEntry &entry : table_entries) {
-      // Skip concrete table entries.
-      if (entry.IsConcrete()) continue;
-
-      // Initialize the symbolic match fields of the current entry.
-      RETURN_IF_ERROR(InitializeSymbolicMatches(
-          entry, *table, state.program, *state.context.z3_context,
-          *state.solver, state.translator));
-
-      // Entries with symbolic action sets are not supported for now.
-      if (table->table_definition().has_action_profile_id()) {
-        return gutil::UnimplementedErrorBuilder()
-               << "Table entries with symbolic action sets are not supported "
-                  "at the moment.";
+    for (ir::TableEntry &entry : table_entries) {
+      switch (entry.entry_case()) {
+        case ir::TableEntry::kConcreteEntry:
+          continue;
+        case ir::TableEntry::kSymbolicEntry: {
+          if (table->table_definition().has_action_profile_id()) {
+            return gutil::UnimplementedErrorBuilder()
+                   << "Table entries with symbolic action sets are not "
+                      "supported at the moment.";
+          }
+          ir::SymbolicTableEntry &symbolic_entry =
+              *entry.mutable_symbolic_entry();
+          RETURN_IF_ERROR(InitializeSymbolicMatches(
+              symbolic_entry, *table, state.program, *state.context.z3_context,
+              *state.solver, state.translator));
+          RETURN_IF_ERROR(InitializeSymbolicActions(
+              symbolic_entry, *table, state.program, *state.context.z3_context,
+              *state.solver, state.translator));
+          continue;
+        }
+        case ir::TableEntry::ENTRY_NOT_SET:
+          break;
       }
-
-      // Initialize the symbolic actions of the current entry.
-      RETURN_IF_ERROR(InitializeSymbolicActions(
-          entry, *table, state.program, *state.context.z3_context,
-          *state.solver, state.translator));
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unsupported table entry: " << absl::StrCat(entry);
     }
   }
 
+  state.context.table_entries = std::move(ir_entries);
   return absl::OkStatus();
 }
 
-// Adds solver constraint to restrict the statically translated given `value` of
-// the given type `type_name` based on the valid values in the given
+// Adds solver constraint to restrict the statically translated given `value`
+// of the given type `type_name` based on the valid values in the given
 // `translator`.
 void AddConstraintForStaticallyTranslatedValue(
     const z3::expr &value, const std::string &type_name,
@@ -147,12 +130,13 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
        state.context.table_entries) {
     ASSIGN_OR_RETURN(const ir::Table *table,
                      util::GetIrTable(state.program, table_name));
-    for (const TableEntry &entry : entries_per_table) {
-      if (!entry.IsSymbolic()) continue;
-      const pdpi::IrTableEntry &sketch = entry.GetPdpiIrTableEntry();
+    for (const ir::TableEntry &entry : entries_per_table) {
+      if (!entry.has_symbolic_entry()) continue;
+      const ir::SymbolicTableEntry &symbolic_entry = entry.symbolic_entry();
 
       // Constrain the symbolic variables for entry matches.
-      for (const pdpi::IrMatch &symbolic_match : sketch.matches()) {
+      for (const pdpi::IrMatch &symbolic_match :
+           ir::GetMatches(symbolic_entry)) {
         const std::string &match_name = symbolic_match.name();
         ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_definition,
                          util::GetMatchDefinition(match_name, *table));
@@ -169,9 +153,10 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
           if (it != state.translator.fields_p4runtime_type.end())
             type_name = it->second;
         }
-        ASSIGN_OR_RETURN(SymbolicMatchVariables match_variables,
-                         entry.GetMatchValues(match_name, *table, state.program,
-                                              *state.context.z3_context));
+        ASSIGN_OR_RETURN(
+            SymbolicMatchVariables match_variables,
+            GetSymbolicMatch(symbolic_entry, match_name, *table, state.program,
+                             *state.context.z3_context));
         AddConstraintForStaticallyTranslatedValue(
             match_variables.value, type_name, state.translator,
             *state.context.z3_context, *state.solver);
@@ -193,9 +178,11 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
              Ordered(action.action_definition().params_by_name())) {
           const std::string &type_name =
               param_definition.param().type_name().name();
-          ASSIGN_OR_RETURN(z3::expr param,
-                           entry.GetActionParameter(param_name, action, *table,
-                                                    *state.context.z3_context));
+          ASSIGN_OR_RETURN(
+              z3::expr param,
+
+              GetSymbolicActionParameter(symbolic_entry, param_name, action,
+                                         *table, *state.context.z3_context));
           AddConstraintForStaticallyTranslatedValue(
               param, type_name, state.translator, *state.context.z3_context,
               *state.solver);
