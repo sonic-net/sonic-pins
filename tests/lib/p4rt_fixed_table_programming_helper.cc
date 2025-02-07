@@ -16,11 +16,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/substitute.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "tests/lib/common_ir_table_entries.h"
 
 namespace pins {
 
@@ -44,7 +45,7 @@ absl::StatusOr<p4::v1::Update> IpTableUpdate(const pdpi::IrP4Info& ir_p4_info,
       break;
     default:
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unsuported IP type: " << ip_type;
+             << "Unsupported IP type: " << ip_type;
   }
 
   // Always set the VRF ID.
@@ -69,7 +70,7 @@ absl::StatusOr<p4::v1::Update> IpTableUpdate(const pdpi::IrP4Info& ir_p4_info,
         break;
       default:
         return gutil::InvalidArgumentErrorBuilder()
-               << "Unsuported IP type: " << ip_type;
+               << "Unsupported IP type: " << ip_type;
     }
     dst_addr->mutable_lpm()->set_prefix_length(ip_options.dst_addr_lpm->second);
   }
@@ -85,7 +86,7 @@ absl::StatusOr<p4::v1::Update> IpTableUpdate(const pdpi::IrP4Info& ir_p4_info,
   auto* action = ir_table_entry->mutable_action();
   action->set_name(action_name);
 
-  // optionally set the nexthop ID paramter
+  // optionally set the nexthop ID parameter
   if (ip_options.nexthop_id.has_value()) {
     auto* param = action->add_params();
     param->set_name("nexthop_id");
@@ -240,25 +241,27 @@ absl::StatusOr<p4::v1::Update> TunnelTableUpdate(
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
       absl::Substitute(R"pb(
                          type: $0
-                         table_entry {
-                           table_name: "tunnel_table"
-                           matches {
-                             name: "tunnel_id"
-                             exact { str: "$1" }
-                           }
-                           action {
-                             name: "mark_for_p2p_tunnel_encap"
-                             params {
-                               name: "encap_dst_ip"
-                               value { ipv6: "$2" }
+                         entity {
+                           table_entry {
+                             table_name: "tunnel_table"
+                             matches {
+                               name: "tunnel_id"
+                               exact { str: "$1" }
                              }
-                             params {
-                               name: "encap_src_ip"
-                               value { ipv6: "$3" }
-                             }
-                             params {
-                               name: "router_interface_id"
-                               value { str: "$4" }
+                             action {
+                               name: "mark_for_p2p_tunnel_encap"
+                               params {
+                                 name: "encap_dst_ip"
+                                 value { ipv6: "$2" }
+                               }
+                               params {
+                                 name: "encap_src_ip"
+                                 value { ipv6: "$3" }
+                               }
+                               params {
+                                 name: "router_interface_id"
+                                 value { str: "$4" }
+                               }
                              }
                            }
                          }
@@ -278,21 +281,8 @@ absl::StatusOr<p4::v1::Update> VrfTableUpdate(const pdpi::IrP4Info& ir_p4_info,
         "Empty vrf id is reserved for default vrf.");
   }
   pdpi::IrUpdate ir_update;
-  RETURN_IF_ERROR(gutil::ReadProtoFromString(
-      absl::Substitute(R"pb(
-                         type: $0
-                         table_entry {
-                           table_name: "vrf_table"
-                           matches {
-                             name: "vrf_id"
-                             exact { str: "$1" }
-                           }
-                           action { name: "no_action" }
-                         }
-                       )pb",
-                       type, vrf_id),
-      &ir_update))
-      << "invalid pdpi::IrUpdate string.";
+  ir_update.set_type(type);
+  *ir_update.mutable_entity()->mutable_table_entry() = VrfIrTableEntry(vrf_id);
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
@@ -343,9 +333,7 @@ absl::StatusOr<p4::v1::Update> L3AdmitAllTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type) {
   pdpi::IrUpdate ir_update;
   ir_update.set_type(type);
-  ir_update.mutable_entity()->mutable_table_entry()->set_table_name("l3_admit_table");
-  ir_update.mutable_entity()->mutable_table_entry()->set_priority(1);
-  ir_update.mutable_entity()->mutable_table_entry()->mutable_action()->set_name("admit_to_l3");
+  *ir_update.mutable_entity()->mutable_table_entry() = L3AdmitAllIrTableEntry();
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 

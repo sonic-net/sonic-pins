@@ -13,6 +13,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "lib/gnmi/openconfig.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -69,7 +70,7 @@ absl::Status WaitForEnabledInterfacesToBeUp(
         on_failure = std::nullopt);
 
 // Gets the set of P4 Runtime port IDs used in `entries`.
-absl::StatusOr<absl::btree_set<std::string>>
+absl::StatusOr<absl::btree_set<P4rtPortId>>
 GetPortsUsed(const pdpi::IrP4Info &info,
              std::vector<pdpi::IrTableEntry> entries);
 
@@ -86,7 +87,7 @@ GetPortsUsed(const pdpi::IrP4Info &info,
 // with any set of ports desired (or configured on the switch).
 absl::Status
 RewritePortsInTableEntries(const pdpi::IrP4Info &info,
-                           absl::Span<const std::string> new_ports,
+                           absl::Span<const P4rtPortId> new_ports,
                            std::vector<pdpi::IrTableEntry> &entries);
 
 // Extracts the available ports from the given `gnmi_config` and rewrites
@@ -95,6 +96,12 @@ absl::Status
 RewritePortsInTableEntries(const pdpi::IrP4Info &info,
                            absl::string_view gnmi_config,
                            std::vector<pdpi::IrTableEntry> &entries);
+
+// Extracts the available, enabled, ethernet ports from the switch using the
+// given `gnmi_stub` and rewrites entries as per above.
+absl::Status RewritePortsInTableEntriesToEnabledEthernetPorts(
+    const pdpi::IrP4Info &info, gnmi::gNMI::StubInterface &gnmi_stub,
+    std::vector<pdpi::IrTableEntry> &entries);
 
 } // namespace pins_test
 

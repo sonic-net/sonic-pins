@@ -51,8 +51,9 @@ cc_library(
     srcs = ["p4rt_fixed_table_programming_helper.cc"],
     hdrs = ["p4rt_fixed_table_programming_helper.h"],
     deps = [
+        ":common_ir_table_entries",
+        "//gutil:proto",
         "//gutil:status",
-        "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -78,6 +79,17 @@ cc_test(
 )
 
 cc_library(
+    name = "common_ir_table_entries",
+    testonly = True,
+    srcs = ["common_ir_table_entries.cc"],
+    hdrs = ["common_ir_table_entries.h"],
+    deps = [
+        "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "switch_test_setup_helpers",
     testonly = True,
     srcs = ["switch_test_setup_helpers.cc"],
@@ -88,6 +100,7 @@ cc_library(
         "//gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnmi:openconfig_cc_proto",
+        "//lib/p4rt:p4rt_port",
         "//lib/validator:validator_lib",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:ir_tools",
@@ -122,6 +135,7 @@ cc_test(
         ":switch_test_setup_helpers",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//lib/p4rt:p4rt_port",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",

@@ -141,6 +141,29 @@ TEST_P(L3RouteProgrammingTest, NexthopId) {
   EXPECT_THAT(pi_update, HasActionParam("\001"));
 }
 
+TEST_P(L3RouteProgrammingTest, TunnelEntry) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       TunnelTableUpdate(sai::GetIrP4Info(GetParam()),
+                                         p4::v1::Update::INSERT,
+                                         /*tunnel_id=*/"tid-1",
+                                         /*encap_dst_ip=*/"::1",
+                                         /*encap_src_ip=*/"::2",
+                                         /*router_interface_id=*/"rid-1"));
+
+  EXPECT_THAT(pi_update, HasExactMatch("tid-1"));
+  EXPECT_THAT(pi_update, HasActionParam("\001"));
+  EXPECT_THAT(pi_update, HasActionParam("\002"));
+  EXPECT_THAT(pi_update, HasActionParam("rid-1"));
+}
+
+TEST_P(L3RouteProgrammingTest, VrfTableAddId) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       VrfTableUpdate(sai::GetIrP4Info(GetParam()),
+                                      p4::v1::Update::INSERT,
+                                      /*vrf_id=*/"vrf-1"));
+  EXPECT_THAT(pi_update, HasExactMatch("vrf-1"));
+}
+
 TEST_P(L3RouteProgrammingTest, VrfTableAddFailsWithEmptyId) {
   EXPECT_THAT(
       pins::VrfTableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
