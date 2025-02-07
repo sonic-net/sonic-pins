@@ -106,12 +106,12 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                        .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
                        .GetDedupedPiEntities(ir_p4info));
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&control_switch));
+  RETURN_IF_ERROR(pdpi::ClearEntities(control_switch));
   RETURN_IF_ERROR(pdpi::InstallPiEntities(control_switch, punt_entities));
 
   // Prepare the SUT.
   LOG(INFO) << "Installing entries from the given test vector on the SUT";
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&sut));
+  RETURN_IF_ERROR(pdpi::ClearEntities(sut));
   RETURN_IF_ERROR(
       pdpi::InstallIrEntities(sut, updated_arriba_test_vector.ir_entities()));
 
@@ -146,17 +146,17 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
           },
           packet_statistics));
 
-  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
-                   pdpi::ReadIrTableEntries(sut));
+  ASSIGN_OR_RETURN(const pdpi::IrEntities installed_entities_sut,
+                   pdpi::ReadIrEntities(sut));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
-      "sut_installed_entries.txtpb",
-      gutil::PrintTextProto(installed_entries_sut)));
+      "sut_installed_entities.txtpb",
+      gutil::PrintTextProto(installed_entities_sut)));
 
-  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_control,
-                   pdpi::ReadIrTableEntries(control_switch));
+  ASSIGN_OR_RETURN(const pdpi::IrEntities installed_entities_control,
+                   pdpi::ReadIrEntities(control_switch));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
-      "control_installed_entries.txtpb",
-      gutil::PrintTextProto(installed_entries_control)));
+      "control_installed_entities.txtpb",
+      gutil::PrintTextProto(installed_entities_control)));
 
   LOG(INFO) << "Number of packets injected: "
             << packet_statistics.total_packets_injected;

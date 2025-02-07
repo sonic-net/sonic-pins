@@ -69,6 +69,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest",
     ],
 )
 
@@ -510,6 +511,15 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "packet_trace",
+    srcs = ["packet_trace.cc"],
+    hdrs = ["packet_trace.h"],
+    deps = [
+        ":packet_trace_cc_proto",
     ],
 )
 
