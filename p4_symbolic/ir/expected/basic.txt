@@ -801,114 +801,125 @@ deparsers {
 =====MyIngress.ipv4_lpm Entries=====
 
 concrete_entry {
-  table_name: "MyIngress.ipv4_lpm"
-  matches {
-    name: "hdr.ipv4.dstAddr"
-    lpm {
-      value {
-        ipv4: "10.10.0.0"
-      }
-      prefix_length: 16
-    }
-  }
-  action {
-    name: "MyIngress.ipv4_forward"
-    params {
-      name: "dstAddr"
-      value {
-        hex_str: "0x000000000000"
+  pdpi_ir_entry {
+    table_name: "MyIngress.ipv4_lpm"
+    matches {
+      name: "hdr.ipv4.dstAddr"
+      lpm {
+        value {
+          ipv4: "10.10.0.0"
+        }
+        prefix_length: 16
       }
     }
-    params {
-      name: "port"
-      value {
-        hex_str: "0x000"
+    action {
+      name: "MyIngress.ipv4_forward"
+      params {
+        name: "dstAddr"
+        value {
+          hex_str: "0x000000000000"
+        }
       }
-    }
-  }
-}
-
-concrete_entry {
-  table_name: "MyIngress.ipv4_lpm"
-  matches {
-    name: "hdr.ipv4.dstAddr"
-    lpm {
-      value {
-        ipv4: "10.10.0.0"
-      }
-      prefix_length: 32
-    }
-  }
-  action {
-    name: "MyIngress.ipv4_forward"
-    params {
-      name: "dstAddr"
-      value {
-        hex_str: "0x000000000000"
-      }
-    }
-    params {
-      name: "port"
-      value {
-        hex_str: "0x001"
+      params {
+        name: "port"
+        value {
+          hex_str: "0x000"
+        }
       }
     }
   }
 }
 
 concrete_entry {
-  table_name: "MyIngress.ipv4_lpm"
-  matches {
-    name: "hdr.ipv4.dstAddr"
-    lpm {
-      value {
-        ipv4: "10.0.0.0"
+  pdpi_ir_entry {
+    table_name: "MyIngress.ipv4_lpm"
+    matches {
+      name: "hdr.ipv4.dstAddr"
+      lpm {
+        value {
+          ipv4: "10.10.0.0"
+        }
+        prefix_length: 32
       }
-      prefix_length: 8
+    }
+    action {
+      name: "MyIngress.ipv4_forward"
+      params {
+        name: "dstAddr"
+        value {
+          hex_str: "0x000000000000"
+        }
+      }
+      params {
+        name: "port"
+        value {
+          hex_str: "0x001"
+        }
+      }
     }
   }
-  action {
-    name: "MyIngress.ipv4_forward"
-    params {
-      name: "dstAddr"
-      value {
-        hex_str: "0x00000000000a"
-      }
-    }
-    params {
-      name: "port"
-      value {
-        hex_str: "0x001"
-      }
-    }
-  }
+  index: 1
 }
 
 concrete_entry {
-  table_name: "MyIngress.ipv4_lpm"
-  matches {
-    name: "hdr.ipv4.dstAddr"
-    lpm {
-      value {
-        ipv4: "20.20.0.0"
+  pdpi_ir_entry {
+    table_name: "MyIngress.ipv4_lpm"
+    matches {
+      name: "hdr.ipv4.dstAddr"
+      lpm {
+        value {
+          ipv4: "10.0.0.0"
+        }
+        prefix_length: 8
       }
-      prefix_length: 16
+    }
+    action {
+      name: "MyIngress.ipv4_forward"
+      params {
+        name: "dstAddr"
+        value {
+          hex_str: "0x00000000000a"
+        }
+      }
+      params {
+        name: "port"
+        value {
+          hex_str: "0x001"
+        }
+      }
     }
   }
-  action {
-    name: "MyIngress.ipv4_forward"
-    params {
-      name: "dstAddr"
-      value {
-        hex_str: "0x160000000016"
+  index: 2
+}
+
+concrete_entry {
+  pdpi_ir_entry {
+    table_name: "MyIngress.ipv4_lpm"
+    matches {
+      name: "hdr.ipv4.dstAddr"
+      lpm {
+        value {
+          ipv4: "20.20.0.0"
+        }
+        prefix_length: 16
       }
     }
-    params {
-      name: "port"
-      value {
-        hex_str: "0x001"
+    action {
+      name: "MyIngress.ipv4_forward"
+      params {
+        name: "dstAddr"
+        value {
+          hex_str: "0x160000000016"
+        }
+      }
+      params {
+        name: "port"
+        value {
+          hex_str: "0x001"
+        }
       }
     }
   }
+  index: 3
 }
 
