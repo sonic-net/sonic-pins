@@ -556,29 +556,7 @@ void WatchPortTestFixture::SetUp() {
 void WatchPortTestFixture::TearDown() {
   thinkit::MirrorTestbedInterface& testbed = *GetParam().testbed;
 
-  // Reboot the switch, if Sut is in critical state.
-  if (sut_gnmi_stub_ && IsSwitchInCriticalState(*sut_gnmi_stub_)) {
-    // Grab logs on the switches before the reboot.
-    ASSERT_OK(testbed.SaveSwitchLogs("before_reboot_"));
-    LOG(INFO) << "Switch is in critical state, rebooting the switch.";
-    pins_test::TestGnoiSystemColdReboot(testbed.GetMirrorTestbed().Sut());
-    EXPECT_OK(control_p4_session_->Finish());
-    if (receive_packet_thread_.joinable()) {
-      receive_packet_thread_.join();
-    }
-    pins_test::TestGnoiSystemColdReboot(
-        testbed.GetMirrorTestbed().ControlSwitch());
-
-    testbed.TearDown();
-    return;
-  }
-
-  // Clear table entries.
-  if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
-    EXPECT_OK(sut_p4_session_->Finish());
-  }
-  // Stop RPC sessions.
+  // Do some general cleanup for control switch.
   if (control_p4_session_ != nullptr) {
     EXPECT_OK(
         pdpi::ClearTableEntries(control_p4_session_.get()));
@@ -596,6 +574,26 @@ void WatchPortTestFixture::TearDown() {
                                        InterfaceState::kUp));
     }
   }
+
+  // Reboot the switch, if Sut is in critical state.
+  if (sut_gnmi_stub_ && IsSwitchInCriticalState(*sut_gnmi_stub_)) {
+    // Grab logs on the switches before the reboot.
+    ASSERT_OK(testbed.SaveSwitchLogs("before_reboot_"));
+    LOG(INFO) << "Switch is in critical state, rebooting the switch.";
+    pins_test::TestGnoiSystemColdReboot(testbed.GetMirrorTestbed().Sut());
+    pins_test::TestGnoiSystemColdReboot(
+        testbed.GetMirrorTestbed().ControlSwitch());
+
+    testbed.TearDown();
+    return;
+  }
+
+  // Clear SUT table entries.
+  if (sut_p4_session_ != nullptr) {
+    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+    EXPECT_OK(sut_p4_session_->Finish());
+  }
+
   testbed.TearDown();
 }
 

@@ -102,6 +102,13 @@ struct ParamsForTestsWithIxia {
   // the testbed. This is required to ensure the per queue rate limits to be
   // tested are within this guaranteed end to end bandwidth.
   int control_plane_bandwidth_bytes_per_second;
+
+  // Optionally verify configuration on switch against expected queue rate limit
+  // parameters. The Map holds queue names as keys and the expected rate limit
+  // in "packets per second" for the queue as value.
+  // When this parameter is passed in, the test will verify configuration on
+  // switch matches expected config.
+  absl::flat_hash_map<std::string, int> expected_queue_limit_config_pps;
 };
 
 class CpuQosTestWithIxia
