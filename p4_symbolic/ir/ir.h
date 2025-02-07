@@ -19,13 +19,17 @@
 #ifndef P4_SYMBOLIC_IR_IR_H_
 #define P4_SYMBOLIC_IR_IR_H_
 
+#include <string>
+
 #include "absl/status/statusor.h"
+#include "glog/logging.h"
+#include "google/protobuf/repeated_ptr_field.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
 
-namespace p4_symbolic {
-namespace ir {
+namespace p4_symbolic::ir {
 
 // The dataplane configuration of the switch.
 // Used as input to our symbolic pipeline.
@@ -55,10 +59,29 @@ inline std::string TableHitAction() { return "__HIT__"; }
 inline std::string TableMissAction() { return "__MISS__"; }
 
 // Transforms bmv2 protobuf and pdpi protobuf into our IR protobuf.
-absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
-                                            const pdpi::IrP4Info &pdpi);
+absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program& bmv2,
+                                            const pdpi::IrP4Info& pdpi);
 
-} // namespace ir
-} // namespace p4_symbolic
+// Returns a reference to the `ir::TableEntry` contained in the given `entry`.
+const pdpi::IrTableEntry& GetPdpiIrEntryOrSketch(const ir::TableEntry& entry);
 
-#endif // P4_SYMBOLIC_IR_IR_H_
+int GetIndex(const TableEntry& entry);
+
+const std::string& GetTableName(const TableEntry& entry);
+const std::string& GetTableName(const ConcreteTableEntry& entry);
+const std::string& GetTableName(const SymbolicTableEntry& entry);
+
+int GetPriority(const TableEntry& entry);
+int GetPriority(const ConcreteTableEntry& entry);
+int GetPriority(const SymbolicTableEntry& entry);
+
+const google::protobuf::RepeatedPtrField<pdpi::IrMatch>& GetMatches(
+    const TableEntry& entry);
+const google::protobuf::RepeatedPtrField<pdpi::IrMatch>& GetMatches(
+    const ConcreteTableEntry& entry);
+const google::protobuf::RepeatedPtrField<pdpi::IrMatch>& GetMatches(
+    const SymbolicTableEntry& entry);
+
+}  // namespace p4_symbolic::ir
+
+#endif  // P4_SYMBOLIC_IR_IR_H_
