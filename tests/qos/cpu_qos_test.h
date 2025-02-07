@@ -20,6 +20,7 @@
 #ifndef PINS_TESTS_CPU_QOS_TEST_H_
 #define PINS_TESTS_CPU_QOS_TEST_H_
 
+#include <functional>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -45,12 +46,18 @@ struct PacketAndExpectedTargetQueue {
 
 // Parameters used by the tests that don't require an Ixia.
 struct ParamsForTestsWithoutIxia {
-  thinkit::MirrorTestbedInterface *testbed_interface;
-  std::string gnmi_config;
+  // Using a shared_ptr because parameterized tests require objects to be
+  // copyable.
+  std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface;
+  // The test assumes that the switch is pre-configured if no `gnmi_config` is
+  // given (default), or otherwise pushes the given config before starting.
+  std::optional<std::string> gnmi_config;
   p4::config::v1::P4Info p4info;
-  // Test packets and expected target queue passsed into the test for
-  // verification.
-  std::vector<PacketAndExpectedTargetQueue> test_packets;
+  // Function to generate test packets and expected target queue passed into the
+  // test for verification.
+  std::function<std::vector<PacketAndExpectedTargetQueue>(
+      absl::string_view gnmi_config)>
+      test_packet_generator_function;
 };
 
 // Fixture of tests that do not require an Ixia. These test must be run on a
@@ -83,11 +90,6 @@ protected:
   }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
-
-  ~CpuQosTestWithoutIxia() override { delete GetParam().testbed_interface; }
-
-private:
-  std::unique_ptr<thinkit::MirrorTestbed> testbed_;
 };
 
 // Parameters used by the tests that require an Ixia.
