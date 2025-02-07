@@ -30,6 +30,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -41,6 +42,9 @@
 
 namespace pins_test {
 namespace {
+
+using ::gutil::IsOk;
+using ::testing::Not;
 
 TEST_P(SmokeTestFixture, CanEstablishConnections) {
   thinkit::MirrorTestbed& testbed =
@@ -472,6 +476,58 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
   ASSERT_OK(pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config));
 }
 
+// TODO: Enable when this test passes due to the bug being fixed.
+TEST_P(SmokeTestFixture, DISABLED_DeleteReferencedEntryNotOk) {
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4info));
+
+  // Initialize the connection, clear table entries, and push GNMI
+  // configuration (if given) for the SUT and Control switch.
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_switch_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_switch_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
+          GetParam().p4info));
+
+  constexpr absl::string_view kRifId = "rif";
+  constexpr absl::string_view kNeighborId = "::1";
+
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update insert_and_delete_neighbor_update,
+      pins::NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT, kRifId,
+                                kNeighborId, /*dst_mac=*/"01:02:03:04:05:06"));
+  ASSERT_OK_AND_ASSIGN(const p4::v1::Update rif_update,
+                       pins::RouterInterfaceTableUpdate(
+                           ir_p4info, p4::v1::Update::INSERT, kRifId,
+                           /*port=*/"1", /*src_mac=*/"00:02:03:04:05:06"));
+  ASSERT_OK_AND_ASSIGN(
+      const p4::v1::Update tunnel_update,
+      pins::TunnelTableUpdate(
+          ir_p4info, p4::v1::Update::INSERT, /*tunnel_id=*/"tid",
+          /*encap_dst_ip=*/kNeighborId, /*encap_src_ip=*/"::2", kRifId));
+
+  ASSERT_OK(pdpi::SendPiUpdates(
+      sut_p4rt_session.get(),
+      {insert_and_delete_neighbor_update, rif_update, tunnel_update}));
+
+  // Cannot delete the neighbor table entry because it is used by the tunnel
+  // entry.
+  insert_and_delete_neighbor_update.set_type(p4::v1::Update::DELETE);
+  EXPECT_THAT(pdpi::SendPiUpdates(sut_p4rt_session.get(),
+                                  {insert_and_delete_neighbor_update}),
+              Not(IsOk()));
+
+  // We should always be able to re-install entries read from the switch.
+  // Otherwise, the switch is in a corrupted state.
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableEntries read_entries,
+                       pdpi::ReadIrTableEntries(*sut_p4rt_session));
+  ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
+  EXPECT_OK(pdpi::InstallIrTableEntries(*sut_p4rt_session, read_entries));
+}
 
 }  // namespace
 }  // namespace pins

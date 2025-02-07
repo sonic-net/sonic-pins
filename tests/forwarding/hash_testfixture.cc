@@ -29,7 +29,6 @@
 #include "absl/meta/type_traits.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -39,9 +38,8 @@
 #include "absl/time/time.h"
 #include "absl/utility/utility.h"
 #include "glog/logging.h"
-#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"
+#include "gutil/status_matchers.h" // IWYU pragma: keep
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -73,10 +71,8 @@ namespace pins_test {
 
 namespace {
 
-using ::gutil::EqualsProto;
 using ::pins::PacketField;
 using ::pins::TestConfiguration;
-using ::testing::Matches;
 
 // The minimum number of ports needed to perform the test.
 constexpr int kMinimumMembersForTest = 3;
@@ -148,19 +144,47 @@ void LogPackets(thinkit::TestEnvironment &environment,
                                           packet_log));
 }
 
+// Returns the P4Info from the switch. If the forwarding pipeline is not
+// configured, returns an empty P4Info.
+absl::StatusOr<p4::config::v1::P4Info> GetP4Info(thinkit::Switch &device) {
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                   pdpi::P4RuntimeSession::Create(device, {}));
+  ASSIGN_OR_RETURN(
+      p4::v1::GetForwardingPipelineConfigResponse forwarding_pipeline_config,
+      pdpi::GetForwardingPipelineConfig(p4_session.get()));
+  return forwarding_pipeline_config.config().p4info();
+}
+
+// Return the P4Info on the switch or push the default P4Info to the switch.
+// Returns the default P4Info if it was pushed.
+absl::StatusOr<p4::config::v1::P4Info>
+GetOrSetP4Info(thinkit::Switch &device,
+               const p4::config::v1::P4Info &default_p4info) {
+  ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info, GetP4Info(device));
+  if (p4info.tables().empty()) {
+    LOG(INFO) << "Pushing default P4Info on switch: " << device.ChassisName();
+    ASSIGN_OR_RETURN(auto p4_session,
+                     ConfigureSwitchAndReturnP4RuntimeSession(
+                         device,
+                         /*gnmi_config=*/std::nullopt, default_p4info));
+    p4info = default_p4info;
+  }
+  return p4info;
+}
+
 // Initialize the testbed for the test.
 //   Push gNMI config.
 //   Add the trap rule to the control switch.
 void InitializeTestbed(thinkit::MirrorTestbed &testbed,
-                       const p4::config::v1::P4Info &p4info) {
+                       const p4::config::v1::P4Info &default_p4info) {
   // Wait for ports to come up before the test. We don't need all the ports to
   // be up, but it helps with reproducibility. We're using a short timeout (1
   // minute) so the impact is small if the testbed doesn't bring up every port.
   if (auto all_interfaces_up_status = WaitForCondition(
-          AllPortsUp, absl::Minutes(1), testbed.Sut(), /*with_healthz=*/false);
+          AllPortsUp, absl::Seconds(10), testbed.Sut(), /*with_healthz=*/false);
       !all_interfaces_up_status.ok()) {
-    LOG(WARNING) << "Some ports are down at the start of the test. Continuing "
-                 << "with only the UP ports. " << all_interfaces_up_status;
+    LOG(WARNING) << "Some ports are down at the start of the test. "
+                 << "Continuing with only the UP ports.";
     // Collect port debug data but don't fail the test.
     absl::Status tmp_status = AllPortsUp(testbed.Sut(), /*with_healthz=*/true);
     LOG_IF(WARNING, !tmp_status.ok()) << "SUT Ports Up Check: " << tmp_status;
@@ -169,20 +193,35 @@ void InitializeTestbed(thinkit::MirrorTestbed &testbed,
         << "Control Ports Up Check: " << tmp_status;
   }
 
+  LOG(INFO) << "Initializing forwarding pipeline for SUT.";
+  {
+    // Use this function to push P4Info if needed. Then clear the forwarding
+    // state.
+    ASSERT_OK(GetOrSetP4Info(testbed.Sut(), default_p4info).status());
+    ASSERT_OK_AND_ASSIGN(auto sut_p4_session,
+                         pdpi::P4RuntimeSession::Create(testbed.Sut()));
+    ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()))
+        << "failed to clear SUT flows before test.";
+  }
+
   // Setup control switch P4 state.
   LOG(INFO) << "Initializing forwarding pipeline for control switch.";
+  ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info control_switch_p4info,
+                       GetOrSetP4Info(testbed.ControlSwitch(), default_p4info));
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
-      ConfigureSwitchAndReturnP4RuntimeSession(testbed.ControlSwitch(),
-                                               /*gnmi_config=*/std::nullopt,
-                                               p4info));
+      pdpi::P4RuntimeSession::Create(testbed.ControlSwitch(), {}));
+  ASSERT_OK(pdpi::ClearTableEntries(control_p4_session.get()))
+      << "failed to clear Control flows before test.";
 
   // Trap all packets on control switch.
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
-  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry punt_all_pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
-                           ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
-                                          R"pb(
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info control_switch_ir_p4info,
+                       pdpi::CreateIrP4Info(control_switch_p4info));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::TableEntry punt_all_pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(
+          control_switch_ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
+                                        R"pb(
                 acl_ingress_table_entry {
                   match {}                                  # Wildcard match.
                   action { acl_trap { qos_queue: "0x7" } }  # Action: punt.
@@ -233,12 +272,12 @@ void ReceivePacketsUntilStreamIsClosed(
 // Send a test packet to the SUT.
 void SendPacket(const pdpi::IrP4Info &ir_p4info, packetlib::Packet packet,
                 pdpi::P4RuntimeSession &control_p4_session,
-                P4rtPortId ingress_port) {
+                const P4rtPortId &ingress_port_id) {
   SCOPED_TRACE(
       absl::StrCat("Failed to inject packet ", packet.ShortDebugString()));
   ASSERT_OK_AND_ASSIGN(std::string raw_packet, SerializePacket(packet));
-  ASSERT_OK(pins::InjectEgressPacket(ingress_port.GetP4rtEncoding(), raw_packet,
-                                     ir_p4info, &control_p4_session,
+  ASSERT_OK(pins::InjectEgressPacket(ingress_port_id.GetP4rtEncoding(),
+                                     raw_packet, ir_p4info, &control_p4_session,
                                      kPacketInterval));
 }
 
@@ -246,7 +285,7 @@ void SendPacket(const pdpi::IrP4Info &ir_p4info, packetlib::Packet packet,
 void SendPackets(const pdpi::IrP4Info &ir_p4info, int num_packets,
                  const TestConfiguration &test_config,
                  pdpi::P4RuntimeSession &control_p4_session,
-                 P4rtPortId ingress_port,
+                 const P4rtPortId &ingress_port_id,
                  std::vector<packetlib::Packet> &injected_packets) {
   // Try to generate one packet first to see if the config is valid.
   {
@@ -261,14 +300,15 @@ void SendPackets(const pdpi::IrP4Info &ir_p4info, int num_packets,
     SetPayload(packet, i);
     injected_packets.push_back(packet);
     // Don't check errors from SendPacket. Continue sending packets.
-    SendPacket(ir_p4info, packet, control_p4_session, ingress_port);
+    SendPacket(ir_p4info, packet, control_p4_session, ingress_port_id);
   }
 }
 
 // Retrieve the current known port IDs from the switch. Must use numerical port
 // id names.
-void GetPortIds(thinkit::Switch &target, std::vector<std::string> &interfaces,
-                absl::btree_set<P4rtPortId> &port_ids) {
+void GetTestablePorts(
+    thinkit::Switch &target,
+    absl::flat_hash_map<P4rtPortId, std::string> &port_ids_to_interface) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, target.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(const auto interface_id_map,
                        GetAllInterfaceNameToPortId(*sut_gnmi_stub));
@@ -281,8 +321,7 @@ void GetPortIds(thinkit::Switch &target, std::vector<std::string> &interfaces,
     ASSERT_OK_AND_ASSIGN(
         P4rtPortId port_id,
         P4rtPortId::MakeFromP4rtEncoding(interface_id_map.at(interface_name)));
-    port_ids.insert(port_id);
-    interfaces.push_back(interface_name);
+    port_ids_to_interface[port_id] = interface_name;
   }
 }
 
@@ -450,7 +489,11 @@ void HashTest::SetUp() {
   MirrorTestbedFixture::SetUp();
 
   ASSERT_NO_FATAL_FAILURE(
-      GetPortIds(GetMirrorTestbed().Sut(), interfaces_, port_ids_));
+      GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
+  for (const auto &[port, interface] : port_ids_to_interfaces_) {
+    port_ids_.insert(port);
+    interfaces_.push_back(interface);
+  }
   LOG(INFO) << "Using ports: ["
             << absl::StrJoin(port_ids_, ", ", absl::StreamFormatter()) << "]";
   ASSERT_GE(port_ids_.size(), kMinimumMembersForTest);
@@ -460,38 +503,25 @@ void HashTest::TearDown() {
   // Clean up flows on the control switch. We're using a non-fatal failure
   // here so we continue cleanup.
   EXPECT_OK(SaveSwitchLogs("teardown_before_table_clear"));
-  auto result_or_control_p4_session =
+  auto control_p4_session =
       pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch());
-  if (result_or_control_p4_session.ok()) {
-    EXPECT_OK(pdpi::ClearTableEntries(result_or_control_p4_session->get()))
+  if (control_p4_session.ok()) {
+    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session->get()))
         << "failed to clean up control switch P4 entries.";
   } else {
     ADD_FAILURE() << "failed to connect to control switch: "
-                  << result_or_control_p4_session.status();
+                  << control_p4_session.status();
   }
-  auto p4info_matches_result = HasDefaultOrNoP4Info(GetMirrorTestbed().Sut());
-  if (!p4info_matches_result.ok()) {
-    ADD_FAILURE() << "Failed to query SUT P4Info on "
-                  << GetMirrorTestbed().Sut().ChassisName()
-                  << " during TearDown: " << p4info_matches_result.status();
-  }
-  // TODO: Restore original P4Info instead of reboot when Reconcile
-  // is supported.
-  if (!p4info_matches_result.ok() || !*p4info_matches_result) {
-    EXPECT_OK(SaveSwitchLogs("teardown_before_reboot"));
-    SCOPED_TRACE("Failed to restore base P4Info.");
-    LOG(INFO) << "Rebooting switch to remove the P4Info.";
-    RebootSut(); // Ignore fatal failures to continue cleanup.
+  auto sut_p4_session =
+      pdpi::P4RuntimeSession::Create(GetMirrorTestbed().Sut());
+  if (sut_p4_session.ok()) {
+    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session->get()))
+        << "failed to clean up sut switch P4 entries.";
+  } else {
+    ADD_FAILURE() << "failed to connect to sut switch: "
+                  << sut_p4_session.status();
   }
   MirrorTestbedFixture::TearDown();
-}
-
-absl::StatusOr<bool> HashTest::HasDefaultOrNoP4Info(thinkit::Switch &target) {
-  ASSIGN_OR_RETURN(auto p4_session, pdpi::P4RuntimeSession::Create(target));
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   pdpi::GetForwardingPipelineConfig(p4_session.get()));
-  return !response.config().has_p4info() ||
-         Matches(EqualsProto(p4_info()))(response.config().p4info());
 }
 
 absl::Status HashTest::RecordP4Info(absl::string_view test_stage,
@@ -533,11 +563,11 @@ void HashTest::RebootSut() {
 
 void HashTest::SendAndReceivePackets(const pdpi::IrP4Info &ir_p4info,
                                      absl::string_view record_prefix,
+                                     const P4rtPortId &ingress_port_id,
                                      int num_packets,
                                      const TestConfiguration &test_config,
                                      TestData &test_data) {
   SCOPED_TRACE(absl::StrCat("Failed while testing config: ", record_prefix));
-  P4rtPortId ingress_port = *port_ids_.begin();
 
   // Set up the receive thread to record packets output by the SUT.
   ASSERT_OK_AND_ASSIGN(
@@ -550,14 +580,16 @@ void HashTest::SendAndReceivePackets(const pdpi::IrP4Info &ir_p4info,
   // Inject the packets.
   std::vector<packetlib::Packet> injected_packets;
   SendPackets(ir_p4info, num_packets, test_config, *control_p4_session,
-              ingress_port, injected_packets);
+              ingress_port_id, injected_packets);
   LogPackets(GetMirrorTestbed().Environment(), injected_packets,
              absl::StrCat(record_prefix, "_injected_packets"));
 
   // Wait for all the packets to arrive.
-  absl::Time deadline = absl::Now() + absl::Seconds(30);
-  while (test_data.PacketCount() < num_packets && absl::Now() < deadline) {
-    absl::SleepFor(absl::Seconds(1));
+  if (test_data.PacketCount() > 0) {
+    absl::Time deadline = absl::Now() + absl::Seconds(30);
+    while (test_data.PacketCount() < num_packets && absl::Now() < deadline) {
+      absl::SleepFor(absl::Seconds(1));
+    }
   }
   EXPECT_OK(test_data.Log(GetMirrorTestbed().Environment(),
                           absl::StrCat(record_prefix, "_received_packets")));
@@ -648,15 +680,33 @@ void HashTest::ForwardAllPacketsToMembers(
 void HashTest::SendPacketsAndRecordResultsPerTestConfig(
     const TestConfigurationMap &test_configs,
     const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
-    int num_packets,
+    const P4rtPortId &ingress_port_id, int num_packets,
     absl::node_hash_map<std::string, TestData> &output_record) {
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
   for (const auto &[config_name, test_config] : test_configs) {
     std::string record_prefix = absl::StrCat(test_stage, "_", config_name);
-    ASSERT_NO_FATAL_FAILURE(SendAndReceivePackets(ir_p4info, record_prefix,
-                                                  num_packets, test_config,
-                                                  output_record[config_name]));
+    ASSERT_NO_FATAL_FAILURE(SendAndReceivePackets(
+        ir_p4info, record_prefix, ingress_port_id, num_packets, test_config,
+        output_record[config_name]));
   }
+}
+
+absl::StatusOr<std::string>
+HashTest::GnmiInterfaceName(const P4rtPortId &port_id) const {
+  auto result = port_ids_to_interfaces_.find(port_id);
+  if (result == port_ids_to_interfaces_.end()) {
+    return absl::NotFoundError(absl::StrCat(
+        "No gNMI interface known for port id ", port_id.GetP4rtEncoding()));
+  }
+  return result->second;
+}
+
+absl::StatusOr<p4::config::v1::P4Info> HashTest::GetSutP4Info() {
+  return GetP4Info(GetMirrorTestbed().Sut());
+}
+
+absl::StatusOr<p4::config::v1::P4Info> HashTest::GetControlSwitchP4Info() {
+  return GetP4Info(GetMirrorTestbed().ControlSwitch());
 }
 
 } // namespace pins_test
