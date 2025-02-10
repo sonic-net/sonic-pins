@@ -71,36 +71,14 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
 // Get total packets (transmitted + dropped) for port queue.
 int64_t TotalPacketsForQueue(const QueueCounters &counters);
 
-// Parse IPv4 DSCP to queue mapping from gnmi configuration.
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config);
-
-// Parse IPv6 DSCP to queue mapping from gnmi configuration.
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config);
-
-// Get IPv4 DSCP to queue mapping from switch.
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Get IPv6 DSCP to queue mapping from switch.
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
-
 // Get queue to IPv4 DSCP mapping from switch.
 absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv4DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Get queue to IPv6 DSCP mapping from switch.
-absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv6DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub);
+GetQueueToDscpsMapping(absl::flat_hash_map<int, std::string> queue_by_dscp);
 
 // Get name of queue configured for the given DSCP.
-absl::StatusOr<std::string>
-GetQueueNameByDscpAndPort(int dscp, absl::string_view port,
-                          gnmi::gNMI::StubInterface &gnmi_stub);
+absl::StatusOr<std::string> GetQueueNameByDscpAndPort(
+    int dscp, absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub,
+    absl::flat_hash_map<int, std::string> queue_by_dscp);
 
 // Reads the name of the scheduler policy applied to the given egress port from
 // the appropriate gNMI state path.
@@ -174,6 +152,12 @@ struct QueueInfo {
 absl::StatusOr<std::vector<QueueInfo>>
 GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
+
+// Reads all strictly prioritized queues belonging to the given scheduler policy
+// from the state paths, and returns their names.
+absl::StatusOr<absl::flat_hash_set<std::string>>
+GetStrictlyPrioritizedQueuesMap(absl::string_view scheduler_policy_name,
+                                gnmi::gNMI::StubInterface &gnmi);
 
 // Reads all strictly prioritized queues belonging to the given scheduler policy
 // from the state paths, and returns their names in descending order of
