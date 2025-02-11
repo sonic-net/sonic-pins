@@ -226,6 +226,29 @@ absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode) {
   return ((num_breakouts > 1) || absl::StrContains(mode, "+"));
 }
 
+absl::StatusOr<bool> IsSfpPlusPort(gnmi::gNMI::StubInterface& sut_gnmi_stub,
+                                   absl::string_view port_name) {
+  absl::flat_hash_map<std::string, std::string> interface_to_transceiver_map,
+      transceiver_to_ethernet_pmd_type_map;
+  ASSIGN_OR_RETURN(interface_to_transceiver_map,
+                   pins_test::GetInterfaceToTransceiverMap(sut_gnmi_stub));
+  ASSIGN_OR_RETURN(transceiver_to_ethernet_pmd_type_map,
+                   pins_test::GetTransceiverToEthernetPmdMap(sut_gnmi_stub));
+  if (!interface_to_transceiver_map.contains(port_name)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Interface " << port_name
+           << " not found in interfaces to transceiver map";
+  }
+  if (!transceiver_to_ethernet_pmd_type_map.contains(
+          interface_to_transceiver_map[port_name])) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Transceiver not found for interface " << port_name;
+  }
+  return absl::StrContains(transceiver_to_ethernet_pmd_type_map
+                               [interface_to_transceiver_map[port_name]],
+                           "LR");
+}
+
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
     const std::string& platform_json_contents,
@@ -295,6 +318,14 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
           interface_to_oper_status_map.at(port_info.port_name) == kStateDown) {
         continue;
       }
+    }
+
+    // Skip SFP+ ports as breakout is not applicable to them.
+    ASSIGN_OR_RETURN(const bool is_sfpp_port,
+                     IsSfpPlusPort(sut_gnmi_stub, port));
+    if (is_sfpp_port) {
+      LOG(INFO) << "Skipping SFP+ port " << port;
+      continue;
     }
 
     // Get the port entry from platform.json interfaces info.

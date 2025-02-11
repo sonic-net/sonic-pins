@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 
 #include <cstddef>
 #include <memory>
@@ -25,7 +25,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
@@ -64,11 +63,10 @@ class IPv4RoutingTableEntriesTest : public testing::Test {
     ASSERT_OK_AND_ASSIGN(
         p4::v1::ForwardingPipelineConfig config,
         ParseToForwardingPipelineConfig(bmv2_json_path, p4info_path));
-    ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::TableEntry> pi_entries,
-        GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
+    ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                         GetPiEntitiesFromPiUpdatesProtoTextFile(entries_path));
     ASSERT_OK_AND_ASSIGN(ir::Dataplane dataplane,
-                         ir::ParseToIr(config, pi_entries));
+                         ir::ParseToIr(config, pi_entities));
     state_ = std::make_unique<SolverState>(dataplane.program);
     ir_entries_ = std::move(dataplane.entries);
   }
@@ -91,7 +89,7 @@ class IPv4RoutingTableEntriesTest : public testing::Test {
 
 TEST_F(IPv4RoutingTableEntriesTest, SymbolicEntryWithGetterFunctions) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -100,20 +98,16 @@ TEST_F(IPv4RoutingTableEntriesTest, SymbolicEntryWithGetterFunctions) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test all basic getter functions.
   EXPECT_EQ(symbolic_entry.index(), entry_index);
   EXPECT_EQ(ir::GetTableName(symbolic_entry), "MyIngress.ipv4_lpm");
-  ASSERT_THAT(ir::GetMatches(symbolic_entry), testing::SizeIs(1));
-  ASSERT_TRUE(ir::GetMatches(symbolic_entry).Get(0).has_lpm());
-  EXPECT_EQ(ir::GetMatches(symbolic_entry).Get(0).lpm().prefix_length(),
-            priority_params.prefix_length);
 }
 
 TEST_F(IPv4RoutingTableEntriesTest, MatchVariablesOfSymbolicEntry) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -122,10 +116,11 @@ TEST_F(IPv4RoutingTableEntriesTest, MatchVariablesOfSymbolicEntry) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test the symbolic variables of the symbolic LPM match.
-  const std::string &match_name = ir::GetMatches(symbolic_entry).Get(0).name();
+  const std::string &match_name =
+      symbolic_entry.sketch().matches().Get(0).name();
   int bitwidth = table.table_definition()
                      .match_fields_by_name()
                      .begin()
@@ -134,7 +129,7 @@ TEST_F(IPv4RoutingTableEntriesTest, MatchVariablesOfSymbolicEntry) {
   constexpr absl::string_view variable_prefix =
       "MyIngress.ipv4_lpm_entry_0_hdr.ipv4.dstAddr_lpm_";
   ASSERT_OK_AND_ASSIGN(
-      SymbolicMatchVariables match_variables,
+      SymbolicMatch match_variables,
       GetSymbolicMatch(symbolic_entry, match_name, table, state_->program,
                        *state_->context.z3_context));
   EXPECT_EQ(match_variables.match_type, MatchType::MatchField_MatchType_LPM);
@@ -148,7 +143,7 @@ TEST_F(IPv4RoutingTableEntriesTest, MatchVariablesOfSymbolicEntry) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ActionInvocationVariablesOfSymbolicEntry) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -157,7 +152,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionInvocationVariablesOfSymbolicEntry) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test the symbolic variables of the symbolic action invocations.
   for (const auto &action_ref : table.table_definition().entry_actions()) {
@@ -177,7 +172,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionInvocationVariablesOfSymbolicEntry) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ActionParameterVariablesOfSymbolicEntry) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -186,7 +181,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionParameterVariablesOfSymbolicEntry) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test the symbolic variables of the symbolic action parameters.
   for (const auto &action_ref : table.table_definition().entry_actions()) {
@@ -212,7 +207,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionParameterVariablesOfSymbolicEntry) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentMatch) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -221,7 +216,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentMatch) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test getting the symbolic variables of a non-existent match.
   constexpr absl::string_view non_existent_match_name = "non_existent_match";
@@ -234,7 +229,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentMatch) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithWildcardMatch) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -243,7 +238,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithWildcardMatch) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry wildcard_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
   wildcard_entry.mutable_sketch()->clear_matches();
 
   // Test getting the symbolic variables of an all-wildcard symbolic entry.
@@ -258,7 +253,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithWildcardMatch) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentAction) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -267,7 +262,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentAction) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test getting the symbolic variables of a non-existent action.
   constexpr absl::string_view non_existent_action_name = "non_existent_action";
@@ -301,7 +296,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentAction) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentActionParameter) {
   constexpr int entry_index = 0;
-  constexpr auto priority_params = TableEntryPriorityParams{
+  constexpr auto priority_params = ir::TableEntryPriorityParams{
       .priority = 0,
       .prefix_length = 16,
   };
@@ -310,7 +305,7 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentActionParameter) {
   ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
   ASSERT_OK_AND_ASSIGN(
       ir::SymbolicTableEntry symbolic_entry,
-      CreateSymbolicIrTableEntry(entry_index, table, priority_params));
+      ir::CreateSymbolicIrTableEntry(entry_index, table, priority_params));
 
   // Test getting the symbolic variables of a non-existent action parameter.
   constexpr absl::string_view non_existent_param_name = "non_existent_param";
@@ -339,9 +334,6 @@ TEST_F(IPv4RoutingTableEntriesTest, ConcreteEntriesWithGetterFunctions) {
                              "entry", ir::TableEntry::kConcreteEntry));
       EXPECT_EQ(ir::GetTableName(entry), table_name);
       EXPECT_EQ(ir::GetTableName(entry), "MyIngress.ipv4_lpm");
-      EXPECT_THAT(ir::GetPdpiIrEntryOrSketch(entry),
-                  gutil::EqualsProto(entry.concrete_entry().pdpi_ir_entry()));
-      EXPECT_THAT(ir::GetMatches(entry), testing::SizeIs(1));
     }
   }
 }

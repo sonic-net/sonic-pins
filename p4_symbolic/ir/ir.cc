@@ -32,7 +32,10 @@
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/names.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/cfg.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -1444,29 +1447,67 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   return output;
 }
 
-const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(const ir::TableEntry &entry) {
-  switch (entry.entry_case()) {
-    case TableEntry::kConcreteEntry:
-      return entry.concrete_entry().pdpi_ir_entry();
-    case TableEntry::kSymbolicEntry:
-      return entry.symbolic_entry().sketch();
-    case TableEntry::ENTRY_NOT_SET:
-      break;
-  }
-  LOG(FATAL)  // Crash ok: test infra.
-      << "p4_symbolic::ir::TableEntry of unknown type: " << absl::StrCat(entry);
-}
+absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
+    int table_entry_index, const ir::Table &table,
+    const TableEntryPriorityParams &priority_params) {
+  // Build a symbolic table entry in P4-Symbolic IR.
+  ir::SymbolicTableEntry result;
+  result.set_index(table_entry_index);
 
-namespace {
-const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(
-    const ir::SymbolicTableEntry &entry) {
-  return entry.sketch();
+  // Set table name.
+  const std::string &table_name = table.table_definition().preamble().name();
+  result.mutable_sketch()->set_table_name(table_name);
+
+  bool has_ternary_or_optional = false;
+  pdpi::IrMatch *lpm_match = nullptr;
+
+  for (const auto &[match_name, match_definition] :
+       Ordered(table.table_definition().match_fields_by_name())) {
+    // Set match name.
+    pdpi::IrMatch &ir_match = *result.mutable_sketch()->add_matches();
+    ir_match.set_name(match_name);
+
+    const auto &pi_match = match_definition.match_field();
+    switch (pi_match.match_type()) {
+      case p4::config::v1::MatchField::TERNARY:
+      case p4::config::v1::MatchField::OPTIONAL: {
+        has_ternary_or_optional = true;
+        break;
+      }
+      case p4::config::v1::MatchField::LPM: {
+        lpm_match = &ir_match;
+        break;
+      }
+      default: {
+        // Exact or some other unsupported type, no need to do anything here.
+        // An absl error will be returned during symbolic evaluation.
+        break;
+      }
+    }
+  }
+
+  // Set prefix length for single-LPM tables.
+  if (!has_ternary_or_optional && lpm_match != nullptr) {
+    if (!priority_params.prefix_length.has_value()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Prefix length must be provided for tables with a single LPM"
+                "match.";
+    }
+    lpm_match->mutable_lpm()->set_prefix_length(*priority_params.prefix_length);
+  }
+
+  // Set priority.
+  if (has_ternary_or_optional && priority_params.priority <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Priority must be greater than 0 for tables with ternary or "
+              "optional matches. Found: "
+           << priority_params.priority;
+  }
+  result.mutable_sketch()->set_priority(
+      has_ternary_or_optional ? priority_params.priority : 0);
+
+  return result;
 }
-const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(
-    const ConcreteTableEntry &entry) {
-  return entry.pdpi_ir_entry();
-}
-}  // namespace
 
 int GetIndex(const TableEntry &entry) {
   switch (entry.entry_case()) {
@@ -1482,37 +1523,48 @@ int GetIndex(const TableEntry &entry) {
   return 0;
 }
 
-const std::string &GetTableName(const TableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).table_name();
+std::string GetTableName(const TableEntry &entry) {
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry:
+      return GetTableName(entry.concrete_entry());
+    case TableEntry::kSymbolicEntry:
+      return GetTableName(entry.symbolic_entry());
+    case TableEntry::ENTRY_NOT_SET:
+      break;
+  }
+  LOG(ERROR) << "p4_symbolic::ir::TableEntry of unknown type: "
+             << absl::StrCat(entry);
+  return "<invalid>";
 }
-const std::string &GetTableName(const ConcreteTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).table_name();
+std::string GetTableName(const ConcreteTableEntry &entry) {
+  absl::StatusOr<std::string> table_name =
+      pdpi::EntityToTableName(entry.pdpi_ir_entity());
+  return table_name.ok() ? std::move(*table_name) : "<invalid>";
 }
-const std::string &GetTableName(const SymbolicTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).table_name();
+std::string GetTableName(const SymbolicTableEntry &entry) {
+  return entry.sketch().table_name();
 }
 
 int GetPriority(const TableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).priority();
-}
-int GetPriority(const ConcreteTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).priority();
-}
-int GetPriority(const SymbolicTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).priority();
-}
-
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
-    const TableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).matches();
-}
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
-    const ConcreteTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).matches();
-}
-const google::protobuf::RepeatedPtrField<pdpi::IrMatch> &GetMatches(
-    const SymbolicTableEntry &entry) {
-  return GetPdpiIrEntryOrSketch(entry).matches();
+  switch (entry.entry_case()) {
+    case TableEntry::kConcreteEntry: {
+      const pdpi::IrEntity &entity = entry.concrete_entry().pdpi_ir_entity();
+      switch (entity.entity_case()) {
+        case pdpi::IrEntity::kTableEntry:
+          return entity.table_entry().priority();
+        case pdpi::IrEntity::kPacketReplicationEngineEntry:
+          return 0;
+        case pdpi::IrEntity::ENTITY_NOT_SET:
+          return 0;
+      }
+      break;
+    }
+    case TableEntry::kSymbolicEntry:
+      return entry.symbolic_entry().sketch().priority();
+    case TableEntry::ENTRY_NOT_SET:
+      return 0;
+  }
+  return 0;
 }
 
 }  // namespace p4_symbolic::ir
