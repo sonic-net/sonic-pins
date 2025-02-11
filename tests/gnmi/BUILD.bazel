@@ -18,11 +18,28 @@ package(
 )
 
 cc_library(
+    name = "util",
+    testonly = True,
+    srcs = ["util.cc"],
+    hdrs = ["util.h"],
+    deps = [
+        "//lib/gnmi:gnmi_helper",
+	"@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
     name = "link_flap_tests",
     testonly = True,
     srcs = ["link_flap_tests.cc"],
     hdrs = ["link_flap_tests.h"],
     deps = [
+	":util",
         "//gutil:status_matchers",
         "//gutil:testing",
         "//lib/gnmi:gnmi_helper",
@@ -39,6 +56,30 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "host_link_flap_tests",
+    testonly = True,
+    srcs = ["host_link_flap_tests.cc"],
+    hdrs = ["link_flap_tests.h"],
+    deps = [
+        ":util",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//lib/gnmi:gnmi_helper",
+        "//thinkit:control_device",
+        "//thinkit:generic_testbed",
+        "//thinkit:generic_testbed_fixture",
+        "//thinkit:switch",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
     ],
