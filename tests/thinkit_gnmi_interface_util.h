@@ -77,6 +77,9 @@ absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
     const std::string& port, const std::string& current_breakout_mode,
     const std::string& new_breakout_mode);
 
+absl::StatusOr<bool> IsSfpPlusPort(gnmi::gNMI::StubInterface &sut_gnmi_stub,
+                                   absl::string_view port_name);
+
 // GetRandomPortWithSupportedBreakoutModes attempts to get a random port from
 // list of front panel ports that supports at least one more breakout mode other
 // than the currently configured breakout mode.
