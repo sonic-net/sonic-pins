@@ -112,12 +112,9 @@ TEST_P(GetLocalMetadataIngressPortFromModelTest,
                priority: 1
              }
            })pb");
-  std::vector<p4::v1::TableEntry> pi_entries;
-  for (auto& pd_entry : pd_entries.entries()) {
-    ASSERT_OK_AND_ASSIGN(
-        pi_entries.emplace_back(),
-        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
-  }
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                       pdpi::PdTableEntriesToPiEntities(ir_p4info, pd_entries));
+
   symbolic::TranslationPerType translations;
   translations[kPortIdTypeName] = symbolic::values::TranslationData{
       .static_mapping = {{"a", 1}, {"b", 2}},
@@ -125,9 +122,10 @@ TEST_P(GetLocalMetadataIngressPortFromModelTest,
   };
 
   // Evaluate the SAI pipeline.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<symbolic::SolverState> state,
-                       symbolic::EvaluateP4Program(
-                           config, pi_entries, /*ports=*/{1, 2}, translations));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<symbolic::SolverState> state,
+      symbolic::EvaluateP4Program(config, pi_entities, /*ports=*/{1, 2},
+                                  translations));
 
   // Check local_metadata.ingress_port value.
   EXPECT_EQ(state->solver->check(), z3::check_result::sat);

@@ -154,7 +154,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
 // inferred dynamically for such types.
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
     const p4::v1::ForwardingPipelineConfig &config,
-    const std::vector<p4::v1::TableEntry> &entries,
+    const std::vector<p4::v1::Entity> &entries,
     const std::vector<int> &physical_ports = {},
     const TranslationPerType &translation_per_type = {});
 
