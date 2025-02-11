@@ -522,7 +522,7 @@ message BuiltinExpression {
 message ConcreteTableEntry {
   // The entry in PDPI IR representation, but using fully qualified names for
   // tables, actions, etc., instead of aliases like in PDPI.
-  pdpi.IrTableEntry pdpi_ir_entry = 1;
+  pdpi.IrEntity pdpi_ir_entity = 1;
 
   // The original index of this entry within the user-provided list of entries,
   // restricted to entries in the same table only.
@@ -569,6 +569,9 @@ message SymbolicTableEntry {
   //
   // In the future, we may copy the fields over from the PDPI IR to have more
   // flexbility if needed.
+  //
+  // TODO: Align with `ConcreteTableEntry` by generalizing
+  // this to `pdpi.IrEntity`.
   pdpi.IrTableEntry sketch = 1;
 
   // The original index of this entry within the user-provided list of entries,
