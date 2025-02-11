@@ -53,10 +53,9 @@ class IPv4RoutingBasicTest : public testing::Test {
     ASSERT_OK_AND_ASSIGN(
         p4::v1::ForwardingPipelineConfig config,
         ParseToForwardingPipelineConfig(bmv2_json_path, p4info_path));
-    ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::TableEntry> entries,
-        GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
-    ASSERT_OK_AND_ASSIGN(state_, symbolic::EvaluateP4Program(config, entries));
+    ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
+                         GetPiEntitiesFromPiUpdatesProtoTextFile(entries_path));
+    ASSERT_OK_AND_ASSIGN(state_, symbolic::EvaluateP4Program(config, entities));
   }
 
  protected:

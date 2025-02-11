@@ -37,7 +37,7 @@
 #include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
@@ -135,7 +135,9 @@ SymbolicTableMatch DefaultTableMatch(z3::context &z3_context) {
 // aliases as table/action names in P4-Symbolic.
 void ConvertFullyQualifiedNamesToAliases(ir::ConcreteTableEntry &entry,
                                          const ir::P4Program &program) {
-  pdpi::IrTableEntry &pdpi_ir_entry = *entry.mutable_pdpi_ir_entry();
+  if (!entry.pdpi_ir_entity().has_table_entry()) return;
+  pdpi::IrTableEntry &pdpi_ir_entry =
+      *entry.mutable_pdpi_ir_entity()->mutable_table_entry();
 
 // Check if the table specified by the table name exists.
   auto it = program.tables().find(pdpi_ir_entry.table_name());

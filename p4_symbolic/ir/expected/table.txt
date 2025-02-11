@@ -420,20 +420,22 @@ deparsers {
 =====MyIngress.ports_exact Entries=====
 
 concrete_entry {
-  pdpi_ir_entry {
-    table_name: "MyIngress.ports_exact"
-    matches {
-      name: "standard_metadata.ingress_port"
-      exact {
-        hex_str: "0x000"
+  pdpi_ir_entity {
+    table_entry {
+      table_name: "MyIngress.ports_exact"
+      matches {
+        name: "standard_metadata.ingress_port"
+        exact {
+          hex_str: "0x000"
+        }
       }
-    }
-    action {
-      name: "MyIngress.set_egress_spec"
-      params {
-        name: "port"
-        value {
-          hex_str: "0x001"
+      action {
+        name: "MyIngress.set_egress_spec"
+        params {
+          name: "port"
+          value {
+            hex_str: "0x001"
+          }
         }
       }
     }
@@ -441,20 +443,22 @@ concrete_entry {
 }
 
 concrete_entry {
-  pdpi_ir_entry {
-    table_name: "MyIngress.ports_exact"
-    matches {
-      name: "standard_metadata.ingress_port"
-      exact {
-        hex_str: "0x001"
+  pdpi_ir_entity {
+    table_entry {
+      table_name: "MyIngress.ports_exact"
+      matches {
+        name: "standard_metadata.ingress_port"
+        exact {
+          hex_str: "0x001"
+        }
       }
-    }
-    action {
-      name: "MyIngress.set_egress_spec"
-      params {
-        name: "port"
-        value {
-          hex_str: "0x000"
+      action {
+        name: "MyIngress.set_egress_spec"
+        params {
+          name: "port"
+          value {
+            hex_str: "0x000"
+          }
         }
       }
     }
