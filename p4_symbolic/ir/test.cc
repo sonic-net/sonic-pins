@@ -16,6 +16,7 @@
 
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
@@ -24,6 +25,7 @@
 #include "absl/strings/str_format.h"
 #include "gutil/io.h"
 #include "gutil/proto.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/parser.h"
 #include "p4_symbolic/test_util.h"
 
@@ -55,10 +57,10 @@ absl::Status Test() {
       p4::v1::ForwardingPipelineConfig config,
       p4_symbolic::ParseToForwardingPipelineConfig(bmv2_path, p4info_path));
   ASSIGN_OR_RETURN(
-      std::vector<p4::v1::TableEntry> table_entries,
-      p4_symbolic::GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
+      std::vector<p4::v1::Entity> entities,
+      p4_symbolic::GetPiEntitiesFromPiUpdatesProtoTextFile(entries_path));
   ASSIGN_OR_RETURN(p4_symbolic::ir::Dataplane dataplane,
-                   p4_symbolic::ir::ParseToIr(config, table_entries));
+                   p4_symbolic::ir::ParseToIr(config, entities));
 
   // Dump string representation to the output file.
   std::ostringstream output;

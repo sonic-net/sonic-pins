@@ -116,8 +116,8 @@ absl::Status ParseAndEvaluate() {
       p4::v1::ForwardingPipelineConfig config,
       p4_symbolic::ParseToForwardingPipelineConfig(bmv2_path, p4info_path));
   ASSIGN_OR_RETURN(
-      std::vector<p4::v1::TableEntry> table_entries,
-      p4_symbolic::GetPiTableEntriesFromPiUpdatesProtoTextFile(entries_path));
+      std::vector<p4::v1::Entity> entities,
+      p4_symbolic::GetPiEntitiesFromPiUpdatesProtoTextFile(entries_path));
 
   // Generate port list.
   std::vector<int> physical_ports(port_count);
@@ -126,7 +126,7 @@ absl::Status ParseAndEvaluate() {
   // Evaluate program symbolically.
   ASSIGN_OR_RETURN(
       std::unique_ptr<p4_symbolic::symbolic::SolverState> solver_state,
-      p4_symbolic::symbolic::EvaluateP4Program(config, table_entries,
+      p4_symbolic::symbolic::EvaluateP4Program(config, entities,
                                                physical_ports));
 
   // Output SMT formula.

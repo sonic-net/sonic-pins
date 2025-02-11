@@ -15,9 +15,10 @@ namespace p4_symbolic {
 
 namespace {
 
-absl::StatusOr<std::vector<p4::v1::TableEntry>>
-ParseWriteRequestToPiTableEntries(const p4::v1::WriteRequest &write_request) {
-  std::vector<p4::v1::TableEntry> table_entries;
+absl::StatusOr<std::vector<p4::v1::Entity>> ParseWriteRequestToPiEntities(
+    const p4::v1::WriteRequest &write_request) {
+  std::vector<p4::v1::Entity> entities;
+  entities.reserve(write_request.updates_size());
 
   for (const auto &update : write_request.updates()) {
     // Make sure update is of type insert.
@@ -27,17 +28,10 @@ ParseWriteRequestToPiTableEntries(const p4::v1::WriteRequest &write_request) {
                        update.DebugString()));
     }
 
-    // Make sure the entity is a table entry.
-    const p4::v1::Entity &entity = update.entity();
-    if (entity.entity_case() != p4::v1::Entity::kTableEntry) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Table entries file contains a non-table entry entity ",
-                       entity.DebugString()));
-    }
-    table_entries.push_back(std::move(entity.table_entry()));
+    entities.push_back(update.entity());
   }
 
-  return table_entries;
+  return entities;
 }
 
 }  // namespace
@@ -59,9 +53,8 @@ ParseToForwardingPipelineConfig(absl::string_view bmv2_json_path,
   return config;
 }
 
-absl::StatusOr<std::vector<p4::v1::TableEntry>>
-GetPiTableEntriesFromPiUpdatesProtoTextFile(
-    absl::string_view table_entries_path) {
+absl::StatusOr<std::vector<p4::v1::Entity>>
+GetPiEntitiesFromPiUpdatesProtoTextFile(absl::string_view table_entries_path) {
   p4::v1::WriteRequest write_request;
   if (!table_entries_path.empty()) {
     RETURN_IF_ERROR(
@@ -70,7 +63,7 @@ GetPiTableEntriesFromPiUpdatesProtoTextFile(
         << "While trying to parse table entry file '" << table_entries_path
         << "': ";
   }
-  return ParseWriteRequestToPiTableEntries(write_request);
+  return ParseWriteRequestToPiEntities(write_request);
 }
 
 }  // namespace p4_symbolic
