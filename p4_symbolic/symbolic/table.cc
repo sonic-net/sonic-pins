@@ -510,6 +510,7 @@ TableEntryPriorityType GetTableEntryPriorityType(const ir::Table &table) {
         // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported.
         return TableEntryPriorityType::kPriorityZeroWithSingleLpm;
       }
+
       default: {
         // Exact or some other unsupported type, no need to do anything here.
         // For unsupported types, an absl error will be returned during symbolic
