@@ -37,7 +37,7 @@
 #include "p4_symbolic/ir/parser.h"
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -136,7 +136,7 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
 
       // Constrain the symbolic variables for entry matches.
       for (const pdpi::IrMatch &symbolic_match :
-           ir::GetMatches(symbolic_entry)) {
+           symbolic_entry.sketch().matches()) {
         const std::string &match_name = symbolic_match.name();
         ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_definition,
                          util::GetMatchDefinition(match_name, *table));
@@ -154,7 +154,7 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
             type_name = it->second;
         }
         ASSIGN_OR_RETURN(
-            SymbolicMatchVariables match_variables,
+            SymbolicMatch match_variables,
             GetSymbolicMatch(symbolic_entry, match_name, *table, state.program,
                              *state.context.z3_context));
         AddConstraintForStaticallyTranslatedValue(

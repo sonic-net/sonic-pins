@@ -32,6 +32,8 @@
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/cfg.h"
@@ -1442,6 +1444,68 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   }
 
   return output;
+}
+
+absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
+    int table_entry_index, const ir::Table &table,
+    const TableEntryPriorityParams &priority_params) {
+  // Build a symbolic table entry in P4-Symbolic IR.
+  ir::SymbolicTableEntry result;
+  result.set_index(table_entry_index);
+
+  // Set table name.
+  const std::string &table_name = table.table_definition().preamble().name();
+  result.mutable_sketch()->set_table_name(table_name);
+
+  bool has_ternary_or_optional = false;
+  pdpi::IrMatch *lpm_match = nullptr;
+
+  for (const auto &[match_name, match_definition] :
+       Ordered(table.table_definition().match_fields_by_name())) {
+    // Set match name.
+    pdpi::IrMatch &ir_match = *result.mutable_sketch()->add_matches();
+    ir_match.set_name(match_name);
+
+    const auto &pi_match = match_definition.match_field();
+    switch (pi_match.match_type()) {
+      case p4::config::v1::MatchField::TERNARY:
+      case p4::config::v1::MatchField::OPTIONAL: {
+        has_ternary_or_optional = true;
+        break;
+      }
+      case p4::config::v1::MatchField::LPM: {
+        lpm_match = &ir_match;
+        break;
+      }
+      default: {
+        // Exact or some other unsupported type, no need to do anything here.
+        // An absl error will be returned during symbolic evaluation.
+        break;
+      }
+    }
+  }
+
+  // Set prefix length for single-LPM tables.
+  if (!has_ternary_or_optional && lpm_match != nullptr) {
+    if (!priority_params.prefix_length.has_value()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Prefix length must be provided for tables with a single LPM"
+                "match.";
+    }
+    lpm_match->mutable_lpm()->set_prefix_length(*priority_params.prefix_length);
+  }
+
+  // Set priority.
+  if (has_ternary_or_optional && priority_params.priority <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Priority must be greater than 0 for tables with ternary or "
+              "optional matches. Found: "
+           << priority_params.priority;
+  }
+  result.mutable_sketch()->set_priority(
+      has_ternary_or_optional ? priority_params.priority : 0);
+
+  return result;
 }
 
 const pdpi::IrTableEntry &GetPdpiIrEntryOrSketch(const ir::TableEntry &entry) {

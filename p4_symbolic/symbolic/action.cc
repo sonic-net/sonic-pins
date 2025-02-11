@@ -34,7 +34,7 @@
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "p4_symbolic/symbolic/values.h"

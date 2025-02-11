@@ -28,7 +28,6 @@
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
-#include "p4_symbolic/symbolic/table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 
 namespace p4_symbolic::packet_synthesizer {

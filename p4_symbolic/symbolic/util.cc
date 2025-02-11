@@ -37,7 +37,7 @@
 #include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
