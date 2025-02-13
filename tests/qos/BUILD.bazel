@@ -117,6 +117,7 @@ cc_library(
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+	"//sai_p4/instantiations/google/test_tools:test_entries",
         "//tests/forwarding:util",
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:generic_testbed",

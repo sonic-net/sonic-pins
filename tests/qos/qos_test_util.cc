@@ -691,6 +691,28 @@ absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
   return ecn_counters;
 }
 
+absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string openconfig_transmit_count_state_path = absl::Substitute(
+      "interfaces/interface[name=$0]"
+      "/state/counters/in-pkts",
+      port);
+
+  ASSIGN_OR_RETURN(
+      std::string ingress_counter_response,
+      GetGnmiStatePathInfo(&gnmi_stub, openconfig_transmit_count_state_path,
+                           "openconfig-interfaces:in-pkts"));
+
+  int64_t ingress_counter;
+  if (!absl::SimpleAtoi(StripQuotes(ingress_counter_response),
+                        &ingress_counter)) {
+    return gutil::UnknownErrorBuilder()
+           << "Unable to parse counter from response: \""
+           << ingress_counter_response << "\"";
+  }
+  return ingress_counter;
+}
+
 absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
     absl::string_view gnmi_config) {
   nlohmann::json config = nlohmann::json::parse(gnmi_config);

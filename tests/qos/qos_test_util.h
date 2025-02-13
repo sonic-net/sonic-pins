@@ -228,6 +228,10 @@ EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
 absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
     absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
 
+// Get Ingress port counters.
+absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
+
 // Get queues for an egress port.
 absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
     absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
