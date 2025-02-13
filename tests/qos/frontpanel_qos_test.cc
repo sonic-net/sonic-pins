@@ -80,11 +80,13 @@
 
 namespace pins_test {
 
+using ::gutil::IsOkAndHolds;
 using ::json_yang::FormatJsonBestEffort;
 using ::testing::Contains;
 using ::testing::Eq;
 using ::testing::Field;
 using ::testing::Ge;
+using ::testing::Gt;
 using ::testing::IsEmpty;
 using ::testing::Le;
 using ::testing::Not;
@@ -122,9 +124,9 @@ absl::StatusOr<Cleanup> ConfigureFairBufferConfigForPortUntilEndOfScope(
   // Set fair buffer config.
   absl::flat_hash_map<std::string, BufferParameters>
       buffer_config_by_queue_name;
-  // TODO: Read queue names from switch instead of
-  // hard-coding them here.
-  for (absl::string_view queue_name : kAllQueuesNames) {
+  ASSIGN_OR_RETURN(std::vector<std::string> queues,
+                   GetQueuesByEgressPort(egress_port, gnmi));
+  for (absl::string_view queue_name : queues) {
     buffer_config_by_queue_name[queue_name] = BufferParameters{
         .dedicated_buffer = 0,
         .use_shared_buffer = true,
@@ -233,17 +235,20 @@ ConstructEntriesToForwardAllTrafficToGivenPort(absl::string_view p4rt_port_id) {
 // looped back to the CPU. Specific Requirements:
 // - L3 admit entries to match on in ports as we do not want to reforward looped
 // back packets
-// - Punt all ECN marked packets which are looped back from egress port.
+// - Punt all ECN marked packets which are looped back from egress port on highe
+//   priority queue.
 absl::StatusOr<sai::TableEntries>
 ConstructEntriesToForwardAllTrafficToLoopbackPortAndCopyEcnPacketsToCPU(
-    absl::string_view p4rt_out_port_id, absl::string_view p4rt_in_port1_id,
-    absl::string_view p4rt_in_port2_id) {
+    const pdpi::IrP4Info ir_p4info, absl::string_view p4rt_out_port_id,
+    absl::string_view p4rt_in_port1_id, absl::string_view p4rt_in_port2_id,
+    absl::string_view default_cpu_queue,
+    absl::string_view high_priority_cpu_queue) {
   // By convention, we use link local IPv6 addresses as neighbor IDs.
   const std::string kNeighborId =
       netaddr::MacAddress(2, 2, 2, 2, 2, 2).ToLinkLocalIpv6Address().ToString();
   // L3 admit packets coming in only on the ingress ports. We do not want to
   // reforward looped back packets.
-  return gutil::ParseTextProto<sai::TableEntries>(absl::Substitute(
+  std::string proto_base_table_entries = absl::Substitute(
       R"pb(
         entries {
           l3_admit_table_entry {
@@ -306,19 +311,79 @@ ConstructEntriesToForwardAllTrafficToLoopbackPortAndCopyEcnPacketsToCPU(
             action { set_dst_mac { dst_mac: "02:02:02:02:02:02" } }
           }
         }
-        entries {
-          acl_ingress_table_entry {
-            match {
-              dst_mac { value: "02:02:02:02:02:02" mask: "ff:ff:ff:ff:ff:ff" }
-              is_ip { value: "0x1" }
-              ecn { value: "0x3" mask: "0x3" }
-            }
-            action { acl_copy { qos_queue: "2" } }
-            priority: 1
-          }
-        }
       )pb",
-      kNeighborId, p4rt_out_port_id, p4rt_in_port1_id, p4rt_in_port2_id));
+      kNeighborId, p4rt_out_port_id, p4rt_in_port1_id, p4rt_in_port2_id);
+
+  // Punt ECN packets ingressing after packets are looped back.
+  if (ir_p4info.tables_by_name().contains("acl_pre_ingress_metadata_table")) {
+    // 1. Mark ECN packets in acl_pre_ingress_metadata_table.
+    // 2. Punt all looped back packets (including non ECN marked packets) to CPU
+    // in acl_ingress_table.
+    // 3. Set ECN marked to higher priority CPU queue in acl_ingress_qos_table.
+    return gutil::ParseTextProto<sai::TableEntries>(absl::StrCat(
+        proto_base_table_entries,
+        absl::Substitute(
+            R"pb(
+              entries {
+                acl_pre_ingress_metadata_table_entry {
+                  match {
+                    is_ip { value: "0x1" }
+                    ecn { value: "0x3" mask: "0x3" }
+                  }
+                  action { set_acl_metadata { acl_metadata: "0x06" } }
+                  priority: 100
+                }
+              }
+              entries {
+                acl_ingress_table_entry {
+                  match {
+                    dst_mac {
+                      value: "02:02:02:02:02:02"
+                      mask: "ff:ff:ff:ff:ff:ff"
+                    }
+                    is_ip { value: "0x1" }
+                  }
+                  action { acl_copy { qos_queue: "$0" } }
+                  priority: 1
+                }
+              }
+              entries {
+                acl_ingress_qos_table_entry {
+                  match { acl_metadata { value: "0x06" mask: "0xff" } }
+                  action {
+                    set_qos_queue_and_cancel_copy_above_rate_limit {
+                      qos_queue: "$1"
+                    }
+                  }
+                  priority: 4400
+                  meter_config { bytes_per_second: 5000 burst_bytes: 5000 }
+                }
+              }
+            )pb",
+            default_cpu_queue, high_priority_cpu_queue)));
+  } else {
+    // 1. Punt all ECN Marked packets in acl_ingress_table.
+    return gutil::ParseTextProto<sai::TableEntries>(
+        absl::StrCat(proto_base_table_entries +
+                     absl::Substitute(
+                         R"pb(
+                           entries {
+                             acl_ingress_table_entry {
+                               match {
+                                 dst_mac {
+                                   value: "02:02:02:02:02:02"
+                                   mask: "ff:ff:ff:ff:ff:ff"
+                                 }
+                                 is_ip { value: "0x1" }
+                                 ecn { value: "0x3" mask: "0x3" }
+                               }
+                               action { acl_copy { qos_queue: "$0" } }
+                               priority: 1
+                             }
+                           }
+                         )pb",
+                         default_cpu_queue)));
+  }
 }
 
 // Structure represents SUTs connections to Ixia.
@@ -1693,9 +1758,11 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   ASSERT_OK_AND_ASSIGN(
       const sai::TableEntries kTableEntries,
       ConstructEntriesToForwardAllTrafficToLoopbackPortAndCopyEcnPacketsToCPU(
+          ir_p4info,
           /*p4rt_out_port_id=*/kSutOutPortId,
           /*p4rt_in_port1_id=*/kSutInPort1Id,
-          /*p4rt_in_port2_id=*/kSutInPort2Id));
+          /*p4rt_in_port2_id=*/kSutInPort2Id, GetParam().default_cpu_queue,
+          GetParam().high_prio_cpu_queue));
   ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
                                                      kTableEntries));
 
@@ -1789,9 +1856,12 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
             const QueueCounters queue_counters_before_test_packet,
             GetGnmiQueueCounters(/*port=*/kSutOutPort, /*queue=*/target_queue,
                                  *gnmi_stub));
-        ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
-          ResetEcnTestPacketCounters(packet_receive_info);
+        ASSERT_OK_AND_ASSIGN(const int64_t ecn_counter_before_traffic,
+                             GetGnmiPortEcnCounter(kSutOutPort, *gnmi_stub));
 
+        ResetEcnTestPacketCounters(packet_receive_info);
+
+        ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
           return pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
                                                ixia_setup_result.topology_ref,
                                                *testbed);
@@ -1814,6 +1884,8 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
 
           if (is_congestion && is_ect) {
             ASSERT_GT(packet_receive_info.num_packets_ecn_marked, 0);
+            EXPECT_THAT(GetGnmiPortEcnCounter(kSutOutPort, *gnmi_stub),
+                        IsOkAndHolds(Gt(ecn_counter_before_traffic)));
           } else {
             // No egress packets must be ECN marked.
             ASSERT_EQ(packet_receive_info.num_packets_ecn_marked, 0);

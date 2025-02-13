@@ -45,6 +45,8 @@ struct QosTestParams {
   std::string ingress_ports[2];
   std::string egress_port_under_test;
   std::string name;
+  std::string default_cpu_queue;
+  std::string high_prio_cpu_queue;
 };
 
 class FrontpanelQosTest : public testing::TestWithParam<QosTestParams> {

@@ -24,11 +24,6 @@ namespace pins_test {
 // 10 seconds.
 constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(25);
 
-// TODO read the queue names from the switch instead of using
-// hand-coded names.
-constexpr std::array<absl::string_view, 8> kAllQueuesNames = {
-    "LLQ1", "LLQ2", "BE1", "AF1", "AF2", "AF3", "AF4", "NC1"};
-
 enum class SwitchRoleToDisablePuntFlowQoS {
   kControlSwitch,
   kSwitchUnderTest,
@@ -244,6 +239,17 @@ UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
 absl::Status
 EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
                                       thinkit::MirrorTestbed &testbed);
+
+// Get ECN port counters.
+absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Get queues for an egress port.
+absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
+
+absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
+    absl::string_view gnmi_config);
 
 }  // namespace pins_test
 
