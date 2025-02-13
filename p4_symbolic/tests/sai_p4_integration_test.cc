@@ -27,6 +27,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
+
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -493,6 +494,7 @@ TEST(P4SymbolicIntegrationTest,
   EXPECT_EQ(Z3ValueStringToInt(egress["ethernet.src_addr"]),
             kEgressSrcMac.ToBitset().to_ulong());
   EXPECT_THAT(Z3ValueStringToInt(solution->egress_port), AnyOf(Eq(1), Eq(2)));
+
 }
 
 }  // namespace
