@@ -24,11 +24,6 @@ namespace pins_test {
 // 10 seconds.
 constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(25);
 
-// TODO read the queue names from the switch instead of using
-// hand-coded names.
-constexpr std::array<absl::string_view, 8> kAllQueuesNames = {
-    "LLQ1", "LLQ2", "BE1", "AF1", "AF2", "AF3", "AF4", "NC1"};
-
 enum class SwitchRoleToDisablePuntFlowQoS {
   kControlSwitch,
   kSwitchUnderTest,
@@ -76,36 +71,14 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
 // Get total packets (transmitted + dropped) for port queue.
 int64_t TotalPacketsForQueue(const QueueCounters &counters);
 
-// Parse IPv4 DSCP to queue mapping from gnmi configuration.
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config);
-
-// Parse IPv6 DSCP to queue mapping from gnmi configuration.
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config);
-
-// Get IPv4 DSCP to queue mapping from switch.
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Get IPv6 DSCP to queue mapping from switch.
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
-
 // Get queue to IPv4 DSCP mapping from switch.
 absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv4DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub);
-
-// Get queue to IPv6 DSCP mapping from switch.
-absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv6DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub);
+GetQueueToDscpsMapping(absl::flat_hash_map<int, std::string> queue_by_dscp);
 
 // Get name of queue configured for the given DSCP.
-absl::StatusOr<std::string>
-GetQueueNameByDscpAndPort(int dscp, absl::string_view port,
-                          gnmi::gNMI::StubInterface &gnmi_stub);
+absl::StatusOr<std::string> GetQueueNameByDscpAndPort(
+    int dscp, absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub,
+    absl::flat_hash_map<int, std::string> queue_by_dscp);
 
 // Reads the name of the scheduler policy applied to the given egress port from
 // the appropriate gNMI state path.
@@ -181,6 +154,12 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
 
 // Reads all strictly prioritized queues belonging to the given scheduler policy
+// from the state paths, and returns their names.
+absl::StatusOr<absl::flat_hash_set<std::string>>
+GetStrictlyPrioritizedQueuesMap(absl::string_view scheduler_policy_name,
+                                gnmi::gNMI::StubInterface &gnmi);
+
+// Reads all strictly prioritized queues belonging to the given scheduler policy
 // from the state paths, and returns their names in descending order of
 // priority.
 absl::StatusOr<std::vector<std::string>>
@@ -244,6 +223,17 @@ UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
 absl::Status
 EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
                                       thinkit::MirrorTestbed &testbed);
+
+// Get ECN port counters.
+absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Get queues for an egress port.
+absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
+
+absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
+    absl::string_view gnmi_config);
 
 }  // namespace pins_test
 
