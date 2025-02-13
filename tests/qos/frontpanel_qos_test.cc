@@ -597,7 +597,8 @@ TEST_P(FrontpanelQosTest,
     if (kStrictlyPrioritizedQueues.contains(queue.first)) {
       continue;
     }
-    kPirByQueueName.insert({queue.first, kPirBaseSpeedInBytesPerSecond});
+    kPirByQueueName.insert(
+        {queue.first, kPirBaseSpeedInBytesPerSecond * pirFactor});
     pirFactor *= 2;
   }
 
@@ -716,7 +717,7 @@ TEST_P(FrontpanelQosTest,
                      << "'";
         continue;
       }
-      ASSERT_OK_AND_ASSIGN(const int kTargetQueuePir,
+      ASSERT_OK_AND_ASSIGN(const int64_t kTargetQueuePir,
                            gutil::FindOrStatus(kPirByQueueName, kTargetQueue));
       ASSERT_OK_AND_ASSIGN(
           const QueueCounters kInitialQueueCounters,
@@ -799,7 +800,7 @@ TEST_P(FrontpanelQosTest,
       ASSERT_OK_AND_ASSIGN(
           const ixia::TrafficItemStats kIxiaTrafficStats,
           ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName, *testbed));
-      const int kObservedTrafficRate =
+      const int64_t kObservedTrafficRate =
           ixia::BytesPerSecondReceived(kIxiaTrafficStats);
       LOG(INFO) << "observed traffic rate (bytes/second): "
                 << kObservedTrafficRate;
