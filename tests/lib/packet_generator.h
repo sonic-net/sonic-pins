@@ -23,8 +23,6 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
 #include "gutil/status.h"  // IWYU pragma: keep
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 
@@ -94,6 +92,11 @@ class PacketGenerator {
 
   // Returns a description of the generator options.
   std::string Description() const { return ToString(options_); }
+
+  // Returns the number of unique packets the generator can create.
+  // For Options with a single variable, packets [0, NumPossiblePackets() - 1]
+  // are guaranteed to be unique.
+  int NumPossiblePackets() const;
 
   // Returns a packet at the given index. Subsequent calls for the same index
   // will return the same packet.

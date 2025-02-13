@@ -194,6 +194,7 @@ cc_library(
 cc_test(
     name = "packet_generator_test",
     srcs = ["packet_generator_test.cc"],
+    shard_count = 4,
     deps = [
         ":packet_generator",
         "//gutil:proto_matchers",

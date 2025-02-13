@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cstdint>
 #include <limits>
 #include <random>
 
@@ -393,9 +394,13 @@ void SetFieldValue(Field field, int value, packetlib::Packet& packet) {
           packetlib::IpFlowLabel(flow_label));
     } break;
     case Field::kL4SrcPort:
+      // TODO: Re-allow PTP ports when traffic forwards.
+      if (value > 318) value += 2;  // Skip PTP ports 319 & 320.
       UdpHeader(packet).set_source_port(packetlib::UdpPort(value));
       break;
     case Field::kL4DstPort:
+      // TODO: Re-allow PTP ports when traffic forwards.
+      if (value > 318) value += 2;  // Skip PTP ports 319 & 320.
       UdpHeader(packet).set_destination_port(packetlib::UdpPort(value));
       break;
   }
@@ -552,7 +557,9 @@ packetlib::Packet PacketGenerator::Packet(int index) const {
     Field field = *options_.variables.begin();
     IpType ip_type = InnerIpFields().contains(field) ? *options_.inner_ip_type
                                                      : options_.ip_type;
-    SetFieldValue(field, NormalizeIndex(index) % Range(field, ip_type), packet);
+    SetFieldValue(field,
+                  NormalizeIndex(index) % packetgen::Range(field, ip_type),
+                  packet);
     return packet;
   }
 
@@ -560,7 +567,8 @@ packetlib::Packet PacketGenerator::Packet(int index) const {
   for (Field field : options_.variables) {
     IpType ip_type = InnerIpFields().contains(field) ? *options_.inner_ip_type
                                                      : options_.ip_type;
-    SetFieldValue(field, absl::Uniform(bit_gen, 0, Range(field, ip_type)),
+    SetFieldValue(field,
+                  absl::Uniform(bit_gen, 0, packetgen::Range(field, ip_type)),
                   packet);
   }
   return packet;
@@ -602,9 +610,23 @@ int Range(Field field, IpType ip_type) {
       return BitwidthToInt(4);
     case Field::kL4SrcPort:
     case Field::kL4DstPort:
-      return BitwidthToInt(packetlib::kUdpPortBitwidth);
+      // TODO: Re-allow PTP ports when traffic forwards.
+      // Reserve PTP ports 319 & 320.
+      return BitwidthToInt(packetlib::kUdpPortBitwidth) - 2;
   }
   return 0;
+}
+
+int PacketGenerator::NumPossiblePackets() const {
+  uint64_t full_range = 1;
+  for (Field field : options_.variables) {
+    IpType ip_type = InnerIpFields().contains(field) ? *options_.inner_ip_type
+                                                     : options_.ip_type;
+    full_range *= packetgen::Range(field, ip_type);
+    if (full_range >= std::numeric_limits<int>::max())
+      return std::numeric_limits<int>::max();
+  }
+  return full_range;
 }
 
 }  // namespace packetgen
