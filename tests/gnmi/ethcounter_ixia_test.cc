@@ -549,8 +549,9 @@ TEST_P(CountersTestFixture, TestInFcsErrors) {
                  interface_mode: TRAFFIC_GENERATOR
                })pb");
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
-                       GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
@@ -700,8 +701,9 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
                  interface_mode: TRAFFIC_GENERATOR
                })pb");
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
-                       GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
@@ -791,10 +793,6 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
         SetLoopback(out_initial_loopback, sut_out_interface, gnmi_stub.get()))
         << "failed to restore initial loopback config.";
   });
-
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      generic_testbed->Sut(), GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
 
   // Set up the switch to forward inbound IPv4 packets to the egress port
   LOG(INFO) << "\n\n----- TestIPv4Pkts: ForwardToEgress -----\n";
@@ -952,8 +950,9 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
                  interface_mode: TRAFFIC_GENERATOR
                })pb");
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
-                       GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
@@ -1044,10 +1043,6 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
         SetLoopback(out_initial_loopback, sut_out_interface, gnmi_stub.get()))
         << "failed to restore initial loopback config.";
   });
-
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      generic_testbed->Sut(), GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
 
   // Set up the switch to forward inbound packets to the egress port
   constexpr absl::string_view kDestMac = "02:02:02:02:02:02";
@@ -1194,7 +1189,6 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
 
 // Set up the switch to punt packets to CPU.
 absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
-                            const netaddr::Ipv4Address &src_ip,
                             const netaddr::Ipv4Address &dst_ip,
                             absl::string_view p4_queue,
                             const p4::config::v1::P4Info &p4info,
@@ -1214,14 +1208,14 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
           match {
             dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
             is_ipv4 { value: "0x1" }
-            src_ip { value: "$1" mask: "255.255.255.255" }
-            dst_ip { value: "$2" mask: "255.255.255.255" }
+            dst_ip { value: "$1" mask: "255.255.255.255" }
           }
-          action { acl_trap { qos_queue: "$3" } }
+          action { acl_trap { qos_queue: "$2" } }
+          dst_ip { value: "$2" mask: "255.255.255.255" }
           priority: 1
         }
       )pb",
-      dmac.ToString(), src_ip.ToString(), dst_ip.ToString(), p4_queue));
+      dmac.ToString(), dst_ip.ToString(), p4_queue));
   std::vector<p4::v1::TableEntry> pi_entries;
   ASSIGN_OR_RETURN(
       pi_entries.emplace_back(), pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
@@ -1258,20 +1252,20 @@ TEST_P(CountersTestFixture, TestCPUOutDiscards) {
       std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
-  ASSERT_OK(generic_testbed->Environment().StoreTestArtifact(
-      "gnmi_config.txt", GetParam().gnmi_config));
-
   thinkit::Switch &sut = generic_testbed->Sut();
 
   // Configure SUT.
-  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
-      "gnmi_config.json", GetParam().gnmi_config));
   EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
       "p4info.textproto", GetParam().p4_info));
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            sut, absl::nullopt, GetParam().p4_info));
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
+
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*gnmi_stub));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact("gnmi_config.json",
+                                                             sut_gnmi_config));
 
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
@@ -1335,8 +1329,8 @@ TEST_P(CountersTestFixture, TestCPUOutDiscards) {
   
   ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, kDefaultFrameSize,
                                           *generic_testbed));
-  
-  ASSERT_OK(SetUpPuntToCPU(dest_mac, source_ip, dest_ip, "0x2",
+
+  ASSERT_OK(SetUpPuntToCPU(dest_mac, dest_ip, GetParam().cpu_queue_to_use,
                            GetParam().p4_info, *sut_p4_session));
 
   ASSERT_OK_AND_ASSIGN(auto initial_cpu_out_discards,

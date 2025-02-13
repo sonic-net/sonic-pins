@@ -1,3 +1,5 @@
+#include <optional>
+
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -156,8 +158,9 @@ TEST_P(CountersTestFixture, PortCountersTimestamp) {
       R"pb(
         interface_requirements { count: 2 interface_mode: TRAFFIC_GENERATOR }
       )pb");
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> testbed,
-                       GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
   // Set test case ID.
   testbed->Environment().SetTestCaseID("0858826a-092f-448f-b2ba-44603b2c0eeb");
@@ -285,8 +288,9 @@ TEST_P(CountersTestFixture, PortQueueCountersTimestamp) {
       R"pb(
         interface_requirements { count: 2 interface_mode: TRAFFIC_GENERATOR }
       )pb");
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> testbed,
-                       GetTestbedWithRequirements(requirements));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
   // Set test case ID.
   testbed->Environment().SetTestCaseID("e4ad3e8f-f443-46e3-b8bd-e95b3f448a04");
@@ -377,10 +381,10 @@ TEST_P(CountersTestFixture, PortQueueCountersTimestamp) {
 
   // Get DSCP-to-queue mapping from switch config.
   using QueueNameByDscp = absl::flat_hash_map<int, std::string>;
-  ASSERT_OK_AND_ASSIGN(std::optional<QueueNameByDscp> queue_name_by_ipv4_dscp,
-                      ParseIpv4DscpToQueueMapping(GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(std::optional<QueueNameByDscp> queue_name_by_ipv6_dscp,
-                      ParseIpv4DscpToQueueMapping(GetParam().gnmi_config));
+  std::optional<QueueNameByDscp> queue_name_by_ipv4_dscp =
+      GetParam().queue_by_dscp;
+  std::optional<QueueNameByDscp> queue_name_by_ipv6_dscp =
+      GetParam().queue_by_dscp;
 
   std::string target_queue = "BE1";
   if (queue_name_by_ipv4_dscp.has_value()) {
