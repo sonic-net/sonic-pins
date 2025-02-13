@@ -249,10 +249,10 @@ absl::Status SetUpV6PuntToCPU(const netaddr::MacAddress &dmac,
 }
 
 // Set up the switch to punt packets to CPU with meter.
+// Returns a copy of installed Punt Entry or QoS Entry.
 absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
-    const netaddr::MacAddress &dmac, const netaddr::Ipv4Address &src_ip,
-    const netaddr::Ipv4Address &dst_ip, absl::string_view p4_queue,
-    int rate_bytes_per_second, int burst_in_bytes,
+    const netaddr::MacAddress &dmac, const netaddr::Ipv4Address &dst_ip,
+    absl::string_view p4_queue, int rate_bytes_per_second, int burst_in_bytes,
     const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
@@ -261,31 +261,84 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
-  // TODO (b/204954722): Remove after bug is fixed.
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
 
-  auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-      R"pb(
-        acl_ingress_table_entry {
-          match {
-            dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
-            is_ipv4 { value: "0x1" }
-            src_ip { value: "$1" mask: "255.255.255.255" }
-            dst_ip { value: "$2" mask: "255.255.255.255" }
+  // There can be 2 schemes for punting depending on
+  // pipeline.
+  // If p4 info table has the "acl_ingress_qos_table" configured, then
+  //     1. Punt the packets using "acl_ingress_table" entry.
+  //     2. Rate limit the packets using a "acl_ingress_qos_table" entry, which
+  //        allows capability to apply policer on a group of punt entries.
+  // else
+  //     Punt and Rate limit packets in same entry in "acl_ingress_table"
+  if (ir_p4info.tables_by_name().contains("acl_ingress_qos_table")) {
+    auto punt_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+        R"pb(
+          acl_ingress_table_entry {
+            match {
+              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ipv4 { value: "0x1" }
+              dst_ip { value: "$1" mask: "255.255.255.255" }
+            }
+            action { acl_trap { qos_queue: "$2" } }
+            priority: 1
           }
-          action { acl_experimental_trap { qos_queue: "$3" } }
-          priority: 1
-          meter_config { bytes_per_second: $4 burst_bytes: $5 }
-        }
-      )pb",
-      dmac.ToString(), src_ip.ToString(), dst_ip.ToString(), p4_queue,
-      rate_bytes_per_second, burst_in_bytes));
+        )pb",
+        dmac.ToString(), dst_ip.ToString(), p4_queue));
 
-  LOG(INFO) << "InstallPiTableEntry";
-  ASSIGN_OR_RETURN(const p4::v1::TableEntry pi_acl_entry,
-                   pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry));
-  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
-  return pi_acl_entry;
+    LOG(INFO) << "InstallPiTableEntry";
+    ASSIGN_OR_RETURN(
+        const p4::v1::TableEntry pi_acl_entry,
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, punt_entry));
+    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
+
+    auto qos_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+        R"pb(
+          acl_ingress_qos_table_entry {
+            match {
+              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ipv4 { value: "0x1" }
+            }
+            action {
+              set_qos_queue_and_cancel_copy_above_rate_limit { qos_queue: "$1" }
+            }
+            priority: 4400
+            meter_config { bytes_per_second: $2 burst_bytes: $3 }
+          }
+        )pb",
+        dmac.ToString(), p4_queue, rate_bytes_per_second, burst_in_bytes));
+
+    LOG(INFO) << "InstallPiTableEntry";
+    ASSIGN_OR_RETURN(
+        const p4::v1::TableEntry pi_acl_qos_entry,
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, qos_entry));
+    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_qos_entry));
+
+    return pi_acl_qos_entry;
+  } else {
+    auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+        R"pb(
+          acl_ingress_table_entry {
+            match {
+              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ipv4 { value: "0x1" }
+              dst_ip { value: "$1" mask: "255.255.255.255" }
+            }
+            action { acl_trap { qos_queue: "$2" } }
+            priority: 1
+            meter_config { bytes_per_second: $3 burst_bytes: $4 }
+          }
+        )pb",
+        dmac.ToString(), dst_ip.ToString(), p4_queue, rate_bytes_per_second,
+        burst_in_bytes));
+
+    LOG(INFO) << "InstallPiTableEntry";
+    ASSIGN_OR_RETURN(
+        const p4::v1::TableEntry pi_acl_entry,
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry));
+    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
+    return pi_acl_entry;
+  }
 }
 
 absl::StatusOr<packetlib::Packet> MakeIpv4PacketWithDscp(
@@ -1563,8 +1616,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
     ASSERT_OK_AND_ASSIGN(
         p4::v1::TableEntry pi_acl_entry,
-        SetUpPuntToCPUWithRateLimit(dest_mac, source_ip, dest_ip,
-                                    queue_info.p4_queue_name,
+        SetUpPuntToCPUWithRateLimit(dest_mac, dest_ip, queue_info.p4_queue_name,
                                     flow_rate_limit_in_bytes_per_second,
                                     /*burst_in_bytes=*/kMaxFrameSize,
                                     GetParam().p4info, *sut_p4_session));
