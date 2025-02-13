@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package dvaas;
+
+// A proto representation of the trace of a packet through a P4 packet
+// processor.
+message PacketTrace {
+  string bmv2_textual_log = 1;
+}

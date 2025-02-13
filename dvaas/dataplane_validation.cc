@@ -17,7 +17,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -29,6 +28,7 @@
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
+#include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/user_provided_packet_test_vector.h"
@@ -195,14 +195,14 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 
   // Synthesize test packets.
   LOG(INFO) << "Synthesizing test packets";
-  ASSIGN_OR_RETURN(generate_test_vectors_result.packet_synthesis_result,
-                   backend.SynthesizePackets(
-                       ir_p4info, entities, p4_spec.p4_symbolic_config, ports,
-                       [&](absl::string_view stats) {
-                         return writer.AppendToTestArtifact(
-                             "test_packet_stats.txt", stats);
-                       },
-                       params.packet_synthesis_time_limit));
+  ASSIGN_OR_RETURN(
+      generate_test_vectors_result.packet_synthesis_result,
+      backend.SynthesizePackets(
+          ir_p4info, entities, p4_spec.p4_symbolic_config, ports,
+          [&](absl::string_view stats) {
+            return writer.AppendToTestArtifact("test_packet_stats.txt", stats);
+          },
+          params.coverage_goals_override, params.packet_synthesis_time_limit));
 
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "synthesized_packets.txt",
@@ -293,12 +293,38 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   RETURN_IF_ERROR(writer->AppendToTestArtifact("test_runs.textproto",
                                                test_runs.DebugString()));
 
+  // Validate test runs to create test outcomes.
+  dvaas::PacketTestOutcomes test_outcomes;
+  test_outcomes.mutable_outcomes()->Reserve(test_runs.test_runs_size());
+  for (const auto& test_run : test_runs.test_runs()) {
+    dvaas::PacketTestOutcome& test_outcome = *test_outcomes.add_outcomes();
+    *test_outcome.mutable_test_run() = test_run;
+    *test_outcome.mutable_test_result() =
+        ValidateTestRun(test_run, params.switch_output_diff_params);
+  }
+
   ValidationResult validation_result(
-      std::move(test_runs), params.switch_output_diff_params,
-      generate_test_vectors_result.packet_synthesis_result);
+      test_outcomes, generate_test_vectors_result.packet_synthesis_result);
   RETURN_IF_ERROR(writer->AppendToTestArtifact(
       "test_vector_failures.txt",
       absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
+
+  // Store the packet trace for the first failed test packet (if any).
+  ASSIGN_OR_RETURN(P4Specification p4_spec,
+                   InferP4Specification(params, *backend_, sut));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
+  for (const dvaas::PacketTestOutcome& test_outcome :
+       test_outcomes.outcomes()) {
+    if (test_outcome.test_result().has_failure()) {
+      LOG(INFO) << "Storing packet trace for the first failed test packet";
+      const SwitchInput& switch_input =
+          test_outcome.test_run().test_vector().input();
+      RETURN_IF_ERROR(backend_->StorePacketTrace(p4_spec.bmv2_config, ir_p4info,
+                                                 entities, switch_input));
+      break;
+    }
+  }
+
   return validation_result;
 }
 

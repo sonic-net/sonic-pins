@@ -28,6 +28,7 @@ limitations under the License.
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -44,6 +45,7 @@ limitations under the License.
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -109,6 +111,12 @@ struct DataplaneValidationParams {
   // Otherwise, if packet synthesis timed out, the synthesis results cover the
   // coverage goals only partially.
   std::optional<absl::Duration> packet_synthesis_time_limit = std::nullopt;
+
+  // Coverage goals override for automated packet synthesis (go/coverage-goals).
+  // If nullopt the backend uses its default goals, which should work well
+  // enough in most cases.
+  std::optional<p4_symbolic::packet_synthesizer::CoverageGoals>
+      coverage_goals_override;
 };
 
 // Forward declaration. See below for description.
@@ -225,6 +233,8 @@ public:
       const p4::v1::ForwardingPipelineConfig& p4_symbolic_config,
       absl::Span<const pins_test::P4rtPortId> ports,
       const OutputWriterFunctionType& write_stats,
+      const std::optional<p4_symbolic::packet_synthesizer::CoverageGoals>&
+          coverage_goals_override,
       std::optional<absl::Duration> time_limit = std::nullopt) const = 0;
 
   // Generates a map of test ID to PacketTestVector with output prediction
@@ -269,6 +279,13 @@ public:
   // May query the SUT, but should not change it.
   virtual absl::StatusOr<P4Specification>
   InferP4Specification(SwitchApi &sut) const = 0;
+
+  // Stores the P4 simulation packet trace for the given config, entries, and
+  // input packet.
+  virtual absl::Status StorePacketTrace(
+      const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
+      const SwitchInput& switch_input) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };

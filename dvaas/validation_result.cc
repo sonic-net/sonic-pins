@@ -18,16 +18,21 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
 #include "glog/logging.h"
-#include "google/protobuf/descriptor.h"
 #include "gutil/status.h"
 
 namespace dvaas {
+
+ValidationResult::ValidationResult(
+    const PacketTestOutcomes& test_outcomes,
+    const PacketSynthesisResult& packet_synthesis_result)
+    : test_outcomes_(test_outcomes),
+      test_vector_stats_(ComputeTestVectorStats(test_outcomes)),
+      packet_synthesis_result_(packet_synthesis_result) {}
 
 ValidationResult::ValidationResult(
     const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
