@@ -427,9 +427,10 @@ absl::Status EvaluateTableEntryAction(const ir::Table &table,
       }
     }
     case pdpi::IrEntity::kPacketReplicationEngineEntry: {
-      return gutil::UnimplementedErrorBuilder()
-             << "TODO: Add support for packet replication "
-                "engine entries.";
+      return gutil::InternalErrorBuilder()
+             << "did not expect packet replication engine entry on this "
+                "control flow path: "
+             << absl::StrCat(entry);
     }
     case pdpi::IrEntity::ENTITY_NOT_SET:
       break;

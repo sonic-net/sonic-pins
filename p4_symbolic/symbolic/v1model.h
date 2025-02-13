@@ -26,9 +26,6 @@
 
 namespace p4_symbolic::symbolic::v1model {
 
-// The bitwdith of the `standard_metadata.mcast_grp` field in V1Model.
-static constexpr int kMcastGrpBitwidth = 16;
-
 // Standard metadata header name.
 constexpr absl::string_view kStandardMetadataHeaderName = "standard_metadata";
 

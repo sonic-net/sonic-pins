@@ -30,6 +30,7 @@
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
@@ -56,6 +57,8 @@ absl::Status InitializeTableEntries(SolverState &state,
   // For each symbolic table entry object in each table, create respective
   // symbolic variables and add corresponding constraints as Z3 assertions.
   for (auto &[table_name, table_entries] : ir_entries) {
+    // We don't support symbolic entries in built-in tables at this time.
+    if (pdpi::IsBuiltInTable(table_name)) continue;
     ASSIGN_OR_RETURN(const ir::Table *table,
                      util::GetIrTable(state.program, table_name));
     for (ir::TableEntry &entry : table_entries) {
@@ -128,6 +131,8 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
   // translator.
   for (const auto &[table_name, entries_per_table] :
        state.context.table_entries) {
+    // We don't support symbolic entries in built-in tables at this time.
+    if (pdpi::IsBuiltInTable(table_name)) continue;
     ASSIGN_OR_RETURN(const ir::Table *table,
                      util::GetIrTable(state.program, table_name));
     for (const ir::TableEntry &entry : entries_per_table) {
