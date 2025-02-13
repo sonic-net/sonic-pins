@@ -64,6 +64,7 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
@@ -2079,10 +2080,6 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
 // traffic for different queues. At the end of the test we verify if
 // queues which are allocated more buffer transmit more packets.
 TEST_P(FrontpanelBufferTest, BufferCarving) {
-  if (GetParam().default_params.multicast_queue_by_dscp.has_value()) {
-    GTEST_SKIP() << "Multicast forwarding WIP";
-    ;
-  }
   LOG(INFO) << "---------------- Test started ---------------------";
   switch (GetParam().config_to_be_tested) {
   case kSharedStaticLimit:
@@ -2150,14 +2147,37 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
                        ConfigureSwitchAndReturnP4RuntimeSession(
                            testbed->Sut(), /*gnmi_config=*/std::nullopt,
                            GetParam().default_params.p4info));
-  ASSERT_OK_AND_ASSIGN(
-      const sai::TableEntries kTableEntries,
-      ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
-  ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
-                                                     kTableEntries));
+  
+  // Install entries for unicast queues.
+  if (GetParam().default_params.queue_by_dscp.has_value()) {
+    ASSERT_OK_AND_ASSIGN(
+        const sai::TableEntries kTableEntries,
+        ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
+    ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
+                                                       kTableEntries));
 
-  ASSERT_OK(InstallPdTableEntries(kTableEntries,
-                                  GetParam().default_params.p4info, *sut_p4rt));
+    ASSERT_OK(InstallPdTableEntries(
+        kTableEntries, GetParam().default_params.p4info, *sut_p4rt));
+  }
+
+  netaddr::Ipv6Address kIpv6McastAddresses[64];
+  netaddr::Ipv4Address kIpv4McastAddresses[64];
+  for (int dscp = 0; dscp < 64; ++dscp) {
+    kIpv6McastAddresses[dscp] =
+        netaddr::Ipv6Address(0xff00, 0, 0, 0, 0, 0, 0, dscp + 1);
+    kIpv4McastAddresses[dscp] = netaddr::Ipv4Address(224, 0, 0, dscp + 1);
+  }
+
+  // Install entries for multicast queues.
+  if (GetParam().default_params.multicast_queue_by_dscp.has_value()) {
+    ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                         pdpi::GetIrP4Info(*sut_p4rt));
+    ASSERT_OK_AND_ASSIGN(
+        auto entries, ConstructEntriesToForwardMcastTrafficToGivenPort(
+                          ir_p4info, kSutEgressPortP4rtId, kIpv6McastAddresses,
+                          kIpv4McastAddresses, 64));
+    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
+  }
 
   // Before we update the scheduler config, save the current config and
   // prepare to restore it at the end of th test.
@@ -2174,13 +2194,22 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
   // Queues under test.
   const absl::flat_hash_map<std::string, BufferParameters> &
       kBufferParametersByQueueName = GetParam().buffer_parameters_by_queue_name;
+
+  // Get strictly prioritized queues.
+  ASSERT_OK_AND_ASSIGN(
+      const absl::flat_hash_set<std::string> kStrictlyPrioritizedQueues,
+      GetStrictlyPrioritizedQueuesMap(kSutEgressPortSchedulerPolicy,
+                                      *gnmi_stub));
+
   // Set lower & upper bounds (CIRs/PIRs) such that they don't effect
   // scheduling, so we can focus on testing the buffer config.
   LOG(INFO) << "configuring scheduler parameters";
   {
     absl::flat_hash_map<std::string, SchedulerParameters> params_by_queue_name;
     for (auto &[queue_name, _] : kBufferParametersByQueueName) {
-      params_by_queue_name[queue_name].weight = 1;
+      if (!kStrictlyPrioritizedQueues.contains(queue_name)) {
+        params_by_queue_name[queue_name].weight = 1;
+      }
       params_by_queue_name[queue_name].committed_information_rate = 0;
       // Limit peak rate to 10% of line rate so queue is always full.
       params_by_queue_name[queue_name].peak_information_rate =
@@ -2249,126 +2278,170 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
   // Figure out which DSCPs to use for each queue.
   using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
-  ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kDscpsByQueueName,
-      GetQueueToDscpsMapping(*GetParam().default_params.queue_by_dscp));
-  // Configue IPv4 and IPv6 traffic items to all queues under test.
-  std::vector<std::string> traffic_items;
-  absl::flat_hash_map<std::string, int64_t> buffer_config_by_traffic_item_name;
-  for (auto &[queue_name, buffer_config] : kBufferParametersByQueueName) {
-    // IPv4.
-    {
-      ASSERT_THAT(kDscpsByQueueName,
-                  Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
-      int dscp = kDscpsByQueueName.at(queue_name).at(0);
-      int config_value;
-      switch (GetParam().config_to_be_tested) {
-      case kSharedStaticLimit:
-        config_value = *buffer_config.shared_static_limit;
-        break;
-      case kDedicatedBuffer:
-        config_value = *buffer_config.dedicated_buffer;
-        break;
-      case kSharedAlpha:
-      default:
-        config_value = *buffer_config.dynamic_limit_scaling_factor;
-      }
-      std::string traffic_name = absl::StrFormat(
-          "IPv4 packets with DSCP %d targeting queue '%s' with config %d", dscp,
-          queue_name, config_value);
-      ASSERT_OK_AND_ASSIGN(std::string traffic_item,
-                           ixia::SetUpTrafficItem(kIxiaIpv4SrcPortHandle,
-                                                  kIxiaDstPortHandle,
-                                                  traffic_name, *testbed));
-      ASSERT_OK(ixia::SetTrafficParameters(
-          traffic_item,
-          ixia::TrafficParameters{
-              // Just send enough traffic to fill up buffer queues.
-              .frame_count = 100000,
-              .frame_size_in_bytes = kFrameSizeInBytes,
-              .traffic_speed = kTrafficItemSpeed,
-              .ip_parameters =
-                  ixia::Ipv4TrafficParameters{
-                      .priority = ixia::IpPriority{.dscp = dscp},
-                  },
-          },
-          *testbed));
-      traffic_items.push_back(traffic_item);
-      buffer_config_by_traffic_item_name[traffic_name] = config_value;
+  DscpsByQueueName kDscpsByUnicastQueueName;
+  DscpsByQueueName kDscpsByMulticastQueueName;
+
+  if (GetParam().default_params.queue_by_dscp.has_value()) {
+    ASSERT_OK_AND_ASSIGN(
+        kDscpsByUnicastQueueName,
+        GetQueueToDscpsMapping(*GetParam().default_params.queue_by_dscp));
+  }
+  if (GetParam().default_params.multicast_queue_by_dscp.has_value()) {
+    ASSERT_OK_AND_ASSIGN(
+        kDscpsByMulticastQueueName,
+        GetQueueToDscpsMapping(
+            *GetParam().default_params.multicast_queue_by_dscp));
+  }
+
+  for (auto kDscpsByQueueName :
+       {kDscpsByUnicastQueueName, kDscpsByMulticastQueueName}) {
+    if (kDscpsByQueueName.empty()) {
+      continue;
     }
-    // IPv6.
-    {
-      ASSERT_THAT(kDscpsByQueueName,
-                  Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
-      int dscp = kDscpsByQueueName.at(queue_name).at(0);
-      int config_value;
-      switch (GetParam().config_to_be_tested) {
-      case kSharedStaticLimit:
-        config_value = *buffer_config.shared_static_limit;
-        break;
-      case kDedicatedBuffer:
-        config_value = *buffer_config.dedicated_buffer;
-        break;
-      case kSharedAlpha:
-      default:
-        config_value = *buffer_config.dynamic_limit_scaling_factor;
+    bool is_multicast = kDscpsByQueueName == kDscpsByMulticastQueueName;
+    // Configue IPv4 and IPv6 traffic items to all queues under test.
+    std::vector<std::string> traffic_items;
+    absl::flat_hash_map<std::string, int64_t>
+        buffer_config_by_traffic_item_name;
+    for (auto &[queue_name, buffer_config] : kBufferParametersByQueueName) {
+      // IPv4.
+      {
+        ASSERT_THAT(kDscpsByQueueName,
+                    Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
+        int dscp = kDscpsByQueueName.at(queue_name).at(0);
+        int config_value;
+        switch (GetParam().config_to_be_tested) {
+          case kSharedStaticLimit:
+            config_value = *buffer_config.shared_static_limit;
+            break;
+          case kDedicatedBuffer:
+            config_value = *buffer_config.dedicated_buffer;
+            break;
+          case kSharedAlpha:
+          default:
+            config_value = *buffer_config.dynamic_limit_scaling_factor;
+        }
+        std::string traffic_name = absl::StrFormat(
+            "IPv4 packets with DSCP %d targeting queue '%s' with config %d",
+            dscp, queue_name, config_value);
+        ASSERT_OK_AND_ASSIGN(
+            std::string traffic_item,
+            ixia::SetUpTrafficItem(kIxiaIpv4SrcPortHandle, kIxiaDstPortHandle,
+                                   traffic_name, *testbed));
+        ASSERT_OK(ixia::SetTrafficParameters(
+            traffic_item, is_multicast ?
+            ixia::TrafficParameters{
+                // Just send enough traffic to fill up buffer queues.
+                .frame_count = 50000,
+                .frame_size_in_bytes = kFrameSizeInBytes,
+                .traffic_speed = kTrafficItemSpeed,
+                .dst_mac = netaddr::MacAddress(1, 0, 0x5e, 0, 0, dscp + 1),
+                .ip_parameters =
+                    ixia::Ipv4TrafficParameters{
+                        .dst_ipv4 = kIpv4McastAddresses[dscp],
+                        .priority = ixia::IpPriority{.dscp = dscp},
+                    },
+            }
+            :
+            ixia::TrafficParameters{
+                // Just send enough traffic to fill up buffer queues.
+                .frame_count = 50000,
+                .frame_size_in_bytes = kFrameSizeInBytes,
+                .traffic_speed = kTrafficItemSpeed,
+                .ip_parameters =
+                    ixia::Ipv4TrafficParameters{
+                        .priority = ixia::IpPriority{.dscp = dscp},
+                    },
+            },
+            *testbed));
+        traffic_items.push_back(traffic_item);
+        buffer_config_by_traffic_item_name[traffic_name] = config_value;
       }
-      std::string traffic_name = absl::StrFormat(
-          "IPv6 packets with DSCP %d targeting queue '%s' with config %d", dscp,
-          queue_name, config_value);
-      ASSERT_OK_AND_ASSIGN(std::string traffic_item,
-                           ixia::SetUpTrafficItem(kIxiaIpv6SrcPortHandle,
-                                                  kIxiaDstPortHandle,
-                                                  traffic_name, *testbed));
-      ASSERT_OK(ixia::SetTrafficParameters(
-          traffic_item,
-          ixia::TrafficParameters{
-              .frame_count = 100'000,
-              .frame_size_in_bytes = kFrameSizeInBytes,
-              .traffic_speed = kTrafficItemSpeed,
-              .ip_parameters =
-                  ixia::Ipv6TrafficParameters{
-                      .priority = ixia::IpPriority{.dscp = dscp},
-                  },
-          },
-          *testbed));
-      traffic_items.push_back(traffic_item);
-      buffer_config_by_traffic_item_name[traffic_name] = config_value;
+      // IPv6.
+      {
+        ASSERT_THAT(kDscpsByQueueName,
+                    Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
+        int dscp = kDscpsByQueueName.at(queue_name).at(0);
+        int config_value;
+        switch (GetParam().config_to_be_tested) {
+          case kSharedStaticLimit:
+            config_value = *buffer_config.shared_static_limit;
+            break;
+          case kDedicatedBuffer:
+            config_value = *buffer_config.dedicated_buffer;
+            break;
+          case kSharedAlpha:
+          default:
+            config_value = *buffer_config.dynamic_limit_scaling_factor;
+        }
+        std::string traffic_name = absl::StrFormat(
+            "IPv6 packets with DSCP %d targeting queue '%s' with config %d",
+            dscp, queue_name, config_value);
+        ASSERT_OK_AND_ASSIGN(
+            std::string traffic_item,
+            ixia::SetUpTrafficItem(kIxiaIpv6SrcPortHandle, kIxiaDstPortHandle,
+                                   traffic_name, *testbed));
+        ASSERT_OK(ixia::SetTrafficParameters(
+            traffic_item, is_multicast ?
+            ixia::TrafficParameters{
+                .frame_count = 100'000,
+                .frame_size_in_bytes = kFrameSizeInBytes,
+                .traffic_speed = kTrafficItemSpeed,
+                .dst_mac = netaddr::MacAddress(0x33, 0x33, 0, 0, 0, dscp + 1),
+                .ip_parameters =
+                    ixia::Ipv6TrafficParameters{
+                        .dst_ipv6 = kIpv6McastAddresses[dscp],
+                        .priority = ixia::IpPriority{.dscp = dscp},
+                    },
+            }
+            :
+            ixia::TrafficParameters{
+                .frame_count = 100'000,
+                .frame_size_in_bytes = kFrameSizeInBytes,
+                .traffic_speed = kTrafficItemSpeed,
+                .ip_parameters =
+                    ixia::Ipv6TrafficParameters{
+                        .priority = ixia::IpPriority{.dscp = dscp},
+                    },
+            },
+            *testbed));
+        traffic_items.push_back(traffic_item);
+        buffer_config_by_traffic_item_name[traffic_name] = config_value;
+      }
+    }
+
+    // Start traffic.
+    LOG(INFO) << "starting traffic";
+    ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
+
+    LOG(INFO) << "traffic started -- sleeping for 5 seconds";
+    absl::SleepFor(absl::Seconds(5));
+
+    // Obtain traffic stats, and ensure traffic got forwarded according to
+    // config.
+    ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
+                         ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+
+    absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
+    for (auto &[traffic_item_name, stats] :
+         Ordered(kTrafficStats.stats_by_traffic_item())) {
+      ASSERT_OK_AND_ASSIGN(
+          int config, gutil::FindOrStatus(buffer_config_by_traffic_item_name,
+                                          traffic_item_name));
+
+      rx_frames_by_buffer_config[config] += stats.num_rx_frames();
+      LOG(INFO) << "Traffic item : " << traffic_item_name
+                << " Rx packets : " << stats.num_rx_frames();
+    }
+
+    int64_t lower_config_num_rx_frames = -1;
+    for (auto &[config, num_rx_frames] : Ordered(rx_frames_by_buffer_config)) {
+      LOG(INFO) << "Config: " << absl::StrFormat("%2d", config)
+                << " Num rx frames: " << num_rx_frames;
+      EXPECT_GT(num_rx_frames, lower_config_num_rx_frames);
+      lower_config_num_rx_frames = num_rx_frames;
     }
   }
-
-  // Start traffic.
-  LOG(INFO) << "starting traffic";
-  ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
-
-  LOG(INFO) << "traffic started -- sleeping for 5 seconds";
-  absl::SleepFor(absl::Seconds(5));
-
-  // Obtain traffic stats, and ensure traffic got forwarded according to
-  // config.
-  ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
-                       ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
-
-  absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
-  for (auto &[traffic_item_name, stats] :
-       Ordered(kTrafficStats.stats_by_traffic_item())) {
-    ASSERT_OK_AND_ASSIGN(int config,
-                         gutil::FindOrStatus(buffer_config_by_traffic_item_name,
-                                             traffic_item_name));
-
-    rx_frames_by_buffer_config[config] += stats.num_rx_frames();
-    LOG(INFO) << "Traffic item : " << traffic_item_name
-              << " Rx packets : " << stats.num_rx_frames();
-  }
-
-  int64_t lower_config_num_rx_frames = -1;
-  for (auto &[config, num_rx_frames] : Ordered(rx_frames_by_buffer_config)) {
-    LOG(INFO) << "Config: " << absl::StrFormat("%2d", config)
-              << " Num rx frames: " << num_rx_frames;
-    EXPECT_GT(num_rx_frames, lower_config_num_rx_frames);
-    lower_config_num_rx_frames = num_rx_frames;
-  }
-
   LOG(INFO) << "---------------- Test done ---------------------";
 }
 }  // namespace pins_test
