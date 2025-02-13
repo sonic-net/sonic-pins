@@ -229,14 +229,8 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 
   // Extract data from params.
   const p4::v1::ForwardingPipelineConfig& config = params.pipeline_config();
-  std::vector<p4::v1::Entity> entities;
-  {
-    entities.reserve(params.pi_entries().size());
-    // TODO: Add support for entities that are not table entries.
-    for (const auto& entry : params.pi_entries()) {
-      *entities.emplace_back().mutable_table_entry() = entry;
-    }
-  }
+  std::vector<p4::v1::Entity> entities(params.pi_entities().begin(),
+                                       params.pi_entities().end());
   std::vector<int> physical_ports(params.physical_port().begin(),
                                   params.physical_port().end());
   symbolic::TranslationPerType translation_per_type;

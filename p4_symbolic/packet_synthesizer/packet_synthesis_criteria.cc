@@ -187,6 +187,15 @@ absl::StatusOr<PacketSynthesisCriteria> MakeConjunction(
           lhs.ShortDebugString(), rhs.ShortDebugString()));
     }
   }
+
+  if (lhs.has_metadata() || rhs.has_metadata()) {
+    *merged_criteria.mutable_metadata() = lhs.metadata();
+    merged_criteria.mutable_metadata()
+        ->mutable_covered_entity_debug_strings()
+        ->Add(rhs.metadata().covered_entity_debug_strings().begin(),
+              rhs.metadata().covered_entity_debug_strings().end());
+  }
+
   return merged_criteria;
 }
 

@@ -80,6 +80,12 @@ message PacketSynthesisCriteria {
   TableEntryReachabilityCriteria table_entry_reachability_criteria = 4;
   PayloadCriteria payload_criteria = 5;
   PortCriteria ingress_port_criteria = 6;
+
+  // Axiluary information about the criteria, for debugging purposes only.
+  Metadata metadata = 7;
+  message Metadata {
+    repeated string covered_entity_debug_strings = 1;
+  }
 }
 // LINT.ThenChange(
 //  :criteria_variant,

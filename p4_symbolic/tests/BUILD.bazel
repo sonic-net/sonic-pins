@@ -4,9 +4,9 @@ package(
 )
 
 cc_test(
-    name = "sai_p4_component_test",
+    name = "sai_p4_integration_test",
     timeout = "long",
-    srcs = ["sai_p4_component_test.cc"],
+    srcs = ["sai_p4_integration_test.cc"],
     deps = [
         "//gutil:status_matchers",
         "//gutil:testing",
