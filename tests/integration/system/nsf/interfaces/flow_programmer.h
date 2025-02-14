@@ -16,6 +16,7 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_FLOW_PROGRAMMER_H_
 
 #include "absl/status/status.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 
 namespace pins_test {
@@ -31,7 +32,8 @@ class FlowProgrammer {
 
   // Programs a predefined flow on the SUT based on the given IP version and
   // protocol.
-  virtual absl::Status ProgramFlows(Testbed& testbed) = 0;
+  virtual absl::Status ProgramFlows(const p4::config::v1::P4Info &p4_info,
+                                    Testbed &testbed) = 0;
 
   // Clears all flows on the SUT.
   virtual absl::Status ClearFlows(Testbed& testbed) = 0;
