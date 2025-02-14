@@ -162,7 +162,7 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             return gutil::GrpcStatusToAbslStatus(
                 stub->SetControlState(&context, request, &response));
           },
-          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed) {
+          [&](thinkit::MirrorTestbed* testbed) {
             return absl::UnimplementedError("MirrorTestbed not implemented");
           }},
       testbed);
@@ -227,7 +227,7 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                 "Following errors were observed while validating traffic:\n\n",
                 absl::StrJoin(errors, "\n\n")));
           },
-          [&](std::unique_ptr<thinkit::MirrorTestbed>& testbed) {
+          [&](thinkit::MirrorTestbed* testbed) {
             return absl::UnimplementedError("MirrorTestbed not implemented");
           }},
       testbed);
