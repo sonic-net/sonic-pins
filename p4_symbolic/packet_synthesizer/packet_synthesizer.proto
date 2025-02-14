@@ -20,8 +20,6 @@ import "p4/v1/p4runtime.proto";
 import "p4_pdpi/packetlib/packetlib.proto";
 import "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.proto";
 
-// Protobuf equivalent of the struct in
-// third_party/pins_infra/p4_symbolic/symbolic/values.h.
 message TranslationData {
   // Static mapping between string values and ids.
   message StaticMapping {
