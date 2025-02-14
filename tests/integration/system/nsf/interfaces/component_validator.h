@@ -17,6 +17,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "glog/logging.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 
 namespace pins_test {
@@ -54,12 +55,14 @@ class ComponentValidator {
 
   // Called before starting every NSF test.
   virtual absl::Status OnInit(absl::string_view version, Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnInit";
     return absl::OkStatus();
   }
 
   // Called after programming flows on SUT.
   virtual absl::Status OnFlowProgram(absl::string_view version,
                                      Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnFlowProgram";
     return absl::OkStatus();
   }
 
@@ -67,24 +70,28 @@ class ComponentValidator {
   // Generator in the testbed.
   virtual absl::Status OnStartTraffic(absl::string_view version,
                                       Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnStartTraffic";
     return absl::OkStatus();
   }
 
   // Called after an image copy is performed on the SUT.
   virtual absl::Status OnImageCopy(absl::string_view version,
                                    Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnImageCopy";
     return absl::OkStatus();
   }
 
   // Called after a successful NSF reboot of the SUT.
   virtual absl::Status OnNsfReboot(absl::string_view version,
                                    Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnNsfReboot";
     return absl::OkStatus();
   }
 
   // Called after pushing config on the SUT.
   virtual absl::Status OnConfigPush(absl::string_view version,
                                     Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnConfigPush";
     return absl::OkStatus();
   }
 
@@ -92,12 +99,14 @@ class ComponentValidator {
   // Generator in the testbed.
   virtual absl::Status OnStopTraffic(absl::string_view version,
                                      Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnStopTraffic";
     return absl::OkStatus();
   }
 
   // Called after clearing up flows from the SUT.
   virtual absl::Status OnFlowCleanup(absl::string_view version,
                                      Testbed& testbed) {
+    LOG(INFO) << "Validating components: OnFlowCleanup";
     return absl::OkStatus();
   }
 };

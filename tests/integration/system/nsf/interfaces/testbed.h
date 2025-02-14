@@ -12,7 +12,7 @@
 namespace pins_test {
 
 using Testbed = std::variant<std::unique_ptr<thinkit::GenericTestbed>,
-                             std::unique_ptr<thinkit::MirrorTestbed>>;
+                             thinkit::MirrorTestbed*>;
 using TestbedInterface =
     std::variant<std::unique_ptr<thinkit::GenericTestbedInterface>,
                  std::unique_ptr<thinkit::MirrorTestbedInterface>>;
