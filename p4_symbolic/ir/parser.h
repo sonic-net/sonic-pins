@@ -31,4 +31,4 @@ absl::StatusOr<Dataplane> ParseToIr(
 
 }  // namespace p4_symbolic::ir
 
-#endif // P4_SYMBOLIC_PARSER_H_
+#endif  // P4_SYMBOLIC_PARSER_H_

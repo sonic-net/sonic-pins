@@ -14,54 +14,56 @@
 
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.h"
 
-#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/base/log_severity.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
-#include "absl/strings/str_split.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "google/protobuf/duration.pb.h"
 #include "gutil/status.h"
+#include "gutil/timer.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
-#include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/packet_synthesizer/util.h"
 #include "p4_symbolic/sai/sai.h"
+#include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic::packet_synthesizer {
-
 namespace {
+
 using ::p4_symbolic::symbolic::SolverState;
 
 // Given a Z3 model, prepares a SynthesizedPacket by extracting the relevant
 // fields from the model. The packet payload will be set to the contents of
 // `packet_payload` parameter.
 absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
-    const p4_symbolic::symbolic::SolverState& solver_state,
-    absl::string_view packet_payload, std::optional<bool> should_be_dropped) {
+    const SolverState& solver_state, absl::string_view packet_payload,
+    std::optional<bool> should_be_dropped) {
   z3::model model = solver_state.solver->get_model();
   ASSIGN_OR_RETURN(std::string packet,
-                   p4_symbolic::DeparseIngressPacket(solver_state, model));
-  ASSIGN_OR_RETURN(
-      const bool dropped,
-      p4_symbolic::EvalZ3Bool(solver_state.context.trace.dropped, model));
+                   DeparseIngressPacket(solver_state, model));
+  ASSIGN_OR_RETURN(const bool dropped,
+                   EvalZ3Bool(solver_state.context.trace.dropped, model));
   if (should_be_dropped.has_value() && dropped != *should_be_dropped) {
     return absl::FailedPreconditionError(absl::Substitute(
         "Z3 model's drop prediction ($0) is inconsistent with the expectation "
@@ -71,16 +73,33 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
   ASSIGN_OR_RETURN(const bool got_cloned,
                    EvalZ3Bool(solver_state.context.trace.got_cloned, model));
 
-  // Get mirrored from the model.
-  ASSIGN_OR_RETURN(
-      std::string mirror_session_id_valid_field_name,
+  // TODO: Remove this hack once we do not need to test older P4
+  // programs that still use 'mirror_session_id_valid' metadata. Get mirrored
+  // from the model.
+  absl::StatusOr<std::string> mirror_session_id_valid_field_name =
       GetUserMetadataFieldName("mirror_session_id_valid",
-                               solver_state.context.egress_headers));
-  ASSIGN_OR_RETURN(z3::expr mirror_session_id_valid,
-                   solver_state.context.egress_headers.Get(
-                       mirror_session_id_valid_field_name));
-  ASSIGN_OR_RETURN(const bool mirrored,
-                   EvalZ3Bool(mirror_session_id_valid == 1, model));
+                               solver_state.context.egress_headers);
+  absl::StatusOr<std::string> marked_to_mirror_field_name =
+      GetUserMetadataFieldName("marked_to_mirror",
+                               solver_state.context.egress_headers);
+  bool mirrored = false;
+
+  if (mirror_session_id_valid_field_name.ok()) {
+    ASSIGN_OR_RETURN(z3::expr mirror_session_id_valid,
+                     solver_state.context.egress_headers.Get(
+                         *mirror_session_id_valid_field_name));
+    ASSIGN_OR_RETURN(mirrored, EvalZ3Bool(mirror_session_id_valid == 1, model));
+  } else if (marked_to_mirror_field_name.ok()) {
+    ASSIGN_OR_RETURN(
+        z3::expr marked_to_mirror,
+        solver_state.context.egress_headers.Get(*marked_to_mirror_field_name));
+    ASSIGN_OR_RETURN(mirrored, EvalZ3Bool(marked_to_mirror == 1, model));
+  } else {
+    return absl::InvalidArgumentError(
+        "Unable to get mirror-related metadata, neither "
+        "`mirror_session_id_valid` "
+        "nor `marked_to_mirror`, from egress_headers.");
+  }
 
   // Get ingress port from the model.
   ASSIGN_OR_RETURN(std::string local_metadata_ingress_port,
@@ -100,26 +119,18 @@ absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
 
   // Set packet payload.
   // TODO: Move this logic to the client.
-  RET_CHECK(packet.payload().empty())
-      << "where packet = " << packet.DebugString();
-  *packet.mutable_payload() = packet_payload;
-
-  // Avoid using bad next_header that causes packet to be dropped.
-  // TODO: Move this logic to the client.
-  RET_CHECK(packet.headers_size() > 0)
-      << "where packet = " << packet.DebugString();
-  auto& last_header = *packet.mutable_headers(packet.headers_size() - 1);
-  if (last_header.ipv6_header().next_header() == "0x00") {
-    // Use protocol number reserved for experimentation/testing (RFC3692).
-    last_header.mutable_ipv6_header()->set_next_header(
-        packetlib::IpNextHeader(253));
-  } else if (last_header.ipv4_header().protocol() == "0x00") {
-    // Use protocol number reserved for experimentation/testing (RFC3692).
-    last_header.mutable_ipv4_header()->set_protocol(packetlib::IpProtocol(253));
+  {
+    packetlib::Packet parsed_packet = packetlib::ParsePacket(packet);
+    RET_CHECK(parsed_packet.payload().empty())
+        << "where parsed_packet = " << parsed_packet.DebugString();
   }
+  absl::StrAppend(&packet, packet_payload);
 
   SynthesizedPacket synthesized_packet;
   *synthesized_packet.mutable_packet() = packet;
+  *synthesized_packet.mutable_debug_info()
+       ->mutable_possibly_stale_parsed_version_of_packet() =
+      packetlib::ParsePacket(packet);
   // Note that we get local_metadata.ingress_port as opposed to
   // standard_metadata.ingress_port because the former is how the
   // controller views the ports. Refer to
@@ -225,7 +236,7 @@ absl::Status AddConstraints(const TableEntryReachabilityCriteria& criteria,
 
 absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
     const PacketSynthesisParams& params) {
-  Timer timer;
+  gutil::Timer timer;
 
   // Extract data from params.
   const p4::v1::ForwardingPipelineConfig& config = params.pipeline_config();
@@ -265,10 +276,10 @@ absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(
   PacketSynthesisResult result;
 
   // Timer to keep end to end time spent in this function.
-  Timer overall_timer;
+  gutil::Timer overall_timer;
   // Timer used for granular measurement of time spent on the main steps of this
   // function (gets reset after each step).
-  Timer granular_timer;
+  gutil::Timer granular_timer;
 
   // Add synthesized packet criterion as Z3 assertions. Modify the incremental
   // solver stack accordingly.
@@ -372,7 +383,7 @@ absl::Status PacketSynthesizer::AddFrameForCriteria(
       break;
     default:
       return gutil::InvalidArgumentErrorBuilder()
-              << "Unsupported criteria case " << criteria_case << " for "
+             << "Unsupported criteria case " << criteria_case << " for "
              << criteria.ShortDebugString();
   }
 
@@ -381,7 +392,7 @@ absl::Status PacketSynthesizer::AddFrameForCriteria(
 
 absl::StatusOr<int> PacketSynthesizer::PrepareZ3SolverStack(
     const PacketSynthesisCriteria& criteria) {
-  // Find the first index from which the stack needs to be poped. This is
+  // Find the first index from which the stack needs to be popped. This is
   // essentially the first index in which the currently encoded criteria is
   // different from the requested criteria.
   int pop_index = 0;

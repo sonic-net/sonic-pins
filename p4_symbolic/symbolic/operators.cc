@@ -208,11 +208,11 @@ absl::StatusOr<z3::expr> Or(const z3::expr &a, const z3::expr &b) {
 }
 absl::StatusOr<z3::expr> BitNeg(const z3::expr &a) { return ~a; }
 
-// Unlike the other operators, BitAnd does not padd to the maximum bitsize
+// Unlike the other operators, BitAnd does not pad to the maximum bitsize
 // of the two operands. Instead, it truncates to the min (by dropping the most
 // significant x bits).
 //
-// First, we show why this preserves correcntess, then we discuss why it's
+// First, we show why this preserves correctness, then we discuss why it's
 // necessary.
 //
 // Imagine we have an expression on the form "x & y" where x is of size 10 and y

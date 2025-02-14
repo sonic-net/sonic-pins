@@ -139,17 +139,17 @@ void ConvertFullyQualifiedNamesToAliases(ir::ConcreteTableEntry &entry,
   pdpi::IrTableEntry &pdpi_ir_entry =
       *entry.mutable_pdpi_ir_entity()->mutable_table_entry();
 
-// Check if the table specified by the table name exists.
+  // Check if the table specified by the table name exists.
   auto it = program.tables().find(pdpi_ir_entry.table_name());
   // If the table cannot be found with the table name, it may have been
   // converted to the alias already.
   if (it == program.tables().end()) return;
   const ir::Table &table = it->second;
 
-// Set table name that is compatible with PDPI.
+  // Set table name that is compatible with PDPI.
   pdpi_ir_entry.set_table_name(table.table_definition().preamble().alias());
 
-// Set action name that is compatible with PDPI.
+  // Set action name that is compatible with PDPI.
   auto convert_action_name = [&program](
                                  pdpi::IrActionInvocation &action_invocation) {
     const std::string &action_name = action_invocation.name();
@@ -161,7 +161,7 @@ void ConvertFullyQualifiedNamesToAliases(ir::ConcreteTableEntry &entry,
     action_invocation.set_name(action.action_definition().preamble().alias());
   };
 
-if (pdpi_ir_entry.has_action()) {
+  if (pdpi_ir_entry.has_action()) {
     convert_action_name(*pdpi_ir_entry.mutable_action());
   } else if (pdpi_ir_entry.has_action_set()) {
     for (pdpi::IrActionSetInvocation &action :

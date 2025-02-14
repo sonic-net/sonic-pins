@@ -98,7 +98,7 @@ std::string GetTableName(const SymbolicTableEntry& entry);
 
 // The priority of the given table entry, or 0 if the table doesn't support
 // priorities.
-int GetPriority(const TableEntry &entry);
+int GetPriority(const TableEntry& entry);
 
 }  // namespace p4_symbolic::ir
 

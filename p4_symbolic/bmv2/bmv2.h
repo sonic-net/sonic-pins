@@ -34,7 +34,7 @@ absl::StatusOr<P4Program> ParseBmv2JsonFile(const std::string &json_path);
 // file.
 absl::StatusOr<P4Program> ParseBmv2JsonString(const std::string &json_string);
 
-} // namespace bmv2
-} // namespace p4_symbolic
+}  // namespace bmv2
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_BMV2_BMV2_H_
+#endif  // P4_SYMBOLIC_BMV2_BMV2_H_

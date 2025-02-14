@@ -44,8 +44,8 @@ absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
     const ir::P4Program &program, const SymbolicPerPacketState &ingress_headers,
     z3::context &z3_context);
 
-} // namespace parser
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace parser
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_
+#endif  // PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_

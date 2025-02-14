@@ -29,18 +29,11 @@ cc_library(
         "//p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/symbolic",
+        "//p4_symbolic/symbolic:operators",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_test(
-    name = "util_test",
-    srcs = ["util_test.cc"],
-    deps = [
-        ":util",
-        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -106,6 +99,36 @@ cc_test(
         "//gutil:testing",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "packet_synthesizer",
+    srcs = ["packet_synthesizer.cc"],
+    hdrs = ["packet_synthesizer.h"],
+    deps = [
+        ":packet_synthesis_criteria",
+        ":packet_synthesis_criteria_cc_proto",
+        ":packet_synthesizer_cc_proto",
+        ":util",
+        "//gutil:status",
+        "//gutil:timer",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/packetlib",
+        "//p4_symbolic:z3_util",
+        "//p4_symbolic/ir:ir_cc_proto",
+        "//p4_symbolic/sai",
+        "//p4_symbolic/symbolic",
+        "//p4_symbolic/symbolic:values",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_github_z3prover_z3//:api",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 

@@ -59,4 +59,4 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
 }  // namespace symbolic
 }  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_TABLE_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_TABLE_H_
