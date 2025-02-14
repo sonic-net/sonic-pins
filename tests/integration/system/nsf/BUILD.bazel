@@ -31,8 +31,10 @@ cc_library(
         "//lib/gnmi:gnmi_helper",
         "//lib/utils:generic_testbed_utils",
         "//lib/validator:validator_lib",
+        "//p4_pdpi:p4_runtime_session",
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:testbed",
+        "//tests/lib:switch_test_setup_helpers",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
         "//thinkit:mirror_testbed",
@@ -72,10 +74,12 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],
+    alwayslink = True,
 )
 
 cc_library(

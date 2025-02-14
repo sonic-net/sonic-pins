@@ -20,6 +20,7 @@
 
 #include "absl/flags/flag.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -75,7 +76,8 @@ absl::Status NsfUpgradeTest::NsfUpgrade(const std::string& prev_version,
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
                                      component_validators_, prev_version,
                                      testbed_));
-  RETURN_IF_ERROR(CaptureDbState());
+  RETURN_IF_ERROR(StoreSutDebugArtifacts(
+      absl::StrCat(prev_version, "_before_nsf_reboot"), testbed_));
 
   // P4 Snapshot before programming flows and starting the traffic.
   ReadResponse p4flow_snapshot1 = TakeP4FlowSnapshot();
@@ -99,7 +101,8 @@ absl::Status NsfUpgradeTest::NsfUpgrade(const std::string& prev_version,
 
   if (absl::GetFlag(FLAGS_do_nsf_upgrade)) {
     // Copy image to the switch for installation.
-    RETURN_IF_ERROR(ImageCopy(version, testbed_, *ssh_client_));
+    ASSIGN_OR_RETURN(std::string image_version,
+                     ImageCopy(version, testbed_, *ssh_client_));
     RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnImageCopy,
                                        component_validators_, version,
                                        testbed_));
@@ -113,13 +116,15 @@ absl::Status NsfUpgradeTest::NsfUpgrade(const std::string& prev_version,
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
                                      component_validators_, version, testbed_));
   RETURN_IF_ERROR(ValidateSutState(version, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateDbState());
+  RETURN_IF_ERROR(StoreSutDebugArtifacts(
+      absl::StrCat(prev_version, "_after_nsf_reboot"), testbed_));
 
   // P4 Snapshot after upgrade and NSF reboot.
   ReadResponse p4flow_snapshot3 = TakeP4FlowSnapshot();
 
   // Push the new config and validate.
-  RETURN_IF_ERROR(PushConfig(GetParam().gnmi_config, testbed_, *ssh_client_));
+  RETURN_IF_ERROR(PushConfig(GetParam().gnmi_config, GetParam().p4_info,
+                             testbed_, *ssh_client_));
   RETURN_IF_ERROR(ValidateSutState(version, testbed_, *ssh_client_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
                                      component_validators_, version, testbed_));
@@ -159,7 +164,8 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   const std::string last_image = "last_image";
   const std::string current_image = "current_image";
 
-  ASSERT_OK(InstallRebootPushConfig(third_last_image, GetParam().gnmi_config,
+  ASSERT_OK(InstallRebootPushConfig(GetParam().stack_image_label,
+                                    GetParam().gnmi_config, GetParam().p4_info,
                                     testbed_, *ssh_client_));
 
   if (absl::GetFlag(FLAGS_do_nsf_upgrade)) {
