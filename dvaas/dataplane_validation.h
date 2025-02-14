@@ -148,6 +148,13 @@ struct DataplaneValidationParams {
   // Parameters in `failure_enhancement_options` are assigned default values.
   FailureEnhancementOptions failure_enhancement_options;
 
+  // A list of labelers (go/test-vector-labeling) that are applied to each
+  // `PacketTestRun`. The labels may be extracted based on various
+  // characteristics such as packet injection time, tables hit, punted, dropped,
+  // etc.
+  std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+      labelers;
+
   // If true, collect and print the switch counters.
   bool reset_and_collect_counters = true;
 
