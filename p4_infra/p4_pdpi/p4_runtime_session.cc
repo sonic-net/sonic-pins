@@ -141,7 +141,7 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
     return gutil::InternalErrorBuilder() << "Received device id doesn't match: "
                                          << response.ShortDebugString();
   }
-  //TODO Enable this check once p4rt app supports role.
+  // TODO: Enable this check once p4rt app supports role.
   // if (response.arbitration().role().name() != session->role_) {
   //   return gutil::InternalErrorBuilder() << "Received role doesn't match: "
   //                                        << response.ShortDebugString();
@@ -163,7 +163,6 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   // won't implicitly wrap the return expressions in std::move(). Then, the case
   // here will trigger the copy of the unique_ptr, which is invalid. Thus, we
   // need to explicitly std::move the returned object here.
-  // See:go/totw/labs/should-i-return-std-move.
   return std::move(session);
 }
 
@@ -645,8 +644,8 @@ absl::Status ClearEntities(
   absl::c_reverse(entities);
 
   // Get current switch version to determine if we need to mask old errors.
-  // TODO: Remove version check when the P4Info version in release is
-  // equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST. Almost
+  // TODO: Remove version check when the P4Info version in release
+  // is equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST. Almost
   // certainly safe to remove by April 2024.
   ASSIGN_OR_RETURN(
       gutil::Version current_version,
@@ -661,7 +660,6 @@ absl::Status ClearEntities(
         << absl::StrJoin(entities, "\n");
   } else {
     // Ideally, whether to use batches or not should be determined by a P4Info
-    // option that will be introduced in b/259194587.
     RETURN_IF_ERROR(SplitSortedUpdatesIntoBatchesAndSend(
         session, info, CreatePiUpdates(entities, Update::DELETE)))
         << "when attempting to delete the following entities: "
