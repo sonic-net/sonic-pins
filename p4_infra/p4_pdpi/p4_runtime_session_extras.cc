@@ -88,7 +88,7 @@ absl::Status InstallIrEntities(P4RuntimeSession& p4rt,
                                      "to pull P4Info from switch: ");
 
   // Convert entries to PI representation.
-  // TODO: Remove this option once we have a better way to handle
+  // TODO: b/369658608 - Remove this option once we have a better way to handle
   // unsupported fields.
   // `allow_unsupported` is a workaround that allows BMv2 on DVaaS to install
   // entities from the switch.
@@ -211,7 +211,7 @@ absl::StatusOr<IrEntities> ReadIrEntitiesSorted(P4RuntimeSession& p4rt) {
 
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
                    ReadPiEntitiesSorted(p4rt));
-  // TODO: Remove this option once we have a better way to handle
+  // TODO: b/369658608 - Remove this option once we have a better way to handle
   // unsupported fields.
   // `allow_unsupported` is a workaround that allows BMv2 on DVaaS to read
   // entities from the switch.

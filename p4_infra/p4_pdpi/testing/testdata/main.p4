@@ -278,7 +278,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
   }
 
   // Action that refers to both fields of two_match_fields_table.
-  // TODO Add double reference.
+  // TODO: b/277738938) - Add double reference.
   action referring_to_two_match_fields_action(@id(1)
   @refers_to(two_match_fields_table, id_1)
                          string_id_t referring_id_1,
@@ -451,12 +451,12 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     // Metadata constraint.
     ::priority > 500;
     // P4runtime translated string constraint without reference.
-    // TODO: This constraint should read
+    // TODO: b/197988347 - This constraint should read
     // `nonreferring_str != ''`, but p4-constraints does not currently
     // support strings.
     nonreferring_str != 0;
     // P4runtime translated string constraint with reference.
-    // TODO: This constraint should read
+    // TODO: b/197988347 - This constraint should read
     // `referring_str != 'some_str'` (or equals), but p4-constraints does not
     // currently support strings. The current constraint is redundant.
     referring_str::mask != 0 -> referring_str != 0;

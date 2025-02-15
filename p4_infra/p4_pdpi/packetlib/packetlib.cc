@@ -1604,13 +1604,15 @@ void PspHeaderInvalidReasons(const PspHeader& header,
                                   "reserved0: Must be 0x0, but was ",
                                   header.reserved0(), " instead."));
   }
-  bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
-      header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
-  if (!reserved1_invalid && header.reserved1() != "0x1") {
-    output.push_back(absl::StrCat(field_prefix,
-                                  "reserved1: Must be 0x1, but was ",
-                                  header.reserved1(), " instead."));
-  }
+
+  // TODO: Enable once DVaaS handles invalid packets correctly.
+  // bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
+  //     header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
+  // if (!reserved1_invalid && header.reserved1() != "0x1") {
+  //   output.push_back(absl::StrCat(field_prefix,
+  //                                 "reserved1: Must be 0x1, but was ",
+  //                                 header.reserved1(), " instead."));
+  // }
 }
 
 }  // namespace
@@ -2312,7 +2314,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           changes = true;
           break;
         }
-        // TODO: Cleanup the computed field logic for hop-by-hop
+        // TODO: b/386218372 - Cleanup the computed field logic for hop-by-hop
         // options to overwrite the options and padding to a more strict and
         // correct state.
         if (overwrite) {

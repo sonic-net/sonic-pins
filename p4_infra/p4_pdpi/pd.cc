@@ -103,7 +103,7 @@ std::string SnakeCaseToPascalCase(absl::string_view input) {
 
 absl::StatusOr<std::string> ProtobufFieldNameToP4Name(
     absl::string_view proto_field_name, P4EntityKind entity_kind) {
-  // TODO: validate the name is in snake case.
+  // TODO: smolkaj - validate the name is in snake case.
   if (absl::ConsumeSuffix(&proto_field_name, ProtoFieldSuffix(entity_kind))) {
     return std::string(proto_field_name);
   }
@@ -564,7 +564,7 @@ absl::Status AddPdMeterCounterDataToIrEntry(
 
 absl::StatusOr<std::string> P4NameToProtobufMessageName(
     absl::string_view p4_name, P4EntityKind entity_kind) {
-  // TODO: validate the name is in snake case.
+  // TODO: heule - validate the name is in snake case.
   const absl::string_view suffix = ProtoMessageSuffix(entity_kind);
   // Append suffix, unless it is redundant.
   return absl::StrCat(absl::StripSuffix(SnakeCaseToPascalCase(p4_name), suffix),
@@ -573,7 +573,7 @@ absl::StatusOr<std::string> P4NameToProtobufMessageName(
 
 absl::StatusOr<std::string> P4NameToProtobufFieldName(
     absl::string_view p4_name, P4EntityKind entity_kind) {
-  // TODO: validate the name is in snake case.
+  // TODO: heule - validate the name is in snake case.
   return absl::StrCat(p4_name, ProtoFieldSuffix(entity_kind));
 }
 
@@ -1352,7 +1352,6 @@ absl::Status IrPacketIoToPd(const IrP4Info &info, const std::string &kind,
     const pdpi::IrPacketIoMetadataDefinition &metadata_definition =
         **status_or_metadata_definition;
 
-    // See go/pdpi-padding.
     if (metadata_definition.is_padding()) {
       invalid_reasons.push_back(absl::StrCat(
           kNewBullet, "Metadata with name '", name,
@@ -2646,7 +2645,7 @@ absl::StatusOr<T> PdPacketIoToIr(const IrP4Info &info, const std::string &kind,
   }
   std::vector<std::string> invalid_reasons;
   for (const auto &[name, metadata] : Ordered(metadata_by_name)) {
-    // Skip metadata with @padding annotation (go/pdpi-padding).
+    // Skip metadata with @padding annotation.
     if (metadata.is_padding()) continue;
 
     const absl::StatusOr<std::string> &pd_entry =

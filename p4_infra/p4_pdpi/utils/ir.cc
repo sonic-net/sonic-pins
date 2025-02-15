@@ -67,7 +67,8 @@ using ::pdpi::IrValue;
 
 absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
     const std::string &bytes, int expected_bitwidth) {
-  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
+  // If the bytestring length is zero, the server always rejects the string.
+  // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-bytestrings
   if (bytes.empty()) {
     return gutil::OutOfRangeErrorBuilder()
            << "Bytestrings must have non-zero length.";
@@ -188,7 +189,8 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
 absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
                                                      const int bitwidth,
                                                      const std::string &bytes) {
-  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
+  // If the bytestring length is zero, the server always rejects the string.
+  // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-bytestrings
   if (bytes.empty()) {
     return gutil::OutOfRangeErrorBuilder()
            << "Bytestrings must have non-zero length.";
@@ -328,7 +330,8 @@ absl::StatusOr<std::string> IrValueToNormalizedByteString(
       return ipv6.ToPaddedByteString();
     }
     case IrValue::kStr: {
-      // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
+      // If the bytestring length is zero, the server always rejects the string.
+      // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-bytestrings
       if (ir_value.str().empty()) {
         return gutil::OutOfRangeErrorBuilder()
                << "Bytestrings must have non-zero length.";

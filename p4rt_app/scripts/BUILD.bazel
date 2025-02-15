@@ -22,8 +22,9 @@ cc_library(
     hdrs = ["p4rt_tool_helpers.h"],
     deps = [
         "//p4_infra/p4_pdpi:p4_runtime_session",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/flags:flag",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_github_google_glog//:glog",
+	"@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",

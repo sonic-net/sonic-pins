@@ -109,7 +109,7 @@ absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
     const std::string& bytes, int expected_bitwidth);
 
 // Convert an arbitrary byte string to its canonical form.
-// TODO: Move to byte_string.h and rename appropriately.
+// TODO: smolkaj - Move to byte_string.h and rename appropriately.
 std::string ArbitraryToCanonicalByteString(std::string bytes);
 
 // Convert the given byte string into a uint value.

@@ -823,7 +823,7 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info& info, const std::string& kind,
         **status_or_metadata_definition_ptr;
 
     // Metadata with @padding annotation must be all zeros and must not be
-    // included in IR representation (go/pdpi-padding).
+    // included in IR representation.
     if (metadata_definition.is_padding()) {
       if (!IsAllZeros(metadata.value())) {
         invalid_reasons.push_back(absl::StrCat(
@@ -1209,7 +1209,7 @@ absl::Status IrActionSetToPi(
 }
 
 // Creates a piece of padding metadata. Metadata with the @padding annotation
-// must contain a zero value bytestring (go/pdpi-padding).
+// must contain a zero value bytestring.
 p4::v1::PacketMetadata CreatePaddingMetadata(uint32_t metadata_id) {
   p4::v1::PacketMetadata metadata;
   metadata.set_metadata_id(metadata_id);
@@ -1260,7 +1260,7 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info& info, const std::string& kind,
         **status_or_metadata_definition_ptr;
 
     // Metadata with @padding annotation must not be present in IR
-    // representation (go/pdpi-padding).
+    // representation.
     if (metadata_definition.is_padding()) {
       invalid_reasons.push_back(absl::StrCat(
           kNewBullet, "Metadata '", metadata_definition.metadata().name(),
@@ -1294,8 +1294,8 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info& info, const std::string& kind,
     *result.add_metadata() = pi_metadata;
   }
   // Check for missing metadata
-  for (const auto& [name, metadata] : metadata_by_name) {
-    // Insert padding metadata into PI representation (go/pdpi-padding).
+  for (const auto &[name, metadata] : metadata_by_name) {
+    // Insert padding metadata into PI representation.
     if (metadata.is_padding()) {
       *result.add_metadata() = CreatePaddingMetadata(metadata.metadata().id());
     } else if (!used_metadata_names.contains(name)) {

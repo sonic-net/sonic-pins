@@ -136,7 +136,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> PdTableEntriesToPiEntities(
 // support 'MulticastGroupTableEntry', returning an InvalidArgumentError if one
 // is provided.
 //
-// TODO: Remove deprecated functions from header file.
+// TODO: b/292582281 - Remove deprecated functions from header file.
 ABSL_DEPRECATED("Use PdTableEntryToPiEntity instead")
 absl::StatusOr<p4::v1::TableEntry> PartialPdTableEntryToPiTableEntry(
     const IrP4Info &info, const google::protobuf::Message &pd,
@@ -286,7 +286,7 @@ absl::StatusOr<IrEntities> PdTableEntriesToIrEntities(
 // support 'MulticastGroupTableEntry', returning an InvalidArgumentError if one
 // is provided.
 //
-// TODO: Remove deprecated functions from header file.
+// TODO: b/292582281 - Remove deprecated functions from header file.
 ABSL_DEPRECATED("Use PdTableEntryToIrEntity instead")
 absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,

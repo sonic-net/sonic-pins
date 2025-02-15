@@ -313,12 +313,12 @@ message ReferringToReferringByMatchFieldTableEntry {
 // ## Metadata constraint.
 //   ::priority > 500;
 // ## P4runtime translated string constraint without reference.
-// ## TODO: This constraint should read
+// ## TODO: b/197988347 - This constraint should read
 // ## `nonreferring_str != ''`, but p4-constraints does not currently
 // ## support strings.
 //   nonreferring_str != 0;
 // ## P4runtime translated string constraint with reference.
-// ## TODO: This constraint should read
+// ## TODO: b/197988347 - This constraint should read
 // ## `referring_str != 'some_str'` (or equals), but p4-constraints does not
 // ## currently support strings. The current constraint is redundant.
 //   referring_str::mask != 0 -> referring_str != 0;

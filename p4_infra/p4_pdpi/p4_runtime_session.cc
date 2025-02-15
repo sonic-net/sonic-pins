@@ -141,13 +141,13 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
     return gutil::InternalErrorBuilder() << "Received device id doesn't match: "
                                          << response.ShortDebugString();
   }
-  // TODO Enable this check once p4rt app supports role.
-  //  if (response.arbitration().role().name() != session->role_) {
-  //    return gutil::InternalErrorBuilder() << "Received role doesn't match: "
-  //                                         << response.ShortDebugString();
-  //  }
-  //  If we want to ensure that this session has become primary, then we check,
-  //  returning the error that we get in the response otherwise.
+  // TODO: tyxia - Enable this check once p4rt app supports role.
+  // if (response.arbitration().role().name() != session->role_) {
+  //   return gutil::InternalErrorBuilder() << "Received role doesn't match: "
+  //                                        << response.ShortDebugString();
+  // }
+  // If we want to ensure that this session has become primary, then we check,
+  // returning the error that we get in the response otherwise.
   if (error_if_not_primary) {
     RETURN_IF_ERROR(gutil::ToAbslStatus(response.arbitration().status()))
             .SetPrepend()
@@ -163,7 +163,6 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   // won't implicitly wrap the return expressions in std::move(). Then, the case
   // here will trigger the copy of the unique_ptr, which is invalid. Thus, we
   // need to explicitly std::move the returned object here.
-  // See:go/totw/labs/should-i-return-std-move.
   return std::move(session);
 }
 
@@ -503,7 +502,7 @@ absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
   // P4RT App bug is fixed, it will only read
   // `multicast_group_entry`, but we will eventually want to read
   // `clone_session_entry` again.
-  // TODO: Remove the workaround that allows `ReadPiEntities()`
+  // TODO: b/332944773 - Remove the workaround that allows `ReadPiEntities()`
   // read entities without failing.
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
@@ -641,8 +640,8 @@ absl::Status ClearEntities(P4RuntimeSession& session) {
   absl::c_reverse(entities);
 
   // Get current switch version to determine if we need to mask old errors.
-  // TODO: Remove version check when the P4Info version in release is
-  // equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST. Almost
+  // TODO: b/317362020 - Remove version check when the P4Info version in release
+  // is equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST. Almost
   // certainly safe to remove by April 2024.
   ASSIGN_OR_RETURN(
       gutil::Version current_version,
