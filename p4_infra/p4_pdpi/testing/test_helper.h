@@ -1,4 +1,3 @@
-p4_infra/p4_pdpi/testing/test_helper.h
 // Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

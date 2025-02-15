@@ -17,7 +17,7 @@
 #include "absl/status/status.h"
 #include "boost/bimap.hpp"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 
 namespace p4rt_app {

@@ -943,6 +943,7 @@ TEST(ParseIrTableReferences, FailsWithRefersToUnknown) {
               StatusIs(absl::StatusCode::kNotFound));
 }
 
+TEST(ParseIrTableReferences, FailsWithRefersToAction) {
   // Setup: Create p4 info.
   auto dst_action = IrActionDefinitionBuilder()
                         .preamble(R"pb(id: 1)pb")

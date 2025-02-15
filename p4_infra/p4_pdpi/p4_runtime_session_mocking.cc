@@ -32,7 +32,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4/v1/p4runtime_mock.grpc.pb.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
-// TODO: Remove version setting once the version check in
+// TODO: b/317362020 - Remove version setting once the version check in
 // `p4_runtime_session.cc` is removed.
 #include "sai_p4/instantiations/google/versions.h"
 
@@ -246,7 +246,7 @@ void MockClearEntities(p4::v1::MockP4RuntimeStub& stub, const P4Info& p4info,
                     p4::v1::GetForwardingPipelineConfigResponse*
                         get_pipeline_response) {
         *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
-        // TODO: Remove version setting once the version check in
+        // TODO: b/317362020 - Remove version setting once the version check in
         // `p4_runtime_session.cc` is removed.
         get_pipeline_response->mutable_config()
             ->mutable_p4info()

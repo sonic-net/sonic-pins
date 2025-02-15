@@ -98,7 +98,6 @@ cc_test(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "packetlib_test_runner",
     srcs = ["packetlib_test_runner.cc"],

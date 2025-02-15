@@ -723,7 +723,7 @@ TEST(ReadIrEntities, PullsP4InfoFromSwitchAndReadsPdpiTranslatedEntities) {
     // table entries in read order.
     ASSERT_OK_AND_ASSIGN(IrEntities expected_ir_entities_unsorted,
                          PiEntitiesToIr(ir_p4info, kPiEntities));
-    // TODO: Use `IgnoringRepeatedFieldOrdering` once that is open
+    // TODO: smolkaj - Use `IgnoringRepeatedFieldOrdering` once that is open
     // source.
     EXPECT_THAT(ReadIrEntities(*p4rt_session),
                 IsOkAndHolds(EqualsProto(expected_ir_entities_unsorted)));

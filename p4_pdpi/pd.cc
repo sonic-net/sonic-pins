@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_pdpi/pd.h"
+#include "p4_infra/p4_pdpi/pd.h"
 
 #include <stdint.h>
 
@@ -41,12 +41,12 @@
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
-#include "p4_pdpi/translation_options.h"
-#include "p4_pdpi/utils/ir.h"
+#include "p4_infra/p4_pdpi/internal/ordered_map.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/p4_pdpi/translation_options.h"
+#include "p4_infra/p4_pdpi/utils/ir.h"
 
 namespace pdpi {
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_pdpi/p4_runtime_matchers.h"
+#include "p4_infra/p4_pdpi/p4_runtime_matchers.h"
 
 #include <ostream>
 
@@ -20,8 +20,8 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/packetlib/packetlib.h"
-#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace pdpi::internal {
 

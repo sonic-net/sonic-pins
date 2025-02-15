@@ -1,4 +1,3 @@
-p4_infra/p4_pdpi/utils/ir_test.cc
 // Copyright 2025 Google LLC
 
 //

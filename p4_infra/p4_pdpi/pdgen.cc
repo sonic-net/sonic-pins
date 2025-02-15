@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #include "absl/flags/flag.h"
@@ -42,7 +43,7 @@ ABSL_FLAG(
     "Optional field number used for multicast_group_table_entry in TableEntry "
     "oneof. If set to nullopt, then multicast_group_table_entry is omitted "
     "from PD proto. Defaults to 2047 to avoid conflicts with other tables and "
-    "remain small go/fast/11#small-field-number");
+    "remain small");
 
 constexpr char kUsage[] =
     "--p4info=<file> --package=<package> --roles=<comma-separated-role-list>";
