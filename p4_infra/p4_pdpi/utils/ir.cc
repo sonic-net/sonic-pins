@@ -67,6 +67,7 @@ using ::pdpi::IrValue;
 
 absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
     const std::string &bytes, int expected_bitwidth) {
+  // If the bytestring length is zero, the server always rejects the string.
   if (bytes.empty()) {
     return gutil::OutOfRangeErrorBuilder()
            << "Bytestrings must have non-zero length.";
@@ -187,6 +188,7 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
 absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
                                                      const int bitwidth,
                                                      const std::string &bytes) {
+  // If the bytestring length is zero, the server always rejects the string.
   if (bytes.empty()) {
     return gutil::OutOfRangeErrorBuilder()
            << "Bytestrings must have non-zero length.";
@@ -326,6 +328,7 @@ absl::StatusOr<std::string> IrValueToNormalizedByteString(
       return ipv6.ToPaddedByteString();
     }
     case IrValue::kStr: {
+      // If the bytestring length is zero, the server always rejects the string.
       if (ir_value.str().empty()) {
         return gutil::OutOfRangeErrorBuilder()
                << "Bytestrings must have non-zero length.";

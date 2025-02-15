@@ -30,9 +30,8 @@
 
 namespace pdpi {
 
-// Sequencing functionality, see go/p4-sequencing for details. All APIs are
-// stable, i.e. for entries without constraint that could appear in any order,
-// the input order is preserved.
+// Sequencing functionality. All APIs are stable, i.e. for entries without
+// constraint that could appear in any order, the input order is preserved.
 
 // Returns a list of write requests, such that updates are sequenced correctly
 // when the write requests are sent in order. Order within a write request is

@@ -1352,7 +1352,6 @@ absl::Status IrPacketIoToPd(const IrP4Info &info, const std::string &kind,
     const pdpi::IrPacketIoMetadataDefinition &metadata_definition =
         **status_or_metadata_definition;
 
-    // See go/pdpi-padding.
     if (metadata_definition.is_padding()) {
       invalid_reasons.push_back(absl::StrCat(
           kNewBullet, "Metadata with name '", name,
@@ -2646,7 +2645,7 @@ absl::StatusOr<T> PdPacketIoToIr(const IrP4Info &info, const std::string &kind,
   }
   std::vector<std::string> invalid_reasons;
   for (const auto &[name, metadata] : Ordered(metadata_by_name)) {
-    // Skip metadata with @padding annotation (go/pdpi-padding).
+    // Skip metadata with @padding annotation.
     if (metadata.is_padding()) continue;
 
     const absl::StatusOr<std::string> &pd_entry =

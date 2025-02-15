@@ -207,7 +207,9 @@ message IrMatchFieldDefinition {
   repeated IrMatchFieldReference references = 3 [deprecated = true];
   // True if match field has @unsupported annotation, otherwise false. Indicates
   // that the match field is not (yet) supported by the target.
+  /* copybara:strip_begin(Internal-only) */
   // See go/unblocking-sai-p4 for more details.
+  /* copybara:strip_end */
   bool is_unsupported = 14;
 }
 
@@ -260,7 +262,9 @@ message IrTableDefinition {
   string role = 12;
   // True if table has @unsupported annotation, otherwise false. Indicates that
   // the table is not (yet) supported by the target.
+  /* copybara:strip_begin(Internal-only) */
   // See go/unblocking-sai-p4 for more details.
+  /* copybara:strip_end */
   bool is_unsupported = 14;
   // `IrTableReference` where this table is the `source_table`.
   repeated IrTableReference outgoing_references = 15;
@@ -301,7 +305,9 @@ message IrActionDefinition {
   map<string, IrActionParamDefinition> params_by_name = 3;
   // True if action has @unsupported annotation, otherwise false. Indicates that
   // the action is not (yet) supported by the target.
+  /* copybara:strip_begin(Internal-only) */
   // See go/unblocking-sai-p4 for more details.
+  /* copybara:strip_end */
   bool is_unsupported = 4;
 }
 
@@ -318,9 +324,12 @@ message IrPacketIoMetadataDefinition {
   // Required, the format of this parameter as deduced from the parameter type
   // and annotations.
   Format format = 2;
-  // True if metadata field has @padding (go/pdpi-padding) annotation present,
-  // otherwise false. Indicates that metadata is excluded from IR and PD proto,
-  // and zero-valued in PI proto.
+  // True if metadata field has @padding annotation present, otherwise false.
+  // Indicates that metadata is excluded from IR and PD proto, and zero-valued
+  // in PI proto.
+  /* copybara:strip_begin(Internal-only) */
+  // See go/pdpi-padding for more details.
+  /* copybara:strip_end */
   bool is_padding = 3;
 }
 

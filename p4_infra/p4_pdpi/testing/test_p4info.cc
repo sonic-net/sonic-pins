@@ -13,9 +13,11 @@
 // limitations under the License.
 #include "p4_infra/p4_pdpi/testing/test_p4info.h"
 
+#include <string>
+#include <utility>
+
 #include "absl/log/check.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
@@ -26,12 +28,10 @@ namespace pdpi {
 
 using ::google::protobuf::TextFormat;
 using ::gutil::FileToc;
-using p4::config::v1::P4Info;
-using pdpi::IrP4Info;
-
-// Adapted from go/totw/128.
+using ::p4::config::v1::P4Info;
+using ::pdpi::IrP4Info;
 const P4Info& GetTestP4Info() {
-  // Safe static object initialization following go/totw/110.
+  // Safe static object initialization.
   static const P4Info* info = [] {
     const FileToc* const toc = test_p4info_embed_create();
     std::string data(toc[0].data, toc[0].size);
@@ -45,7 +45,7 @@ const P4Info& GetTestP4Info() {
 }
 
 const IrP4Info& GetTestIrP4Info() {
-  // Safe static object initialization following go/totw/110.
+  // Safe static object initialization.
   static const IrP4Info* info = [] {
     absl::StatusOr<IrP4Info> ir_p4info = pdpi::CreateIrP4Info(GetTestP4Info());
     CHECK(ir_p4info.status().ok())  // Crash ok: TAP rules out failures.

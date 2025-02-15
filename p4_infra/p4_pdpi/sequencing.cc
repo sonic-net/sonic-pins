@@ -502,7 +502,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
   std::vector<p4::v1::Entity> unreachable_entities;
   unreachable_entities.reserve(unreachable_indices.size());
 
-  // TODO: verios - remove sort once tests are updated to handle
+  // TODO: Remove sort once tests are updated to handle
   // non-determinism.
   std::vector<int> sorted_unreachable_indices(unreachable_indices.begin(),
                                               unreachable_indices.end());

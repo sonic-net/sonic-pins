@@ -100,7 +100,6 @@ cc_library(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "hex_string_test_runner",
     srcs = ["hex_string_test_runner.cc"],
@@ -132,7 +131,6 @@ cc_library(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "decimal_string_test_runner",
     srcs = ["decimal_string_test_runner.cc"],

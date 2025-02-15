@@ -82,12 +82,10 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
     ],
 )
 
-# Auxiliary target, see go/totw/128.
 cc_embed_data(
     name = "test_p4info_embed",
     srcs = ["main-p4info.pb.txt"],
@@ -148,7 +146,6 @@ cc_library(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "sequencing_test_runner",
     srcs = ["sequencing_test_runner.cc"],
@@ -242,7 +239,6 @@ cmd_diff_test(
     tools = [":references_test_runner"],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "info_test_runner",
     srcs = ["info_test_runner.cc"],
@@ -275,7 +271,6 @@ cmd_diff_test(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "rpc_test_runner",
     srcs = ["rpc_test_runner.cc"],
@@ -315,7 +310,6 @@ cmd_diff_test(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "packet_io_test_runner",
     srcs = ["packet_io_test_runner.cc"],
@@ -349,7 +343,6 @@ cmd_diff_test(
     ],
 )
 
-# go/golden-test-with-coverage
 cc_test(
     name = "table_entry_test_runner",
     srcs = ["table_entry_test_runner.cc"],
