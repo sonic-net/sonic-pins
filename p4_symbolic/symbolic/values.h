@@ -51,12 +51,11 @@ struct TranslationData {
 };
 
 // This class is responsible for translating string values into consistent
-// numberic ids, that can then be used to create bitvector values to use in
-// z3.
+// numeric ids, that can then be used to create bitvector values to use in Z3.
 // It also handles the reverse translation of previously allocated ids to
 // their corresponding string value.
 class IdAllocator {
-public:
+ public:
   IdAllocator(const TranslationData &translation_data);
 
   // Allocates an integer ID to this string identifier. If a static mapping is
@@ -170,8 +169,8 @@ absl::StatusOr<pdpi::IrValue> TranslateZ3ValueStringToIrValue(
     const std::optional<std::string> &type_name,
     const P4RuntimeTranslator &translator, const pdpi::Format &format);
 
-} // namespace values
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace values
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_VALUES_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_VALUES_H_

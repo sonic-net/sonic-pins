@@ -93,7 +93,7 @@ class SymbolicGuardedMap {
   const_iterator begin() const noexcept { return this->map_.cbegin(); }
   const_iterator end() const noexcept { return this->map_.cend(); }
 
-private:
+ private:
   // The underlying map storing the keys and their values.
   absl::btree_map<std::string, z3::expr> map_;
 
@@ -102,7 +102,7 @@ private:
       : map_(std::move(map)) {}
 };
 
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_GUARDED_MAP_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_GUARDED_MAP_H_

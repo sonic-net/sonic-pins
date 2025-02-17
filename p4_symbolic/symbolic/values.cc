@@ -31,18 +31,13 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "gmpxx.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
 #include "p4_pdpi/utils/ir.h"
-#include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
@@ -75,7 +70,7 @@ absl::StatusOr<z3::expr> FormatP4RTValue(
 
       // Must translate the string into a bitvector according to the field type.
       const std::string &string_value = value.str();
-      
+
       // If there is no IdAllocator for the given type (implying no static
       // mapping was provided), create a new dynamic IdAllocator.
       translator.p4runtime_translation_allocators.try_emplace(

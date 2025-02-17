@@ -15,9 +15,7 @@
 #include "dvaas/test_run_validation.h"
 
 #include <optional>
-#include <ostream>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -31,9 +29,7 @@
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
-#include "absl/types/span.h"
 #include "dvaas/output_writer.h"
-#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
@@ -41,10 +37,10 @@
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
+#include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "re2/re2.h"
 
 namespace dvaas {
 
@@ -55,14 +51,6 @@ using ::gutil::PrintTextProto;
 using ::testing::MatchResultListener;
 
 // -- Detailed comparison of actual vs expected `SwitchOutput`s ----------------
-
-bool PacketLessThan(const Packet* a, const Packet* b) {
-  return a->hex() < b->hex();
-}
-
-bool PacketInLessThan(const PacketIn* a, const PacketIn* b) {
-  return a->hex() < b->hex();
-}
 
 // Returns a copy of the given `string` with all newlines indented by
 // (an additional) `indentation` number of spaces. Empty lines are not indented.
@@ -108,16 +96,10 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     }
   }
 
-  std::sort(actual_output.mutable_packets()->pointer_begin(),
-            actual_output.mutable_packets()->pointer_end(), PacketLessThan);
-  std::sort(expected_output.mutable_packets()->pointer_begin(),
-            expected_output.mutable_packets()->pointer_end(), PacketLessThan);
-  std::sort(actual_output.mutable_packet_ins()->pointer_begin(),
-            actual_output.mutable_packet_ins()->pointer_end(),
-            PacketInLessThan);
-  std::sort(expected_output.mutable_packet_ins()->pointer_begin(),
-            expected_output.mutable_packet_ins()->pointer_end(),
-            PacketInLessThan);
+  gutil::InefficientProtoSort(*actual_output.mutable_packets());
+  gutil::InefficientProtoSort(*expected_output.mutable_packets());
+  gutil::InefficientProtoSort(*actual_output.mutable_packet_ins());
+  gutil::InefficientProtoSort(*expected_output.mutable_packet_ins());
 
   for (int i = 0; i < expected_output.packets_size(); ++i) {
     const Packet& actual_packet = actual_output.packets(i);
@@ -332,16 +314,6 @@ static constexpr absl::string_view kExpectationBanner =
     "=============================================================";
 
 }  // namespace
-
-absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet) {
-  // Regexp to extract the ID from a test packet's payload.
-  constexpr LazyRE2 kTestPacketIdRegexp{R"(test packet #([0-9]+):)"};
-  int tag;
-  if (RE2::PartialMatch(packet.payload(), *kTestPacketIdRegexp, &tag))
-    return tag;
-  return absl::InvalidArgumentError(absl::StrCat(
-      "Payload does not contain a packet id: ", packet.DebugString()));
-}
 
 PacketTestValidationResult ValidateTestRun(
     const PacketTestRun& test_run, const SwitchOutputDiffParams& diff_params) {
