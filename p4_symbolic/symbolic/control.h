@@ -78,8 +78,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const std::string &control_name, SolverState &state,
     SymbolicPerPacketState &headers, const z3::expr &guard);
 
-} // namespace control
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace control
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_CONTROL_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_CONTROL_H_

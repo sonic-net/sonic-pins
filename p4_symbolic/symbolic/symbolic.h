@@ -33,7 +33,6 @@
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -91,7 +90,6 @@ class SolverState {
     // assertions (through z3::solver::add) sometimes lead to memory leaks. The
     // exact details of the root cause is not yet clear. Here we explicitly
     // clear the assertions upon releasing a solver.
-    // See b/285990074 for more details.
     if (solver) solver->reset();
   }
 
@@ -168,7 +166,7 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
 std::string DebugSMT(const std::unique_ptr<SolverState> &state,
                      const Assertion &assertion);
 
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
