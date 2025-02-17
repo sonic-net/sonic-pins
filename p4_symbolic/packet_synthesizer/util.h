@@ -16,7 +16,9 @@
 #define PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_UTIL_H_
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "z3++.h"
 
 // This file contains various utility functions and classes used by packet
 // synthesizer.
@@ -27,39 +29,18 @@ namespace p4_symbolic::packet_synthesizer {
 // the switch deams invalid and drops, such as "martian" packets.
 // Ideally this switch behavior would be fully modeled in P4 instead, and this
 // function would disappear.
-absl::Status
-AddSanePacketConstraints(p4_symbolic::symbolic::SolverState &state);
-
-// A simple timer implementation.
-// TODO: Move this to third_party/pins_infra/gutil/timer
-class Timer {
-public:
-  // Returns the duration between the current time and the last reset (or
-  // initialization).
-  absl::Duration GetDuration() { return absl::Now() - start_time_; }
-  // Same as GetDuration. Resets the timer as well.
-  absl::Duration GetDurationAndReset() {
-    auto duration = GetDuration();
-    Reset();
-    return duration;
-  }
-  // Subsequent calls to GetDuration will measure the duration between the last
-  // call to Reset and those calls.
-  void Reset() { start_time_ = absl::Now(); }
-
-private:
-  absl::Time start_time_ = absl::Now();
-};
+absl::Status AddSanePacketConstraints(
+    p4_symbolic::symbolic::SolverState& state);
 
 // Turns a given IrValue into equivalent Z3 bitvector with length `bitwidth`.
-absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue &value,
+absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
                                               int bitwidth);
 
 // Return Z3 constraints corresponding to `field` matching the given
 // pdpi::IrMatch value assuming the field's size is `bitwidth`.
 absl::StatusOr<z3::expr> GetFieldMatchConstraints(z3::expr field, int bitwidth,
-                                                  const pdpi::IrMatch &match);
+                                                  const pdpi::IrMatch& match);
 
 }  // namespace p4_symbolic::packet_synthesizer
 
-#endif // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_UTIL_H_
+#endif  // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_UTIL_H_

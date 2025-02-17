@@ -383,6 +383,7 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           sut, image_config_param.gnmi_config, image_config_param.p4_info));
 
+
   LOG(INFO) << "Verifying config push on " << sut.ChassisName();
   return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
                             ssh_client, GetConnectedInterfacesForSut(testbed));
