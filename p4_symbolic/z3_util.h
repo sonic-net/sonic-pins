@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #ifndef PINS_P4_SYMBOLIC_Z3_UTIL_H_
 #define PINS_P4_SYMBOLIC_Z3_UTIL_H_
 
@@ -65,9 +66,9 @@ absl::StatusOr<absl::uint128> EvalZ3BitvectorToUInt128(const z3::expr& bv_expr,
 // Returns Z3 bitvector of the given `hex_string` value.
 // If no bitwidth is given, the size of the bitvector is derived from
 // `hex_string`.
-absl::StatusOr<z3::expr>
-HexStringToZ3Bitvector(z3::context &context, const std::string &hex_string,
-                       absl::optional<int> bitwidth = absl::nullopt);
+absl::StatusOr<z3::expr> HexStringToZ3Bitvector(
+    z3::context& context, const std::string& hex_string,
+    absl::optional<int> bitwidth = absl::nullopt);
 
 // -- Misc. --------------------------------------------------------------------
 
@@ -77,7 +78,7 @@ HexStringToZ3Bitvector(z3::context &context, const std::string &hex_string,
 // with.
 // Note: This function assumes that the input is well-formatted and the result
 // fits in uint64_t (otherwise an exception will be thrown).
-uint64_t Z3ValueStringToInt(const std::string &value);
+uint64_t Z3ValueStringToInt(const std::string& value);
 
 // Appends exactly `num_bits` bits to the `result` PDPI bit string from the
 // evaluated Z3 string `value`. Returns an error if the `value` is not a valid
@@ -91,4 +92,4 @@ absl::Status AppendZ3ValueStringToBitString(pdpi::BitString& result,
 
 }  // namespace p4_symbolic
 
-#endif // PINS_P4_SYMBOLIC_Z3_UTIL_H_
+#endif  // PINS_P4_SYMBOLIC_Z3_UTIL_H_

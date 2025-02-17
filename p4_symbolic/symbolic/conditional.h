@@ -32,8 +32,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const ir::Conditional &conditional, SolverState &state,
     SymbolicPerPacketState &headers, const z3::expr &guard);
 
-} // namespace conditional
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace conditional
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
