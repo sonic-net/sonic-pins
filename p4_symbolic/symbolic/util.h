@@ -59,9 +59,8 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
 
 // Merges two maps of table matches into a single map. The two maps must contain
 // disjoint keys, otherwise an error is returned.
-absl::StatusOr<SymbolicTableMatches>
-MergeDisjointTableMatches(const SymbolicTableMatches &lhs,
-                          const SymbolicTableMatches &rhs);
+absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
+    const SymbolicTableMatches &lhs, const SymbolicTableMatches &rhs);
 
 // Extracts the bit-width of the field with the `qualified_field_name` (i.e.,
 // `<header>.<field>`) in the given `program`.
@@ -97,4 +96,4 @@ absl::StatusOr<const ir::Table *> GetIrTable(const ir::P4Program &program,
 }  // namespace symbolic
 }  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_UTIL_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_UTIL_H_

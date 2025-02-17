@@ -43,7 +43,7 @@ using TableEntries = absl::btree_map<std::string, std::vector<TableEntry>>;
 absl::StatusOr<TableEntries> ParseTableEntries(
     const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::Entity> entities);
 
-} // namespace ir
-} // namespace p4_symbolic
+}  // namespace ir
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_IR_TABLE_ENTRIES_H_
+#endif  // P4_SYMBOLIC_IR_TABLE_ENTRIES_H_
