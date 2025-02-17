@@ -108,12 +108,9 @@ bool IsInnerIpField(const PacketField field) {
   }
 }
 
-constexpr uint32_t kMaxPorts = 1 << 16;
-
 // Returns the ith L4 port, given a base port
 uint32_t GetIthL4Port(int i, uint32_t base) {
-  uint32_t result = base + i % kMaxPorts;
-  return result;
+  return (base + i) & 0xffff;  // limit to 16 bits.
 }
 
 }  // namespace
@@ -185,9 +182,8 @@ bool IsValidTestConfiguration(const TestConfiguration& config) {
 int Range(const TestConfiguration &config) {
   // GenerateIthPacket takes in an int index. Any field with 31 or more bits
   // may be limited by the int range before the header field range.
-  static constexpr int kInt32Range =
-      std::min(static_cast<uint64_t>(std::numeric_limits<int>::max()),
-               static_cast<uint64_t>(1) << 32);
+  static constexpr int kIpv4Range =
+      0xff000000 - kBaseDecapIpV4Dst;  // Exclude 127.x.x.x
   static constexpr int kInt64Range =
       std::min(static_cast<uint64_t>(std::numeric_limits<int>::max()),
                std::numeric_limits<uint64_t>::max());
@@ -201,7 +197,7 @@ int Range(const TestConfiguration &config) {
   case PacketField::kIpDst:
   case PacketField::kInnerIpSrc:
   case PacketField::kInnerIpDst:
-    return config.ipv4 ? kInt32Range : kInt64Range;
+    return config.ipv4 ? kIpv4Range : kInt64Range;
   case PacketField::kHopLimit:
   case PacketField::kInnerHopLimit:
     return kHopLimitRange;
@@ -215,7 +211,7 @@ int Range(const TestConfiguration &config) {
     return 1 << 4;
   case PacketField::kL4SrcPort:
   case PacketField::kL4DstPort:
-    return kMaxPorts;
+    return 1 << 16;
   // Not used by the packet generator
   case PacketField::kInputPort:
   case PacketField::kInnerDscp:
