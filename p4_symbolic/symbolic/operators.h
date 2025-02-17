@@ -86,8 +86,8 @@ absl::StatusOr<z3::expr> ToBitVectorSort(const z3::expr &a, unsigned int size);
 absl::StatusOr<z3::expr> PrefixEq(const z3::expr &a, const z3::expr &b,
                                   unsigned int prefix_size);
 
-} // namespace operators
-} // namespace symbolic
-} // namespace p4_symbolic
+}  // namespace operators
+}  // namespace symbolic
+}  // namespace p4_symbolic
 
-#endif // P4_SYMBOLIC_SYMBOLIC_OPERATORS_H_
+#endif  // P4_SYMBOLIC_SYMBOLIC_OPERATORS_H_

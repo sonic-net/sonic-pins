@@ -45,7 +45,7 @@ namespace p4_symbolic::packet_synthesizer {
 // is currently not safe to have more than once instance of this class per
 // process.
 class PacketSynthesizer {
-public:
+ public:
   // Creates and initializes an instance of PacketSynthesizer given the
   // input (the P4 program, table entries, etc.). Returns a unique pointer to
   // the created object on success. The returned object keeps a state
@@ -53,19 +53,24 @@ public:
   //
   // This static function is the only way to create an instance of
   // PacketSynthesizer.
-  static absl::StatusOr<std::unique_ptr<PacketSynthesizer>>
-  Create(const PacketSynthesisParams &params);
+  static absl::StatusOr<std::unique_ptr<PacketSynthesizer>> Create(
+      const PacketSynthesisParams& params);
 
   // Attempts to synthesize and return a packet (if any) for the given
   // `criteria`.
-  absl::StatusOr<PacketSynthesisResult>
-  SynthesizePacket(const PacketSynthesisCriteria &criteria);
+  absl::StatusOr<PacketSynthesisResult> SynthesizePacket(
+      const PacketSynthesisCriteria& criteria);
+
+  // Returns a const reference to the internal solver state.
+  // Note: The solver state also includes a mutable pointer to the Z3 solver. DO
+  // NOT MODIFY THE SOLVER.
+  const p4_symbolic::symbolic::SolverState& SolverState();
 
   // Disallow copy and move.
-  PacketSynthesizer(const PacketSynthesizer &) = delete;
-  PacketSynthesizer(PacketSynthesizer &&) = delete;
-  PacketSynthesizer &operator=(const PacketSynthesizer &) = delete;
-  PacketSynthesizer &operator=(PacketSynthesizer &&) = delete;
+  PacketSynthesizer(const PacketSynthesizer&) = delete;
+  PacketSynthesizer(PacketSynthesizer&&) = delete;
+  PacketSynthesizer& operator=(const PacketSynthesizer&) = delete;
+  PacketSynthesizer& operator=(PacketSynthesizer&&) = delete;
 
   // The order of Z3 frames corresponding to different types of criteria. The
   // criteria type in lower index will be lower in the stack. See
@@ -88,10 +93,10 @@ public:
       CriteriaVariant::kIngressPortCriteria,
   };
 
-private:
+ private:
   // A PacketSynthesizer object may only be created through a (successful) call
   // to Create.
-  explicit PacketSynthesizer(p4_symbolic::symbolic::SolverState &&solver_state)
+  explicit PacketSynthesizer(p4_symbolic::symbolic::SolverState&& solver_state)
       : solver_state_(std::move(solver_state)) {
     // Prepare the solver frame stack.
     for (int i = 0; i < kSolverFrameStackOrder.size(); i++) {
@@ -127,7 +132,7 @@ private:
   // Adds a new (Z3) frame to the solver state, then adds logical assertions
   // corresponding to the given `criteria_case` of the input `criteria`.
   absl::Status AddFrameForCriteria(CriteriaVariant::CriteriaCase criteria_case,
-                                   const PacketSynthesisCriteria &criteria);
+                                   const PacketSynthesisCriteria& criteria);
 
   // To use Z3's incremental solver and gain better performance, we keep logical
   // constraints corresponding to different types of criteria in separate Z3
@@ -142,6 +147,6 @@ private:
       const PacketSynthesisCriteria& criteria);
 };
 
-} // namespace p4_symbolic::packet_synthesizer
+}  // namespace p4_symbolic::packet_synthesizer
 
-#endif // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_PACKET_SYNTHESIZER_H_
+#endif  // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_PACKET_SYNTHESIZER_H_

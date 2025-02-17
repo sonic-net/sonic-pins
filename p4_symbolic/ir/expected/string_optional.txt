@@ -424,12 +424,24 @@ tables {
     }
     table_implementation {
       default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.set_egress_spec"
+        value: "__END_OF_PIPELINE__"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "__END_OF_PIPELINE__"
+      }
       match_name_to_field {
         key: "meta.string_field"
         value {
           header_name: "scalars"
           field_name: "metadata.string_field"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+        continue_to_merge_point: true
       }
     }
   }
@@ -539,6 +551,10 @@ tables {
           field_name: "ingress_port"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "MyIngress.optional_match"
+        continue_to_merge_point: true
+      }
     }
   }
 }
@@ -556,6 +572,10 @@ tables {
         key: "program92"
         value: "MyIngress.set_field_table"
       }
+      optimized_symbolic_execution_info {
+        merge_point: "MyIngress.set_field_table"
+        continue_to_merge_point: true
+      }
     }
   }
 }
@@ -563,6 +583,7 @@ pipeline {
   key: "egress"
   value {
     name: "egress"
+    initial_control: "__END_OF_PIPELINE__"
   }
 }
 pipeline {

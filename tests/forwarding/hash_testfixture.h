@@ -25,6 +25,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -40,7 +41,9 @@
 namespace pins_test {
 
 using TestConfigurationMap =
-    absl::btree_map<std::string, pins::TestConfiguration>;
+    absl::btree_map<std::string /*test_name*/, pins::TestConfiguration>;
+using TestPacketMap =
+    absl::btree_map<std::string /*test_name*/, std::vector<packetlib::Packet>>;
 
 // This class stores and reports data on received packets. Particularly, it
 // keeps track of packets based on the egress port for the SUT / ingress port of
@@ -104,21 +107,46 @@ public:
   // session is reachable.
   void RebootSut();
 
+  // Generate packets based on the provided test config. Values are sequential
+  // if num_packets is sufficiently large compared to the range of unique
+  // values. Otherwise, packets are generated with random values across the
+  // available value range. Returns an error if the config is invalid.
+  static absl::StatusOr<std::vector<packetlib::Packet>> GeneratePackets(
+      const pins::TestConfiguration &test_config, int num_packets);
+  static absl::StatusOr<TestPacketMap> GeneratePackets(
+      const TestConfigurationMap &test_configs, int num_packets);
+
   // Send and receive packets for all test configs. Save the resulting test
   // data as a map of TestConfiguration name to TestData.
-  void SendPacketsAndRecordResultsPerTestConfig(
+  absl::Status SendPacketsAndRecordResultsPerTest(
+      const TestPacketMap &test_packets, const p4::config::v1::P4Info &p4info,
+      absl::string_view test_stage, const P4rtPortId &ingress_port_id,
+      absl::node_hash_map<std::string, TestData> &output_record);
+
+  absl::Status SendPacketsToDefaultPortAndRecordResultsPerTest(
+      const TestPacketMap &test_packets, const p4::config::v1::P4Info &p4info,
+      absl::string_view test_stage,
+      absl::node_hash_map<std::string, TestData> &output_record) {
+    return SendPacketsAndRecordResultsPerTest(
+        test_packets, p4info, test_stage, DefaultIngressPort(), output_record);
+  }
+
+  // Send and receive packets for all test configs. Save the resulting test
+  // data as a map of TestConfiguration name to TestData.
+  absl::Status SendPacketsAndRecordResultsPerTestConfig(
       const TestConfigurationMap &test_configs,
       const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
       const P4rtPortId &ingress_port_id, int num_packets,
       absl::node_hash_map<std::string, TestData> &output_record);
-  void SendPacketsAndRecordResultsPerTestConfig(
+
+  absl::Status SendPacketsToDefaultPortAndRecordResultsPerTestConfig(
       const TestConfigurationMap &test_configs,
       const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
       int num_packets,
       absl::node_hash_map<std::string, TestData> &output_record) {
-    SendPacketsAndRecordResultsPerTestConfig(test_configs, p4info, test_stage,
-                                             DefaultIngressPort(), num_packets,
-                                             output_record);
+    return SendPacketsAndRecordResultsPerTestConfig(
+        test_configs, p4info, test_stage, DefaultIngressPort(), num_packets,
+        output_record);
   }
 
   // Initializes the forwarding pipeline to forward all packets to the provided
@@ -158,11 +186,10 @@ public:
 protected:
   // Send and receive packets for a particular test config. Save the resulting
   // test data.
-  void SendAndReceivePackets(const pdpi::IrP4Info &ir_p4info,
-                             absl::string_view record_prefix,
-                             const P4rtPortId &ingress_port_id, int num_packets,
-                             const pins::TestConfiguration &test_config,
-                             TestData &test_data);
+ absl::Status SendAndReceivePackets(
+     const pdpi::IrP4Info &ir_p4info, absl::string_view record_prefix,
+     const P4rtPortId &ingress_port_id,
+     const std::vector<packetlib::Packet> &packets, TestData &test_data);
 
 private:
   // Set of interfaces to hash against. There is a 1:1 mapping of interfaces_ to
