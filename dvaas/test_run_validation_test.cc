@@ -132,6 +132,22 @@ TEST(TestRunValidationTest,
               HasSubstr("mismatched ports:"));
 }
 
+TEST(TestRunValidationTest, DifferentPortOrderOfPacketsIsOk) {
+  EXPECT_FALSE(ValidateTestRun(gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+                 test_vector {
+                   acceptable_outputs {
+                     packets { port: "1" }
+                     packets { port: "2" }
+                   }
+                 }
+                 actual_output {
+                   packets { port: "2" }
+                   packets { port: "1" }
+                 }
+               )pb"))
+                   .has_failure());
+}
+
 TEST(TestRunValidationTest,
      MissingPacketInsAreIgnoredIfAndOnlyIfIgnorePacketInsIsSet) {
   const PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(

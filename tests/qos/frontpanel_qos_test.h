@@ -38,6 +38,11 @@ namespace pins_test {
 // `egress_port_under_test`: Egress port under test to validate egress QoS.
 // Each `ingress_port` speed needs to be at least the speed of `egress_port`
 // as the tests require oversubscription of egress port.
+// `queue_by_dscp`: provides the dscp to queue name mapping that needs to be
+// verified by the test.
+// `test_multicast_queues`: `true` indicates that test needs to be
+// run for multicast queues else unicast queues will be tested.
+// By default this will be false and the tests will test for Unicast queues.`
 
 struct QosTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
@@ -45,6 +50,10 @@ struct QosTestParams {
   std::string ingress_ports[2];
   std::string egress_port_under_test;
   std::string name;
+  std::string default_cpu_queue;
+  std::string high_prio_cpu_queue;
+  absl::flat_hash_map<int, std::string> queue_by_dscp;
+  bool test_multicast_queues;
 };
 
 class FrontpanelQosTest : public testing::TestWithParam<QosTestParams> {

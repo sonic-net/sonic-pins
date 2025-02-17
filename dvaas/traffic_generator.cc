@@ -197,4 +197,16 @@ SimpleTrafficGenerator::GetAndClearValidationResult() {
       generate_test_vectors_result_.packet_synthesis_result);
 }
 
+SimpleTrafficGenerator::~SimpleTrafficGenerator() {
+  if (GetState() == kTrafficFlowing) {
+    LOG(WARNING)
+        << "SimpleTrafficGenerator destructed while traffic is flowing. "
+           "Stopping traffic.";
+    absl::Status status = StopTraffic();
+    if (!status.ok()) {
+      LOG(FATAL) << "Failed to stop traffic: " << status;  // Crash OK.
+    }
+  }
+}
+
 }  // namespace dvaas

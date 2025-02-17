@@ -3,6 +3,7 @@
 #include <array>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
@@ -16,6 +17,7 @@
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/utils/json_utils.h"
@@ -91,68 +93,18 @@ int64_t TotalPacketsForQueue(const QueueCounters &counters) {
   return counters.num_packets_dropped + counters.num_packets_transmitted;
 }
 
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config) {
-  // TODO: Actually parse config -- hard-coded for now.
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  for (int dscp = 0; dscp < 64; ++dscp) queue_by_dscp[dscp] = "BE1";
-  for (int dscp = 8; dscp <= 11; ++dscp) queue_by_dscp[dscp] = "AF1";
-  queue_by_dscp[13] = "LLQ1";
-  for (int dscp = 16; dscp <= 19; ++dscp) queue_by_dscp[dscp] = "AF2";
-  queue_by_dscp[21] = "LLQ2";
-  for (int dscp = 24; dscp <= 27; ++dscp) queue_by_dscp[dscp] = "AF3";
-  for (int dscp = 32; dscp <= 39; ++dscp) queue_by_dscp[dscp] = "AF4";
-  for (int dscp = 48; dscp <= 59; ++dscp) queue_by_dscp[dscp] = "NC1";
-  return queue_by_dscp;
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return ParseIpv4DscpToQueueMapping(gnmi_config);
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return ParseIpv4DscpToQueueMapping(/*gnmi_config=*/"");
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return GetIpv4DscpToQueueMapping(port, gnmi_stub);
-}
-
 absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv4DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub) {
+GetQueueToDscpsMapping(absl::flat_hash_map<int, std::string> queue_by_dscp) {
   absl::flat_hash_map<std::string, std::vector<int>> dscps_by_queue;
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv4DscpToQueueMapping(port, gnmi_stub));
   for (auto &[dscp, queue] : queue_by_dscp) {
     dscps_by_queue[queue].push_back(dscp);
   }
   return dscps_by_queue;
 }
 
-absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv6DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub) {
-  absl::flat_hash_map<std::string, std::vector<int>> dscps_by_queue;
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv6DscpToQueueMapping(port, gnmi_stub));
-  for (auto &[dscp, queue] : queue_by_dscp) {
-    dscps_by_queue[queue].push_back(dscp);
-  }
-  return dscps_by_queue;
-}
-
-absl::StatusOr<std::string>
-GetQueueNameByDscpAndPort(int dscp, absl::string_view port,
-                          gnmi::gNMI::StubInterface &gnmi_stub) {
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv4DscpToQueueMapping(port, gnmi_stub));
+absl::StatusOr<std::string> GetQueueNameByDscpAndPort(
+    int dscp, absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub,
+    absl::flat_hash_map<int, std::string> queue_by_dscp) {
   return gutil::FindOrStatus(queue_by_dscp, dscp);
 }
 
@@ -342,7 +294,9 @@ absl::Status ReplaceCpuSchedulerPolicyParametersForAllQueues(
   ASSIGN_OR_RETURN(std::string scheduler_policy_name,
                    GetSchedulerPolicyNameByEgressPort("CPU", gnmi_stub));
   absl::flat_hash_map<std::string, SchedulerParameters> scheduler_params;
-  for (absl::string_view queue_name : kAllQueuesNames) {
+  ASSIGN_OR_RETURN(std::vector<std::string> queues,
+                   GetQueuesByEgressPort("CPU", gnmi_stub));
+  for (absl::string_view queue_name : queues) {
     scheduler_params[queue_name] = scheduler_param;
   }
   return SetSchedulerPolicyParameters(scheduler_policy_name, scheduler_params,
@@ -364,6 +318,20 @@ GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
     }
   }
   return weight_by_queue_name;
+}
+
+absl::StatusOr<absl::flat_hash_set<std::string>>
+GetStrictlyPrioritizedQueuesMap(absl::string_view scheduler_policy_name,
+                                gnmi::gNMI::StubInterface &gnmi) {
+  absl::flat_hash_set<std::string> strict_queues;
+  ASSIGN_OR_RETURN(std::vector<QueueInfo> queues,
+                   GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+                       scheduler_policy_name, gnmi));
+  for (auto &queue : queues) {
+    if (queue.type == QueueType::kStrictlyPrioritized)
+      strict_queues.insert(queue.name);
+  }
+  return strict_queues;
 }
 
 absl::StatusOr<std::vector<std::string>>
@@ -478,7 +446,8 @@ absl::StatusOr<openconfig::Qos::BufferAllocationProfile>
 GetBufferAllocationProfileConfigAsProto(
     absl::string_view buffer_allocation_profile,
     gnmi::gNMI::StubInterface &gnmi) {
-  const std::string kPath = SchedulerPolicyPath(buffer_allocation_profile);
+  const std::string kPath =
+      BufferAllocationProfilePath(buffer_allocation_profile);
   const std::string kRoot = "openconfig-qos:buffer-allocation-profile";
   ASSIGN_OR_RETURN(const std::string kRawConfig,
                    ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
@@ -487,6 +456,21 @@ GetBufferAllocationProfileConfigAsProto(
       gutil::ParseJsonAsProto<openconfig::Qos::BufferAllocationProfile>(
           StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
   return proto_config;
+}
+
+absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi) {
+  std::vector<std::string> queues;
+  ASSIGN_OR_RETURN(std::string buffer_profile,
+                   GetBufferAllocationProfileByEgressPort(egress_port, gnmi));
+  ASSIGN_OR_RETURN(
+      openconfig::Qos::BufferAllocationProfile proto_config,
+      GetBufferAllocationProfileConfigAsProto(buffer_profile, gnmi));
+  for (openconfig::Qos::Queue &queue :
+       *proto_config.mutable_queues()->mutable_queue()) {
+    queues.push_back(queue.name());
+  }
+  return queues;
 }
 
 absl::Status
@@ -624,7 +608,9 @@ UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
                                       int buffer_size) {
   absl::flat_hash_map<std::string, BufferParameters>
       buffer_config_by_queue_name;
-  for (absl::string_view queue_name : kAllQueuesNames) {
+  ASSIGN_OR_RETURN(std::vector<std::string> queues,
+                   GetQueuesByEgressPort("CPU", gnmi_stub));
+  for (absl::string_view queue_name : queues) {
     buffer_config_by_queue_name[queue_name] = BufferParameters{
         .dedicated_buffer = 0,
         .use_shared_buffer = true,
@@ -682,6 +668,64 @@ EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
                    "_gnmi_config_after_qos_and_buffer_change.pb.txt"),
       gnmi_config_after_qos_and_buffer_change));
   return absl::OkStatus();
+}
+
+absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string openconfig_transmit_count_state_path = absl::Substitute(
+      "interfaces/interface[name=$0]"
+      "/state/counters/out-ecn-marked-pkts",
+      port);
+
+  ASSIGN_OR_RETURN(
+      std::string ecn_counter_response,
+      GetGnmiStatePathInfo(&gnmi_stub, openconfig_transmit_count_state_path,
+                           "google-pins-interfaces:out-ecn-marked-pkts"));
+
+  int64_t ecn_counters;
+  if (!absl::SimpleAtoi(StripQuotes(ecn_counter_response), &ecn_counters)) {
+    return gutil::UnknownErrorBuilder()
+           << "Unable to parse counter from response: \""
+           << ecn_counter_response << "\"";
+  }
+  return ecn_counters;
+}
+
+absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
+    absl::string_view gnmi_config) {
+  nlohmann::json config = nlohmann::json::parse(gnmi_config);
+  if (!config.is_object()) {
+    return absl::InvalidArgumentError("Could not parse gnmi configuration.");
+  }
+
+  absl::flat_hash_set<std::string> queues;
+  auto &qos_interfaces =
+      config["openconfig-qos:qos"]["interfaces"]["interface"];
+
+  std::string cpu_scheduler_policy;
+  for (auto &interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == "CPU") {
+      cpu_scheduler_policy =
+          interface["output"]["scheduler-policy"]["config"]["name"]
+              .get<std::string>();
+      break;
+    }
+  }
+
+  auto &scheduler_policies =
+      config["openconfig-qos:qos"]["scheduler-policies"]["scheduler-policy"];
+  for (auto &policy : scheduler_policies) {
+    if (policy["name"].get<std::string>() == cpu_scheduler_policy) {
+      for (auto &scheduler : policy["schedulers"]["scheduler"]) {
+        std::string queue_name =
+            scheduler["inputs"]["input"][0]["config"]["queue"]
+                .get<std::string>();
+        queues.insert(queue_name);
+      }
+      break;
+    }
+  }
+  return queues;
 }
 
 }  // namespace pins_test
