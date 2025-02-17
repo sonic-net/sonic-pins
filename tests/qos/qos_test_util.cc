@@ -93,68 +93,18 @@ int64_t TotalPacketsForQueue(const QueueCounters &counters) {
   return counters.num_packets_dropped + counters.num_packets_transmitted;
 }
 
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config) {
-  // TODO: Actually parse config -- hard-coded for now.
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  for (int dscp = 0; dscp < 64; ++dscp) queue_by_dscp[dscp] = "BE1";
-  for (int dscp = 8; dscp <= 11; ++dscp) queue_by_dscp[dscp] = "AF1";
-  queue_by_dscp[13] = "LLQ1";
-  for (int dscp = 16; dscp <= 19; ++dscp) queue_by_dscp[dscp] = "AF2";
-  queue_by_dscp[21] = "LLQ2";
-  for (int dscp = 24; dscp <= 27; ++dscp) queue_by_dscp[dscp] = "AF3";
-  for (int dscp = 32; dscp <= 39; ++dscp) queue_by_dscp[dscp] = "AF4";
-  for (int dscp = 48; dscp <= 59; ++dscp) queue_by_dscp[dscp] = "NC1";
-  return queue_by_dscp;
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>>
-ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return ParseIpv4DscpToQueueMapping(gnmi_config);
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return ParseIpv4DscpToQueueMapping(/*gnmi_config=*/"");
-}
-
-absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
-    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub) {
-  // TODO: Actually parse config -- hard-coded for now.
-  return GetIpv4DscpToQueueMapping(port, gnmi_stub);
-}
-
 absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv4DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub) {
+GetQueueToDscpsMapping(absl::flat_hash_map<int, std::string> queue_by_dscp) {
   absl::flat_hash_map<std::string, std::vector<int>> dscps_by_queue;
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv4DscpToQueueMapping(port, gnmi_stub));
   for (auto &[dscp, queue] : queue_by_dscp) {
     dscps_by_queue[queue].push_back(dscp);
   }
   return dscps_by_queue;
 }
 
-absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
-GetQueueToIpv6DscpsMapping(absl::string_view port,
-                           gnmi::gNMI::StubInterface &gnmi_stub) {
-  absl::flat_hash_map<std::string, std::vector<int>> dscps_by_queue;
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv6DscpToQueueMapping(port, gnmi_stub));
-  for (auto &[dscp, queue] : queue_by_dscp) {
-    dscps_by_queue[queue].push_back(dscp);
-  }
-  return dscps_by_queue;
-}
-
-absl::StatusOr<std::string>
-GetQueueNameByDscpAndPort(int dscp, absl::string_view port,
-                          gnmi::gNMI::StubInterface &gnmi_stub) {
-  absl::flat_hash_map<int, std::string> queue_by_dscp;
-  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv4DscpToQueueMapping(port, gnmi_stub));
+absl::StatusOr<std::string> GetQueueNameByDscpAndPort(
+    int dscp, absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub,
+    absl::flat_hash_map<int, std::string> queue_by_dscp) {
   return gutil::FindOrStatus(queue_by_dscp, dscp);
 }
 
@@ -368,6 +318,20 @@ GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
     }
   }
   return weight_by_queue_name;
+}
+
+absl::StatusOr<absl::flat_hash_set<std::string>>
+GetStrictlyPrioritizedQueuesMap(absl::string_view scheduler_policy_name,
+                                gnmi::gNMI::StubInterface &gnmi) {
+  absl::flat_hash_set<std::string> strict_queues;
+  ASSIGN_OR_RETURN(std::vector<QueueInfo> queues,
+                   GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
+                       scheduler_policy_name, gnmi));
+  for (auto &queue : queues) {
+    if (queue.type == QueueType::kStrictlyPrioritized)
+      strict_queues.insert(queue.name);
+  }
+  return strict_queues;
 }
 
 absl::StatusOr<std::vector<std::string>>

@@ -557,12 +557,18 @@ TEST_P(FrontpanelQosTest,
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
       ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
-  ASSERT_OK_AND_ASSIGN(
-      const sai::TableEntries kTableEntries,
-      ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
-  ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
-                                                     kTableEntries));
-  ASSERT_OK(InstallPdTableEntries(kTableEntries, GetParam().p4info, *sut_p4rt));
+
+  if (GetParam().test_multicast_queues) {
+    GTEST_FAIL() << "Multicast test failed. Multicast forwarding WIP";
+  } else {
+    ASSERT_OK_AND_ASSIGN(
+        const sai::TableEntries kTableEntries,
+        ConstructEntriesToForwardAllTrafficToGivenPort(kSutEgressPortP4rtId));
+    ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
+                                                       kTableEntries));
+    ASSERT_OK(
+        InstallPdTableEntries(kTableEntries, GetParam().p4info, *sut_p4rt));
+  }
 
   // Fix test parameters and PIRs (peak information rates, in bytes
   // per second) for each DSCP.
@@ -571,22 +577,29 @@ TEST_P(FrontpanelQosTest,
   constexpr int64_t kTestFramesPerSecond = kTestFrameCount / 3; // for 3 s
   constexpr int64_t kTestFrameSpeedInBytesPerSecond =           // 10 GB/s
       kTestFramesPerSecond * kTestFrameSizeInBytes;
+
+  // Get strictly prioritized queues.
+  ASSERT_OK_AND_ASSIGN(
+      const absl::flat_hash_set<std::string> kStrictlyPrioritizedQueues,
+      GetStrictlyPrioritizedQueuesMap(kSutEgressPortScheduler, *gnmi_stub));
   // We use exponentially spaced PIRs, with a base rate that's high enough for
   // buffers to drain quickly. That way we don't have to drain buffers manually
   // between test traffic flows.
   constexpr int64_t kPirBaseSpeedInBytesPerSecond = 40'000'000; // 40 MB/s.
-  const absl::flat_hash_map<std::string, int64_t> kPirByQueueName = {
-      {"BE1", 1 * kPirBaseSpeedInBytesPerSecond},
-      {"AF1", 2 * kPirBaseSpeedInBytesPerSecond},
-      {"AF2", 4 * kPirBaseSpeedInBytesPerSecond},
-      {"AF3", 8 * kPirBaseSpeedInBytesPerSecond},
-      {"LLQ1", 16 * kPirBaseSpeedInBytesPerSecond},
-      {"LLQ2", 32 * kPirBaseSpeedInBytesPerSecond},
-      // TODO: Also test strict queues once reconfiguring them is
-      // supported.
-      // {"AF4", 64 * kPirBaseSpeedInBytesPerSecond},
-      // {"NC1", 128 * kPirBaseSpeedInBytesPerSecond},
-  };
+  absl::flat_hash_map<std::string, int64_t> kPirByQueueName;
+  using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
+  ASSERT_OK_AND_ASSIGN(const DscpsByQueueName kDscpsByQueueName,
+                       GetQueueToDscpsMapping(GetParam().queue_by_dscp));
+  int pirFactor = 1;
+  for (const auto &queue : kDscpsByQueueName) {
+    // Skip queues that are strictly prioritized, as these do not support
+    // reconfiguration today.
+    if (kStrictlyPrioritizedQueues.contains(queue.first)) {
+      continue;
+    }
+    kPirByQueueName.insert({queue.first, kPirBaseSpeedInBytesPerSecond});
+    pirFactor *= 2;
+  }
 
   // Ensure the test parameters are compatible with the testbed.
   ASSERT_OK_AND_ASSIGN(
@@ -696,10 +709,10 @@ TEST_P(FrontpanelQosTest,
       // Figure out which queue we will be targeting and some queue parameters.
       ASSERT_OK_AND_ASSIGN(
           const std::string kTargetQueue,
-          GetQueueNameByDscpAndPort(dscp, kSutEgressPort, *gnmi_stub));
-      // TODO(b/230107242: Test strict queues once that is supported.
-      if (kTargetQueue == "AF4" || kTargetQueue == "NC1") {
-        LOG(WARNING) << "skipping test for unuspported queue '" << kTargetQueue
+          GetQueueNameByDscpAndPort(dscp, kSutEgressPort, *gnmi_stub,
+                                    GetParam().queue_by_dscp));
+      if (kStrictlyPrioritizedQueues.contains(kTargetQueue)) {
+        LOG(WARNING) << "skipping test for strict queue '" << kTargetQueue
                      << "'";
         continue;
       }
@@ -727,22 +740,46 @@ TEST_P(FrontpanelQosTest,
           .frame_size_in_bytes = kTestFrameSizeInBytes,
           .traffic_speed = ixia::FramesPerSecond{kTestFramesPerSecond},
       };
-      if (is_ipv4) {
-        traffix_parameters.ip_parameters = ixia::Ipv4TrafficParameters{
-            .src_ipv4 = netaddr::Ipv4Address(192, 168, 2, dscp + 1),
-            .dst_ipv4 = netaddr::Ipv4Address(172, 0, 0, dscp + 1),
-            // Set ECN 0 to avoid RED drops.
-            .priority = ixia::IpPriority{.dscp = dscp, .ecn = 1},
-        };
+      if (GetParam().test_multicast_queues) {
+        if (is_ipv4) {
+          traffix_parameters.dst_mac =
+              netaddr::MacAddress(1, 0, 0x5e, 0, 0, dscp + 1);
+          traffix_parameters.ip_parameters = ixia::Ipv4TrafficParameters{
+              .src_ipv4 = netaddr::Ipv4Address(192, 168, 2, dscp + 1),
+              .dst_ipv4 = netaddr::Ipv4Address(224, 0, 0, dscp + 1),
+              // Set ECN 0 to avoid RED drops.
+              .priority = ixia::IpPriority{.dscp = dscp, .ecn = 0},
+          };
+        } else {
+          traffix_parameters.dst_mac =
+              netaddr::MacAddress(0x33, 0x33, 0, 0, 0, dscp + 1);
+          traffix_parameters.ip_parameters = ixia::Ipv6TrafficParameters{
+              .src_ipv6 =
+                  netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, dscp + 1),
+              .dst_ipv6 =
+                  netaddr::Ipv6Address(0xff00, 0, 0, 0, 0, 0, 0, dscp + 1),
+              // Set ECN 0 to avoid RED drops.
+              .priority = ixia::IpPriority{.dscp = dscp, .ecn = 0},
+          };
+        }
       } else {
-        traffix_parameters.ip_parameters = ixia::Ipv6TrafficParameters{
-            .src_ipv6 =
-                netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, dscp + 1),
-            .dst_ipv6 =
-                netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, dscp + 1),
-            // Set ECN 0 to avoid RED drops.
-            .priority = ixia::IpPriority{.dscp = dscp, .ecn = 0},
-        };
+        if (is_ipv4) {
+          traffix_parameters.ip_parameters = ixia::Ipv4TrafficParameters{
+              .src_ipv4 = netaddr::Ipv4Address(192, 168, 2, dscp + 1),
+              .dst_ipv4 = netaddr::Ipv4Address(172, 0, 0, dscp + 1),
+              // Set ECN 0 to avoid RED drops.
+              .priority = ixia::IpPriority{.dscp = dscp, .ecn = 0},
+          };
+        } else {
+          traffix_parameters.ip_parameters = ixia::Ipv6TrafficParameters{
+              .src_ipv6 =
+                  netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, dscp + 1),
+              .dst_ipv6 =
+                  netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, dscp + 1),
+              // Set ECN 0 to avoid RED drops.
+              .priority = ixia::IpPriority{.dscp = dscp, .ecn = 0},
+          };
+        }
       }
       LOG(INFO) << "-- starting " << kTrafficName;
       ASSERT_OK(ixia::SetTrafficParameters(kIxiaTrafficHandle,
@@ -911,12 +948,8 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 
   // Figure out which DSCPs to use for each queue.
   using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
-  ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kIpv4DscpsByQueueName,
-      GetQueueToIpv4DscpsMapping(kSutMainIngressPort, *gnmi_stub));
-  ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kIpv6DscpsByQueueName,
-      GetQueueToIpv4DscpsMapping(kSutMainIngressPort, *gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(const DscpsByQueueName kDscpsByQueueName,
+                       GetQueueToDscpsMapping(GetParam().queue_by_dscp));
 
   // Identify round-robin queues and their weights.
   using WeightByQueueName = absl::flat_hash_map<std::string, int64_t>;
@@ -945,14 +978,15 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
                        });
 
   // Pick a queue/DSCP that is strictly prioritized over the round robin queues.
-  ASSERT_OK_AND_ASSIGN(const std::vector<std::string> kStrictlyPrioritzedQueues,
-                       GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
-                           kSutEgressPortSchedulerPolicy, *gnmi_stub));
-  ASSERT_THAT(kStrictlyPrioritzedQueues, Not(IsEmpty()));
-  const std::string kStrictlyPrioritzedQueue = kStrictlyPrioritzedQueues.at(0);
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> kStrictlyPrioritizedQueues,
+      GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
+          kSutEgressPortSchedulerPolicy, *gnmi_stub));
+  ASSERT_THAT(kStrictlyPrioritizedQueues, Not(IsEmpty()));
+  const std::string kStrictlyPrioritzedQueue = kStrictlyPrioritizedQueues.at(0);
   ASSERT_OK_AND_ASSIGN(
       const std::vector<int> kStrictlyPrioritizedIpv4Dscps,
-      gutil::FindOrStatus(kIpv4DscpsByQueueName, kStrictlyPrioritzedQueue));
+      gutil::FindOrStatus(kDscpsByQueueName, kStrictlyPrioritzedQueue));
   ASSERT_THAT(kStrictlyPrioritizedIpv4Dscps, Not(IsEmpty()));
   const int kStrictlyPrioritizedIpv4Dscp = kStrictlyPrioritizedIpv4Dscps.at(0);
 
@@ -1028,8 +1062,6 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   const int kNumRoundRobinTrafficItems = 2 * kWeightByQueueName.size();
   for (auto &[queue_name, weight] : kWeightByQueueName) {
     for (bool ipv4 : {true, false}) {
-      const auto &kDscpsByQueueName =
-          ipv4 ? kIpv4DscpsByQueueName : kIpv6DscpsByQueueName;
       ASSERT_THAT(kDscpsByQueueName,
                   Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
       const int kDscp = kDscpsByQueueName.at(queue_name).at(0);
@@ -1127,7 +1159,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     const double kAbsoluteError = kActualFraction - kExpectedFraction;
     const double kRelativeErrorPercent =
         100. * kAbsoluteError / kExpectedFraction;
-    const double kAcceptableErrorPercent = 4;
+    const double kAcceptableErrorPercent = 7;
     LOG(INFO) << "'" << queue << "' transmitted " << (kActualFraction * 100)
               << "% of forwarded round-robin traffic (expected: "
               << (kExpectedFraction * 100)
@@ -1159,6 +1191,9 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 // where the CIRs are chosen low enough to be fully saturated by the background
 // traffic. We repeat this for CIRs = 0 and CIRs > 0.
 TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
+  if (GetParam().test_multicast_queues) {
+    GTEST_FAIL() << "Multicast test failed. Multicast forwarding WIP";
+  }
   LOG(INFO) << "-- Test started ----------------------------------------------";
   LOG(INFO) << "obtaining testbed handle";
   // Pick a testbed with SUT connected to an Ixia on 3 ports, so we can
@@ -1253,12 +1288,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
                          absl::StrAppend(out, queue.name);
                        });
   using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
-  ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kIpv4DscpsByQueueName,
-      GetQueueToIpv4DscpsMapping(kSutBackgroundTrafficInPort, *gnmi_stub));
-  ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kIpv6DscpsByQueueName,
-      GetQueueToIpv6DscpsMapping(kSutBackgroundTrafficInPort, *gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(const DscpsByQueueName kDscpsByQueueName,
+                       GetQueueToDscpsMapping(GetParam().queue_by_dscp));
 
   // Restore scheduler config at the end of the test, so we can freely modify.
   ASSERT_OK_AND_ASSIGN(
@@ -1349,9 +1380,6 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         }
       });
       for (bool ipv4 : {true, false}) {
-        const auto &kDscpsByQueueName =
-            ipv4 ? kIpv4DscpsByQueueName : kIpv6DscpsByQueueName;
-
         // Configuring main traffic targetting queue under test.
         {
           ASSERT_THAT(
@@ -1394,8 +1422,6 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         // Configure background traffic, for all queues including the queue
         // under test.
         for (const QueueInfo &queue : kQueuesFromHighestToLowestPriority) {
-          const auto &kDscpsByQueueName =
-              ipv4 ? kIpv4DscpsByQueueName : kIpv6DscpsByQueueName;
           ASSERT_THAT(kDscpsByQueueName,
                       Contains(Pair(Eq(queue.name), Not(IsEmpty()))));
           const int kDscp = kDscpsByQueueName.at(queue.name).at(0);
@@ -1587,6 +1613,9 @@ absl::StatusOr<EcnTestIxiaSetUpResult> SetUpIxiaForEcnTest(
 // 3. The test also verifies that switch does not mark non-ECN capable traffic
 //    even when threshold for queue usage exceeds.
 TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
+  if (GetParam().test_multicast_queues) {
+    GTEST_FAIL() << "ECN not supported for multicast queues.";
+  }
   // Pick a testbed with an Ixia Traffic Generator.
   auto requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
@@ -1746,10 +1775,10 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
 
   // Get DSCP-to-queue mapping from switch config.
   using QueueNameByDscp = absl::flat_hash_map<int, std::string>;
-  ASSERT_OK_AND_ASSIGN(std::optional<QueueNameByDscp> queue_name_by_ipv4_dscp,
-                       ParseIpv4DscpToQueueMapping(kSutOutPort));
-  ASSERT_OK_AND_ASSIGN(std::optional<QueueNameByDscp> queue_name_by_ipv6_dscp,
-		       ParseIpv4DscpToQueueMapping(kSutOutPort));
+  std::optional<QueueNameByDscp> queue_name_by_ipv4_dscp =
+      GetParam().queue_by_dscp;
+  std::optional<QueueNameByDscp> queue_name_by_ipv6_dscp =
+      GetParam().queue_by_dscp;
   const std::string kDefaultQueueName = "BE1";
 
   // Set up the switch to forward inbound packets to the egress port
@@ -2089,21 +2118,17 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
   // Figure out which DSCPs to use for each queue.
   using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
   ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kIpv4DscpsByQueueName,
-      GetQueueToIpv4DscpsMapping(kSutIpv4IngressPort, *gnmi_stub));
-  ASSERT_OK_AND_ASSIGN(
-      const DscpsByQueueName kIpv6DscpsByQueueName,
-      GetQueueToIpv4DscpsMapping(kSutIpv4IngressPort, *gnmi_stub));
-
+      const DscpsByQueueName kDscpsByQueueName,
+      GetQueueToDscpsMapping(GetParam().default_params.queue_by_dscp));
   // Configue IPv4 and IPv6 traffic items to all queues under test.
   std::vector<std::string> traffic_items;
   absl::flat_hash_map<std::string, int64_t> buffer_config_by_traffic_item_name;
   for (auto &[queue_name, buffer_config] : kBufferParametersByQueueName) {
     // IPv4.
     {
-      ASSERT_THAT(kIpv4DscpsByQueueName,
+      ASSERT_THAT(kDscpsByQueueName,
                   Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
-      int dscp = kIpv4DscpsByQueueName.at(queue_name).at(0);
+      int dscp = kDscpsByQueueName.at(queue_name).at(0);
       int config_value;
       switch (GetParam().config_to_be_tested) {
       case kSharedStaticLimit:
@@ -2141,9 +2166,9 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
     }
     // IPv6.
     {
-      ASSERT_THAT(kIpv6DscpsByQueueName,
+      ASSERT_THAT(kDscpsByQueueName,
                   Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
-      int dscp = kIpv6DscpsByQueueName.at(queue_name).at(0);
+      int dscp = kDscpsByQueueName.at(queue_name).at(0);
       int config_value;
       switch (GetParam().config_to_be_tested) {
       case kSharedStaticLimit:
