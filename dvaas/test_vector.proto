@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package dvaas;
 
+import "dvaas/packet_trace.proto";
 import "p4_pdpi/ir.proto";
 import "p4_pdpi/packetlib/packetlib.proto";
 
@@ -113,6 +114,7 @@ message PacketTestValidationResult {
 message PacketTestOutcome {
   PacketTestRun test_run = 1;
   PacketTestValidationResult test_result = 2;
+  PacketTrace p4_packet_trace = 3;
 }
 
 // A list of test outcomes.

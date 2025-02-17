@@ -16,8 +16,9 @@
 
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
-#include <thread> // NOLINT
+#include <thread>  // NOLINT
 #include <utility>
 #include <vector>
 
@@ -26,11 +27,15 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/functional/bind_front.h"
-#include "absl/meta/type_traits.h"
+#include "absl/random/distributions.h"
+#include "absl/random/random.h"
+#include "absl/random/seed_sequences.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -38,8 +43,10 @@
 #include "absl/time/time.h"
 #include "absl/utility/utility.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h" // IWYU pragma: keep
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -54,7 +61,6 @@
 #include "p4_pdpi/pd.h"
 #include "re2/re2.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "system/system.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/forwarding/util.h"
@@ -64,8 +70,6 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -113,11 +117,24 @@ constexpr absl::string_view kL3AdmitUnicastTableEntry = R"pb(
     priority: 2070
   })pb";
 
-// Set the payload for a HashTest packet that contains an identifier
-// and the packet index.
-void SetPayload(packetlib::Packet &packet, int index) {
-  packet.set_payload(
-      absl::Substitute("HashAlgPacket($0): $1", index, packet.payload()));
+absl::BitGen &HashTestBitGen() {
+  static auto *bit_gen = new absl::BitGen();
+
+  return *bit_gen;
+}
+
+// Set the payload for a HashTest packet that contains an identifier,
+// the packet index, and optionally the generator index.
+void SetPayload(packetlib::Packet &packet, int packet_index,
+                std::optional<int> generator_index) {
+  if (generator_index == std::nullopt) {
+    packet.set_payload(absl::Substitute("HashAlgPacket($0): $1", packet_index,
+                                        packet.payload()));
+  } else {
+    packet.set_payload(absl::Substitute("HashAlgPacket($0), Generator($1): $2",
+                                        packet_index, *generator_index,
+                                        packet.payload()));
+  }
 }
 
 // Return the index of a HashTest packet or an error if parsing fails.
@@ -269,39 +286,18 @@ void ReceivePacketsUntilStreamIsClosed(
   }
 }
 
-// Send a test packet to the SUT.
-void SendPacket(const pdpi::IrP4Info &ir_p4info, packetlib::Packet packet,
-                pdpi::P4RuntimeSession &control_p4_session,
-                const P4rtPortId &ingress_port_id) {
-  SCOPED_TRACE(
-      absl::StrCat("Failed to inject packet ", packet.ShortDebugString()));
-  ASSERT_OK_AND_ASSIGN(std::string raw_packet, SerializePacket(packet));
-  ASSERT_OK(pins::InjectEgressPacket(ingress_port_id.GetP4rtEncoding(),
-                                     raw_packet, ir_p4info, &control_p4_session,
-                                     kPacketInterval));
-}
-
-// Send test packets to the SUT. Packets are generated based on the test config.
-void SendPackets(const pdpi::IrP4Info &ir_p4info, int num_packets,
-                 const TestConfiguration &test_config,
-                 pdpi::P4RuntimeSession &control_p4_session,
-                 const P4rtPortId &ingress_port_id,
-                 std::vector<packetlib::Packet> &injected_packets) {
-  // Try to generate one packet first to see if the config is valid.
-  {
-    ASSERT_OK_AND_ASSIGN(packetlib::Packet packet,
-                         pins::GenerateIthPacket(test_config, 0));
-    ASSERT_OK(SerializePacket(packet).status())
-        << "Failed to generate raw packet for " << packet.ShortDebugString();
-  }
-  for (int i = 0; i < num_packets; ++i) {
-    ASSERT_OK_AND_ASSIGN(packetlib::Packet packet,
-                         pins::GenerateIthPacket(test_config, i));
-    SetPayload(packet, i);
-    injected_packets.push_back(packet);
-    // Don't check errors from SendPacket. Continue sending packets.
-    SendPacket(ir_p4info, packet, control_p4_session, ingress_port_id);
-  }
+absl::Status SendPacket(const pdpi::IrP4Info &ir_p4info,
+                        packetlib::Packet packet,
+                        pdpi::P4RuntimeSession &control_p4_session,
+                        const P4rtPortId &ingress_port_id) {
+  ASSIGN_OR_RETURN(
+      std::string raw_packet, SerializePacket(packet),
+      _ << "Failed to inject packet: " << packet.ShortDebugString());
+  RETURN_IF_ERROR(
+      pins::InjectEgressPacket(ingress_port_id.GetP4rtEncoding(), raw_packet,
+                               ir_p4info, &control_p4_session, kPacketInterval))
+      << "Failed to inject packet: " << packet.ShortDebugString();
+  return absl::OkStatus();
 }
 
 // Retrieve the current known port IDs from the switch. Must use numerical port
@@ -561,41 +557,85 @@ void HashTest::RebootSut() {
       << "Switch failed to reboot and come up after " << kRebootTimeout;
 }
 
-void HashTest::SendAndReceivePackets(const pdpi::IrP4Info &ir_p4info,
-                                     absl::string_view record_prefix,
-                                     const P4rtPortId &ingress_port_id,
-                                     int num_packets,
-                                     const TestConfiguration &test_config,
-                                     TestData &test_data) {
-  SCOPED_TRACE(absl::StrCat("Failed while testing config: ", record_prefix));
+absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
+    const pins::TestConfiguration &test_config, int num_packets) {
+  // Try to generate one packet first to see if the config is valid.
+  ASSIGN_OR_RETURN(packetlib::Packet packet,
+                   pins::GenerateIthPacket(test_config, 0));
+  RETURN_IF_ERROR(SerializePacket(packet).status())
+      << "Failed to generate raw packet for " << packet.ShortDebugString();
 
+  // If the range of values available in the hashed field is sufficiently larger
+  // than the number of packets we want to send, generate packets with random
+  // values distributed from the full range. Otherwise, choose sequential
+  // values.
+  int range = pins::Range(test_config);
+  bool use_random_index = range > 4 * num_packets;
+  LOG(INFO) << "Generating " << (use_random_index ? "random" : "sequential")
+            << " packets for config: " << pins::DescribeTestConfig(test_config);
+
+  std::vector<packetlib::Packet> packets;
+  for (int packet_index = 0; packet_index < num_packets; ++packet_index) {
+    int generator_index = use_random_index
+                              ? absl::Uniform(HashTestBitGen(), 0, range)
+                              : packet_index;
+    ASSIGN_OR_RETURN(packetlib::Packet packet,
+                     pins::GenerateIthPacket(test_config, generator_index));
+    SetPayload(
+        packet, packet_index,
+        use_random_index ? std::optional<int>(generator_index) : std::nullopt);
+    packets.push_back(packet);
+  }
+  return packets;
+}
+
+absl::StatusOr<TestPacketMap> HashTest::GeneratePackets(
+    const TestConfigurationMap &test_configs, int num_packets) {
+  TestPacketMap packets;
+  for (const auto &[field, config] : test_configs) {
+    ASSIGN_OR_RETURN(packets[field], GeneratePackets(config, num_packets),
+                     _ << "Invalid test config for " << field);
+  }
+  return packets;
+}
+
+absl::Status HashTest::SendAndReceivePackets(
+    const pdpi::IrP4Info &ir_p4info, absl::string_view record_prefix,
+    const P4rtPortId &ingress_port_id,
+    const std::vector<packetlib::Packet> &packets, TestData &test_data) {
+  SCOPED_TRACE(absl::StrCat("Failed while testing config: ", record_prefix));
   // Set up the receive thread to record packets output by the SUT.
-  ASSERT_OK_AND_ASSIGN(
+  ASSIGN_OR_RETURN(
       std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
       pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch()));
+
   std::thread receive_packet_thread(
       absl::bind_front(ReceivePacketsUntilStreamIsClosed, &GetMirrorTestbed(),
                        &ir_p4info, control_p4_session.get(), &test_data));
 
-  // Inject the packets.
-  std::vector<packetlib::Packet> injected_packets;
-  SendPackets(ir_p4info, num_packets, test_config, *control_p4_session,
-              ingress_port_id, injected_packets);
-  LogPackets(GetMirrorTestbed().Environment(), injected_packets,
+  for (const auto &packet : packets) {
+    RETURN_IF_ERROR(
+        SendPacket(ir_p4info, packet, *control_p4_session, ingress_port_id));
+  }
+  LogPackets(GetMirrorTestbed().Environment(), packets,
              absl::StrCat(record_prefix, "_injected_packets"));
 
   // Wait for all the packets to arrive.
   if (test_data.PacketCount() > 0) {
     absl::Time deadline = absl::Now() + absl::Seconds(30);
-    while (test_data.PacketCount() < num_packets && absl::Now() < deadline) {
+    while (test_data.PacketCount() < packets.size() && absl::Now() < deadline) {
       absl::SleepFor(absl::Seconds(1));
     }
   }
-  EXPECT_OK(test_data.Log(GetMirrorTestbed().Environment(),
-                          absl::StrCat(record_prefix, "_received_packets")));
+  if (auto result =
+          test_data.Log(GetMirrorTestbed().Environment(),
+                        absl::StrCat(record_prefix, "_received_packets"));
+      !result.ok()) {
+    LOG(ERROR) << result;
+  }
   std::set<int> missing_packets;
-  if (test_data.PacketCount() != num_packets) {
-    for (int i = 0; i < num_packets; ++i) {
+  if (test_data.PacketCount() != packets.size()) {
+    for (int i = 0; i < packets.size(); ++i) {
       missing_packets.insert(i);
       for (const auto &[port, packetlist] : test_data.Results()) {
         for (int packet : packetlist) {
@@ -604,15 +644,33 @@ void HashTest::SendAndReceivePackets(const pdpi::IrP4Info &ir_p4info,
       }
     }
   }
-  EXPECT_EQ(test_data.PacketCount(), num_packets)
-      << "Unexpected number of packets received. "
-      << (missing_packets.empty()
-              ? ""
-              : absl::Substitute("Missing packets [$0]",
-                                 absl::StrJoin(missing_packets, ", ")));
+  std::vector<std::string> errors;
+  if (test_data.PacketCount() != packets.size()) {
+    errors.push_back(absl::Substitute(
+        "Unexpected number of packets received. Expected $0. Got $1.$2",
+        packets.size(), test_data.PacketCount(),
+        missing_packets.empty()
+            ? ""
+            : absl::Substitute(" Missing packets [$0]",
+                               absl::StrJoin(missing_packets, ", "))));
+  }
   // Clean up.
-  EXPECT_OK(control_p4_session->Finish());
+  if (absl::Status finished = control_p4_session->Finish(); !finished.ok()) {
+    errors.push_back(absl::StrCat("Failed control_p4_session->Finish(): ",
+                                  finished.message()));
+  }
   receive_packet_thread.join();
+  if (!missing_packets.empty()) {
+    std::vector<packetlib::Packet> missing_packet_list;
+    missing_packet_list.reserve(missing_packets.size());
+    for (int index : missing_packets) {
+      missing_packet_list.push_back(packets[index]);
+    }
+    LogPackets(GetMirrorTestbed().Environment(), missing_packet_list,
+               absl::StrCat(record_prefix, "_missing_packets"));
+  }
+  if (errors.empty()) return absl::OkStatus();
+  return absl::InternalError(absl::StrJoin(errors, "\n"));
 }
 
 // Initializes the forwarding pipeline to forward all packets to the provided
@@ -677,18 +735,30 @@ void HashTest::ForwardAllPacketsToMembers(
   ASSERT_OK(pdpi::InstallPiTableEntries(session.get(), ir_p4info, pi_entries));
 }
 
-void HashTest::SendPacketsAndRecordResultsPerTestConfig(
+absl::Status HashTest::SendPacketsAndRecordResultsPerTestConfig(
     const TestConfigurationMap &test_configs,
     const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
     const P4rtPortId &ingress_port_id, int num_packets,
     absl::node_hash_map<std::string, TestData> &output_record) {
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
-  for (const auto &[config_name, test_config] : test_configs) {
+  ASSIGN_OR_RETURN(TestPacketMap test_packets,
+                   GeneratePackets(test_configs, num_packets));
+  return SendPacketsAndRecordResultsPerTest(test_packets, p4info, test_stage,
+                                            ingress_port_id, output_record);
+}
+
+absl::Status HashTest::SendPacketsAndRecordResultsPerTest(
+    const TestPacketMap &test_packets, const p4::config::v1::P4Info &p4info,
+    absl::string_view test_stage, const P4rtPortId &ingress_port_id,
+    absl::node_hash_map<std::string, TestData> &output_record) {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
+  for (const auto &[config_name, packets] : test_packets) {
     std::string record_prefix = absl::StrCat(test_stage, "_", config_name);
-    ASSERT_NO_FATAL_FAILURE(SendAndReceivePackets(
-        ir_p4info, record_prefix, ingress_port_id, num_packets, test_config,
-        output_record[config_name]));
+    RETURN_IF_ERROR(SendAndReceivePackets(ir_p4info, record_prefix,
+                                          ingress_port_id, packets,
+                                          output_record[config_name]))
+        << "Failed during test " << record_prefix;
   }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<std::string>

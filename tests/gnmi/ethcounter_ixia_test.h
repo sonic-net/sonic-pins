@@ -15,11 +15,27 @@
 #ifndef PINS_TEST_GNMI_ETHCOUNTER_IXIA_TEST_H_
 #define PINS_TEST_GNMI_ETHCOUNTER_IXIA_TEST_H_
 
+#include "absl/container/flat_hash_map.h"
 #include "thinkit/generic_testbed_fixture.h"
 
 namespace pins_test {
 
-class CountersTestFixture : public thinkit::GenericTestbedFixture<> {};
+// Parameters used by the Counter tests.
+struct ParamsForCountersTest {
+  thinkit::GenericTestbedInterface* testbed_interface;
+  p4::config::v1::P4Info p4_info;
+  // CPU queue to use for any punted traffic.
+  std::string cpu_queue_to_use;
+  // DSCP to queue mapping.
+  absl::flat_hash_map<int, std::string> queue_by_dscp;
+};
+class CountersTestFixture
+    : public testing::TestWithParam<ParamsForCountersTest> {
+ protected:
+  void SetUp() override { GetParam().testbed_interface->SetUp(); }
+  void TearDown() override { GetParam().testbed_interface->TearDown(); }
+  ~CountersTestFixture() override { delete GetParam().testbed_interface; }
+};
 
 } // namespace pins_test
 

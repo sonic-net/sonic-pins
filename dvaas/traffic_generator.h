@@ -152,7 +152,9 @@ public:
   absl::StatusOr<ValidationResult> GetValidationResult() override;
   absl::StatusOr<ValidationResult> GetAndClearValidationResult() override;
 
-private:
+  ~SimpleTrafficGenerator();
+
+ private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
   std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
   // Test vectors created as a result of (latest) call to `Init`. Calls to
