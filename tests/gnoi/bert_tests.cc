@@ -541,6 +541,7 @@ void GetAndVerifyBertResultsWithAdminDownInterfaces(
         GetInterfaceNameFromOcInterfacePath(
             result_response.per_port_responses(idx).interface()));
     LOG(INFO) << "Verifying result for interface: " << interface_name;
+    SCOPED_TRACE(absl::Substitute("Interface: $0", interface_name));
     // Check if interface is part of list where admin state was disabled.
     if (IsInterfaceInList(interface_name, admin_down_interfaces) ||
         IsInterfaceInList(interface_name, admin_down_on_peer_interfaces)) {
@@ -1192,16 +1193,27 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   // Select SUT interfaces whose peer interfaces on control switch will be admin
   // disabled in the range
   // [sut_test_interfaces_/2..sut_test_interfaces_.size()).
-  std::vector<std::string> sut_interfaces_peer_admin_down;
-  std::sample(sut_test_interfaces_.begin() + sut_test_interfaces_.size() / 2,
-              sut_test_interfaces_.end(),
-              std::back_inserter(sut_interfaces_peer_admin_down),
-              num_interfaces_to_disable,
-              std::mt19937(absl::GetFlag(FLAGS_idx_seed)));
-  // Get control switch interfaces for admin disable.
+  std::vector<std::string> sut_interfaces_peer_admin_down_candidates(
+      sut_test_interfaces_.begin() + sut_test_interfaces_.size() / 2,
+      sut_test_interfaces_.end());
+  ASSERT_OK_AND_ASSIGN(std::vector<std::string>
+                           control_switch_interfaces_for_admin_down_candidates,
+                       GetPeerInterfacesForSutInterfaces(
+                           sut_interfaces_peer_admin_down_candidates));
   ASSERT_OK_AND_ASSIGN(
-      std::vector<std::string> control_switch_interfaces_for_admin_down,
-      GetPeerInterfacesForSutInterfaces(sut_interfaces_peer_admin_down));
+      std::vector<std::string>
+          control_switch_interfaces_for_admin_down_filtered_candidates,
+      control_device.FilterCollateralDownOnAdminDownInterfaces(
+          control_switch_interfaces_for_admin_down_candidates));
+  std::vector<std::string> control_switch_interfaces_for_admin_down;
+  std::sample(
+      control_switch_interfaces_for_admin_down_filtered_candidates.begin(),
+      control_switch_interfaces_for_admin_down_filtered_candidates.end(),
+      std::back_inserter(control_switch_interfaces_for_admin_down),
+      num_interfaces_to_disable, std::mt19937(absl::GetFlag(FLAGS_idx_seed)));
+  ASSERT_OK_AND_ASSIGN(std::vector<std::string> sut_interfaces_peer_admin_down,
+                       GetSutInterfacesForControlInterfaces(
+                           control_switch_interfaces_for_admin_down));
 
   LOG(INFO) << "Starting BERT on " << sut_test_interfaces_.size()
             << " {SUT, control_device} links: ";

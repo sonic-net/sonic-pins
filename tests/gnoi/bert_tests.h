@@ -129,6 +129,20 @@ class BertTest : public thinkit::GenericTestbedFixture<> {
     return peer_interfaces;
   }
 
+  absl::StatusOr<std::vector<std::string>> GetSutInterfacesForControlInterfaces(
+      const std::vector<std::string> &control_interfaces) {
+    std::vector<std::string> sut_interfaces;
+    sut_interfaces.reserve(control_interfaces.size());
+    for (const std::string &control_interface : control_interfaces) {
+      if (control_to_peer_interface_mapping_.count(control_interface) == 0) {
+        return absl::NotFoundError("Failed to find peer.");
+      }
+      sut_interfaces.push_back(
+          control_to_peer_interface_mapping_[control_interface]);
+    }
+    return sut_interfaces;
+  }
+
  protected:
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
