@@ -20,6 +20,7 @@
 
 #include "absl/flags/flag.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -32,6 +33,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "tests/integration/system/nsf/milestone.h"
@@ -40,16 +42,10 @@
 
 ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
           "The NSF milestone to test.");
-ABSL_FLAG(bool, do_nsf_upgrade, false,
-          "Specifies whether to perform NSF Upgrade during the test or just an "
-          "NSF Reboot.");
-ABSL_FLAG(bool, include_traffic, false,
-          "Specifies whether to include traffic transmission and validations "
-          "during the test.");
 
 namespace pins_test {
 
-using ::p4::v1::ReadResponse;
+using ::p4::v1::Entity;
 
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
@@ -67,111 +63,149 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
-// Assumption: Valid config (gNMI and P4Info) has been pushed (to avoid
-// duplicate config push)
-absl::Status NsfUpgradeTest::NsfUpgrade(const std::string& prev_version,
-                                        const std::string& version) {
-  RETURN_IF_ERROR(ValidateSutState(prev_version, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
-                                     component_validators_, prev_version,
-                                     testbed_));
-  RETURN_IF_ERROR(CaptureDbState());
+absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
+    const ImageConfigParams& curr_image_config,
+    const ImageConfigParams& next_image_config) {
+  LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
+            << " to: " << next_image_config.image_label;
 
-  // P4 Snapshot before programming flows and starting the traffic.
-  ReadResponse p4flow_snapshot1 = TakeP4FlowSnapshot();
+  RETURN_IF_ERROR(ValidateTestbedState(curr_image_config.image_label, testbed_,
+                                       *ssh_client_,
+                                       curr_image_config.gnmi_config));
+  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
+                                     component_validators_,
+                                     curr_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(StoreSutDebugArtifacts(
+      absl::StrCat(curr_image_config.image_label, "_before_nsf_reboot"),
+      testbed_));
+
+  // P4 snapshot before programming flows and starting the traffic.
+  LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
+               "the traffic";
+  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot1,
+                   TakeP4FlowSnapshot(testbed_));
 
   // Program all the flows.
-  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(testbed_));
+  LOG(INFO) << "Programming flows before starting the traffic";
+  RETURN_IF_ERROR(
+      flow_programmer_->ProgramFlows(curr_image_config.p4_info, testbed_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowProgram,
-                                     component_validators_, prev_version,
-                                     testbed_));
+                                     component_validators_,
+                                     curr_image_config.image_label, testbed_));
 
-  if (absl::GetFlag(FLAGS_include_traffic)) {
-    RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed_));
-    RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStartTraffic,
-                                       component_validators_, prev_version,
-                                       testbed_));
-  }
+  LOG(INFO) << "Starting the traffic";
+  RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed_));
+  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStartTraffic,
+                                     component_validators_,
+                                     curr_image_config.image_label, testbed_));
 
+  // P4 snapshot before Upgrade and NSF reboot.
+  LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
+  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot2,
+                   TakeP4FlowSnapshot(testbed_));
 
-  // P4 Snapshot before Upgrade and NSF reboot.
-  ReadResponse p4flow_snapshot2 = TakeP4FlowSnapshot();
-
-  if (absl::GetFlag(FLAGS_do_nsf_upgrade)) {
-    // Copy image to the switch for installation.
-    RETURN_IF_ERROR(ImageCopy(version, testbed_, *ssh_client_));
-    RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnImageCopy,
-                                       component_validators_, version,
-                                       testbed_));
-  }
+  LOG(INFO) << "Starting NSF Upgrade";
+  // Copy image to the switch for installation.
+  ASSIGN_OR_RETURN(
+      std::string image_version,
+      ImageCopy(next_image_config.image_label, testbed_, *ssh_client_));
+  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnImageCopy,
+                                     component_validators_,
+                                     next_image_config.image_label, testbed_));
 
   // Perform NSF Reboot.
   RETURN_IF_ERROR(NsfReboot(testbed_));
-  RETURN_IF_ERROR(WaitForReboot(testbed_, *ssh_client_));
+  RETURN_IF_ERROR(WaitForNsfReboot(testbed_, *ssh_client_));
 
   // Perform validations after reboot is completed.
+  RETURN_IF_ERROR(ValidateTestbedState(next_image_config.image_label, testbed_,
+                                       *ssh_client_,
+                                       next_image_config.gnmi_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
-                                     component_validators_, version, testbed_));
-  RETURN_IF_ERROR(ValidateSutState(version, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateDbState());
+                                     component_validators_,
+                                     next_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(StoreSutDebugArtifacts(
+      absl::StrCat(curr_image_config.image_label, "_after_nsf_reboot"),
+      testbed_));
 
-  // P4 Snapshot after upgrade and NSF reboot.
-  ReadResponse p4flow_snapshot3 = TakeP4FlowSnapshot();
+  // P4 snapshot after upgrade and NSF reboot.
+  LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
+  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot3,
+                   TakeP4FlowSnapshot(testbed_));
 
   // Push the new config and validate.
-  RETURN_IF_ERROR(PushConfig(GetParam().gnmi_config, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateSutState(version, testbed_, *ssh_client_));
+  RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_));
+  RETURN_IF_ERROR(ValidateTestbedState(next_image_config.image_label, testbed_,
+                                       *ssh_client_,
+                                       next_image_config.gnmi_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
-                                     component_validators_, version, testbed_));
+                                     component_validators_,
+                                     next_image_config.image_label, testbed_));
 
-  if (absl::GetFlag(FLAGS_include_traffic)) {
-    // Wait for transmission duration.
-    LOG(INFO) << "Wait for " << kTrafficRunDuration
-              << " for transmit completion";
-    absl::SleepFor(kTrafficRunDuration);
+  // Wait for transmission duration.
+  LOG(INFO) << "Wait for " << kTrafficRunDuration << " for transmit completion";
+  absl::SleepFor(kTrafficRunDuration);
 
-    // Stop and validate traffic
-    RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed_));
+  // Stop and validate traffic
+  LOG(INFO) << "Stopping the traffic";
+  RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed_));
 
-    RETURN_IF_ERROR(
-        traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
-    RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
-                                       component_validators_, version,
-                                       testbed_));
-  }
+  LOG(INFO) << "Validating the traffic";
+  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
+  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
+                                     component_validators_,
+                                     next_image_config.image_label, testbed_));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
   // testbeds).
+  LOG(INFO) << "Clearing the flows";
   RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed_));
 
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowCleanup,
-                                     component_validators_, version, testbed_));
+                                     component_validators_,
+                                     next_image_config.image_label, testbed_));
 
-  ReadResponse p4flow_snapshot4 = TakeP4FlowSnapshot();
+  // P4 snapshot after cleaning up flows.
+  LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
+  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot4,
+                   TakeP4FlowSnapshot(testbed_));
 
+  LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
+               "Clearing Flows";
   RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
-  return CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4);
+  LOG(INFO) << "Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs. After "
+               "Upgrade + NSF Reboot";
+  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
+  LOG(INFO) << "NSF Upgrade from: " << curr_image_config.image_label
+            << " to: " << next_image_config.image_label << " is complete.";
+  return absl::OkStatus();
 }
 
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
-  const std::string third_last_image = "third_last_image";
-  const std::string second_last_image = "second_last_image";
-  const std::string last_image = "last_image";
-  const std::string current_image = "current_image";
-
-  ASSERT_OK(InstallRebootPushConfig(third_last_image, GetParam().gnmi_config,
-                                    testbed_, *ssh_client_));
-
-  if (absl::GetFlag(FLAGS_do_nsf_upgrade)) {
-    // NSF Upgrade to N - 2 (once a week)
-    ASSERT_OK(NsfUpgrade(third_last_image, second_last_image));
-
-    // NSF Upgrade to N - 1
-    ASSERT_OK(NsfUpgrade(second_last_image, last_image));
+  // The test needs at least 1 image_config_param to run.
+  if (GetParam().image_config_params.empty()) {
+    GTEST_SKIP() << "No image config params provided";
   }
 
-  // NSF Upgrade to N
-  ASSERT_OK(NsfUpgrade(last_image, current_image));
+  // The first element of the given `image_config_params` is considered as the
+  // "base" image that will be installed and configured on the SUT before going
+  // ahead with NSF Upgrade/Reboot for the following `image_config_params` (if
+  // present) in order.
+  ASSERT_OK(InstallRebootPushConfig(GetParam().image_config_params[0], testbed_,
+                                    *ssh_client_));
+  // If only a single config param is provided, we do an N to N upgrade.
+  if (GetParam().image_config_params.size() == 1) {
+    ASSERT_OK(NsfUpgradeOrReboot(GetParam().image_config_params[0],
+                                 GetParam().image_config_params[0]));
+    return;
+  }
+  // If multiple config params are provided, we do N - 1 to N upgrades.
+  for (auto image_config_param = GetParam().image_config_params.begin();
+       image_config_param + 1 != GetParam().image_config_params.end();
+       ++image_config_param) {
+    ASSERT_OK(
+        NsfUpgradeOrReboot(*image_config_param, *(image_config_param + 1)));
+  }
 }
 
 }  // namespace pins_test

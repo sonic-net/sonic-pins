@@ -147,6 +147,12 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
                        .mutate_update_probability = 0.1,
                        .tables_for_which_to_not_exceed_resource_guarantees =
                            {"vrf_table", "mirror_session_table"},
+                       // TODO: Remove once P4RT translated types
+                       // are supported by P4-constraints.
+                       .ignore_constraints_on_tables =
+                           {
+                               "ingress.routing_lookup.vrf_table",
+                           },
                    }));
   ASSERT_OK_AND_ASSIGN(
       auto p4rt_session,
