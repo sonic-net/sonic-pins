@@ -328,6 +328,7 @@ absl::Status SetupDefaultMulticastProgramming(
                          ir_p4info, vrf_id, ipv6_address, multicast_group_id));
     ipmc_entities.insert(ipmc_entities.end(), ipmcs_v6.begin(), ipmcs_v6.end());
   }
+
   RETURN_IF_ERROR(pdpi::InstallPiEntities(&session, ir_p4info, ipmc_entities));
   entities_created.insert(entities_created.end(), ipmc_entities.begin(),
                           ipmc_entities.end());
@@ -713,6 +714,7 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   // EXPECT_OK(validation_result_del.HasSuccessRateOfAtLeast(1.0));
 }
 
+
 // TEST_P(L3MulticastTestFixture, UnregisteredParticipantProgramming) {
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
@@ -894,6 +896,7 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryForUnknownVrfFails) {
 // TEST_P(L3MulticastTestFixture, InvalidProgrammingInvalidIpAddress) {
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
+
 // TEST_P(L3MulticastTestFixture, InvalidOrderDeleteRifWhileInUse) {
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
