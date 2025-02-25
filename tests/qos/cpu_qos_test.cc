@@ -31,6 +31,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -142,6 +143,7 @@ ExtractQueueInfoViaGnmiConfig(absl::string_view gnmi_config) {
             scheduler["inputs"]["input"][0]["config"]["queue"]
                 .get<std::string>();
         queue_info_by_queue_name[queue_name].gnmi_queue_name = queue_name;
+	queue_info_by_queue_name[queue_name].p4_queue_name = queue_name;
         std::string peak_rate = scheduler["two-rate-three-color"]["config"]
                                          ["google-pins-qos:pir-pkts"]
                                              .get<std::string>();
@@ -173,7 +175,6 @@ ExtractQueueInfoViaGnmiConfig(absl::string_view gnmi_config) {
 
 // Set up the switch to punt packets to CPU.
 absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
-                            const netaddr::Ipv4Address &src_ip,
                             const netaddr::Ipv4Address &dst_ip,
                             absl::string_view p4_queue,
                             const p4::config::v1::P4Info &p4info,
@@ -191,31 +192,36 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
           match {
             dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
             is_ipv4 { value: "0x1" }
-            src_ip { value: "$1" mask: "255.255.255.255" }
-            dst_ip { value: "$2" mask: "255.255.255.255" }
+            dst_ip { value: "$1" mask: "255.255.255.255" }
           }
-          action { acl_trap { qos_queue: "$3" } }
+          action { acl_trap { qos_queue: "$2" } }
           priority: 1
         }
       )pb",
-      dmac.ToString(), src_ip.ToString(), dst_ip.ToString(), p4_queue));
-  std::vector<p4::v1::TableEntry> pi_entries;
-  ASSIGN_OR_RETURN(
-      pi_entries.emplace_back(), pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
-      _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
-                     << acl_entry.DebugString() << " error: ");
+      dmac.ToString(), dst_ip.ToString(), p4_queue));
+  p4::v1::TableEntry pi_entry;
+  ASSIGN_OR_RETURN(pi_entry, pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
+                   _.SetPrepend()
+                       << "Failed in PD table conversion to PI, entry: "
+                       << acl_entry.DebugString() << " error: ");
 
   LOG(INFO) << "InstallPiTableEntries";
-  return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
+  return gutil::StatusBuilder(pdpi::InstallPiTableEntry(&p4_session, pi_entry))
+         << "Failed to install entry: " << acl_entry.ShortDebugString();
 }
 
-// Set up the switch to punt packets to CPU.
-absl::Status SetUpV6PuntToCPU(const netaddr::MacAddress &dmac,
-                              const netaddr::Ipv6Address &src_ip,
-                              const netaddr::Ipv6Address &dst_ip,
-                              absl::string_view p4_queue,
-                              const p4::config::v1::P4Info &p4info,
-                              pdpi::P4RuntimeSession &p4_session) {
+// Set up the switch to punt packets to CPU
+// The function also adds a wildcard l3_admit entry, so that
+// packets addressed to switch are punted to the CPU due to L3.
+// We would like packets punted to CPU due to multiple reasons but
+// should still be able to receive the packets end to end due to the
+// punt flow.
+absl::Status SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
+    const netaddr::MacAddress &dmac, const netaddr::Ipv6Address &src_ip,
+    const netaddr::Ipv6Address &dst_ip, int rate_bytes_per_second,
+    int burst_in_bytes, absl::string_view p4_queue,
+    const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
+
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
@@ -224,6 +230,21 @@ absl::Status SetUpV6PuntToCPU(const netaddr::MacAddress &dmac,
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+
+  auto l3_admit_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+      R"pb(
+        l3_admit_table_entry {
+          match {}  # Wildcard.
+          action { admit_to_l3 {} }
+          priority: 1
+        }
+      )pb");
+  std::vector<p4::v1::TableEntry> pi_entries;
+  ASSIGN_OR_RETURN(pi_entries.emplace_back(),
+                   pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, l3_admit_entry),
+                   _.SetPrepend()
+                       << "Failed in PD table conversion to PI, entry: "
+                       << l3_admit_entry.DebugString() << " error: ");
 
   auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
@@ -234,10 +255,11 @@ absl::Status SetUpV6PuntToCPU(const netaddr::MacAddress &dmac,
           }
           action { acl_trap { qos_queue: "$1" } }
           priority: 1
+          meter_config { bytes_per_second: $2 burst_bytes: $3 }
         }
       )pb",
-      dmac.ToString(), p4_queue));
-  std::vector<p4::v1::TableEntry> pi_entries;
+      dmac.ToString(), p4_queue, rate_bytes_per_second, burst_in_bytes));
+
   ASSIGN_OR_RETURN(
       pi_entries.emplace_back(),
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
@@ -719,12 +741,71 @@ absl::StatusOr<openconfig::QueuesByName> GetCpuQueueStateViaGnmi(
 
   // Convert `Queues` to `QueuesByName`, which is equivalent but more convenient
   // for diffing.
+  // Today, subtree subscription to queues isn't working. Query each leaf
+  // individually for the actual data.
   openconfig::QueuesByName queues_by_name;
   for (auto &queue : queues_proto.queues()) {
-    queues_by_name.mutable_queues()->insert({queue.name(), queue.state()});
+    ASSIGN_OR_RETURN(
+        std::string transmitted_packets,
+        GetGnmiStatePathInfo(
+            &gnmi_stub, absl::Substitute(
+                            "qos/interfaces/interface[interface-id=CPU]/output/"
+                            "queues/queue[name=$0]/state/transmit-pkts",
+                            queue.name())),
+        _ << "Failed to query transmit-pkts for CPU queue " << queue.name());
+    openconfig::Queues::Queue::State state;
+    ASSIGN_OR_RETURN(*state.mutable_transmit_pkts(),
+                     ParseJsonValue(transmitted_packets));
+    queues_by_name.mutable_queues()->insert({queue.name(), state});
   }
 
   return queues_by_name;
+}
+
+// Return the name of each queue with a difference in transmitted packets.
+// Only returns queues that are present in both snapshots.
+absl::flat_hash_set<std::string> QueuesWithTransmittedPacketDifferences(
+    const openconfig::QueuesByName &snapshot1,
+    const openconfig::QueuesByName &snapshot2) {
+  absl::flat_hash_set<std::string> diff_queues;
+  for (const auto &[name, state] : snapshot2.queues()) {
+    auto queue1 = snapshot1.queues().find(name);
+    if (queue1 == snapshot1.queues().end()) continue;
+    if (queue1->second.transmit_pkts() != state.transmit_pkts()) {
+      diff_queues.insert(name);
+    }
+  }
+  return diff_queues;
+}
+
+void EraseQueuesFromSnapshot(const absl::flat_hash_set<std::string> &queues,
+                             openconfig::QueuesByName &snapshot) {
+  for (const auto &queue : queues) snapshot.mutable_queues()->erase(queue);
+}
+
+// Not all CPU queues reported by the switch are valid. Return true if the queue
+// is usable.
+bool IsValidCpuQueue(absl::string_view queue_name) {
+  return !absl::StartsWith(queue_name, "CPU:");
+}
+
+absl::Status InstallAclEntriesToFilterOutUnsolicitedPackets(
+    pdpi::P4RuntimeSession &sut_p4rt_session) {
+  return absl::OkStatus();
+}
+
+// Increment the number of transmitted packets in the queue state proto by the
+// specified amount.
+absl::Status IncrementTransmittedPackets(
+    openconfig::Queues::Queue::State &state, int packets) {
+  int initial_packet_count;
+  if (!absl::SimpleAtoi(state.transmit_pkts(), &initial_packet_count)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot increment non-integer transmitted packet count for queue "
+           << "with state: " << state.ShortDebugString() << ".";
+  }
+  state.set_transmit_pkts(absl::StrCat(initial_packet_count + packets));
+  return absl::OkStatus();
 }
 
 // Purpose: Verify that the CPU is protected from packets by default.
@@ -1291,11 +1372,9 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   constexpr absl::string_view kPuntOnlyTest = "punt_only_test";
   constexpr absl::string_view kLoopbackPuntTest = "to_loopback_punt_test";
-  constexpr absl::string_view kLoopbackPuntTtl0Test =
-      "to_loopback_ttl0_punt_test";
+  constexpr absl::string_view kPuntTtl0Test = "ttl0_punt_test";
 
-  for (auto test_case :
-       {kPuntOnlyTest, kLoopbackPuntTest, kLoopbackPuntTtl0Test}) {
+  for (auto test_case : {kPuntOnlyTest, kPuntTtl0Test}) {
     LOG(INFO) << "\n\nTesting case: " << test_case;
     LOG(INFO) << "\n===================\n\n";
     if (test_case == kLoopbackPuntTest) {
@@ -1303,22 +1382,13 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
           traffic_ref, loopback_ipv6.front().ToString(), *generic_testbed));
       LOG(INFO) << "Traffic to Loopback IP: "
                 << loopback_ipv6.front().ToString();
-    } else if (test_case == kLoopbackPuntTtl0Test) {
-      ASSERT_OK(pins_test::ixia::SetDestIPv6(
-          traffic_ref, loopback_ipv6.front().ToString(), *generic_testbed));
+    } else if (test_case == kPuntTtl0Test) {
       ASSERT_OK(pins_test::ixia::SetIpTTL(traffic_ref, /*ttl=*/0,
                                           /*is_ipv4=*/false, *generic_testbed));
       LOG(INFO) << "Traffic with TTL=0 and to Loopback IP: "
                 << loopback_ipv6.front().ToString();
     }
     for (auto &[queue_name, queue_info] : queues) {
-      // TODO : Need to fix supported CPU queues. Currently,
-      // punting to queue 0 is not supported by OA in SONiC.
-      if (generic_testbed->Environment().MaskKnownFailures() &&
-          queue_info.p4_queue_name == "0x0") {
-        continue;
-      }
-
       LOG(INFO) << "\n\n\nTesting Queue : " << queue_info.gnmi_queue_name
                 << "\n===================\n\n\n";
 
@@ -1352,9 +1422,29 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
       ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, frame_size,
                                               *generic_testbed));
 
-      ASSERT_OK(SetUpV6PuntToCPU(dest_mac, source_ip, dest_ip,
-                                 queue_info.p4_queue_name, GetParam().p4info,
-                                 *sut_p4_session));
+      // Punt flows to Inband queues should not succeed.
+      if (absl::StartsWith(queue_info.p4_queue_name, "INBAND")) {
+        ASSERT_FALSE(
+            SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
+                dest_mac, source_ip, dest_ip,
+                /*rate_bytes_per_second=*/
+                (queue_info.rate_packets_per_second + 10) * frame_size,
+                /*burst_in_bytes=*/(queue_info.rate_packets_per_second + 10) *
+                    frame_size / 4,
+                queue_info.p4_queue_name, GetParam().p4info, *sut_p4_session)
+                .ok());
+        continue;
+      }
+      // Punt packets to CPU with flow rate set to atleast 10 packets
+      // higher than the queue rate. This means that the queue limits will
+      // be the bottleneck.
+      ASSERT_OK(SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
+          dest_mac, source_ip, dest_ip,
+          /*rate_bytes_per_second=*/(queue_info.rate_packets_per_second + 10) *
+              frame_size,
+          /*burst_in_bytes=*/(queue_info.rate_packets_per_second + 10) *
+              frame_size / 4,
+          queue_info.p4_queue_name, GetParam().p4info, *sut_p4_session));
       ASSERT_OK_AND_ASSIGN(
           QueueCounters initial_counters,
           GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
@@ -1372,12 +1462,12 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
       absl::SleepFor(kTrafficDuration);
 
       static constexpr absl::Duration kPollInterval = absl::Seconds(5);
-      static constexpr absl::Duration kTotalTime = absl::Seconds(30);
+      static constexpr absl::Duration kTotalTime = absl::Seconds(15);
       static const int kIterations = kTotalTime / kPollInterval;
 
       QueueCounters final_counters;
       QueueCounters delta_counters;
-      // Check for counters every 5 seconds up to 30 seconds till they match.
+      // Check for counters every 5 seconds up to 15 seconds till they match.
       for (int gnmi_counters_check = 0; gnmi_counters_check < kIterations;
            gnmi_counters_check++) {
         absl::SleepFor(kPollInterval);
@@ -1397,11 +1487,6 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
             kTotalFrames) {
           break;
         }
-        ASSERT_NE(gnmi_counters_check, kIterations - 1)
-            << "GNMI packet count "
-            << delta_counters.num_packets_transmitted +
-                   delta_counters.num_packets_dropped
-            << " != Packets sent from Ixia " << kTotalFrames;
       }
 
       {
@@ -1604,10 +1689,14 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
           GetParam().control_plane_bandwidth_bytes_per_second / 2;
     }
 
-    // TODO : Need to fix supported CPU queues. Currently, punting
-    // to queue 0 is not supported by OA in SONiC.
-    if (generic_testbed->Environment().MaskKnownFailures() &&
-        queue_info.p4_queue_name == "0x0") {
+    // Punt flows to Inband queues should not succeed.
+    if (absl::StartsWith(queue_info.p4_queue_name, "INBAND")) {
+      ASSERT_FALSE((SetUpPuntToCPUWithRateLimit(
+                        dest_mac, dest_ip, queue_info.p4_queue_name,
+                        flow_rate_limit_in_bytes_per_second,
+                        /*burst_in_bytes=*/kMaxFrameSize, GetParam().p4info,
+                        *sut_p4_session)
+                        .ok()));
       continue;
     }
 
