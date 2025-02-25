@@ -1,3 +1,4 @@
+#include <iostream>
 #include <ostream>
 
 #include "absl/strings/ascii.h"
@@ -5,6 +6,7 @@
 #include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
 #include "gutil/proto.h"
+#include "gutil/status.h"
 #include "tests/qos/gnmi_parsers.h"
 
 // -- Pretty priners for golden testing ----------------------------------------
@@ -28,16 +30,6 @@ std::ostream& operator<<(std::ostream& os, const std::variant<T, U>& t_or_u) {
 }
 
 }  // namespace std
-
-namespace absl {
-
-template <class T>
-std::ostream& operator<<(std::ostream& os, const absl::StatusOr<T>& statusor) {
-  if (statusor.ok()) return os << *statusor;
-  return os << statusor.status().code() << ": " << statusor.status().message();
-}
-
-}  // namespace absl
 
 namespace google::protobuf {
 
@@ -190,6 +182,8 @@ static constexpr absl::string_view kTestGnmiQosConfig =
 
 static constexpr absl::string_view kTestGnmiQosConfig2 = R"json(
 {
+"openconfig-qos:qos" : {
+  "scheduler-policies" : {
     "scheduler-policy": [
       {
         "name": "cpu_scheduler",
@@ -676,6 +670,129 @@ static constexpr absl::string_view kTestGnmiQosConfig2 = R"json(
         }
       }
     ]
+  }
+}
+}
+)json";
+
+static constexpr absl::string_view kTestGnmiQosConfig3 = R"json(
+{
+"openconfig-qos:qos" : {
+  "buffer-allocation-profiles": {
+    "buffer-allocation-profile": [
+      {
+        "name": "staggered_8queue",
+        "queues": {
+          "queue": [
+            {
+              "name": "AF1",
+              "config": {
+                "name": "AF1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 1
+              }
+            },
+            {
+              "name": "AF2",
+              "config": {
+                "name": "AF2",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "AF3",
+              "config": {
+                "name": "AF3",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "AF4",
+              "config": {
+                "name": "AF4",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "BE1",
+              "config": {
+                "name": "BE1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": -1
+              }
+            },
+            {
+              "name": "LLQ1",
+              "config": {
+                "name": "LLQ1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 1
+              }
+            },
+            {
+              "name": "LLQ2",
+              "config": {
+                "name": "LLQ2",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "NC1",
+              "config": {
+                "name": "NC1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "interfaces": {
+    "interface": [
+      {
+        "interface-id": "Ethernet1/1/1",
+        "config": {
+          "interface-id": "Ethernet1/1/1"
+        },
+        "output": {
+          "config": {
+            "buffer-allocation-profile": "staggered_8queue"
+          }
+        }
+      }
+    ]
+  }
+}
 }
 )json";
 
@@ -685,32 +802,50 @@ void RunAllParsersAndPrintTheirOutput() {
 
   // Test ParseLoopbackIps.
   std::cout << "-- OUTPUT: ParseLoopbackIps --\n";
-  std::cout << ParseLoopbackIps(kTestGnmiInterfaceConfig) << "\n";
+  std::cout << gutil::StreamableStatusOr(
+                   ParseLoopbackIps(kTestGnmiInterfaceConfig))
+            << "\n";
 
   // Test ParseLoopbackIpv4s.
   std::cout << "-- OUTPUT: ParseLoopbackIpv4s --\n";
-  std::cout << ParseLoopbackIpv4s(kTestGnmiInterfaceConfig) << "\n";
+  std::cout << gutil::StreamableStatusOr(
+                   ParseLoopbackIpv4s(kTestGnmiInterfaceConfig))
+            << "\n";
 
   // Test ParseLoopbackIpv6s.
   std::cout << "-- OUTPUT: ParseLoopbackIpv6s --\n";
-  std::cout << ParseLoopbackIpv6s(kTestGnmiInterfaceConfig) << "\n";
+  std::cout << gutil::StreamableStatusOr(
+                   ParseLoopbackIpv6s(kTestGnmiInterfaceConfig))
+            << "\n";
 
   // Test openconfig::Qos parsing.
   std::cout << kInputBanner << absl::StripAsciiWhitespace(kTestGnmiQosConfig)
             << "\n";
   std::cout << "-- OUTPUT: gutil::ParseJsonAsProto<openconfig::Config> --\n";
-  std::cout << gutil::ParseJsonAsProto<openconfig::Config>(
-                   kTestGnmiQosConfig,
-                   /*ignore_unknown_fields=*/true)
+  std::cout << gutil::StreamableStatusOr(
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       kTestGnmiQosConfig,
+                       /*ignore_unknown_fields=*/true))
             << "\n";
 
   // Test openconfig::Qos parsing.
   std::cout << kInputBanner << absl::StripAsciiWhitespace(kTestGnmiQosConfig2)
             << "\n";
   std::cout << "-- OUTPUT: gutil::ParseJsonAsProto<openconfig::Config> --\n";
-  std::cout << gutil::ParseJsonAsProto<openconfig::Config>(
-                   kTestGnmiQosConfig,
-                   /*ignore_unknown_fields=*/true)
+  std::cout << gutil::StreamableStatusOr(
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       kTestGnmiQosConfig2,
+                       /*ignore_unknown_fields=*/true))
+            << "\n";
+
+  // Test openconfig::Qos parsing.
+  std::cout << kInputBanner << absl::StripAsciiWhitespace(kTestGnmiQosConfig3)
+            << "\n";
+  std::cout << "-- OUTPUT: gutil::ParseJsonAsProto<openconfig::Config> --\n";
+  std::cout << gutil::StreamableStatusOr(
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       kTestGnmiQosConfig3,
+                       /*ignore_unknown_fields=*/true))
             << "\n";
 }
 
