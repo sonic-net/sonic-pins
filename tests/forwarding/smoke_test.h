@@ -28,6 +28,9 @@ struct SmokeTestParams {
   // given (default), or otherwise pushes the given config before starting.
   std::optional<std::string> gnmi_config;
   p4::config::v1::P4Info p4info;
+  // Use on platforms that don't support GRE tunnels to avoid using them in
+  // tests.
+  bool does_not_support_gre_tunnels;
 };
 
 class SmokeTestFixture : public testing::TestWithParam<SmokeTestParams> {
