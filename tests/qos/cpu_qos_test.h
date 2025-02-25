@@ -29,11 +29,11 @@
 #include "gutil/testing.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 // Structure holds packet and expected target queue passed in to test as
@@ -56,7 +56,8 @@ struct ParamsForTestsWithoutIxia {
   // Function to generate test packets and expected target queue passed into the
   // test for verification.
   std::function<std::vector<PacketAndExpectedTargetQueue>(
-      absl::string_view gnmi_config)>
+      absl::string_view gnmi_config,
+      std::optional<sai::Instantiation> instantiation)>
       test_packet_generator_function;
 };
 

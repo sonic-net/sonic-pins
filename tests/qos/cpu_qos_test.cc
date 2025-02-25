@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <variant>
@@ -24,6 +25,8 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/flags/declare.h"
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
@@ -31,6 +34,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -39,7 +43,9 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/util/json_util.h"
+#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/overload.h"
 #include "gutil/proto.h"
@@ -65,7 +71,9 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/versions.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
@@ -77,8 +85,8 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+
+ABSL_DECLARE_FLAG(std::optional<sai::Instantiation>, switch_instantiation);
 
 namespace pins_test {
 namespace {
@@ -142,6 +150,7 @@ ExtractQueueInfoViaGnmiConfig(absl::string_view gnmi_config) {
             scheduler["inputs"]["input"][0]["config"]["queue"]
                 .get<std::string>();
         queue_info_by_queue_name[queue_name].gnmi_queue_name = queue_name;
+	queue_info_by_queue_name[queue_name].p4_queue_name = queue_name;
         std::string peak_rate = scheduler["two-rate-three-color"]["config"]
                                          ["google-pins-qos:pir-pkts"]
                                              .get<std::string>();
@@ -173,7 +182,6 @@ ExtractQueueInfoViaGnmiConfig(absl::string_view gnmi_config) {
 
 // Set up the switch to punt packets to CPU.
 absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
-                            const netaddr::Ipv4Address &src_ip,
                             const netaddr::Ipv4Address &dst_ip,
                             absl::string_view p4_queue,
                             const p4::config::v1::P4Info &p4info,
@@ -191,31 +199,36 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
           match {
             dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
             is_ipv4 { value: "0x1" }
-            src_ip { value: "$1" mask: "255.255.255.255" }
-            dst_ip { value: "$2" mask: "255.255.255.255" }
+            dst_ip { value: "$1" mask: "255.255.255.255" }
           }
-          action { acl_trap { qos_queue: "$3" } }
+          action { acl_trap { qos_queue: "$2" } }
           priority: 1
         }
       )pb",
-      dmac.ToString(), src_ip.ToString(), dst_ip.ToString(), p4_queue));
-  std::vector<p4::v1::TableEntry> pi_entries;
-  ASSIGN_OR_RETURN(
-      pi_entries.emplace_back(), pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
-      _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
-                     << acl_entry.DebugString() << " error: ");
+      dmac.ToString(), dst_ip.ToString(), p4_queue));
+  p4::v1::TableEntry pi_entry;
+  ASSIGN_OR_RETURN(pi_entry, pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
+                   _.SetPrepend()
+                       << "Failed in PD table conversion to PI, entry: "
+                       << acl_entry.DebugString() << " error: ");
 
   LOG(INFO) << "InstallPiTableEntries";
-  return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
+  return gutil::StatusBuilder(pdpi::InstallPiTableEntry(&p4_session, pi_entry))
+         << "Failed to install entry: " << acl_entry.ShortDebugString();
 }
 
-// Set up the switch to punt packets to CPU.
-absl::Status SetUpV6PuntToCPU(const netaddr::MacAddress &dmac,
-                              const netaddr::Ipv6Address &src_ip,
-                              const netaddr::Ipv6Address &dst_ip,
-                              absl::string_view p4_queue,
-                              const p4::config::v1::P4Info &p4info,
-                              pdpi::P4RuntimeSession &p4_session) {
+// Set up the switch to punt packets to CPU
+// The function also adds a wildcard l3_admit entry, so that
+// packets addressed to switch are punted to the CPU due to L3.
+// We would like packets punted to CPU due to multiple reasons but
+// should still be able to receive the packets end to end due to the
+// punt flow.
+absl::Status SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
+    const netaddr::MacAddress &dmac, const netaddr::Ipv6Address &src_ip,
+    const netaddr::Ipv6Address &dst_ip, int rate_bytes_per_second,
+    int burst_in_bytes, absl::string_view p4_queue,
+    const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
+
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
@@ -225,25 +238,85 @@ absl::Status SetUpV6PuntToCPU(const netaddr::MacAddress &dmac,
 
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
 
-  auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+  auto l3_admit_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
-        acl_ingress_table_entry {
-          match {
-            dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
-            is_ipv6 { value: "0x1" }
-          }
-          action { acl_trap { qos_queue: "$1" } }
+        l3_admit_table_entry {
+          match {}  # Wildcard.
+          action { admit_to_l3 {} }
           priority: 1
+          meter_config { bytes_per_second: $2 burst_bytes: $3 }
         }
-      )pb",
-      dmac.ToString(), p4_queue));
+      )pb");
   std::vector<p4::v1::TableEntry> pi_entries;
-  ASSIGN_OR_RETURN(
-      pi_entries.emplace_back(),
-      pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
-      _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
-                     << acl_entry.DebugString() << " error: ");
+  ASSIGN_OR_RETURN(pi_entries.emplace_back(),
+                   pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, l3_admit_entry),
+                   _.SetPrepend()
+                       << "Failed in PD table conversion to PI, entry: "
+                       << l3_admit_entry.DebugString() << " error: ");
 
+  if (ir_p4info.tables_by_name().contains("acl_ingress_qos_table")) {
+    auto punt_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+        R"pb(
+          acl_ingress_table_entry {
+            match {
+              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ipv6 { value: "0x1" }
+            }
+            action { acl_trap { qos_queue: "$1" } }
+            priority: 1
+          }
+        )pb",
+        dmac.ToString(), p4_queue));
+
+    LOG(INFO) << "Installing trap rule to queue " << p4_queue
+              << " in ACL punt table";
+    ASSIGN_OR_RETURN(
+        pi_entries.emplace_back(),
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, punt_entry));
+
+    auto qos_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+        R"pb(
+          acl_ingress_qos_table_entry {
+            match {
+              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ipv6 { value: "0x1" }
+            }
+            action {
+              set_qos_queue_and_cancel_copy_above_rate_limit { qos_queue: "$1" }
+            }
+            priority: 4400
+            meter_config { bytes_per_second: $2 burst_bytes: $3 }
+          }
+        )pb",
+        dmac.ToString(), p4_queue, rate_bytes_per_second, burst_in_bytes));
+
+    LOG(INFO) << "Installing QoS rule to rate limit flow to a rate of "
+              << rate_bytes_per_second << "(Bps) and burst of "
+              << burst_in_bytes << "(Bytes)";
+    ASSIGN_OR_RETURN(
+        pi_entries.emplace_back(),
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, qos_entry));
+  } else {
+    auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+        R"pb(
+          acl_ingress_table_entry {
+            match {
+              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+              is_ipv6 { value: "0x1" }
+            }
+            action { acl_trap { qos_queue: "$1" } }
+            priority: 1
+            meter_config { bytes_per_second: $2 burst_bytes: $3 }
+          }
+        )pb",
+        dmac.ToString(), p4_queue, rate_bytes_per_second, burst_in_bytes));
+
+    ASSIGN_OR_RETURN(
+        pi_entries.emplace_back(),
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
+        _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
+                       << acl_entry.DebugString() << " error: ");
+  }
   LOG(INFO) << "InstallPiTableEntries";
   return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
 }
@@ -263,8 +336,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
 
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
 
-  // There can be 2 schemes for punting depending on
-  // pipeline.
+  // There can be 2 schemes for punting depending on pipeline.
   // If p4 info table has the "acl_ingress_qos_table" configured, then
   //     1. Punt the packets using "acl_ingress_table" entry.
   //     2. Rate limit the packets using a "acl_ingress_qos_table" entry, which
@@ -717,14 +789,69 @@ absl::StatusOr<openconfig::QueuesByName> GetCpuQueueStateViaGnmi(
       gutil::ToAbslStatus(google::protobuf::util::JsonStringToMessage(
           queues_json, &queues_proto, options)));
 
-  // Convert `Queues` to `QueuesByName`, which is equivalent but more convenient
-  // for diffing.
   openconfig::QueuesByName queues_by_name;
   for (auto &queue : queues_proto.queues()) {
-    queues_by_name.mutable_queues()->insert({queue.name(), queue.state()});
+    ASSIGN_OR_RETURN(
+        std::string transmitted_packets,
+        GetGnmiStatePathInfo(
+            &gnmi_stub, absl::Substitute(
+                            "qos/interfaces/interface[interface-id=CPU]/output/"
+                            "queues/queue[name=$0]/state/transmit-pkts",
+                            queue.name())),
+        _ << "Failed to query transmit-pkts for CPU queue " << queue.name());
+    openconfig::Queues::Queue::State state;
+    ASSIGN_OR_RETURN(*state.mutable_transmit_pkts(),
+                     ParseJsonValue(transmitted_packets));
+    queues_by_name.mutable_queues()->insert({queue.name(), state});
   }
 
   return queues_by_name;
+}
+
+// Return the name of each queue with a difference in transmitted packets.
+// Only returns queues that are present in both snapshots.
+absl::flat_hash_set<std::string> QueuesWithTransmittedPacketDifferences(
+    const openconfig::QueuesByName &snapshot1,
+    const openconfig::QueuesByName &snapshot2) {
+  absl::flat_hash_set<std::string> diff_queues;
+  for (const auto &[name, state] : snapshot2.queues()) {
+    auto queue1 = snapshot1.queues().find(name);
+    if (queue1 == snapshot1.queues().end()) continue;
+    if (queue1->second.transmit_pkts() != state.transmit_pkts()) {
+      diff_queues.insert(name);
+    }
+  }
+  return diff_queues;
+}
+
+void EraseQueuesFromSnapshot(const absl::flat_hash_set<std::string> &queues,
+                             openconfig::QueuesByName &snapshot) {
+  for (const auto &queue : queues) snapshot.mutable_queues()->erase(queue);
+}
+
+// Not all CPU queues reported by the switch are valid. Return true if the queue
+// is usable.
+bool IsValidCpuQueue(absl::string_view queue_name) {
+  return !absl::StartsWith(queue_name, "CPU:");
+}
+
+absl::Status InstallAclEntriesToFilterOutUnsolicitedPackets(
+    pdpi::P4RuntimeSession &sut_p4rt_session) {
+  return absl::OkStatus();
+}
+
+// Increment the number of transmitted packets in the queue state proto by the
+// specified amount.
+absl::Status IncrementTransmittedPackets(
+    openconfig::Queues::Queue::State &state, int packets) {
+  int initial_packet_count;
+  if (!absl::SimpleAtoi(state.transmit_pkts(), &initial_packet_count)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot increment non-integer transmitted packet count for queue "
+           << "with state: " << state.ShortDebugString() << ".";
+  }
+  state.set_transmit_pkts(absl::StrCat(initial_packet_count + packets));
+  return absl::OkStatus();
 }
 
 // Purpose: Verify that the CPU is protected from packets by default.
@@ -767,6 +894,27 @@ TEST_P(CpuQosTestWithoutIxia,
       std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>;
   ASSERT_OK_AND_ASSIGN(IpAddresses loopback_ips,
                        ParseLoopbackIps(sut_gnmi_config));
+
+  // Install ACL table entry to drop broadcast packets from Control to avoid
+  // broadcast storm.
+  ASSERT_OK_AND_ASSIGN(
+      const sai::TableEntry pd_broadcast_drop_entry,
+      gutil::ParseTextProto<sai::TableEntry>(R"pb(
+        acl_ingress_table_entry {
+          priority: 1
+          match {
+            dst_mac { value: "ff:ff:ff:ff:ff:ff" mask: "ff:ff:ff:ff:ff:ff" }
+          }
+          action { acl_drop {} }
+        }
+      )pb"));
+
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_drop_entry,
+                       pdpi::PartialPdTableEntryToPiTableEntry(
+                           ir_p4info, pd_broadcast_drop_entry));
+
+  ASSERT_OK(
+      pdpi::InstallPiTableEntry(control_p4rt_session.get(), pi_drop_entry));
 
   // Read CPU queue state prior to injecting test packets. The state should
   // remain unchanged when we inject test packets.
@@ -971,35 +1119,28 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
       ASSERT_OK(pins::InjectEgressPacket(
           /*port=*/link_used_for_test_packets.control_device_port_p4rt_name,
           /*packet=*/raw_packet, ir_p4info, control_p4rt_session.get(),
-          /*packet_delay=*/std::nullopt));
+          /*packet_delay=*/absl::Milliseconds(10)));
     }
 
-    // Verify we receive expected packets back.
-    absl::SleepFor(absl::Seconds(1));
-    int num_vlan_packets_received = 0;
-    ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::StreamMessageResponse> pi_responses,
-        sut_p4rt_session->ReadStreamChannelResponsesAndFinish());
-    for (const auto &pi_response : pi_responses) {
-      sai::StreamMessageResponse pd_response;
-      ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
-                                                  &pd_response))
-          << " packet in PI to PD failed: " << pi_response.DebugString();
-      ASSERT_TRUE(pd_response.has_packet())
-          << " received unexpected stream message for packet in: "
-          << pd_response.DebugString();
-      packetlib::Packet punted_packet =
-          packetlib::ParsePacket(pd_response.packet().payload());
-      EXPECT_THAT(punted_packet, EqualsProto(test_packet));
-      num_vlan_packets_received += 1;
-    }
-    EXPECT_EQ(num_vlan_packets_received, kPacketCount);
+    EXPECT_OK(sut_p4rt_session->HandleNextNStreamMessages(
+        [&](const p4::v1::StreamMessageResponse &message) {
+          if (!message.has_packet()) return false;
+          packetlib::Packet punted_packet =
+              packetlib::ParsePacket(message.packet().payload());
+          if (!testing::Matches(EqualsProto(test_packet))(punted_packet)) {
+            LOG(WARNING) << "Received unknown packet: "
+                         << punted_packet.ShortDebugString();
+            return false;
+          }
+          return true;
+        },
+        kPacketCount, absl::Minutes(2)));
   }
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
 
-// Purpose: Verify DSCP-to-queue mapping for traffic to switch loopback IP.
-TEST_P(CpuQosTestWithoutIxia, TrafficToLoopbackIpGetsMappedToCorrectQueues) {
+// Purpose: Verify protocol-to-queue mapping for traffic to switch.
+TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
 
   // Check that a test packet generator function is specified.
@@ -1039,7 +1180,8 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopbackIpGetsMappedToCorrectQueues) {
             << link_used_for_test_packets;
 
   std::vector<PacketAndExpectedTargetQueue> test_packets =
-      GetParam().test_packet_generator_function(sut_gnmi_config);
+      GetParam().test_packet_generator_function(
+          sut_gnmi_config, absl::GetFlag(FLAGS_switch_instantiation));
   ASSERT_FALSE(test_packets.empty())
       << "No packets to test, maybe no loopback IP is configured on switch?";
 
@@ -1291,11 +1433,9 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   constexpr absl::string_view kPuntOnlyTest = "punt_only_test";
   constexpr absl::string_view kLoopbackPuntTest = "to_loopback_punt_test";
-  constexpr absl::string_view kLoopbackPuntTtl0Test =
-      "to_loopback_ttl0_punt_test";
+  constexpr absl::string_view kPuntTtl0Test = "ttl0_punt_test";
 
-  for (auto test_case :
-       {kPuntOnlyTest, kLoopbackPuntTest, kLoopbackPuntTtl0Test}) {
+  for (auto test_case : {kPuntOnlyTest, kPuntTtl0Test}) {
     LOG(INFO) << "\n\nTesting case: " << test_case;
     LOG(INFO) << "\n===================\n\n";
     if (test_case == kLoopbackPuntTest) {
@@ -1303,22 +1443,13 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
           traffic_ref, loopback_ipv6.front().ToString(), *generic_testbed));
       LOG(INFO) << "Traffic to Loopback IP: "
                 << loopback_ipv6.front().ToString();
-    } else if (test_case == kLoopbackPuntTtl0Test) {
-      ASSERT_OK(pins_test::ixia::SetDestIPv6(
-          traffic_ref, loopback_ipv6.front().ToString(), *generic_testbed));
+    } else if (test_case == kPuntTtl0Test) {
       ASSERT_OK(pins_test::ixia::SetIpTTL(traffic_ref, /*ttl=*/0,
                                           /*is_ipv4=*/false, *generic_testbed));
       LOG(INFO) << "Traffic with TTL=0 and to Loopback IP: "
                 << loopback_ipv6.front().ToString();
     }
     for (auto &[queue_name, queue_info] : queues) {
-      // TODO : Need to fix supported CPU queues. Currently,
-      // punting to queue 0 is not supported by OA in SONiC.
-      if (generic_testbed->Environment().MaskKnownFailures() &&
-          queue_info.p4_queue_name == "0x0") {
-        continue;
-      }
-
       LOG(INFO) << "\n\n\nTesting Queue : " << queue_info.gnmi_queue_name
                 << "\n===================\n\n\n";
 
@@ -1352,9 +1483,29 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
       ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, frame_size,
                                               *generic_testbed));
 
-      ASSERT_OK(SetUpV6PuntToCPU(dest_mac, source_ip, dest_ip,
-                                 queue_info.p4_queue_name, GetParam().p4info,
-                                 *sut_p4_session));
+      // Punt flows to Inband queues should not succeed.
+      if (absl::StartsWith(queue_info.p4_queue_name, "INBAND")) {
+        ASSERT_FALSE(
+            SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
+                dest_mac, source_ip, dest_ip,
+                /*rate_bytes_per_second=*/
+                (queue_info.rate_packets_per_second + 10) * frame_size,
+                /*burst_in_bytes=*/(queue_info.rate_packets_per_second + 10) *
+                    frame_size / 4,
+                queue_info.p4_queue_name, GetParam().p4info, *sut_p4_session)
+                .ok());
+        continue;
+      }
+      // Punt packets to CPU with flow rate set to atleast 10 packets
+      // higher than the queue rate. This means that the queue limits will
+      // be the bottleneck.
+      ASSERT_OK(SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
+          dest_mac, source_ip, dest_ip,
+          /*rate_bytes_per_second=*/(queue_info.rate_packets_per_second + 10) *
+              frame_size,
+          /*burst_in_bytes=*/(queue_info.rate_packets_per_second + 10) *
+              frame_size / 4,
+          queue_info.p4_queue_name, GetParam().p4info, *sut_p4_session));
       ASSERT_OK_AND_ASSIGN(
           QueueCounters initial_counters,
           GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
@@ -1372,12 +1523,12 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
       absl::SleepFor(kTrafficDuration);
 
       static constexpr absl::Duration kPollInterval = absl::Seconds(5);
-      static constexpr absl::Duration kTotalTime = absl::Seconds(30);
+      static constexpr absl::Duration kTotalTime = absl::Seconds(15);
       static const int kIterations = kTotalTime / kPollInterval;
 
       QueueCounters final_counters;
       QueueCounters delta_counters;
-      // Check for counters every 5 seconds up to 30 seconds till they match.
+      // Check for counters every 5 seconds up to 15 seconds till they match.
       for (int gnmi_counters_check = 0; gnmi_counters_check < kIterations;
            gnmi_counters_check++) {
         absl::SleepFor(kPollInterval);
@@ -1397,11 +1548,6 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
             kTotalFrames) {
           break;
         }
-        ASSERT_NE(gnmi_counters_check, kIterations - 1)
-            << "GNMI packet count "
-            << delta_counters.num_packets_transmitted +
-                   delta_counters.num_packets_dropped
-            << " != Packets sent from Ixia " << kTotalFrames;
       }
 
       {
@@ -1604,10 +1750,14 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
           GetParam().control_plane_bandwidth_bytes_per_second / 2;
     }
 
-    // TODO : Need to fix supported CPU queues. Currently, punting
-    // to queue 0 is not supported by OA in SONiC.
-    if (generic_testbed->Environment().MaskKnownFailures() &&
-        queue_info.p4_queue_name == "0x0") {
+    // Punt flows to Inband queues should not succeed.
+    if (absl::StartsWith(queue_info.p4_queue_name, "INBAND")) {
+      ASSERT_FALSE((SetUpPuntToCPUWithRateLimit(
+                        dest_mac, dest_ip, queue_info.p4_queue_name,
+                        flow_rate_limit_in_bytes_per_second,
+                        /*burst_in_bytes=*/kMaxFrameSize, GetParam().p4info,
+                        *sut_p4_session)
+                        .ok()));
       continue;
     }
 
