@@ -12,44 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_TESTS_FORWARDING_L3_MULTICAST_TEST_H_
-#define PINS_TESTS_FORWARDING_L3_MULTICAST_TEST_H_
+#ifndef PINS_TESTS_FORWARDING_ACL_FEATURE_TEST_H_
+#define PINS_TESTS_FORWARDING_ACL_FEATURE_TEST_H_
 
-#include <memory>
 #include <optional>
+#include <tuple>
 
 #include "dvaas/dataplane_validation.h"
-#include "gtest/gtest.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "dvaas/test_vector.h"
+#include "dvaas/test_vector.pb.h"
+#include "dvaas/validation_result.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
 namespace pins_test {
 
-struct L3MulticastTestParams {
+struct AclFeatureTestParams {
   // Using a shared_ptr because parameterized tests require objects to be
   // copyable.
   std::shared_ptr<thinkit::MirrorTestbedInterface> mirror_testbed;
-  // The test assumes that the switch is pre-configured if no `gnmi_config` is
-  // given (default), or otherwise pushes the given config before starting.
-  std::optional<std::string> gnmi_config;
   std::optional<p4::config::v1::P4Info> p4info;
+  std::string test_name;
+  // ACL action variant to test out different behavior
+  std::optional<sai::PuntAction> punt_action;
+  dvaas::DataplaneValidationParams dvaas_params;
   std::shared_ptr<dvaas::DataplaneValidator> dvaas;
 };
 
-class L3MulticastTestFixture
-    : public testing::TestWithParam<L3MulticastTestParams> {
+class AclFeatureTestFixture
+    : public testing::TestWithParam<AclFeatureTestParams> {
  public:
-  void SetUp() override;
-  void TearDown() override { GetParam().mirror_testbed->TearDown(); }
+  void SetUp() override { GetParam().mirror_testbed->SetUp(); }
 
- protected:
-  // This test runs on a mirror testbed setup, but we only need to configure
-  // the SUT.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
-  pdpi::IrP4Info ir_p4info_;
+  void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 };
 
 }  // namespace pins_test
-#endif  // PINS_TESTS_FORWARDING_L3_MULTICAST_TEST_H_
+
+#endif  // PINS_TESTS_FORWARDING_ACL_FEATURE_TEST_H_

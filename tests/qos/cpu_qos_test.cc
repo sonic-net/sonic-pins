@@ -244,6 +244,7 @@ absl::Status SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
           match {}  # Wildcard.
           action { admit_to_l3 {} }
           priority: 1
+          meter_config { bytes_per_second: $2 burst_bytes: $3 }
         }
       )pb");
   std::vector<p4::v1::TableEntry> pi_entries;
