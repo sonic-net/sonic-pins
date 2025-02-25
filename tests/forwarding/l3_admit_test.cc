@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "tests/forwarding/l3_admit_test.h"
 
 #include <algorithm>
@@ -32,6 +33,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -47,14 +50,16 @@
 #include "tests/forwarding/util.h"
 #include "tests/lib/p4info_helper.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
-#include "tests/lib/packet_in_helper.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins {
 namespace {
+
+// Depending on the test we may want to send packets with, or without, a VLAN
+// ID. If the test want's to use a VLAN ID it should choose the value itself,
+// otherwise it can use this constant to say no VLAN ID should be set.
+constexpr absl::string_view kNoVlanId = "";
 
 absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
                                  const pdpi::IrP4Info& ir_p4info,
@@ -75,9 +80,10 @@ absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
                              }
                            }
                          }
-                         )pb",
+                       )pb",
                        vrf_id),
       &set_vrf_ir_update));
+
   p4::v1::WriteRequest pi_write_request;
   ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
                    VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
@@ -146,7 +152,7 @@ absl::Status PuntAllPacketsToController(pdpi::P4RuntimeSession& session,
         }
       )pb",
       &ir_write_request));
-  
+
   ASSIGN_OR_RETURN(p4::v1::WriteRequest pi_write_request,
                    pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
   return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
@@ -156,14 +162,14 @@ absl::Status PuntAllPacketsToController(pdpi::P4RuntimeSession& session,
 // flows.
 struct L3Route {
   std::string vrf_id;
-  
+
   std::string switch_mac;
   std::pair<std::string, int> switch_ip;
-  
+
   std::string peer_port;
   std::string peer_mac;
   std::string peer_ip;
-  
+
   std::string router_interface_id;
   std::string nexthop_id;
 };
@@ -201,7 +207,7 @@ absl::Status AddL3Route(pdpi::P4RuntimeSession& session,
                           .action = IpTableOptions::Action::kSetNextHopId,
                           .nexthop_id = options.nexthop_id,
                       }));
-  
+
   return pdpi::SetMetadataAndSendPiWriteRequest(&session, write_request);
 }
 
@@ -224,55 +230,66 @@ absl::Status AdmitL3Route(pdpi::P4RuntimeSession& session,
 }
 
 absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
+                                      absl::string_view vlan_id,
                                       absl::string_view dst_ip,
                                       absl::string_view payload) {
   packetlib::Packet packet;
-  RETURN_IF_ERROR(gutil::ReadProtoFromString(
-      absl::Substitute(
-          R"pb(
-            headers {
-              ethernet_header {
-                ethernet_destination: "$0"
-                ethernet_source: "00:00:22:22:00:00"
-                ethertype: "0x0800"
-              }
-            }
-            headers {
-              ipv4_header {
-                version: "0x4"
-                ihl: "0x5"
-                dscp: "0x1b"
-                ecn: "0x1"
-                identification: "0x0000"
-                flags: "0x0"
-                fragment_offset: "0x0000"
-                ttl: "0x10"
-                protocol: "0x11"  # UDP
-                ipv4_source: "10.0.0.1"
-                ipv4_destination: "$1"
-              }
-            }
-            headers {
-              udp_header { source_port: "0x0014" destination_port: "0x000a" }
-            }
-            payload: "$2"
-          )pb",
-          dst_mac, dst_ip, payload),
-      &packet));
+
+  // Ethernet
+  auto* ethernet = packet.add_headers();
+  ethernet->mutable_ethernet_header()->set_ethernet_destination(dst_mac);
+  ethernet->mutable_ethernet_header()->set_ethernet_source("00:00:22:22:00:00");
+  ethernet->mutable_ethernet_header()->set_ethertype("0x0800");
+
+  // VLAN
+  if (!vlan_id.empty()) {
+    auto* vlan = packet.add_headers();
+    vlan->mutable_vlan_header()->set_priority_code_point("0x0");
+    vlan->mutable_vlan_header()->set_drop_eligible_indicator("0x0");
+    vlan->mutable_vlan_header()->set_vlan_identifier(vlan_id);
+    vlan->mutable_vlan_header()->set_ethertype(
+        ethernet->ethernet_header().ethertype());
+
+    ethernet->mutable_ethernet_header()->set_ethertype("0x8100");
+  }
+
+  // IP
+  auto* ip = packet.add_headers();
+  ip->mutable_ipv4_header()->set_version("0x4");
+  ip->mutable_ipv4_header()->set_ihl("0x5");
+  ip->mutable_ipv4_header()->set_dscp("0x1b");
+  ip->mutable_ipv4_header()->set_ecn("0x1");
+  ip->mutable_ipv4_header()->set_identification("0x0000");
+  ip->mutable_ipv4_header()->set_flags("0x0");
+  ip->mutable_ipv4_header()->set_fragment_offset("0x0000");
+  ip->mutable_ipv4_header()->set_ttl("0x10");
+  ip->mutable_ipv4_header()->set_protocol("0x11");
+  ip->mutable_ipv4_header()->set_ipv4_source("10.0.0.1");
+  ip->mutable_ipv4_header()->set_ipv4_destination(dst_ip);
+
+  // UDP
+  auto* udp = packet.add_headers();
+  udp->mutable_udp_header()->set_source_port("0x0014");
+  udp->mutable_udp_header()->set_destination_port("0x000a");
+
+  // Payload
+  packet.set_payload(payload);
+
   return packetlib::SerializePacket(packet);
 }
 
 absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
                            const pdpi::IrP4Info& ir_p4info,
                            const std::string& port_id, int packet_count,
-                           absl::string_view dst_mac, absl::string_view dst_ip,
+                           absl::string_view dst_mac, absl::string_view vlan_id,
+                           absl::string_view dst_ip,
                            absl::string_view payload) {
   LOG(INFO) << absl::StreamFormat("Sending %d packets with %s, %s to port %s.",
                                   packet_count, dst_mac, dst_ip, port_id);
 
   for (int i = 0; i < packet_count; ++i) {
     ASSIGN_OR_RETURN(std::string packet,
-                     UdpPacket(dst_mac, dst_ip,
+                     UdpPacket(dst_mac, vlan_id, dst_ip,
                                absl::Substitute("[Packet:$0] $1", i, payload)));
     // Rate limit to 500pps to avoid punt packet drops on the control switch.
     RETURN_IF_ERROR(InjectEgressPacket(port_id, packet, ir_p4info, &session,
@@ -282,14 +299,14 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
 }
 
 bool IsNonLagEthernetInterface(
-    const pins_test::openconfig::Interfaces::Interface &interface) {
+    const pins_test::openconfig::Interfaces::Interface& interface) {
   return interface.state().enabled() && interface.state().has_p4rt_id() &&
          absl::StartsWith(interface.name(), "Ethernet") &&
          interface.ethernet().state().aggregate_id().empty();
 }
 
-absl::StatusOr<std::vector<std::string>>
-GetNUpInterfaceIDs(thinkit::Switch &device, int num_interfaces) {
+absl::StatusOr<std::vector<std::string>> GetNUpInterfaceIDs(
+    thinkit::Switch& device, int num_interfaces) {
   // The test fixture pushes a new config during setup so we give the switch a
   // few minutes to converge before failing to report no valid ports.
   absl::Duration time_limit = absl::Minutes(3);
@@ -315,7 +332,7 @@ GetNUpInterfaceIDs(thinkit::Switch &device, int num_interfaces) {
 
   // Convert the sample into a string.
   std::vector<std::string> result;
-  for (const auto &port_id : random_sample) {
+  for (const auto& port_id : random_sample) {
     result.push_back(absl::StrCat(port_id.GetOpenConfigEncoding()));
   }
   return result;
@@ -324,6 +341,7 @@ GetNUpInterfaceIDs(thinkit::Switch &device, int num_interfaces) {
 }  // namespace
 
 TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
+
   // Get SUT and control ports to test on.
   ASSERT_OK_AND_ASSIGN(
       auto sut_ports,
@@ -336,9 +354,6 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(control_switch_p4rt_session_.get(),
-                                       PacketInHelper::NoFilter);
   ASSERT_OK(
       PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
 
@@ -357,7 +372,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
       AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
-  // Admit only 1 MAC address to the forwaring pipeline.
+  // Admit only 1 MAC address to the forwarding pipeline.
   ASSERT_OK(AdmitL3Route(
       *sut_p4rt_session_, ir_p4info_,
       L3AdmitOptions{
@@ -368,58 +383,53 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
   // Send 2 sets of packets to the switch. The first set of packets should not
   // match the L3 admit MAC and therefore will be dropped. The second set of
   // packet should match the L3 admit MAC and therefore get forwarded.
-  const int kNumberOfTestPacket = 100;
-  
+  const int kNumberOfTestPackets = 100;
+
   // Send the "bad" packets first to give them the most time.
   const std::string kBadPayload =
       "Testing L3 forwarding. This packet should be dropped.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[0], kNumberOfTestPacket,
-                          /*dst_mac=*/"00:aa:bb:cc:cc:dd",
+                          control_ports[0], kNumberOfTestPackets,
+                          /*dst_mac=*/"00:aa:bb:cc:cc:dd", kNoVlanId,
                           /*dst_ip=*/"10.0.0.1", kBadPayload));
 
   // Then send the "good" packets.
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[0], kNumberOfTestPacket,
-                          /*dst_mac=*/"00:01:02:03:04:05",
+                          control_ports[0], kNumberOfTestPackets,
+                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
                           /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
-  absl::Time timeout = absl::Now() + absl::Minutes(1);
   int good_packet_count = 0;
   int bad_packet_count = 0;
-  while (good_packet_count < kNumberOfTestPacket) {
-    if (packetio_control->HasPacketInMessage()) {
-      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
-                           packetio_control->GetNextPacketInMessage());
-      // Verify this is the packet we expect.
-      packetlib::Packet packet_in =
-          packetlib::ParsePacket(response.packet().payload());
-      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          absl::StrContains(packet_in.payload(), kGoodPayload)) {
-        ++good_packet_count;
-      } else if (response.update_case() ==
-                     p4::v1::StreamMessageResponse::kPacket &&
-                 packet_in.payload() == kBadPayload) {
-        ++bad_packet_count;
-      } else {
-        LOG(WARNING) << "Unexpected response: " << response.DebugString();
-      }
-    }
-    
-    if (absl::Now() > timeout) {
-      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
-      break;
-    }
-  }
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        // Verify this is the packet we expect.
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          ++good_packet_count;
+          return true;
+        }
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kBadPayload)) {
+          ++bad_packet_count;
+          return false;
+        }
+        LOG(WARNING) << "Unexpected response: " << message.DebugString();
+        return false;
+      },
+      kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
   LOG(INFO) << "Done collecting packets.";
-  
-  EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+
+  EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
   EXPECT_EQ(bad_packet_count, 0);
 }
 
 TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
+
   // Get SUT and control ports to test on.
   ASSERT_OK_AND_ASSIGN(
       auto sut_ports,
@@ -432,9 +442,6 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(control_switch_p4rt_session_.get(),
-                                       PacketInHelper::NoFilter);
   ASSERT_OK(
       PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
 
@@ -463,46 +470,38 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
 
   // Send 5 sets of packets to the switch each with a different MAC address that
   // matches the L3Admit rule's mask.
-  const int kNumberOfTestPacket = 20;
+  const int kNumberOfTestPackets = 20;
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
   for (int i = 0; i < 5; ++i) {
     std::string dst_mac = absl::StrFormat("00:01:02:03:%02d:05", i);
     ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                            control_ports[0], kNumberOfTestPacket, dst_mac,
-                            /*dst_ip=*/"10.0.0.1", kGoodPayload));
+                            control_ports[0], kNumberOfTestPackets, dst_mac,
+                            kNoVlanId, /*dst_ip=*/"10.0.0.1", kGoodPayload));
   }
 
-  absl::Time timeout = absl::Now() + absl::Minutes(1);
   int good_packet_count = 0;
-  while (good_packet_count < 5 * kNumberOfTestPacket) {
-    if (packetio_control->HasPacketInMessage()) {
-      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
-                           packetio_control->GetNextPacketInMessage());
-
-      // Verify this is the packet we expect.
-      packetlib::Packet packet_in =
-          packetlib::ParsePacket(response.packet().payload());
-      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          absl::StrContains(packet_in.payload(), kGoodPayload)) {
-        ++good_packet_count;
-      } else {
-        LOG(WARNING) << "Unexpected response: " << response.DebugString();
-      }
-    }
-
-    if (absl::Now() > timeout) {
-      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
-      break;
-    }
-  }
-
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        // Verify this is the packet we expect.
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          ++good_packet_count;
+          return true;
+        }
+        LOG(WARNING) << "Unexpected response: " << message.DebugString();
+        return false;
+      },
+      5 * kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
   LOG(INFO) << "Done collecting packets.";
-  
-  EXPECT_EQ(good_packet_count, 5 * kNumberOfTestPacket);
+
+  EXPECT_EQ(good_packet_count, 5 * kNumberOfTestPackets);
 }
 
 TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
+
   // Get SUT and control ports to test on.
   ASSERT_OK_AND_ASSIGN(
       auto sut_ports,
@@ -515,9 +514,6 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(control_switch_p4rt_session_.get(),
-                                       PacketInHelper::NoFilter);
   ASSERT_OK(
       PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
 
@@ -548,70 +544,53 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
   // Send 2 sets of packets to the switch. The first set of packets should not
   // match the L3 admit port and therefore will be dropped. The second set of
   // packet should match the L3 admit port and therefore get forwarded.
-  const int kNumberOfTestPacket = 100;
+  const int kNumberOfTestPackets = 100;
 
   // Send the "bad" packets first to give them the most time.
   const std::string kBadPayload =
       "Testing L3 forwarding. This packet should be dropped.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[1], kNumberOfTestPacket,
-                          /*dst_mac=*/"00:01:02:03:04:05",
+                          control_ports[1], kNumberOfTestPackets,
+                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
                           /*dst_ip=*/"10.0.0.1", kBadPayload));
 
   // Then send the "good" packets.
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[0], kNumberOfTestPacket,
-                          /*dst_mac=*/"00:01:02:03:04:05",
+                          control_ports[0], kNumberOfTestPackets,
+                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
                           /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
-  absl::Time timeout = absl::Now() + absl::Minutes(1);
   int good_packet_count = 0;
   int bad_packet_count = 0;
-  while (good_packet_count < kNumberOfTestPacket) {
-    if (packetio_control->HasPacketInMessage()) {
-      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
-                           packetio_control->GetNextPacketInMessage());
-
-      // Verify this is the packet we expect.
-      packetlib::Packet packet_in =
-          packetlib::ParsePacket(response.packet().payload());
-      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          absl::StrContains(packet_in.payload(), kGoodPayload)) {
-        ++good_packet_count;
-      } else if (response.update_case() ==
-                     p4::v1::StreamMessageResponse::kPacket &&
-                 packet_in.payload() == kBadPayload) {
-        ++bad_packet_count;
-      } else {
-        LOG(WARNING) << "Unexpected response: " << response.DebugString();
-      }
-    }
-
-    if (absl::Now() > timeout) {
-      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
-      break;
-    }
-  }
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        // Verify this is the packet we expect.
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          ++good_packet_count;
+          return true;
+        }
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kBadPayload)) {
+          ++bad_packet_count;
+          return false;
+        }
+        LOG(WARNING) << "Unexpected response: " << message.DebugString();
+        return false;
+      },
+      kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
   LOG(INFO) << "Done collecting packets.";
 
-  if (GetParam()
-          .testbed_interface->GetMirrorTestbed()
-          .Environment()
-          .MaskKnownFailures()) {
-    // TODO: Reduce expected count by tolerance level.
-    const int kDropTolerance = 1;
-    int adjusted_good_packets = kNumberOfTestPacket - kDropTolerance;
-    EXPECT_GE(good_packet_count, adjusted_good_packets);
-    EXPECT_LE(good_packet_count, kNumberOfTestPacket);
-  } else {
-    EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
-  }
+  EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
   EXPECT_EQ(bad_packet_count, 0);
 }
 
 TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
+
   // Only use 1 port because for the router interface L3 admit behavior to work
   // the incomming packet needs to match the outgoing port.
   ASSERT_OK_AND_ASSIGN(
@@ -621,9 +600,6 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(control_switch_p4rt_session_.get(),
-                                       PacketInHelper::NoFilter);
   ASSERT_OK(
       PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
 
@@ -645,43 +621,36 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
 
   // Send 1 set of packets to the switch using the switch's MAC address from the
   // L3 route.
-  const int kNumberOfTestPacket = 100;
+  const int kNumberOfTestPackets = 100;
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          sut_ports[0], kNumberOfTestPacket,
-                          /*dst_mac=*/"00:00:00:00:00:01",
+                          sut_ports[0], kNumberOfTestPackets,
+                          /*dst_mac=*/"00:00:00:00:00:01", kNoVlanId,
                           /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
-  absl::Time timeout = absl::Now() + absl::Minutes(1);
   int good_packet_count = 0;
-  while (good_packet_count < kNumberOfTestPacket) {
-    if (packetio_control->HasPacketInMessage()) {
-      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
-                           packetio_control->GetNextPacketInMessage());
-
-      // Verify this is the packet we expect.
-      packetlib::Packet packet_in =
-          packetlib::ParsePacket(response.packet().payload());
-      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          absl::StrContains(packet_in.payload(), kGoodPayload)) {
-        ++good_packet_count;
-      } else {
-        LOG(WARNING) << "Unexpected response: " << response.DebugString();
-      }
-    }
-
-    if (absl::Now() > timeout) {
-      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
-      break;
-    }
-  }
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        // Verify this is the packet we expect.
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          ++good_packet_count;
+          return true;
+        }
+        LOG(WARNING) << "Unexpected response: " << message.DebugString();
+        return false;
+      },
+      kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
   LOG(INFO) << "Done collecting packets.";
 
-  EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+  EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
 }
 
 TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
+
   // Only run this test if the ACL_PRE_INGRESS table supports matching on
   // DST_MAC.
   if (!TableHasMatchField(ir_p4info_, "acl_pre_ingress_table", "dst_mac")) {
@@ -701,9 +670,6 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  std::unique_ptr<PacketInHelper> packetio_control =
-      std::make_unique<PacketInHelper>(control_switch_p4rt_session_.get(),
-                                       PacketInHelper::NoFilter);
   ASSERT_OK(
       PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
 
@@ -745,7 +711,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
   // Send 2 set of packets to the switch. One using the expected destination
   // MAC (gets forwarded), and another using an unexpected destination MAC
   // (gets dropped).
-  const int kNumberOfTestPacket = 100;
+  const int kNumberOfTestPackets = 100;
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
   const std::string kBadPayload =
@@ -753,44 +719,162 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
 
   // Send the "bad" packets first to give them the most time.
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[0], kNumberOfTestPacket, drop_dst_mac,
-                          /*dst_ip=*/"10.0.0.1", kBadPayload));
+                          control_ports[0], kNumberOfTestPackets, drop_dst_mac,
+                          kNoVlanId, /*dst_ip=*/"10.0.0.1", kBadPayload));
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[0], kNumberOfTestPacket, good_dst_mac,
-                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
+                          control_ports[0], kNumberOfTestPackets, good_dst_mac,
+                          kNoVlanId, /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   // Wait for all the good packets to get punted back on the control switch.
-  absl::Time timeout = absl::Now() + absl::Minutes(1);
   int good_packet_count = 0;
   int bad_packet_count = 0;
-  while (good_packet_count < kNumberOfTestPacket) {
-    if (packetio_control->HasPacketInMessage()) {
-      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
-                           packetio_control->GetNextPacketInMessage());
-
-       // Verify this is the packet we expect.
-      packetlib::Packet packet_in =
-          packetlib::ParsePacket(response.packet().payload());
-      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          absl::StrContains(packet_in.payload(), kGoodPayload)) {
-        ++good_packet_count;
-      } else if (response.update_case() ==
-                     p4::v1::StreamMessageResponse::kPacket &&
-                 packet_in.payload() == kBadPayload) {
-        ++bad_packet_count;
-      } else {
-        LOG(WARNING) << "Unexpected response: " << response.DebugString();
-      }
-    }
-
-    if (absl::Now() > timeout) {
-      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
-      break;
-    }
-  }
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        // Verify this is the packet we expect.
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          ++good_packet_count;
+          return true;
+        }
+        if (message.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+            absl::StrContains(packet_in.payload(), kBadPayload)) {
+          ++bad_packet_count;
+          return false;
+        }
+        LOG(WARNING) << "Unexpected response: " << message.DebugString();
+        return false;
+      },
+      kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
   LOG(INFO) << "Done collecting packets.";
-  EXPECT_EQ(good_packet_count, kNumberOfTestPacket);
+
+  EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
   EXPECT_EQ(bad_packet_count, 0);
+}
+
+TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
+
+  // Only run this test if the ACL_PRE_INGRESS_VLAN_TABLE exists.
+  if (!ir_p4info_.tables_by_name().contains("acl_pre_ingress_vlan_table")) {
+    GTEST_SKIP()
+        << "Skipping because ACL_PRE_INGRESS_VLAN_TABLE does not exist.";
+  }
+
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto sut_ports,
+      GetNUpInterfaceIDs(GetParam().testbed_interface->GetMirrorTestbed().Sut(),
+                         1));
+  ASSERT_OK_AND_ASSIGN(
+      auto control_ports,
+      GetNUpInterfaceIDs(
+          GetParam().testbed_interface->GetMirrorTestbed().ControlSwitch(), 1));
+
+  // Punt all traffic arriving at the control switch, and collect them to verify
+  // forwarding.
+  ASSERT_OK(
+      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
+
+  // Add an L3 route to enable forwarding.
+  L3Route l3_route{
+      .vrf_id = "vrf-1",
+      .switch_mac = "00:00:00:00:00:01",
+      .switch_ip = std::make_pair("10.0.0.1", 32),
+      .peer_port = sut_ports[0],
+      .peer_mac = "00:00:00:00:00:02",
+      .peer_ip = "fe80::2",
+      .router_interface_id = "rif-1",
+      .nexthop_id = "nexthop-1",
+  };
+  ASSERT_OK(
+      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+  ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
+
+  // Admit only 1 MAC address to the forwarding pipeline.
+  ASSERT_OK(AdmitL3Route(
+      *sut_p4rt_session_, ir_p4info_,
+      L3AdmitOptions{
+          .priority = 2070,
+          .dst_mac = std ::make_pair("00:01:02:03:04:05", "FF:FF:FF:FF:FF:FF"),
+      }));
+
+  // Force all Packet to have the default VLAN.
+  pdpi::IrWriteRequest ir_set_default_vlan;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(
+        updates {
+          type: INSERT
+          table_entry {
+            table_name: "acl_pre_ingress_vlan_table"
+            priority: 10
+            matches {
+              name: "is_ipv4"
+              optional { value { hex_str: "0x1" } }
+            }
+            action {
+              name: "set_outer_vlan_id",
+              params {
+                name: "vlan_id"
+                value { hex_str: "0xfff" }
+              }
+            }
+          }
+        }
+      )pb",
+      &ir_set_default_vlan));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest pi_set_default_vlan,
+      pdpi::IrWriteRequestToPi(ir_p4info_, ir_set_default_vlan));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session_.get(),
+                                                   pi_set_default_vlan));
+
+  // Send 100 packets to the switch with an Outer VLAN that is not the default
+  // PINs VLAN (i.e. 4095).
+  const int kNumberOfTestPackets = 100;
+  const std::string kGoodPayload =
+      "Testing L3 forwarding. This packet should arrive to packet in.";
+  ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
+                          control_ports[0], kNumberOfTestPackets,
+                          /*dst_mac=*/"00:01:02:03:04:05", /*vlan_id=*/"0x004",
+                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
+
+  int good_packet_count = 0;
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        if (message.update_case() != p4::v1::StreamMessageResponse::kPacket) {
+          LOG(WARNING) << "Unexpected response: " << message.DebugString();
+          return false;
+        }
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+
+        // If we have the correct packet (i.e. it has a good payload) we will
+        // return true so that the test doesn't have to wait for the timeout.
+        // However, we don't count the packet as good unless it is missing the
+        // VLAN ID.
+        if (absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          bool has_vlan_id = false;
+          for (const auto& header : packet_in.headers()) {
+            if (header.has_vlan_header()) {
+              LOG(WARNING) << "packet_in message still has VLAN ID: "
+                           << packet_in.DebugString();
+              has_vlan_id = true;
+            }
+          }
+          if (!has_vlan_id) {
+            ++good_packet_count;
+          }
+          return true;
+        }
+        LOG(WARNING) << "Unexpected packet_in message: "
+                     << packet_in.DebugString();
+        return false;
+      },
+      kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
+  LOG(INFO) << "Done collecting packets.";
+
+  EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
 }
 
 }  // namespace pins
