@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "tests/lib/switch_test_setup_helpers.h"
 
 #include <cstdlib>
@@ -11,10 +25,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "gmock/gmock.h"
 #include "grpcpp/test/mock_stream.h"
+#include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
@@ -30,12 +46,11 @@
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mock_switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
 
+using ::gutil::EqualsProto;
 using ::testing::AnyNumber;
 using ::testing::InSequence;
 using ::testing::Not;
@@ -145,7 +160,7 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
     // Using optional& against style-guide advice to avoid memory leak; these
     // arguments are used in setting up expectations, and need to outlive the
     // function call.
-    const std::optional<std::string>& gnmi_config,
+    const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata,
     const std::vector<OpenConfigInterfaceDescription>& interfaces) {
@@ -174,15 +189,14 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
   }
 }
 
-// Tests that ConfigureSwitchAndReturnP4RuntimeSession works when given a
-// P4Info.
-TEST(TestHelperLibTest,
-     ConfigureSwitchAndReturnP4RuntimeSessionWithP4InfoPush) {
+TEST(ConfigureSwitchAndReturnP4RuntimeSessionTest,
+     WorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
   const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
   const pdpi::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch;
-  OpenConfigInterfaceDescription interface {
-    .port_name = "Ethernet0", .port_id = 1,
+  OpenConfigInterfaceDescription interface{
+      .port_name = "Ethernet0",
+      .port_id = 1,
   };
   const std::string gnmi_config = OpenConfigWithInterfaces(
       GnmiFieldType::kConfig, /*interfaces=*/{interface});
@@ -208,13 +222,15 @@ TEST(TestHelperLibTest,
   }
 }
 
-TEST(TestHelperLibTest, ConfigureSwitchPairAndReturnP4RuntimeSessionPair) {
+TEST(ConfigureSwitchPairAndReturnP4RuntimeSessionPairTest,
+     WorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
   const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
   const pdpi::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch1;
   thinkit::MockSwitch mock_switch2;
-  OpenConfigInterfaceDescription interface {
-    .port_name = "Ethernet0", .port_id = 1,
+  OpenConfigInterfaceDescription interface{
+      .port_name = "Ethernet0",
+      .port_id = 1,
   };
   const std::string gnmi_config = OpenConfigWithInterfaces(
       GnmiFieldType::kConfig, /*interfaces=*/{interface});
@@ -245,7 +261,137 @@ TEST(TestHelperLibTest, ConfigureSwitchPairAndReturnP4RuntimeSessionPair) {
   }
 }
 
-/*** REWRITE PORT TESTS ******************************************************/
+TEST(ConfigureSwitchTest,
+     WorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
+  const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
+  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  thinkit::MockSwitch mock_switch;
+  OpenConfigInterfaceDescription interface{
+      .port_name = "Ethernet0",
+      .port_id = 1,
+  };
+  const std::string gnmi_config = OpenConfigWithInterfaces(
+      GnmiFieldType::kConfig, /*interfaces=*/{interface});
+
+  for (bool push_gnmi_config : {true, false}) {
+    for (bool push_p4info : {true, false}) {
+      SCOPED_TRACE(absl::StrCat("push_gnmi_config: ", push_gnmi_config));
+      SCOPED_TRACE(absl::StrCat("push_p4info: ", push_p4info));
+      auto config = PinsConfigView{
+          .gnmi_config =
+              push_gnmi_config ? std::make_optional(gnmi_config) : std::nullopt,
+          .p4info = push_p4info ? std::make_optional(p4info) : std::nullopt,
+      };
+
+      MockConfigureSwitchAndReturnP4RuntimeSession(
+          mock_switch, config.gnmi_config, config.p4info, metadata,
+          /*interfaces=*/{interface});
+      ASSERT_OK(ConfigureSwitch(mock_switch, config, metadata));
+      testing::Mock::VerifyAndClearExpectations(&mock_switch);
+    }
+  }
+}
+
+TEST(ConfigureSwitchPairTest,
+     NewOverloadWorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
+  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  thinkit::MockSwitch mock_switch1;
+  thinkit::MockSwitch mock_switch2;
+
+  const p4::config::v1::P4Info& p4info1 = pdpi::GetTestP4Info();
+  p4::config::v1::P4Info p4info2 = p4info1;
+  p4info2.clear_pkg_info();
+  ASSERT_THAT(p4info2, Not(EqualsProto(p4info1)));
+
+  OpenConfigInterfaceDescription interface1{
+      .port_name = "Ethernet0",
+      .port_id = 1,
+  };
+  OpenConfigInterfaceDescription interface2{
+      .port_name = "Ethernet8",
+      .port_id = 2,
+  };
+  const std::string gnmi_config1 = OpenConfigWithInterfaces(
+      GnmiFieldType::kConfig, /*interfaces=*/{interface1});
+  const std::string gnmi_config2 = OpenConfigWithInterfaces(
+      GnmiFieldType::kConfig, /*interfaces=*/{interface2});
+  ASSERT_NE(gnmi_config2, gnmi_config1);
+
+  for (bool push_gnmi_config1 : {true, false}) {
+    for (bool push_gnmi_config2 : {true, false}) {
+      for (bool push_p4info1 : {true, false}) {
+        for (bool push_p4info2 : {true, false}) {
+          SCOPED_TRACE(absl::StrCat("push_gnmi_config 1: ", push_gnmi_config1));
+          SCOPED_TRACE(absl::StrCat("push_p4info 1: ", push_p4info1));
+          SCOPED_TRACE(absl::StrCat("push_gnmi_config 2: ", push_gnmi_config2));
+          SCOPED_TRACE(absl::StrCat("push_p4info 2: ", push_p4info2));
+          auto config1 = PinsConfigView{
+              .gnmi_config = push_gnmi_config1
+                                 ? std::make_optional(gnmi_config1)
+                                 : std::nullopt,
+              .p4info =
+                  push_p4info1 ? std::make_optional(p4info1) : std::nullopt,
+          };
+          auto config2 = PinsConfigView{
+              .gnmi_config = push_gnmi_config2
+                                 ? std::make_optional(gnmi_config2)
+                                 : std::nullopt,
+              .p4info =
+                  push_p4info2 ? std::make_optional(p4info2) : std::nullopt,
+          };
+
+          // Mock two configurings.
+          MockConfigureSwitchAndReturnP4RuntimeSession(
+              mock_switch1, config1.gnmi_config, config1.p4info, metadata,
+              /*interfaces=*/{interface1});
+          MockConfigureSwitchAndReturnP4RuntimeSession(
+              mock_switch2, config2.gnmi_config, config2.p4info, metadata,
+              /*interfaces=*/{interface2});
+          ASSERT_OK(ConfigureSwitchPair(mock_switch1, config1, mock_switch2,
+                                        config2, metadata));
+        }
+      }
+    }
+  }
+}
+
+TEST(ConfigureSwitchPairTest,
+     OldOverloadWorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
+  const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
+  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  thinkit::MockSwitch mock_switch1;
+  thinkit::MockSwitch mock_switch2;
+  OpenConfigInterfaceDescription interface{
+      .port_name = "Ethernet0",
+      .port_id = 1,
+  };
+  const std::string gnmi_config = OpenConfigWithInterfaces(
+      GnmiFieldType::kConfig, /*interfaces=*/{interface});
+
+  for (bool push_gnmi_config : {true, false}) {
+    for (bool push_p4info : {true, false}) {
+      SCOPED_TRACE(absl::StrCat("push_gnmi_config: ", push_gnmi_config));
+      SCOPED_TRACE(absl::StrCat("push_p4info: ", push_gnmi_config));
+      std::optional<std::string> optional_gnmi_config =
+          push_gnmi_config ? std::make_optional(gnmi_config) : std::nullopt;
+      std::optional<p4::config::v1::P4Info> optional_p4info =
+          push_p4info ? std::make_optional(p4info) : std::nullopt;
+
+      // Mock two configurings.
+      MockConfigureSwitchAndReturnP4RuntimeSession(
+          mock_switch1, optional_gnmi_config, optional_p4info, metadata,
+          /*interfaces=*/{interface});
+      MockConfigureSwitchAndReturnP4RuntimeSession(
+          mock_switch2, optional_gnmi_config, optional_p4info, metadata,
+          /*interfaces=*/{interface});
+      ASSERT_OK(ConfigureSwitchPair(mock_switch1, mock_switch2,
+                                    optional_gnmi_config, optional_p4info,
+                                    metadata));
+    }
+  }
+}
+
+/*** REWRITE PORT TESTS *******************************************************/
 
 TEST(RewritePortsForTableEntriesTest, NoPortsInConfigFails) {
   const pdpi::IrP4Info fbr_info =
