@@ -77,6 +77,7 @@
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
@@ -355,6 +356,7 @@ absl::Status SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
 absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
     const netaddr::MacAddress &dmac, const netaddr::Ipv4Address &dst_ip,
     absl::string_view p4_queue, int rate_bytes_per_second, int burst_in_bytes,
+    const AclIngressTablePuntFlowRateLimitAction &acl_ingress_table_action,
     const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
@@ -372,7 +374,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
   //        allows capability to apply policer on a group of punt entries.
   // else
   //     Punt and Rate limit packets in same entry in "acl_ingress_table"
-  if (ir_p4info.tables_by_name().contains("acl_ingress_qos_table")) {
+  if (ir_p4info.tables_by_name().contains(kAclIngressQosTable)) {
     auto punt_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
         R"pb(
           acl_ingress_table_entry {
@@ -381,7 +383,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
               is_ipv4 { value: "0x1" }
               dst_ip { value: "$1" mask: "255.255.255.255" }
             }
-            action { acl_trap { qos_queue: "$2" } }
+            action { acl_copy { qos_queue: "$2" } }
             priority: 1
           }
         )pb",
@@ -400,14 +402,14 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
               dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
               is_ipv4 { value: "0x1" }
             }
-            action {
-              set_qos_queue_and_cancel_copy_above_rate_limit { qos_queue: "$1" }
-            }
+            action { $1 { $2: "$3" } }
             priority: 4400
-            meter_config { bytes_per_second: $2 burst_bytes: $3 }
+            meter_config { bytes_per_second: $4 burst_bytes: $5 }
           }
         )pb",
-        dmac.ToString(), p4_queue, rate_bytes_per_second, burst_in_bytes));
+        dmac.ToString(), acl_ingress_table_action.rate_limit_action,
+        acl_ingress_table_action.cpu_queue_attribute_name, p4_queue,
+        rate_bytes_per_second, burst_in_bytes));
 
     LOG(INFO) << "InstallPiTableEntry";
     ASSIGN_OR_RETURN(
@@ -425,13 +427,15 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
               is_ipv4 { value: "0x1" }
               dst_ip { value: "$1" mask: "255.255.255.255" }
             }
-            action { acl_trap { qos_queue: "$2" } }
+            action { $2 { $3: "$4" } }
             priority: 1
-            meter_config { bytes_per_second: $3 burst_bytes: $4 }
+            meter_config { bytes_per_second: $5 burst_bytes: $6 }
           }
         )pb",
-        dmac.ToString(), dst_ip.ToString(), p4_queue, rate_bytes_per_second,
-        burst_in_bytes));
+        dmac.ToString(), dst_ip.ToString(),
+        acl_ingress_table_action.rate_limit_action,
+        acl_ingress_table_action.cpu_queue_attribute_name, p4_queue,
+        rate_bytes_per_second, burst_in_bytes));
 
     LOG(INFO) << "InstallPiTableEntry";
     ASSIGN_OR_RETURN(
@@ -1464,6 +1468,7 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
 // This could be parameterized in future if this is platform
 // dependent.
 constexpr float kTolerancePercent = 10.0;
+constexpr float kMeterCounterTolerance = 5.0;
 
 // Ixia configurations:
 // 1. Frames sent per second by Ixia.
@@ -1477,6 +1482,8 @@ constexpr absl::Duration kTrafficDuration =
     absl::Seconds(kTotalFrames / kFramesPerSecond);
 constexpr int kDefaultFrameSize = 1514;
 constexpr int kMaxFrameSize = 9216;
+constexpr int kVlanTagSize = 4;
+constexpr int kMaxFrameSizeWithoutVlanTag = kMaxFrameSize - kVlanTagSize;
 constexpr int kMinFrameSize = 64;
 
 struct PacketReceiveInfo {
@@ -1785,7 +1792,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
                                      (1 - kTolerancePercent / 100));
       }
     }  // for each queue.
-  }    // test_case
+  }  // test_case
   // Stop receiving at tester.
   receiver.Destroy();
 }
@@ -1847,6 +1854,19 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
   std::string ixia_interface = ready_links[0].ixia_interface;
   std::string sut_interface = ready_links[0].sut_interface;
+  std::string ixia_rx_interface = ready_links[1].ixia_interface;
+  std::string sut_egress_interface = ready_links[1].sut_interface;
+
+  LOG(INFO) << absl::StrFormat(
+      "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
+      ixia_interface, sut_interface, sut_egress_interface, ixia_rx_interface);
+
+  absl::flat_hash_map<std::string, std::string> p4rt_id_by_interface;
+  ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface,
+                       GetAllInterfaceNameToPortId(*gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface, sut_egress_interface));
 
   // We will perform the following steps with Ixia:
   // Set up Ixia traffic.
@@ -1856,41 +1876,44 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_port,
                        ixia::ExtractPortInfo(ixia_interface));
 
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_rx_port,
+                       ixia::ExtractPortInfo(ixia_rx_interface));
+
   ASSERT_OK_AND_ASSIGN(
-      std::string topology_ref,
+      std::string kIxiaHandle,
       pins_test::ixia::IxiaConnect(ixia_port.hostname, *generic_testbed));
 
   ASSERT_OK_AND_ASSIGN(
-      std::string vport_ref,
-      pins_test::ixia::IxiaVport(topology_ref, ixia_port.card, ixia_port.port,
+      std::string kIxiaSrcPortHandle,
+      pins_test::ixia::IxiaVport(kIxiaHandle, ixia_port.card, ixia_port.port,
                                  *generic_testbed));
 
   ASSERT_OK_AND_ASSIGN(
-      std::string traffic_ref,
-      pins_test::ixia::IxiaSession(vport_ref, *generic_testbed));
+      std::string kIxiaDstPortHandle,
+      pins_test::ixia::IxiaVport(kIxiaHandle, ixia_rx_port.card,
+                                 ixia_rx_port.port, *generic_testbed));
 
-  ASSERT_OK(pins_test::ixia::SetFrameRate(traffic_ref, kFramesPerSecond,
-                                          *generic_testbed));
+  const std::string kTrafficName = "cpu_qos_test_ixia_traffic";
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kIxiaTrafficHandle,
+      ixia::SetUpTrafficItem(kIxiaSrcPortHandle, kIxiaDstPortHandle,
+                             kTrafficName, *generic_testbed));
+  auto delete_traffic_item = absl::Cleanup([&, kIxiaTrafficHandle] {
+    ASSERT_OK(ixia::DeleteTrafficItem(kIxiaTrafficHandle, *generic_testbed));
+  });
 
-  ASSERT_OK(pins_test::ixia::SetFrameCount(traffic_ref, kTotalFrames,
-                                           *generic_testbed));
-
-  ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, kMaxFrameSize,
-                                          *generic_testbed));
-
-  ASSERT_OK(pins_test::ixia::SetSrcMac(traffic_ref, source_mac.ToString(),
-                                       *generic_testbed));
-
-  ASSERT_OK(pins_test::ixia::SetDestMac(traffic_ref, dest_mac.ToString(),
-                                        *generic_testbed));
-
-  ASSERT_OK(pins_test::ixia::AppendIPv4(traffic_ref, *generic_testbed));
-
-  ASSERT_OK(pins_test::ixia::SetSrcIPv4(traffic_ref, source_ip.ToString(),
-                                        *generic_testbed));
-
-  ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref, dest_ip.ToString(),
-                                         *generic_testbed));
+  auto traffic_parameters = ixia::TrafficParameters{
+      .frame_count = kTotalFrames,
+      .frame_size_in_bytes = kMaxFrameSizeWithoutVlanTag,
+      .traffic_speed = ixia::FramesPerSecond{kFramesPerSecond},
+      .src_mac = source_mac,
+      .dst_mac = dest_mac,
+      .ip_parameters = ixia::Ipv4TrafficParameters{
+          .src_ipv4 = source_ip,
+          .dst_ipv4 = dest_ip,
+          // Set ECN 0 to avoid RED drops.
+          .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
+      }};
 
   // Listen for punted packets from the SUT.
   PacketReceiveInfo packet_receive_info;
@@ -1912,6 +1935,17 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues,
                        ExtractQueueInfoViaGnmiConfig(sut_gnmi_config));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
+                       sai::EntryBuilder()
+                           .AddEntriesForwardingIpPacketsToGivenPort(
+                               /*egress_port=*/kSutEgressPortP4rtId)
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(ir_p4info));
+
+  bool has_acl_qos_table =
+      ir_p4info.tables_by_name().contains(kAclIngressQosTable);
 
   for (auto &[queue_name, queue_info] : queues) {
     // Skip unconfigured queues.
@@ -1921,7 +1955,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
     // Lets set flow rate limit to be half of queue limit so that queue limit
     // doesnt take effect.
     int flow_rate_limit_in_bytes_per_second =
-        (kMaxFrameSize * queue_info.rate_packets_per_second) / 2;
+        (kMaxFrameSizeWithoutVlanTag * queue_info.rate_packets_per_second) / 2;
 
     if (flow_rate_limit_in_bytes_per_second >
         GetParam().control_plane_bandwidth_bytes_per_second) {
@@ -1929,136 +1963,262 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
           GetParam().control_plane_bandwidth_bytes_per_second / 2;
     }
 
-    // Punt flows to Inband queues should not succeed.
-    if (absl::StartsWith(queue_info.p4_queue_name, "INBAND")) {
-      // PKTIO queues.
-      if (!generic_testbed->Environment().MaskKnownFailures()) {
-        ASSERT_FALSE((SetUpPuntToCPUWithRateLimit(
-                          dest_mac, dest_ip, queue_info.p4_queue_name,
-                          flow_rate_limit_in_bytes_per_second,
-                          /*burst_in_bytes=*/kMaxFrameSize, GetParam().p4info,
-                          *sut_p4_session)
-                          .ok()));
+    for (auto acl_table_punt_action :
+         GetParam().acl_ingress_table_punt_flow_rate_limit_actions) {
+      // Skip ACL "Ingress table" rate limit actions if switch supports
+      // ACL "Ingress QoS table".
+      if (has_acl_qos_table == true &&
+          (acl_table_punt_action.rate_limit_action == kAclTrap ||
+           acl_table_punt_action.rate_limit_action == kAclCopy)) {
+        LOG(INFO) << "Skipping " << kAclIngressTable << " action "
+                  << acl_table_punt_action.rate_limit_action
+                  << " as switch has " << kAclIngressQosTable;
+        continue;
       }
-      continue;
-    }
+      // Skip ACL "Ingress QoS table" rate limit actions if switch does not
+      // support ACL "Ingress QoS table".
+      if (has_acl_qos_table == false &&
+          (acl_table_punt_action.rate_limit_action ==
+               kAclSetCpuQueueAndCancelCopyAboveRateLimit ||
+           acl_table_punt_action.rate_limit_action ==
+               kAclSetCpuQueueAndDenyAboveRateLimit ||
+           acl_table_punt_action.rate_limit_action ==
+               kAclSetCpuQueueMulticastQueueAndDenyAboveRateLimit)) {
+        LOG(INFO) << "Skipping action as rate limit action is part of "
+                  << pins_test::kAclIngressTable;
+        continue;
+      }
 
-    LOG(INFO) << "\n\n\nTesting Queue : " << queue_info.gnmi_queue_name
-              << "\n===================\n\n\n";
+      // Punt flows to Inband queues should not succeed.
+      if (absl::StartsWith(queue_info.p4_queue_name, "INBAND")) {
+        // PKTIO queues.
+        if (!generic_testbed->Environment().MaskKnownFailures()) {
+          ASSERT_FALSE(
+              (SetUpPuntToCPUWithRateLimit(
+                   dest_mac, dest_ip, queue_info.p4_queue_name,
+                   flow_rate_limit_in_bytes_per_second,
+                   /*burst_in_bytes=*/kMaxFrameSizeWithoutVlanTag,
+                   acl_table_punt_action, GetParam().p4info, *sut_p4_session)
+                   .ok()));
+        }
+        continue;
+      }
 
-    ASSERT_OK_AND_ASSIGN(
-        p4::v1::TableEntry pi_acl_entry,
-        SetUpPuntToCPUWithRateLimit(dest_mac, dest_ip, queue_info.p4_queue_name,
-                                    flow_rate_limit_in_bytes_per_second,
-                                    /*burst_in_bytes=*/kMaxFrameSize,
-                                    GetParam().p4info, *sut_p4_session));
+      LOG(INFO) << "\n\n\nTesting Queue : " << queue_info.gnmi_queue_name
+                << ", acl_qos_table_action: "
+                << acl_table_punt_action.rate_limit_action
+                << "\n===================\n\n\n";
 
-    ASSERT_OK_AND_ASSIGN(
-        QueueCounters initial_counters,
-        GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
-
-    // Reset received packet count at tester for each iteration.
-    {
-      absl::MutexLock lock(&packet_receive_info.mutex);
-      packet_receive_info.num_packets_punted = 0;
-    }
-
-    // Check that the counters are initially zero.
-    ASSERT_THAT(
-        pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry),
-        IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
-
-    ASSERT_OK(pins_test::ixia::StartTraffic(traffic_ref, topology_ref,
-                                            *generic_testbed));
-
-    // Wait for Traffic to be sent.
-    absl::SleepFor(kTrafficDuration);
-
-    // Check for counters every 5 seconds upto 30 seconds till the fetched gNMI
-    // queue counter stats match packets and bytes sent by Ixia.
-    // Check that the counters increment within kMaxQueueCounterUpdateTime.
-    absl::Time time_packet_sent = absl::Now();
-    p4::v1::CounterData counter_data;
-    do {
       ASSERT_OK_AND_ASSIGN(
-          counter_data,
-          pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry));
-    } while (counter_data.packet_count() != kTotalFrames &&
-             absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
-    p4::v1::CounterData expected_counter_data;
-    expected_counter_data.set_packet_count(kTotalFrames);
-    expected_counter_data.set_byte_count(static_cast<int64_t>(kMaxFrameSize) *
-                                         static_cast<int64_t>(kTotalFrames));
-    EXPECT_THAT(counter_data, EqualsProto(expected_counter_data))
-        << "Counter for the table entry given below did not match expectation "
-           "within "
-        << kMaxQueueCounterUpdateTime
-        << " after injecting the Ixia test packets via CPU queue "
-        << queue_name;
-
-    // Verify GNMI queue stats match packets received.
-    static constexpr absl::Duration kPollInterval = absl::Seconds(5);
-    static constexpr absl::Duration kTotalTime = absl::Seconds(20);
-    static const int kIterations = kTotalTime / kPollInterval;
-
-    // Check for counters every 5 seconds upto 20 seconds till they match.
-    for (int gnmi_counters_check = 0; gnmi_counters_check < kIterations;
-         gnmi_counters_check++) {
-      absl::SleepFor(kPollInterval);
-      QueueCounters final_counters;
-      QueueCounters delta_counters;
+          p4::v1::TableEntry pi_acl_entry,
+          SetUpPuntToCPUWithRateLimit(
+              dest_mac, dest_ip, queue_info.p4_queue_name,
+              flow_rate_limit_in_bytes_per_second,
+              /*burst_in_bytes=*/kMaxFrameSizeWithoutVlanTag,
+              acl_table_punt_action, GetParam().p4info, *sut_p4_session));
+      ASSERT_OK(
+          pdpi::InstallPiEntities(sut_p4_session.get(), ir_p4info, entities));
       ASSERT_OK_AND_ASSIGN(
-          final_counters,
+          QueueCounters initial_counters,
           GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
-      delta_counters = {
-          .num_packets_transmitted = final_counters.num_packets_transmitted -
-                                     initial_counters.num_packets_transmitted,
-          .num_packets_dropped = final_counters.num_packets_dropped -
-                                 initial_counters.num_packets_dropped,
-      };
-      LOG(INFO) << delta_counters;
-      absl::MutexLock lock(&packet_receive_info.mutex);
-      if (delta_counters.num_packets_transmitted ==
-          packet_receive_info.num_packets_punted) {
-        break;
+
+      // Reset received packet count at tester for each iteration.
+      {
+        absl::MutexLock lock(&packet_receive_info.mutex);
+        packet_receive_info.num_packets_punted = 0;
       }
-      ASSERT_NE(gnmi_counters_check, kIterations - 1)
-          << "GNMI packet count "
-          << delta_counters.num_packets_transmitted +
-                 delta_counters.num_packets_dropped
-          << " != Packets received at controller "
-          << packet_receive_info.num_packets_punted;
-    }
 
-    {
-      absl::MutexLock lock(&packet_receive_info.mutex);
+      // Check that the counters are initially zero.
+      ASSERT_THAT(
+          pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry),
+          IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
+      if (pi_acl_entry.has_meter_config()) {
+        EXPECT_OK(
+            pdpi::ReadPiMeterCounterData(sut_p4_session.get(), pi_acl_entry));
+      }
 
-      LOG(INFO) << "Packets received at Controller: "
-                << packet_receive_info.num_packets_punted;
-      LOG(INFO) << "Timestamp of first received packet: "
-                << packet_receive_info.time_first_packet_punted;
-      LOG(INFO) << "Timestamp of last received packet: "
-                << packet_receive_info.time_last_packet_punted;
+      ASSERT_OK(ixia::SetTrafficParameters(
+          kIxiaTrafficHandle, traffic_parameters, *generic_testbed));
+      // Occasionally the Ixia API cannot keep up and starting traffic fails,
+      // so we try up to 3 times.
+      ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+        return ixia::StartTraffic(kIxiaTrafficHandle, kIxiaHandle,
+                                  *generic_testbed);
+      }));
 
-      absl::Duration duration = packet_receive_info.time_last_packet_punted -
-                                packet_receive_info.time_first_packet_punted;
-      LOG(INFO) << "Duration of packets received: " << duration;
-      LOG(INFO) << "Frame size: " << kMaxFrameSize;
-      int64_t rate_received_in_bytes_per_second = 0;
-      int64_t useconds = absl::ToInt64Microseconds(duration);
-      ASSERT_NE(useconds, 0);
-      int64_t num_bytes =
-          packet_receive_info.num_packets_punted * kMaxFrameSize;
-      LOG(INFO) << "Num bytes received: " << num_bytes;
-      rate_received_in_bytes_per_second = num_bytes * 1000000 / useconds;
-      LOG(INFO) << "Rate of packets received (bytes per second): "
-                << rate_received_in_bytes_per_second;
-      EXPECT_LE(
-          rate_received_in_bytes_per_second,
-          flow_rate_limit_in_bytes_per_second * (1 + kTolerancePercent / 100));
-      EXPECT_GE(
-          rate_received_in_bytes_per_second,
-          flow_rate_limit_in_bytes_per_second * (1 - kTolerancePercent / 100));
+      // Wait for Traffic to be sent.
+      absl::SleepFor(kTrafficDuration);
+
+      // Check for counters every 5 seconds up to 30 seconds till the fetched
+      // gNMI queue counter stats match packets and bytes sent by Ixia. Check
+      // that the counters increment within kMaxQueueCounterUpdateTime.
+      absl::Time time_packet_sent = absl::Now();
+      p4::v1::CounterData counter_data;
+      do {
+        ASSERT_OK_AND_ASSIGN(
+            counter_data,
+            pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry));
+      } while (counter_data.packet_count() != kTotalFrames &&
+               absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
+      p4::v1::CounterData expected_counter_data;
+      expected_counter_data.set_packet_count(kTotalFrames);
+      expected_counter_data.set_byte_count(
+          static_cast<int64_t>(kMaxFrameSizeWithoutVlanTag) *
+          static_cast<int64_t>(kTotalFrames));
+      EXPECT_THAT(counter_data, EqualsProto(expected_counter_data))
+          << "Counter for the table entry given below did not match "
+             "expectation "
+             "within "
+          << kMaxQueueCounterUpdateTime
+          << " after injecting the Ixia test packets via CPU queue "
+          << queue_name;
+
+      // Verify GNMI queue stats match packets received.
+      static constexpr absl::Duration kPollInterval = absl::Seconds(5);
+      static constexpr absl::Duration kTotalTime = absl::Seconds(20);
+      static const int kIterations = kTotalTime / kPollInterval;
+
+      // Check for counters every 5 seconds up to 20 seconds till they match.
+      for (int gnmi_counters_check = 0; gnmi_counters_check < kIterations;
+           gnmi_counters_check++) {
+        absl::SleepFor(kPollInterval);
+        QueueCounters final_counters;
+        QueueCounters delta_counters;
+        ASSERT_OK_AND_ASSIGN(
+            final_counters, GetGnmiQueueCounters(
+                                "CPU", queue_info.gnmi_queue_name, *gnmi_stub));
+        delta_counters = {
+            .num_packets_transmitted = final_counters.num_packets_transmitted -
+                                       initial_counters.num_packets_transmitted,
+            .num_packets_dropped = final_counters.num_packets_dropped -
+                                   initial_counters.num_packets_dropped,
+        };
+        LOG(INFO) << delta_counters;
+        absl::MutexLock lock(&packet_receive_info.mutex);
+        if (delta_counters.num_packets_transmitted ==
+            packet_receive_info.num_packets_punted) {
+          break;
+        }
+        ASSERT_NE(gnmi_counters_check, kIterations - 1)
+            << "GNMI packet count "
+            << delta_counters.num_packets_transmitted +
+                   delta_counters.num_packets_dropped
+            << " != Packets received at controller "
+            << packet_receive_info.num_packets_punted;
+      }
+
+      {
+        absl::MutexLock lock(&packet_receive_info.mutex);
+
+        LOG(INFO) << "Packets received at Controller: "
+                  << packet_receive_info.num_packets_punted;
+        LOG(INFO) << "Timestamp of first received packet: "
+                  << packet_receive_info.time_first_packet_punted;
+        LOG(INFO) << "Timestamp of last received packet: "
+                  << packet_receive_info.time_last_packet_punted;
+
+        absl::Duration duration = packet_receive_info.time_last_packet_punted -
+                                  packet_receive_info.time_first_packet_punted;
+        LOG(INFO) << "Duration of packets received: " << duration;
+        LOG(INFO) << "Frame size: " << kMaxFrameSizeWithoutVlanTag;
+        int64_t rate_received_in_bytes_per_second = 0;
+        int64_t useconds = absl::ToInt64Microseconds(duration);
+        ASSERT_NE(useconds, 0);
+        int64_t num_bytes = packet_receive_info.num_packets_punted *
+                            kMaxFrameSizeWithoutVlanTag;
+        LOG(INFO) << "Num bytes received: " << num_bytes;
+        rate_received_in_bytes_per_second = num_bytes * 1000000 / useconds;
+        LOG(INFO) << "Rate of packets received (bytes per second): "
+                  << rate_received_in_bytes_per_second;
+        EXPECT_LE(rate_received_in_bytes_per_second,
+                  flow_rate_limit_in_bytes_per_second *
+                      (1 + kTolerancePercent / 100));
+        EXPECT_GE(rate_received_in_bytes_per_second,
+                  flow_rate_limit_in_bytes_per_second *
+                      (1 - kTolerancePercent / 100));
+
+        if (pi_acl_entry.has_meter_config()) {
+          ASSERT_OK_AND_ASSIGN(
+              p4::v1::MeterCounterData meter_counter_data,
+              pdpi::ReadPiMeterCounterData(sut_p4_session.get(), pi_acl_entry));
+          LOG(INFO) << "Meter counter data: "
+                    << meter_counter_data.DebugString();
+          // With some tolerance, green packets should equal number of expected
+          // receive packets based on the configured rate limit and red packets
+          // should be the remainder of the total transmitted packets.
+          int64_t expected_green_bytes =
+              static_cast<int64_t>(flow_rate_limit_in_bytes_per_second) *
+              useconds / 1000000;
+          int64_t expected_green_packets =
+              expected_green_bytes /
+              static_cast<int64_t>(kMaxFrameSizeWithoutVlanTag);
+          EXPECT_LE(
+              meter_counter_data.green().packet_count(),
+              expected_green_packets * (1 + kMeterCounterTolerance / 100));
+          EXPECT_GE(
+              meter_counter_data.green().packet_count(),
+              expected_green_packets * (1 - kMeterCounterTolerance / 100));
+          EXPECT_LE(meter_counter_data.green().byte_count(),
+                    expected_green_bytes * (1 + kMeterCounterTolerance / 100));
+          EXPECT_GE(meter_counter_data.green().byte_count(),
+                    expected_green_bytes * (1 - kMeterCounterTolerance / 100));
+
+          int64_t expected_red_packets =
+              static_cast<int64_t>(kTotalFrames) - expected_green_packets;
+          int64_t expected_red_bytes =
+              static_cast<int64_t>(kTotalFrames) *
+                  static_cast<int64_t>(kMaxFrameSizeWithoutVlanTag) -
+              expected_green_bytes;
+          EXPECT_LE(meter_counter_data.red().packet_count(),
+                    expected_red_packets * (1 + kMeterCounterTolerance / 100));
+          EXPECT_GE(meter_counter_data.red().packet_count(),
+                    expected_red_packets * (1 - kMeterCounterTolerance / 100));
+          EXPECT_LE(meter_counter_data.red().byte_count(),
+                    expected_red_bytes * (1 + kMeterCounterTolerance / 100));
+          EXPECT_GE(meter_counter_data.red().byte_count(),
+                    expected_red_bytes * (1 - kMeterCounterTolerance / 100));
+          // For trap action we do not expect any forwarding.
+          if (acl_table_punt_action.rate_limit_action == kAclTrap) {
+            ASSERT_FALSE(ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName,
+                                                   *generic_testbed)
+                             .ok());
+            continue;
+          }
+          // Check observed traffic rate.
+          ASSERT_OK_AND_ASSIGN(
+              const ixia::TrafficItemStats kIxiaTrafficStats,
+              ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName,
+                                        *generic_testbed));
+          const int64_t kObservedTrafficRate =
+              ixia::BytesPerSecondReceived(kIxiaTrafficStats);
+          LOG(INFO) << "Rate of forwarded packets received (bytes per second): "
+                    << kObservedTrafficRate;
+          if (acl_table_punt_action.rate_limit_action ==
+                  kAclSetCpuQueueAndDenyAboveRateLimit ||
+              acl_table_punt_action.rate_limit_action ==
+                  kAclSetCpuQueueMulticastQueueAndDenyAboveRateLimit) {
+            // For "deny" actions verify that forwarded traffic does not
+            // get impacted by the policer.
+            EXPECT_LE(kObservedTrafficRate,
+                      flow_rate_limit_in_bytes_per_second *
+                          (1 + kTolerancePercent / 100));
+            EXPECT_GE(kObservedTrafficRate,
+                      flow_rate_limit_in_bytes_per_second *
+                          (1 - kTolerancePercent / 100));
+          } else {
+            // For "CopyCancel" action verify that the rate limit applies to the
+            // forwarded traffic also.
+            EXPECT_LE(kObservedTrafficRate,
+                      static_cast<int64_t>(kFramesPerSecond) *
+                          kMaxFrameSizeWithoutVlanTag *
+                          (1 + kTolerancePercent / 100));
+            EXPECT_GE(kObservedTrafficRate,
+                      static_cast<int64_t>(kFramesPerSecond) *
+                          kMaxFrameSizeWithoutVlanTag *
+                          (1 - kTolerancePercent / 100));
+          }
+        }
+      }
     }
   }  // for each queue.
 
