@@ -60,6 +60,7 @@ cc_library(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:p4_versions",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//sai_p4/instantiations/google/test_tools:test_entries",
         "//tests/forwarding:util",
         "//tests/lib:switch_test_setup_helpers",
         "//tests/sflow:sflow_util",
