@@ -480,6 +480,7 @@ std::function<void()> MakeLogPortDebugInfoFunction(
 // fixed DSCP at line rate, observing the rate at which the SUT forwards them,
 // and inferring which queue was used by cross checking against the PIRs of the
 // queues, which we configure to be exponentially spaced.
+// TODO (b/319319129): Refactor code to helper methods and reduce test size.
 TEST_P(FrontpanelQosTest,
        PacketsGetMappedToCorrectQueuesBasedOnDscpAndQueuePeakRatesAreEnforced) {
   LOG(INFO) << "-- Test started ----------------------------------------------";
