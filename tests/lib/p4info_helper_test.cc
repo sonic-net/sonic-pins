@@ -17,7 +17,7 @@
 #include "gtest/gtest.h"
 #include "p4_pdpi/ir.pb.h"
 
-namespace gpins {
+namespace pins {
 namespace {
 
 TEST(P4InfoHelperTest, TableHasMatchField) {
@@ -36,4 +36,4 @@ TEST(P4InfoHelperTest, TableHasMatchField) {
 }
 
 }  // namespace
-}  // namespace gpins
+}  // namespace pins

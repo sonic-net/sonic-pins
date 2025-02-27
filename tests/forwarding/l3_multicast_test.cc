@@ -702,14 +702,7 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   // Send test packets.
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
   dvaas::DataplaneValidationParams dvaas_params =
-      dvaas::DefaultPinsDataplaneValidationParams();
-  // Ensure the port map for the control switch can map to the SUT (for
-  // situations where the config differs for SUT and control switch).
-  auto interface_to_peer_entity_map = gtl::ValueOrDie(
-      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
-  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
-      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
-          interface_to_peer_entity_map));
+      dvaas::DefaultpinsDataplaneValidationParams();
   dvaas_params.packet_test_vector_override = vectors;
 
   ASSERT_OK_AND_ASSIGN(
@@ -740,7 +733,7 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   // Send test packets.
   // LOG(INFO) << "Sending traffic to verify deleted multicast programming.";
   // dvaas::DataplaneValidationParams dvaas_params_del =
-  //    dvaas::DefaultPinsDataplaneValidationParams();
+  //    dvaas::DefaultpinsDataplaneValidationParams();
   // dvaas_params_del.packet_test_vector_override = vectors_del;
   // ASSERT_OK_AND_ASSIGN(
   //     dvaas::ValidationResult validation_result_del,

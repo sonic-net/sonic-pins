@@ -17,9 +17,6 @@
 
 #include <string>
 
-#include "gutil/status_matchers.h"
-#include "tests/thinkit_sanity_tests.h"
-#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
 namespace pins {
@@ -27,26 +24,20 @@ namespace pins {
 struct P4InfoPushTestParams {
   std::string description;
   // TODO: use GenericTestbed instead.
-  thinkit::MirrorTestbedInterface *testbed_interface;
-  std::string gnmi_config;
+  std::shared_ptr<thinkit::MirrorTestbedInterface> mirror_testbed;
+  // The test assumes that the switch is pre-configured if no `gnmi_config` is
+  // given (default), or otherwise pushes the given config before starting.
+  std::optional<std::string> gnmi_config;
   p4::config::v1::P4Info p4info;
 };
 
 class P4InfoPushTestFixture
     : public testing::TestWithParam<P4InfoPushTestParams> {
-protected:
-  void SetUp() override { testbed_interface_->SetUp(); }
-  void TearDown() override { testbed_interface_->TearDown(); }
-
-  thinkit::MirrorTestbed &GetTestbed() {
-    return testbed_interface_->GetMirrorTestbed();
-  }
-
-private:
-  std::unique_ptr<thinkit::MirrorTestbedInterface> testbed_interface_ =
-      absl::WrapUnique(GetParam().testbed_interface);
+ protected:
+  void SetUp() override { GetParam().mirror_testbed->SetUp(); }
+  void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 };
 
-} // namespace pins
+}  // namespace pins
 
-#endif // PINS_TESTS_FORWARDING_P4INFO_PUSH_TEST_H_
+#endif  // PINS_TESTS_FORWARDING_P4INFO_PUSH_TEST_H_

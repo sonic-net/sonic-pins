@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,28 +14,29 @@
 
 #include "tests/gnoi/factory_reset_test.h"
 
-#include <cstdint>
-#include <cstdlib>
-#include <map>
 #include <memory>
 #include <string>
-#include <utility>
-#include <valarray>
 
-#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "factory_reset/factory_reset.pb.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "grpcpp/client_context.h"
+#include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
-#include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
+#include "thinkit/ssh_client.h"
+#include "thinkit/switch.h"
 
 namespace factory_reset {
+namespace {
 
 // TODO: investigate why shutdown time is increasing and revert
 // to 60s if possible.
@@ -49,7 +50,7 @@ constexpr absl::Duration kSshSessionTimeout = absl::Seconds(5);
 void IssueGnoiFactoryResetAndValidateStatus(
     thinkit::Switch& sut, const gnoi::factory_reset::StartRequest& request,
     gnoi::factory_reset::StartResponse* response,
-    grpc::Status expected_status) {
+    grpc::Status expected_status = {}) {
   LOG(INFO) << "Issuing factory reset with parameters: "
             << request.DebugString();
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_factory_reset_stub,
@@ -104,6 +105,8 @@ void ValidateStackState(thinkit::Switch& sut,
       << "System did not come up in " << kFactoryResetWaitForUpTime;
 }
 
+}  // namespace
+
 void TestFactoryResetSuccess(thinkit::Switch& sut,
                              thinkit::SSHClient& ssh_client,
                              absl::Span<const std::string> interfaces) {
@@ -142,14 +145,15 @@ void TestGnoiFactoryResetGnoiServerUnreachableFail(
   while (consecutive_unreachable_count < kConsecutivePingsRequired) {
     if (pins_test::Pingable(sut, kPingTimeout).ok()) {
       consecutive_unreachable_count = 0;
+      LOG(INFO) << "System still reachable";
+      if (absl::Now() - start > kFactoryResetWaitForDownTime) {
+        FAIL() << "System did not go down in " << kFactoryResetWaitForDownTime;
+      }
     } else {
       consecutive_unreachable_count++;
+      LOG(INFO) << "System unreachable for " << consecutive_unreachable_count
+                << " consecutive pings";
     }
-    if (absl::Now() - start > kFactoryResetWaitForDownTime) {
-      FAIL() << "System did not go down in " << kFactoryResetWaitForDownTime;
-    }
-    LOG(INFO) << "System unreachable for " << consecutive_unreachable_count
-              << " consecutive pings";
     absl::SleepFor(kPingReachabilityInterval);
   }
   LOG(INFO) << "Device became unreachable after: " << absl::Now() - start;
