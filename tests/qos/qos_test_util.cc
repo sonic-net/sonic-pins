@@ -372,9 +372,7 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
     return a.sequence() < b.sequence();
   });
 
-  // Extract queue info, and ensure strict queues come before round-robin
-  // queues.
-  bool have_seen_round_robin_scheduler = false;
+  // Extract queue info.
   for (const openconfig::Qos::Scheduler &scheduler : schedulers) {
     if (scheduler.inputs().input_size() != 1) {
       return gutil::UnimplementedErrorBuilder()
@@ -394,7 +392,6 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
 
     // Extract weight, if relevant.
     if (info.type == QueueType::kRoundRobin) {
-      have_seen_round_robin_scheduler = true;
       bool parsed_weight = absl::SimpleAtoi(weight, &info.weight);
       if (!parsed_weight) {
         return gutil::UnknownErrorBuilder()
@@ -403,12 +400,6 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
                << scheduler.config().sequence() << " in scheduler policy '"
                << scheduler_policy_name << "'";
       }
-    }
-
-    // Ensure invariant.
-    if (IsStrict(scheduler) && have_seen_round_robin_scheduler) {
-      return gutil::UnimplementedErrorBuilder()
-             << "found strict scheduler after weighted scheduler";
     }
   }
   return queues;
@@ -486,69 +477,70 @@ absl::Status SetBufferConfigParameters(
     absl::flat_hash_map<std::string, BufferParameters> params_by_queue_name,
     gnmi::gNMI::StubInterface &gnmi, absl::Duration convergence_timeout) {
   // Pull existing config.
-  const std::string kPath =
-      BufferAllocationProfilePath(buffer_allocation_profile);
-  const std::string kRoot = "openconfig-qos:buffer-allocation-profile";
+  const std::string kPath = "qos";
+  const std::string kRoot = "openconfig-qos:qos";
   ASSIGN_OR_RETURN(const std::string kRawConfig,
                    ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
   ASSIGN_OR_RETURN(
-      openconfig::Qos::BufferAllocationProfile proto_config,
-      gutil::ParseJsonAsProto<openconfig::Qos::BufferAllocationProfile>(
-          StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
+      openconfig::Qos proto_config,
+      gutil::ParseJsonAsProto<openconfig::Qos>(StripBrackets(kRawConfig),
+                                               /*ignore_unknown_fields=*/true));
 
-  // Updated config.
-  for (openconfig::Qos::Queue &queue :
-       *proto_config.mutable_queues()->mutable_queue()) {
-    const std::string kBufferQueuePath =
-        absl::StrFormat("%s/queues/queue[name=%s]", kPath, queue.name());
+  for (openconfig::Qos::BufferAllocationProfile &buffer_profile :
+       *proto_config.mutable_buffer_allocation_profiles()
+            ->mutable_buffer_allocation_profile()) {
+    if (buffer_profile.name() == buffer_allocation_profile) {
+      for (openconfig::Qos::Queue &queue :
+           *buffer_profile.mutable_queues()->mutable_queue()) {
+        const std::string kBufferQueuePath =
+            absl::StrFormat("%s/queues/queue[name=%s]", kPath, queue.name());
 
-    BufferParameters *const params =
-        gutil::FindOrNull(params_by_queue_name, queue.name());
+        BufferParameters *const params =
+            gutil::FindOrNull(params_by_queue_name, queue.name());
 
-    if (params == nullptr) {
-      continue;
-    }
+        if (params == nullptr) {
+          continue;
+        }
 
-    if (auto dedicated_buffer = params->dedicated_buffer;
-        dedicated_buffer.has_value()) {
-      queue.mutable_config()->set_dedicated_buffer(
-          absl::StrCat(*dedicated_buffer));
-    }
+        if (auto dedicated_buffer = params->dedicated_buffer;
+            dedicated_buffer.has_value()) {
+          queue.mutable_config()->set_dedicated_buffer(
+              absl::StrCat(*dedicated_buffer));
+        }
 
-    if (auto use_shared_buffer = params->use_shared_buffer;
-        use_shared_buffer.has_value()) {
-      queue.mutable_config()->set_use_shared_buffer(*use_shared_buffer);
-    }
-    if (auto shared_buffer_limit_type = params->shared_buffer_limit_type;
-        shared_buffer_limit_type.has_value()) {
-      queue.mutable_config()->set_shared_buffer_limit_type(
-          *shared_buffer_limit_type);
-    }
+        if (auto use_shared_buffer = params->use_shared_buffer;
+            use_shared_buffer.has_value()) {
+          queue.mutable_config()->set_use_shared_buffer(*use_shared_buffer);
+        }
+        if (auto shared_buffer_limit_type = params->shared_buffer_limit_type;
+            shared_buffer_limit_type.has_value()) {
+          queue.mutable_config()->set_shared_buffer_limit_type(
+              *shared_buffer_limit_type);
+        }
 
-    if (auto dynamic_limit_scaling_factor =
-            params->dynamic_limit_scaling_factor;
-        dynamic_limit_scaling_factor.has_value()) {
-      queue.mutable_config()->set_dynamic_limit_scaling_factor(
-          *dynamic_limit_scaling_factor);
-    }
+        if (auto dynamic_limit_scaling_factor =
+                params->dynamic_limit_scaling_factor;
+            dynamic_limit_scaling_factor.has_value()) {
+          queue.mutable_config()->set_dynamic_limit_scaling_factor(
+              *dynamic_limit_scaling_factor);
+        }
 
-    if (auto shared_static_limit = params->shared_static_limit;
-        shared_static_limit.has_value()) {
-      queue.mutable_config()->set_static_shared_buffer_limit(
-          *shared_static_limit);
-    }
-
-    // We update the entire queue subtree.
-    {
-      // Convert proto back to JSON string.
-      ASSIGN_OR_RETURN(std::string buffer_queue_json,
-                       gutil::SerializeProtoAsJson(queue));
-      // Apply updated queue.
-      RETURN_IF_ERROR(SetGnmiConfigPath(
-          &gnmi, kBufferQueuePath, GnmiSetType::kUpdate,
-          absl::StrFormat(R"({ "queue": [%s] })", buffer_queue_json)));
+        if (auto shared_static_limit = params->shared_static_limit;
+            shared_static_limit.has_value()) {
+          queue.mutable_config()->set_static_shared_buffer_limit(
+              *shared_static_limit);
+        }
+      }
     }
   }
+
+  proto_config.clear_scheduler_policies();
+  // Convert proto back to JSON string.
+  ASSIGN_OR_RETURN(std::string qos_json,
+                   gutil::SerializeProtoAsJson(proto_config));
+  RETURN_IF_ERROR(SetGnmiConfigPath(
+      &gnmi, "qos", GnmiSetType::kUpdate,
+      absl::StrFormat(R"({ "openconfig-qos:qos": %s })", qos_json)));
 
   // Wait for convergence.
   const absl::Time kDeadline = absl::Now() + convergence_timeout;
