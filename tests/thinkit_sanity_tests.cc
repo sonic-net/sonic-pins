@@ -14,6 +14,7 @@
 
 #include "tests/thinkit_sanity_tests.h"
 
+#include <cstdint>
 #include <cstdlib>
 #include <map>
 #include <memory>
@@ -22,6 +23,7 @@
 #include <valarray>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
@@ -31,20 +33,21 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/impl/codegen/client_context.h"
-#include "grpcpp/impl/codegen/status.h"
+#include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
-#include "include/nlohmann/json.hpp"
 #include "proto/gnmi/gnmi.pb.h"
 #include "system/system.grpc.pb.h"
 #include "system/system.pb.h"
 #include "tests/thinkit_util.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
@@ -52,14 +55,12 @@ namespace pins_test {
 namespace {
 
 using ::nlohmann::json;
-using ::std::abs;
 using ::testing::HasSubstr;
 
 constexpr int kEpochMarginalError = 2;
-constexpr absl::Duration kColdRebootWaitForDownTime = absl::Seconds(30);
+constexpr absl::Duration kColdRebootWaitForDownTime = absl::Seconds(75);
 // TODO: Reduce reboot up time.
 constexpr absl::Duration kColdRebootWaitForUpTime = absl::Minutes(6);
-constexpr absl::Duration kWaitForApplicationsReady = absl::Minutes(1);
 constexpr char kV3ReleaseConfigBlob[] = R"({
    "openconfig-platform:components" : {
       "component" : [
@@ -275,7 +276,7 @@ void TestGnmiConfigBlobSet(thinkit::Switch& sut) {
 }
 
 //  Returns last boot time of SUT.
-absl::StatusOr<int> GetGnmiSystemBootTime(
+absl::StatusOr<uint64_t> GetGnmiSystemBootTime(
     thinkit::Switch& sut, gnmi::gNMI::StubInterface* sut_gnmi_stub) {
   ASSIGN_OR_RETURN(
       gnmi::GetRequest request,
@@ -291,7 +292,7 @@ absl::StatusOr<int> GetGnmiSystemBootTime(
       ParseGnmiGetResponse(response, "openconfig-system:boot-time"));
   // Remove characters <"">  in the parsed string.
   std::string boot_time_string = parsed_str.substr(1, parsed_str.size() - 2);
-  int boot_time;
+  uint64_t boot_time;
   if (!absl::SimpleAtoi(boot_time_string, &boot_time)) {
     return gutil::InternalErrorBuilder().LogError()
            << absl::StrCat("SimpleAtoi Error while parsing ")
@@ -301,9 +302,10 @@ absl::StatusOr<int> GetGnmiSystemBootTime(
   return boot_time;
 }
 
-void TestGnoiSystemColdReboot(thinkit::Switch& sut) {
+void TestGnoiSystemColdReboot(thinkit::Switch& sut,
+                              absl::Span<const std::string> interfaces) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(int first_boot_time,
+  ASSERT_OK_AND_ASSIGN(uint64_t first_boot_time,
                        GetGnmiSystemBootTime(sut, sut_gnmi_stub.get()));
 
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
@@ -312,17 +314,24 @@ void TestGnoiSystemColdReboot(thinkit::Switch& sut) {
   request.set_message("Testing Purpose");
   gnoi::system::RebootResponse response;
   grpc::ClientContext context;
-  LOG(INFO) << "Sending Reboot request: " << request.ShortDebugString();
+  VLOG(1) << "Sending Reboot request: " << request.ShortDebugString();
   ASSERT_OK(sut_gnoi_system_stub->Reboot(&context, request, &response));
-  LOG(INFO) << "Received Reboot response: " << response.ShortDebugString();
+  VLOG(1) << "Received Reboot response: " << response.ShortDebugString();
 
   absl::Time start_time = absl::Now();
   bool system_down = false;
-  
+
   // Wait for system to become unreachable via ping - as that's the last thing
   // that goes down.
   while (absl::Now() < (start_time + kColdRebootWaitForDownTime)) {
-    if (Pingable(sut) != absl::OkStatus()) {
+    if (Pingable(sut, absl::Seconds(1)) != absl::OkStatus()) {
+      LOG(INFO) << "The switch is not pingable at "
+                << absl::FormatTime("%Y-%m-%d %H:%M:%S", absl::Now(),
+                                    absl::LocalTimeZone())
+                << ", which is before the timeout threshold at: "
+                << absl::FormatTime("%Y-%m-%d %H:%M:%S",
+                                    (start_time + kColdRebootWaitForDownTime),
+                                    absl::LocalTimeZone());
       system_down = true;
       break;
     }
@@ -330,12 +339,24 @@ void TestGnoiSystemColdReboot(thinkit::Switch& sut) {
 
   // Return failure if system did not go down.
   ASSERT_TRUE(system_down) << "System did not go down in "
-                           << kColdRebootWaitForDownTime;
+                           << kColdRebootWaitForDownTime
+                           << ". Reboot triggered timestamp is "
+                           << absl::FormatTime("%Y-%m-%d %H:%M:%S", start_time,
+                                               absl::LocalTimeZone());
 
   // Wait for system to become reachable over gNOI.
   start_time = absl::Now();
+  absl::Status status;
   while (absl::Now() < (start_time + kColdRebootWaitForUpTime)) {
-    if (GnoiAble(sut) == absl::OkStatus()) {
+    status = SwitchReady(sut, interfaces);
+    if (status.ok()) {
+      LOG(INFO) << "The switch is ready at "
+                << absl::FormatTime("%Y-%m-%d %H:%M:%S", absl::Now(),
+                                    absl::LocalTimeZone())
+                << ", which is before the timeout threshold at: "
+                << absl::FormatTime("%Y-%m-%d %H:%M:%S",
+                                    (start_time + kColdRebootWaitForUpTime),
+                                    absl::LocalTimeZone());
       system_down = false;
       break;
     }
@@ -343,13 +364,15 @@ void TestGnoiSystemColdReboot(thinkit::Switch& sut) {
 
   // Return failure if system did not come up.
   ASSERT_FALSE(system_down)
-      << "System did not come up in " << kColdRebootWaitForUpTime;
+      << "System did not come up in " << kColdRebootWaitForUpTime
+      << " with error: " << status << ". Probe activation timestamp is "
+      << absl::FormatTime("%Y-%m-%d %H:%M:%S", start_time,
+                          absl::LocalTimeZone());
 
-  ASSERT_OK_AND_ASSIGN(int latest_boot_time,
+  ASSERT_OK_AND_ASSIGN(uint64_t latest_boot_time,
                        GetGnmiSystemBootTime(sut, sut_gnmi_stub.get()));
 
-  EXPECT_GT(abs(latest_boot_time - first_boot_time), kEpochMarginalError);
-  EXPECT_OK(SwitchReady(sut));
+  EXPECT_GT((latest_boot_time - first_boot_time), kEpochMarginalError);
 }
 
 }  // namespace pins_test

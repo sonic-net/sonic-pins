@@ -317,7 +317,425 @@ action {
 -- MODIFICATIONS ---------------------------------------------------------------
 NONE
 
-tests/lib/switch_test_setup_helpers_golden_test_runner.cc:91: Failure
-Value of: pins_test::RewritePortsInTableEntries( test_case.info, test_case.new_ports_available, entries_to_rewrite)
-Expected: is OK
-  Actual: NOT_FOUND: Key not found: 'mirror_with_psamp_encapsulation' (of type absl::lts_20230802::Status)
+================================================================================
+Roughly even number of 1, 2, and 3, with existing 3 and port-less entries unchanged
+Available ports: 1,2,3
+================================================================================
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "neighbor_table"
+matches {
+  name: "router_interface_id"
+  exact {
+    str: "router-interface-1"
+  }
+}
+matches {
+  name: "neighbor_id"
+  exact {
+    str: "fe80::3e28:6dff:fe34:c002"
+  }
+}
+action {
+  name: "set_dst_mac"
+  params {
+    name: "dst_mac"
+    value {
+      mac: "3c:28:6d:34:c0:02"
+    }
+  }
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+NONE
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "router_interface_table"
+matches {
+  name: "router_interface_id"
+  exact {
+    str: "router-interface-1"
+  }
+}
+action {
+  name: "set_port_and_src_mac"
+  params {
+    name: "port"
+    value {
+      str: "3"
+    }
+  }
+  params {
+    name: "src_mac"
+    value {
+      mac: "00:02:03:04:05:06"
+    }
+  }
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+NONE
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "wcmp_group_table"
+matches {
+  name: "wcmp_group_id"
+  exact {
+    str: "group-4294934545"
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-1"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "4"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "5"
+  }
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: action_set.actions[0].watch_port: "4" -> "2"
+modified: action_set.actions[1].watch_port: "5" -> "1"
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "mirror_session_table"
+matches {
+  name: "mirror_session_id"
+  exact {
+    str: "mirror-session-201326593"
+  }
+}
+action {
+  name: "mirror_with_vlan_tag_and_ipfix_encapsulation"
+  params {
+    name: "monitor_port"
+    value {
+      str: "6"
+    }
+  }
+  params {
+    name: "monitor_failover_port"
+    value {
+      str: "7"
+    }
+  }
+  params {
+    name: "mirror_encap_dst_ip"
+    value {
+      ipv6: "::1"
+    }
+  }
+  params {
+    name: "mirror_encap_src_ip"
+    value {
+      ipv6: "::2"
+    }
+  }
+  params {
+    name: "mirror_encap_src_mac"
+    value {
+      mac: "00:01:02:03:04:05"
+    }
+  }
+  params {
+    name: "mirror_encap_vlan_id"
+    value {
+      hex_str: "0x001"
+    }
+  }
+  params {
+    name: "mirror_encap_dst_mac"
+    value {
+      mac: "01:02:03:04:05:06"
+    }
+  }
+  params {
+    name: "mirror_encap_udp_dst_port"
+    value {
+      hex_str: "0x1234"
+    }
+  }
+  params {
+    name: "mirror_encap_udp_src_port"
+    value {
+      hex_str: "0x2472"
+    }
+  }
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: action.params[0].value.str: "6" -> "3"
+modified: action.params[1].value.str: "7" -> "2"
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "l3_admit_table"
+matches {
+  name: "dst_mac"
+  ternary {
+    value {
+      mac: "02:32:0a:ce:c4:04"
+    }
+    mask {
+      mac: "ff:ff:ff:ff:ff:ff"
+    }
+  }
+}
+matches {
+  name: "in_port"
+  optional {
+    value {
+      str: "7"
+    }
+  }
+}
+priority: 2030
+action {
+  name: "admit_to_l3"
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: matches[1].optional.value.str: "7" -> "2"
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "acl_ingress_table"
+matches {
+  name: "is_ipv4"
+  optional {
+    value {
+      hex_str: "0x1"
+    }
+  }
+}
+matches {
+  name: "ip_protocol"
+  ternary {
+    value {
+      hex_str: "0x11"
+    }
+    mask {
+      hex_str: "0xff"
+    }
+  }
+}
+matches {
+  name: "l4_dst_port"
+  ternary {
+    value {
+      hex_str: "0x0223"
+    }
+    mask {
+      hex_str: "0xffff"
+    }
+  }
+}
+matches {
+  name: "in_port"
+  optional {
+    value {
+      str: "8"
+    }
+  }
+}
+priority: 3100
+action {
+  name: "acl_drop"
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: matches[3].optional.value.str: "8" -> "1"
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "acl_pre_ingress_table"
+matches {
+  name: "in_port"
+  optional {
+    value {
+      str: "9"
+    }
+  }
+}
+priority: 1151
+action {
+  name: "set_vrf"
+  params {
+    name: "vrf_id"
+    value {
+      str: "vrf-210"
+    }
+  }
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: matches[0].optional.value.str: "9" -> "3"
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "acl_egress_table"
+matches {
+  name: "ether_type"
+  ternary {
+    value {
+      hex_str: "0x0800"
+    }
+    mask {
+      hex_str: ""
+    }
+  }
+}
+matches {
+  name: "ip_protocol"
+  ternary {
+    value {
+      hex_str: "0x11"
+    }
+    mask {
+      hex_str: "0xff"
+    }
+  }
+}
+matches {
+  name: "l4_dst_port"
+  ternary {
+    value {
+      hex_str: "0x0223"
+    }
+    mask {
+      hex_str: "0xffff"
+    }
+  }
+}
+matches {
+  name: "out_port"
+  optional {
+    value {
+      str: "10"
+    }
+  }
+}
+priority: 3101
+action {
+  name: "acl_drop"
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: matches[3].optional.value.str: "10" -> "2"
+
+-- ORIGINAL ENTRY --------------------------------------------------------------
+table_name: "wcmp_group_table"
+matches {
+  name: "wcmp_group_id"
+  exact {
+    str: "group-4294934545"
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-1"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "11"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "12"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "13"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "14"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "15"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "16"
+  }
+  actions {
+    action {
+      name: "set_nexthop_id"
+      params {
+        name: "nexthop_id"
+        value {
+          str: "nexthop-2"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "17"
+  }
+}
+-- MODIFICATIONS ---------------------------------------------------------------
+modified: action_set.actions[0].watch_port: "11" -> "1"
+modified: action_set.actions[1].watch_port: "12" -> "3"
+modified: action_set.actions[2].watch_port: "13" -> "2"
+modified: action_set.actions[3].watch_port: "14" -> "1"
+modified: action_set.actions[4].watch_port: "15" -> "3"
+modified: action_set.actions[5].watch_port: "16" -> "2"
+modified: action_set.actions[6].watch_port: "17" -> "1"

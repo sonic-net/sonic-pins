@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,13 +31,16 @@ namespace {
 // Sends P4Info to the switch and makes sure it works.
 TEST_P(P4InfoPushTestFixture, P4InfoPushTest) {
   LOG(INFO) << "Test started";
-
+  ASSERT_OK(GetParam()
+                .mirror_testbed->GetMirrorTestbed()
+                .Environment()
+                .StoreTestArtifact("pushed_p4info.pb.txt", GetParam().p4info));
   // Push the gNMI configuration and P4Info to the SUT.
   LOG(INFO) << "Pushing gNMI config & P4info";
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          GetTestbed().Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                           GetParam().gnmi_config, GetParam().p4info));
 
   // Pull P4Info, make sure it is the same as the pushed one.
   LOG(INFO) << "Pulling P4Info";
