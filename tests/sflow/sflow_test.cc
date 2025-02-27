@@ -69,6 +69,8 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/util.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "tests/integration/system/nsf/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
@@ -575,6 +577,9 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
       traffic_refs, topology_ref,
       /*runtime=*/absl::Seconds(std::ceil(1.0f * pkt_count / pkt_rate)),
       testbed));
+
+  // Sleep to wait for the counters to be reflected.
+  absl::SleepFor(absl::Seconds(10));
 
   LOG(INFO) << "Read final packet counters.";
   // Read final counters via GNMI from the SUT
@@ -2318,32 +2323,12 @@ void SflowMirrorTestFixture::TearDown() {
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"posttest_", testbed.Environment());
   if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(OutputTableEntriesToArtifact(
-        *sut_p4_session_, testbed.Environment(),
-        /*artifact_name=*/"posttest_SUT_table_entries.txt"));
+    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+    EXPECT_OK(sut_p4_session_->Finish());
   }
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(OutputTableEntriesToArtifact(
-        *control_p4_session_, testbed.Environment(),
-        /*artifact_name=*/"posttest_control_table_entries.txt"));
-  }
-
-  // Restore config on SUT and clear table entries.
-  if (sut_gnmi_stub_ != nullptr) {
-    ASSERT_OK_AND_ASSIGN(auto sflow_enabled,
-                         IsSflowConfigEnabled(GetParam().sut_gnmi_config));
-    ASSERT_OK(SetSflowConfigEnabled(sut_gnmi_stub_.get(), sflow_enabled));
-  }
-  ASSERT_OK_AND_ASSIGN(
-      sut_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed.Sut(), GetParam().sut_gnmi_config, GetSutP4Info()));
-
-  // Restores control switch config and clear table entries.
-  if (control_gnmi_stub_ != nullptr) {
-    ASSERT_OK_AND_ASSIGN(auto sflow_enabled,
-                         IsSflowConfigEnabled(GetParam().control_gnmi_config));
-    ASSERT_OK(SetSflowConfigEnabled(control_gnmi_stub_.get(), sflow_enabled));
+    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+    EXPECT_OK(control_p4_session_->Finish());
   }
   ASSERT_OK_AND_ASSIGN(control_p4_session_,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
@@ -2907,7 +2892,13 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
     EXPECT_OK(sut_p4_session_->Finish());
     sut_p4_session_ = nullptr;
   }
-  pins_test::TestGnoiSystemColdReboot(testbed.Sut());
+  if (GetParam().nsf_enabled) {
+    pins_test::Testbed testbed_variant;
+    testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
+    ASSERT_OK(pins_test::NsfReboot(testbed_variant));
+  } else {
+    pins_test::TestGnoiSystemColdReboot(testbed.Sut());
+  }
   std::vector<std::string> interface_names;
   for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
     interface_names.push_back(interface_name);
