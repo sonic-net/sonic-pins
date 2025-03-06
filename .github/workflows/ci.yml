@@ -19,6 +19,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Free disk space as workaround for https://github.com/actions/runner-images/issues/2875.
+      uses: jlumbroso/free-disk-space@v1.3.1
+      with:
+        # Keeping these as a precaution, in case we do need them.
+        large-packages: false
+
     - name: Mount bazel cache
       uses: actions/cache/restore@v3
       with:

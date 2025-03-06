@@ -157,7 +157,7 @@ public:
   }
 
   // Returns the list of all non-const table IDs in the underlying P4 program.
-  const std::vector<uint32_t> AllTableIds() const;
+  std::vector<uint32_t> AllTableIds() const;
 
   // Applies the given update to the given table entries. Assumes that all
   // updates can actually be applied successfully e.g for INSERT, an entry

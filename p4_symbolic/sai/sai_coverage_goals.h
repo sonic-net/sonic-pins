@@ -56,7 +56,7 @@ inline CoverageGoals SaiDefaultCoverageGoals() {
                   "ingress.routing_resolution.router_interface_table",
                   "ingress.routing_resolution.wcmp_group_table",
                   "ingress.routing_resolution.tunnel_table",
-                  # TODO: Remove the following when GPINS releases
+                  # TODO: Remove the following when PINS releases
                   # no longer include the tables.
                   "ingress.routing.neighbor_table",
                   "ingress.routing.nexthop_table",
