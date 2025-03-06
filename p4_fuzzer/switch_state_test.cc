@@ -55,6 +55,7 @@ using ::p4::v1::ActionProfileAction;
 using ::p4::v1::Entity;
 using ::p4::v1::FieldMatch;
 using ::p4::v1::MulticastGroupEntry;
+using ::p4::v1::Replica;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::CreateIrP4Info;
@@ -666,6 +667,10 @@ class ResourceExhaustionAllowedTest : public testing::Test {
     // If above is true, determines whether to use SumOfWeight (nullopt) or
     // SumOfMembers with max_member_weight set to the given value.
     std::optional<int> max_member_weight = std::nullopt;
+
+    int32_t multicast_group_table_max_replicas_per_entry = 0;
+    int32_t multicast_group_table_total_replicas = 0;
+    int32_t multicast_group_table_size = 0;
   };
 
   uint64_t TableWithActionProfileId() const { return 101; }
@@ -725,6 +730,18 @@ class ResourceExhaustionAllowedTest : public testing::Test {
     action_ref->set_id(action->preamble().id());
     action_ref->add_annotations("@proto_id(1)");
 
+    info.mutable_pkg_info()
+        ->mutable_platform_properties()
+        ->set_multicast_group_table_size(options.multicast_group_table_size);
+    info.mutable_pkg_info()
+        ->mutable_platform_properties()
+        ->set_multicast_group_table_max_replicas_per_entry(
+            options.multicast_group_table_max_replicas_per_entry);
+    info.mutable_pkg_info()
+        ->mutable_platform_properties()
+        ->set_multicast_group_table_total_replicas(
+            options.multicast_group_table_total_replicas);
+
     return CreateIrP4Info(info);
   }
 
@@ -772,13 +789,12 @@ TEST_F(ResourceExhaustionAllowedTest,
 }
 
 TEST_F(ResourceExhaustionAllowedTest,
-       ReturnsUnimplementedErrorForMulticastUpdate) {
+       ReturnsInvalidArgumentForMulticastUpdate) {
   ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
                        GetIrP4Info(P4InfoOptions{
-                           .table_size = 1,
-                           .action_profile_size = 10,
-                           .action_profile_max_group_size = 10,
-                           .set_selector_size_semantics = true,
+                           .multicast_group_table_max_replicas_per_entry = 2,
+                           .multicast_group_table_total_replicas = 3,
+                           .multicast_group_table_size = 1,
                        }));
   SwitchState state(ir_p4info);
 
@@ -788,7 +804,110 @@ TEST_F(ResourceExhaustionAllowedTest,
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
   EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
-              StatusIs(absl::StatusCode::kUnimplemented));
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsIsOkForMulticastInsertUpdateForMaxTotalReplicas) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .multicast_group_table_max_replicas_per_entry = 2,
+                           .multicast_group_table_total_replicas = 1,
+                           .multicast_group_table_size = 1,
+                       }));
+  SwitchState state(ir_p4info);
+
+  p4::v1::Update update;
+  update.set_type(Update::INSERT);
+  // Add 2 replicas to the group.
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->add_replicas();
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->add_replicas();
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kOk));
+}
+
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsIsOkForMulticastInsertUpdateForMaxReplicasPerEntry) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .multicast_group_table_max_replicas_per_entry = 0,
+                           .multicast_group_table_total_replicas = 1,
+                           .multicast_group_table_size = 1,
+                       }));
+  SwitchState state(ir_p4info);
+
+  p4::v1::Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->add_replicas();
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kOk));
+}
+
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsIsOkForMulticastInsertUpdateForMaxTotalEntries) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .multicast_group_table_max_replicas_per_entry = 2,
+                           .multicast_group_table_total_replicas = 2,
+                           .multicast_group_table_size = 0,
+                       }));
+  SwitchState state(ir_p4info);
+
+  p4::v1::Update update;
+  update.set_type(Update::INSERT);
+  // Add 2 replicas to the group.
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->add_replicas();
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->add_replicas();
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kOk));
+}
+
+TEST_F(ResourceExhaustionAllowedTest, ReturnsIsOkForMulticastModifyUpdate) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .multicast_group_table_max_replicas_per_entry = 1,
+                           .multicast_group_table_total_replicas = 1,
+                           .multicast_group_table_size = 1,
+                       }));
+  SwitchState state(ir_p4info);
+
+  Update update;
+  update.set_type(Update::INSERT);
+  MulticastGroupEntry* entry = update.mutable_entity()
+                                   ->mutable_packet_replication_engine_entry()
+                                   ->mutable_multicast_group_entry();
+  entry->set_multicast_group_id(1);
+  Replica* replica = entry->add_replicas();
+  *replica->mutable_port() = "1";
+
+  // Initial insert does not cause resource exhaustion.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+
+  // Resource exhaustion allowed on modify.
+  replica = entry->add_replicas();
+  *replica->mutable_port() = "2";
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  update.set_type(Update::MODIFY);
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kOk));
 }
 
 TEST_F(ResourceExhaustionAllowedTest,

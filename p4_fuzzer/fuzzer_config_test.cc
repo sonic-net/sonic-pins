@@ -6,7 +6,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
-#include "gutils/parse_text_proto.h"
+#include "gutil/gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -14,8 +14,8 @@
 namespace p4_fuzzer {
 namespace {
 
+using ::gutil::ParseProtoOrDie;
 using ::gutil::StatusIs;
-using ::gutils::ParseTextProtoOrDie;
 using ::p4::config::v1::MatchField;
 using ::p4::config::v1::P4Info;
 using ::p4::config::v1::Table;
@@ -25,7 +25,7 @@ using ::p4::config::v1::Table;
 //  2) EXACT key with P4Runtime translated type (STRING format)
 // and another table with a single key of type bitstring<2> (HEX_STRING format).
 p4::config::v1::P4Info SimpleP4Info() {
-  return ParseTextProtoOrDie<P4Info>(
+  return ParseProtoOrDie<P4Info>(
       R"pb(
         tables {
           preamble { id: 1 name: "ingress.simple_table" alias: "simple_table" }
