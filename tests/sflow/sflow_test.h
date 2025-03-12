@@ -43,7 +43,7 @@ struct SflowTestParams {
 
 // Structure represents a link between SUT and Ixia.
 // This is represented by Ixia interface name and the SUT's gNMI interface
-// name and its corrosponding p4 runtime id.
+// name and its corresponding p4 runtime id.
 struct IxiaLink {
   std::string ixia_interface;
   std::string sut_interface;
@@ -85,6 +85,9 @@ struct SflowMirrorTestParams {
 
   // Used for port breakout test.
   std::string platform_json_path;
+
+  // If enabled, warm reboot would be used in tests instead of cold reboot.
+  bool nsf_enabled;
 };
 
 struct Port {
@@ -112,6 +115,11 @@ class SflowMirrorTestFixture
   std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
 
   std::string agent_address_;
+
+  // Used for setting gNMI collector config. It would be set to the same as the
+  // config collector port. If config does not have any collector config, it
+  // would be set to 6343.
+  int collector_port_;
 };
 
 class SflowRebootTestFixture : public SflowMirrorTestFixture {};
