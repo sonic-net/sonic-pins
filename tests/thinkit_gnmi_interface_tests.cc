@@ -78,6 +78,10 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
             << " with current breakout mode " << port_info.curr_breakout_mode;
   // Verify that all ports for the selected port are operationally up.
   for (const auto& p : orig_breakout_info) {
+    ASSERT_OK_AND_ASSIGN(
+        pins_test::AdminStatus port_admin_status,
+        pins_test::GetInterfaceAdminStatusOverGnmi(*sut_gnmi_stub, p.first));
+    if (port_admin_status != AdminStatus::kUp) continue;
     EXPECT_OK(pins_test::CheckInterfaceOperStateOverGnmi(*sut_gnmi_stub,
                                                          kStateUp, {p.first}));
   }
