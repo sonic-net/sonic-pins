@@ -61,6 +61,10 @@ namespace {
 // otherwise it can use this constant to say no VLAN ID should be set.
 constexpr absl::string_view kNoVlanId = "";
 
+// send_to_ingress is a special port created on the switch which allows the CPU
+// to inject a packet into the ingress pipeline.
+constexpr absl::string_view kSendToIngress = "send_to_ingress";
+
 absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
                                  const pdpi::IrP4Info& ir_p4info,
                                  const std::string& vrf_id) {
@@ -69,14 +73,16 @@ absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
       absl::Substitute(R"pb(
                          type: INSERT
-                         table_entry {
-                           table_name: "acl_pre_ingress_table"
-                           priority: 2000
-                           action {
-                             name: "set_vrf"
-                             params {
-                               name: "vrf_id"
-                               value { str: "$0" }
+                         entity {
+                           table_entry {
+                             table_name: "acl_pre_ingress_table"
+                             priority: 2000
+                             action {
+                               name: "set_vrf"
+                               params {
+                                 name: "vrf_id"
+                                 value { str: "$0" }
+                               }
                              }
                            }
                          }
@@ -101,21 +107,23 @@ absl::Status AllowVrfTrafficToDstMac(pdpi::P4RuntimeSession& session,
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
       absl::Substitute(R"pb(
                          type: INSERT
-                         table_entry {
-                           table_name: "acl_pre_ingress_table"
-                           matches {
-                             name: "dst_mac"
-                             ternary {
-                               value { mac: "$0" }
-                               mask { mac: "ff:ff:ff:ff:ff:ff" }
+                         entity {
+                           table_entry {
+                             table_name: "acl_pre_ingress_table"
+                             matches {
+                               name: "dst_mac"
+                               ternary {
+                                 value { mac: "$0" }
+                                 mask { mac: "ff:ff:ff:ff:ff:ff" }
+                               }
                              }
-                           }
-                           priority: 2000
-                           action {
-                             name: "set_vrf"
-                             params {
-                               name: "vrf_id"
-                               value { str: "$1" }
+                             priority: 2000
+                             action {
+                               name: "set_vrf"
+                               params {
+                                 name: "vrf_id"
+                                 value { str: "$1" }
+                               }
                              }
                            }
                          }
@@ -138,14 +146,16 @@ absl::Status PuntAllPacketsToController(pdpi::P4RuntimeSession& session,
       R"pb(
         updates {
           type: INSERT
-          table_entry {
-            table_name: "acl_ingress_table"
-            priority: 2
-            action {
-              name: "acl_trap",
-              params {
-                name: "qos_queue"
-                value { str: "0x1" }
+          entity {
+            table_entry {
+              table_name: "acl_ingress_table"
+              priority: 2
+              action {
+                name: "acl_trap",
+                params {
+                  name: "qos_queue"
+                  value { str: "0x1" }
+                }
               }
             }
           }
@@ -280,7 +290,7 @@ absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
 
 absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
                            const pdpi::IrP4Info& ir_p4info,
-                           const std::string& port_id, int packet_count,
+                           absl::string_view port_id, int packet_count,
                            absl::string_view dst_mac, absl::string_view vlan_id,
                            absl::string_view dst_ip,
                            absl::string_view payload) {
@@ -292,8 +302,15 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
                      UdpPacket(dst_mac, vlan_id, dst_ip,
                                absl::Substitute("[Packet:$0] $1", i, payload)));
     // Rate limit to 500pps to avoid punt packet drops on the control switch.
-    RETURN_IF_ERROR(InjectEgressPacket(port_id, packet, ir_p4info, &session,
-                                       /*packet_delay=*/absl::Milliseconds(2)));
+    if (port_id == kSendToIngress) {
+      RETURN_IF_ERROR(
+          InjectIngressPacket(packet, ir_p4info, &session,
+                              /*packet_delay=*/absl::Milliseconds(2)));
+    } else {
+      RETURN_IF_ERROR(
+          InjectEgressPacket(std::string{port_id}, packet, ir_p4info, &session,
+                             /*packet_delay=*/absl::Milliseconds(2)));
+    }
   }
   return absl::OkStatus();
 }
@@ -805,18 +822,20 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
       R"pb(
         updates {
           type: INSERT
-          table_entry {
-            table_name: "acl_pre_ingress_vlan_table"
-            priority: 10
-            matches {
-              name: "is_ipv4"
-              optional { value { hex_str: "0x1" } }
-            }
-            action {
-              name: "set_outer_vlan_id",
-              params {
-                name: "vlan_id"
-                value { hex_str: "0xfff" }
+          entity {
+            table_entry {
+              table_name: "acl_pre_ingress_vlan_table"
+              priority: 10
+              matches {
+                name: "is_ipv4"
+                optional { value { hex_str: "0x1" } }
+              }
+              action {
+                name: "set_outer_vlan_id",
+                params {
+                  name: "vlan_id"
+                  value { hex_str: "0xfff" }
+                }
               }
             }
           }
@@ -875,6 +894,148 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
   LOG(INFO) << "Done collecting packets.";
 
   EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
+}
+
+TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
+
+  // Only run this test if the ACL_INGRESS_QOS_TABLE exists and we can match on
+  // the IN_PORT.
+  if (!TableHasMatchField(ir_p4info_, "acl_ingress_qos_table", "in_port")) {
+    GTEST_SKIP() << "Skipping because ACL_INGRESS_QOS_TABLE does not exist.";
+  }
+
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_sut,
+      GetParam().testbed_interface->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_control,
+      GetParam().testbed_interface->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string sut_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_sut));
+  ASSERT_OK_AND_ASSIGN(std::string control_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+
+  // Punt all traffic arriving at the control switch, and collect them to verify
+  // forwarding.
+  ASSERT_OK(
+      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
+
+  // Add an L3 route to enable forwarding.
+  L3Route l3_route{
+      .vrf_id = "vrf-1",
+      .switch_mac = "00:00:00:00:00:01",
+      .switch_ip = std::make_pair("10.0.0.1", 32),
+      .peer_port = sut_port,
+      .peer_mac = "00:00:00:00:00:02",
+      .peer_ip = "fe80::2",
+      .router_interface_id = "rif-1",
+      .nexthop_id = "nexthop-1",
+  };
+  ASSERT_OK(
+      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+  ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
+
+  // Admit only 1 MAC address to the forwarding pipeline.
+  ASSERT_OK(AdmitL3Route(
+      *sut_p4rt_session_, ir_p4info_,
+      L3AdmitOptions{
+          .priority = 2070,
+          .dst_mac = std ::make_pair("00:01:02:03:04:05", "FF:FF:FF:FF:FF:FF"),
+      }));
+
+  {
+    // Write QoS rule that will drop any packet, and a higher priority rule that
+    // will only allow ports matching on the CPU port.
+    pdpi::IrWriteRequest ir_write_request;
+    ASSERT_OK(gutil::ReadProtoFromString(
+        R"pb(
+          updates {
+            type: INSERT
+            entity {
+              table_entry {
+                table_name: "acl_ingress_qos_table"
+                priority: 10
+                action {
+                  name: "acl_drop",
+                }
+              }
+            }
+          }
+          updates {
+            type: INSERT
+            entity {
+              table_entry {
+                table_name: "acl_ingress_qos_table"
+                priority: 11
+                matches {
+                  name: "in_port"
+                  optional {
+                    value {
+                      str: "4294967293"  # OPENFLOW_PORT_CONTROLLER
+                    }
+                  }
+                }
+                action {
+                  name: "acl_forward",
+                }
+              }
+            }
+          }
+        )pb",
+        &ir_write_request));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::WriteRequest pi_write_request,
+        pdpi::IrWriteRequestToPi(ir_p4info_, ir_write_request));
+    ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session_.get(),
+                                                     pi_write_request));
+  }
+
+  // Send 2 sets of packets to the switch. The packets are exactly the same, but
+  // the first set of packets will be sent to the SUT from the control switch
+  // (i.e. they arrive on a physical port). The second set of packets will be
+  // sent through the "send_to_ingress" port.
+  const int kNumberOfTestPackets = 100;
+
+  // Send the "bad" packets first to give them the most time.
+  const std::string kBadPayload =
+      "Testing L3 forwarding. This packet should be dropped.";
+  ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
+                          control_port, kNumberOfTestPackets,
+                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
+                          /*dst_ip=*/"10.0.0.1", kBadPayload));
+
+  // Then send the "good" packets.
+  const std::string kGoodPayload =
+      "Testing L3 forwarding. This packet should arrive to packet in.";
+  ASSERT_OK(SendUdpPacket(*sut_p4rt_session_, ir_p4info_, kSendToIngress,
+                          kNumberOfTestPackets, /*dst_mac=*/"00:01:02:03:04:05",
+                          kNoVlanId, /*dst_ip=*/"10.0.0.1", kGoodPayload));
+
+  int good_packet_count = 0;
+  int bad_packet_count = 0;
+  ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        // Verify this is the packet we expect.
+        packetlib::Packet packet_in =
+            packetlib::ParsePacket(message.packet().payload());
+        if (absl::StrContains(packet_in.payload(), kGoodPayload)) {
+          ++good_packet_count;
+          return true;
+        }
+        if (absl::StrContains(packet_in.payload(), kBadPayload)) {
+          ++bad_packet_count;
+          return false;
+        }
+        LOG(WARNING) << "Unexpected P4 Stream response: "
+                     << message.DebugString();
+        return false;
+      },
+      kNumberOfTestPackets, /*timeout=*/absl::Minutes(1)));
+  LOG(INFO) << "Done collecting packets.";
+
+  EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
+  EXPECT_EQ(bad_packet_count, 0);
 }
 
 }  // namespace pins
