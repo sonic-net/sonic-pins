@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,11 @@
 #ifndef PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_
 #define PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_
 
+#include <string>
+#include <vector>
+
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -44,17 +48,17 @@ const int kSlotPortLaneMaxValues = 3;
 // PortBreakoutInfo contains physical channels and operational status for an
 // interface.
 typedef struct {
-  std::string physical_channels; // Eg. format: [0,1,2,3]
-  std::string oper_status;       // Eg. format: "UP"
+  std::string physical_channels;  // Eg. format: [0,1,2,3]
+  std::string oper_status;        // Eg. format: "UP"
   std::string breakout_speed;     // Eg. format: 400G
 } PortBreakoutInfo;
 
 typedef struct {
-  std::string port_name; // Randomly selected port on switch.
+  std::string port_name;  // Randomly selected port on switch.
   std::string
-      curr_breakout_mode; // Currently configured breakout mode on the port.
-  std::string supported_breakout_mode; // Supported breakout mode on port
-                                       // different from current breakout mode.
+      curr_breakout_mode;  // Currently configured breakout mode on the port.
+  std::string supported_breakout_mode;  // Supported breakout mode on port
+                                        // different from current breakout mode.
 } RandomPortBreakoutInfo;
 
 typedef struct {
@@ -68,7 +72,7 @@ enum BreakoutType { kAny, kChannelized };
 // GetSupportedBreakoutModesForPort returns list of supported breakout modes for
 // given interface.
 absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
-    const std::string &interface_info, const std::string_view port,
+    const std::string& interface_info, const absl::string_view port,
     const BreakoutType breakout_type = BreakoutType::kAny);
 
 // BreakoutResultsInSpeedChangeOnly returns whether changing from current to new
@@ -77,17 +81,23 @@ absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
     const std::string& port, const std::string& current_breakout_mode,
     const std::string& new_breakout_mode);
 
-absl::StatusOr<bool> IsSfpPlusPort(gnmi::gNMI::StubInterface &sut_gnmi_stub,
+absl::StatusOr<bool> IsSfpPlusPort(gnmi::gNMI::StubInterface& sut_gnmi_stub,
                                    absl::string_view port_name);
+
+absl::StatusOr<absl::flat_hash_set<int>> GetPortSetWithOsfpOptics(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub);
+
+absl::StatusOr<absl::flat_hash_map<int, std::vector<std::string>>>
+GetXcvrToInterfacesMapGivenPmdType(gnmi::gNMI::StubInterface& sut_gnmi_stub,
+                                   absl::string_view pmd_type);
 
 // GetRandomPortWithSupportedBreakoutModes attempts to get a random port from
 // list of front panel ports that supports at least one more breakout mode other
 // than the currently configured breakout mode.
 // If allow_list is empty, all available ports on the switch will be used.
-
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
-    gnmi::gNMI::StubInterface &sut_gnmi_stub,
-    const std::string &platform_json_contents,
+    gnmi::gNMI::StubInterface& sut_gnmi_stub,
+    const std::string& platform_json_contents,
     const BreakoutType new_breakout_type = BreakoutType::kAny,
     const BreakoutType current_breakout_type = BreakoutType::kAny,
     const std::vector<absl::string_view>& allow_list = {});
@@ -95,8 +105,8 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
 // GetBreakoutStateInfoForPort returns the state values of physical channels and
 // operational status information for ports in a given breakout mode.
 absl::StatusOr<absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>>
-GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface *sut_gnmi_stub,
-                            const std::string &port,
+GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
+                            const std::string& port,
                             absl::string_view breakout_mode);
 
 // GetExpectedPortInfoForBreakoutMode returns the expected port list and
@@ -106,7 +116,7 @@ GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface *sut_gnmi_stub,
 // number of physical channels per breakout mode is used to compute the offset
 // from the parent port number.
 absl::StatusOr<absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>>
-GetExpectedPortInfoForBreakoutMode(const std::string &port,
+GetExpectedPortInfoForBreakoutMode(const std::string& port,
                                    absl::string_view breakout_mode);
 
 // GetBreakoutModeConfigFromString returns breakout config path values from
@@ -114,10 +124,9 @@ GetExpectedPortInfoForBreakoutMode(const std::string &port,
 // breakoutSpeed1 + numBreakouts2 x breakoutSpeed2 + ... Eg: "1x400G", 2x100G +
 // 1x200G".
 absl::Status GetBreakoutModeConfigFromString(
-    gnmi::SetRequest &req, gnmi::gNMI::StubInterface *sut_gnmi_stub,
+    gnmi::SetRequest& req, gnmi::gNMI::StubInterface* sut_gnmi_stub,
     const absl::string_view port_index, const absl::string_view intf_name,
     const absl::string_view breakout_mode);
-
 // Same as above expect this function returns a JSON string.
 absl::StatusOr<std::string> GetBreakoutModeConfigJson(
     gnmi::gNMI::StubInterface* sut_gnmi_stub,
@@ -134,9 +143,9 @@ absl::StatusOr<std::string> GetBreakoutModeConfigJson(
 // the port, ports in original breakout config that were not in new breakout
 // config should no longer exist as new breakout is now applied.
 std::vector<std::string> GetNonExistingPortsAfterBreakout(
-    const absl::flat_hash_map<std::string, PortBreakoutInfo>
-        &original_port_info,
-    const absl::flat_hash_map<std::string, PortBreakoutInfo> &new_port_info,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>&
+        original_port_info,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>& new_port_info,
     bool expected_success);
 
 // ValidateBreakoutState checks the breakout related state paths with the
@@ -147,20 +156,20 @@ std::vector<std::string> GetNonExistingPortsAfterBreakout(
 // For a successful test case where we expect the breakout mode to be applied on
 // the port, the expected_port_info contains expected breakout values for the
 // new mode.
-absl::Status
-ValidateBreakoutState(gnmi::gNMI::StubInterface *sut_gnmi_stub,
-                      const absl::flat_hash_map<std::string, PortBreakoutInfo>
-                          &expected_port_info,
-                      const std::vector<std::string> &non_existing_ports_list);
+absl::Status ValidateBreakoutState(
+    gnmi::gNMI::StubInterface* sut_gnmi_stub,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>&
+        expected_port_info,
+    const std::vector<std::string>& non_existing_ports_list);
 
-absl::StatusOr<std::string>
-GetPortIndex(absl::string_view platform_json_contents, absl::string_view port);
+absl::StatusOr<std::string> GetPortIndex(
+    absl::string_view platform_json_contents, absl::string_view port);
 
 std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
                                            absl::string_view breakout_speed);
 
 // IsCopperPort returns whether the port is copper or optic.
-absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface *sut_gnmi_stub,
+absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                   absl::string_view port);
 
 // Returns (slot/port/lane) info for a front panel port Ethernet<slot/port/lane>
