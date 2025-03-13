@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ struct ParamsForTestsWithoutIxia {
 // received packets.
 class CpuQosTestWithoutIxia
     : public testing::TestWithParam<ParamsForTestsWithoutIxia> {
-protected:
+ protected:
   void SetUp() override {
     GetParam().testbed_interface->SetUp();
 
@@ -86,19 +86,47 @@ protected:
     //     testbed_, GetParam().testbed_interface->GetMirrorTestbed());
   }
 
-  thinkit::MirrorTestbed &Testbed() {
+  thinkit::MirrorTestbed& Testbed() {
     return GetParam().testbed_interface->GetMirrorTestbed();
   }
+  thinkit::Switch& Sut() { return Testbed().Sut(); }
+  thinkit::Switch& ControlSwitch() { return Testbed().ControlSwitch(); }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
 };
 
+// Reference for the ACL QoS table actions and attributes can be found in:
+
+// ACL Ingress tables
+constexpr absl::string_view kAclIngressTable = "acl_ingress_table";
+constexpr absl::string_view kAclIngressQosTable = "acl_ingress_qos_table";
+
+// ACL Ingress table actions.
+constexpr absl::string_view kAclTrap = "acl_trap";
+constexpr absl::string_view kAclCopy = "acl_copy";
+
+// ACL Ingress QoS table actions.
+constexpr absl::string_view kAclSetCpuQueueAndCancelCopyAboveRateLimit =
+    "set_qos_queue_and_cancel_copy_above_rate_limit";
+constexpr absl::string_view kAclSetCpuQueueAndDenyAboveRateLimit =
+    "set_cpu_queue_and_deny_above_rate_limit";
+constexpr absl::string_view kAclSetCpuQueueMulticastQueueAndDenyAboveRateLimit =
+    "set_cpu_queue_multicast_queue_and_deny_above_rate_limit";
+
+// ACL punt queue attribute name.
+constexpr absl::string_view kCpuQosQueueAttributeName = "qos_queue";
+constexpr absl::string_view kCpuQueueAttributeName = "cpu_queue";
+
+struct AclIngressTablePuntFlowRateLimitAction {
+  absl::string_view rate_limit_action;
+  absl::string_view cpu_queue_attribute_name;
+};
+
 // Parameters used by the tests that require an Ixia.
 struct ParamsForTestsWithIxia {
-  thinkit::GenericTestbedInterface *testbed_interface;
-  std::string gnmi_config;
+  thinkit::GenericTestbedInterface* testbed_interface;
+
   p4::config::v1::P4Info p4info;
-  absl::optional<std::string> test_case_id;
   // This is be the minimum guaranteed bandwidth for control path to Tester in
   // the testbed. This is required to ensure the per queue rate limits to be
   // tested are within this guaranteed end to end bandwidth.
@@ -110,11 +138,15 @@ struct ParamsForTestsWithIxia {
   // When this parameter is passed in, the test will verify configuration on
   // switch matches expected config.
   absl::flat_hash_map<std::string, int> expected_queue_limit_config_pps;
+
+  // Vector of actions to verify for Punt flow rate limit test.
+  const std::vector<AclIngressTablePuntFlowRateLimitAction>
+      acl_ingress_table_punt_flow_rate_limit_actions;
 };
 
 class CpuQosTestWithIxia
     : public testing::TestWithParam<ParamsForTestsWithIxia> {
-protected:
+ protected:
   void SetUp() override { GetParam().testbed_interface->SetUp(); }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
@@ -122,5 +154,5 @@ protected:
   ~CpuQosTestWithIxia() override { delete GetParam().testbed_interface; }
 };
 
-} // namespace pins_test
-#endif // PINS_TESTS_CPU_QOS_TEST_H_
+}  // namespace pins_test
+#endif  // PINS_TESTS_CPU_QOS_TEST_H_
