@@ -16,6 +16,9 @@ workspace(name = "com_github_sonic_net_sonic_pins")
 
 # -- Load buildifier -----------------------------------------------------------
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("pins_infra_deps.bzl", "pins_infra_deps")
+
+pins_infra_deps()
 
 # Bazel toolchain to build go-lang.
 http_archive(
@@ -36,10 +39,6 @@ http_archive(
         "https://github.com/bazelbuild/bazel-gazelle/releases/download/v0.34.0/bazel-gazelle-v0.34.0.tar.gz",
     ],
 )
-
-load("pins_infra_deps.bzl", "pins_infra_deps")
-
-pins_infra_deps()
 
 # -- Load Rules Foreign CC -----------------------------------------------------
 
