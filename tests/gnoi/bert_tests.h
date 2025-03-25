@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,20 +15,37 @@
 #ifndef PINS_TESTS_GNOI_BERT_TESTS_H_
 #define PINS_TESTS_GNOI_BERT_TESTS_H_
 
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/status_matchers.h"
-#include "gutil/testing.h"
-#include "thinkit/generic_testbed_fixture.h"
+#include "diag/diag.grpc.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/status_matchers.h"
+#include "gutil/testing.h"
+#include "lib/gnmi/gnmi_helper.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "thinkit/control_device.h"
+#include "thinkit/generic_testbed.h"
+#include "thinkit/generic_testbed_fixture.h"
 
 namespace bert {
 
 class BertTest : public thinkit::GenericTestbedFixture<> {
-public:
+ public:
   BertTest()
-      : generic_testbed_(nullptr), sut_gnmi_stub_(nullptr),
-        sut_diag_stub_(nullptr) {}
+      : generic_testbed_(nullptr),
+        sut_gnmi_stub_(nullptr),
+        sut_diag_stub_(nullptr) {
+    GetParam().testbed_interface->ExpectLinkFlaps();
+  }
 
   void InitializeTestEnvironment(absl::string_view test_id) {
     thinkit::TestRequirements requirements =
@@ -40,7 +57,6 @@ public:
 
     ASSERT_OK_AND_ASSIGN(generic_testbed_,
                          GetTestbedWithRequirements(requirements));
-    generic_testbed_->Environment().SetTestCaseID(test_id);
 
     absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
         generic_testbed_->GetSutInterfaceInfo();
@@ -50,9 +66,46 @@ public:
     ASSERT_OK_AND_ASSIGN(sut_diag_stub_,
                          generic_testbed_->Sut().CreateGnoiDiagStub());
 
+    absl::flat_hash_set<std::string> model_sut_interfaces;
+    absl::flat_hash_set<std::string> model_peer_interfaces;
     for (const auto &[interface, info] : interface_info) {
-      if ((info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) ==
-          thinkit::CONTROL_INTERFACE) {
+      if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
+        model_sut_interfaces.insert(interface);
+        model_peer_interfaces.insert(info.peer_interface_name);
+      }
+    }
+    ASSERT_OK_AND_ASSIGN(auto sut_interface_to_lane_speed,
+                         pins_test::GetInterfaceToLaneSpeedMap(
+                             *sut_gnmi_stub_, model_sut_interfaces));
+
+    thinkit::ControlDevice &control_device = generic_testbed_->ControlDevice();
+    bool check_control_switch = false;
+    absl::flat_hash_map<std::string, int> control_interface_to_lane_speed;
+
+    absl::StatusOr<absl::flat_hash_map<std::string, int>> statusor =
+        control_device.GetInterfaceLaneSpeed(model_peer_interfaces);
+    if (statusor.ok()) {
+      check_control_switch = true;
+      control_interface_to_lane_speed = statusor.value();
+    } else {
+      // ASSERT if there was an error in getting the lane speed if API to get
+      // the lane speed is implemented.
+      ASSERT_EQ(statusor.status().code(), absl::StatusCode::kUnimplemented);
+    }
+
+    for (const auto &[interface, info] : interface_info) {
+      if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
+        if (!pins_test::InterfaceSupportsBert(interface,
+                                              sut_interface_to_lane_speed)) {
+          continue;
+        }
+        if (check_control_switch &&
+            (pins_test::InterfaceSupportsBert(
+                 info.peer_interface_name, control_interface_to_lane_speed) ==
+             false)) {
+          continue;
+        }
+
         sut_interfaces_.push_back(interface);
         peer_interfaces_.push_back(info.peer_interface_name);
         sut_to_peer_interface_mapping_[interface] = info.peer_interface_name;
@@ -76,7 +129,7 @@ public:
     return peer_interfaces;
   }
 
-protected:
+ protected:
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
   std::unique_ptr<gnoi::diag::Diag::StubInterface> sut_diag_stub_;
@@ -95,6 +148,6 @@ protected:
       control_to_peer_interface_mapping_;
 };
 
-} // namespace bert
+}  // namespace bert
 
-#endif // PINS_TESTS_GNOI_BERT_TESTS_H_
+#endif  // PINS_TESTS_GNOI_BERT_TESTS_H_

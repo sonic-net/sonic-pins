@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,30 +14,44 @@
 
 #include "tests/gnoi/bert_tests.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <ctime>
+#include <iterator>
 #include <random>
+#include <sstream>
+#include <string>
+#include <vector>
 
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/text_format.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "grpcpp/impl/codegen/client_context.h"
+#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
-#include "thinkit/test_environment.h"
+#include "thinkit/switch.h"
 
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
@@ -58,6 +72,7 @@ using ::testing::SizeIs;
 
 // BERT test duration.
 constexpr absl::Duration kTestDuration = absl::Seconds(180);
+constexpr absl::Duration kLongTestDuration = absl::Seconds(360);
 // Maximum allowed duration for port to sync with its peer.
 constexpr absl::Duration kSyncDuration = absl::Minutes(5);
 // Maximum allowed BERT delay duration due to setup, sync and recovery
@@ -79,8 +94,9 @@ constexpr uint8_t kMaxAllowedInterfacesToRunBert = 96;
 constexpr char kEnabledFalse[] = "{\"enabled\":false}";
 constexpr char kEnabledTrue[] = "{\"enabled\":true}";
 
-const std::string BuildPerPortStartBertRequest(
-    absl::string_view interface_name) {
+std::string BuildPerPortStartBertRequest(
+    absl::string_view interface_name,
+    absl::Duration test_duration = kTestDuration) {
   return absl::Substitute(R"pb(
                             interface {
                               origin: "openconfig"
@@ -93,10 +109,10 @@ const std::string BuildPerPortStartBertRequest(
                             prbs_polynomial: PRBS_POLYNOMIAL_PRBS31
                             test_duration_in_secs: $1
                           )pb",
-                          interface_name, ToInt64Seconds(kTestDuration));
+                          interface_name, ToInt64Seconds(test_duration));
 }
 
-const std::string BuildOpenConfigInterface(absl::string_view interface_name) {
+std::string BuildOpenConfigInterface(absl::string_view interface_name) {
   return absl::Substitute(R"pb(
                             origin: "openconfig"
                             elem { name: "interfaces" }
@@ -223,7 +239,7 @@ void WaitForBertToCompleteOnInterfaces(
     std::vector<std::string> sut_interfaces,
     thinkit::ControlDevice& control_device,
     gnoi::diag::GetBERTResultRequest control_switch_result_request,
-    int max_poll_count) {
+    int max_poll_count, absl::Duration test_duration = kTestDuration) {
   for (int count = 0; count < max_poll_count; ++count) {
     absl::SleepFor(kPollInterval);
     // If port is no longer in "TESTING" oper state on both sides of the link,
@@ -255,7 +271,7 @@ void WaitForBertToCompleteOnInterfaces(
       ASSERT_THAT(
           result_response.per_port_responses(),
           SizeIs(control_switch_result_request.per_port_requests_size()));
-      int testDurationMinutes = absl::ToInt64Minutes(kTestDuration);
+      int testDurationMinutes = absl::ToInt64Minutes(test_duration);
       for (const auto& result : result_response.per_port_responses()) {
         if (result.status() == gnoi::diag::BERT_STATUS_OK &&
             result.error_count_per_minute_size() < testDurationMinutes) {
@@ -287,7 +303,8 @@ void WaitForBertToCompleteOnInterfaces(
 void VerifyBertResultForSuccess(
     const gnoi::diag::GetBERTResultResponse::PerPortResponse& bert_result,
     absl::string_view op_id, const gnoi::types::Path& interface,
-    gnoi::diag::PrbsPolynomial prbs_order) {
+    gnoi::diag::PrbsPolynomial prbs_order,
+    absl::Duration test_duration = kTestDuration) {
   EXPECT_EQ(bert_result.status(), gnoi::diag::BERT_STATUS_OK);
   EXPECT_TRUE(MessageDifferencer::Equals(bert_result.interface(), interface));
   EXPECT_EQ(bert_result.bert_operation_id(), op_id);
@@ -300,13 +317,13 @@ void VerifyBertResultForSuccess(
   // 1 second.
   EXPECT_GE(bert_result.last_bert_get_result_timestamp() -
                 bert_result.last_bert_start_timestamp(),
-            absl::ToInt64Microseconds(kTestDuration - absl::Seconds(1)));
+            absl::ToInt64Microseconds(test_duration - absl::Seconds(1)));
   EXPECT_LE(bert_result.last_bert_get_result_timestamp() -
                 bert_result.last_bert_start_timestamp(),
-            absl::ToInt64Microseconds(kTestDuration + absl::Seconds(60)));
+            absl::ToInt64Microseconds(test_duration + absl::Seconds(60)));
 
   EXPECT_THAT(bert_result.error_count_per_minute(),
-              SizeIs(absl::ToInt64Minutes(kTestDuration)));
+              SizeIs(absl::ToInt64Minutes(test_duration)));
   uint64_t total_errors = 0;
   for (const uint32_t error_count : bert_result.error_count_per_minute()) {
     total_errors += error_count;
@@ -512,7 +529,8 @@ void GetAndVerifyBertResultsWithAdminDownInterfaces(
     const gnoi::diag::StartBERTRequest& bert_request,
     const gnoi::diag::GetBERTResultResponse& result_response,
     const std::vector<std::string>& admin_down_interfaces,
-    const std::vector<std::string>& admin_down_on_peer_interfaces) {
+    const std::vector<std::string>& admin_down_on_peer_interfaces,
+    absl::Duration test_duration = kLongTestDuration) {
   ASSERT_THAT(result_response.per_port_responses(),
               SizeIs(bert_request.per_port_requests_size()));
   for (unsigned idx = 0; idx < result_response.per_port_responses_size();
@@ -536,7 +554,7 @@ void GetAndVerifyBertResultsWithAdminDownInterfaces(
         result_response.per_port_responses(idx),
         bert_request.bert_operation_id(),
         bert_request.per_port_requests(idx).interface(),
-        bert_request.per_port_requests(idx).prbs_polynomial());
+        bert_request.per_port_requests(idx).prbs_polynomial(), test_duration);
   }
 }
 
@@ -606,6 +624,10 @@ bool IsListPartOfInterfaceList(const std::vector<std::string>& list,
 
 // Test StartBERT with invalid request parameters.
 TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("c1dcb1cc-4806-45cc-8f8a-676beafde103"));
+
+  // Test requires one SUT interface.
   if (sut_interfaces_.empty()) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
@@ -708,6 +730,10 @@ TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
 // 2) If StopBERT RPC is requested on a port that is not running BERT, RPC
 // should fail.
 TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("224db9cf-c709-486d-a0d3-6ab64c1a1e1f"));
+
+  // Test requires one SUT interface.
   if (sut_interfaces_.empty()) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
@@ -779,6 +805,10 @@ TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
 // 2) If GetBERTResult RPC is requested on a port that never ran BERT before,
 // RPC should fail.
 TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("4f837d7a-ab44-4694-9ca9-399d576757f4"));
+
+  // Test requires one SUT interface.
   if (sut_interfaces_.empty()) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
@@ -848,6 +878,10 @@ TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
 
 // Test StartBERT fails if peer port is not running BERT.
 TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("37e48922-0616-4d16-8fd3-975897491956"));
+
+  // Test requires one SUT interface.
   if (sut_interfaces_.empty()) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
@@ -931,17 +965,23 @@ TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
 // 3) Operation id that was used earlier to start the BERT test will fail to
 // start BERT if used again.
 TEST_P(BertTest, StartBertSucceeds) {
-  if (sut_interfaces_.empty()) {
-    GTEST_SKIP() << "No SUT interfaces to test";
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("b31a796a-d078-4d45-b785-f09ec598e05a"));
+
+  // Test requires 2 SUT interfaces.
+  constexpr int kNumInterfaces = 2;
+  if (sut_interfaces_.size() < kNumInterfaces) {
+    GTEST_SKIP() << "Need at least " << kNumInterfaces
+                 << " SUT interfaces to test but got: "
+                 << sut_interfaces_.size();
   }
   thinkit::Switch& sut = generic_testbed_->Sut();
   thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
   ASSERT_OK(
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 
-  // Select 2 operational state "up" ports.
+  // Select kNumInterfaces operational state "up" ports.
   sut_test_interfaces_ = absl::GetFlag(FLAGS_interfaces);
-  constexpr int kNumInterfaces = 2;
   if (!sut_test_interfaces_.empty()) {
     // Verify that provided interfaces are part of SUT's UP interfaces.
     ASSERT_TRUE(
@@ -1112,8 +1152,13 @@ TEST_P(BertTest, StartBertSucceeds) {
 // This helps us verify a mix of operation during BERT - unexpected software or
 // hardware errors.
 TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
-  if (sut_interfaces_.empty()) {
-    GTEST_SKIP() << "No SUT interfaces to test";
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("ce526e97-2a62-4044-9dce-8fc74b232e4b"));
+
+  // For this test, we need at least 4 SUT interfaces.
+  if (sut_interfaces_.size() < 4) {
+    GTEST_SKIP() << "Need at least 4 SUT interfaces to test but got: "
+                 << sut_interfaces_.size();
   }
   thinkit::Switch& sut = generic_testbed_->Sut();
   thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
@@ -1122,8 +1167,6 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
 
   // Get all the interfaces that are operational status "UP".
   sut_test_interfaces_ = sut_interfaces_;
-  // For this test, we need at least 5 UP interfaces.
-  ASSERT_GE(sut_test_interfaces_.size(), 5);
   // Resize the interface list if UP ports are more than max number of allowed
   // ports.
   if (sut_test_interfaces_.size() > kMaxAllowedInterfacesToRunBert) {
@@ -1152,7 +1195,7 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   std::vector<std::string> sut_interfaces_peer_admin_down;
   std::sample(sut_test_interfaces_.begin() + sut_test_interfaces_.size() / 2,
               sut_test_interfaces_.end(),
-	      std::back_inserter(sut_interfaces_peer_admin_down),
+              std::back_inserter(sut_interfaces_peer_admin_down),
               num_interfaces_to_disable,
               std::mt19937(absl::GetFlag(FLAGS_idx_seed)));
   // Get control switch interfaces for admin disable.
@@ -1178,14 +1221,16 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   bert_request_sut.set_bert_operation_id(op_id);
   bert_request_control_switch.set_bert_operation_id(op_id);
   for (const std::string& interface : sut_test_interfaces_) {
+    // Since during test ports will be brought down, run test for longer
+    // duration.
     *(bert_request_sut.add_per_port_requests()) =
         gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
-            BuildPerPortStartBertRequest(interface));
+            BuildPerPortStartBertRequest(interface, kLongTestDuration));
     const std::string peer_interface =
         sut_to_peer_interface_mapping_[interface];
     *(bert_request_control_switch.add_per_port_requests()) =
         gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
-            BuildPerPortStartBertRequest(peer_interface));
+            BuildPerPortStartBertRequest(peer_interface, kLongTestDuration));
   }
 
   // Request StartBert on the SUT switch.
@@ -1208,14 +1253,14 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   absl::Time end_time = absl::Now();
 
   // Wait for BERT to finish on test interfaces.
-  int max_poll_count = 1 + (kDelayDuration + kWaitTime + kTestDuration -
+  int max_poll_count = 1 + (kDelayDuration + kWaitTime + kLongTestDuration -
                             (end_time - start_time) - absl::Seconds(1)) /
                                kPollInterval;
 
   ASSERT_NO_FATAL_FAILURE(WaitForBertToCompleteOnInterfaces(
       *sut_gnmi_stub_, sut_test_interfaces_, control_device,
       GetBertResultRequestFromStartRequest(bert_request_control_switch),
-      max_poll_count));
+      max_poll_count, kLongTestDuration));
 
   // Get the BERT result from SUT and verify it.
   LOG(INFO) << "Verify BERT results on SUT interfaces.";
@@ -1255,6 +1300,10 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
 // stop on SUT and this will cause BERT failure on control switch as control
 // switch side port will lose lock with its peer port on SUT side.
 TEST_P(BertTest, StopBertSucceeds) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("be7b6653-51b9-4231-a438-d9589bbcb677"));
+
+  // Test requires one SUT interface.
   if (sut_interfaces_.empty()) {
     GTEST_SKIP() << "No SUT interfaces to test";
   }
