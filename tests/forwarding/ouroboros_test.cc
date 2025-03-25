@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,37 +17,28 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
-#include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/container/btree_map.h"
-#include "absl/container/btree_set.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "absl/types/span.h"
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/switch_api.h"
-#include "dvaas/test_vector.pb.h"
+#include "dvaas/validation_result.h"
 #include "glog/logging.h"
-#include "google/protobuf/descriptor.h"
-#include "gutil/proto.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/status.h"  // IWYU pragma: keep
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
-#include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/annotation_util.h"
@@ -55,22 +46,15 @@
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_pdpi/pd.h"
-#include "p4_pdpi/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -87,8 +71,8 @@ std::string CreateHeader(absl::string_view title) {
 
 // Reads table entries on `sut` and outputs them into an artifact given by
 // `artifact_name`.
-absl::Status OutputTableEntriesToArtifact(SwitchApi &sut,
-                                          thinkit::TestEnvironment &environment,
+absl::Status OutputTableEntriesToArtifact(SwitchApi& sut,
+                                          thinkit::TestEnvironment& environment,
                                           absl::string_view artifact_name,
                                           int iteration) {
   RETURN_IF_ERROR(environment.AppendToTestArtifact(
@@ -103,7 +87,7 @@ absl::Status OutputTableEntriesToArtifact(SwitchApi &sut,
 // Augments the given FuzzerConfig to fit the `sut` and Ouroboros Test by
 // replacing the IrP4Info and available ports with those read from the switch
 // and setting mutation probability to 0.
-absl::Status AugmentFuzzerConfig(SwitchApi &sut, FuzzerConfig &fuzzer_config) {
+absl::Status AugmentFuzzerConfig(SwitchApi& sut, FuzzerConfig& fuzzer_config) {
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
                    pdpi::GetForwardingPipelineConfig(sut.p4rt.get()));
 
@@ -118,13 +102,15 @@ absl::Status AugmentFuzzerConfig(SwitchApi &sut, FuzzerConfig &fuzzer_config) {
 }
 
 // Creates connections to the SUT and Control switch and configures them with a
-// `gnmi_config` and `p4info` (if given). Mirrors the SUTs interfaces on the
-// control switch and waits for them to be Up.
+// `gnmi_config` and `p4info` (if given).
+// If `mirror_sut_ports_to_control_switch` is true then it mirrors the SUTs
+// interfaces on the control switch.
+// Either way, the function waits for the enabled interfaces to be Up.
 // Returns a configured (SUT, Control Switch) pair.
-absl::StatusOr<std::pair<SwitchApi, SwitchApi>>
-ConfigureMirrorTestbed(thinkit::MirrorTestbed &testbed,
-                       std::optional<std::string> gnmi_config,
-                       std::optional<p4::config::v1::P4Info> p4info) {
+absl::StatusOr<std::pair<SwitchApi, SwitchApi>> ConfigureMirrorTestbed(
+    thinkit::MirrorTestbed& testbed, bool mirror_sut_ports_to_control_switch,
+    std::optional<std::string> gnmi_config,
+    std::optional<p4::config::v1::P4Info> p4info) {
   // Configure both switches and set up gNMI and P4Runtime sessions to them.
   SwitchApi sut;
   SwitchApi control_switch;
@@ -138,15 +124,20 @@ ConfigureMirrorTestbed(thinkit::MirrorTestbed &testbed,
       ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), gnmi_config, p4info));
 
-  // Mirror testbed ports.
-  RETURN_IF_ERROR(MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
+  if (mirror_sut_ports_to_control_switch) {
+    // Mirror testbed ports.
+    RETURN_IF_ERROR(MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
+    // TODO: Always check that control switch interfaces are up
+    // once the model is correctly captured in the gNMI config. I.e. move this
+    // to outside of the if-statement.
+    RETURN_IF_ERROR(WaitForEnabledInterfacesToBeUp(testbed.ControlSwitch()))
+            .SetPrepend()
+        << "expected enabled interfaces on control switch to be up: ";
+  }
 
   // Ensure that all enabled ports are up.
   RETURN_IF_ERROR(WaitForEnabledInterfacesToBeUp(testbed.Sut())).SetPrepend()
       << "expected enabled interfaces on SUT to be up: ";
-  RETURN_IF_ERROR(WaitForEnabledInterfacesToBeUp(testbed.ControlSwitch()))
-          .SetPrepend()
-      << "expected enabled interfaces on control switch to be up: ";
 
   return std::make_pair(std::move(sut), std::move(control_switch));
 }
@@ -155,11 +146,11 @@ ConfigureMirrorTestbed(thinkit::MirrorTestbed &testbed,
 
 // Generates updates to switch state using the P4-Fuzzer and sends them to the
 // switch.
-absl::Status FuzzSwitchState(absl::BitGen &gen, SwitchApi &sut,
-                             thinkit::TestEnvironment &environment,
-                             int iteration, const FuzzerConfig &fuzzer_config,
+absl::Status FuzzSwitchState(absl::BitGen& gen, SwitchApi& sut,
+                             thinkit::TestEnvironment& environment,
+                             int iteration, const FuzzerConfig& fuzzer_config,
                              int min_num_updates,
-                             p4_fuzzer::SwitchState &state) {
+                             p4_fuzzer::SwitchState& state) {
   int num_updates = 0;
   int num_fuzzing_cycles = 0;
   while (num_updates < min_num_updates) {
@@ -211,30 +202,54 @@ TEST_P(
   // Get the start time to determine when to stop the test.
   const absl::Time deadline = absl::Now() + GetParam().target_test_time;
 
-  // Store the original control switch gNMI interface config before changing
-  // it.
-  // WARNING: This may fail if a gNMI config has not been pushed.
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
-      testbed.ControlSwitch().CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(
-      const pins_test::openconfig::Interfaces original_control_interfaces,
-      pins_test::GetInterfacesAsProto(*control_gnmi_stub,
-                                      gnmi::GetRequest::CONFIG));
+  // Empty and unused unless the test mirrors testbed ports.
+  pins_test::openconfig::Interfaces original_control_interfaces;
+  if (!GetParam().dvaas_params.mirror_testbed_port_map_override.has_value()) {
+    // Store the original control switch gNMI interface config before changing
+    // it.
+    // WARNING: This may fail if a gNMI config has not been pushed.
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
+        testbed.ControlSwitch().CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(original_control_interfaces,
+                         pins_test::GetInterfacesAsProto(
+                             *control_gnmi_stub, gnmi::GetRequest::CONFIG));
+  }
+
+  std::optional<p4::config::v1::P4Info> p4info =
+      GetParam().config.has_value()
+          ? std::make_optional(GetParam().config->p4info())
+          : std::nullopt;
+
+  if (!p4info.has_value()) {
+    LOG(INFO)
+        << "Not pushing a P4Info to either switch and instead assuming "
+           "they have one. Both switches' P4Infos are stored as artifacts.";
+  }
 
   SwitchApi sut, control_switch;
-  ASSERT_OK_AND_ASSIGN(std::tie(sut, control_switch),
-                       ConfigureMirrorTestbed(testbed, GetParam().gnmi_config,
-                                              GetParam().config.p4info()));
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut, control_switch),
+      ConfigureMirrorTestbed(
+          testbed,
+          /*mirror_sut_ports_to_control_switch=*/
+          !GetParam().dvaas_params.mirror_testbed_port_map_override.has_value(),
+          GetParam().gnmi_config, p4info));
 
-  ASSERT_OK_AND_ASSIGN(auto ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().config.p4info()));
-  ASSERT_OK(environment.AppendToTestArtifact("sut_initial_ir_p4info.txt",
-                                             ir_p4info.DebugString()));
+  {  // Log P4Infos for debugging purposes.
+    ASSERT_OK_AND_ASSIGN(auto sut_ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
+    ASSERT_OK_AND_ASSIGN(auto control_switch_ir_p4info,
+                         pdpi::GetIrP4Info(*control_switch.p4rt));
+    ASSERT_OK(environment.AppendToTestArtifact("sut_initial_ir_p4info.txt",
+                                               sut_ir_p4info.DebugString()));
+    ASSERT_OK(environment.AppendToTestArtifact(
+        "control_switch_initial_ir_p4info.txt",
+        control_switch_ir_p4info.DebugString()));
+  }
 
   // Set up SUT with initial entries.
-  ASSERT_OK(pdpi::InstallIrTableEntries(*sut.p4rt,
-                                        GetParam().initial_sut_table_entries));
+  ASSERT_OK(
+      pdpi::InstallIrEntities(*sut.p4rt, GetParam().initial_sut_entities));
 
   FuzzerConfig fuzzer_config = GetParam().fuzzer_config;
   ASSERT_OK(AugmentFuzzerConfig(sut, fuzzer_config));
@@ -254,6 +269,7 @@ TEST_P(
          deadline - absl::Now() > 2 * last_iteration_time) {
     iteration++;
     SCOPED_TRACE(absl::StrCat("Iteration: ", iteration));
+
     absl::Time iteration_start_time = absl::Now();
 
     ASSERT_OK(FuzzSwitchState(gen, sut, environment, iteration, fuzzer_config,
@@ -266,6 +282,7 @@ TEST_P(
 
     // Configure `get_artifact_header` for current iteration.
     dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
+
     dvaas_params.get_artifact_header = [=]() {
       std::string iteration_header =
           CreateHeader(absl::StrCat("Iteration ", iteration));
@@ -280,7 +297,9 @@ TEST_P(
     ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
                          GetParam().validator->ValidateDataplane(
                              sut, control_switch, dvaas_params));
+
     validation_result.LogStatistics();
+
     ASSERT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 
     last_iteration_time = absl::Now() - iteration_start_time;
@@ -300,9 +319,11 @@ TEST_P(
   LOG(INFO) << "Final switch forwarding state is:\n"
             << fuzzer_switch_state.SwitchStateSummary();
 
-  // Restore the original control switch gNMI interface config's P4RT IDs.
-  ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_switch.gnmi,
-                                           original_control_interfaces));
+  if (!GetParam().dvaas_params.mirror_testbed_port_map_override.has_value()) {
+    // Restore the original control switch gNMI interface config's P4RT IDs.
+    ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_switch.gnmi,
+                                             original_control_interfaces));
+  }
 }
 
 }  // namespace

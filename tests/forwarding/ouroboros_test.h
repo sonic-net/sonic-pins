@@ -15,21 +15,15 @@
 #ifndef PINS_TESTS_FORWARDING_OUROBOROS_TEST_H_
 #define PINS_TESTS_FORWARDING_OUROBOROS_TEST_H_
 
-#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
-#include <vector>
 
-#include "absl/container/btree_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "absl/types/span.h"
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/test_vector.pb.h"
-#include "lib/p4rt/p4rt_port.h"
+#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
@@ -37,18 +31,19 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 
 struct OuroborosTestParams {
   // -- Basic Settings ---------------------------------------------------------
   std::shared_ptr<thinkit::MirrorTestbedInterface> mirror_testbed;
-  p4::v1::ForwardingPipelineConfig config;
+  // If present, the test installs the provided config on SUT and control
+  // switch.
+  std::optional<p4::v1::ForwardingPipelineConfig> config;
 
-  // A set of entries that will be installed on the SUT before initiating the
-  // main loop of the test.
-  pdpi::IrTableEntries initial_sut_table_entries;
+  // A set of entities that will be installed on the SUT before initiating
+  // the main loop of the test.
+  pdpi::IrEntities initial_sut_entities;
 
   // Target time for the test to run. This should not include testbed setup and
   // teardown.
@@ -91,11 +86,11 @@ struct OuroborosTestParams {
 //
 // See go/ouroboros for more details.
 class OuroborosTest : public testing::TestWithParam<OuroborosTestParams> {
-protected:
+ protected:
   void SetUp() override { GetParam().mirror_testbed->SetUp(); }
   void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 };
 
-} // namespace pins_test
+}  // namespace pins_test
 
-#endif // PINS_TESTS_FORWARDING_OUROBOROS_TEST_H_
+#endif  // PINS_TESTS_FORWARDING_OUROBOROS_TEST_H_
