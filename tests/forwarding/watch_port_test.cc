@@ -607,6 +607,19 @@ void WatchPortTestFixture::TearDown() {
     EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
     EXPECT_OK(sut_p4_session_->Finish());
   }
+  // Stop RPC sessions.
+  if (control_p4_session_ != nullptr) {
+    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+  }
+  if (control_gnmi_stub_) {
+    ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
+                         GetPortNamePerPortId(*control_gnmi_stub_));
+    // Restore the admin state to UP.
+    for (const auto& [port_id, name] : port_name_per_port_id) {
+      EXPECT_OK(SetInterfaceAdminState(*control_gnmi_stub_, name,
+                                       InterfaceState::kUp));
+    }
+  }
 
   testbed.TearDown();
 }

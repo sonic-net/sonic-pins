@@ -193,6 +193,8 @@ qos {
 
 -- INPUT -----------------------------------------------------------------------
 {
+"openconfig-qos:qos" : {
+  "scheduler-policies" : {
     "scheduler-policy": [
       {
         "name": "cpu_scheduler",
@@ -679,16 +681,18 @@ qos {
         }
       }
     ]
+  }
+}
 }
 -- OUTPUT: gutil::ParseJsonAsProto<openconfig::Config> --
 qos {
   scheduler_policies {
     scheduler_policy {
-      name: "scheduler_1gb"
+      name: "cpu_scheduler"
       schedulers {
         scheduler {
           sequence: 0
-          config {
+          state {
             priority: "STRICT"
             sequence: 0
             type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
@@ -696,23 +700,22 @@ qos {
           inputs {
             input {
               id: "AF4"
-              config {
+              state {
                 id: "AF4"
                 input_type: "QUEUE"
                 queue: "AF4"
+                weight: "0"
               }
             }
           }
           two_rate_three_color {
-            config {
-              cir: "0"
-              pir: "1000000000"
+            state {
             }
           }
         }
         scheduler {
           sequence: 1
-          config {
+          state {
             priority: "STRICT"
             sequence: 1
             type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
@@ -720,19 +723,608 @@ qos {
           inputs {
             input {
               id: "NC1"
-              config {
+              state {
                 id: "NC1"
                 input_type: "QUEUE"
                 queue: "NC1"
+                weight: "0"
               }
             }
           }
           two_rate_three_color {
-            config {
-              cir: "10000000"
-              pir: "20000000"
+            state {
             }
           }
+        }
+        scheduler {
+          sequence: 2
+          state {
+            priority: "DWRR"
+            sequence: 2
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF3"
+              state {
+                id: "AF3"
+                input_type: "QUEUE"
+                queue: "AF3"
+                weight: "12"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+            }
+          }
+        }
+        scheduler {
+          sequence: 3
+          state {
+            priority: "DWRR"
+            sequence: 3
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "LLQ2"
+              state {
+                id: "LLQ2"
+                input_type: "QUEUE"
+                queue: "LLQ2"
+                weight: "8"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+            }
+          }
+        }
+        scheduler {
+          sequence: 4
+          state {
+            priority: "DWRR"
+            sequence: 4
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF1"
+              state {
+                id: "AF1"
+                input_type: "QUEUE"
+                queue: "AF1"
+                weight: "4"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+            }
+          }
+        }
+        scheduler {
+          sequence: 5
+          state {
+            priority: "DWRR"
+            sequence: 5
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF2"
+              state {
+                id: "AF2"
+                input_type: "QUEUE"
+                queue: "AF2"
+                weight: "4"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+            }
+          }
+        }
+        scheduler {
+          sequence: 6
+          state {
+            priority: "DWRR"
+            sequence: 6
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "BE1"
+              state {
+                id: "BE1"
+                input_type: "QUEUE"
+                queue: "BE1"
+                weight: "1"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+            }
+          }
+        }
+        scheduler {
+          sequence: 7
+          state {
+            priority: "DWRR"
+            sequence: 7
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "LLQ1"
+              state {
+                id: "LLQ1"
+                input_type: "QUEUE"
+                queue: "LLQ1"
+                weight: "1"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+            }
+          }
+        }
+      }
+    }
+    scheduler_policy {
+      name: "scheduler_100gb"
+      schedulers {
+        scheduler {
+          sequence: 0
+          state {
+            priority: "STRICT"
+            sequence: 0
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF4"
+              state {
+                id: "AF4"
+                input_type: "QUEUE"
+                queue: "AF4"
+                weight: "0"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 1
+          state {
+            priority: "STRICT"
+            sequence: 1
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "NC1"
+              state {
+                id: "NC1"
+                input_type: "QUEUE"
+                queue: "NC1"
+                weight: "0"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "1000000000"
+              pir: "2000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 2
+          state {
+            priority: "DWRR"
+            sequence: 2
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF3"
+              state {
+                id: "AF3"
+                input_type: "QUEUE"
+                queue: "AF3"
+                weight: "12"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 3
+          state {
+            priority: "DWRR"
+            sequence: 3
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "LLQ2"
+              state {
+                id: "LLQ2"
+                input_type: "QUEUE"
+                queue: "LLQ2"
+                weight: "8"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 4
+          state {
+            priority: "DWRR"
+            sequence: 4
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF1"
+              state {
+                id: "AF1"
+                input_type: "QUEUE"
+                queue: "AF1"
+                weight: "4"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 5
+          state {
+            priority: "DWRR"
+            sequence: 5
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "AF2"
+              state {
+                id: "AF2"
+                input_type: "QUEUE"
+                queue: "AF2"
+                weight: "4"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 6
+          state {
+            priority: "DWRR"
+            sequence: 6
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "BE1"
+              state {
+                id: "BE1"
+                input_type: "QUEUE"
+                queue: "BE1"
+                weight: "1"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+        scheduler {
+          sequence: 7
+          state {
+            priority: "DWRR"
+            sequence: 7
+            type: "openconfig-qos-types:TWO_RATE_THREE_COLOR"
+          }
+          inputs {
+            input {
+              id: "LLQ1"
+              state {
+                id: "LLQ1"
+                input_type: "QUEUE"
+                queue: "LLQ1"
+                weight: "1"
+              }
+            }
+          }
+          two_rate_three_color {
+            state {
+              cir: "0"
+              pir: "100000000000"
+              bc: 0
+              be: 0
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+-- INPUT -----------------------------------------------------------------------
+{
+"openconfig-qos:qos" : {
+  "buffer-allocation-profiles": {
+    "buffer-allocation-profile": [
+      {
+        "name": "staggered_8queue",
+        "queues": {
+          "queue": [
+            {
+              "name": "AF1",
+              "config": {
+                "name": "AF1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 1
+              }
+            },
+            {
+              "name": "AF2",
+              "config": {
+                "name": "AF2",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "AF3",
+              "config": {
+                "name": "AF3",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "AF4",
+              "config": {
+                "name": "AF4",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "BE1",
+              "config": {
+                "name": "BE1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": -1
+              }
+            },
+            {
+              "name": "LLQ1",
+              "config": {
+                "name": "LLQ1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 1
+              }
+            },
+            {
+              "name": "LLQ2",
+              "config": {
+                "name": "LLQ2",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            },
+            {
+              "name": "NC1",
+              "config": {
+                "name": "NC1",
+                "dedicated-buffer": "0",
+                "use-shared-buffer": true,
+                "shared-buffer-limit-type": "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR",
+                "static-shared-buffer-limit": 0,
+                "dynamic-limit-scaling-factor": 3
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "interfaces": {
+    "interface": [
+      {
+        "interface-id": "Ethernet1/1/1",
+        "config": {
+          "interface-id": "Ethernet1/1/1"
+        },
+        "output": {
+          "config": {
+            "buffer-allocation-profile": "staggered_8queue"
+          }
+        }
+      }
+    ]
+  }
+}
+}
+-- OUTPUT: gutil::ParseJsonAsProto<openconfig::Config> --
+qos {
+  buffer_allocation_profiles {
+    buffer_allocation_profile {
+      name: "staggered_8queue"
+      queues {
+        queue {
+          name: "AF1"
+          config {
+            name: "AF1"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 1
+          }
+        }
+        queue {
+          name: "AF2"
+          config {
+            name: "AF2"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 3
+          }
+        }
+        queue {
+          name: "AF3"
+          config {
+            name: "AF3"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 3
+          }
+        }
+        queue {
+          name: "AF4"
+          config {
+            name: "AF4"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 3
+          }
+        }
+        queue {
+          name: "BE1"
+          config {
+            name: "BE1"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: -1
+          }
+        }
+        queue {
+          name: "LLQ1"
+          config {
+            name: "LLQ1"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 1
+          }
+        }
+        queue {
+          name: "LLQ2"
+          config {
+            name: "LLQ2"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 3
+          }
+        }
+        queue {
+          name: "NC1"
+          config {
+            name: "NC1"
+            dedicated_buffer: "0"
+            use_shared_buffer: true
+            shared_buffer_limit_type: "openconfig-qos:DYNAMIC_BASED_ON_SCALING_FACTOR"
+            static_shared_buffer_limit: 0
+            dynamic_limit_scaling_factor: 3
+          }
+        }
+      }
+    }
+  }
+  interfaces {
+    interface {
+      interface_id: "Ethernet1/1/1"
+      config {
+        interface_id: "Ethernet1/1/1"
+      }
+      output {
+        config {
+          buffer_allocation_profile: "staggered_8queue"
         }
       }
     }
