@@ -4,6 +4,7 @@
 #include <thread>  // NOLINT
 
 #include "absl/synchronization/notification.h"
+#include "absl/time/time.h"
 #include "p4_pdpi/p4_runtime_session.h"
 namespace pins_test {
 
@@ -22,11 +23,12 @@ class PacketInReceiver final {
   PacketInReceiver(pdpi::P4RuntimeSession &session,
                    std::function<void(p4::v1::StreamMessageResponse)> callback)
       : session_(session), receiver_([this, callback = std::move(callback)]() {
-          p4::v1::StreamMessageResponse pi_response;
+          absl::StatusOr<p4::v1::StreamMessageResponse> pi_response;
           // To break out of this loop invoke Destroy().
-          while (session_.StreamChannelRead(pi_response)) {
-            if (pi_response.has_packet()) {
-              callback(std::move(pi_response));
+          while (!stop_receiving_.HasBeenNotified()) {
+            pi_response = session_.GetNextStreamMessage(absl::Seconds(1));
+            if (pi_response.ok() && pi_response->has_packet()) {
+              callback(*std::move(pi_response));
             }
           }
         }) {}
@@ -35,7 +37,6 @@ class PacketInReceiver final {
 
   // It's ok to call this function multiple times.
   void Destroy() {
-    session_.Finish();
     if (receiver_.joinable()) {
       stop_receiving_.Notify();
       receiver_.join();
