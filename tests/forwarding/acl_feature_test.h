@@ -15,13 +15,14 @@
 #ifndef PINS_TESTS_FORWARDING_ACL_FEATURE_TEST_H_
 #define PINS_TESTS_FORWARDING_ACL_FEATURE_TEST_H_
 
+#include <memory>
 #include <optional>
-#include <tuple>
+#include <string>
 
 #include "dvaas/dataplane_validation.h"
-#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
-#include "dvaas/validation_result.h"
+#include "gtest/gtest.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
@@ -31,7 +32,9 @@ struct AclFeatureTestParams {
   // Using a shared_ptr because parameterized tests require objects to be
   // copyable.
   std::shared_ptr<thinkit::MirrorTestbedInterface> mirror_testbed;
-  std::optional<p4::config::v1::P4Info> p4info;
+  // Pushed to the SUT if given, otherwise assumes the correct one is already
+  // configured.
+  std::optional<p4::config::v1::P4Info> sut_p4info;
   std::string test_name;
   // ACL action variant to test out different behavior
   std::optional<sai::PuntAction> punt_action;
