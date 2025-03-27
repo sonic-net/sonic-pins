@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -446,10 +446,42 @@ int main(int argc, char** argv) {
               exact { str: "mirror-session-201326593" }
             }
             action {
-              name: "mirror_with_psamp_encapsulation"
+              name: "mirror_with_vlan_tag_and_ipfix_encapsulation"
               params {
                 name: "monitor_port"
                 value { str: "6" }
+              }
+              params {
+                name: "monitor_failover_port"
+                value { str: "7" }
+              }
+              params {
+                name: "mirror_encap_dst_ip"
+                value { ipv6: "::1" }
+              }
+              params {
+                name: "mirror_encap_src_ip"
+                value { ipv6: "::2" }
+              }
+              params {
+                name: "mirror_encap_src_mac"
+                value { mac: "00:01:02:03:04:05" }
+              }
+              params {
+                name: "mirror_encap_vlan_id"
+                value { hex_str: "0x001" }
+              }
+              params {
+                name: "mirror_encap_dst_mac"
+                value { mac: "01:02:03:04:05:06" }
+              }
+              params {
+                name: "mirror_encap_udp_dst_port"
+                value { hex_str: "0x1234" }
+              }
+              params {
+                name: "mirror_encap_udp_src_port"
+                value { hex_str: "0x2472" }
               }
             }
           )pb",

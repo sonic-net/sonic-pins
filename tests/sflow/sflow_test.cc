@@ -2317,32 +2317,12 @@ void SflowMirrorTestFixture::TearDown() {
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"posttest_", testbed.Environment());
   if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(OutputTableEntriesToArtifact(
-        *sut_p4_session_, testbed.Environment(),
-        /*artifact_name=*/"posttest_SUT_table_entries.txt"));
+    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+    EXPECT_OK(sut_p4_session_->Finish());
   }
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(OutputTableEntriesToArtifact(
-        *control_p4_session_, testbed.Environment(),
-        /*artifact_name=*/"posttest_control_table_entries.txt"));
-  }
-
-  // Restore config on SUT and clear table entries.
-  if (sut_gnmi_stub_ != nullptr) {
-    ASSERT_OK_AND_ASSIGN(auto sflow_enabled,
-                         IsSflowConfigEnabled(GetParam().sut_gnmi_config));
-    ASSERT_OK(SetSflowConfigEnabled(sut_gnmi_stub_.get(), sflow_enabled));
-  }
-  ASSERT_OK_AND_ASSIGN(
-      sut_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed.Sut(), GetParam().sut_gnmi_config, GetSutP4Info()));
-
-  // Restores control switch config and clear table entries.
-  if (control_gnmi_stub_ != nullptr) {
-    ASSERT_OK_AND_ASSIGN(auto sflow_enabled,
-                         IsSflowConfigEnabled(GetParam().control_gnmi_config));
-    ASSERT_OK(SetSflowConfigEnabled(control_gnmi_stub_.get(), sflow_enabled));
+    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+    EXPECT_OK(control_p4_session_->Finish());
   }
   ASSERT_OK_AND_ASSIGN(control_p4_session_,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(

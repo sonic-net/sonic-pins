@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <thread>  // NOLINT
-#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -38,7 +37,10 @@
 #include "absl/types/span.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/collections.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
@@ -46,6 +48,7 @@
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
@@ -59,15 +62,14 @@
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-// Tests for the watchport functionality in Action Profile Group operation.
 
+// Tests for the watchport functionality in Action Profile Group operation.
 namespace pins {
 
 namespace {
@@ -179,19 +181,6 @@ absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
       pdpi::PartialPdTableEntryToPiTableEntry(
           ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
                          R"pb(
-                           vrf_table_entry {
-                             match { vrf_id: "$0" }
-                             action { no_action {} }
-                           })pb",
-                         default_vrf))));
-  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
-
-  // Set default VRF for all packets.
-  ASSIGN_OR_RETURN(
-      pi_entry,
-      pdpi::PartialPdTableEntryToPiTableEntry(
-          ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-                         R"pb(
                            acl_pre_ingress_table_entry {
                              match {}  # Wildcard match
                              action { set_vrf { vrf_id: "$0" } }  # Default vrf
@@ -287,15 +276,31 @@ absl::Status ProgramL3Admit(pdpi::P4RuntimeSession& p4_session,
   return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
 }
 
+// Checks if there is a header next to UDP header by UDP dest_port.
+bool HasNextHeaderAfterUdp(const packetlib::Packet& packet) {
+  const absl::flat_hash_set<std::string> udp_dest_ports_next_header = {
+      packetlib::UdpPort(packetlib::kIpfixUdpDestPort)  // IPFIX
+  };
+  for (const auto& header : packet.headers()) {
+    if (header.header_case() == packetlib::Header::kUdpHeader &&
+        udp_dest_ports_next_header.contains(
+            header.udp_header().destination_port())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Sends N packets from the control switch to sut at a rate of 500 packets/sec.
 absl::Status SendNPacketsToSut(int num_packets,
-                               const TestConfiguration &test_config,
+                               const TestConfiguration& test_config,
                                absl::Span<const GroupMember> members,
                                absl::Span<const pins_test::P4rtPortId> port_ids,
-                               const pdpi::IrP4Info &ir_p4info,
-                               pdpi::P4RuntimeSession &p4_session,
-                               thinkit::TestEnvironment &test_environment) {
+                               const pdpi::IrP4Info& ir_p4info,
+                               pdpi::P4RuntimeSession& p4_session,
+                               thinkit::TestEnvironment& test_environment) {
   const absl::Time start_time = absl::Now();
+  int packet_index = 0;
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to 500 packets per second.
     auto earliest_send_time = start_time + (i * absl::Seconds(1) / 500);
@@ -308,8 +313,14 @@ absl::Status SendNPacketsToSut(int num_packets,
       port = port_ids[i % members.size()];
     }
 
-    ASSIGN_OR_RETURN(packetlib::Packet packet,
-                     pins::GenerateIthPacket(test_config, i));
+    packetlib::Packet packet;
+    // TODO: find more robust workaround to support UDP packets with
+    // mandatory headers after UDP (based on dest_port).
+    do {
+      ASSIGN_OR_RETURN(packet,
+                       pins::GenerateIthPacket(test_config, packet_index++));
+    } while (HasNextHeaderAfterUdp(packet));
+
     ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
     RETURN_IF_ERROR(InjectEgressPacket(port.GetP4rtEncoding(), raw_packet,
                                        ir_p4info, &p4_session,
@@ -391,6 +402,7 @@ absl::StatusOr<InterfaceState> GetInterfaceState(
       "response: $2",
       state_path_match->pattern(), if_name, state_path_response));
 }
+
 // Verifies the admin or oper status of the interface is the same as
 // "desired_state" in the state verification path.
 absl::Status VerifyInterfaceState(gnmi::gNMI::StubInterface& gnmi_stub,
@@ -450,7 +462,7 @@ absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
   ASSIGN_OR_RETURN(
       InterfaceState current_admin_state,
       GetInterfaceState(gnmi_stub, kAdminStatusPathMatch, if_name));
-      if (current_admin_state == admin_state) {
+  if (current_admin_state == admin_state) {
     return absl::OkStatus();
   }
 
@@ -476,81 +488,85 @@ bool IsSwitchInCriticalState(gnmi::gNMI::StubInterface& gnmi_stub) {
   return false;
 }
 
+bool HandleStreamMessage(const pdpi::IrP4Info& ir_p4info,
+                         thinkit::MirrorTestbed* testbed,
+                         const p4::v1::StreamMessageResponse& pi_response,
+                         TestData* test_data) {
+  absl::MutexLock lock(&test_data->mutex);
+  sai::StreamMessageResponse pd_response;
+  if (absl::Status status = pdpi::PiStreamMessageResponseToPd(
+          ir_p4info, pi_response, &pd_response);
+      !status.ok()) {
+    ADD_FAILURE() << " PacketIn PI to PD failed: " << status;
+    return false;
+  }
+  if (!pd_response.has_packet()) {
+    LOG(WARNING) << " Received unexpected stream message (expected packet in): "
+                 << pd_response.DebugString();
+    return false;
+  }
+  absl::string_view raw_packet = pd_response.packet().payload();
+  dvaas::Packet packet;
+  packet.set_port(pd_response.packet().metadata().ingress_port());
+  packet.set_hex(absl::BytesToHexString(raw_packet));
+  *packet.mutable_parsed() = packetlib::ParsePacket(raw_packet);
+  std::string key = packet.parsed().payload();
+  if (!test_data->input_output_per_packet.contains(key)) {
+    LOG(WARNING) << "Unexpected Packet: " << packet.DebugString();
+    absl::Status log_to_file = testbed->Environment().AppendToTestArtifact(
+        "control_unexpected_packet_ins.pb.txt",
+        absl::StrCat(packet.DebugString(), "\n"));
+    LOG_IF(WARNING, !log_to_file.ok())
+        << "Could not write to file: " << log_to_file;
+    test_data->total_invalid_packets_received += 1;
+    return false;
+  }
+  test_data->input_output_per_packet[key].output.push_back(packet);
+  test_data->total_packets_received += 1;
+  return true;
+}
+
 }  // namespace
 
 void WatchPortTestFixture::SetUp() {
   GetParam().testbed->SetUp();
   thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
 
-  // Push gnmi config to the sut and control switch.
-  const std::string& gnmi_config = GetParam().gnmi_config;
-  ASSERT_OK(
-      testbed.Environment().StoreTestArtifact("gnmi_config.txt", gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(testbed.Sut(), gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(testbed.ControlSwitch(), gnmi_config));
-
-  // Wait for the gnmi port config to converge.
-  ASSERT_OK(
-      pins_test::WaitForGnmiPortIdConvergence(testbed.Sut(), gnmi_config,
-                                              /*timeout=*/absl::Minutes(3)));
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      testbed.ControlSwitch(), gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
-
   ASSERT_OK(testbed.Environment().StoreTestArtifact(
       "p4info.pb.txt", GetParam().p4_info.DebugString()));
 
   // Setup SUT & control switch.
-
-  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           testbed.Sut(), GetParam().p4_info));
-  ASSERT_OK_AND_ASSIGN(control_p4_session_,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           testbed.ControlSwitch(), GetParam().p4_info));
-  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(SetUpSut(*sut_p4_session_, ir_p4info, kVrfId));
-  ASSERT_OK(SetUpControlSwitch(*control_p4_session_, ir_p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4_session_, control_p4_session_),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
+          GetParam().p4_info));
 
   // Create GNMI stub for admin operations.
   ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(control_gnmi_stub_,
                        testbed.ControlSwitch().CreateGnmiStub());
 
-  // Start the receiver thread for control switch to listen for packets from
-  // SUT, this thread is terminated in the TearDown.
-  receive_packet_thread_ = std::thread([&, ir_p4info]() {
-    p4::v1::StreamMessageResponse pi_response;
-    while (control_p4_session_->StreamChannelRead(pi_response)) {
-      absl::MutexLock lock(&test_data_.mutex);
-      sai::StreamMessageResponse pd_response;
-      ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
-                                                  &pd_response))
-          << " PacketIn PI to PD failed: ";
-      if (!pd_response.has_packet()) {
-        LOG(WARNING)
-            << " Received unexpected stream message (expected packet in): "
-            << pd_response.DebugString();
-        continue;
-      }
-      absl::string_view raw_packet = pd_response.packet().payload();
-      dvaas::Packet packet;
-      packet.set_port(pd_response.packet().metadata().ingress_port());
-      packet.set_hex(absl::BytesToHexString(raw_packet));
-      *packet.mutable_parsed() = packetlib::ParsePacket(raw_packet);
-      std::string key = packet.parsed().payload();
-      if (test_data_.input_output_per_packet.contains(key)) {
-        test_data_.input_output_per_packet[key].output.push_back(packet);
-        test_data_.total_packets_received += 1;
-      } else {
-        ASSERT_OK(testbed.Environment().AppendToTestArtifact(
-            "control_unexpected_packet_ins.pb.txt",
-            absl::StrCat(packet.DebugString(), "\n")));
-        test_data_.total_invalid_packets_received += 1;
-      }
-    }
-  });
+  // Store the original control switch gNMI interface config before changing it.
+  ASSERT_OK_AND_ASSIGN(original_control_interfaces_,
+                       pins_test::GetInterfacesAsProto(
+                           *control_gnmi_stub_, gnmi::GetRequest::CONFIG));
+
+  // Ensures that the SUT and Control Switch are set up with the same
+  // P4rtPortIds for the connected interfaces.
+  ASSERT_OK(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(
+      GetParam().testbed->GetMirrorTestbed()));
+
+  // Store GNMI config for debugging.
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*sut_gnmi_stub_));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact("sut_gnmi_config.txt",
+                                                    sut_gnmi_config));
+
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
+  ASSERT_OK(SetUpSut(*sut_p4_session_, ir_p4info, kVrfId));
+  ASSERT_OK(SetUpControlSwitch(*control_p4_session_, ir_p4info));
 }
 
 void WatchPortTestFixture::TearDown() {
@@ -558,12 +574,7 @@ void WatchPortTestFixture::TearDown() {
 
   // Do some general cleanup for control switch.
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(
-        pdpi::ClearTableEntries(control_p4_session_.get()));
-    EXPECT_OK(control_p4_session_->Finish());
-  }
-  if (receive_packet_thread_.joinable()) {
-    receive_packet_thread_.join();
+    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
   }
   if (control_gnmi_stub_) {
     ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
@@ -573,6 +584,9 @@ void WatchPortTestFixture::TearDown() {
       EXPECT_OK(SetInterfaceAdminState(*control_gnmi_stub_, name,
                                        InterfaceState::kUp));
     }
+    // Restore the original control switch gNMI interface config's P4RT IDs.
+    ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_gnmi_stub_,
+                                             original_control_interfaces_));
   }
 
   // Reboot the switch, if Sut is in critical state.
@@ -592,6 +606,19 @@ void WatchPortTestFixture::TearDown() {
   if (sut_p4_session_ != nullptr) {
     EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
     EXPECT_OK(sut_p4_session_->Finish());
+  }
+  // Stop RPC sessions.
+  if (control_p4_session_ != nullptr) {
+    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+  }
+  if (control_gnmi_stub_) {
+    ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
+                         GetPortNamePerPortId(*control_gnmi_stub_));
+    // Restore the admin state to UP.
+    for (const auto& [port_id, name] : port_name_per_port_id) {
+      EXPECT_OK(SetInterfaceAdminState(*control_gnmi_stub_, name,
+                                       InterfaceState::kUp));
+    }
   }
 
   testbed.TearDown();
@@ -620,7 +647,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-					   ir_p4info, kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT))
       << "Failed to program WCMP group: ";
 
@@ -664,7 +691,13 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   test_data_.total_packets_sent = kNumTestPackets;
 
   // Wait for packets from the SUT to arrive.
-  absl::SleepFor(kDurationToWaitForPackets);
+  ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        return HandleStreamMessage(ir_p4info,
+                                   &GetParam().testbed->GetMirrorTestbed(),
+                                   message, &test_data_);
+      },
+      kNumTestPackets, kDurationToWaitForPackets));
 
   // For the test configuration, check the output distribution.
   {
@@ -759,7 +792,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   const int selected_port_id = members[random_member_index].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
                        GetPortNamePerPortId(*control_gnmi_stub_));
-  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {  
+  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {
     ASSERT_OK_AND_ASSIGN(const auto& port_name,
                          gutil::FindOrStatus(port_name_per_port_id,
                                              absl::StrCat(selected_port_id)));
@@ -784,7 +817,13 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
     test_data_.total_packets_sent = kNumTestPackets;
 
     // Wait for packets from the SUT to arrive.
-    absl::SleepFor(kDurationToWaitForPackets);
+    ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
+        [&](const p4::v1::StreamMessageResponse& message) {
+          return HandleStreamMessage(ir_p4info,
+                                     &GetParam().testbed->GetMirrorTestbed(),
+                                     message, &test_data_);
+        },
+        kNumTestPackets, kDurationToWaitForPackets));
 
     // For the test configuration, check the output distribution.
     {
@@ -899,6 +938,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   // write operations are disabled) and verify watch port action kicks in.
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
                                    InterfaceState::kDown));
+
   // Verify the oper status is reflected on the SUT.
   ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
                                      GetParam().testbed->GetMirrorTestbed(),
@@ -917,7 +957,13 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   test_data_.total_packets_sent = kNumTestPackets;
 
   // Wait for packets from the SUT to arrive.
-  absl::SleepFor(kDurationToWaitForPackets);
+  ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        return HandleStreamMessage(ir_p4info,
+                                   &GetParam().testbed->GetMirrorTestbed(),
+                                   message, &test_data_);
+      },
+      kNumTestPackets, kDurationToWaitForPackets));
 
   // For the test configuration, check the output distribution.
   {
@@ -1040,7 +1086,14 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
     test_data_.total_packets_sent = kNumTestPackets;
 
     // Wait for packets from the SUT to arrive.
-    absl::SleepFor(kDurationToWaitForPackets);
+    absl::Status packets_arrived =
+        control_p4_session_->HandleNextNStreamMessages(
+            [&](const p4::v1::StreamMessageResponse& message) {
+              return HandleStreamMessage(
+                  ir_p4info, &GetParam().testbed->GetMirrorTestbed(), message,
+                  &test_data_);
+            },
+            kNumTestPackets, kDurationToWaitForPackets);
 
     // For the test configuration, check the output distribution.
     {
@@ -1056,6 +1109,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
             << test.output.size() << " actual packets";
         expected_member_ports.erase(single_member_port_id);
       } else {
+        ASSERT_OK(packets_arrived);
         expected_member_ports.insert(single_member_port_id);
         EXPECT_EQ(test.output.size(), test_data_.total_packets_sent)
             << "Mismatch in expected: " << test_data_.total_packets_sent
@@ -1146,6 +1200,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
                                            absl::StrCat(selected_port_id)));
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                    InterfaceState::kDown));
+
   // Verify the oper status is reflected on the SUT.
   ASSERT_OK(VerifyInterfaceOperState(
       *sut_gnmi_stub_, GetParam().testbed->GetMirrorTestbed(),
@@ -1174,7 +1229,13 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   test_data_.total_packets_sent = kNumTestPackets;
 
   // Wait for packets from the SUT to arrive.
-  absl::SleepFor(kDurationToWaitForPackets);
+  ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
+      [&](const p4::v1::StreamMessageResponse& message) {
+        return HandleStreamMessage(ir_p4info,
+                                   &GetParam().testbed->GetMirrorTestbed(),
+                                   message, &test_data_);
+      },
+      kNumTestPackets, kDurationToWaitForPackets));
 
   // For the test configuration, check the output distribution.
   {
@@ -1236,6 +1297,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
   // Bring the port down before the group and members are created.
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                    InterfaceState::kDown));
+
   // Verify the oper status is reflected on the SUT.
   ASSERT_OK(VerifyInterfaceOperState(
       *sut_gnmi_stub_, GetParam().testbed->GetMirrorTestbed(),
@@ -1287,7 +1349,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
     // Down operation is a no-op here since the port is already down.
     ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
                                      operation));
-
     // Verify the oper status is reflected on the SUT.
     ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
                                        GetParam().testbed->GetMirrorTestbed(),
@@ -1306,7 +1367,13 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
     test_data_.total_packets_sent = kNumTestPackets;
 
     // Wait for packets from the SUT to arrive.
-    absl::SleepFor(kDurationToWaitForPackets);
+    ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
+        [&](const p4::v1::StreamMessageResponse& message) {
+          return HandleStreamMessage(ir_p4info,
+                                     &GetParam().testbed->GetMirrorTestbed(),
+                                     message, &test_data_);
+        },
+        kNumTestPackets, kDurationToWaitForPackets));
 
     // For the test configuration, check the output distribution.
     {

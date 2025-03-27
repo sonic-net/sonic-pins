@@ -133,7 +133,7 @@ def pins_infra_deps():
             strip_prefix = "gnmi-0.10.0",
             patch_args = ["-p1"],
             patches = [
-                "@com_github_google_pins_infra//:bazel/patches/gnmi-001-fix_virtual_proto_import.patch",
+                "@com_github_sonic_net_sonic_pins//:bazel/patches/gnmi-001-fix_virtual_proto_import.patch",
             ],
             sha256 = "2231e1cc398a523fa840810fa6fdb8960639f7b91b57bb8f12ed8681e0142a67",
         )

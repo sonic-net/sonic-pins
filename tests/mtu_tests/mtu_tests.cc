@@ -38,6 +38,7 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
@@ -252,10 +253,10 @@ TEST_P(MtuRoutingTestFixture, MtuTest) {
   ASSERT_TRUE(absl::SimpleAtoi(state_path_response, &orig_mtu));
 
   // Set up a route between the source and destination interfaces.
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-          testbed_->Sut(), MtuRoutingTestFixture::GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed_->Sut(), /*gnmi_config=*/std::nullopt,
+                           MtuRoutingTestFixture::GetParam().p4_info));
   P4rtProgrammingContext p4rt_context(p4_session.get(),
                                       pdpi::SetMetadataAndSendPiWriteRequest);
   ASSERT_OK(SetupRoute(&p4rt_context));
@@ -319,10 +320,10 @@ TEST_P(MtuRoutingTestFixture, VerifyTrafficWithMtuChangeTest) {
              std::to_string(kMtu4500));
 
   // Set up a route between the source and destination interfaces.
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-          testbed_->Sut(), MtuRoutingTestFixture::GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed_->Sut(), /*gnmi_config=*/std::nullopt,
+                           MtuRoutingTestFixture::GetParam().p4_info));
   P4rtProgrammingContext p4rt_context(p4_session.get(),
                                       pdpi::SetMetadataAndSendPiWriteRequest);
   ASSERT_OK(SetupRoute(&p4rt_context));
