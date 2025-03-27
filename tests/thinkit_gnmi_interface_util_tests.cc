@@ -18,8 +18,6 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -165,19 +163,6 @@ constexpr char all_interfaces_resp[] =
          }
     )pb";
 
-constexpr char invalid_interfaces_resp[] =
-    R"pb(notification {
-           timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
-           update {
-             path { elem { name: "interfaces" } }
-             val {
-               json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":1,\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}},{\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":2,\"openconfig-platform-transceiver:transceiver\":\"EthernetABC\"}}]}}"
-             }
-           }
-         }
-    )pb";
-
 constexpr char all_components_req[] =
     R"pb(prefix { origin: "openconfig" }
          path { elem { name: "components" } }
@@ -191,32 +176,6 @@ constexpr char all_components_resp[] =
              path { elem { name: "components" } }
              val {
                json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CR4\"}}},{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CR4\"}}}]}}"
-             }
-           }
-         }
-    )pb";
-
-constexpr char multi_form_factor_components_resp[] =
-    R"pb(notification {
-           timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
-           update {
-             path { elem { name: "components" } }
-             val {
-               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CDGR4_PLUS\",\"form-factor\":\"OSFP\"}}},{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\",\"form-factor\":\"SFP_PLUS\"}}}]}}"
-             }
-           }
-         }
-    )pb";
-
-constexpr char invalid_components_resp[] =
-    R"pb(notification {
-           timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
-           update {
-             path { elem { name: "components" } }
-             val {
-               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CDGR4_PLUS\",\"form-factor\":\"OSFP\"}}},{\"name\":\"EthernetABC\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_DR4\",\"form-factor\":\"OSFP\"}}}]}}"
              }
            }
          }
@@ -1576,184 +1535,6 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       StatusIs(absl::StatusCode::kInternal,
                HasSubstr(
                    "No random interface with supported breakout modes found")));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetPortSetWithOsfpOpticsFailedInGettingComponents) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
-  EXPECT_THAT(pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr),
-              StatusIs(absl::StatusCode::kDeadlineExceeded));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetPortSetWithOsfpOpticsInvalidXcvrName) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  gnmi::GetResponse components_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      invalid_components_resp, &components_resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
-  EXPECT_THAT(pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr),
-              StatusIs(absl::StatusCode::kInternal,
-                       HasSubstr("Failed to parse transceiver number in")));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest, TestGetPortSetWithOsfpOpticsSuccess) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  gnmi::GetResponse components_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      multi_form_factor_components_resp, &components_resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
-  ASSERT_OK_AND_ASSIGN(
-      auto port_set, pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr));
-  absl::flat_hash_set<int> expected_port_set_set = {1};
-  ASSERT_EQ(port_set, expected_port_set_set);
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetXcvrToInterfacesMapGivenPmdTypeInterfacesGetFailure) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest interfaces_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
-                                                            &interfaces_req));
-  gnmi::GetResponse interfaces_resp;
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
-      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
-  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
-                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
-              StatusIs(absl::StatusCode::kDeadlineExceeded));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetXcvrToInterfacesMapGivenPmdTypeComponentsGetFailure) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest interfaces_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
-                                                            &interfaces_req));
-  gnmi::GetResponse interfaces_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
-                                                            &interfaces_resp));
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
-      .WillOnce(
-          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
-  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
-                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
-              StatusIs(absl::StatusCode::kDeadlineExceeded));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetXcvrToInterfacesMapGivenPmdTypeXcvrNotFoundFailure) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest interfaces_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
-                                                            &interfaces_req));
-  gnmi::GetResponse interfaces_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
-                                                            &interfaces_resp));
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  gnmi::GetResponse components_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(notification {
-             timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
-             update {
-               path { elem { name: "components" } }
-               val {
-                 json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\"}}}]}}"
-               }
-             }
-           }
-      )pb",
-      &components_resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
-  EXPECT_THAT(
-      pins_test::GetXcvrToInterfacesMapGivenPmdType(*mock_gnmi_stub_ptr,
-                                                    "ETH_2X400GBASE_DR4"),
-      StatusIs(absl::StatusCode::kInternal,
-               HasSubstr("Transceiver not found for interface Ethernet1/1/1")));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetXcvrToInterfacesMapGivenPmdTypeInvalidXcvrName) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest interfaces_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
-                                                            &interfaces_req));
-  gnmi::GetResponse interfaces_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      invalid_interfaces_resp, &interfaces_resp));
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  gnmi::GetResponse components_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      invalid_components_resp, &components_resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
-  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
-                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
-              StatusIs(absl::StatusCode::kInternal,
-                       HasSubstr("Failed to parse transceiver number in")));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetXcvrToInterfacesMapGivenPmdTypeSuccess) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  gnmi::GetRequest interfaces_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
-                                                            &interfaces_req));
-  gnmi::GetResponse interfaces_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
-                                                            &interfaces_resp));
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  gnmi::GetResponse components_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
-                                                            &components_resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
-  ASSERT_OK_AND_ASSIGN(auto xcvr_to_interfaces_map,
-                       pins_test::GetXcvrToInterfacesMapGivenPmdType(
-                           *mock_gnmi_stub_ptr, "ETH_2X400GBASE_CR4"));
-  absl::flat_hash_map<int, std::vector<std::string>>
-      expected_xcvr_to_interfaces_map = {{1, {"Ethernet1/1/1"}},
-                                         {2, {"Ethernet1/2/1"}}};
-  ASSERT_EQ(xcvr_to_interfaces_map, expected_xcvr_to_interfaces_map);
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsSfpPlusPortTrueSuccess) {

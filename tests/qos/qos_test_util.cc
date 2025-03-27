@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "tests/qos/qos_test_util.h"
 
 #include <array>
@@ -6,6 +20,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -81,7 +96,7 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
       "qos/interfaces/interface[interface-id=$0]"
       "/output/queues/queue[name=$1]/state/$2",
       port, queue, statistic);
-  
+
   return GetGnmiStatePathAndTimestamp(&gnmi_stub,
                                       openconfig_transmit_count_state_path,
                                       "openconfig-qos:transmit-pkts");
@@ -108,9 +123,8 @@ absl::StatusOr<std::string> GetQueueNameByDscpAndPort(
   return gutil::FindOrStatus(queue_by_dscp, dscp);
 }
 
-absl::StatusOr<std::string>
-GetSchedulerPolicyNameByEgressPort(absl::string_view egress_port,
-                                   gnmi::gNMI::StubInterface &gnmi) {
+absl::StatusOr<std::string> GetSchedulerPolicyNameByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi) {
   const std::string kPath = absl::StrFormat(
       "qos/interfaces/interface[interface-id=%s]/output/scheduler-policy/"
       "config/name",
@@ -121,15 +135,14 @@ GetSchedulerPolicyNameByEgressPort(absl::string_view egress_port,
   return std::string(StripQuotes(name));
 }
 
-static std::string
-SchedulerPolicyPath(absl::string_view scheduler_policy_name) {
+static std::string SchedulerPolicyPath(
+    absl::string_view scheduler_policy_name) {
   return absl::StrFormat("qos/scheduler-policies/scheduler-policy[name=%s]",
                          scheduler_policy_name);
 }
 
-absl::StatusOr<std::string>
-GetSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
-                         gnmi::gNMI::StubInterface &gnmi) {
+absl::StatusOr<std::string> GetSchedulerPolicyConfig(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi) {
   std::string path = SchedulerPolicyPath(scheduler_policy_name);
   return ReadGnmiPath(&gnmi, path, gnmi::GetRequest::CONFIG, "");
 }
@@ -148,10 +161,9 @@ GetSchedulerPolicyConfigAsProto(absl::string_view scheduler_policy_name,
   return proto_config;
 }
 
-absl::Status
-UpdateSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
-                            absl::string_view config,
-                            gnmi::gNMI::StubInterface &gnmi) {
+absl::Status UpdateSchedulerPolicyConfig(
+    absl::string_view scheduler_policy_name, absl::string_view config,
+    gnmi::gNMI::StubInterface &gnmi) {
   std::string path = SchedulerPolicyPath(scheduler_policy_name);
   return SetGnmiConfigPath(&gnmi, path, GnmiSetType::kUpdate, config);
 }
@@ -173,8 +185,7 @@ absl::Status SetSchedulerPolicyParameters(
   // Updated config.
   for (openconfig::Qos::Scheduler &scheduler :
        *proto_config.mutable_schedulers()->mutable_scheduler()) {
-    if (scheduler.inputs().input_size() == 0)
-      continue;
+    if (scheduler.inputs().input_size() == 0) continue;
     if (scheduler.inputs().input_size() > 1) {
       return gutil::UnimplementedErrorBuilder()
              << "scheduler with several inputs unsupported: "
@@ -190,8 +201,7 @@ absl::Status SetSchedulerPolicyParameters(
         gutil::FindOrNull(params_by_queue_name, kQueue);
     LOG(INFO) << "-> " << (params == nullptr ? "no " : "")
               << "changes requested";
-    if (params == nullptr)
-      continue;
+    if (params == nullptr) continue;
 
     if (scheduler.config().type() !=
         "openconfig-qos-types:TWO_RATE_THREE_COLOR") {
@@ -250,8 +260,7 @@ absl::Status SetSchedulerPolicyParameters(
             StripBrackets(raw_config), /*ignore_unknown_fields=*/true));
     for (openconfig::Qos::Scheduler &scheduler :
          *proto_config.mutable_schedulers()->mutable_scheduler()) {
-      if (!scheduler.has_two_rate_three_color())
-        continue;
+      if (!scheduler.has_two_rate_three_color()) continue;
       auto &config = scheduler.two_rate_three_color().config();
       auto &state = scheduler.two_rate_three_color().state();
       ASSIGN_OR_RETURN(config_state_diff, gutil::ProtoDiff(config, state));
@@ -263,8 +272,7 @@ absl::Status SetSchedulerPolicyParameters(
         break;
       }
 
-      if (!scheduler.has_inputs())
-        continue;
+      if (!scheduler.has_inputs()) continue;
       auto &input_config = scheduler.inputs().input(0).config();
       auto &input_state = scheduler.inputs().input(0).state();
       ASSIGN_OR_RETURN(config_state_diff,
@@ -317,6 +325,7 @@ GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
       weight_by_queue_name[queue.name] = queue.weight;
     }
   }
+
   return weight_by_queue_name;
 }
 
@@ -365,16 +374,10 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
       kSchedulerPolicy.schedulers().scheduler().begin(),
       kSchedulerPolicy.schedulers().scheduler().end());
   absl::c_sort(schedulers, [](const auto &a, const auto &b) -> bool {
-    // TODO: Remove this temporary workaround once strict queues
-    // are no longer inverted.
-    if (IsStrict(a) && IsStrict(b))
-      return a.sequence() > b.sequence();
     return a.sequence() < b.sequence();
   });
 
-  // Extract queue info, and ensure strict queues come before round-robin
-  // queues.
-  bool have_seen_round_robin_scheduler = false;
+  // Extract queue info.
   for (const openconfig::Qos::Scheduler &scheduler : schedulers) {
     if (scheduler.inputs().input_size() != 1) {
       return gutil::UnimplementedErrorBuilder()
@@ -394,7 +397,6 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
 
     // Extract weight, if relevant.
     if (info.type == QueueType::kRoundRobin) {
-      have_seen_round_robin_scheduler = true;
       bool parsed_weight = absl::SimpleAtoi(weight, &info.weight);
       if (!parsed_weight) {
         return gutil::UnknownErrorBuilder()
@@ -404,31 +406,24 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
                << scheduler_policy_name << "'";
       }
     }
-
-    // Ensure invariant.
-    if (IsStrict(scheduler) && have_seen_round_robin_scheduler) {
-      return gutil::UnimplementedErrorBuilder()
-             << "found strict scheduler after weighted scheduler";
-    }
   }
   return queues;
 }
 
-absl::StatusOr<std::string>
-GetBufferAllocationProfileByEgressPort(absl::string_view egress_port,
-                                       gnmi::gNMI::StubInterface &gnmi) {
-  const std::string kPath =
-      absl::StrFormat("qos/interfaces/interface[interface-id=%s]/output/config/"
-                      "buffer-allocation-profile",
-                      egress_port);
+absl::StatusOr<std::string> GetBufferAllocationProfileByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi) {
+  const std::string kPath = absl::StrFormat(
+      "qos/interfaces/interface[interface-id=%s]/output/config/"
+      "buffer-allocation-profile",
+      egress_port);
   ASSIGN_OR_RETURN(std::string name,
                    ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG,
                                 "openconfig-qos:buffer-allocation-profile"));
   return std::string(StripQuotes(name));
 }
 
-static std::string
-BufferAllocationProfilePath(absl::string_view buffer_allocation_profile_name) {
+static std::string BufferAllocationProfilePath(
+    absl::string_view buffer_allocation_profile_name) {
   return absl::StrFormat(
       "qos/buffer-allocation-profiles/buffer-allocation-profile[name=%s]",
       buffer_allocation_profile_name);
@@ -472,11 +467,9 @@ absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
   }
   return queues;
 }
-
-absl::Status
-UpdateBufferAllocationProfileConfig(absl::string_view buffer_allocation_profile,
-                                    absl::string_view config,
-                                    gnmi::gNMI::StubInterface &gnmi) {
+absl::Status UpdateBufferAllocationProfileConfig(
+    absl::string_view buffer_allocation_profile, absl::string_view config,
+    gnmi::gNMI::StubInterface &gnmi) {
   std::string path = BufferAllocationProfilePath(buffer_allocation_profile);
   return SetGnmiConfigPath(&gnmi, path, GnmiSetType::kUpdate, config);
 }
@@ -486,69 +479,79 @@ absl::Status SetBufferConfigParameters(
     absl::flat_hash_map<std::string, BufferParameters> params_by_queue_name,
     gnmi::gNMI::StubInterface &gnmi, absl::Duration convergence_timeout) {
   // Pull existing config.
-  const std::string kPath =
-      BufferAllocationProfilePath(buffer_allocation_profile);
-  const std::string kRoot = "openconfig-qos:buffer-allocation-profile";
+  const std::string kPath = "qos";
+  const std::string kRoot = "openconfig-qos:qos";
   ASSIGN_OR_RETURN(const std::string kRawConfig,
                    ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
   ASSIGN_OR_RETURN(
-      openconfig::Qos::BufferAllocationProfile proto_config,
-      gutil::ParseJsonAsProto<openconfig::Qos::BufferAllocationProfile>(
-          StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
+      openconfig::Qos proto_config,
+      gutil::ParseJsonAsProto<openconfig::Qos>(StripBrackets(kRawConfig),
+                                               /*ignore_unknown_fields=*/true));
 
-  // Updated config.
-  for (openconfig::Qos::Queue &queue :
-       *proto_config.mutable_queues()->mutable_queue()) {
-    const std::string kBufferQueuePath =
-        absl::StrFormat("%s/queues/queue[name=%s]", kPath, queue.name());
+  for (openconfig::Qos::BufferAllocationProfile &buffer_profile :
+       *proto_config.mutable_buffer_allocation_profiles()
+            ->mutable_buffer_allocation_profile()) {
+    if (buffer_profile.name() == buffer_allocation_profile) {
+      for (openconfig::Qos::Queue &queue :
+           *buffer_profile.mutable_queues()->mutable_queue()) {
+        const std::string kBufferQueuePath =
+            absl::StrFormat("%s/queues/queue[name=%s]", kPath, queue.name());
 
-    BufferParameters *const params =
-        gutil::FindOrNull(params_by_queue_name, queue.name());
+        BufferParameters *const params =
+            gutil::FindOrNull(params_by_queue_name, queue.name());
 
-    if (params == nullptr) {
-      continue;
-    }
+        if (params == nullptr) {
+          continue;
+        }
 
-    if (auto dedicated_buffer = params->dedicated_buffer;
-        dedicated_buffer.has_value()) {
-      queue.mutable_config()->set_dedicated_buffer(
-          absl::StrCat(*dedicated_buffer));
-    }
+        if (auto dedicated_buffer = params->dedicated_buffer;
+            dedicated_buffer.has_value()) {
+          queue.mutable_config()->set_dedicated_buffer(
+              absl::StrCat(*dedicated_buffer));
+        }
 
-    if (auto use_shared_buffer = params->use_shared_buffer;
-        use_shared_buffer.has_value()) {
-      queue.mutable_config()->set_use_shared_buffer(*use_shared_buffer);
-    }
-    if (auto shared_buffer_limit_type = params->shared_buffer_limit_type;
-        shared_buffer_limit_type.has_value()) {
-      queue.mutable_config()->set_shared_buffer_limit_type(
-          *shared_buffer_limit_type);
-    }
+        if (auto use_shared_buffer = params->use_shared_buffer;
+            use_shared_buffer.has_value()) {
+          queue.mutable_config()->set_use_shared_buffer(*use_shared_buffer);
+        }
+        if (auto shared_buffer_limit_type = params->shared_buffer_limit_type;
+            shared_buffer_limit_type.has_value()) {
+          queue.mutable_config()->set_shared_buffer_limit_type(
+              *shared_buffer_limit_type);
+        }
 
-    if (auto dynamic_limit_scaling_factor =
-            params->dynamic_limit_scaling_factor;
-        dynamic_limit_scaling_factor.has_value()) {
-      queue.mutable_config()->set_dynamic_limit_scaling_factor(
-          *dynamic_limit_scaling_factor);
-    }
+        if (auto dynamic_limit_scaling_factor =
+                params->dynamic_limit_scaling_factor;
+            dynamic_limit_scaling_factor.has_value()) {
+          queue.mutable_config()->set_dynamic_limit_scaling_factor(
+              *dynamic_limit_scaling_factor);
+        }
 
-    if (auto shared_static_limit = params->shared_static_limit;
-        shared_static_limit.has_value()) {
-      queue.mutable_config()->set_static_shared_buffer_limit(
-          *shared_static_limit);
-    }
-
-    // We update the entire queue subtree.
-    {
-      // Convert proto back to JSON string.
-      ASSIGN_OR_RETURN(std::string buffer_queue_json,
-                       gutil::SerializeProtoAsJson(queue));
-      // Apply updated queue.
-      RETURN_IF_ERROR(SetGnmiConfigPath(
-          &gnmi, kBufferQueuePath, GnmiSetType::kUpdate,
-          absl::StrFormat(R"({ "queue": [%s] })", buffer_queue_json)));
+        if (auto shared_static_limit = params->shared_static_limit;
+            shared_static_limit.has_value()) {
+          queue.mutable_config()->set_static_shared_buffer_limit(
+              *shared_static_limit);
+        }
+      }
     }
   }
+
+  proto_config.clear_scheduler_policies();
+
+  // Clear PortChannel interfaces from retreived config.
+  for (openconfig::Qos::Interface &interface :
+       *proto_config.mutable_interfaces()->mutable_interface()) {
+    if (absl::StrContains(interface.interface_id(), "PortChannel")) {
+      proto_config.mutable_interfaces()->clear_interface();
+    }
+  }
+
+  // Convert proto back to JSON string.
+  ASSIGN_OR_RETURN(std::string qos_json,
+                   gutil::SerializeProtoAsJson(proto_config));
+  RETURN_IF_ERROR(SetGnmiConfigPath(
+      &gnmi, "qos", GnmiSetType::kUpdate,
+      absl::StrFormat(R"({ "openconfig-qos:qos": %s })", qos_json)));
 
   // Wait for convergence.
   const absl::Time kDeadline = absl::Now() + convergence_timeout;
@@ -603,9 +606,8 @@ absl::Status DisablePuntRateLimits(gnmi::gNMI::StubInterface &gnmi_stub) {
   return absl::OkStatus();
 }
 
-absl::Status
-UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
-                                      int buffer_size) {
+absl::Status UpdateBufferAllocationForAllCpuQueues(
+    gnmi::gNMI::StubInterface &gnmi_stub, int buffer_size) {
   absl::flat_hash_map<std::string, BufferParameters>
       buffer_config_by_queue_name;
   ASSIGN_OR_RETURN(std::vector<std::string> queues,
@@ -626,19 +628,18 @@ UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
   return absl::OkStatus();
 }
 
-absl::Status
-EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
-                                      thinkit::MirrorTestbed &testbed) {
+absl::Status EffectivelyDisablePuntLimitsForSwitch(
+    SwitchRoleToDisablePuntFlowQoS role, thinkit::MirrorTestbed &testbed) {
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub;
   switch (role) {
-  case SwitchRoleToDisablePuntFlowQoS::kSwitchUnderTest: {
-    ASSIGN_OR_RETURN(gnmi_stub, testbed.Sut().CreateGnmiStub());
-    break;
-  }
-  case SwitchRoleToDisablePuntFlowQoS::kControlSwitch: {
-    ASSIGN_OR_RETURN(gnmi_stub, testbed.ControlSwitch().CreateGnmiStub());
-    break;
-  }
+    case SwitchRoleToDisablePuntFlowQoS::kSwitchUnderTest: {
+      ASSIGN_OR_RETURN(gnmi_stub, testbed.Sut().CreateGnmiStub());
+      break;
+    }
+    case SwitchRoleToDisablePuntFlowQoS::kControlSwitch: {
+      ASSIGN_OR_RETURN(gnmi_stub, testbed.ControlSwitch().CreateGnmiStub());
+      break;
+    }
   }
   std::string switch_role_name = SwtichRoleToDisableQoSToString(role);
 
@@ -711,6 +712,93 @@ absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
            << ingress_counter_response << "\"";
   }
   return ingress_counter;
+}
+
+// Extract the queue configurations from the gNMI configuration.
+// The function returns a map keyed on queue name and value
+// holds queue configuration information.
+// TODO: Need to handle exceptions cleanly for failures
+// during json parsing which can crash the test run.
+// Currently we are assuming validity of config json parameter passed into
+// the test.
+absl::StatusOr<absl::flat_hash_map<std::string, QueueInfoByQueueName>>
+ExtractQueueInfoViaGnmiConfig(absl::string_view port,
+                              absl::string_view gnmi_config) {
+  nlohmann::json config = nlohmann::json::parse(gnmi_config);
+  if (!config.is_object()) {
+    return absl::InvalidArgumentError("Could not parse gnmi configuration.");
+  }
+
+  absl::flat_hash_map<std::string, QueueInfoByQueueName> queue_info;
+  auto &qos_interfaces =
+      config["openconfig-qos:qos"]["interfaces"]["interface"];
+
+  std::string scheduler_policy;
+  for (auto &interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == port) {
+      scheduler_policy =
+          interface["output"]["scheduler-policy"]["config"]["name"]
+              .get<std::string>();
+      break;
+    }
+  }
+
+  auto &scheduler_policies =
+      config["openconfig-qos:qos"]["scheduler-policies"]["scheduler-policy"];
+  for (auto &policy : scheduler_policies) {
+    if (policy["name"].get<std::string>() == scheduler_policy) {
+      for (auto &scheduler : policy["schedulers"]["scheduler"]) {
+        std::string queue_name =
+            scheduler["inputs"]["input"][0]["config"]["queue"]
+                .get<std::string>();
+        queue_info[queue_name].gnmi_queue_name = queue_name;
+        queue_info[queue_name].p4_queue_name = queue_name;
+        std::string peak_rate = scheduler["two-rate-three-color"]["config"]
+                                         ["google-pins-qos:pir-pkts"]
+                                             .get<std::string>();
+        if (!absl::SimpleAtoi(
+                peak_rate, &queue_info[queue_name].rate_packets_per_second)) {
+          return absl::InternalError(
+              absl::StrCat("Unable to parse rate as int ", peak_rate,
+                           " for queue ", queue_name));
+        }
+        LOG(INFO) << "Queue: " << queue_name
+                  << ", configured rate:" << peak_rate;
+        int be_pkts = scheduler["two-rate-three-color"]["config"]
+                               ["google-pins-qos:be-pkts"]
+                                   .get<int>();
+        queue_info[queue_name].scheduler_be_pkts = be_pkts;
+      }
+      break;
+    }
+  }
+
+  std::string buffer_allocation_profile;
+  for (auto &interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == "CPU") {
+      buffer_allocation_profile =
+          interface["output"]["config"]["buffer-allocation-profile"]
+              .get<std::string>();
+      break;
+    }
+  }
+
+  auto &buffer_allocation_profiles =
+      config["openconfig-qos:qos"]["buffer-allocation-profiles"]
+            ["buffer-allocation-profile"];
+  for (auto &profile : buffer_allocation_profiles) {
+    if (profile["name"].get<std::string>() == buffer_allocation_profile) {
+      for (auto &queue : profile["queues"]["queue"]) {
+        std::string queue_name = queue["name"].get<std::string>();
+        double buffer_limit =
+            queue["config"]["static-shared-buffer-limit"].get<double>();
+        queue_info[queue_name].shared_buffer_static_limit = buffer_limit;
+      }
+      break;
+    }
+  }
+
+  return queue_info;
 }
 
 absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
