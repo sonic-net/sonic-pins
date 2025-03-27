@@ -782,7 +782,7 @@ static constexpr absl::string_view kTestGnmiQosConfig3 = R"json(
       {
         "interface-id": "Ethernet1/1/1",
         "config": {
-          "interface-id": "Ethernet1/1/1"
+          "interface-id": "Ethernet1/1/1"  
         },
         "output": {
           "config": {
