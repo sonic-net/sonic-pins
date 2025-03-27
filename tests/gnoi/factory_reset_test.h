@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,32 +15,26 @@
 #ifndef PINS_TESTS_GNOI_FACTORY_RESET_TEST_H_
 #define PINS_TESTS_GNOI_FACTORY_RESET_TEST_H_
 
-#include "factory_reset/factory_reset.pb.h"
-#include "thinkit/mirror_testbed_fixture.h"
+#include <string>
+
+#include "absl/types/span.h"
 #include "thinkit/ssh_client.h"
+#include "thinkit/switch.h"
 
 namespace factory_reset {
 
-void IssueGnoiFactoryResetAndValidateStatus(
-    thinkit::Switch &sut, const gnoi::factory_reset::StartRequest &request,
-    gnoi::factory_reset::StartResponse *response,
-    grpc::Status expected_status = grpc::Status());
-
-void ValidateStackState(thinkit::Switch &sut,
-                        absl::Span<const std::string> interfaces);
-
-void TestFactoryResetSuccess(thinkit::Switch &sut,
-                             thinkit::SSHClient &ssh_client,
+void TestFactoryResetSuccess(thinkit::Switch& sut,
+                             thinkit::SSHClient& ssh_client,
                              absl::Span<const std::string> interfaces);
 
-void TestDuplicateFactoryResetFailure(thinkit::Switch &sut,
-                                      thinkit::SSHClient &ssh_client,
+void TestDuplicateFactoryResetFailure(thinkit::Switch& sut,
+                                      thinkit::SSHClient& ssh_client,
                                       absl::Span<const std::string> interfaces);
 
 void TestGnoiFactoryResetGnoiServerUnreachableFail(
-    thinkit::Switch &sut, thinkit::SSHClient &ssh_client,
+    thinkit::Switch& sut, thinkit::SSHClient& ssh_client,
     absl::Span<const std::string> interfaces);
 
-} // namespace factory_reset
+}  // namespace factory_reset
 
-#endif // PINS_TESTS_GNOI_FACTORY_RESET_TEST_H_
+#endif  // PINS_TESTS_GNOI_FACTORY_RESET_TEST_H_
