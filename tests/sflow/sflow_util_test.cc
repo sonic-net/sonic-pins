@@ -14,6 +14,9 @@
 
 #include "tests/sflow/sflow_util.h"
 
+#include <string>
+#include <vector>
+
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -23,11 +26,13 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "thinkit/mock_ssh_client.h"
 
 namespace pins {
 namespace {
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::testing::AllOf;
 using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::HasSubstr;
@@ -848,6 +853,102 @@ TEST(SflowUtilTest, UpdateSflowInterfaceEnableNotConvergeFail) {
       StatusIs(absl::StatusCode::kDeadlineExceeded));
 }
 
+constexpr absl::string_view kTorSflowGnmiConfig = R"json({
+     "openconfig-sampling:sampling" : {
+        "openconfig-sampling-sflow:sflow" : {
+           "collectors" : {
+              "collector" : [
+                 {
+                    "address" : "2001:4860:f802::be",
+                    "config" : {
+                       "address" : "2001:4860:f802::be",
+                       "port" : 6344
+                    },
+                    "port" : 6344
+                 }
+              ]
+           }
+        }
+     }
+  })json";
+
+TEST(SflowUtilTest, GetSflowCollectorPortTest) {
+  ASSERT_THAT(GetSflowCollectorPort(kTorSflowGnmiConfig), IsOkAndHolds(6344));
+}
+
+constexpr absl::string_view kTorSflowGnmiConfigMissingPort = R"json({
+     "openconfig-sampling:sampling" : {
+        "openconfig-sampling-sflow:sflow" : {
+           "collectors" : {
+              "collector" : [
+                 {
+                    "address" : "2001:4860:f802::be",
+                    "config" : {
+                    },
+                    "port" : 6344
+                 }
+              ]
+           }
+        }
+     }
+  })json";
+
+TEST(SflowUtilTest, GetSflowCollectorPortMissingPortTest) {
+  ASSERT_THAT(
+      GetSflowCollectorPort(kTorSflowGnmiConfigMissingPort),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("sFlow collector config is not populated correctly")));
+}
+
+constexpr absl::string_view kNoCollectorGnmiConfig = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  },
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 12
+      },
+      "interfaces": {
+        "interface": [
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet2"
+            },
+            "name": "Ethernet2"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet3"
+            },
+            "name": "Ethernet3"
+          }
+        ]
+      }
+    }
+  }
+})json";
+
+TEST(SflowUtilTest, GetSflowCollectorPortNoCollectorConfigTest) {
+  ASSERT_THAT(GetSflowCollectorPort(kNoCollectorGnmiConfig),
+              IsOkAndHolds(6343));
+}
+
 TEST(SflowDscpTest, ParseTcpdumpResultA1Success) {
   const std::string tcpdump_result =
       R"(tcpdump: listening on lo, link-type EN10MB (Ethernet), capture size "
@@ -982,6 +1083,52 @@ TEST(IpAddressTest, SameIpv6AddressDifferentFormat4) {
   EXPECT_THAT(IsSameIpAddressStr("2607:f001:acf::",
                                  "2607:f001:0acf:0000:0000:0000:0000:0000"),
               IsOkAndHolds(true));
+}
+
+TEST(PortIndexTest, SshCommandFailCheckFail) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand)
+      .WillByDefault(Return(absl::InternalError("No ssh client")));
+  const std::vector<std::string> port_names = {"Ethernet1/1/1",
+                                               "Ethernet1/1/2"};
+  EXPECT_THAT(
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(PortIndexTest, SshCommandNoNilCheckSuccess) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand)
+      .WillByDefault(Return(R"(PORT_INDEX_TABLE|Ethernet1/10/1
+PORT_INDEX_TABLE|Ethernet1/9/1
+PORT_INDEX_TABLE|Ethernet1/31/1
+PORT_INDEX_TABLE|Ethernet1/2/5
+PORT_INDEX_TABLE|Ethernet1/13/1)"));
+  const std::vector<std::string> port_names = {
+      "Ethernet1/10/1", "Ethernet1/31/1", "Ethernet1/13/1"};
+  EXPECT_OK(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                             port_names));
+}
+
+TEST(PortIndexTest, SshCommandNilCheckFail) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand).WillByDefault(Return("nil"));
+  const std::vector<std::string> port_names = {"Ethernet1/1/1",
+                                               "Ethernet1/1/2"};
+  EXPECT_THAT(
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(PortIndexTest, SshCommandEmptyCheckFail) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand).WillByDefault(Return(""));
+  const std::vector<std::string> port_names = {"Ethernet1/1/1",
+                                               "Ethernet1/1/2"};
+  EXPECT_THAT(
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("Ethernet1/1/1"), HasSubstr("Ethernet1/1/2"))));
 }
 
 }  // namespace
