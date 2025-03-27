@@ -75,9 +75,6 @@ constexpr char kOpsUp[] = "\"UP\"";
 constexpr char kSpeed100GB[] = "\"openconfig-if-ethernet:SPEED_100GB\"";
 constexpr char kSpeed200GB[] = "\"openconfig-if-ethernet:SPEED_200GB\"";
 
-constexpr char kLoopbackFalse[] = "false";  // NOLINT
-constexpr char kLoopbackTrue[] = "true";
-
 constexpr uint32_t kMtu = 1514;
 }  // namespace
 
@@ -342,8 +339,8 @@ absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
   return links;
 }
 
-absl::StatusOr<bool> CheckLoopback(absl::string_view iface,
-                                   gnmi::gNMI::StubInterface *gnmi_stub) {
+absl::StatusOr<std::string> CheckLoopback(
+    absl::string_view iface, gnmi::gNMI::StubInterface *gnmi_stub) {
   std::string ops_state_path = absl::StrCat("interfaces/interface[name=", iface,
                                             "]/state/loopback-mode");
 
@@ -351,26 +348,21 @@ absl::StatusOr<bool> CheckLoopback(absl::string_view iface,
                    GetGnmiStatePathInfo(gnmi_stub, ops_state_path,
                                         "openconfig-interfaces:loopback-mode"));
 
-  return (ops_response == kLoopbackTrue);
+  if (absl::StrContains(ops_response, "FACILITY")) {
+    return "FACILITY";
+  } else if (absl::StrContains(ops_response, "TERMINAL")) {
+    return "TERMINAL";
+  }
+  return "NONE";
 }
 
-absl::Status SetLoopback(bool port_loopback, absl::string_view iface,
+absl::Status SetLoopback(std::string port_loopback, absl::string_view iface,
                          gnmi::gNMI::StubInterface *gnmi_stub) {
   std::string ops_config_path = absl::StrCat(
       "interfaces/interface[name=", iface, "]/config/loopback-mode");
 
-  // Originally I wrote:
-  // ops_val =
-  // ConstructGnmiConfigSetString("openconfig-interfaces:loopback-mode",
-  // port_loopback); but that gets converted to 0 or 1 and that gets rejected as
-  // a "float". so the API needs an upgrade for bool.
-
-  std::string ops_val;
-  if (port_loopback) {
-    ops_val = "{\"openconfig-interfaces:loopback-mode\":true}";
-  } else {
-    ops_val = "{\"openconfig-interfaces:loopback-mode\":false}";
-  }
+  std::string ops_val = ConstructGnmiConfigSetString(
+      "openconfig-interfaces:loopback-mode", port_loopback);
 
   RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(gnmi_stub, ops_config_path,
                                                GnmiSetType::kUpdate, ops_val));
@@ -692,6 +684,9 @@ TEST_P(CountersTestFixture, TestInFcsErrors) {
 TEST_P(CountersTestFixture, TestIPv4Pkts) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestIPv4Pkts "
                "----------\n\n\n\n\n";
+  // TODO: Remove after PINs release includes loopback-mode changes
+  GTEST_SKIP() << "loopback-mode tests temporarily skipped until "
+                  "next PINs release";
 
   // Pick a testbed with an Ixia Traffic Generator. A SUT is assumed.
   thinkit::TestRequirements requirements =
@@ -785,7 +780,7 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   LOG(INFO) << "\n\n";
 
   // Set the egress port to loopback mode
-  EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
+  EXPECT_OK(SetLoopback("FACILITY", sut_out_interface, gnmi_stub.get()));
 
   // Restore loopback configuration after test.
   const auto kRestoreLoopbackConfig = absl::Cleanup([&] {
@@ -941,6 +936,9 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
 TEST_P(CountersTestFixture, TestIPv6Pkts) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestIPv6Pkts "
                "----------\n\n\n\n\n";
+  // TODO: Remove after PINs release includes loopback-mode changes
+  GTEST_SKIP() << "loopback-mode tests temporarily skipped until "
+                  "next PINs release";
 
   // Pick a testbed with an Ixia Traffic Generator. A SUT is assumed.
   thinkit::TestRequirements requirements =
@@ -1035,7 +1033,7 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
   LOG(INFO) << "\n\n";
 
   // Set the egress port to loopback mode
-  EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
+  EXPECT_OK(SetLoopback("FACILITY", sut_out_interface, gnmi_stub.get()));
 
   // Restore loopback configuration after test.
   const auto kRestoreLoopbackConfig = absl::Cleanup([&] {
