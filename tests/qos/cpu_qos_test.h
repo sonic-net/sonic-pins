@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ struct ParamsForTestsWithoutIxia {
 // received packets.
 class CpuQosTestWithoutIxia
     : public testing::TestWithParam<ParamsForTestsWithoutIxia> {
-protected:
+ protected:
   void SetUp() override {
     GetParam().testbed_interface->SetUp();
 
@@ -86,19 +86,20 @@ protected:
     //     testbed_, GetParam().testbed_interface->GetMirrorTestbed());
   }
 
-  thinkit::MirrorTestbed &Testbed() {
+  thinkit::MirrorTestbed& Testbed() {
     return GetParam().testbed_interface->GetMirrorTestbed();
   }
+  thinkit::Switch& Sut() { return Testbed().Sut(); }
+  thinkit::Switch& ControlSwitch() { return Testbed().ControlSwitch(); }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
 };
 
 // Parameters used by the tests that require an Ixia.
 struct ParamsForTestsWithIxia {
-  thinkit::GenericTestbedInterface *testbed_interface;
-  std::string gnmi_config;
+  thinkit::GenericTestbedInterface* testbed_interface;
+
   p4::config::v1::P4Info p4info;
-  absl::optional<std::string> test_case_id;
   // This is be the minimum guaranteed bandwidth for control path to Tester in
   // the testbed. This is required to ensure the per queue rate limits to be
   // tested are within this guaranteed end to end bandwidth.
@@ -114,7 +115,7 @@ struct ParamsForTestsWithIxia {
 
 class CpuQosTestWithIxia
     : public testing::TestWithParam<ParamsForTestsWithIxia> {
-protected:
+ protected:
   void SetUp() override { GetParam().testbed_interface->SetUp(); }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
@@ -122,5 +123,5 @@ protected:
   ~CpuQosTestWithIxia() override { delete GetParam().testbed_interface; }
 };
 
-} // namespace pins_test
-#endif // PINS_TESTS_CPU_QOS_TEST_H_
+}  // namespace pins_test
+#endif  // PINS_TESTS_CPU_QOS_TEST_H_
