@@ -45,6 +45,8 @@ cc_library(
         "//tests:thinkit_sanity_tests",
         "//tests/forwarding:group_programming_util",
         "//tests/forwarding:util",
+        "//tests/integration/system/nsf:util",
+        "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/lib:p4rt_fixed_table_programming_helper",
         "//tests/lib:switch_test_setup_helpers",
         "//tests/qos:gnmi_parsers",
