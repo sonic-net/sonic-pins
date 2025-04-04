@@ -251,7 +251,7 @@ absl::StatusOr<absl::flat_hash_set<int>> GetPortSetWithOsfpOptics(
   ASSIGN_OR_RETURN(transceiver_to_form_factor_map,
                    pins_test::GetTransceiverToFormFactorMap(sut_gnmi_stub));
   for (const auto& [xcvr_name, form_factor] : transceiver_to_form_factor_map) {
-    if (form_factor != "OSFP") {
+    if (!absl::StrContains(form_factor, "OSFP")) {
       // Skip non-OSFP transceivers.
       continue;
     }
@@ -289,11 +289,11 @@ GetXcvrToInterfacesMapGivenPmdType(gnmi::gNMI::StubInterface& sut_gnmi_stub,
                    pins_test::GetTransceiverToEthernetPmdMap(sut_gnmi_stub));
   for (const auto& [interface, xcvr_name] : interface_to_transceiver_map) {
     if (!transceiver_to_ethernet_pmd_type_map.contains(xcvr_name)) {
-      return gutil::InternalErrorBuilder().LogError()
-             << "Transceiver not found for interface " << interface;
+      // Skip the interfaces that doesn't have PMD types.
+      continue;
     }
     std::string ethernet_pmd = transceiver_to_ethernet_pmd_type_map[xcvr_name];
-    if (ethernet_pmd == pmd_type) {
+    if (absl::StrContains(ethernet_pmd, pmd_type)) {
       int xcvr_num;
       if (!absl::SimpleAtoi(xcvr_name.substr(kEthernetLen), &xcvr_num)) {
         return gutil::InternalErrorBuilder().LogError()
