@@ -32,6 +32,14 @@
 
 namespace pins {
 
+// The constants structure for NOS
+struct NosParameters {
+  std::string kRedisExecPrefix;
+  std::string kSflowContainerExecPrefix;
+  std::string kSudoCmdPrefix;
+  bool kIsSwitchLinux;
+};
+
 struct SflowTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
   thinkit::SSHClient* ssh_client;
@@ -44,6 +52,9 @@ struct SflowTestParams {
   int sample_rate;
   // For NSF tests.
   bool nsf_enabled;
+  NosParameters nos_param;
+  bool nos_is_sonic;
+  bool run_all_tests;
 };
 
 // Structure represents a link between SUT and Ixia.
@@ -101,6 +112,10 @@ struct SflowMirrorTestParams {
 
   // If enabled, warm reboot would be used in tests instead of cold reboot.
   bool nsf_enabled;
+
+  NosParameters nos_param;
+  bool nos_is_sonic;
+  bool run_all_tests;
 };
 
 struct Port {
