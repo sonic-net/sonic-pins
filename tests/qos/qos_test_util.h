@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef PINS_TESTS_QOS_QOS_TEST_UTIL_H_
 #define PINS_TESTS_QOS_QOS_TEST_UTIL_H_
 
@@ -13,6 +27,7 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 
@@ -29,13 +44,13 @@ enum class SwitchRoleToDisablePuntFlowQoS {
   kSwitchUnderTest,
 };
 
-inline std::string
-SwtichRoleToDisableQoSToString(SwitchRoleToDisablePuntFlowQoS role) {
+inline std::string SwtichRoleToDisableQoSToString(
+    SwitchRoleToDisablePuntFlowQoS role) {
   switch (role) {
-  case SwitchRoleToDisablePuntFlowQoS::kControlSwitch:
-    return "control_switch";
-  case SwitchRoleToDisablePuntFlowQoS::kSwitchUnderTest:
-    return "switch_under_test";
+    case SwitchRoleToDisablePuntFlowQoS::kControlSwitch:
+      return "control_switch";
+    case SwitchRoleToDisablePuntFlowQoS::kSwitchUnderTest:
+      return "switch_under_test";
   }
 }
 
@@ -48,12 +63,12 @@ struct QueueCounters {
 // Operator to pretty print Queue Counters.
 inline std::ostream &operator<<(std::ostream &os,
                                 const QueueCounters &counters) {
-  return os << absl::StreamFormat("QueueCounters{"
-                                  ".num_packets_transmitted = %d, "
-                                  ".num_packets_dropped = %d"
-                                  "}",
-                                  counters.num_packets_transmitted,
-                                  counters.num_packets_dropped);
+  return os << absl::StreamFormat(
+             "QueueCounters{"
+             ".num_packets_transmitted = %d, "
+             ".num_packets_dropped = %d"
+             "}",
+             counters.num_packets_transmitted, counters.num_packets_dropped);
 }
 
 QueueCounters operator-(const QueueCounters &x, const QueueCounters &y);
@@ -82,21 +97,18 @@ absl::StatusOr<std::string> GetQueueNameByDscpAndPort(
 
 // Reads the name of the scheduler policy applied to the given egress port from
 // the appropriate gNMI state path.
-absl::StatusOr<std::string>
-GetSchedulerPolicyNameByEgressPort(absl::string_view egress_port,
-                                   gnmi::gNMI::StubInterface &gnmi);
+absl::StatusOr<std::string> GetSchedulerPolicyNameByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
 
 // Reads the config path of the scheduler policy of the given name.
 // The config is returned unparsed as a raw JSON string.
-absl::StatusOr<std::string>
-GetSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
-                         gnmi::gNMI::StubInterface &gnmi);
+absl::StatusOr<std::string> GetSchedulerPolicyConfig(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
 
 // Updates the config path of the scheduler policy of the given name.
-absl::Status
-UpdateSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
-                            absl::string_view config,
-                            gnmi::gNMI::StubInterface &gnmi);
+absl::Status UpdateSchedulerPolicyConfig(
+    absl::string_view scheduler_policy_name, absl::string_view config,
+    gnmi::gNMI::StubInterface &gnmi);
 
 // Two-rate-three-color scheduler parameters. Rates are in bytes/second, sizes
 // are in bytes. All parameter are optional, only non-nullopt parameters take
@@ -104,10 +116,10 @@ UpdateSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
 // - https://datatracker.ietf.org/doc/html/rfc2698
 // - http://ops.openconfig.net/branches/models/master/docs/openconfig-qos.html
 struct SchedulerParameters {
-  std::optional<int64_t> committed_information_rate; // 'cir' in OpenConfig
-  std::optional<int64_t> committed_burst_size;       // 'bc' in OpenConfig
-  std::optional<int64_t> peak_information_rate;      // 'pir' in OpenConfig
-  std::optional<int64_t> excess_burst_size;          // 'be' in OpenConfig
+  std::optional<int64_t> committed_information_rate;  // 'cir' in OpenConfig
+  std::optional<int64_t> committed_burst_size;        // 'bc' in OpenConfig
+  std::optional<int64_t> peak_information_rate;       // 'pir' in OpenConfig
+  std::optional<int64_t> excess_burst_size;           // 'be' in OpenConfig
 
   std::optional<int> weight;
 };
@@ -165,16 +177,11 @@ GetStrictlyPrioritizedQueuesMap(absl::string_view scheduler_policy_name,
 absl::StatusOr<std::vector<std::string>>
 GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
     absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
-// Get queues for an egress port.
-absl::StatusOr<std::vector<std::string>>
-GetQueuesByEgressPort(absl::string_view egress_port,
-                      gnmi::gNMI::StubInterface &gnmi);
 
 // Reads the name of the buffer allocation profile applied
 // to the given egress port from the appropriate gNMI state path.
-absl::StatusOr<std::string>
-GetBufferAllocationProfileByEgressPort(absl::string_view egress_port,
-                                       gnmi::gNMI::StubInterface &gnmi);
+absl::StatusOr<std::string> GetBufferAllocationProfileByEgressPort(
+    absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
 
 // Reads the config path of the buffer profile of the given name.
 // The config is returned unparsed as a raw JSON string.
@@ -197,6 +204,17 @@ struct BufferParameters {
   std::optional<int> shared_static_limit;
 };
 
+// queue info.
+struct QueueInfoByQueueName {
+  std::string gnmi_queue_name;        // Openconfig queue name.
+  std::string p4_queue_name;          // P4 queue name.
+  int rate_packets_per_second = 0;    // Rate of packets in packets per second.
+  double shared_buffer_static_limit;  // Statically configured shared buffer
+                                      // limit of queue.
+  int scheduler_be_pkts;              // Burst excess packets.
+};
+
+
 // Updates parameters of the buffer profile of the given name according to
 // `params_by_queue_name` and waits for the updated config to converge, or times
 // out with an Unavailable error if the state does not converge within the given
@@ -213,16 +231,14 @@ absl::Status DisablePuntRateLimits(gnmi::gNMI::StubInterface &gnmi_stub);
 
 // Updates buffer allocation profile for all CPU queues with `buffer_size` for
 // the switch `gnmi_stub` connects to.
-absl::Status
-UpdateBufferAllocationForAllCpuQueues(gnmi::gNMI::StubInterface &gnmi_stub,
-                                      int buffer_size);
+absl::Status UpdateBufferAllocationForAllCpuQueues(
+    gnmi::gNMI::StubInterface &gnmi_stub, int buffer_size);
 
 // Disables QoS limits for punting for switch with `role`.
 // Scheduler policies and buffer allocation will be set to very high value to
 // effectively remove limits for punting.
-absl::Status
-EffectivelyDisablePuntLimitsForSwitch(SwitchRoleToDisablePuntFlowQoS role,
-                                      thinkit::MirrorTestbed &testbed);
+absl::Status EffectivelyDisablePuntLimitsForSwitch(
+    SwitchRoleToDisablePuntFlowQoS role, thinkit::MirrorTestbed &testbed);
 
 // Get ECN port counters.
 absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
@@ -235,6 +251,11 @@ absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
 // Get queues for an egress port.
 absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
     absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
+
+// Extract CPU queues and their bursty traffic info from the gNMI config.
+absl::StatusOr<absl::flat_hash_map<std::string, QueueInfoByQueueName>>
+ExtractQueueInfoViaGnmiConfig(absl::string_view port,
+                              absl::string_view gnmi_config);
 
 absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
     absl::string_view gnmi_config);

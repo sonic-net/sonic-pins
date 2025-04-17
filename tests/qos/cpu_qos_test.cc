@@ -105,6 +105,11 @@ using ::testing::Ge;
 using ::testing::Le;
 using ::testing::Not;
 
+const sai::NexthopRewriteOptions kNextHopRewriteOptions = {
+    .src_mac_rewrite = netaddr::MacAddress(0x66, 0x55, 0x44, 0x33, 0x22, 0x11),
+    .dst_mac_rewrite = netaddr::MacAddress(2, 2, 2, 2, 2, 2),
+};
+
 // Size of the "frame check sequence" (FCS) that is part of Layer 2 Ethernet
 // frames.
 constexpr int kFrameCheckSequenceSize = 4;
@@ -1940,7 +1945,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
                        sai::EntryBuilder()
                            .AddEntriesForwardingIpPacketsToGivenPort(
-                               /*egress_port=*/kSutEgressPortP4rtId)
+                               /*egress_port=*/kSutEgressPortP4rtId,
+                               /*ip_version=*/sai::IpVersion::kIpv4And6,
+                               /*rewrite_options*/ kNextHopRewriteOptions)
                            .LogPdEntries()
                            .GetDedupedPiEntities(ir_p4info));
 
@@ -1965,6 +1972,12 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
     for (auto acl_table_punt_action :
          GetParam().acl_ingress_table_punt_flow_rate_limit_actions) {
+      if (acl_table_punt_action.rate_limit_action == kAclTrap ||
+          acl_table_punt_action.rate_limit_action == kAclCopy) {
+      } else if (acl_table_punt_action.rate_limit_action ==
+                 kAclSetCpuQueueAndDenyAboveRateLimit) {
+      }
+
       // Skip ACL "Ingress table" rate limit actions if switch supports
       // ACL "Ingress QoS table".
       if (has_acl_qos_table == true &&
@@ -2008,7 +2021,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
                 << ", acl_qos_table_action: "
                 << acl_table_punt_action.rate_limit_action
                 << "\n===================\n\n\n";
-      
+
       ASSERT_OK_AND_ASSIGN(
           p4::v1::TableEntry pi_acl_entry,
           SetUpPuntToCPUWithRateLimit(
