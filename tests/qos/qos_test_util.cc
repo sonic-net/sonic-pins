@@ -537,15 +537,6 @@ absl::Status SetBufferConfigParameters(
   }
 
   proto_config.clear_scheduler_policies();
-
-  // Clear PortChannel interfaces from retreived config.
-  for (openconfig::Qos::Interface &interface :
-       *proto_config.mutable_interfaces()->mutable_interface()) {
-    if (absl::StrContains(interface.interface_id(), "PortChannel")) {
-      proto_config.mutable_interfaces()->clear_interface();
-    }
-  }
-
   // Convert proto back to JSON string.
   ASSIGN_OR_RETURN(std::string qos_json,
                    gutil::SerializeProtoAsJson(proto_config));

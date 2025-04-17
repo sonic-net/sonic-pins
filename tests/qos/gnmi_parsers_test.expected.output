@@ -1207,7 +1207,7 @@ qos {
       {
         "interface-id": "Ethernet1/1/1",
         "config": {
-          "interface-id": "Ethernet1/1/1"
+          "interface-id": "Ethernet1/1/1"  
         },
         "output": {
           "config": {
