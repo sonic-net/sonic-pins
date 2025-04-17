@@ -118,12 +118,12 @@ constexpr absl::string_view kSflowToolName = "sflowtool";
 constexpr int kSflowCollectorPort = 6343;
 
 constexpr absl::string_view kSflowtoolLineFormatTemplate =
-    "/etc/init.d/sflow-container exec '$0 -l -p 6343 &"
-    " pid=$$!; sleep $1; kill -9 $$pid;'";
+    "docker exec sflow bash -c \"/usr/bin/sflowtool -l -p 6343 & sleep 1;kill "
+    "-9 \\$!\"";
 
 constexpr absl::string_view kSflowtoolFullFormatTemplate =
-    "/etc/init.d/sflow-container exec '$0 -p 6343 &"
-    " pid=$$!; sleep $1; kill -9 $$pid;'";
+    "docker exec sflow bash -c \"/usr/bin/sflowtool -p 6343 & sleep 1;kill -9 "
+    "\\$!\"";
 
 constexpr absl::string_view kTcpdumpForTos =
     "tcpdump -c $0 -i lo -vv -eX udp and port 6343";
@@ -952,16 +952,15 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
   auto result_or = ssh_client->RunCommand(
       device_name,
       /*command=*/
-      "/etc/init.d/sflow-container exec 'cat /etc/hsflowd.auto'",
-      absl::Seconds(20));
+      "docker exec sflow bash -c \"cat /etc/hsflowd.auto\"", absl::Seconds(20));
   if (result_or.ok()) {
     EXPECT_OK(environment.StoreTestArtifact(
         absl::StrCat(prefix, "sflow_container_hsflowd_auto.txt"), *result_or));
   }
-  result_or = ssh_client->RunCommand(
-      device_name,
-      /*command=*/
-      "/etc/init.d/sflow-container exec 'ps -ef'", absl::Seconds(20));
+  result_or = ssh_client->RunCommand(device_name,
+                                     /*command=*/
+                                     "docker exec sflow bash -c \"ps -ef\"",
+                                     absl::Seconds(20));
   if (result_or.ok()) {
     EXPECT_OK(environment.StoreTestArtifact(
         absl::StrCat(prefix, "sflow_container_ps_ef.txt"), *result_or));
