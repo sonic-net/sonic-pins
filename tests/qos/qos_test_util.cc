@@ -705,6 +705,93 @@ absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
   return ingress_counter;
 }
 
+// Extract the queue configurations from the gNMI configuration.
+// The function returns a map keyed on queue name and value
+// holds queue configuration information.
+// TODO: Need to handle exceptions cleanly for failures
+// during json parsing which can crash the test run.
+// Currently we are assuming validity of config json parameter passed into
+// the test.
+absl::StatusOr<absl::flat_hash_map<std::string, QueueInfoByQueueName>>
+ExtractQueueInfoViaGnmiConfig(absl::string_view port,
+                              absl::string_view gnmi_config) {
+  nlohmann::json config = nlohmann::json::parse(gnmi_config);
+  if (!config.is_object()) {
+    return absl::InvalidArgumentError("Could not parse gnmi configuration.");
+  }
+
+  absl::flat_hash_map<std::string, QueueInfoByQueueName> queue_info;
+  auto &qos_interfaces =
+      config["openconfig-qos:qos"]["interfaces"]["interface"];
+
+  std::string scheduler_policy;
+  for (auto &interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == port) {
+      scheduler_policy =
+          interface["output"]["scheduler-policy"]["config"]["name"]
+              .get<std::string>();
+      break;
+    }
+  }
+
+  auto &scheduler_policies =
+      config["openconfig-qos:qos"]["scheduler-policies"]["scheduler-policy"];
+  for (auto &policy : scheduler_policies) {
+    if (policy["name"].get<std::string>() == scheduler_policy) {
+      for (auto &scheduler : policy["schedulers"]["scheduler"]) {
+        std::string queue_name =
+            scheduler["inputs"]["input"][0]["config"]["queue"]
+                .get<std::string>();
+        queue_info[queue_name].gnmi_queue_name = queue_name;
+        queue_info[queue_name].p4_queue_name = queue_name;
+        std::string peak_rate = scheduler["two-rate-three-color"]["config"]
+                                         ["google-pins-qos:pir-pkts"]
+                                             .get<std::string>();
+        if (!absl::SimpleAtoi(
+                peak_rate, &queue_info[queue_name].rate_packets_per_second)) {
+          return absl::InternalError(
+              absl::StrCat("Unable to parse rate as int ", peak_rate,
+                           " for queue ", queue_name));
+        }
+        LOG(INFO) << "Queue: " << queue_name
+                  << ", configured rate:" << peak_rate;
+        int be_pkts = scheduler["two-rate-three-color"]["config"]
+                               ["google-pins-qos:be-pkts"]
+                                   .get<int>();
+        queue_info[queue_name].scheduler_be_pkts = be_pkts;
+      }
+      break;
+    }
+  }
+
+  std::string buffer_allocation_profile;
+  for (auto &interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == "CPU") {
+      buffer_allocation_profile =
+          interface["output"]["config"]["buffer-allocation-profile"]
+              .get<std::string>();
+      break;
+    }
+  }
+
+  auto &buffer_allocation_profiles =
+      config["openconfig-qos:qos"]["buffer-allocation-profiles"]
+            ["buffer-allocation-profile"];
+  for (auto &profile : buffer_allocation_profiles) {
+    if (profile["name"].get<std::string>() == buffer_allocation_profile) {
+      for (auto &queue : profile["queues"]["queue"]) {
+        std::string queue_name = queue["name"].get<std::string>();
+        double buffer_limit =
+            queue["config"]["static-shared-buffer-limit"].get<double>();
+        queue_info[queue_name].shared_buffer_static_limit = buffer_limit;
+      }
+      break;
+    }
+  }
+
+  return queue_info;
+}
+
 absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
     absl::string_view gnmi_config) {
   nlohmann::json config = nlohmann::json::parse(gnmi_config);
