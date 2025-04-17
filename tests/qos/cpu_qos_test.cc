@@ -2008,7 +2008,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
                 << ", acl_qos_table_action: "
                 << acl_table_punt_action.rate_limit_action
                 << "\n===================\n\n\n";
-
+      
       ASSERT_OK_AND_ASSIGN(
           p4::v1::TableEntry pi_acl_entry,
           SetUpPuntToCPUWithRateLimit(
