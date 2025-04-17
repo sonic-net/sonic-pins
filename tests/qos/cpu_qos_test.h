@@ -95,6 +95,33 @@ class CpuQosTestWithoutIxia
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
 };
 
+// Reference for the ACL QoS table actions and attributes can be found in:
+
+// ACL Ingress tables
+constexpr absl::string_view kAclIngressTable = "acl_ingress_table";
+constexpr absl::string_view kAclIngressQosTable = "acl_ingress_qos_table";
+
+// ACL Ingress table actions.
+constexpr absl::string_view kAclTrap = "acl_trap";
+constexpr absl::string_view kAclCopy = "acl_copy";
+
+// ACL Ingress QoS table actions.
+constexpr absl::string_view kAclSetCpuQueueAndCancelCopyAboveRateLimit =
+    "set_qos_queue_and_cancel_copy_above_rate_limit";
+constexpr absl::string_view kAclSetCpuQueueAndDenyAboveRateLimit =
+    "set_cpu_queue_and_deny_above_rate_limit";
+constexpr absl::string_view kAclSetCpuQueueMulticastQueueAndDenyAboveRateLimit =
+    "set_cpu_queue_multicast_queue_and_deny_above_rate_limit";
+
+// ACL punt queue attribute name.
+constexpr absl::string_view kCpuQosQueueAttributeName = "qos_queue";
+constexpr absl::string_view kCpuQueueAttributeName = "cpu_queue";
+
+struct AclIngressTablePuntFlowRateLimitAction {
+  absl::string_view rate_limit_action;
+  absl::string_view cpu_queue_attribute_name;
+};
+
 // Parameters used by the tests that require an Ixia.
 struct ParamsForTestsWithIxia {
   thinkit::GenericTestbedInterface* testbed_interface;
@@ -111,6 +138,10 @@ struct ParamsForTestsWithIxia {
   // When this parameter is passed in, the test will verify configuration on
   // switch matches expected config.
   absl::flat_hash_map<std::string, int> expected_queue_limit_config_pps;
+
+  // Vector of actions to verify for Punt flow rate limit test.
+  const std::vector<AclIngressTablePuntFlowRateLimitAction>
+      acl_ingress_table_punt_flow_rate_limit_actions;
 };
 
 class CpuQosTestWithIxia
