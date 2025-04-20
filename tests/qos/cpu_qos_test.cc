@@ -120,79 +120,6 @@ constexpr int kFrameCheckSequenceSize = 4;
 // poll the state of the switch to ensure config has been applied.
 constexpr absl::Duration kTimeToWaitForGnmiConfigToApply = absl::Seconds(30);
 
-struct QueueInfo {
-  std::string gnmi_queue_name;      // Openconfig queue name.
-  std::string p4_queue_name;        // P4 queue name.
-  int rate_packets_per_second = 0;  // Rate of packets in packets per second.
-};
-
-// Extract the queue configurations from the gNMI configuration.
-// The function returns a map keyed on queue name and value
-// holds queue configuration information.
-// TODO: Need to handle exceptions cleanly for failures
-// during json parsing which can crash the test run.
-// Currently we are assuming validity of config json parameter passed into
-// the test.
-absl::StatusOr<absl::flat_hash_map<std::string, QueueInfo>>
-ExtractQueueInfoViaGnmiConfig(absl::string_view gnmi_config) {
-  nlohmann::json config = nlohmann::json::parse(gnmi_config);
-  if (!config.is_object()) {
-    return absl::InvalidArgumentError("Could not parse gnmi configuration.");
-  }
-
-  absl::flat_hash_map<std::string, QueueInfo> queue_info_by_queue_name;
-  auto &qos_interfaces =
-      config["openconfig-qos:qos"]["interfaces"]["interface"];
-
-  std::string cpu_scheduler_policy;
-  for (auto &interface : qos_interfaces) {
-    if (interface["interface-id"].get<std::string>() == "CPU") {
-      cpu_scheduler_policy =
-          interface["output"]["scheduler-policy"]["config"]["name"]
-              .get<std::string>();
-      break;
-    }
-  }
-
-  auto &scheduler_policies =
-      config["openconfig-qos:qos"]["scheduler-policies"]["scheduler-policy"];
-  for (auto &policy : scheduler_policies) {
-    if (policy["name"].get<std::string>() == cpu_scheduler_policy) {
-      for (auto &scheduler : policy["schedulers"]["scheduler"]) {
-        std::string queue_name =
-            scheduler["inputs"]["input"][0]["config"]["queue"]
-                .get<std::string>();
-        queue_info_by_queue_name[queue_name].gnmi_queue_name = queue_name;
-        queue_info_by_queue_name[queue_name].p4_queue_name = queue_name;
-        std::string peak_rate = scheduler["two-rate-three-color"]["config"]
-                                         ["google-pins-qos:pir-pkts"]
-                                             .get<std::string>();
-        if (!absl::SimpleAtoi(peak_rate, &queue_info_by_queue_name[queue_name]
-                                              .rate_packets_per_second)) {
-          return absl::InternalError(
-              absl::StrCat("Unable to parse rate as int ", peak_rate,
-                           " for queue ", queue_name));
-        }
-        LOG(INFO) << "Queue: " << queue_name
-                  << ", configured rate:" << peak_rate;
-      }
-      break;
-    }
-  }
-
-  // TODO: Remove these once P4 uses gnmi queue names
-  queue_info_by_queue_name["BE1"].p4_queue_name = "0x2";
-  queue_info_by_queue_name["AF1"].p4_queue_name = "0x3";
-  queue_info_by_queue_name["AF2"].p4_queue_name = "0x4";
-  queue_info_by_queue_name["AF3"].p4_queue_name = "0x5";
-  queue_info_by_queue_name["AF4"].p4_queue_name = "0x6";
-  queue_info_by_queue_name["LLQ1"].p4_queue_name = "0x0";
-  queue_info_by_queue_name["LLQ2"].p4_queue_name = "0x1";
-  queue_info_by_queue_name["NC1"].p4_queue_name = "0x7";
-
-  return queue_info_by_queue_name;
-}
-
 // Set up the switch to punt packets to CPU.
 absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
                             const netaddr::Ipv4Address &dst_ip,
@@ -1638,8 +1565,8 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   });
 
   // Get Queues.
-  ASSERT_OK_AND_ASSIGN(auto queues,
-                       ExtractQueueInfoViaGnmiConfig(sut_gnmi_config));
+  ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
+                                        /*port=*/"CPU", sut_gnmi_config));
 
   constexpr absl::string_view kPuntOnlyTest = "punt_only_test";
   constexpr absl::string_view kLoopbackPuntTest = "to_loopback_punt_test";
@@ -1938,8 +1865,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   });
 
   // Get Queues.
-  ASSERT_OK_AND_ASSIGN(auto queues,
-                       ExtractQueueInfoViaGnmiConfig(sut_gnmi_config));
+  ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
+                                        /*port=*/"CPU", sut_gnmi_config));
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
@@ -2235,6 +2162,227 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
     }
   }  // for each queue.
 
+  // Stop receiving at tester.
+  receiver.Destroy();
+}
+
+// Purpose: Verify that burst of packets sent within the queue buffer limit
+// are transmitted by the queue, and excess packets get dropped.
+TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
+  LOG(INFO) << "-- START OF TEST ---------------------------------------------";
+
+  // Pick a testbed with an Ixia Traffic Generator.
+  auto requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 1
+                 interface_mode: TRAFFIC_GENERATOR
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+
+
+  ASSERT_GT(GetParam().control_plane_bandwidth_bytes_per_second, 0);
+
+  thinkit::Switch &sut = generic_testbed->Sut();
+
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*gnmi_stub));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact("gnmi_config.json",
+                                                             sut_gnmi_config));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "p4info.txtpb", GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4info));
+  // Configure SUT.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, std::nullopt, GetParam().p4info));
+
+  // Disable sFlow since it would interfere with the test results.
+  ASSERT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), /*enabled=*/false));
+
+  absl::Cleanup cleanup([&] {
+    // Restore sflow enable config.
+    ASSERT_OK_AND_ASSIGN(bool sflow_enabled,
+                         pins::IsSflowConfigEnabled(sut_gnmi_config));
+    EXPECT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), sflow_enabled))
+        << "failed to restore sflow configuration -- switch config may be "
+           "corrupted, causing subsequent test to fail";
+  });
+
+  // Flow details.
+  constexpr auto dest_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
+  constexpr auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 06);
+  constexpr auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
+
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
+
+  ASSERT_FALSE(ready_links.empty());
+
+  std::string ixia_interface = ready_links[0].ixia_interface;
+
+  // We will perform the following steps with Ixia:
+  // Set up Ixia traffic.
+  // Send Ixia traffic.
+  // Stop Ixia traffic.
+
+  constexpr int kFrameSize =
+      kMaxFrameSize - kVlanTagSize - kFrameCheckSequenceSize;
+
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_port,
+                       ixia::ExtractPortInfo(ixia_interface));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string topology_ref,
+      pins_test::ixia::IxiaConnect(ixia_port.hostname, *generic_testbed));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string vport_ref,
+      pins_test::ixia::IxiaVport(topology_ref, ixia_port.card, ixia_port.port,
+                                 *generic_testbed));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string traffic_ref,
+      pins_test::ixia::IxiaSession(vport_ref, *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameRate(traffic_ref, kFramesPerSecond,
+                                          *generic_testbed));
+
+  ASSERT_OK(
+      pins_test::ixia::SetFrameSize(traffic_ref, kFrameSize, *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetSrcMac(traffic_ref, source_mac.ToString(),
+                                       *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetDestMac(traffic_ref, dest_mac.ToString(),
+                                        *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::AppendIPv4(traffic_ref, *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetSrcIPv4(traffic_ref, source_ip.ToString(),
+                                        *generic_testbed));
+
+  // Listen for punted packets from the SUT.
+  PacketReceiveInfo packet_receive_info;
+  {
+    absl::MutexLock lock(&packet_receive_info.mutex);
+    packet_receive_info.num_packets_punted = 0;
+  }
+
+  PacketInReceiver receiver(*sut_p4_session, [&packet_receive_info](auto) {
+    absl::MutexLock lock(&packet_receive_info.mutex);
+    if (packet_receive_info.num_packets_punted == 0) {
+      packet_receive_info.time_first_packet_punted = absl::Now();
+    }
+    packet_receive_info.time_last_packet_punted = absl::Now();
+    packet_receive_info.num_packets_punted++;
+    return;
+  });
+
+  // Get Queues.
+  ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
+                                        /*port=*/"CPU", sut_gnmi_config));
+  int queue_index = 0;
+  for (auto &[queue_name, queue_info] : queues) {
+    if (!IsValidCpuQueue(queue_info.p4_queue_name)) continue;
+    if (absl::StartsWith(queue_info.p4_queue_name, "INBAND_")) continue;
+    // Skip unconfigured queues.
+    if (queue_info.rate_packets_per_second == 0) {
+      continue;
+    }
+
+    LOG(INFO) << "\n\n\nTesting Queue : " << queue_name
+              << "\n===================\n\n\n";
+
+    constexpr uint32_t kBaseIp = 0xac000001;
+    auto kDestIp = netaddr::Ipv4Address(std::bitset<32>(kBaseIp + queue_index));
+    // Install punt entries on control switch
+    ASSERT_OK(SetUpPuntToCPU(dest_mac, kDestIp, queue_info.p4_queue_name,
+                             ir_p4info, *sut_p4_session));
+
+    ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref, kDestIp.ToString(),
+                                           *generic_testbed));
+
+    ASSERT_OK_AND_ASSIGN(QueueCounters initial_counters,
+                         GetGnmiQueueCounters("CPU", queue_name, *gnmi_stub));
+
+    // Reset received packet count at tester for each iteration.
+    {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      packet_receive_info.num_packets_punted = 0;
+    }
+
+    int num_pipes = GetParam().num_pipes;
+    int kBurstyTotalFrames =
+        queue_info.shared_buffer_static_limit / (num_pipes * kFrameSize) +
+        queue_info.scheduler_be_pkts;
+    ASSERT_OK(pins_test::ixia::SetFrameCount(traffic_ref, kBurstyTotalFrames,
+                                             *generic_testbed));
+
+    ASSERT_OK(pins_test::ixia::StartTraffic(traffic_ref, topology_ref,
+                                            *generic_testbed));
+
+    // Wait for Traffic to be sent.
+    absl::SleepFor(kTrafficDuration);
+
+    static constexpr absl::Duration kPollInterval = absl::Seconds(5);
+    static constexpr absl::Duration kTotalTime = absl::Seconds(15);
+    static const int kIterations = kTotalTime / kPollInterval;
+
+    QueueCounters final_counters;
+    QueueCounters delta_counters;
+    // Check for counters every 5 seconds up to 15 seconds till they match.
+    for (int gnmi_counters_check = 0; gnmi_counters_check < kIterations;
+         gnmi_counters_check++) {
+      absl::SleepFor(kPollInterval);
+      ASSERT_OK_AND_ASSIGN(final_counters,
+                           GetGnmiQueueCounters("CPU", queue_name, *gnmi_stub));
+      delta_counters = {
+          .num_packets_transmitted = final_counters.num_packets_transmitted -
+                                     initial_counters.num_packets_transmitted,
+          .num_packets_dropped = final_counters.num_packets_dropped -
+                                 initial_counters.num_packets_dropped,
+      };
+      LOG(INFO) << "Tx = " << delta_counters.num_packets_transmitted
+                << " Drop = " << delta_counters.num_packets_dropped;
+      if (delta_counters.num_packets_transmitted +
+              delta_counters.num_packets_dropped ==
+          kBurstyTotalFrames) {
+        break;
+      }
+    }
+
+    // The shared buffer is split between the number of pipes.
+    ASSERT_GE(delta_counters.num_packets_transmitted,
+              queue_info.shared_buffer_static_limit / (num_pipes * kFrameSize));
+    ASSERT_LE(delta_counters.num_packets_transmitted, kBurstyTotalFrames);
+    {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      // Verify the received packets matches gNMI queue stats.
+      ASSERT_LE(packet_receive_info.num_packets_punted,
+                delta_counters.num_packets_transmitted);
+      ASSERT_GE(packet_receive_info.num_packets_punted,
+                delta_counters.num_packets_transmitted *
+                    (1 - kTolerancePercent / 100));
+      absl::Duration duration = packet_receive_info.time_last_packet_punted -
+                                packet_receive_info.time_first_packet_punted;
+
+      LOG(INFO) << "Packets received at Controller: "
+                << packet_receive_info.num_packets_punted;
+      LOG(INFO) << "Packet size: " << kFrameSize;
+      LOG(INFO) << "Timestamp of first received packet: "
+                << packet_receive_info.time_first_packet_punted;
+      LOG(INFO) << "Timestamp of last received packet: "
+                << packet_receive_info.time_last_packet_punted;
+      LOG(INFO) << "Duration of packets received: " << duration;
+    }
+    ++queue_index;
+  }  // for each queue.
   // Stop receiving at tester.
   receiver.Destroy();
 }
