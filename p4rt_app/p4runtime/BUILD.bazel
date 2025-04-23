@@ -401,3 +401,17 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "p4info_reconcile",
+    srcs = ["p4info_reconcile.cc"],
+    hdrs = ["p4info_reconcile.h"],
+    deps = [
+        "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic:hashing",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)

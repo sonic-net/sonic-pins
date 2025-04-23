@@ -24,6 +24,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/rediscommand.h"
@@ -51,10 +52,26 @@ struct HashPacketFieldConfig {
   }
 };
 
-bool operator==(const HashPacketFieldConfig &lhs,
-                const HashPacketFieldConfig &rhs);
-bool operator!=(const HashPacketFieldConfig &lhs,
-                const HashPacketFieldConfig &rhs);
+inline bool operator==(const HashPacketFieldConfig& lhs,
+                        const HashPacketFieldConfig& rhs) {
+   return lhs.key == rhs.key && lhs.switch_table_key == rhs.switch_table_key &&
+          lhs.fields == rhs.fields;
+}
+
+inline bool operator!=(const HashPacketFieldConfig& lhs,
+                        const HashPacketFieldConfig& rhs) {
+   return !(lhs == rhs);
+}
+
+inline bool operator<(const HashPacketFieldConfig& lhs,
+                       const HashPacketFieldConfig& rhs) {
+   return lhs.key < rhs.key;
+}
+
+inline bool operator>(const HashPacketFieldConfig& lhs,
+                       const HashPacketFieldConfig& rhs) {
+   return lhs.key > rhs.key;
+}
 
 // Returns true for Ipv4 hash key.
 bool IsIpv4HashKey(absl::string_view key);
@@ -90,7 +107,7 @@ GenerateAppDbHashValueEntries(const pdpi::IrP4Info &ir_p4info);
 //    .fields: {"src_ip", "dst_ip", "l4_src_prt", "l4_dst_port"},
 //    .switch_table_key: "ecmp_hash_ipv4"
 //  }
-absl::StatusOr<std::vector<HashPacketFieldConfig>>
+absl::StatusOr<absl::btree_set<HashPacketFieldConfig>>
 ExtractHashPacketFieldConfigs(const pdpi::IrP4Info &ir_p4info);
 
 // Generates a list of hash value configs from the IrP4Info. These configs can
@@ -124,15 +141,22 @@ ExtractHashParamConfigs(const pdpi::IrP4Info &ir_p4info);
 //   “hash_ipv4_config” = {
 //      “hash_field_list”: [“src_ip”, “dst_ip”, “l4_src_port”, “l4_dst_port”,
 //                          “ip_protocol”],
-absl::Status ProgramHashFieldTable(HashTable &hash_table,
-                                   std::vector<HashPacketFieldConfig> configs);
+absl::Status ProgramHashFieldTable(
+     HashTable& hash_table,
+     const absl::btree_set<HashPacketFieldConfig>& configs);
+
+// Removes APP_DB HASH_TABLE entries previously added by
+// ProgramHashFieldTable(). Any call to RemoveFromHashFieldTable() should be
+// followed by a call to ProgramSwitchTable with the newly reduced config set.
+absl::Status RemoveFromHashFieldTable(
+    HashTable& hash_table, absl::Span<const std::string> config_keys);
 
 // Programs the APP_DB enries (SWITCH_TABLE) with all ecmp hashing related
 // fields in the switch table, like algorithm, seed, offset and the hash field
 // object.
 absl::Status ProgramSwitchTable(
     SwitchTable &switch_table, const HashParamConfigs &hash_params,
-    const std::vector<HashPacketFieldConfig> &hash_packet_fields);
+    const absl::btree_set<HashPacketFieldConfig> &hash_packet_fields);
 
 } // namespace sonic
 } // namespace p4rt_app

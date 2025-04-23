@@ -27,6 +27,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/status.h"
@@ -207,25 +208,6 @@ bool IsIpv6HashKey(absl::string_view key) {
   return absl::StrContains(key, "ipv6");
 }
 
-bool operator==(const HashPacketFieldConfig& lhs,
-                const HashPacketFieldConfig& rhs) {
-  if (lhs.key != rhs.key) return false;
-  if (lhs.switch_table_key != rhs.switch_table_key) return false;
-  if (lhs.fields.size() != rhs.fields.size()) return false;
-  absl::btree_set<std::string>::const_iterator lhs_iter, rhs_iter;
-  for (lhs_iter = lhs.fields.begin(), rhs_iter = rhs.fields.begin();
-       lhs_iter != lhs.fields.end() && rhs_iter != rhs.fields.end();
-       ++lhs_iter, ++rhs_iter) {
-    if (*lhs_iter != *rhs_iter) return false;
-  }
-  return true;
-}
-
-bool operator!=(const HashPacketFieldConfig& lhs,
-                const HashPacketFieldConfig& rhs) {
-  return !(lhs == rhs);
-}
-
 std::vector<swss::FieldValueTuple> HashPacketFieldConfig::AppDbContents()
     const {
   nlohmann::json field_json;
@@ -233,16 +215,16 @@ std::vector<swss::FieldValueTuple> HashPacketFieldConfig::AppDbContents()
   return {{"hash_field_list", field_json.dump()}};
 }
 
-absl::StatusOr<std::vector<HashPacketFieldConfig>>
+absl::StatusOr<absl::btree_set<HashPacketFieldConfig>>
 ExtractHashPacketFieldConfigs(const pdpi::IrP4Info& ir_p4info) {
-  std::vector<HashPacketFieldConfig> hash_field_configs;
+  absl::btree_set<HashPacketFieldConfig> hash_field_configs;
   for (const auto& [action_name, action_def] : ir_p4info.actions_by_name()) {
     auto arg_lists = pdpi::GetAllAnnotationsAsArgList(
         kHashFieldLabel, action_def.preamble().annotations());
     if (!arg_lists.ok() || arg_lists->empty()) continue;
     ASSIGN_OR_RETURN(auto config,
                      HashPacketFieldConfigFromAction(action_name, *arg_lists));
-    hash_field_configs.push_back(std::move(config));
+    hash_field_configs.insert(std::move(config));
   }
   return hash_field_configs;
 }
@@ -257,8 +239,9 @@ absl::StatusOr<HashParamConfigs> ExtractHashParamConfigs(
   return configs;
 }
 
-absl::Status ProgramHashFieldTable(HashTable& hash_table,
-                                   std::vector<HashPacketFieldConfig> configs) {
+absl::Status ProgramHashFieldTable(
+     HashTable& hash_table,
+     const absl::btree_set<HashPacketFieldConfig>& configs) {
   if (configs.empty()) return absl::OkStatus();
   LOG(INFO) << "Apply hash fields: \n "
             << absl::StrJoin(configs, "\n  ",
@@ -273,7 +256,6 @@ absl::Status ProgramHashFieldTable(HashTable& hash_table,
   }
 
   // Wait for the OrchAgent's response.
-  pdpi::IrWriteResponse ir_write_response;
   RETURN_IF_ERROR(GetAndProcessResponseNotification(
       *hash_table.notification_consumer, *hash_table.app_db,
       *hash_table.app_state_db, status_by_key));
@@ -290,9 +272,35 @@ absl::Status ProgramHashFieldTable(HashTable& hash_table,
   return absl::OkStatus();
 }
 
+absl::Status RemoveFromHashFieldTable(
+     HashTable& hash_table, absl::Span<const std::string> config_keys) {
+   if (config_keys.empty()) return absl::OkStatus();
+   LOG(INFO) << "Removing hash fields: {" << absl::StrJoin(config_keys, ", ")
+             << "}";
+   pdpi::IrWriteResponse update_status;
+   absl::btree_map<std::string, pdpi::IrUpdateStatus*> status_by_key;
+   for (const auto& key : config_keys) {
+     hash_table.producer_state->del(key);
+     status_by_key[key] = update_status.add_statuses();
+   }
+
+   // Wait for the OrchAgent's response.
+   RETURN_IF_ERROR(GetAndProcessResponseNotification(
+       *hash_table.notification_consumer, *hash_table.app_db,
+       *hash_table.app_state_db, status_by_key));
+
+   for (const auto& [key, status] : status_by_key) {
+     if (status->code() != google::rpc::Code::OK) {
+       return gutil::InternalErrorBuilder()
+              << "Could not delete key '" << key
+              << "' from AppDb HASH_TABLE: " << status->message();
+     }
+   }
+   return absl::OkStatus();
+ }
 absl::Status ProgramSwitchTable(
     SwitchTable& switch_table, const HashParamConfigs& hash_params,
-    const std::vector<HashPacketFieldConfig>& hash_packet_fields) {
+    const absl::btree_set<HashPacketFieldConfig>& hash_packet_fields) {
   const std::string kSwitchTableEntryKey = "switch";
 
   std::vector<swss::FieldValueTuple> hash_tuples;
