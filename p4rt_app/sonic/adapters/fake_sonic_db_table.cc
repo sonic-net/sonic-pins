@@ -37,6 +37,7 @@ void FakeSonicDbTable::InsertTableEntry(const std::string &key,
                                 debug_table_name_, key);
   absl::WriterMutexLock lock(&entries_mutex_);
   auto &entry = entries_[key];
+  entry = {};
   for (const auto &[field, data] : values) {
     entry.insert_or_assign(field, data);
   }
