@@ -29,6 +29,8 @@ public:
   virtual swss::WarmStart::WarmStartState GetWarmBootState();
   virtual void SetWarmBootState(swss::WarmStart::WarmStartState state);
   virtual bool IsWarmStart(void);
+  // Get OrchAgent WarmBoot state.
+  virtual swss::WarmStart::WarmStartState GetOrchAgentWarmBootState(void);
 };
 
 } // namespace sonic

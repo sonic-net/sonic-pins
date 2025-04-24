@@ -15,6 +15,7 @@
 #include "p4rt_app/p4runtime/p4info_reconcile.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
@@ -29,12 +30,15 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/utils/ir_builder.h"
+#include "p4rt_app/utils/table_utility.h"
 
 namespace p4rt_app {
 namespace {
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::ExplainMatchResult;
+using ::testing::IsEmpty;
+using ::testing::Not;
 using ::testing::UnorderedElementsAreArray;
 
 std::string ToString(const P4InfoReconcileTransition& transition) {
@@ -379,6 +383,112 @@ bool EraseTable(pdpi::IrP4Info& ir_p4info, absl::string_view table_name) {
           }).empty();
 }
 
+bool IsAclTable(const pdpi::IrTableDefinition& table) {
+  return *GetTableType(table) == table::Type::kAcl;
+}
+
+TEST(CalculateTransition, CalculatesFullAclTableDeletion) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  auto without_acl_tables = original;
+  std::vector<std::string> acl_tables =
+      EraseTables(without_acl_tables, IsAclTable);
+
+  EXPECT_THAT(CalculateTransition(original, without_acl_tables),
+              IsOkAndHolds(TransitionIs(
+                  {.acl_tables_to_delete = std::move(acl_tables)})));
+}
+
+TEST(CalculateTransition, CalculatesFullAclTableAddition) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  auto without_acl_tables = original;
+  std::vector<std::string> acl_tables =
+      EraseTables(without_acl_tables, IsAclTable);
+
+  EXPECT_THAT(
+      CalculateTransition(without_acl_tables, original),
+      IsOkAndHolds(TransitionIs({.acl_tables_to_add = std::move(acl_tables)})));
+}
+
+TEST(CalculateTransition, CalculatesFullAclTableModification) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  auto modified_acl_tables = original;
+  std::vector<std::string> acl_tables;
+  for (auto& [name, table] : *modified_acl_tables.mutable_tables_by_name()) {
+    if (!IsAclTable(table)) continue;
+    acl_tables.push_back(name);
+    if (table.has_meter()) {
+      table.clear_meter();
+    } else {
+      table.mutable_meter()->set_unit(p4::config::v1::MeterSpec::BYTES);
+    }
+  }
+
+  EXPECT_THAT(CalculateTransition(original, modified_acl_tables),
+              IsOkAndHolds(TransitionIs({.acl_tables_to_modify = acl_tables})));
+
+  EXPECT_THAT(CalculateTransition(modified_acl_tables, original),
+              IsOkAndHolds(TransitionIs(
+                  {.acl_tables_to_modify = std::move(acl_tables)})));
+}
+
+TEST(CalculateTransition, CalculatesPartialAclTableDeletion) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  auto with_fewer_tables = original;
+  std::vector<std::string> removed_tables =
+      EraseTables(with_fewer_tables, [](const pdpi::IrTableDefinition& table) {
+        return table.preamble().alias() == "acl_ingress_table_a" ||
+               table.preamble().alias() == "acl_ingress_table_c";
+      });
+  ASSERT_THAT(removed_tables, Not(IsEmpty()));
+
+  EXPECT_THAT(CalculateTransition(original, with_fewer_tables),
+              IsOkAndHolds(TransitionIs(
+                  {.acl_tables_to_delete = std::move(removed_tables)})));
+}
+
+TEST(CalculateTransition, CalculatesPartialAclTableAddition) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  auto with_fewer_tables = original;
+  std::vector<std::string> removed_tables =
+      EraseTables(with_fewer_tables, [](const pdpi::IrTableDefinition& table) {
+        return table.preamble().alias() == "acl_ingress_table_a" ||
+               table.preamble().alias() == "acl_ingress_table_c";
+      });
+  ASSERT_THAT(removed_tables, Not(IsEmpty()));
+
+  EXPECT_THAT(CalculateTransition(with_fewer_tables, original),
+              IsOkAndHolds(TransitionIs(
+                  {.acl_tables_to_add = std::move(removed_tables)})));
+}
+
+TEST(CalculateTransition, CalculatesPartialAclTableModification) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  auto modified_acl_tables = original;
+  std::vector<std::string> modified_tables;
+  for (auto& [name, table] : *modified_acl_tables.mutable_tables_by_name()) {
+    if (!IsAclTable(table) ||
+        table.preamble().alias() == "acl_ingress_table_a" ||
+        table.preamble().alias() == "acl_ingress_table_c") {
+      continue;
+    }
+    modified_tables.push_back(name);
+    if (table.has_meter()) {
+      table.clear_meter();
+    } else {
+      table.mutable_meter()->set_unit(p4::config::v1::MeterSpec::BYTES);
+    }
+  }
+  ASSERT_THAT(modified_tables, Not(IsEmpty()));
+
+  EXPECT_THAT(
+      CalculateTransition(original, modified_acl_tables),
+      IsOkAndHolds(TransitionIs({.acl_tables_to_modify = modified_tables})));
+
+  EXPECT_THAT(CalculateTransition(modified_acl_tables, original),
+              IsOkAndHolds(TransitionIs(
+                  {.acl_tables_to_modify = std::move(modified_tables)})));
+}
+
 TEST(CalculateTransition, IgnoresFixedTableDeletion) {
   const pdpi::IrP4Info original = GetIrP4Info();
   pdpi::IrP4Info without_fixed_tables = original;
@@ -450,9 +560,9 @@ TEST(CalculateTransition, CalculatesComplexTransition) {
       IsOkAndHolds(TransitionIs({
           .hashing_packet_field_configs_to_delete = {"compute_lag_hash_ipv4"},
           .update_switch_table = true,
-          // .acl_tables_to_delete = {"acl_ingress_table_a"},
-          // .acl_tables_to_add = {"acl_ingress_table_d"},
-          // .acl_tables_to_modify = {"acl_ingress_table_b"},
+          .acl_tables_to_delete = {"acl_ingress_table_a"},
+          .acl_tables_to_add = {"acl_ingress_table_d"},
+          .acl_tables_to_modify = {"acl_ingress_table_b"},
       })));
 
   EXPECT_THAT(
@@ -460,10 +570,26 @@ TEST(CalculateTransition, CalculatesComplexTransition) {
       IsOkAndHolds(TransitionIs({
           .hashing_packet_field_configs_to_set = {"compute_lag_hash_ipv4"},
           .update_switch_table = true,
-          // .acl_tables_to_delete = {"acl_ingress_table_d"},
-          // .acl_tables_to_add = {"acl_ingress_table_a"},
-          // .acl_tables_to_modify = {"acl_ingress_table_b"},
+          .acl_tables_to_delete = {"acl_ingress_table_d"},
+          .acl_tables_to_add = {"acl_ingress_table_a"},
+          .acl_tables_to_modify = {"acl_ingress_table_b"},
       })));
+}
+
+TEST(CalculateTransition, ReturnsErrorForBadAclTable) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  pdpi::IrP4Info modified = original;
+  auto& table = modified.mutable_tables_by_name()->at("acl_ingress_table_a");
+  table.clear_match_fields_by_name();
+  table.clear_match_fields_by_id();
+  table = modified.mutable_tables_by_id()->at(table.preamble().id());
+  table.clear_match_fields_by_name();
+  table.clear_match_fields_by_id();
+
+  EXPECT_THAT(CalculateTransition(original, modified),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(CalculateTransition(modified, original),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(CalculateTransition, ReturnsErrorForBadHashSetting) {
@@ -479,6 +605,18 @@ TEST(CalculateTransition, ReturnsErrorForBadHashSetting) {
               StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(CalculateTransition(modified, original),
               StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(CalculateTransition, ReturnsInvalidArgumentForAclStageTransition) {
+  const pdpi::IrP4Info original = GetIrP4Info();
+  pdpi::IrP4Info modified = original;
+  auto& table = modified.mutable_tables_by_name()->at("acl_ingress_table_a");
+  *table.mutable_preamble()->mutable_annotations(0) = "@sai_acl(EGRESS)";
+
+  EXPECT_THAT(CalculateTransition(original, modified),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(CalculateTransition(modified, original),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace
