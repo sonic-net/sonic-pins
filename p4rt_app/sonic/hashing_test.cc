@@ -52,6 +52,7 @@ using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Pair;
+using ::testing::SizeIs;
 using ::testing::Test;
 using ::testing::UnorderedElementsAre;
 using ::testing::UnorderedElementsAreArray;
@@ -234,8 +235,7 @@ TEST(HashingTest, TestHashPacketFieldConfigComparisonWithFieldDiff) {
 
 TEST(HashingTest, GeneratesHashPacketFieldConfigs) {
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info, GetSampleHashConfig("ecmp"));
-  ASSERT_OK_AND_ASSIGN(std::vector<HashPacketFieldConfig> configs,
-                       ExtractHashPacketFieldConfigs(ir_p4_info));
+  ASSERT_OK_AND_ASSIGN(auto configs, ExtractHashPacketFieldConfigs(ir_p4_info));
   EXPECT_THAT(
       configs,
       UnorderedElementsAre(
@@ -254,8 +254,7 @@ TEST(HashingTest, GeneratesHashPacketFieldConfigs) {
 
 TEST(HashingTest, ProgramHashFieldTableSucceeds) {
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info, GetSampleHashConfig("ecmp"));
-  ASSERT_OK_AND_ASSIGN(std::vector<HashPacketFieldConfig> configs,
-                       ExtractHashPacketFieldConfigs(ir_p4_info));
+  ASSERT_OK_AND_ASSIGN(auto configs, ExtractHashPacketFieldConfigs(ir_p4_info));
   FakeTable fake_table;
   HashTable hash_table = fake_table.GenerateHashTable();
   EXPECT_THAT(ProgramHashFieldTable(hash_table, configs), IsOk());
@@ -279,8 +278,7 @@ TEST(HashingTest, ProgramHashFieldTableSucceeds) {
 
 TEST(HashingTest, SupportLagHashConfig) {
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info, GetSampleHashConfig("lag"));
-  ASSERT_OK_AND_ASSIGN(std::vector<HashPacketFieldConfig> configs,
-                       ExtractHashPacketFieldConfigs(ir_p4_info));
+  ASSERT_OK_AND_ASSIGN(auto configs, ExtractHashPacketFieldConfigs(ir_p4_info));
   EXPECT_THAT(
       configs,
       UnorderedElementsAre(
@@ -743,6 +741,38 @@ TEST(HashingTest, ProgramSwitchTableReturnsErrorForBackendFailure) {
   EXPECT_THAT(
       ProgramSwitchTable(switch_table, hash_value_configs, hash_field_configs),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("Test Failure")));
+}
+
+TEST(HashingTest, RemoveHashFieldTableRemovesTableFromDb) {
+   FakeTable fake_table;
+   HashTable hash_table = fake_table.GenerateHashTable();
+
+   ASSERT_OK_AND_ASSIGN(auto hash_field_configs,
+                        ExtractHashPacketFieldConfigs(FullHashIrP4Info()));
+   ASSERT_OK(ProgramHashFieldTable(hash_table, hash_field_configs));
+
+   std::vector<std::string> keys = fake_table.db_table().GetAllKeys();
+   ASSERT_THAT(keys, SizeIs(hash_field_configs.size()));
+
+   std::vector<std::string> keys_to_remove;
+   keys_to_remove.push_back(keys.back());
+   keys.pop_back();
+   keys_to_remove.push_back(keys.back());
+   keys.pop_back();
+
+   ASSERT_OK(RemoveFromHashFieldTable(hash_table, keys_to_remove));
+   ASSERT_THAT(fake_table.db_table().GetAllKeys(),
+               UnorderedElementsAreArray(keys));
+}
+
+TEST(HashingTest, RemoveFromHashFieldTableReturnsErrorForBackendFailure) {
+   FakeTable fake_table;
+   HashTable hash_table = fake_table.GenerateHashTable();
+   fake_table.db_table().SetResponseForKey("compute_ecmp_hash_ipv4",
+                                           "SWSS_RC_UNKNOWN", "Test Failure");
+   EXPECT_THAT(RemoveFromHashFieldTable(hash_table,
+                                        {"a", "compute_ecmp_hash_ipv4", "b"}),
+               StatusIs(absl::StatusCode::kInternal, HasSubstr("Test Failure")));
 }
 
 }  // namespace
