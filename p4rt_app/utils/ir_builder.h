@@ -14,6 +14,9 @@
 #ifndef PINS_P4RT_APP_UTILS_IR_BUILDER_H_
 #define PINS_P4RT_APP_UTILS_IR_BUILDER_H_
 
+#include <string>
+#include <utility>
+
 #include "absl/strings/string_view.h"
 #include "google/protobuf/text_format.h"
 #include "p4_pdpi/ir.pb.h"
@@ -37,6 +40,10 @@ public:
   }
   IrActionDefinitionBuilder &preamble(p4::config::v1::Preamble preamble_proto) {
     *action_.mutable_preamble() = std::move(preamble_proto);
+    return *this;
+  }
+  IrActionDefinitionBuilder& id(int id_num) {
+    action_.mutable_preamble()->set_id(id_num);
     return *this;
   }
   IrActionDefinitionBuilder &name(absl::string_view name_str) {
@@ -93,6 +100,11 @@ public:
   }
   IrTableDefinitionBuilder &preamble(p4::config::v1::Preamble preamble_proto) {
     *table_.mutable_preamble() = std::move(preamble_proto);
+    return *this;
+  }
+
+  IrTableDefinitionBuilder& id(int id_num) {
+    table_.mutable_preamble()->set_id(id_num);
     return *this;
   }
   IrTableDefinitionBuilder &name(absl::string_view name_str) {

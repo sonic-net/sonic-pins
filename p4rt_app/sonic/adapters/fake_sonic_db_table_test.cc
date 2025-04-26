@@ -15,6 +15,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -64,7 +65,7 @@ TEST(FakeSonicDbTest, ReadBackEntry) {
   EXPECT_THAT(*result, UnorderedElementsAre(std::make_pair("key", "value")));
 }
 
-TEST(FakeSonicDbTest, InsertDuplicateKeyDoesNotOverwritesExistingEntry) {
+TEST(FakeSonicDbTest, InsertDuplicateKeyReplacesExistingEntry) {
   FakeSonicDbTable table;
 
   // First insert.
@@ -78,8 +79,7 @@ TEST(FakeSonicDbTest, InsertDuplicateKeyDoesNotOverwritesExistingEntry) {
   result = table.ReadTableEntry("entry");
   ASSERT_TRUE(result.ok());
   EXPECT_THAT(*result,
-              UnorderedElementsAre(std::make_pair("key", "value"),
-                                   std::make_pair("new_key", "new_value")));
+              UnorderedElementsAre(std::make_pair("new_key", "new_value")));
 }
 
 TEST(FakeSonicDbTest, DeleteNonExistantEntry) {
