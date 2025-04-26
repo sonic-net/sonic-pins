@@ -81,7 +81,14 @@ absl::StatusOr<IrMatchField> CreateIrP4MatchField(absl::string_view table_name,
       const IrMatchFieldDefinition *match_field,
       gutil::FindPtrOrStatus(table->match_fields_by_name(), field_name));
 
-  if (match_field->match_field().match_type() != MatchField::EXACT) {
+  IrMatchField ir_match_field;
+
+  // TODO: b/329428288 - Allow optional type once it is supported.
+  switch (match_field->match_field().match_type()) {
+  case MatchField::EXACT: {
+    break;
+  }
+  default:
     return gutil::UnimplementedErrorBuilder()
            << "Only match fields of type EXACT can be used in references. "
               "Match field '"
@@ -90,7 +97,6 @@ absl::StatusOr<IrMatchField> CreateIrP4MatchField(absl::string_view table_name,
                   match_field->match_field().match_type());
   }
 
-  IrMatchField ir_match_field;
   ir_match_field.mutable_p4_match_field()->set_field_name(field_name);
   ir_match_field.mutable_p4_match_field()->set_field_id(
       match_field->match_field().id());
@@ -149,6 +155,10 @@ absl::StatusOr<IrActionField> CreateIrBuiltInActionField(
 }
 
 }  // namespace
+
+bool FieldIsOptional(const IrField &field) {
+  return field.match_field().p4_match_field().is_optional();
+}
 
 absl::StatusOr<IrTable> CreateIrTable(absl::string_view table_name,
                                       const IrP4Info &info) {

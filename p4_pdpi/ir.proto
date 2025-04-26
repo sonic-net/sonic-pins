@@ -62,6 +62,8 @@ message IrMatchFieldReference {
 message IrP4MatchField {
   string field_name = 1;
   uint32 field_id = 2;
+  // Whether the match field is an OPTIONAL or EXACT.
+  bool is_optional = 3;
 }
 
 // Uniquely identifies a built-in (not user-defined) match field within the

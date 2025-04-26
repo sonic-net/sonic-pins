@@ -26,6 +26,7 @@
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/rpc/code.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 #if !defined(ABSL_IS_LITTLE_ENDIAN)
 #error                                                                         \
     "Some of the utility functions are not supported in Big Endian architecture"
@@ -65,8 +66,10 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
                                  const int bitwidth, bool is_sdn_string);
 
 // Checks if the IrValue in the IR table entry is in the same format as
-// specified in the P4Info.
-absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format);
+// specified in the P4Info. If "allow_arbitrary_format" in the translation
+// options is true, any format is accepted.
+absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format,
+                                   const TranslationOptions &options);
 
 // Converts the IR value to a PI byte string and returns it.
 absl::StatusOr<std::string>

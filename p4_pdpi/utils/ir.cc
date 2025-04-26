@@ -15,9 +15,7 @@
 #include "p4_pdpi/utils/ir.h"
 
 #include <arpa/inet.h>
-#include <ctype.h>
 #include <endian.h>
-#include <errno.h>
 #include <net/ethernet.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
@@ -26,6 +24,8 @@
 #include <sys/types.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -42,7 +42,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
-#include "google/protobuf/map.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -53,6 +53,8 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_pdpi/string_encodings/byte_string.h"
+#include "p4_pdpi/translation_options.h"
 
 namespace pdpi {
 
@@ -238,13 +240,14 @@ absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
   }
 }
 
-absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format) {
+absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format,
+                                   const TranslationOptions &options) {
   const auto &format_case = ir_value.format_case();
   ASSIGN_OR_RETURN(const std::string format_case_name,
                    gutil::GetOneOfFieldName(ir_value, std::string("format")));
   switch (format) {
     case Format::MAC: {
-      if (format_case != IrValue::kMac) {
+      if (format_case != IrValue::kMac && !options.allow_arbitrary_format) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Expected format '" << Format_Name(Format::MAC)
                << "', but got '" << absl::AsciiStrToUpper(format_case_name)
@@ -253,7 +256,7 @@ absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format) {
       break;
     }
     case Format::IPV4: {
-      if (format_case != IrValue::kIpv4) {
+      if (format_case != IrValue::kIpv4 && !options.allow_arbitrary_format) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Expected format '" << Format_Name(Format::IPV4)
                << "', but got '" << absl::AsciiStrToUpper(format_case_name)
@@ -262,7 +265,7 @@ absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format) {
       break;
     }
     case Format::IPV6: {
-      if (format_case != IrValue::kIpv6) {
+      if (format_case != IrValue::kIpv6 && !options.allow_arbitrary_format) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Expected format '" << Format_Name(Format::IPV6)
                << "', but got '" << absl::AsciiStrToUpper(format_case_name)
@@ -271,7 +274,7 @@ absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format) {
       break;
     }
     case Format::STRING: {
-      if (format_case != IrValue::kStr) {
+      if (format_case != IrValue::kStr && !options.allow_arbitrary_format) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Expected format '" << Format_Name(Format::STRING)
                << "', but got '" << absl::AsciiStrToUpper(format_case_name)
@@ -280,15 +283,11 @@ absl::Status ValidateIrValueFormat(const IrValue &ir_value, Format format) {
       break;
     }
     case Format::HEX_STRING: {
-      if (format_case != IrValue::kHexStr) {
+      if (format_case != IrValue::kHexStr && !options.allow_arbitrary_format) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Expected format '" << Format_Name(Format::HEX_STRING)
                << "', but got '" << absl::AsciiStrToUpper(format_case_name)
                << "' instead.";
-      }
-      std::string hex_str = ir_value.hex_str();
-      if (absl::StartsWith(hex_str, "0x")) {
-        hex_str.replace(0, 2, "");
       }
       break;
     }

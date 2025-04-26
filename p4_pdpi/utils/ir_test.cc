@@ -22,12 +22,14 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "gmock/gmock.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
@@ -240,6 +242,141 @@ TEST(GetFormatTest, InvalidAnnotations) {
       GetFormat(annotations, /*bitwidth=*/65, /*is_sdn_string=*/false);
   EXPECT_EQ(status_or_format.status().code(),
             absl::StatusCode::kInvalidArgument);
+}
+
+TEST(ValidateIrValueFormatTest, ArbitraryFormatWorksForAllIPv4Cases) {
+  IrValue testValue;
+  testValue.set_ipv4("1.2.3.4");
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV4,
+                                  {.allow_arbitrary_format = false}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV6,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV6,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::MAC,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::MAC,
+                                  {.allow_arbitrary_format = true}));
+}
+
+TEST(ValidateIrValueFormatTest, ArbitraryFormatWorksForAllIPv6Cases) {
+  IrValue testValue;
+  testValue.set_ipv6("0:aaaa:bbbb:cccc:dddd:eeee:ffff:0");
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV6,
+                                  {.allow_arbitrary_format = false}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV4,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV4,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::MAC,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::MAC,
+                                  {.allow_arbitrary_format = true}));
+}
+
+TEST(ValidateIrValueFormatTest, ArbitraryFormatWorksForAllMacCases) {
+  IrValue testValue;
+  testValue.set_mac("00:11:22:33:44:55:66");
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::MAC,
+                                  {.allow_arbitrary_format = false}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV4,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV4,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV6,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV6,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                  {.allow_arbitrary_format = true}));
+}
+
+TEST(ValidateIrValueFormatTest, ArbitraryFormatWorksForAllHexStringCases) {
+  IrValue testValue;
+  testValue.set_hex_str("0x01");
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                  {.allow_arbitrary_format = false}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV4,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV4,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV6,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV6,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::MAC,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::MAC,
+                                  {.allow_arbitrary_format = true}));
+}
+
+TEST(ValidateIrValueFormatTest, ArbitraryFormatWorksForAllStringCases) {
+  IrValue testValue;
+  testValue.set_str("0x01");
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::STRING,
+                                  {.allow_arbitrary_format = false}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV4,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV4,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::IPV6,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::IPV6,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::HEX_STRING,
+                                  {.allow_arbitrary_format = true}));
+  EXPECT_THAT(ValidateIrValueFormat(testValue, Format::MAC,
+                                    {.allow_arbitrary_format = false}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_OK(ValidateIrValueFormat(testValue, Format::MAC,
+                                  {.allow_arbitrary_format = true}));
 }
 
 TEST(IsAllZerosTest, TestZeros) {

@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
-#define GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
+#ifndef PINS_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
+#define PINS_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
 
 // Bit widths of packet fields. Naming convention is:
 //   "k" <header-name> <field-name> "Bitwidth"
@@ -120,4 +120,4 @@ constexpr int kPsampVariableLengthBitwidth = 8;
 constexpr int kPsampPacketSampledLengthBitwidth = 16;
 } // namespace packetlib
 
-#endif // GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
+#endif // PINS_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_
