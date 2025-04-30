@@ -91,6 +91,7 @@ cc_test(
     deps = [
         ":app_db_manager",
         ":redis_connections",
+        ":vlan_entry_translation",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
@@ -379,6 +380,27 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "vlan_entry_translation_test",
+    srcs = ["vlan_entry_translation_test.cc"],
+    deps = [
+        ":redis_connections",
+        ":vlan_entry_translation",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
+        "//p4rt_app/sonic/adapters:mock_table_adapter",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
