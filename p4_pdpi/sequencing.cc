@@ -289,6 +289,10 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ExtractWriteRequests(
   for (int i = 0; i < write_request.updates_size(); i++) {
     if (i % *max_write_request_size == 0) {
       WriteRequest request;
+      request.set_role(write_request.role());
+      request.set_device_id(write_request.device_id());
+      *request.mutable_election_id() = write_request.election_id();
+
       requests.push_back(std::move(request));
     }
     p4::v1::WriteRequest& request = requests.back();

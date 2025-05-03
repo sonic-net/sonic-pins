@@ -2268,7 +2268,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           changes = true;
         }
         if (psamp_header.variable_length().empty() || overwrite) {
-          psamp_header.set_variable_length("0xFF");
+          psamp_header.set_variable_length("0xff");
           changes = true;
         }
         if (psamp_header.packet_sampled_length().empty() || overwrite) {
