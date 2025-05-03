@@ -164,6 +164,12 @@ tables {
     parameters { name: "port" format: STRING }
     parameters { name: "src_mac" format: MAC }
   }
+  actions {
+    name: "set_port_and_src_mac_and_vlan_id"
+    parameters { name: "port" format: STRING }
+    parameters { name: "src_mac" format: MAC }
+    parameters { name: "vlan_id" bitwidth: 12 }
+  }
 }
 tables {
   name: "tunnel_table"

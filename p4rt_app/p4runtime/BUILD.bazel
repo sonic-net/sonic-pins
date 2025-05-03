@@ -409,7 +409,10 @@ cc_library(
     deps = [
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic:app_db_acl_def_table_manager",
         "//p4rt_app/sonic:hashing",
+        "//p4rt_app/sonic:swss_utils",
+        "//p4rt_app/utils:table_utility",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -417,17 +420,18 @@ cc_library(
 )
 
 cc_test(
-     name = "p4info_reconcile_test",
-     srcs = ["p4info_reconcile_test.cc"],
-     deps = [
-         ":p4info_reconcile",
-         "//gutil:status_matchers",
-         "//p4_pdpi:ir_cc_proto",
-         "//p4rt_app/utils:ir_builder",
-         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-         "@com_google_absl//absl/functional:any_invocable",
-         "@com_google_absl//absl/status",
-         "@com_google_absl//absl/strings",
-         "@com_google_googletest//:gtest_main",
-     ],
+    name = "p4info_reconcile_test",
+    srcs = ["p4info_reconcile_test.cc"],
+    deps = [
+        ":p4info_reconcile",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/utils:ir_builder",
+        "//p4rt_app/utils:table_utility",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
