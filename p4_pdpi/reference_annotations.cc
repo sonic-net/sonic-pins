@@ -83,6 +83,7 @@ absl::StatusOr<IrMatchField> CreateIrP4MatchField(absl::string_view table_name,
 
   IrMatchField ir_match_field;
 
+  // TODO: b/329428288 - Allow optional type once it is supported.
   switch (match_field->match_field().match_type()) {
   case MatchField::EXACT: {
     break;

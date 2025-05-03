@@ -24,13 +24,22 @@ public:
   explicit FakeWarmBootStateAdapter();
   swss::WarmStart::WarmStartState GetWarmBootState() override;
   void SetWarmBootState(swss::WarmStart::WarmStartState state) override;
+  swss::WarmStart::WarmStartState GetOrchAgentWarmBootState(void) override;
   bool IsWarmStart(void) override;
-  void SetWarmStart(bool is_warm_start);
 
-private:
-  swss::WarmStart::WarmStartState state_ =
-      swss::WarmStart::WarmStartState::WSUNKNOWN;
+  // Test-only accessors
+  std::vector<swss::WarmStart::WarmStartState> GetWarmBootStateHistory();
+  void SetWarmStart(bool is_warm_start);
+  void SetWaitForUnfreeze(bool wait_for_unfreeze);
+  void SetOrchAgentWarmBootState(swss::WarmStart::WarmStartState);
+
+ private:
+  // History of warm-boot states.
+  std::vector<swss::WarmStart::WarmStartState> states_;
   bool is_warm_start_ = false;
+  bool wait_for_unfreeze_ = false;
+  swss::WarmStart::WarmStartState oa_state_ =
+      swss::WarmStart::WarmStartState::WSUNKNOWN;
 };
 
 } // namespace sonic

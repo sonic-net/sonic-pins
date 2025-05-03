@@ -14,6 +14,12 @@
 #ifndef PINS_P4RT_APP_UTILS_IR_BUILDER_H_
 #define PINS_P4RT_APP_UTILS_IR_BUILDER_H_
 
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/text_format.h"
 #include "p4_pdpi/ir.pb.h"
@@ -21,6 +27,98 @@
 namespace p4rt_app {
 
 // This file provides builders for constructing pdpi::Ir* protobufs.
+
+class IrActionProfileDefinitionBuilder {
+ public:
+  IrActionProfileDefinitionBuilder() = default;
+  explicit IrActionProfileDefinitionBuilder(
+      pdpi::IrActionProfileDefinition action_profile)
+      : action_profile_(std::move(action_profile)) {}
+
+  const pdpi::IrActionProfileDefinition& operator()() const {
+    return action_profile_;
+  }
+
+  IrActionProfileDefinitionBuilder& preamble(absl::string_view preamble_str) {
+    google::protobuf::TextFormat::ParseFromString(
+        std::string(preamble_str),
+        action_profile_.mutable_action_profile()->mutable_preamble());
+    return *this;
+  }
+  IrActionProfileDefinitionBuilder& preamble(
+      p4::config::v1::Preamble preamble_proto) {
+    *action_profile_.mutable_action_profile()->mutable_preamble() =
+        std::move(preamble_proto);
+    return *this;
+  }
+  IrActionProfileDefinitionBuilder& name(absl::string_view name_str) {
+    action_profile_.mutable_action_profile()->mutable_preamble()->set_name(
+        name_str);
+    return *this;
+  }
+  IrActionProfileDefinitionBuilder& id(int id_number) {
+    action_profile_.mutable_action_profile()->mutable_preamble()->set_id(
+        id_number);
+    return *this;
+  }
+
+  // Set up the action definition with a static size. Overwrites any previous
+  // wcmp_selector_size, max_sum_of_weights, or max_sum_of_members setting.
+  IrActionProfileDefinitionBuilder& static_size(int64_t size) {
+    action_profile_.mutable_action_profile()->set_size(size);
+    action_profile_.mutable_action_profile()->set_max_group_size(0);
+    action_profile_.mutable_action_profile()->set_with_selector(false);
+    action_profile_.mutable_action_profile()->clear_sum_of_members();
+    action_profile_.mutable_action_profile()->clear_sum_of_weights();
+    return *this;
+  }
+
+  // Set up the action definition with a selector size. Overwrites any previous
+  // static_size, max_sum_of_weights, or max_sum_of_members setting.
+  IrActionProfileDefinitionBuilder& wcmp_selector_size(int64_t size,
+                                                       int max_group_size) {
+    action_profile_.mutable_action_profile()->set_size(size);
+    action_profile_.mutable_action_profile()->set_max_group_size(
+        max_group_size);
+    action_profile_.mutable_action_profile()->set_with_selector(true);
+    action_profile_.mutable_action_profile()->clear_sum_of_members();
+    action_profile_.mutable_action_profile()->clear_sum_of_weights();
+    return *this;
+  }
+
+  // Set up the action definition with sum-of-weights accounting. Overwrites any
+  // previous static_size, wcmp_selector_size, or max_sum_of_members setting.
+  IrActionProfileDefinitionBuilder& max_sum_of_weights(int64_t size) {
+    action_profile_.mutable_action_profile()->set_size(0);
+    action_profile_.mutable_action_profile()->set_with_selector(true);
+    action_profile_.mutable_action_profile()->set_max_group_size(size);
+    action_profile_.mutable_action_profile()->mutable_sum_of_weights();
+    return *this;
+  }
+
+  // Set up the action definition with sum-of-members accounting. Overwrites any
+  // previous static_size, wcmp_selector_size, or max_sum_of_weights setting.
+  IrActionProfileDefinitionBuilder& max_sum_of_members(int64_t size,
+                                                       int max_member_weight) {
+    action_profile_.mutable_action_profile()->set_size(0);
+    action_profile_.mutable_action_profile()->set_with_selector(true);
+    action_profile_.mutable_action_profile()->set_max_group_size(size);
+    action_profile_.mutable_action_profile()
+        ->mutable_sum_of_members()
+        ->set_max_member_weight(max_member_weight);
+    return *this;
+  }
+  IrActionProfileDefinitionBuilder& table_ids(std::vector<int> table_ids) {
+    for (int table_id : table_ids) {
+      action_profile_.mutable_action_profile()->add_table_ids(table_id);
+    }
+    return *this;
+  }
+
+  private:
+   pdpi::IrActionProfileDefinition action_profile_;
+};
+
 
 class IrActionDefinitionBuilder {
 public:
@@ -41,6 +139,10 @@ public:
   }
   IrActionDefinitionBuilder &name(absl::string_view name_str) {
     action_.mutable_preamble()->set_alias(std::string(name_str));
+    return *this;
+  }
+  IrActionDefinitionBuilder& id(int id_number) {
+    action_.mutable_preamble()->set_id(id_number);
     return *this;
   }
 
@@ -95,8 +197,13 @@ public:
     *table_.mutable_preamble() = std::move(preamble_proto);
     return *this;
   }
+
   IrTableDefinitionBuilder &name(absl::string_view name_str) {
     table_.mutable_preamble()->set_alias(std::string(name_str));
+    return *this;
+  }
+  IrTableDefinitionBuilder& id(int id_number) {
+    table_.mutable_preamble()->set_id(id_number);
     return *this;
   }
 
@@ -201,6 +308,10 @@ private:
 // Currently only supports the following P4Info fields:
 //   tables_by_name
 //   tables_by_id
+//   actions_by_name
+//   actions_by_id
+//   action_profiles_by_name
+//   action_profiles_by_id
 class IrP4InfoBuilder {
 public:
   IrP4InfoBuilder() = default;
@@ -209,16 +320,7 @@ public:
 
   const pdpi::IrP4Info &operator()() const { return p4info_; }
 
-  IrP4InfoBuilder &table(pdpi::IrTableDefinition ir_table) {
-    if (ir_table.preamble().id() == 0) {
-      ir_table.mutable_preamble()->set_id(++table_id_);
-    }
-    (*p4info_.mutable_tables_by_id())[ir_table.preamble().id()] = ir_table;
-    (*p4info_.mutable_tables_by_name())[ir_table.preamble().alias()] =
-        std::move(ir_table);
-    return *this;
-  }
-
+  IrP4InfoBuilder& table(pdpi::IrTableDefinition ir_table);
   IrP4InfoBuilder &action(pdpi::IrActionDefinition ir_action) {
     if (ir_action.preamble().id() == 0) {
       ir_action.mutable_preamble()->set_id(++action_id_);
@@ -237,10 +339,22 @@ public:
     return action(builder());
   }
 
+  IrP4InfoBuilder& action_profile(
+      pdpi::IrActionProfileDefinition ir_action_profile);
+  IrP4InfoBuilder& action_profile(
+      const IrActionProfileDefinitionBuilder& builder) {
+    return action_profile(builder());
+  }
 private:
   pdpi::IrP4Info p4info_;
-  int table_id_ = 1;
-  int action_id_ = 1;
+  // Current ID numbers for ID auto-generation.
+  int table_id_ = 0;
+  int action_id_ = 0;
+  int action_profile_id_ = 0;
+
+  // Map of action-profile associations to be processed when the table is
+  // installed.
+  absl::flat_hash_map<int, int> action_profile_associations_;
 };
 
 } // namespace p4rt_app
