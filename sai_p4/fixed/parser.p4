@@ -150,8 +150,8 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     packet.emit(headers.mirror_encap_vlan);
     packet.emit(headers.mirror_encap_ipv6);
     packet.emit(headers.mirror_encap_udp);
-    packet.emit(headers.ipfix);
-    packet.emit(headers.psamp_extended);
+    packet.emit(headers.mirror_encap_ipfix);
+    packet.emit(headers.mirror_encap_psamp_extended);
     packet.emit(headers.ethernet);
     packet.emit(headers.tunnel_encap_ipv6);
     packet.emit(headers.tunnel_encap_gre);

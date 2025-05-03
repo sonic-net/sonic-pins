@@ -146,8 +146,8 @@ struct headers_t {
   vlan_t mirror_encap_vlan;
   ipv6_t mirror_encap_ipv6;
   udp_t mirror_encap_udp;
-  ipfix_t ipfix;
-  psamp_extended_t psamp_extended;
+  ipfix_t mirror_encap_ipfix;
+  psamp_extended_t mirror_encap_psamp_extended;
   // -- end of mirroring encap headers -----------------------------------------
 
   ethernet_t ethernet;

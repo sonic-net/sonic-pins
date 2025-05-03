@@ -186,6 +186,24 @@ control acl_ingress(in headers_t headers,
     local_metadata.acl_drop = true;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_L2MC_GROUP_ACTION_ID)
+  @action_restriction("
+    // Disallow 0 since it encodes 'no multicast' in V1Model.
+    multicast_group_id != 0;
+  ")
+  @unsupported
+  action redirect_to_l2mc_group(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)
+    @refers_to(builtin::multicast_group_table, multicast_group_id)
+    multicast_group_id_t multicast_group_id) {
+    standard_metadata.mcast_grp = multicast_group_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.nexthop_id_valid = false;
+    local_metadata.wcmp_group_id_valid = false;
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_TABLE_ID)
   @sai_acl(INGRESS)
@@ -296,6 +314,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(3) acl_forward();
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
+      @proto_id(6) redirect_to_l2mc_group();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -483,7 +502,6 @@ control acl_ingress(in headers_t headers,
     local_metadata.nexthop_id_valid = false;
     local_metadata.wcmp_group_id_valid = false;
   }
-
 
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)

@@ -36,5 +36,13 @@ bool WarmBootStateAdapter::IsWarmStart() {
   return swss::WarmStart::isWarmStart();
 }
 
+swss::WarmStart::WarmStartState
+WarmBootStateAdapter::GetOrchAgentWarmBootState() {
+  swss::WarmStart::WarmStartState state;
+  swss::WarmStart::getWarmStartState("orchagent", state);
+
+  return state;
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app

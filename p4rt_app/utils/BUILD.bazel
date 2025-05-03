@@ -63,9 +63,11 @@ cc_library(
 cc_library(
     name = "ir_builder",
     testonly = 1,
+    srcs = ["ir_builder.cc"],
     hdrs = ["ir_builder.h"],
     deps = [
         "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
     ],
