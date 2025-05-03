@@ -120,8 +120,7 @@ TEST(RedirectTest, RedirectToNextHopOverridesLpmDecision) {
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(kEgressPortProto)
           .AddIngressAclEntryRedirectingToNexthop(
-              kRedirectNexthopId,
-              /*in_port_match=*/kRedirectIngressPortProto)
+              kRedirectNexthopId, {.in_port = kRedirectIngressPortProto})
           .AddNexthopRifNeighborEntries(kRedirectNexthopId,
                                         kRedirectEgressPortProto)
           .LogPdEntries()
@@ -195,8 +194,7 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
           })
           // Redirect entries.
           .AddIngressAclEntryRedirectingToNexthop(
-              kRedirectNexthopId,
-              /*in_port_match=*/kRedirectIngressPortProto)
+              kRedirectNexthopId, {.in_port = kRedirectIngressPortProto})
           .AddNexthopRifNeighborEntries(kRedirectNexthopId,
                                         kRedirectEgressPortProto)
           .LogPdEntries()

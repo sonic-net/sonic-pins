@@ -130,6 +130,7 @@ struct Replica {
 struct MirrorAndRedirectMatchFields {
   std::optional<absl::string_view> in_port;
   std::optional<bool> ipmc_table_hit;
+  std::optional<int> vlan_id;
 };
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
@@ -238,8 +239,8 @@ public:
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
   EntryBuilder &AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
-      std::optional<absl::string_view> in_port_match = std::nullopt);
-  EntryBuilder &AddIngressAclEntryRedirectingToMulticastGroup(
+      const MirrorAndRedirectMatchFields& match_fields = {});
+  EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
       const MirrorAndRedirectMatchFields &match_fields = {});
   EntryBuilder &

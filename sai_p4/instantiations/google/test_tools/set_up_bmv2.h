@@ -24,8 +24,8 @@
 namespace sai {
 
 // Returns sensible default arguments for using BMv2 with SAI P4.
-inline orion::p4::test::Bmv2::Args DefaultSaiP4Bmv2Args() {
-  return orion::p4::test::Bmv2::Args{
+inline orion::p4::test::Bmv2Args DefaultSaiP4Bmv2Args() {
+  return orion::p4::test::Bmv2Args{
       .device_id = 1,
       .cpu_port = SAI_P4_CPU_PORT,
       .drop_port = SAI_P4_DROP_PORT,
@@ -36,8 +36,8 @@ inline orion::p4::test::Bmv2::Args DefaultSaiP4Bmv2Args() {
 // Configures BMv2 by pushing the given `config` and installing the auxiliary
 // clone session entry required for PacketIO.
 absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
-    const p4::v1::ForwardingPipelineConfig &bmv2_config,
-    orion::p4::test::Bmv2::Args bmv2_args = DefaultSaiP4Bmv2Args());
+    const p4::v1::ForwardingPipelineConfig& bmv2_config,
+    orion::p4::test::Bmv2Args bmv2_args = DefaultSaiP4Bmv2Args());
 
 // Returns configured BMv2 ready for use with SAI P4.
 // Configures BMv2 by pushing the pipeline config associated with the given
@@ -45,7 +45,7 @@ absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
 // PacketIO.
 absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
     Instantiation instantiation,
-    orion::p4::test::Bmv2::Args bmv2_args = DefaultSaiP4Bmv2Args());
+    orion::p4::test::Bmv2Args bmv2_args = DefaultSaiP4Bmv2Args());
 
 } // namespace sai
 
