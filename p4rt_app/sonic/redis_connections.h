@@ -49,6 +49,30 @@ struct VrfTable {
 };
 
 // The P4RT app needs to:
+//   * Write VLAN_TABLE_P4 entries into the AppDb.
+//   * Read VLAN_TABLE_P4 entries out of the AppStateDb.
+//   * Support failed updates through the response path.
+//   * Support state verification between the AppDb and AppStateDb.
+struct VlanTable {
+  std::unique_ptr<ProducerStateTableAdapter> producer_state;
+  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
+  std::unique_ptr<TableAdapter> app_db;
+  std::unique_ptr<TableAdapter> app_state_db;
+};
+
+// The P4RT app needs to:
+//   * Write VLAN_MEMBER_TABLE_P4 entries into the AppDb.
+//   * Read VLAN_MEMBER_TABLE_P4 entries out of the AppStateDb.
+//   * Support failed updates through the response path.
+//   * Support state verification between the AppDb and AppStateDb.
+struct VlanMemberTable {
+  std::unique_ptr<ProducerStateTableAdapter> producer_state;
+  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
+  std::unique_ptr<TableAdapter> app_db;
+  std::unique_ptr<TableAdapter> app_state_db;
+};
+
+// The P4RT app needs to:
 //   * Write HASH_TABLE entries into the AppDb.
 //   * Support failed updates through the response path.
 //   * Support state verification between the AppDb and AppStateDb.

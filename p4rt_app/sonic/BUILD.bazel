@@ -365,6 +365,7 @@ cc_test(
 
 cc_library(
     name = "vlan_entry_translation",
+    srcs = ["vlan_entry_translation.cc"],
     hdrs = ["vlan_entry_translation.h"],
     deps = [
         ":redis_connections",
