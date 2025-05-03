@@ -441,12 +441,21 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     absl::string_view nexthop_id,
-    std::optional<absl::string_view> in_port_match) {
+    const MirrorAndRedirectMatchFields& match_fields) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
-  if (in_port_match.has_value()) {
-    entry.mutable_match()->mutable_in_port()->set_value(*in_port_match);
+  if (match_fields.in_port.has_value()) {
+    entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (match_fields.ipmc_table_hit.has_value()) {
+    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
+        BoolToHexString(*match_fields.ipmc_table_hit));
+  }
+  if (match_fields.vlan_id.has_value()) {
+    entry.mutable_match()->mutable_vlan_id()->set_value(
+        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
@@ -466,6 +475,11 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToMulticastGroup(
   if (match_fields.ipmc_table_hit.has_value()) {
     entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
         BoolToHexString(*match_fields.ipmc_table_hit));
+  }
+  if (match_fields.vlan_id.has_value()) {
+    entry.mutable_match()->mutable_vlan_id()->set_value(
+        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   entry.mutable_action()
       ->mutable_redirect_to_ipmc_group()

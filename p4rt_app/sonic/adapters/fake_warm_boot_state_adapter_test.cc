@@ -24,7 +24,7 @@ namespace {
 TEST(FakeWarmBootStateAdapterTest, GetWarmBootStateDefault) {
   FakeWarmBootStateAdapter adapter;
   EXPECT_THAT(adapter.GetWarmBootState(),
-              swss::WarmStart::WarmStartState::WSUNKNOWN);
+              swss::WarmStart::WarmStartState::RECONCILED);
 }
 
 TEST(FakeWarmBootStateAdapterTest, SetWarmBootState) {
