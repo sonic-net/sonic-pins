@@ -88,10 +88,14 @@ absl::StatusOr<IrMatchField> CreateIrP4MatchField(absl::string_view table_name,
   case MatchField::EXACT: {
     break;
   }
+  case MatchField::OPTIONAL: {
+    ir_match_field.mutable_p4_match_field()->set_is_optional(true);
+    break;
+  }
   default:
     return gutil::UnimplementedErrorBuilder()
-           << "Only match fields of type EXACT can be used in references. "
-              "Match field '"
+           << "Only match fields of type EXACT or OPTIONAL can be used in "
+              "references. Match field '"
            << field_name << "' in '" << table_name << "' has type '"
            << MatchField_MatchType_Name(
                   match_field->match_field().match_type());
@@ -370,6 +374,15 @@ absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
             *field_reference.mutable_source()->mutable_action_field(),
             CreateIrActionField(action_name, param_name, info));
 
+        if (FieldIsOptional(field_reference.destination())) {
+          return gutil::UnimplementedErrorBuilder()
+                 << "References to optional fields are not supported. "
+                    "Parameter "
+                 << param_name << "in action " << action_name
+                 << " refers to optional field " << annotation.field
+                 << " in table " << annotation.table;
+        }
+
         field_references_by_dst_table_by_src_action[action_name]
                                                    [annotation.table]
                                                        .Add(std::move(
@@ -418,6 +431,15 @@ absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
         ASSIGN_OR_RETURN(
             *field_reference->mutable_source()->mutable_match_field(),
             CreateIrMatchField(table_name, match_field_name, info));
+
+        if (FieldIsOptional(field_reference->destination())) {
+          return gutil::UnimplementedErrorBuilder()
+                 << "References to optional fields are not supported. Match "
+                    "field "
+                 << match_field_name << "in table " << table_name
+                 << " refers to optional field " << annotation.field
+                 << " in table " << annotation.table;
+        }
       }
 
       // Parse all @referenced_by annotations on table match field.
@@ -438,6 +460,15 @@ absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
         ASSIGN_OR_RETURN(
             *field_reference->mutable_destination()->mutable_match_field(),
             CreateIrMatchField(table_name, match_field_name, info));
+
+        if (FieldIsOptional(field_reference->destination())) {
+          return gutil::UnimplementedErrorBuilder()
+                 << "References to optional fields are not supported. Match "
+                    "field "
+                 << annotation.field << "in table " << annotation.table
+                 << " refers to optional field " << match_field_name
+                 << " in table " << table_name;
+        }
       }
     }
 
