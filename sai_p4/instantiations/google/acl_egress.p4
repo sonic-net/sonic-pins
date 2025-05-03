@@ -148,7 +148,7 @@ control acl_egress(in headers_t headers,
     }
     const default_action = NoAction;
     counters = acl_egress_dhcp_to_host_counter;
-    size = ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
+    size = ACL_EGRESS_DHCP_TO_HOST_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
   apply {

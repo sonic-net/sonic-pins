@@ -50,15 +50,16 @@
   0x0100010E                                           // 16777486
 #define ACL_INGRESS_SET_CPU_QUEUE_ACTION_ID 0x01000110 // 16777488
 #define ACL_INGRESS_SET_CPU_AND_MULTICAST_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID \
-  0x01000111                                                    // 16777489
-#define ACL_INGRESS_DENY_ACTION_ID 0x0100010F                   // 16777487
-#define ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID 0x01000112    // 16777490
-#define ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID 0x01000113 // 16777491
-#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D                 // 16777485
-#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107               // 16777479
-#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108               // 16777480
-#define ACL_DROP_ACTION_ID 0x01000109                           // 16777481
-// Next available action id: 0x01000113 (16777492)
+  0x01000111                                                     // 16777489
+#define ACL_INGRESS_DENY_ACTION_ID 0x0100010F                    // 16777487
+#define ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID 0x01000112     // 16777490
+#define ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID 0x01000113  // 16777491
+#define ACL_INGRESS_REDIRECT_TO_L2MC_GROUP_ACTION_ID 0x01000114  // 16777492
+#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D                  // 16777485
+#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107                // 16777479
+#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108                // 16777480
+#define ACL_DROP_ACTION_ID 0x01000109                            // 16777481
+// Next available action id: 0x01000115 (16777493)
 
 // NOLINTEND
 // --- Meters ------------------------------------------------------------------

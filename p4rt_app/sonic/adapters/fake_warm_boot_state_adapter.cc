@@ -13,26 +13,49 @@
 // limitations under the License.
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 
+#include <vector>
+
 #include "swss/warm_restart.h"
 
 namespace p4rt_app {
 namespace sonic {
 
-FakeWarmBootStateAdapter::FakeWarmBootStateAdapter() {}
+FakeWarmBootStateAdapter::FakeWarmBootStateAdapter() {
+  states_.push_back(swss::WarmStart::WarmStartState::RECONCILED);
+}
 
 swss::WarmStart::WarmStartState FakeWarmBootStateAdapter::GetWarmBootState() {
-  return state_;
+  return states_.back();
+}
+
+std::vector<swss::WarmStart::WarmStartState>
+FakeWarmBootStateAdapter::GetWarmBootStateHistory() {
+  return states_;
 }
 
 void FakeWarmBootStateAdapter::SetWarmBootState(
     swss::WarmStart::WarmStartState state) {
-  state_ = state;
+  states_.push_back(state);
 }
 
 bool FakeWarmBootStateAdapter::IsWarmStart() { return is_warm_start_; }
 
 void FakeWarmBootStateAdapter::SetWarmStart(bool is_warm_start) {
   is_warm_start_ = is_warm_start;
+}
+
+void FakeWarmBootStateAdapter::SetWaitForUnfreeze(bool wait_for_unfreeze) {
+  wait_for_unfreeze_ = wait_for_unfreeze;
+}
+
+void FakeWarmBootStateAdapter::SetOrchAgentWarmBootState(
+    swss::WarmStart::WarmStartState state) {
+  oa_state_ = state;
+}
+
+swss::WarmStart::WarmStartState
+FakeWarmBootStateAdapter::GetOrchAgentWarmBootState() {
+  return oa_state_;
 }
 
 }  // namespace sonic
