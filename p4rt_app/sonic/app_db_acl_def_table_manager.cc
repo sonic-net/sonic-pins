@@ -809,28 +809,6 @@ absl::Status VerifyConstDefaultActionInIrTable(
   return absl::OkStatus();
 }
 
-// Example AppDB Table
-//  P4RT_ACL_TABLE_DEFINITION:P4RT_ACL_PUNT_TABLE
-//    "stage" = "INGRESS"
-//    "match/ether_type" = "SAI_ACL_ENTRY_ATTR_FIELD_ETHER_TYPE"
-//    "match/ether_dst" = "SAI_ACL_ENTRY_ATTR_FIELD_DST_MAC"
-//    "match/ipv6_dst" = "SAI_ACL_ENTRY_ATTR_FIELD_DST_IPV6"
-//    "match/ipv6_next_header" = "SAI_ACL_ENTRY_ATTR_FIELD_IPV6_NEXT_HEADER"
-//    "match/ttl" = "SAI_ACL_ENTRY_ATTR_FIELD_TTL"
-//    "match/icmp_type" = "SAI_ACL_ENTRY_ATTR_FIELD_ICMP_TYPE"
-//    "match/l4_dst_port" = "SAI_ACL_ENTRY_ATTR_FIELD_L4_DST_PORT"
-//    "action/copy_and_set_tc" = JsonToString([
-//      {"action": "SAI_PACKET_ACTION_COPY"},
-//      {"action": "SAI_ACL_ENTRY_ATTR_ACTION_SET_TC", "param": "traffic_class"}
-//    ])
-//    "action/punt_and_set_tc" = JsonToString([
-//      {"action": "SAI_PACKET_ACTION_PUNT"},
-//      {"action": "SAI_ACL_ENTRY_ATTR_ACTION_SET_TC", "param": "traffic_class"}
-//    ])
-//    "meter/unit" = "BYTES"
-//    "counter/unit" = "PACKETS"
-//    "size" = "123"
-//    "priority" = "234"
 StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
     const IrTableDefinition& ir_table) {
   std::vector<swss::FieldValueTuple> values;
@@ -908,9 +886,13 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
 
 }  // namespace
 
-Status VerifyAclTableDefinition(const IrTableDefinition& ir_table) {
-  RETURN_IF_ERROR(GenerateSonicDbKeyFromIrTable(ir_table).status());
-  return GenerateSonicDbValuesFromIrTable(ir_table).status();
+StatusOr<swss::KeyOpFieldsValuesTuple> AppDbAclTableDefinition(
+    const pdpi::IrTableDefinition& ir_table) {
+  swss::KeyOpFieldsValuesTuple kfv;
+  ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
+  ASSIGN_OR_RETURN(kfvFieldsValues(kfv),
+                   GenerateSonicDbValuesFromIrTable(ir_table));
+  return kfv;
 }
 
 StatusOr<std::string> InsertAclTableDefinition(

@@ -13,21 +13,21 @@
 // limitations under the License.
 #include "p4_pdpi/packetlib/packetlib.h"
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
-#include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "absl/types/variant.h"
 #include "glog/logging.h"
@@ -37,7 +37,6 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
-#include "p4_pdpi/netaddr/network_address.h"
 #include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
@@ -129,9 +128,10 @@ absl::StatusOr<NextHeader> GetNextHeader(const Ipv6Header& header) {
 absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
   ASSIGN_OR_RETURN(auto dest_port,
                    pdpi::HexStringToInt32(header.destination_port()));
-  if (dest_port == kIpfixUdpDestPort) {
+  if (dest_port == kIpfixUdpDestPort)
     return Header::kIpfixHeader;
-  }
+  if (dest_port == 319)
+    return Header::kPtpHeader;
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const TcpHeader& header) {
@@ -147,6 +147,9 @@ absl::StatusOr<NextHeader> GetNextHeader(const IpfixHeader& header) {
   return Header::kPsampHeader;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const PsampHeader& header) {
+  return Header::HEADER_NOT_SET;
+}
+absl::StatusOr<NextHeader> GetNextHeader(const PtpHeader &header) {
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
@@ -175,6 +178,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
       return GetNextHeader(header.ipfix_header());
     case Header::kPsampHeader:
       return GetNextHeader(header.psamp_header());
+    case Header::kPtpHeader:
+      return GetNextHeader(header.ptp_header());
     case Header::HEADER_NOT_SET:
       return Header::HEADER_NOT_SET;
   }
@@ -524,6 +529,34 @@ absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
   return header;
 }
 
+absl::StatusOr<PtpHeader> ParsePtpHeader(pdpi::BitString &data) {
+  if (data.size() < kPtpHeaderBitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Packet is too short to parse a PTP header next. Only "
+           << data.size() << " bits left, need at least " << kPtpHeaderBitwidth
+           << ".";
+  }
+  PtpHeader header;
+
+  header.set_transport_specific(ParseBits(data, kPtpTransportSpecificBitwidth));
+  header.set_message_type(ParseBits(data, kPtpMessageTypeBitwidth));
+  header.set_reserved0(ParseBits(data, kPtpReserved0Bitwidth));
+  header.set_version_ptp(ParseBits(data, kPtpVersionPtpBitwidth));
+  header.set_message_length(ParseBits(data, kPtpMessageLengthBitwidth));
+  header.set_domain_number(ParseBits(data, kPtpDomainNumberBitwidth));
+  header.set_reserved1(ParseBits(data, kPtpReserved1Bitwidth));
+  header.set_flags(ParseBits(data, kPtpFlagsBitwidth));
+  header.set_correction_field(ParseBits(data, kPtpCorrectionFieldBitwidth));
+  header.set_reserved2(ParseBits(data, kPtpReserved2Bitwidth));
+  header.set_source_port_identity(
+      ParseBits(data, kPtpSourcePortIdentityBitwidth));
+  header.set_sequence_id(ParseBits(data, kPtpSequenceIdBitwidth));
+  header.set_control_field(ParseBits(data, kPtpControlFieldBitwidth));
+  header.set_log_message_interval(
+      ParseBits(data, kPtpLogMessageIntervalBitwidth));
+  return header;
+}
+
 absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
                                    pdpi::BitString& data) {
   Header result;
@@ -576,6 +609,10 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
     }
     case Header::kPsampHeader: {
       ASSIGN_OR_RETURN(*result.mutable_psamp_header(), ParsePsampHeader(data));
+      return result;
+    }
+    case Header::kPtpHeader: {
+      ASSIGN_OR_RETURN(*result.mutable_ptp_header(), ParsePtpHeader(data));
       return result;
     }
     case Header::HEADER_NOT_SET:
@@ -1413,6 +1450,105 @@ void PsampHeaderInvalidReasons(const PsampHeader& header,
     }
   }
 }
+
+void PtpHeaderInvalidReasons(const PtpHeader &header,
+                             const std::string &field_prefix,
+                             const Packet &packet, int header_index,
+                             std::vector<std::string> &output) {
+  HexStringInvalidReasons<kPtpTransportSpecificBitwidth>(
+      header.transport_specific(),
+      absl::StrCat(field_prefix, "transport_specific"), output);
+  HexStringInvalidReasons<kPtpVersionPtpBitwidth>(
+      header.version_ptp(), absl::StrCat(field_prefix, "version_ptp"), output);
+  HexStringInvalidReasons<kPtpDomainNumberBitwidth>(
+      header.domain_number(), absl::StrCat(field_prefix, "domain_number"),
+      output);
+  HexStringInvalidReasons<kPtpFlagsBitwidth>(
+      header.flags(), absl::StrCat(field_prefix, "flags"), output);
+  HexStringInvalidReasons<kPtpCorrectionFieldBitwidth>(
+      header.correction_field(), absl::StrCat(field_prefix, "correction_field"),
+      output);
+  HexStringInvalidReasons<kPtpSourcePortIdentityBitwidth>(
+      header.source_port_identity(),
+      absl::StrCat(field_prefix, "source_port_identity"), output);
+  HexStringInvalidReasons<kPtpSequenceIdBitwidth>(
+      header.sequence_id(), absl::StrCat(field_prefix, "sequence_id"), output);
+  HexStringInvalidReasons<kPtpControlFieldBitwidth>(
+      header.control_field(), absl::StrCat(field_prefix, "control_field"),
+      output);
+  HexStringInvalidReasons<kPtpLogMessageIntervalBitwidth>(
+      header.log_message_interval(),
+      absl::StrCat(field_prefix, "log_message_interval"), output);
+
+  // Event messages (i.e. UDP port 319) will have a value between [0x0,0x3].
+  // General messages (i.e. UDP port 320) will have a value between [0x8,0xD],
+  // but we don't support these today. Values [0x4,0x7] and [0xE-0xF] are
+  // reserved.
+  bool message_type_invalid = HexStringInvalidReasons<kPtpMessageTypeBitwidth>(
+      header.message_type(), absl::StrCat(field_prefix, "message_type"),
+      output);
+  if (!message_type_invalid) {
+    if (int message_type_value;
+        !absl::SimpleHexAtoi(header.message_type(), &message_type_value)) {
+      output.push_back(absl::StrFormat(
+          "%smessage_type: Couldn't translate hex string '%s' to an integer.",
+          field_prefix, header.message_type()));
+    } else if (!(message_type_value >= 0x0 && message_type_value <= 0x3)) {
+      output.push_back(absl::StrFormat(
+          "%smessage_type: value '%s' is invalid. expecting a value in the "
+          "range [0x0,0x3]",
+          field_prefix, header.message_type()));
+    }
+  }
+
+  // Check that the reserved fields are all set to 0.
+  bool reserved0_invalid = HexStringInvalidReasons<kPtpReserved0Bitwidth>(
+      header.reserved0(), absl::StrCat(field_prefix, "reserved0"), output);
+  if (!reserved0_invalid && header.reserved0() != "0x0") {
+    output.push_back(absl::StrCat(field_prefix,
+                                  "reserved0: Must be 0x0, but was ",
+                                  header.reserved0(), " instead."));
+  }
+
+  bool reserved1_invalid = HexStringInvalidReasons<kPtpReserved1Bitwidth>(
+      header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
+  if (!reserved1_invalid && header.reserved1() != "0x00") {
+    output.push_back(absl::StrCat(field_prefix,
+                                  "reserved1: Must be 0x00, but was ",
+                                  header.reserved1(), " instead."));
+  }
+
+  bool reserved2_invalid = HexStringInvalidReasons<kPtpReserved2Bitwidth>(
+      header.reserved2(), absl::StrCat(field_prefix, "reserved2"), output);
+  if (!reserved2_invalid && header.reserved2() != "0x00000000") {
+    output.push_back(absl::StrCat(field_prefix,
+                                  "reserved2: Must be 0x00000000, but was ",
+                                  header.reserved2(), " instead."));
+  }
+
+  // Message length should match the header size plus the remaining bytes in the
+  // packet.
+  bool message_length_invalid =
+      HexStringInvalidReasons<kPtpMessageLengthBitwidth>(
+          header.message_length(), absl::StrCat(field_prefix, "message_length"),
+          output);
+  if (!message_length_invalid) {
+    if (auto size = PacketSizeInBytes(packet, header_index); !size.ok()) {
+      output.push_back(absl::StrFormat(
+          "%smessage_length: Couldn't compute expected size: %s", field_prefix,
+          size.status().ToString()));
+    } else {
+      std::string expected = pdpi::BitsetToHexString(
+          std::bitset<kPtpMessageLengthBitwidth>(*size));
+      if (header.message_length() != expected) {
+        output.push_back(
+            absl::StrFormat("%smessage_length: Must be %s, but was %s instead.",
+                            field_prefix, expected, header.message_length()));
+      }
+    }
+  }
+}
+
 }  // namespace
 
 std::string HeaderCaseName(Header::HeaderCase header_case) {
@@ -1441,6 +1577,8 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
       return "IpfixHeader";
     case Header::kPsampHeader:
       return "PsampHeader";
+    case Header::kPtpHeader:
+      return "PtpHeader";
     case Header::HEADER_NOT_SET:
       return "HEADER_NOT_SET";
   }
@@ -1530,6 +1668,11 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
       case Header::kPsampHeader: {
         PsampHeaderInvalidReasons(header.psamp_header(), error_prefix, packet,
                                   index, result);
+        break;
+      }
+      case Header::kPtpHeader: {
+        PtpHeaderInvalidReasons(header.ptp_header(), error_prefix, packet,
+                                index, result);
         break;
       }
       case Header::HEADER_NOT_SET:
@@ -1801,6 +1944,38 @@ absl::Status SerializePsampHeader(const PsampHeader& header,
   return absl::OkStatus();
 }
 
+absl::Status SerializePtpHeader(const PtpHeader &header,
+                                pdpi::BitString &output) {
+  RETURN_IF_ERROR(SerializeBits<kPtpTransportSpecificBitwidth>(
+      header.transport_specific(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpMessageTypeBitwidth>(header.message_type(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpReserved0Bitwidth>(header.reserved0(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpVersionPtpBitwidth>(header.version_ptp(), output));
+  RETURN_IF_ERROR(SerializeBits<kPtpMessageLengthBitwidth>(
+      header.message_length(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpDomainNumberBitwidth>(header.domain_number(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpReserved1Bitwidth>(header.reserved1(), output));
+  RETURN_IF_ERROR(SerializeBits<kPtpFlagsBitwidth>(header.flags(), output));
+  RETURN_IF_ERROR(SerializeBits<kPtpCorrectionFieldBitwidth>(
+      header.correction_field(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpReserved2Bitwidth>(header.reserved2(), output));
+  RETURN_IF_ERROR(SerializeBits<kPtpSourcePortIdentityBitwidth>(
+      header.source_port_identity(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpSequenceIdBitwidth>(header.sequence_id(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPtpControlFieldBitwidth>(header.control_field(), output));
+  RETURN_IF_ERROR(SerializeBits<kPtpLogMessageIntervalBitwidth>(
+      header.log_message_interval(), output));
+  return absl::OkStatus();
+}
+
 absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
   switch (header.header_case()) {
     case Header::kEthernetHeader:
@@ -1828,6 +2003,8 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
     case Header::kSaiP4Bmv2PacketInHeader:
       return SerializeSaiP4BMv2PacketInHeader(
           header.sai_p4_bmv2_packet_in_header(), output);
+    case Header::kPtpHeader:
+      return SerializePtpHeader(header.ptp_header(), output);
     case Header::HEADER_NOT_SET:
       return gutil::InvalidArgumentErrorBuilder()
              << "Found invalid HEADER_NOT_SET in header.";
@@ -2104,6 +2281,17 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         }
         break;
       }
+      case Header::kPtpHeader: {
+        PtpHeader &ptp_header = *header.mutable_ptp_header();
+        if (ptp_header.message_length().empty() || overwrite) {
+          ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
+                           _.SetPrepend() << error_prefix << "length: ");
+          ptp_header.set_message_length(pdpi::BitsetToHexString(
+              std::bitset<kPtpMessageLengthBitwidth>(size)));
+          changes = true;
+        }
+        break;
+      }
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
                << "Invalid packet with HEADER_NOT_SET: "
@@ -2151,6 +2339,7 @@ absl::StatusOr<bool> PadPacketToMinimumSizeFromHeaderIndex(Packet& packet,
     case Header::kSaiP4Bmv2PacketInHeader:
     case Header::kIpfixHeader:
     case Header::kPsampHeader:
+    case Header::kPtpHeader:
       return PadPacketToMinimumSizeFromHeaderIndex(packet, header_index + 1);
     case Header::HEADER_NOT_SET:
       return false;
@@ -2251,6 +2440,9 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
         break;
       case Header::kPsampHeader:
         size += kPsampHeaderBitwidth;
+        break;
+      case Header::kPtpHeader:
+        size += kPtpHeaderBitwidth;
         break;
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
