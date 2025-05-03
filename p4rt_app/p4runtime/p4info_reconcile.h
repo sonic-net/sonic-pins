@@ -31,7 +31,7 @@ struct P4InfoReconcileTransition {
   std::vector<std::string> hashing_packet_field_configs_to_set;
   bool update_switch_table = false;
 
-  // ACL (Currently unused).
+  // ACL
   std::vector<std::string> acl_tables_to_delete;
   std::vector<std::string> acl_tables_to_add;
   std::vector<std::string> acl_tables_to_modify;

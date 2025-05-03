@@ -43,8 +43,6 @@ control mirror_session_lookup(inout headers_t headers,
   // * SAI_MIRROR_SESSION_ATTR_IPFIX_ENCAPSULATION_TYPE to
   //   SAI_IPFIX_ENCAPSULATION_TYPE_EXTENDED
   // * SAI_MIRROR_SESSION_ATTR_MONITOR_PORT to `monitor_port`
-  // * SAI_MIRROR_SESSION_ATTR_MONITOR_FAILOVER_PORT to
-  //   `monitor_failover_port
   // * SAI_MIRROR_SESSION_ATTR_SRC_MAC_ADDRESS
   // * SAI_MIRROR_SESSION_ATTR_DST_MAC_ADDRESS
   // * SAI_MIRROR_SESSION_ATTR_VLAN_TPID
@@ -53,6 +51,12 @@ control mirror_session_lookup(inout headers_t headers,
   // * SAI_MIRROR_SESSION_ATTR_DST_IP_ADDRESS
   // * SAI_MIRROR_SESSION_ATTR_UDP_SRC_PORT
   // * SAI_MIRROR_SESSION_ATTR_UDP_DST_PORT
+  //
+  // `monitor_failover_port` is used by OrchAgent to update
+  // SAI_MIRROR_SESSION_ATTR_MONITOR_PORT when `monitor_port` goes down.
+  // monitor_failover_port is not associated with any SAI ATTR But OrchAgent
+  // will switch to using it when `monitor_port` goes down.
+  // This is similar to how OrchAgent handles watch ports.
   @id(CLONING_MIRROR_WITH_VLAN_TAG_AND_IPFIX_ENCAPSULATION_ACTION_ID)
   action mirror_with_vlan_tag_and_ipfix_encapsulation(
       @id(1) port_id_t monitor_port,
@@ -158,8 +162,8 @@ control mirroring_encap(inout headers_t headers,
 
       // IPFIX and PSAMP fields are opaque to P4 so we only set their headers
       // as valid.
-      headers.ipfix.setValid();
-      headers.psamp_extended.setValid();
+      headers.mirror_encap_ipfix.setValid();
+      headers.mirror_encap_psamp_extended.setValid();
     }
   }
 }  // control mirroring_encap

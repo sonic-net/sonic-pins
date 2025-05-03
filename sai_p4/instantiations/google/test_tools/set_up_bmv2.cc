@@ -30,6 +30,7 @@
 namespace sai {
 
 using ::orion::p4::test::Bmv2;
+using ::orion::p4::test::Bmv2Args;
 using ::p4::v1::ForwardingPipelineConfig;
 constexpr int kV1ModelPortBitwidth = 9;
 constexpr int kV1ModelCloneSessionBitwidth = 32;
@@ -223,7 +224,7 @@ absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
 }  // namespace
 
 absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(
-    const ForwardingPipelineConfig& bmv2_config, Bmv2::Args bmv2_args) {
+    const ForwardingPipelineConfig& bmv2_config, Bmv2Args bmv2_args) {
   ASSIGN_OR_RETURN(Bmv2 bmv2, Bmv2::Create(std::move(bmv2_args)));
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       &bmv2.P4RuntimeSession(),
@@ -253,7 +254,7 @@ absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(
 }
 
 absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(Instantiation instantiation,
-                                       Bmv2::Args bmv2_args) {
+                                       Bmv2Args bmv2_args) {
   return SetUpBmv2ForSaiP4(GetNonstandardForwardingPipelineConfig(
                                instantiation, NonstandardPlatform::kBmv2),
                            std::move(bmv2_args));

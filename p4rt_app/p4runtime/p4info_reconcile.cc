@@ -15,6 +15,7 @@
 #include "p4rt_app/p4runtime/p4info_reconcile.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_set.h"
@@ -22,7 +23,10 @@
 #include "absl/status/statusor.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/hashing.h"
+#include "p4rt_app/sonic/swss_utils.h"
+#include "p4rt_app/utils/table_utility.h"
 
 namespace p4rt_app {
 namespace {
@@ -114,12 +118,80 @@ absl::Status CalculateHashingDifference(const pdpi::IrP4Info& from,
   return absl::OkStatus();
 }
 
+absl::StatusOr<absl::btree_set<std::string>> GetAclTableNames(
+    const pdpi::IrP4Info& p4info) {
+  absl::btree_set<std::string> acl_table_names;
+  for (const auto& [name, table] : p4info.tables_by_name()) {
+    ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
+                     _.SetPrepend()
+                         << "Failed to determine table type of table '" << name
+                         << "': ");
+    if (table_type == table::Type::kAcl) acl_table_names.insert(name);
+  }
+  return acl_table_names;
+}
+
+absl::StatusOr<bool> IsValidModification(
+    const pdpi::IrTableDefinition& from_table,
+    const pdpi::IrTableDefinition& to_table) {
+  auto from_db_table = sonic::AppDbAclTableDefinition(from_table);
+  if (!from_db_table.ok()) {
+    return gutil::InternalErrorBuilder()
+           << "Failed to generate AppDB representation of ACL table from "
+           << "existing P4Info: " << from_db_table.status().message();
+  }
+  ASSIGN_OR_RETURN(auto to_db_table, sonic::AppDbAclTableDefinition(to_table),
+                   _.SetPrepend()
+                       << "Failed to generate AppDB format for ACL table "
+                       << to_table.preamble().alias());
+
+  // We don't bother with the return status code here because the ACL table
+  // definition always has a stage.
+  ASSIGN_OR_RETURN(std::string from_stage,
+                   sonic::kfvFieldLookup(*from_db_table, "stage"));
+  ASSIGN_OR_RETURN(std::string to_stage,
+                   sonic::kfvFieldLookup(to_db_table, "stage"));
+
+  if (from_stage != to_stage) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "ACL tables may not change stage. Cannot transition table '"
+           << to_table.preamble().alias() << "' from stage '" << from_stage
+           << "' to '" << to_stage << "'";
+  }
+
+  return !sonic::kfvEq(*from_db_table, to_db_table);
+}
+
+absl::Status CalculateAclDifference(const pdpi::IrP4Info& from,
+                                    const pdpi::IrP4Info& to,
+                                    P4InfoReconcileTransition& transition) {
+  ASSIGN_OR_RETURN(absl::btree_set<std::string> from_acl_table_names,
+                   GetAclTableNames(from));
+  ASSIGN_OR_RETURN(absl::btree_set<std::string> to_acl_table_names,
+                   GetAclTableNames(to));
+
+  SetDifference<std::string> acl_table_diff =
+      CalculateSetDifference(from_acl_table_names, to_acl_table_names);
+
+  transition.acl_tables_to_add = std::move(acl_table_diff.added);
+  transition.acl_tables_to_delete = std::move(acl_table_diff.deleted);
+
+  for (const std::string& table_name : acl_table_diff.intersection) {
+    pdpi::IrTableDefinition from_table = from.tables_by_name().at(table_name);
+    pdpi::IrTableDefinition to_table = to.tables_by_name().at(table_name);
+    ASSIGN_OR_RETURN(bool modified, IsValidModification(from_table, to_table));
+    if (modified) transition.acl_tables_to_modify.push_back(table_name);
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<P4InfoReconcileTransition> CalculateTransition(
     const pdpi::IrP4Info& from, const pdpi::IrP4Info& to) {
   P4InfoReconcileTransition transition;
   RETURN_IF_ERROR(CalculateHashingDifference(from, to, transition));
+  RETURN_IF_ERROR(CalculateAclDifference(from, to, transition));
   return transition;
 }
 
