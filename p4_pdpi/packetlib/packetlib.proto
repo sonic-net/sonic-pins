@@ -67,6 +67,7 @@ message Header {
     IpfixHeader ipfix_header = 11;
     PsampHeader psamp_header = 12;
     PtpHeader ptp_header = 13;
+    PspHeader psp_header = 14;
   }
 }
 
@@ -246,4 +247,19 @@ message PtpHeader {
   string sequence_id = 12;
   string control_field = 13;
   string log_message_interval = 14;
+}
+
+// message PspHeader (https://github.com/google/psp)
+message PspHeader {
+  string next_header = 1;
+  string header_ext_length = 2;
+  string reserved0 = 3;
+  string crypt_offset = 4;
+  string sample_bit = 5;
+  string drop_bit = 6;
+  string version = 7;
+  string virtualization_cookie_present = 8;
+  string reserved1 = 9;
+  string security_parameters_index = 10;
+  string initialization_vector = 11;
 }
