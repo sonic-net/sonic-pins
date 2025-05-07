@@ -33,6 +33,8 @@ constexpr int kSaiP4BMv2PacketInHeaderBitwidth = 24;
 constexpr int kIpfixHeaderBitwidth = 128;
 constexpr int kPsampHeaderBitwidth = 224;
 constexpr int kPtpHeaderBitwidth = 272;
+constexpr int kPspHeaderBitwidth = 128;
+constexpr int kCsigHeaderBitwidth = 32;
 
 // Ethernet constants.
 constexpr int kEthernetEthertypeBitwidth = 16;
@@ -42,6 +44,13 @@ constexpr int kVlanPriorityCodePointBitwidth = 3;
 constexpr int kVlanDropEligibilityIndicatorBitwidth = 1;
 constexpr int kVlanVlanIdentifierBitwidth = 12;
 constexpr int kVlanEthertypeBitwidth = 16;
+
+// CSIG constants.
+constexpr int kCsigSignalTypeBitwidth = 3;
+constexpr int kCsigReserved0Bitwidth = 1;
+constexpr int kCsigSignalValueBitwidth = 5;
+constexpr int kCsigLocatorMetadataBitwidth = 7;
+constexpr int kCsigEthertypeBitwidth = 16;
 
 // IP constants.
 constexpr int kIpVersionBitwidth = 4;         // IPv4 & IPv6
@@ -135,6 +144,21 @@ constexpr int kPtpSourcePortIdentityBitwidth = 80;
 constexpr int kPtpSequenceIdBitwidth = 16;
 constexpr int kPtpControlFieldBitwidth = 8;
 constexpr int kPtpLogMessageIntervalBitwidth = 8;
+
+// PSP constants
+// NOTE: There is an optional virtualization_cookie field that we do not model
+// since we do not yet have a use-case.
+constexpr int kPspNextHeaderBitwidth = 8;
+constexpr int kPspHeaderExtLengthBitwidth = 8;
+constexpr int kPspReserved0Bitwidth = 2;
+constexpr int kPspCryptOffsetBitwidth = 6;
+constexpr int kPspSampleBitwidth = 1;
+constexpr int kPspDropBitwidth = 1;
+constexpr int kPspVersionBitwidth = 4;
+constexpr int kPspVirtualizationCookieBitwidth = 1;
+constexpr int kPspReserved1Bitwidth = 1;
+constexpr int kPspSecurityParametersIndexBitwidth = 32;
+constexpr int kPspInitializationVectorBitwidth = 64;
 
 } // namespace packetlib
 

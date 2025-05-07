@@ -67,6 +67,8 @@ message Header {
     IpfixHeader ipfix_header = 11;
     PsampHeader psamp_header = 12;
     PtpHeader ptp_header = 13;
+    PspHeader psp_header = 14;
+    CsigHeader csig_header = 15;
   }
 }
 
@@ -85,6 +87,15 @@ message VlanHeader {
   string drop_eligible_indicator = 2;  // 1 bit
   string vlan_identifier = 3;          // 12 bits
   string ethertype = 4;                // 16 bits
+}
+
+// A CSIG header.
+message CsigHeader {
+  string signal_type = 1;       // 3 bits
+  string reserved0 = 2;         // 1 bit
+  string signal_value = 3;      // 5 bits
+  string locator_metadata = 4;  // 7 bits
+  string ethertype = 5;         // 16 bits
 }
 
 // An ARP header.
@@ -246,4 +257,19 @@ message PtpHeader {
   string sequence_id = 12;
   string control_field = 13;
   string log_message_interval = 14;
+}
+
+// message PspHeader (https://github.com/google/psp)
+message PspHeader {
+  string next_header = 1;
+  string header_ext_length = 2;
+  string reserved0 = 3;
+  string crypt_offset = 4;
+  string sample_bit = 5;
+  string drop_bit = 6;
+  string version = 7;
+  string virtualization_cookie_present = 8;
+  string reserved1 = 9;
+  string security_parameters_index = 10;
+  string initialization_vector = 11;
 }
