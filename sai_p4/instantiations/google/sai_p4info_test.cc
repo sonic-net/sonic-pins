@@ -6,6 +6,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
@@ -49,11 +50,13 @@ TEST_P(InstantiationTest, GetIrP4InfoDoesNotCrash) {
 
 TEST_P(InstantiationTest, GetP4InfoWithHashSeedReplacesHashSeed) {
   constexpr uint32_t kHashSeed = 1966175594;
-  std::string p4info = GetP4Info(GetParam()).ShortDebugString();
+  std::string p4info_textproto;
+  google::protobuf::TextFormat::PrintToString(GetP4Info(GetParam()),
+                                              &p4info_textproto);
   absl::StrReplaceAll({{"@sai_hash_seed(0)", "@sai_hash_seed(1966175594)"}},
-                      &p4info);
+                      &p4info_textproto);
   EXPECT_THAT(GetP4InfoWithHashSeed(GetParam(), kHashSeed),
-              gutil::EqualsProto(p4info));
+              gutil::EqualsProto(p4info_textproto));
 }
 
 INSTANTIATE_TEST_SUITE_P(
