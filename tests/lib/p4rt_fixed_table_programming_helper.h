@@ -72,6 +72,20 @@ struct IpTableOptions {
   std::optional<std::string> nexthop_id;
 };
 
+struct MulticastReplica {
+  std::string port;
+  int instance = 0;
+  std::string src_mac;
+  const std::string key;
+
+  MulticastReplica() = default;
+  MulticastReplica(std::string port, int instance, std::string src_mac)
+      : port(std::move(port)),
+        instance(instance),
+        src_mac(std::move(src_mac)),
+        key(absl::StrCat(this->port, "_", this->instance)) {}
+};
+
 absl::StatusOr<p4::v1::Update>
 Ipv4TableUpdate(const pdpi::IrP4Info &ir_p4_info, p4::v1::Update::Type type,
                 const IpTableOptions &ip_options);
@@ -79,6 +93,14 @@ Ipv4TableUpdate(const pdpi::IrP4Info &ir_p4_info, p4::v1::Update::Type type,
 absl::StatusOr<p4::v1::Update>
 Ipv6TableUpdate(const pdpi::IrP4Info &ir_p4_info, p4::v1::Update::Type type,
                 const IpTableOptions &ip_options);
+
+absl::StatusOr<p4::v1::Update> MulticastGroupUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    uint32_t group_id, absl::Span<MulticastReplica> replicas);
+
+absl::StatusOr<p4::v1::Update> MulticastRouterInterfaceTableUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    const MulticastReplica& replica);
 
 // The L3 admit table can optionally admit packets based on the ingress port.
 struct L3AdmitOptions {
