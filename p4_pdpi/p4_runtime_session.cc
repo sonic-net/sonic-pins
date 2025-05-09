@@ -48,8 +48,6 @@
 #include "p4_pdpi/sequencing.h"
 // TODO: A temporary dependence on SAI to mask a bug. Safe to remove
 // in April 2024.
-#include "google/protobuf/descriptor.h"
-#include "google/protobuf/util/message_differencer.h"
 #include "gutil/status.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "thinkit/switch.h"

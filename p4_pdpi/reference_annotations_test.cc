@@ -393,7 +393,7 @@ TEST(CreateIrActionField, FailsForUnknownP4Param) {
 
 // -- FieldIsOptional Test -----------------------------------------------------
 
-TEST(FieldIsOptional, OnlyReturnsTrueForP4OptionalMatchField) {
+TEST(FieldIsOptional, OnlyReturnsTrueIfIrFieldHoldsP4OptionalMatchField) {
   // Under-specified protos return false.
   EXPECT_FALSE(FieldIsOptional(ParseProtoOrDie<IrField>(R"pb()pb")));
   EXPECT_FALSE(FieldIsOptional(ParseProtoOrDie<IrField>(R"pb(
@@ -424,6 +424,34 @@ TEST(FieldIsOptional, OnlyReturnsTrueForP4OptionalMatchField) {
   // Optional p4 match field returns true.
   EXPECT_TRUE(FieldIsOptional(ParseProtoOrDie<IrField>(R"pb(
     match_field { p4_match_field { is_optional: true } }
+  )pb")));
+}
+
+TEST(FieldIsOptional, OnlyReturnsTrueIfIrMatchFieldHoldsP4OptionalMatchField) {
+  // Built-in match field returns false.
+  EXPECT_FALSE(FieldIsOptional(ParseProtoOrDie<IrMatchField>(R"pb(
+    built_in_match_field: BUILT_IN_MATCH_FIELD_UNSPECIFIED
+  )pb")));
+
+  // Non-optional p4 match field returns false.
+  EXPECT_FALSE(FieldIsOptional(ParseProtoOrDie<IrMatchField>(R"pb(
+    p4_match_field {}
+  )pb")));
+
+  // Optional p4 match field returns true.
+  EXPECT_TRUE(FieldIsOptional(ParseProtoOrDie<IrMatchField>(R"pb(
+    p4_match_field { is_optional: true }
+  )pb")));
+}
+
+TEST(FieldIsOptional, OnlyReturnsTrueIfIrP4MatchFieldHoldsOptionalMatchField) {
+  // Non-optional p4 match field returns false.
+  EXPECT_FALSE(FieldIsOptional(ParseProtoOrDie<IrP4MatchField>(R"pb(
+  )pb")));
+
+  // Optional p4 match field returns true.
+  EXPECT_TRUE(FieldIsOptional(ParseProtoOrDie<IrP4MatchField>(R"pb(
+    is_optional: true
   )pb")));
 }
 
