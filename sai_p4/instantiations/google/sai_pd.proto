@@ -224,7 +224,6 @@ message MulticastRouterInterfaceTableEntry {
   message Action {
     oneof action {
       SetMulticastSrcMacAction set_multicast_src_mac = 1;
-      // CAUTION: This action is not (yet) supported.
       L2MulticastPassthroughAction l2_multicast_passthrough = 2;
     }
   }
@@ -344,9 +343,15 @@ message AclIngressTableEntry {
     Ternary arp_tpa = 16;      // ternary match / Format::IPV4
     Optional in_port = 17;     // optional match / Format::STRING
     Optional route_metadata =
-        18;                    // optional match / Format::HEX_STRING / 6 bits
-    Ternary icmp_type = 19;    // ternary match / Format::HEX_STRING / 8 bits
-    Ternary l4_src_port = 20;  // ternary match / Format::HEX_STRING / 16 bits
+        18;                     // optional match / Format::HEX_STRING / 6 bits
+    Ternary icmp_type = 19;     // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_src_port = 20;   // ternary match / Format::HEX_STRING / 16 bits
+    Ternary acl_metadata = 21;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary psp_next_header =
+        22;                 // ternary match / Format::HEX_STRING / 8 bits
+    Ternary psp_info = 23;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary inner_psp_udp_dst =
+        24;  // ternary match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
@@ -523,6 +528,7 @@ message AclPreIngressVlanTableEntry {
     Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
     Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
     Ternary vlan_id = 5;     // ternary match / Format::HEX_STRING / 12 bits
+    Optional in_port = 6;    // optional match / Format::STRING
   }
   Match match = 1;
   message Action {
@@ -539,14 +545,11 @@ message AclPreIngressVlanTableEntry {
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
-// ## DSCP is only allowed on IP traffic.
-//   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-//   ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Forbid unsupported combinations of IP_TYPE fields.
 //   is_ipv4::mask != 0 -> (is_ipv4 == 1);
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
-// ## Only allow icmp_type matches for ICMP packets
-//   icmpv6_type::mask != 0 -> ip_protocol == 58;
+//   dst_ip::mask != 0 -> is_ipv4 == 1;
+//   dst_ipv6::mask != 0 -> is_ipv6 == 1;
 message AclPreIngressMetadataTableEntry {
   message Match {
     Optional is_ip = 1;       // optional match / Format::HEX_STRING / 1 bits
@@ -557,6 +560,8 @@ message AclPreIngressMetadataTableEntry {
     Ternary dscp = 6;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary ecn = 7;          // ternary match / Format::HEX_STRING / 2 bits
     Optional in_port = 8;     // optional match / Format::STRING
+    Ternary dst_ip = 9;       // ternary match / Format::IPV4
+    Ternary dst_ipv6 = 10;    // ternary match / Format::IPV6 / upper 64 bits
   }
   Match match = 1;
   message Action {
@@ -619,8 +624,10 @@ message AclIngressQosTableEntry {
           set_cpu_queue_and_deny_above_rate_limit = 2;
       SetCpuQueueAction set_cpu_queue = 5;
       // CAUTION: This action is not (yet) supported.
-      SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction
-          set_cpu_and_multicast_queues_and_deny_above_rate_limit = 6;
+      SetDscpAndQueuesAndDenyAboveRateLimitAction
+          set_dscp_and_queues_and_deny_above_rate_limit = 6;
+      // CAUTION: This action is not (yet) supported.
+      SetForwardingQueuesAction set_forwarding_queues = 7;
     }
   }
   Action action = 2;
@@ -757,7 +764,8 @@ message AclIngressMirrorAndRedirectTableEntry {
     Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
     Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
-    Optional vrf_id = 8;       // optional match / Format::STRING
+    // Refers to 'vrf_table.vrf_id'.
+    Optional vrf_id = 8; // optional match / Format::STRING
     Optional ipmc_table_hit =
         9;                // optional match / Format::HEX_STRING / 1 bits
     Ternary dst_ip = 10;  // ternary match / Format::IPV4
@@ -905,7 +913,8 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
   string mirror_encap_udp_dst_port = 10;  // Format::HEX_STRING / 16 bits
 }
 
-// CAUTION: This action is not (yet) supported.
+message EgressLoopbackAction {}
+
 message L2MulticastPassthroughAction {}
 
 message SetVrfAction {
@@ -961,10 +970,13 @@ message SetCpuQueueAction {
 }
 
 // CAUTION: This action is not (yet) supported.
-message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
-  string cpu_queue = 1;              // Format::STRING
-  string green_multicast_queue = 2;  // Format::STRING
-  string red_multicast_queue = 3;    // Format::STRING
+message SetDscpAndQueuesAndDenyAboveRateLimitAction {
+  string dscp = 1;                   // Format::HEX_STRING / 6 bits
+  string cpu_queue = 2;              // Format::STRING
+  string green_multicast_queue = 3;  // Format::STRING
+  string red_multicast_queue = 4;    // Format::STRING
+  string green_unicast_queue = 5;    // Format::STRING
+  string red_unicast_queue = 6;      // Format::STRING
 }
 
 message RedirectToNexthopAction {
@@ -979,6 +991,14 @@ message RedirectToIpmcGroupAction {
 // CAUTION: This action is not (yet) supported.
 message RedirectToL2mcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetForwardingQueuesAction {
+  string green_multicast_queue = 1;  // Format::STRING
+  string red_multicast_queue = 2;    // Format::STRING
+  string green_unicast_queue = 3;    // Format::STRING
+  string red_unicast_queue = 4;      // Format::STRING
 }
 
 message NoAction {}

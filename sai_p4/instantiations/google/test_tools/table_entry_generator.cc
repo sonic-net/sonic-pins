@@ -281,6 +281,28 @@ TableEntryGenerator MulticastRouterInterfaceTableGenerator(
   };
 }
 
+TableEntryGenerator Ipv6TunnelTerminationGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  TableEntryGenerator generator;
+  auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(R"pb(
+    table_name: "ipv6_tunnel_termination_table"
+    priority: 1
+    matches {
+      name: "src_ipv6"
+      ternary {
+        value { ipv6: "0001:0002:0003:0004:0005:0006:1111:2222" }
+        mask { ipv6: "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff" }
+      }
+
+    }
+    action { name: "tunnel_decap" }
+  )pb");
+  if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
+  generator.generator =
+      IrMatchFieldGenerator(table_definition, *base_entry, "dst_ipv6");
+  return generator;
+}
+
 const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
   static const auto* const kUnsupportedTables =
       new absl::flat_hash_set<std::string>({
@@ -301,9 +323,6 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
-          // TODO: Add support for this table once the switch
-          // supports it.
-          "ipv6_tunnel_termination_table",
           // TODO: Add support for these tables once the switch
           // supports it.
           "ipv4_multicast_table",
@@ -335,6 +354,7 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"acl_egress_dhcp_to_host_table", AclEgressDhcpToHostTableGenerator},
       {"ipv4_table", Ipv4TableGenerator},
       {"ipv6_table", Ipv6TableGenerator},
+      {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
       {"multicast_router_interface_table",
        MulticastRouterInterfaceTableGenerator},

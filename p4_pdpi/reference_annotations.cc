@@ -160,8 +160,14 @@ absl::StatusOr<IrActionField> CreateIrBuiltInActionField(
 
 }  // namespace
 
+bool FieldIsOptional(const IrP4MatchField &p4_match_field) {
+  return p4_match_field.is_optional();
+}
+bool FieldIsOptional(const IrMatchField &match_field) {
+  return FieldIsOptional(match_field.p4_match_field());
+}
 bool FieldIsOptional(const IrField &field) {
-  return field.match_field().p4_match_field().is_optional();
+  return FieldIsOptional(field.match_field());
 }
 
 absl::StatusOr<IrTable> CreateIrTable(absl::string_view table_name,
