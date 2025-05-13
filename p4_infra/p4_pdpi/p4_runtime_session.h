@@ -205,6 +205,10 @@ class P4RuntimeSession {
   GetForwardingPipelineConfig(
       const p4::v1::GetForwardingPipelineConfigRequest& request);
 
+  // Method to fetch switch capabilities.
+  absl::StatusOr<p4::v1::CapabilitiesResponse> GetSwitchCapabilities(
+      const p4::v1::CapabilitiesRequest& request);
+
   // Returns the id of the node that this session belongs to.
   uint32_t DeviceId() const { return device_id_; }
   // Returns the election id that has been used to perform arbitration.

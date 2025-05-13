@@ -292,6 +292,18 @@ bool P4RuntimeSession::StreamChannelRead(
   return false;
 }
 
+absl::StatusOr<p4::v1::CapabilitiesResponse>
+P4RuntimeSession::GetSwitchCapabilities(
+    const p4::v1::CapabilitiesRequest& request) {
+  grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
+  p4::v1::CapabilitiesResponse response;
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      stub_->Capabilities(&context, request, &response)));
+  return response;
+}
+
 bool P4RuntimeSession::StreamChannelWrite(
     const p4::v1::StreamMessageRequest& request) {
   absl::MutexLock lock(&stream_write_lock_);
@@ -496,20 +508,27 @@ absl::Status SetMetadataAndSendPiWriteRequests(
 
 absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
   ReadRequest read_request;
-  read_request.add_entities()->mutable_table_entry();
-  // Currently, `ReadPiEntities()` cannot read all PRE entities due to ambiguity
-  // expanded upon here
-  // P4RT App bug is fixed, it will only read
-  // `multicast_group_entry`, but we will eventually want to read
-  // `clone_session_entry` again.
-  // TODO: b/332944773 - Remove the workaround that allows `ReadPiEntities()`
-  // read entities without failing.
+  // Read all table entries and their associated counters and meters.
+  TableEntry& table_entry = *read_request.add_entities()->mutable_table_entry();
+  table_entry.mutable_meter_config();
+  table_entry.mutable_counter_data();
+  table_entry.mutable_meter_counter_data();
+
+  // Read all Packet Replication Engine entities.
+  // Currently, there is ambiguity in the P4 Runtime specification regarding PRE
+  // wildcard reads
+  // (https://github.com/p4lang/PI/pull/610#issuecomment-2011101546). Depending
+  // on the resolution of that issue, we may want to combine these to lines to
+  // only add a single PRE entry. BMv2 does not currently support that.
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
+  read_request.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_clone_session_entry();
+
   ASSIGN_OR_RETURN(ReadResponse read_response,
                    SetMetadataAndSendPiReadRequest(session, read_request));
-
   return std::vector<Entity>{read_response.entities().begin(),
                              read_response.entities().end()};
 }
@@ -517,7 +536,12 @@ absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
 absl::StatusOr<std::vector<TableEntry>> ReadPiTableEntries(
     P4RuntimeSession* session) {
   ReadRequest read_request;
-  read_request.add_entities()->mutable_table_entry();
+  // Read all table entries and their associated counters and meters.
+  TableEntry& table_entry = *read_request.add_entities()->mutable_table_entry();
+  table_entry.mutable_meter_config();
+  table_entry.mutable_counter_data();
+  table_entry.mutable_meter_counter_data();
+
   ASSIGN_OR_RETURN(ReadResponse read_response,
                    SetMetadataAndSendPiReadRequest(session, read_request));
 
