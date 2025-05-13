@@ -299,12 +299,12 @@ absl::Status DeleteIrEntity(P4RuntimeSession& p4rt,
 // Deletes the given `ir_entities` from the switch.
 absl::Status DeleteIrEntities(P4RuntimeSession& p4rt,
                               const IrEntities& ir_entities) {
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, GetIrP4Info(p4rt),
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(p4rt),
                    _.SetPrepend() << "cannot delete entity on switch: failed "
                                      "to pull P4Info from switch: ");
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
                    IrEntitiesToPi(ir_p4info, ir_entities));
-  return DeletePiEntities(p4rt, pi_entities);
+  return pdpi::DeletePiEntities(p4rt, pi_entities);
 }
 
 absl::Status DeletePiEntity(P4RuntimeSession& p4rt,
