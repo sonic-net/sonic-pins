@@ -622,6 +622,8 @@ message AclIngressQosTableEntry {
       // CAUTION: This action is not (yet) supported.
       SetDscpAndQueuesAndDenyAboveRateLimitAction
           set_dscp_and_queues_and_deny_above_rate_limit = 6;
+      // CAUTION: This action is not (yet) supported.
+      SetMulticastQueuesAction set_multicast_queues = 7;
     }
   }
   Action action = 2;
@@ -983,6 +985,12 @@ message RedirectToIpmcGroupAction {
 // CAUTION: This action is not (yet) supported.
 message RedirectToL2mcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetMulticastQueuesAction {
+  string green_multicast_queue = 1;  // Format::STRING
+  string red_multicast_queue = 2;    // Format::STRING
 }
 
 message NoAction {}
