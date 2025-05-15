@@ -55,22 +55,27 @@ control drop_martians(in headers_t headers,
     // Drop the packet if:
     // - Src IPv6 address is in multicast range; or
     // - Src IPv4 address is in multicast or broadcast range; or
-    // - Src/Dst IPv4/IPv6 address is a loopback address.
+    // - Src/Dst IPv4/IPv6 address is a loopback address; or
+    // - Dst IPv4/IPv6 is the all-zero address.
     // Rationale:
     // Src IP multicast drop: https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
     // Src/Dst IP loopback drop: https://en.wikipedia.org/wiki/Localhost#Packet_processing
     //    "Packets received on a non-loopback interface with a loopback source
     //     or destination address must be dropped."
+    // Dst IP all zeroes drop: https://en.wikipedia.org/wiki/0.0.0.0
+    //    "RFC 1122 [...] prohibits this as a destination address."
     if ((headers.ipv6.isValid() &&
             (IS_MULTICAST_IPV6(headers.ipv6.src_addr) ||
              IS_LOOPBACK_IPV6(headers.ipv6.src_addr) ||
-             IS_LOOPBACK_IPV6(headers.ipv6.dst_addr))) ||
+             IS_LOOPBACK_IPV6(headers.ipv6.dst_addr) ||
+             headers.ipv6.dst_addr == 0)) ||
         (headers.ipv4.isValid() &&
             (IS_MULTICAST_IPV4(headers.ipv4.src_addr) ||
              IS_BROADCAST_IPV4(headers.ipv4.src_addr) ||
              IS_BROADCAST_IPV4(headers.ipv4.dst_addr) ||
              IS_LOOPBACK_IPV4(headers.ipv4.src_addr) ||
-             IS_LOOPBACK_IPV4(headers.ipv4.dst_addr)))
+             IS_LOOPBACK_IPV4(headers.ipv4.dst_addr) ||
+             headers.ipv4.dst_addr == 0))
        ) {
         mark_to_drop(standard_metadata);
     }
