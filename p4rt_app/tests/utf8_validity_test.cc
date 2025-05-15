@@ -22,7 +22,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -318,7 +318,7 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInPacketOut) {
   packet_out.set_payload(std::string("test packet"));
   sai::PacketOut::Metadata& metadata = *packet_out.mutable_metadata();
   metadata.set_egress_port("\x01\x33\x89");
-  metadata.set_submit_to_ingress(pdpi::BitsetToHexString<1>(0));
+  metadata.set_submit_to_ingress(string_encodings::BitsetToHexString<1>(0));
 
   p4::v1::StreamMessageRequest request;
   ASSERT_OK_AND_ASSIGN(*request.mutable_packet(),

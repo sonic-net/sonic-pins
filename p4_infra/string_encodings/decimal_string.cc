@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/string_encodings/decimal_string.h"
+#include "p4_infra/string_encodings/decimal_string.h"
 
+#include <cctype>
+#include <cstdint>
 #include <limits>
+#include <string>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
 
-namespace pdpi {
+namespace string_encodings {
 namespace {
 
 template <typename IntType>
@@ -102,4 +105,4 @@ absl::StatusOr<std::string> IntToDecimalString(uint64_t value) {
   return ToDecimalString<uint64_t>(value);
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings

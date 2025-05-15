@@ -52,9 +52,9 @@
 #include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/decimal_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 #include "p4_infra/p4_pdpi/ternary.h"
+#include "p4_infra/string_encodings/decimal_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -294,7 +294,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
 
     ASSERT_OK_AND_ASSIGN(
         curr_sequence,
-        pdpi::HexStringToInt(
+        string_encodings::HexStringToInt(
             received_packet.headers(4).ipfix_header().sequence_number()));
     if (prev_sequence.has_value()) {
       EXPECT_EQ(curr_sequence, prev_sequence.value() + 1);
@@ -304,7 +304,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
     ASSERT_EQ(received_packet.headers(5).has_psamp_header(), true);
     const auto& psamp_header = received_packet.headers(5).psamp_header();
     // Validate observation times increment within expected range.
-    ASSERT_OK_AND_ASSIGN(curr_obs_time, pdpi::HexStringToUint64(
+    ASSERT_OK_AND_ASSIGN(curr_obs_time, string_encodings::HexStringToUint64(
                                             psamp_header.observation_time()));
     if (prev_obs_time.has_value()) {
       constexpr int kObsTimeGapThresholdNs = 2000000;
@@ -324,8 +324,9 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
             sut_gnmi_stub.get()));
     int gnmi_vendor_port_id = -1;
     ASSERT_TRUE(absl::SimpleAtoi(ingress_vendor_port_id, &gnmi_vendor_port_id));
-    ASSERT_OK_AND_ASSIGN(auto psamp_ingress_port_id,
-                         pdpi::HexStringToInt(psamp_header.ingress_port()));
+    ASSERT_OK_AND_ASSIGN(
+        auto psamp_ingress_port_id,
+        string_encodings::HexStringToInt(psamp_header.ingress_port()));
     EXPECT_EQ(psamp_ingress_port_id, gnmi_vendor_port_id);
 
     LOG(INFO) << absl::StrCat(
@@ -401,7 +402,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreatePreIngressAclEntries(
   sai::EntryBuilder entry_builder;
   for (const int ingress_vlan_id : ingress_vlan_ids) {
     ASSIGN_OR_RETURN(std::bitset<sai::kVlanIdBitwidth> ingress_vlan_id_bitset,
-                     pdpi::HexStringToBitset<sai::kVlanIdBitwidth>(
+                     string_encodings::HexStringToBitset<sai::kVlanIdBitwidth>(
                          GetVlanIdHexStr(ingress_vlan_id)));
     entry_builder.AddPreIngressAclEntrySettingVlanAndAclMetadata(
         GetVlanIdHexStr(forwarded_packet_vlan_id),
@@ -442,9 +443,10 @@ CreateEntriesToMatchOnAclMetadataAndMirrorTrafficAndRedirectToPort(
                      builder_entities.end());
   for (const int ingress_vlan_id : ingress_vlan_ids) {
     /* Set ACL metadata to be the ingress VLAN ID. */
-    ASSIGN_OR_RETURN(std::bitset<sai::kAclMetadataBitwidth> acl_metadata,
-                     pdpi::HexStringToBitset<sai::kAclMetadataBitwidth>(
-                         GetAclMetadataHexStr(ingress_vlan_id)));
+    ASSIGN_OR_RETURN(
+        std::bitset<sai::kAclMetadataBitwidth> acl_metadata,
+        string_encodings::HexStringToBitset<sai::kAclMetadataBitwidth>(
+            GetAclMetadataHexStr(ingress_vlan_id)));
     ASSIGN_OR_RETURN(
         std::vector<p4::v1::Entity> pre_ingress_acl_entries,
         sai::EntryBuilder()
@@ -483,7 +485,7 @@ CreateControllerPacketCaptureTestVectors(
     dvaas::PacketTestVector test_vector;
     ProtoFixtureRepository repo;
 
-    ASSIGN_OR_RETURN(int mirror_port, pdpi::DecimalStringToInt(
+    ASSIGN_OR_RETURN(int mirror_port, string_encodings::DecimalStringToInt(
                                           mirror_session_params.monitor_port));
 
     std::string mirror_port_hex =

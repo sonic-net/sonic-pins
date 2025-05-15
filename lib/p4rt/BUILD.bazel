@@ -77,9 +77,9 @@ cc_library(
     hdrs = ["p4rt_port.h"],
     deps = [
         "//gutil/gutil:status",
-        "//p4_infra/p4_pdpi/string_encodings:byte_string",
-        "//p4_infra/p4_pdpi/string_encodings:decimal_string",
-	"//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "//p4_infra/string_encodings:byte_string",
+        "//p4_infra/string_encodings:decimal_string",
+        "//p4_infra/string_encodings:hex_string",
         "@com_google_absl//absl/numeric:bits",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

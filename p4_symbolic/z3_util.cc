@@ -29,8 +29,8 @@
 #include "absl/types/optional.h"
 #include "gmpxx.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "z3++.h"
 #include "z3_api.h"
 
@@ -46,8 +46,8 @@ namespace {
 // Note that we assume network (big) endianness for all bit strings and packet
 // fields. When interpreted to integers, preceding bits are more significant.
 absl::Status AppendBitCharStringToPDPIBitString(
-    pdpi::BitString& result, const absl::string_view& bit_char_string,
-    size_t num_bits) {
+    string_encodings::BitString& result,
+    const absl::string_view& bit_char_string, size_t num_bits) {
   // The bit string length should not exceed the specified number of bits.
   if (bit_char_string.size() > num_bits) {
     return gutil::InvalidArgumentErrorBuilder()
@@ -90,8 +90,8 @@ absl::Status AppendBitCharStringToPDPIBitString(
 // Note that we assume network (big) endianness for all bit strings and packet
 // fields. When interpreted to integers, preceding bits are more significant.
 absl::Status AppendHexCharStringToPDPIBitString(
-    pdpi::BitString& result, const absl::string_view& hex_char_string,
-    size_t num_bits) {
+    string_encodings::BitString& result,
+    const absl::string_view& hex_char_string, size_t num_bits) {
   // The hex string length should not exceed the specified number of bits.
   if (hex_char_string.size() * 4 > num_bits) {
     return gutil::InvalidArgumentErrorBuilder()
@@ -110,7 +110,8 @@ absl::Status AppendHexCharStringToPDPIBitString(
   // then convert the rest of the hex string with an even length.
   if (hex_string.size() % 2 == 1) {
     // Convert the first hex character and append to the result bit string.
-    ASSIGN_OR_RETURN(const int digit, pdpi::HexCharToDigit(hex_string.at(0)));
+    ASSIGN_OR_RETURN(const int digit,
+                     string_encodings::HexCharToDigit(hex_string.at(0)));
     for (int i = 3; i >= 0; --i) {
       result.AppendBit((digit >> i) % 2);
     }
@@ -154,9 +155,9 @@ absl::StatusOr<int> EvalZ3Int(const z3::expr& int_expr,
   return model.eval(int_expr, /*model_completion=*/true).get_numeral_int();
 }
 
-absl::Status EvalAndAppendZ3BitvectorToBitString(pdpi::BitString& output,
-                                                 const z3::expr& bv_expr,
-                                                 const z3::model& model) {
+absl::Status EvalAndAppendZ3BitvectorToBitString(
+    string_encodings::BitString& output, const z3::expr& bv_expr,
+    const z3::model& model) {
   if (!bv_expr.is_bv()) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Expected a bitvector, found '" << bv_expr << "'";
@@ -262,7 +263,7 @@ uint64_t Z3ValueStringToInt(const std::string& value) {
   }
 }
 
-absl::Status AppendZ3ValueStringToBitString(pdpi::BitString& result,
+absl::Status AppendZ3ValueStringToBitString(string_encodings::BitString& result,
                                             absl::string_view value,
                                             size_t num_bits) {
   if (absl::ConsumePrefix(&value, "#x")) {

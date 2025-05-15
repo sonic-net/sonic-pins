@@ -44,15 +44,16 @@
 #include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
 #include "p4_infra/p4_pdpi/utils/ir.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace pdpi {
 
 using ::google::protobuf::FieldDescriptor;
 using ::gutil::InvalidArgumentErrorBuilder;
 using ::p4::config::v1::MatchField;
+using ::string_encodings::BitsetToHexString;
 
 namespace {
 
@@ -2425,7 +2426,8 @@ absl::StatusOr<IrReplica> PdReplicaToIr(const IrP4Info &info,
   IrReplica ir;
   ASSIGN_OR_RETURN(*ir.mutable_port(), GetStringField(pd, "port"));
   ASSIGN_OR_RETURN(std::string instance_string, GetStringField(pd, "instance"));
-  ASSIGN_OR_RETURN(uint32_t instance, HexStringToUint32(instance_string));
+  ASSIGN_OR_RETURN(uint32_t instance,
+                   string_encodings::HexStringToUint32(instance_string));
   ir.set_instance(instance);
   /*ASSIGN_OR_RETURN(
       std::vector<const google::protobuf::Message *> backup_replicas,
@@ -2436,8 +2438,9 @@ absl::StatusOr<IrReplica> PdReplicaToIr(const IrP4Info &info,
                      GetStringField(*backup_replica, "port"));
     ASSIGN_OR_RETURN(std::string backup_instance_string,
                      GetStringField(*backup_replica, "instance"));
-    ASSIGN_OR_RETURN(uint32_t backup_instance,
-                     HexStringToUint32(backup_instance_string));
+    ASSIGN_OR_RETURN(
+        uint32_t backup_instance,
+        string_encodings::HexStringToUint32(backup_instance_string));
     ir_backup_replica->set_instance(backup_instance);
   }*/
   return ir;
@@ -2463,7 +2466,8 @@ absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
   }
   ASSIGN_OR_RETURN(std::string multicast_group_id_string,
                    GetStringField(*match, "multicast_group_id"));
-  const auto &multicast_group_id = HexStringToUint32(multicast_group_id_string);
+  const auto &multicast_group_id =
+      string_encodings::HexStringToUint32(multicast_group_id_string);
   if (!multicast_group_id.ok()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
         "MulticastGroupEntry",

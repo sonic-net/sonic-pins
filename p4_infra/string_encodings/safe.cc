@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/string_encodings/safe.h"
+
+#include "p4_infra/string_encodings/safe.h"
 
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
 
-namespace pdpi {
+namespace string_encodings {
 
 char SafeChar(uint8_t byte) {
   char c = 0;
@@ -33,4 +34,4 @@ std::string SafeString(std::vector<uint8_t> bytes) {
   return result;
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings
