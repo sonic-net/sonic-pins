@@ -2502,13 +2502,11 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         break;
       }
       case Header::kVlanHeader:
+      case Header::kCsigHeader:
       case Header::kPspHeader: {
         // No computed fields.
         break;
       }
-      case Header::kCsigHeader:
-        // No computed fields.
-        break;
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
                << "Invalid packet with HEADER_NOT_SET: "

@@ -612,6 +612,10 @@ tables {
     match_type: OPTIONAL
   }
   action_refs {
+    id: 16777475
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
     id: 16777476
     annotations: "@proto_id(1)"
   }
@@ -778,7 +782,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 200
+  size: 190
 }
 tables {
   preamble {
@@ -978,7 +982,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 1024
 }
 tables {
   preamble {
