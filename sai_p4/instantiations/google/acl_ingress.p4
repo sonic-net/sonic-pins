@@ -135,21 +135,26 @@ control acl_ingress(in headers_t headers,
     //  * This action should model behaviors.
   }
 
-  // Forwards green packets normally. Otherwise, drops packets and ensures that
-  // they are not copied to the CPU.
-  // Also sets CPU queue and Multicast queue, with different multicast queues
-  // set depending on packet color.
-  @id(ACL_INGRESS_SET_CPU_AND_MULTICAST_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
+  // Forwards green packets normally and sets their DSCP to the given value.
+  // Otherwise, drops packets and ensures that they are not copied to the CPU.
+  // Also sets CPU queue, Multicast queue, and Unicast queue, with different
+  // multicast queues set depending on packet color.
+  @id(ACL_INGRESS_SET_DSCP_AND_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
   // TODO: Remove @unsupported annotation.
   @unsupported
-  action set_cpu_and_multicast_queues_and_deny_above_rate_limit(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
-      @id(2) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_GREEN)
+  action set_dscp_and_queues_and_deny_above_rate_limit(
+      @id(1) @sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP) bit<6> dscp,
+      @id(2) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
+      @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         qos_queue_t green_multicast_queue,
-      @id(3) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue) {
+      @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_multicast_queue,
+      @id(5) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
+        qos_queue_t green_unicast_queue,
+      @id(6) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -172,6 +177,19 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action set_cpu_queue(
       @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+  }
+
+  // Forwards packets normally. Sets Multicast queue depending on packet color.
+  @id(ACL_INGRESS_SET_MULTICAST_QUEUES_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  // TODO: Remove @unsupported annotation.
+  @unsupported
+  action set_multicast_queues(
+      @id(1) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
+        qos_queue_t green_multicast_queue,
+      @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_multicast_queue) {
+    acl_ingress_qos_meter.read(local_metadata.color);
   }
 
   // Drops the packet at the end of the the pipeline and ensures that it is not
@@ -331,6 +349,7 @@ control acl_ingress(in headers_t headers,
   @sai_acl(INGRESS)
   @sai_acl_priority(10)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -385,6 +404,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+      local_metadata.route_metadata : ternary
+          @id(15) @name("route_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       local_metadata.l4_src_port : ternary
           @id(12) @name("l4_src_port")
@@ -392,9 +414,6 @@ control acl_ingress(in headers_t headers,
       headers.icmp.type : ternary
           @id(14) @name("icmp_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
-      local_metadata.route_metadata : ternary
-          @id(15) @name("route_metadata")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #endif
 #if defined(SAI_INSTANTIATION_TOR)
       headers.ethernet.dst_addr : ternary
@@ -420,8 +439,8 @@ control acl_ingress(in headers_t headers,
       @proto_id(3) acl_forward();
       @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
-      @proto_id(6)
-        set_cpu_and_multicast_queues_and_deny_above_rate_limit();
+      @proto_id(6) set_dscp_and_queues_and_deny_above_rate_limit();
+      @proto_id(7) set_multicast_queues();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -578,14 +597,11 @@ control acl_ingress(in headers_t headers,
     actions = {
 // We don't usually restrict actions to instantiations because they don't
 // require resources but we make an exception here because of issues with
-// metering (go/gpins-meter-consistency for details).
-// `acl_forward` in `mirror_and_redirect` is needed for `experimental_tor` and is an
+// metering (go/pins-meter-consistency for details).
 // unmetered action there. `middleblock` needs `mirror_and_redirect` but NOT
 // `acl_forward` which is a metered action there. If we include it in
 // `middleblock` we run into resource issues.
-#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
       @proto_id(4) acl_forward();
-#endif
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();
