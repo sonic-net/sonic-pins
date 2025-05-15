@@ -51,8 +51,8 @@ cc_library(
     hdrs = ["z3_util.h"],
     deps = [
         "//gutil/gutil:status",
-        "//p4_infra/p4_pdpi/string_encodings:bit_string",
-        "//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "//p4_infra/string_encodings:bit_string",
+        "//p4_infra/string_encodings:hex_string",
         "@com_github_z3prover_z3//:api",
         "@com_gnu_gmp//:gmp",
         "@com_google_absl//absl/numeric:int128",
@@ -84,7 +84,7 @@ cc_test(
     deps = [
         ":z3_util",
         "//gutil/gutil:status_matchers",
-        "//p4_infra/p4_pdpi/string_encodings:bit_string",
+        "//p4_infra/string_encodings:bit_string",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/status",

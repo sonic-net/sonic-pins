@@ -9,7 +9,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -95,7 +95,7 @@ TEST(EvalAndAppendZ3BitvectorToBitString,
   z3::model model = solver.get_model();
 
   // Check for evaluated values.
-  pdpi::BitString ans1, ans2, ans3, ans4;
+  string_encodings::BitString ans1, ans2, ans3, ans4;
   ASSERT_OK(EvalAndAppendZ3BitvectorToBitString(ans1, expr1, model));
   ASSERT_OK(EvalAndAppendZ3BitvectorToBitString(ans2, expr2, model));
   ASSERT_OK(EvalAndAppendZ3BitvectorToBitString(ans3, expr3, model));
@@ -261,20 +261,20 @@ TEST(Z3ValueStringToInt, WorksForDecimalStrings) {
 }
 
 TEST(AppendZ3ValueStringToBitString, InvalidZ3BitvectorValue) {
-  pdpi::BitString bit_string;
+  string_encodings::BitString bit_string;
   EXPECT_THAT(AppendZ3ValueStringToBitString(bit_string, "9527", 16),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(AppendZ3ValueStringToBitString, HexStringBitvector) {
-  pdpi::BitString bit_string;
+  string_encodings::BitString bit_string;
   ASSERT_OK(AppendZ3ValueStringToBitString(bit_string, "#x9527", 16));
   ASSERT_OK_AND_ASSIGN(std::string hex_string, bit_string.ToHexString());
   EXPECT_EQ(hex_string, "0x9527");
 }
 
 TEST(AppendZ3ValueStringToBitString, BitStringBitvector) {
-  pdpi::BitString bit_string;
+  string_encodings::BitString bit_string;
   ASSERT_OK(
       AppendZ3ValueStringToBitString(bit_string, "#b1001010100100111", 16));
   ASSERT_OK_AND_ASSIGN(std::string hex_string, bit_string.ToHexString());

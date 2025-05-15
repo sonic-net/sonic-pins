@@ -38,7 +38,7 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/packetio_interface.h"
@@ -97,7 +97,7 @@ class FakePacketIoTest : public testing::Test {
     packet_out.set_payload(std::string(data));
     sai::PacketOut::Metadata& metadata = *packet_out.mutable_metadata();
     metadata.set_egress_port(absl::StrCat(port));
-    metadata.set_submit_to_ingress(pdpi::BitsetToHexString<1>(0));
+    metadata.set_submit_to_ingress(string_encodings::BitsetToHexString<1>(0));
 
     // Assemble PacketOut request and write to stream channel.
     p4::v1::StreamMessageRequest request;
@@ -262,8 +262,9 @@ TEST_F(FakePacketIoTest, PacketOutFailForSecondary) {
   sai::PacketOut packet_out;
   packet_out.set_payload(std::string("test packet"));
   sai::PacketOut::Metadata& metadata = *packet_out.mutable_metadata();
-  metadata.set_egress_port(pdpi::BitsetToHexString<9>(/*bitset=*/0));
-  metadata.set_submit_to_ingress(pdpi::BitsetToHexString<1>(0));
+  metadata.set_egress_port(
+      string_encodings::BitsetToHexString<9>(/*bitset=*/0));
+  metadata.set_submit_to_ingress(string_encodings::BitsetToHexString<1>(0));
 
   // Assemble PacketOut request and write to stream channel.
   p4::v1::StreamMessageRequest request;

@@ -11,20 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
-#define PINS_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
+
+#ifndef PINS_P4_INFRA_STRING_ENCODINGS_BIT_STRING_H_
+#define PINS_P4_INFRA_STRING_ENCODINGS_BIT_STRING_H_
 
 #include <bitset>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_infra/p4_pdpi/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 // Represents a bitstring of arbitrary size that grows as necessary. Useful when
 // working with byte strings, but also needing the ability to operate on a
@@ -58,7 +63,8 @@ public:
   }
 
   absl::Status AppendHexString(absl::string_view hex_string) {
-    ASSIGN_OR_RETURN(auto bytes, pdpi::HexStringToByteString(hex_string));
+    ASSIGN_OR_RETURN(auto bytes,
+                     string_encodings::HexStringToByteString(hex_string));
     AppendBytes(bytes);
     return absl::OkStatus();
   }
@@ -119,6 +125,6 @@ private:
   int start_index_ = 0;
 };
 
-} // namespace pdpi
+}  // namespace string_encodings
 
-#endif // PINS_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
+#endif  // PINS_P4_INFRA_STRING_ENCODINGS_BIT_STRING_H_
