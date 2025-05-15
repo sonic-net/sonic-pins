@@ -146,9 +146,9 @@ control acl_ingress(in headers_t headers,
   @unsupported
   action set_cpu_and_multicast_queues_and_deny_above_rate_limit(
       @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
-      @id(2) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_GREEN)
+      @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         qos_queue_t green_multicast_queue,
-      @id(3) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_RED)
+      @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
         qos_queue_t red_multicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
@@ -578,14 +578,11 @@ control acl_ingress(in headers_t headers,
     actions = {
 // We don't usually restrict actions to instantiations because they don't
 // require resources but we make an exception here because of issues with
-// metering (go/gpins-meter-consistency for details).
-// `acl_forward` in `mirror_and_redirect` is needed for `experimental_tor` and is an
+// metering (go/pins-meter-consistency for details).
 // unmetered action there. `middleblock` needs `mirror_and_redirect` but NOT
 // `acl_forward` which is a metered action there. If we include it in
 // `middleblock` we run into resource issues.
-#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
       @proto_id(4) acl_forward();
-#endif
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();

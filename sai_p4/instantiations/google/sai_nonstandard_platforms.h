@@ -1,6 +1,12 @@
 #ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_NONSTANDARD_PLATFORMS_H_
 #define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_NONSTANDARD_PLATFORMS_H_
 
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -35,6 +41,12 @@ std::string PreprocessedInstantiationFileName(
     Instantiation role,
     std::optional<NonstandardPlatform> nonstandard_platform);
 
-} // namespace sai
+// Returns the file name of the preprocessed P4 program for the given
+// instantiation and platform.
+std::string PreprocessedInstantiationFileName(
+    Instantiation role,
+    std::optional<NonstandardPlatform> nonstandard_platform);
+
+}  // namespace sai
 
 #endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_NONSTANDARD_PLATFORMS_H_
