@@ -523,6 +523,7 @@ message AclPreIngressVlanTableEntry {
     Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
     Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
     Ternary vlan_id = 5;     // ternary match / Format::HEX_STRING / 12 bits
+    Optional in_port = 6;    // optional match / Format::STRING
   }
   Match match = 1;
   message Action {
@@ -619,8 +620,10 @@ message AclIngressQosTableEntry {
           set_cpu_queue_and_deny_above_rate_limit = 2;
       SetCpuQueueAction set_cpu_queue = 5;
       // CAUTION: This action is not (yet) supported.
-      SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction
-          set_cpu_and_multicast_queues_and_deny_above_rate_limit = 6;
+      SetDscpAndQueuesAndDenyAboveRateLimitAction
+          set_dscp_and_queues_and_deny_above_rate_limit = 6;
+      // CAUTION: This action is not (yet) supported.
+      SetMulticastQueuesAction set_multicast_queues = 7;
     }
   }
   Action action = 2;
@@ -961,10 +964,13 @@ message SetCpuQueueAction {
 }
 
 // CAUTION: This action is not (yet) supported.
-message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
-  string cpu_queue = 1;              // Format::STRING
-  string green_multicast_queue = 2;  // Format::STRING
-  string red_multicast_queue = 3;    // Format::STRING
+message SetDscpAndQueuesAndDenyAboveRateLimitAction {
+  string dscp = 1;                   // Format::HEX_STRING / 6 bits
+  string cpu_queue = 2;              // Format::STRING
+  string green_multicast_queue = 3;  // Format::STRING
+  string red_multicast_queue = 4;    // Format::STRING
+  string green_unicast_queue = 5;    // Format::STRING
+  string red_unicast_queue = 6;      // Format::STRING
 }
 
 message RedirectToNexthopAction {
@@ -979,6 +985,12 @@ message RedirectToIpmcGroupAction {
 // CAUTION: This action is not (yet) supported.
 message RedirectToL2mcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetMulticastQueuesAction {
+  string green_multicast_queue = 1;  // Format::STRING
+  string red_multicast_queue = 2;    // Format::STRING
 }
 
 message NoAction {}

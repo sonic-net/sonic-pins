@@ -519,26 +519,17 @@ control routing_resolution(in headers_t headers,
     size = ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
-  // TODO: When the P4RT compiler supports the size selector
-  // annotation, this should be used to specify the semantics.
-  // #if defined(SAI_INSTANTIATION_TOR)
-  // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR)
-  // #else
-  // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS)
-  // #endif
-  // TODO: Uncomment when supported by the P4RT compiler.
-  // @max_member_weight(WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT)
 #if defined(SAI_INSTANTIATION_TOR)
   @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR)
 #else
-  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE)
+  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_NON_TOR)
 #endif
   @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
   action_selector(HashAlgorithm.identity,
 #if defined(SAI_INSTANTIATION_TOR)
  WCMP_GROUP_SELECTOR_SIZE_TOR,
 #else
- WCMP_GROUP_SELECTOR_SIZE,
+ WCMP_GROUP_SELECTOR_SIZE_NON_TOR,
 #endif
                   WCMP_SELECTOR_INPUT_BITWIDTH)
       wcmp_group_selector;
@@ -560,7 +551,7 @@ control routing_resolution(in headers_t headers,
 #if defined(SAI_INSTANTIATION_TOR)
     size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR;
 #else
-    size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE;
+    size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_NON_TOR;
 #endif
   }
 
