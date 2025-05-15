@@ -248,10 +248,15 @@ TEST(EntryBuilder, AddVrfEntryAddsEntry) {
 TEST(EntryBuilder, AddIpv6TunnelTerminationEntryAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   sai::Ipv6TunnelTerminationParams params{
-      .src_ipv6_value = netaddr::Ipv6Address(0x77, 0x4455, 0, 0, 0, 0, 0, 0),
-      .src_ipv6_mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
-      .dst_ipv6_value = netaddr::Ipv6Address(0x11, 0x2233, 0, 0, 0, 0, 0, 0),
-      .dst_ipv6_mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0)};
+      .src_ipv6 =
+          P4RuntimeTernary<netaddr::Ipv6Address>{
+              .value = netaddr::Ipv6Address(0x77, 0x4455, 0, 0, 0, 0, 0, 0),
+              .mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
+          },
+      .dst_ipv6 = P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = netaddr::Ipv6Address(0x11, 0x2233, 0, 0, 0, 0, 0, 0),
+          .mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
+      }};
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
                        EntryBuilder()
                            .AddIpv6TunnelTerminationEntry(params)
@@ -503,6 +508,36 @@ TEST(EntryBuilder, AddIngressAclEntryRedirectingToNexthopAddsEntry) {
                            .AddIngressAclEntryRedirectingToNexthop("nexthop")
                            .LogPdEntries()
                            .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddIngressAclEntryRedirectingToNexthopWithMatchFieldOptionsAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  MirrorAndRedirectMatchFields match_fields = {
+      .is_ipv4 = true,
+      .dst_ip =
+          sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+              .value = netaddr::Ipv4Address(0x10, 0, 0, 0x1),
+              .mask = netaddr::Ipv4Address(0xff, 0xff, 0xff, 0xff),
+          },
+      .is_ipv6 = true,
+      .dst_ipv6 =
+          sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+              .value = netaddr::Ipv6Address(0x10, 0, 0, 0, 0, 0, 0, 0x1),
+              .mask = netaddr::Ipv6Address(0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                           0xff, 0xff),
+          },
+  };
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToNexthop("nexthop", match_fields)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
   EXPECT_THAT(
       entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
         table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
