@@ -737,8 +737,8 @@ TEST_P(WhitespaceTest, MatchField) {
                        pdpi::IPV4)
           .entry_action(IrActionDefinitionBuilder().preamble(
               R"pb(alias: "action"
-                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))()
-          .DebugString());
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))
+          .GetTableAsTextProto());
 
   switch (GetParam()) {
     case WhitespaceCase::kNone:
@@ -771,8 +771,8 @@ TEST_P(WhitespaceTest, Stage) {
               pdpi::IPV6)
           .entry_action(IrActionDefinitionBuilder().preamble(
               R"pb(alias: "action"
-                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))()
-          .DebugString());
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))
+          .GetTableAsTextProto());
 
   switch (GetParam()) {
     case WhitespaceCase::kNone:
@@ -800,8 +800,8 @@ TEST_P(WhitespaceTest, UncoloredAction) {
               )pb",
               pdpi::STRING)
           .entry_action(IrActionDefinitionBuilder().preamble(
-              R"pb(alias: "action" annotations: "@sai_action($0)")pb"))()
-          .DebugString());
+              R"pb(alias: "action" annotations: "@sai_action($0)")pb"))
+          .GetTableAsTextProto());
 
   switch (GetParam()) {
     case WhitespaceCase::kNone:
@@ -834,8 +834,8 @@ TEST_P(WhitespaceTest, UdfBase) {
               pdpi::IPV4)
           .entry_action(IrActionDefinitionBuilder().preamble(
               R"pb(alias: "action"
-                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))()
-          .DebugString());
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))
+          .GetTableAsTextProto());
 
   switch (GetParam()) {
     case WhitespaceCase::kNone:
@@ -867,8 +867,8 @@ TEST_P(WhitespaceTest, UdfOffset) {
               pdpi::IPV4)
           .entry_action(IrActionDefinitionBuilder().preamble(
               R"pb(alias: "action"
-                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))()
-          .DebugString());
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))
+          .GetTableAsTextProto());
 
   switch (GetParam()) {
     case WhitespaceCase::kNone:
@@ -898,8 +898,8 @@ TEST_P(WhitespaceTest, UdfLength) {
               pdpi::IPV4)
           .entry_action(IrActionDefinitionBuilder().preamble(
               R"pb(alias: "action"
-                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))()
-          .DebugString());
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))
+          .GetTableAsTextProto());
 
   switch (GetParam()) {
     case WhitespaceCase::kNone:
@@ -939,8 +939,8 @@ TEST_P(ActionColorWhitespaceTest, Action) {
                    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
               pdpi::STRING)
           .entry_action(IrActionDefinitionBuilder().preamble(
-              R"pb(alias: "action" annotations: "@sai_action($0)")pb"))()
-          .DebugString());
+              R"pb(alias: "action" annotations: "@sai_action($0)")pb"))
+          .GetTableAsTextProto());
 
   WhitespaceCase inner_padding = std::get<0>(GetParam());
   WhitespaceCase outer_padding = std::get<1>(GetParam());

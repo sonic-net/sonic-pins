@@ -248,10 +248,15 @@ TEST(EntryBuilder, AddVrfEntryAddsEntry) {
 TEST(EntryBuilder, AddIpv6TunnelTerminationEntryAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   sai::Ipv6TunnelTerminationParams params{
-      .src_ipv6_value = netaddr::Ipv6Address(0x77, 0x4455, 0, 0, 0, 0, 0, 0),
-      .src_ipv6_mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
-      .dst_ipv6_value = netaddr::Ipv6Address(0x11, 0x2233, 0, 0, 0, 0, 0, 0),
-      .dst_ipv6_mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0)};
+      .src_ipv6 =
+          P4RuntimeTernary<netaddr::Ipv6Address>{
+              .value = netaddr::Ipv6Address(0x77, 0x4455, 0, 0, 0, 0, 0, 0),
+              .mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
+          },
+      .dst_ipv6 = P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = netaddr::Ipv6Address(0x11, 0x2233, 0, 0, 0, 0, 0, 0),
+          .mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
+      }};
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
                        EntryBuilder()
                            .AddIpv6TunnelTerminationEntry(params)

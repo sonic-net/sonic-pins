@@ -330,6 +330,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Add support for this table once the switch
           // supports it.
           "disable_vlan_checks_table",
+          // TODO: Remove and re-enable in `GetGenerator` once
+          // resource modeling is fixed.
+          "multicast_router_interface_table",
       });
   return *kUnsupportedTables;
 }
@@ -356,8 +359,9 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv6_table", Ipv6TableGenerator},
       {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
-      {"multicast_router_interface_table",
-       MulticastRouterInterfaceTableGenerator},
+      // TODO: Re-enable when once modeling is fixed.
+      // {"multicast_router_interface_table",
+      //  MulticastRouterInterfaceTableGenerator},
   });
 
   const std::string& table_name = table.preamble().alias();

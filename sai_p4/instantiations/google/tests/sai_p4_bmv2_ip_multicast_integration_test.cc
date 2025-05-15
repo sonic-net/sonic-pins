@@ -198,47 +198,44 @@ TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   constexpr absl::string_view kVrf = "vrf";
   const netaddr::Ipv4Address kDstIp = MulticastIpv4();
   constexpr int kMulticastGroupId = 42;
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddVrfEntry(kVrf)
-          .AddEntryAdmittingAllPacketsToL3()
-          .AddEntrySettingVrfForAllPackets(kVrf)
-          .AddMulticastRoute(kVrf, kDstIp, kMulticastGroupId)
-          .AddMulticastGroupEntry(
-              kMulticastGroupId,
-              {
-                  sai::Replica{.egress_port = "\1", .instance = 0},
-                  sai::Replica{.egress_port = "\1", .instance = 1},
-                  sai::Replica{.egress_port = "\1", .instance = 2},
-                  sai::Replica{.egress_port = "\2", .instance = 0},
-              })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\1",
-              .multicast_replica_instance = 0,
-              .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 0),
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\1",
-              .multicast_replica_instance = 1,
-              .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 1),
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\1",
-              .multicast_replica_instance = 2,
-              .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 2),
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\2",
-              .multicast_replica_instance = 0,
-              .src_mac = netaddr::MacAddress(2, 0, 0, 0, 0, 0x42),
-          })
-          // Technically only needed when `GetParam().test_packet_vlan_id` is
-          // set.
-          .AddDisableVlanChecksEntry()
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddVrfEntry(kVrf)
+                .AddEntryAdmittingAllPacketsToL3()
+                .AddEntrySettingVrfForAllPackets(kVrf)
+                .AddMulticastRoute(kVrf, kDstIp, kMulticastGroupId)
+                .AddMulticastGroupEntry(
+                    kMulticastGroupId,
+                    {
+                        sai::Replica{.egress_port = "\1", .instance = 0},
+                        sai::Replica{.egress_port = "\1", .instance = 1},
+                        sai::Replica{.egress_port = "\1", .instance = 2},
+                        sai::Replica{.egress_port = "\2", .instance = 0},
+                    })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\1",
+                    .multicast_replica_instance = 0,
+                    .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 0),
+                })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\1",
+                    .multicast_replica_instance = 1,
+                    .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 1),
+                })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\1",
+                    .multicast_replica_instance = 2,
+                    .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 2),
+                })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\2",
+                    .multicast_replica_instance = 0,
+                    .src_mac = netaddr::MacAddress(2, 0, 0, 0, 0, 0x42),
+                })
+                // Technically only needed when `GetParam().test_packet_vlan_id`
+                // is set.
+                .AddDisableVlanChecksEntry()
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
 
   // Send Ipv4 test packet and expect output packets on egress ports 1 and 2.
   ASSERT_OK_AND_ASSIGN(
@@ -301,41 +298,38 @@ TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   constexpr absl::string_view kVrf = "vrf";
   const netaddr::Ipv6Address kDstIp = MulticastIpv6();
   constexpr int kMulticastGroupId = 42;
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddVrfEntry(kVrf)
-          .AddEntryAdmittingAllPacketsToL3()
-          .AddEntrySettingVrfForAllPackets(kVrf)
-          .AddMulticastRoute(kVrf, kDstIp, kMulticastGroupId)
-          .AddMulticastGroupEntry(
-              kMulticastGroupId,
-              {
-                  sai::Replica{.egress_port = "\7", .instance = 0},
-                  sai::Replica{.egress_port = "\7", .instance = 1234},
-                  sai::Replica{.egress_port = "\5", .instance = 0},
-              })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\7",
-              .multicast_replica_instance = 0,
-              .src_mac = netaddr::MacAddress(7, 7, 7, 7, 7, 7),
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\7",
-              .multicast_replica_instance = 1234,
-              .src_mac = netaddr::MacAddress(7, 7, 7, 7, 7, 7),
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\5",
-              .multicast_replica_instance = 0,
-              .src_mac = netaddr::MacAddress(5, 5, 5, 5, 5, 5),
-          })
-          // Technically only needed when `GetParam().test_packet_vlan_id` is
-          // set.
-          .AddDisableVlanChecksEntry()
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddVrfEntry(kVrf)
+                .AddEntryAdmittingAllPacketsToL3()
+                .AddEntrySettingVrfForAllPackets(kVrf)
+                .AddMulticastRoute(kVrf, kDstIp, kMulticastGroupId)
+                .AddMulticastGroupEntry(
+                    kMulticastGroupId,
+                    {
+                        sai::Replica{.egress_port = "\7", .instance = 0},
+                        sai::Replica{.egress_port = "\7", .instance = 1234},
+                        sai::Replica{.egress_port = "\5", .instance = 0},
+                    })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\7",
+                    .multicast_replica_instance = 0,
+                    .src_mac = netaddr::MacAddress(7, 7, 7, 7, 7, 7),
+                })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\7",
+                    .multicast_replica_instance = 1234,
+                    .src_mac = netaddr::MacAddress(7, 7, 7, 7, 7, 7),
+                })
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\5",
+                    .multicast_replica_instance = 0,
+                    .src_mac = netaddr::MacAddress(5, 5, 5, 5, 5, 5),
+                })
+                // Technically only needed when `GetParam().test_packet_vlan_id`
+                // is set.
+                .AddDisableVlanChecksEntry()
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
 
   // Send Ipv6 test packet and expect output packets on egress ports 7 and 5.
   ASSERT_OK_AND_ASSIGN(
@@ -386,26 +380,23 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
   const netaddr::Ipv4Address kDstIpv4 = MulticastIpv4();
   const netaddr::Ipv6Address kDstIpv6 = MulticastIpv6();
   constexpr int kMulticastGroupId = 42;
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddVrfEntry(kVrf)
-          .AddEntryAdmittingAllPacketsToL3()
-          .AddEntrySettingVrfForAllPackets(kVrf)
-          .AddMulticastRoute(kVrf, kDstIpv4, kMulticastGroupId)
-          .AddMulticastRoute(kVrf, kDstIpv6, kMulticastGroupId)
-          .AddMulticastGroupEntry(kMulticastGroupId,
-                                  {sai::Replica{.egress_port = "\1"}})
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\1",
-              .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
-          })
-          // Technically only needed when `GetParam().test_packet_vlan_id` is
-          // set.
-          .AddDisableVlanChecksEntry()
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddVrfEntry(kVrf)
+                .AddEntryAdmittingAllPacketsToL3()
+                .AddEntrySettingVrfForAllPackets(kVrf)
+                .AddMulticastRoute(kVrf, kDstIpv4, kMulticastGroupId)
+                .AddMulticastRoute(kVrf, kDstIpv6, kMulticastGroupId)
+                .AddMulticastGroupEntry(kMulticastGroupId,
+                                        {sai::Replica{.egress_port = "\1"}})
+                .AddMulticastRouterInterfaceEntry({
+                    .multicast_replica_port = "\1",
+                    .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+                })
+                // Technically only needed when `GetParam().test_packet_vlan_id`
+                // is set.
+                .AddDisableVlanChecksEntry()
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
 
   // Send test packets and expect output.
   constexpr int kArbitraryIngressPort1 = 24;
@@ -422,13 +413,10 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
               IsOkAndHolds(Not(IsEmpty())));
 
   // Install ACL, resend packets, and expect NO output.
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> drop_acl_pi_entities,
-                       sai::EntryBuilder()
-                           .AddIngressAclDroppingAllPackets()
-                           .LogPdEntries()
-                           .GetDedupedPiEntities(kIrP4Info));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), drop_acl_pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddIngressAclDroppingAllPackets()
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort1, ipv4_test_packet),
               IsOkAndHolds(IsEmpty()));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort2, ipv6_test_packet),
@@ -459,8 +447,7 @@ TEST_P(IpMulticastTest, IpmcTableHitQualifierWorks) {
   static constexpr netaddr::Ipv4Address kDefaultMatchIpv4Dst =
       netaddr::Ipv4Address(10, 0, 0, 24);
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddVrfEntry("vrf")
           .AddEntrySettingVrfForAllPackets("vrf")
@@ -485,9 +472,8 @@ TEST_P(IpMulticastTest, IpmcTableHitQualifierWorks) {
           // Technically only needed when `GetParam().test_packet_vlan_id` is
           // set.
           .AddDisableVlanChecksEntry()
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                  /*allow_unsupported=*/true));
 
   ASSERT_OK_AND_ASSIGN(
       const packetlib::Packet kExactMatchInputPacket,
