@@ -179,16 +179,21 @@ control acl_ingress(in headers_t headers,
       @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
   }
 
-  // Forwards packets normally. Sets Multicast queue depending on packet color.
-  @id(ACL_INGRESS_SET_MULTICAST_QUEUES_ACTION_ID)
+  // Forwards packets normally. Sets Multicast and unicast queues depending on
+  // packet color.
+  @id(ACL_INGRESS_SET_FORWARDING_QUEUES_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   // TODO: Remove @unsupported annotation.
   @unsupported
-  action set_multicast_queues(
+  action set_forwarding_queues(
       @id(1) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         qos_queue_t green_multicast_queue,
       @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue) {
+        qos_queue_t red_multicast_queue,
+      @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
+        qos_queue_t green_unicast_queue,
+      @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
   }
 
@@ -440,7 +445,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
       @proto_id(6) set_dscp_and_queues_and_deny_above_rate_limit();
-      @proto_id(7) set_multicast_queues();
+      @proto_id(7) set_forwarding_queues();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -589,6 +594,7 @@ control acl_ingress(in headers_t headers,
 
       local_metadata.vrf_id : optional
         @id(8) @name("vrf_id")
+        @refers_to(vrf_table, vrf_id)
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
       local_metadata.ipmc_table_hit : optional
         @id(9) @name("ipmc_table_hit")

@@ -134,26 +134,10 @@ absl::StatusOr<p4::v1::Entity> SaiP4IngressCloneTableEntry(
   return pi_entity;
 }
 
-// Returns CloneSession (CS) entries and IngressClone (IC) entries that
-// aggregate punting and mirroring's effect needed by V1Model targets such as
-// BMv2:
-// 1. one CS entry with 1 p4::v1::Replica for punting only.
-// 2. one IC entry that lets marked_to_punt packets to get cloned using the CS
-// created in step 1.
-// 3. One CS entry for each port with one p4::v1::Replica that mirrors to that
-// port.
-// 4. One IC entry for each port. Each IC entry lets marked_to_mirror packets
-// to get cloned with the CS entry for that port created in step 3.
-// 5. One CS entry for each port with 2 p4::v1::Replicas. In each CS entry, One
-// replica mirrors to that particular port and the other replica punts.
-// 6. One IC entry for each port. Each IC entry lets marked_to_mirror and
-// marked_to_punt packets to get cloned and punt with the CS entry for that port
-// created in step 5.
-//
-// BMv2's port number ranges from 1 to 511 (V1Model uses 9 bits for port and
-// BMv2 prohibits port to be 0).
+}  // namespace
+
 absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
-    const pdpi::IrP4Info& ir_p4info) {
+    const pdpi::IrP4Info& bmv2_ir_p4info) {
   pdpi::PiEntities entities;
   int next_clone_session = 1;
 
@@ -169,11 +153,11 @@ absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
 
     ASSIGN_OR_RETURN(*entities.add_entities(),
                      SaiP4IngressCloneTableEntry(
-                         ir_p4info, IngressCloneMatchFields{
-                                        .marked_to_copy = true,
-                                        .clone_session = clone_session,
-                                        .mirror_egress_port = std::nullopt,
-                                    }));
+                         bmv2_ir_p4info, IngressCloneMatchFields{
+                                             .marked_to_copy = true,
+                                             .clone_session = clone_session,
+                                             .mirror_egress_port = std::nullopt,
+                                         }));
   }
 
   // Mirror-only CSs and ICs.
@@ -189,11 +173,11 @@ absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
     ASSIGN_OR_RETURN(
         *entities.add_entities(),
         SaiP4IngressCloneTableEntry(
-            ir_p4info, IngressCloneMatchFields{
-                           .marked_to_copy = false,
-                           .clone_session = clone_session,
-                           .mirror_egress_port = mirror_egress_port,
-                       }));
+            bmv2_ir_p4info, IngressCloneMatchFields{
+                                .marked_to_copy = false,
+                                .clone_session = clone_session,
+                                .mirror_egress_port = mirror_egress_port,
+                            }));
   }
 
   // Mirror-and-punt CSs and ICs.
@@ -213,16 +197,14 @@ absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
     ASSIGN_OR_RETURN(
         *entities.add_entities(),
         SaiP4IngressCloneTableEntry(
-            ir_p4info, IngressCloneMatchFields{
-                           .marked_to_copy = true,
-                           .clone_session = clone_session,
-                           .mirror_egress_port = mirror_egress_port,
-                       }));
+            bmv2_ir_p4info, IngressCloneMatchFields{
+                                .marked_to_copy = true,
+                                .clone_session = clone_session,
+                                .mirror_egress_port = mirror_egress_port,
+                            }));
   }
   return entities;
 }
-
-}  // namespace
 
 absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(
     const ForwardingPipelineConfig& bmv2_config,
