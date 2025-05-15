@@ -590,6 +590,71 @@ void RunPacketParseTests() {
     # Payload
     payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   )pb");
+
+  RunPacketParseTest("CSIG IPv6 packet (valid)", R"pb(
+    # ethernet header
+    ethernet_destination: 0xaabbccddeeff
+    ethernet_source: 0x112233445566
+    ether_type: 0x9900
+    # CSIG header
+    signal_type: 0b001
+    reserved0: 0b0
+    signal_value: 0b10001
+    locator_metadata: 0b0000000
+    ethertype: 0x86dd
+    # IPv6 header:
+    version: 0x6
+    dscp: 0b011011
+    ecn: 0b01
+    flow_label: 0x12345
+    payload_length: 0x0010
+    next_header: 0xfd  # Reserved for experimentation -- payload is arbitrary.
+    hop_limit: 0x03
+    ipv6_source: 0x00001111222233334444555566667777
+    ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+    # other headers:
+    payload: 0x00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff
+  )pb");
+
+  RunPacketParseTest("CSIG IPv6 packet (invalid)", R"pb(
+    # ethernet header
+    ethernet_destination: 0xaabbccddeeff
+    ethernet_source: 0x112233445566
+    ether_type: 0x9900
+    # CSIG header
+    signal_type: 0b001
+    reserved0: 0b0
+    signal_value: 0b10001
+    locator_metadata: 0b0000000
+    ethertype: 0x86dd
+    # IPv6 header:
+    version: 0x4
+    dscp: 0b011011
+    ecn: 0b01
+    flow_label: 0x12345
+    payload_length: 0x0000
+    next_header: 0x90  # some unassigned protocol
+    hop_limit: 0xff
+    ipv6_source: 0x00001111222233334444555566667777
+    ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+    # other headers:
+    payload: 0x12
+  )pb");
+
+  RunPacketParseTest("CSIG IPv6 packet (invalid length)", R"pb(
+    # ethernet header
+    ethernet_destination: 0xaabbccddeeff
+    ethernet_source: 0x112233445566
+    ether_type: 0x9900
+    # CSIG header
+    signal_type: 0b001
+    reserved0: 0b0
+    signal_value: 0b10001
+    locator_metadata: 0b0000000
+    # other headers:
+    payload: 0x12
+  )pb");
+
   RunPacketParseTest("Packet too short to parse a GRE header (Invalid)", R"pb(
     # Ethernet header
     ethernet_destination: 0x c2 01 51 fa 00 00

@@ -917,6 +917,161 @@ headers {
 payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 
 ================================================================================
+Parsing test: CSIG IPv6 packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# ethernet header
+    ethernet_destination: 0xaabbccddeeff
+    ethernet_source: 0x112233445566
+    ether_type: 0x9900
+    # CSIG header
+    signal_type: 0b001
+    reserved0: 0b0
+    signal_value: 0b10001
+    locator_metadata: 0b0000000
+    ethertype: 0x86dd
+    # IPv6 header:
+    version: 0x6
+    dscp: 0b011011
+    ecn: 0b01
+    flow_label: 0x12345
+    payload_length: 0x0010
+    next_header: 0xfd  # Reserved for experimentation -- payload is arbitrary.
+    hop_limit: 0x03
+    ipv6_source: 0x00001111222233334444555566667777
+    ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+    # other headers:
+    payload: 0x00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "aa:bb:cc:dd:ee:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x9900"
+  }
+}
+headers {
+  csig_header {
+    signal_type: "0x1"
+    reserved0: "0x0"
+    signal_value: "0x11"
+    locator_metadata: "0x00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x1b"
+    ecn: "0x1"
+    flow_label: "0x12345"
+    payload_length: "0x0010"
+    next_header: "0xfd"
+    hop_limit: "0x03"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+payload: "\000\021\"3DUfw\210\231\252\273\314\335\356\377"
+
+================================================================================
+Parsing test: CSIG IPv6 packet (invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# ethernet header
+    ethernet_destination: 0xaabbccddeeff
+    ethernet_source: 0x112233445566
+    ether_type: 0x9900
+    # CSIG header
+    signal_type: 0b001
+    reserved0: 0b0
+    signal_value: 0b10001
+    locator_metadata: 0b0000000
+    ethertype: 0x86dd
+    # IPv6 header:
+    version: 0x4
+    dscp: 0b011011
+    ecn: 0b01
+    flow_label: 0x12345
+    payload_length: 0x0000
+    next_header: 0x90  # some unassigned protocol
+    hop_limit: 0xff
+    ipv6_source: 0x00001111222233334444555566667777
+    ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+    # other headers:
+    payload: 0x12
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "aa:bb:cc:dd:ee:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x9900"
+  }
+}
+headers {
+  csig_header {
+    signal_type: "0x1"
+    reserved0: "0x0"
+    signal_value: "0x11"
+    locator_metadata: "0x00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x4"
+    dscp: "0x1b"
+    ecn: "0x1"
+    flow_label: "0x12345"
+    payload_length: "0x0000"
+    next_header: "0x90"
+    hop_limit: "0xff"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+payload: "\022"
+reason_not_fully_parsed: "ipv6_header.next_header 0x90: unsupported"
+reasons_invalid: "in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 45"
+reasons_invalid: "in Ipv6Header headers[2]: version: Must be 0x6, but was 0x4 instead."
+reasons_invalid: "in Ipv6Header headers[2]: payload_length: Must be 0x0001, but was 0x0000 instead."
+
+PadPacketToMinimumSize(packet) = true
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = OK
+================================================================================
+Parsing test: CSIG IPv6 packet (invalid length)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# ethernet header
+    ethernet_destination: 0xaabbccddeeff
+    ethernet_source: 0x112233445566
+    ether_type: 0x9900
+    # CSIG header
+    signal_type: 0b001
+    reserved0: 0b0
+    signal_value: 0b10001
+    locator_metadata: 0b0000000
+    # other headers:
+    payload: 0x12
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "aa:bb:cc:dd:ee:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x9900"
+  }
+}
+payload: "(\200\022"
+reasons_invalid: "Packet is too short to parse a CSIG header next. Only 24 bits left, need at least 32."
+reasons_invalid: "in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 3"
+reasons_invalid: "headers[1]: header missing - expected CsigHeader"
+
+PadPacketToMinimumSize(packet) = true
+UpdateAllComputedFields(packet) = false
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- headers[1]: header missing - expected CsigHeader
+================================================================================
 Parsing test: Packet too short to parse a GRE header (Invalid)
 ================================================================================
 -- INPUT -----------------------------------------------------------------------

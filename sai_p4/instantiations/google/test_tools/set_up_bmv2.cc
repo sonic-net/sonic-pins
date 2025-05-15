@@ -7,6 +7,7 @@
 
 #include "absl/log/check.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "gutil/version.h"
@@ -224,7 +225,8 @@ absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
 }  // namespace
 
 absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(
-    const ForwardingPipelineConfig& bmv2_config, Bmv2Args bmv2_args) {
+    const ForwardingPipelineConfig& bmv2_config,
+    const SaiP4Bmv2SetupOptions& options, Bmv2Args bmv2_args) {
   ASSIGN_OR_RETURN(Bmv2 bmv2, Bmv2::Create(std::move(bmv2_args)));
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       &bmv2.P4RuntimeSession(),
@@ -233,31 +235,43 @@ absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
                    pdpi::CreateIrP4Info(bmv2_config.p4info()));
 
-  // TODO: Remove version checks and stop installing
-  // PacketReplicationEngine entry for punt explicitly once the entire fleet has
-  // moved to p4 programs that support ingress_cloning.
-  ASSIGN_OR_RETURN(gutil::Version current_version,
-                   gutil::ParseVersion(ir_p4info.pkg_info().version()));
-  ASSIGN_OR_RETURN(
-      gutil::Version version_with_ingress_cloning,
-      gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_HAS_INGRESS_CLONING_SUPPORT));
-  if (current_version >= version_with_ingress_cloning) {
-    ASSIGN_OR_RETURN(pdpi::PiEntities entities, GetEntitiesForClone(ir_p4info));
-    RETURN_IF_ERROR(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), entities));
-  } else {
-    RETURN_IF_ERROR(pdpi::InstallPiEntity(
-        &bmv2.P4RuntimeSession(),
-        MakeV1modelPacketReplicationEngineEntryRequiredForPunts()));
+  switch (options.initial_bmv2_control_plane) {
+    case InitialBmv2ControlPlane::kNoControlPlane:
+      return bmv2;
+    case InitialBmv2ControlPlane::kInstallCloneEntries: {
+      // TODO: Remove version checks and stop installing
+      // PacketReplicationEngine entry for punt explicitly once the entire fleet
+      // has moved to p4 programs that support ingress_cloning.
+      ASSIGN_OR_RETURN(gutil::Version current_version,
+                       gutil::ParseVersion(ir_p4info.pkg_info().version()));
+      ASSIGN_OR_RETURN(gutil::Version version_with_ingress_cloning,
+                       gutil::ParseVersion(
+                           SAI_P4_PKGINFO_VERSION_HAS_INGRESS_CLONING_SUPPORT));
+      if (current_version >= version_with_ingress_cloning) {
+        ASSIGN_OR_RETURN(pdpi::PiEntities entities,
+                         GetEntitiesForClone(ir_p4info));
+        RETURN_IF_ERROR(
+            pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), entities));
+      } else {
+        RETURN_IF_ERROR(pdpi::InstallPiEntity(
+            &bmv2.P4RuntimeSession(),
+            MakeV1modelPacketReplicationEngineEntryRequiredForPunts()));
+      }
+      return bmv2;
+    }
   }
-
-  return bmv2;
+  return gutil::InvalidArgumentErrorBuilder()
+         << "Control plane configuration "
+         << absl::StrCat(options.initial_bmv2_control_plane)
+         << " is not covered.";
 }
 
 absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(Instantiation instantiation,
+                                       const SaiP4Bmv2SetupOptions& options,
                                        Bmv2Args bmv2_args) {
   return SetUpBmv2ForSaiP4(GetNonstandardForwardingPipelineConfig(
                                instantiation, NonstandardPlatform::kBmv2),
-                           std::move(bmv2_args));
+                           options, std::move(bmv2_args));
 }
 
 }  // namespace sai
