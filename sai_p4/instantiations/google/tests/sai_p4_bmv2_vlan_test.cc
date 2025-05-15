@@ -144,11 +144,9 @@ packetlib::Packet GetVlanIpv4PacketOrDie(absl::string_view vid_hexstr) {
 
 absl::Status InstallEntries(Bmv2& bmv2, const pdpi::IrP4Info& ir_p4info,
                             const sai::EntryBuilder& entry_builder) {
-  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
-                   entry_builder.LogPdEntries().GetDedupedPiEntities(
-                       ir_p4info, /*allow_unsupported=*/true));
-  return pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info,
-                                 pi_entities);
+  return entry_builder.LogPdEntries().InstallDedupedEntities(
+      ir_p4info, bmv2.P4RuntimeSession(),
+      /*allow_unsupported=*/true);
 }
 
 TEST_P(VlanTest, VlanPacketWithNonReservedVidGetsDroppedByDefault) {
@@ -716,6 +714,31 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
   }
 }
 
+// VLAN-tagged punt packets keep their VLAN tags regardless of their IDs.
+TEST(ButerTorVlanTest, VlanPreservedForPuntedPackets) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
+
+  constexpr absl::string_view kNonReservedVlanId = "0x123";
+  constexpr absl::string_view kReservedVlanId = "0xfff";
+
+  ASSERT_OK(bmv2.SendPacket(kIngressPort,
+                            GetVlanIpv4PacketOrDie(kNonReservedVlanId)));
+  ASSERT_OK(
+      bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(kReservedVlanId)));
+
+  EXPECT_THAT(bmv2.P4RuntimeSession().ReadStreamChannelResponsesAndFinish(),
+              IsOkAndHolds(ElementsAre(
+                  HasPacketIn(ParsedPayloadIs(
+                      EqualsProto(GetVlanIpv4PacketOrDie(kNonReservedVlanId)))),
+                  HasPacketIn(ParsedPayloadIs(
+                      EqualsProto(GetVlanIpv4PacketOrDie(kReservedVlanId)))))));
+}
+
 INSTANTIATE_TEST_SUITE_P(
     VlanTest, VlanTest, testing::ValuesIn(sai::AllSaiInstantiations()),
     [&](const testing::TestParamInfo<sai::Instantiation>& info) {
@@ -749,18 +772,16 @@ TEST(MirrorVlanTest,
   // Encap the mirrored packet with non-reserved vlan id.
   mirror_session_params.mirror_encap_vlan_id = "0x123";
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddMirrorSessionTableEntry(mirror_session_params)
           .AddMarkToMirrorAclEntry(sai::MarkToMirrorParams{
               .ingress_port = std::string(kIngressPortProto),
               .mirror_session_id = mirror_session_params.mirror_session_id,
           })
-          .GetDedupedPiEntities(sai::GetIrP4Info(kInstantiation),
-                                /*allow_unsupported=*/true));
-
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(sai::GetIrP4Info(kInstantiation),
+                                  bmv2.P4RuntimeSession(),
+                                  /*allow_unsupported=*/true));
   packetlib::Packet input_packet = GetIpv4PacketOrDie();
 
   ASSERT_OK_AND_ASSIGN(auto outputs,
@@ -782,18 +803,16 @@ TEST(
   // Encap the mirrored packet with reserved vlan id.
   mirror_session_params.mirror_encap_vlan_id = "0xfff";
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddMirrorSessionTableEntry(mirror_session_params)
           .AddMarkToMirrorAclEntry(sai::MarkToMirrorParams{
               .ingress_port = std::string(kIngressPortProto),
               .mirror_session_id = mirror_session_params.mirror_session_id,
           })
-          .GetDedupedPiEntities(sai::GetIrP4Info(kInstantiation),
-                                /*allow_unsupported=*/true));
-
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(sai::GetIrP4Info(kInstantiation),
+                                  bmv2.P4RuntimeSession(),
+                                  /*allow_unsupported=*/true));
   packetlib::Packet input_packet = GetIpv4PacketOrDie();
 
   ASSERT_OK_AND_ASSIGN(auto outputs,
@@ -825,19 +844,17 @@ TEST(
   // Encap the mirrored packet with non-reserved vlan id.
   mirror_session_params.mirror_encap_vlan_id = "0x123";
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddDisableVlanChecksEntry()
-          .AddMirrorSessionTableEntry(GetMirrorSessionParamsForTest())
-          .AddMarkToMirrorAclEntry(sai::MarkToMirrorParams{
-              .ingress_port = std::string(kIngressPortProto),
-              .mirror_session_id =
-                  GetMirrorSessionParamsForTest().mirror_session_id,
-          })
-          .GetDedupedPiEntities(sai::GetIrP4Info(kInstantiation),
-                                /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddDisableVlanChecksEntry()
+                .AddMirrorSessionTableEntry(GetMirrorSessionParamsForTest())
+                .AddMarkToMirrorAclEntry(sai::MarkToMirrorParams{
+                    .ingress_port = std::string(kIngressPortProto),
+                    .mirror_session_id =
+                        GetMirrorSessionParamsForTest().mirror_session_id,
+                })
+                .InstallDedupedEntities(sai::GetIrP4Info(kInstantiation),
+                                        bmv2.P4RuntimeSession(),
+                                        /*allow_unsupported=*/true));
   packetlib::Packet input_packet = GetIpv4PacketOrDie();
 
   ASSERT_OK_AND_ASSIGN(auto outputs,

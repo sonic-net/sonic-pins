@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -36,6 +37,8 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/translation_options.h"
@@ -85,6 +88,20 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
           pdpi::TranslationOptions{.allow_unsupported = allow_unsupported}));
   gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
   return ir_entities;
+}
+
+absl::Status EntryBuilder::InstallDedupedEntities(
+    pdpi::P4RuntimeSession& session, bool allow_unsupported) const {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(session));
+  return InstallDedupedEntities(ir_p4info, session, allow_unsupported);
+}
+
+absl::Status EntryBuilder::InstallDedupedEntities(
+    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session,
+    bool allow_unsupported) const {
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
+                   GetDedupedPiEntities(ir_p4info, allow_unsupported));
+  return pdpi::InstallPiEntities(&session, ir_p4info, pi_entities);
 }
 
 EntryBuilder& EntryBuilder::AddVrfEntry(absl::string_view vrf) {
@@ -344,17 +361,17 @@ EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVrfForAllPackets(
-    absl::string_view vrf) {
+    absl::string_view vrf, int priority) {
   sai::AclPreIngressTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
   entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
-  entry.set_priority(1);
+  entry.set_priority(priority);
   return *this;
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
     absl::string_view set_vlan_id_hexstr,
-    std::optional<absl::string_view> match_vlan_id_hexstr) {
+    std::optional<absl::string_view> match_vlan_id_hexstr, int priority) {
   sai::AclPreIngressVlanTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
   if (match_vlan_id_hexstr.has_value()) {
@@ -363,7 +380,7 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
   }
   entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
       set_vlan_id_hexstr);
-  entry.set_priority(1);
+  entry.set_priority(priority);
 
   return *this;
 }
@@ -441,7 +458,7 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     absl::string_view nexthop_id,
-    const MirrorAndRedirectMatchFields& match_fields) {
+    const MirrorAndRedirectMatchFields& match_fields, int priority) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
@@ -459,7 +476,7 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
-  entry.set_priority(1);
+  entry.set_priority(priority);
 
   return *this;
 }

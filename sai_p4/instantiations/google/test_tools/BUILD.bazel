@@ -30,6 +30,8 @@ cc_library(
         "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:p4_runtime_session_extras",
         "//p4_pdpi:pd",
         "//p4_pdpi:translation_options",
         "//p4_pdpi/netaddr:ipv4_address",

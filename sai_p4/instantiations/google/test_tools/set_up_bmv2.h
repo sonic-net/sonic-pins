@@ -18,6 +18,7 @@
 #include "../../fixed/ids.h"
 #include "absl/status/statusor.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/p4_runtime_session_extras.pb.h"
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
@@ -59,6 +60,27 @@ struct SaiP4Bmv2SetupOptions {
   InitialBmv2ControlPlane initial_bmv2_control_plane =
       InitialBmv2ControlPlane::kInstallCloneEntries;
 };
+
+// Returns CloneSession (CS) entries and IngressClone (IC) entries that
+// aggregate punting and mirroring's effect needed by V1Model targets such as
+// BMv2:
+// 1. one CS entry with 1 p4::v1::Replica for punting only.
+// 2. one IC entry that lets marked_to_punt packets to get cloned using the CS
+// created in step 1.
+// 3. One CS entry for each port with one p4::v1::Replica that mirrors to that
+// port.
+// 4. One IC entry for each port. Each IC entry lets marked_to_mirror packets
+// to get cloned with the CS entry for that port created in step 3.
+// 5. One CS entry for each port with 2 p4::v1::Replicas. In each CS entry, One
+// replica mirrors to that particular port and the other replica punts.
+// 6. One IC entry for each port. Each IC entry lets marked_to_mirror and
+// marked_to_punt packets to get cloned and punt with the CS entry for that port
+// created in step 5.
+//
+// BMv2's port number ranges from 1 to 511 (V1Model uses 9 bits for port and
+// BMv2 prohibits port to be 0).
+absl::StatusOr<pdpi::PiEntities> GetEntitiesForClone(
+    const pdpi::IrP4Info &bmv2_ir_p4info);
 
 // Returns configured BMv2 ready for use with SAI P4.
 // Configures BMv2 by pushing the given `config` and installing the auxiliary
