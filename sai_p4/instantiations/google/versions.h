@@ -42,20 +42,22 @@
 // Indicates the switch supports multiple WCMP members with the same Nexthop.
 #define SAI_P4_PKGINFO_VERSION_HAS_DUPLICATE_WCMP_MEMBER_SUPPORT "1.6.1"
 
-// Indicates the switch executes batched updates in order, aborting every update
-// after the first failed one.
-#define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "1.6.2"
-
 // Indicates that switch respects ingress ACL resource guarantees.
-#define SAI_P4_PKGINFO_VERSION_FIXED_INGRESS_ACL_RESOURCE                      \
-  SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
+#define SAI_P4_PKGINFO_VERSION_FIXED_INGRESS_ACL_RESOURCE "1.6.2"
 
 // Indicates that the program does not support the `set_nexthop` action.
 #define SAI_P4_PKGINFO_VERSION_HAS_NO_SET_NEXTHOP_SUPPORT "2.0.0"
 
+// Indicates the switch supports P4Info ReconcileAndCommit for most cases.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_RECONCILE "2.1.0"
+
 // Indicates that the program supports ternary rather than optional route
 // metadata in the acl_ingress_table.
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
+
+// Indicates the switch executes batched updates in order, aborting every update
+// after the first failed one.
+#define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.1.0"
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \

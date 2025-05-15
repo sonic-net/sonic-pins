@@ -279,19 +279,14 @@ TEST_P(MirrorAndEncapTest, OnePacketEmittedWhenPacketIsMirroredAndDropped) {
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddDisableVlanChecksEntry()
-          .AddMarkToMirrorAclEntry(
-              mirroring_test_params.marked_to_mirror_params)
-          .AddMirrorSessionTableEntry(
-              mirroring_test_params.mirror_session_params)
-          // TODO: Remove unsupported once the
-          // switch supports mirroring-related tables.
-          .GetDedupedPiEntities(sai::GetIrP4Info(kInstantiation),
-                                /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddDisableVlanChecksEntry()
+                .AddMarkToMirrorAclEntry(
+                    mirroring_test_params.marked_to_mirror_params)
+                .AddMirrorSessionTableEntry(
+                    mirroring_test_params.mirror_session_params)
+                .InstallDedupedEntities(sai::GetIrP4Info(kInstantiation),
+                                        bmv2.P4RuntimeSession()));
 
   packetlib::Packet input_packet = GetIpPacketOrDie(ip_version);
   ASSERT_OK_AND_ASSIGN(
@@ -324,22 +319,16 @@ TEST_P(MirrorAndEncapTest,
                    ip_version));
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddDisableVlanChecksEntry()
-          .AddEntriesForwardingIpPacketsToGivenPort(
-              BMv2Port(kForwardEgressPort))
-          .AddMarkToMirrorAclEntry(
-              mirroring_test_params.marked_to_mirror_params)
-          .AddMirrorSessionTableEntry(
-              mirroring_test_params.mirror_session_params)
-          // TODO: Remove unsupported once the
-          // switch supports mirroring-related tables.
-          .GetDedupedPiEntities(sai::GetIrP4Info(kInstantiation),
-                                /*allow_unsupported=*/true));
-
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddDisableVlanChecksEntry()
+                .AddEntriesForwardingIpPacketsToGivenPort(
+                    BMv2Port(kForwardEgressPort))
+                .AddMarkToMirrorAclEntry(
+                    mirroring_test_params.marked_to_mirror_params)
+                .AddMirrorSessionTableEntry(
+                    mirroring_test_params.mirror_session_params)
+                .InstallDedupedEntities(sai::GetIrP4Info(kInstantiation),
+                                        bmv2.P4RuntimeSession()));
 
   packetlib::Packet input_packet = GetIpPacketOrDie(ip_version);
   ASSERT_OK_AND_ASSIGN(
@@ -377,22 +366,17 @@ TEST_P(
                    ip_version));
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddDisableVlanChecksEntry()
-          .AddEntriesForwardingIpPacketsToGivenPort(
-              BMv2Port(kForwardEgressPort))
-          .AddMarkToMirrorAclEntry(
-              mirroring_test_params.marked_to_mirror_params)
-          .AddMirrorSessionTableEntry(
-              mirroring_test_params.mirror_session_params)
-          .AddEntryPuntingAllPackets(sai::PuntAction::kCopy)
-          // TODO: Remove unsupported once the
-          // switch supports mirroring-related tables.
-          .GetDedupedPiEntities(sai::GetIrP4Info(kInstantiation),
-                                /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddDisableVlanChecksEntry()
+                .AddEntriesForwardingIpPacketsToGivenPort(
+                    BMv2Port(kForwardEgressPort))
+                .AddMarkToMirrorAclEntry(
+                    mirroring_test_params.marked_to_mirror_params)
+                .AddMirrorSessionTableEntry(
+                    mirroring_test_params.mirror_session_params)
+                .AddEntryPuntingAllPackets(sai::PuntAction::kCopy)
+                .InstallDedupedEntities(sai::GetIrP4Info(kInstantiation),
+                                        bmv2.P4RuntimeSession()));
 
   packetlib::Packet input_packet = GetIpPacketOrDie(ip_version);
   ASSERT_OK_AND_ASSIGN(

@@ -122,23 +122,17 @@ TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
 
   // Install table entries: decap & default route, so we can check that VRF
   // assignment works and observe the forwarded output packet.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddEntrySettingVrfForAllPackets("vrf")
-          .AddEntryDecappingAllIpInIpv6Packets()
-          .AddDefaultRouteForwardingAllPacketsToGivenPort(
-              /*egress_port=*/"\001", sai::IpVersion::kIpv4, "vrf",
-              // Rewrites to the same src and dst mac as the input packet.
-              sai::NexthopRewriteOptions{.src_mac_rewrite = kSrcMac,
-                                         .dst_mac_rewrite = kDstMac})
-          .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info,
-                                // TODO: Remove once tunnel termination table is
-                                // no longer `@unsupported`.
-                                /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntrySettingVrfForAllPackets("vrf")
+                .AddEntryDecappingAllIpInIpv6Packets()
+                .AddDefaultRouteForwardingAllPacketsToGivenPort(
+                    /*egress_port=*/"\001", sai::IpVersion::kIpv4, "vrf",
+                    // Rewrites to the same src and dst mac as the input packet.
+                    sai::NexthopRewriteOptions{.src_mac_rewrite = kSrcMac,
+                                               .dst_mac_rewrite = kDstMac})
+                .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
 
   // Inject Ipv4-in-IPv6 test packet and expect one output packet.
   ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet,
@@ -187,8 +181,7 @@ TEST_P(TunnelTerminationTest,
   // Install table entries: decap & default routes, so we can check that VRF
   // assignment works as expected by observing the egress port of the forwarded
   // output packet.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddEntryDecappingAllIpInIpv6Packets()
           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
@@ -205,11 +198,7 @@ TEST_P(TunnelTerminationTest,
               /*egress_port=*/"\003", sai::IpVersion::kIpv4And6, "acl-ipv6-vrf")
           .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
           .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info,
-                                // TODO: Remove once tunnel termination table is
-                                // no longer `@unsupported`.
-                                /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
 
   // Inject Ipv4-in-IPv6 test packet and expect one output packet.
   ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet,
@@ -236,17 +225,11 @@ TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
 
   // Install table entries: decap & punt to controller, so we can check that the
   // punted packet did not get decapped.
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
-                       sai::EntryBuilder()
-                           .AddEntryDecappingAllIpInIpv6Packets()
-                           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
-                           .LogPdEntries()
-                           .GetDedupedPiEntities(
-                               kIrP4Info,
-                               // TODO: Remove once tunnel
-                               // termination table is no longer `@unsupported`.
-                               /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryDecappingAllIpInIpv6Packets()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession()));
 
   // Inject Ipv4-in-IPv6 test packet and expect 0 forwarded packets and 1
   // punted packet.
