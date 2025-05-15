@@ -58,7 +58,7 @@
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
 
 // Macro that always points to the latest SAI P4 version.
-#define SAI_P4_PKGINFO_VERSION_LATEST                                          \
+#define SAI_P4_PKGINFO_VERSION_LATEST \
   SAI_P4_PKGINFO_VERSION_HAS_NO_SET_NEXTHOP_SUPPORT
 
 #endif // PINS_SAI_VERSIONS_H_
