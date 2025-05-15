@@ -133,6 +133,54 @@ absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
+absl::StatusOr<p4::v1::Update> MulticastRouterInterfaceTableUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    const MulticastReplica& replica) {
+  pdpi::IrUpdate ir_update;
+  ir_update.set_type(type);
+  pdpi::IrTableEntry* ir_table_entry =
+      ir_update.mutable_entity()->mutable_table_entry();
+  ir_table_entry->set_table_name("multicast_router_interface_table");
+
+  auto* port_match = ir_table_entry->add_matches();
+  port_match->set_name("multicast_replica_port");
+  port_match->mutable_exact()->set_str(replica.port);
+
+  auto* instance_match = ir_table_entry->add_matches();
+  instance_match->set_name("multicast_replica_instance");
+  instance_match->mutable_exact()->set_hex_str(
+      absl::StrFormat("0x%04x", replica.instance));
+
+  auto* action = ir_table_entry->mutable_action();
+  action->set_name("set_multicast_src_mac");
+  auto* action_param = action->add_params();
+  action_param->set_name("src_mac");
+  *action_param->mutable_value()->mutable_mac() = replica.src_mac;
+
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
+absl::StatusOr<p4::v1::Update> MulticastGroupUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    uint32_t group_id, absl::Span<MulticastReplica> replicas) {
+  pdpi::IrUpdate ir_update;
+  ir_update.set_type(type);
+  pdpi::IrPacketReplicationEngineEntry* ir_packet_replication_engine_entry =
+      ir_update.mutable_entity()->mutable_packet_replication_engine_entry();
+
+  auto* multicast_group_entry =
+      ir_packet_replication_engine_entry->mutable_multicast_group_entry();
+  multicast_group_entry->set_multicast_group_id(group_id);
+
+  for (auto& replica : replicas) {
+    auto* new_replica = multicast_group_entry->add_replicas();
+    new_replica->set_port(replica.port);
+    new_replica->set_instance(replica.instance);
+  }
+
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
 absl::StatusOr<p4::v1::Update> NeighborTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
     absl::string_view router_interface_id, absl::string_view neighbor_id,

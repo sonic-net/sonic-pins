@@ -33,6 +33,7 @@ constexpr int kSaiP4BMv2PacketInHeaderBitwidth = 24;
 constexpr int kIpfixHeaderBitwidth = 128;
 constexpr int kPsampHeaderBitwidth = 224;
 constexpr int kPtpHeaderBitwidth = 272;
+constexpr int kCsigHeaderBitwidth = 32;
 
 // Ethernet constants.
 constexpr int kEthernetEthertypeBitwidth = 16;
@@ -42,6 +43,13 @@ constexpr int kVlanPriorityCodePointBitwidth = 3;
 constexpr int kVlanDropEligibilityIndicatorBitwidth = 1;
 constexpr int kVlanVlanIdentifierBitwidth = 12;
 constexpr int kVlanEthertypeBitwidth = 16;
+
+// CSIG constants.
+constexpr int kCsigSignalTypeBitwidth = 3;
+constexpr int kCsigReserved0Bitwidth = 1;
+constexpr int kCsigSignalValueBitwidth = 5;
+constexpr int kCsigLocatorMetadataBitwidth = 7;
+constexpr int kCsigEthertypeBitwidth = 16;
 
 // IP constants.
 constexpr int kIpVersionBitwidth = 4;         // IPv4 & IPv6
