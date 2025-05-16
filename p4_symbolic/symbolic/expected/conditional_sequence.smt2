@@ -1,7 +1,7 @@
 (ingress) $got_cloned$: false
 (ingress) $got_recirculated$: false
 (ingress) h1.$extracted$: false
-(ingress) h1.$valid$: (ite true true false)
+(ingress) h1.$valid$: true
 (ingress) h1.f1: h1.f1
 (ingress) h1.f2: h1.f2
 (ingress) h1.f3: h1.f3
@@ -36,8 +36,8 @@
 
 (parsed) $got_cloned$: false
 (parsed) $got_recirculated$: false
-(parsed) h1.$extracted$: (ite true true false)
-(parsed) h1.$valid$: (ite true true false)
+(parsed) h1.$extracted$: true
+(parsed) h1.$valid$: true
 (parsed) h1.f1: h1.f1
 (parsed) h1.f2: h1.f2
 (parsed) h1.f3: h1.f3
@@ -67,13 +67,13 @@
 (parsed) standard_metadata.instance_type: #x00000000
 (parsed) standard_metadata.mcast_grp: #x0000
 (parsed) standard_metadata.packet_length: standard_metadata.packet_length
-(parsed) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
+(parsed) standard_metadata.parser_error: #x00000000
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
 (egress) $got_recirculated$: false
-(egress) h1.$extracted$: (ite true true false)
-(egress) h1.$valid$: (ite true true false)
+(egress) h1.$extracted$: true
+(egress) h1.$valid$: true
 (egress) h1.f1: h1.f1
 (egress) h1.f2: h1.f2
 (egress) h1.f3: h1.f3
@@ -83,7 +83,7 @@
 (egress) h1.f7: h1.f7
 (egress) h1.f8: h1.f8
 (egress) h1.fr: h1.fr
-(egress) h1.fw: (ite (and true true (= h1.fr #xff)) (concat #b0000000 #b1) h1.fw)
+(egress) h1.fw: (ite (= h1.fr #xff) #x01 h1.fw)
 (egress) scalars.$extracted$: false
 (egress) scalars.$valid$: false
 (egress) standard_metadata.$extracted$: false
@@ -93,11 +93,7 @@
 (egress) standard_metadata.deq_qdepth: #b0000000000000000000
 (egress) standard_metadata.deq_timedelta: #x00000000
 (egress) standard_metadata.egress_global_timestamp: #x000000000000
-(egress) standard_metadata.egress_port: (ite (not (= #b000000000 #b111111111))
-     #b000000000
-     (ite (and true true (= h1.fr #xff))
-          #b000000001
-          standard_metadata.egress_port))
+(egress) standard_metadata.egress_port: #b000000000
 (egress) standard_metadata.egress_rid: #x0000
 (egress) standard_metadata.egress_spec: #b000000000
 (egress) standard_metadata.enq_qdepth: #b0000000000000000000
@@ -107,7 +103,7 @@
 (egress) standard_metadata.instance_type: #x00000000
 (egress) standard_metadata.mcast_grp: #x0000
 (egress) standard_metadata.packet_length: standard_metadata.packet_length
-(egress) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
+(egress) standard_metadata.parser_error: #x00000000
 (egress) standard_metadata.priority: #b000
 
 (solver constraints)
@@ -115,10 +111,10 @@
 (set-info :status unknown)
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
 (assert
- (let (($x101 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x101)))
+ (let (($x41 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x41)))
 (assert
- (let (($x104 (or (or false (= (_ bv0 9) (_ bv0 9))) (= (_ bv0 9) (_ bv1 9)))))
- (let (($x87 (= (_ bv0 9) (_ bv511 9))))
- (or $x87 $x104))))
+ (let (($x49 (or (or false (= (_ bv0 9) (_ bv0 9))) (= (_ bv0 9) (_ bv1 9)))))
+ (let (($x20 (= (_ bv0 9) (_ bv511 9))))
+ (or $x20 $x49))))
 (check-sat)

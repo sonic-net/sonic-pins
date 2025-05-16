@@ -169,6 +169,40 @@ TEST(MakeConjunctionTest,
               IsOkAndHolds(EqualsProto(expected_criteria)));
 }
 
+TEST(MakeConjunctionTest,
+     SucceedsWhenOperandsHaveNonEqualInputPacketHeaderCriteria) {
+  auto lhs = ParseProtoOrDie<PacketSynthesisCriteria>(
+      R"pb(input_packet_header_criteria {
+             field_criteria {
+               field_match {
+                 name: "dummy.field1"
+                 exact { str: "dummy1" }
+               }
+               negated: true
+             }
+           })pb");
+  auto rhs = ParseProtoOrDie<PacketSynthesisCriteria>(
+      R"pb(input_packet_header_criteria {
+             field_criteria {
+               field_match {
+                 name: "dummy.field2"
+                 exact { str: "dummy2" }
+               }
+             }
+           })pb");
+
+  PacketSynthesisCriteria expected_criteria;
+  *expected_criteria.mutable_input_packet_header_criteria()
+       ->mutable_field_criteria()
+       ->Add() = lhs.input_packet_header_criteria().field_criteria(0);
+  *expected_criteria.mutable_input_packet_header_criteria()
+       ->mutable_field_criteria()
+       ->Add() = rhs.input_packet_header_criteria().field_criteria(0);
+
+  ASSERT_THAT(MakeConjunction(lhs, rhs),
+              IsOkAndHolds(EqualsProto(expected_criteria)));
+}
+
 TEST(MakeCartesianProductConjunctionTest, YieldsCorrectResult) {
   std::vector<PacketSynthesisCriteria> lhs = {
       ParseProtoOrDie<PacketSynthesisCriteria>(
