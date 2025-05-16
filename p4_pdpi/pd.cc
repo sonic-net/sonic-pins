@@ -1560,15 +1560,20 @@ absl::Status IrMulticastGroupEntryToPd(
 absl::Status IrPacketReplicationEngineEntryToPd(
     const IrP4Info &info, const IrPacketReplicationEngineEntry &ir,
     google::protobuf::Message *pd, const TranslationOptions &options) {
-  const absl::StatusOr<google::protobuf::Message *> pd_multicast =
-      GetMutableMessage(pd, "multicast_group_table_entry");
-  if (!pd_multicast.ok()) {
-    return absl::InternalError(GenerateFormattedError(
-        "MulticastGroupEntry",
-        absl::StrCat(kNewBullet, pd_multicast.status().message())));
+  if (ir.has_multicast_group_entry()) {
+    const absl::StatusOr<google::protobuf::Message *> pd_multicast =
+        GetMutableMessage(pd, "multicast_group_table_entry");
+    if (!pd_multicast.ok()) {
+      return absl::InternalError(GenerateFormattedError(
+          "MulticastGroupEntry",
+          absl::StrCat(kNewBullet, pd_multicast.status().message())));
+    }
+    return IrMulticastGroupEntryToPd(info, ir.multicast_group_entry(),
+                                     *pd_multicast, options);
   }
-  return IrMulticastGroupEntryToPd(info, ir.multicast_group_entry(),
-                                   *pd_multicast, options);
+  return absl::UnimplementedError(
+      absl::StrCat("PacketReplicationEngineEntry is not supported: ",
+                   gutil::PrintShortTextProto(ir)));
 }
 
 absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
