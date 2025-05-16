@@ -43,7 +43,7 @@
 (parsed) standard_metadata.instance_type: #x00000000
 (parsed) standard_metadata.mcast_grp: #x0000
 (parsed) standard_metadata.packet_length: standard_metadata.packet_length
-(parsed) standard_metadata.parser_error: #x00000000
+(parsed) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
@@ -77,7 +77,7 @@
 (egress) standard_metadata.instance_type: #x00000000
 (egress) standard_metadata.mcast_grp: #x0000
 (egress) standard_metadata.packet_length: standard_metadata.packet_length
-(egress) standard_metadata.parser_error: #x00000000
+(egress) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
 (egress) standard_metadata.priority: #b000
 
 (solver constraints)
@@ -85,8 +85,8 @@
 (set-info :status unknown)
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
 (assert
- (let (($x25 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x25)))
+ (let (($x19 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x19)))
 (assert
  (let (($x25 (= standard_metadata.ingress_port (_ bv0 9))))
  (let (($x10 (and true $x25)))
