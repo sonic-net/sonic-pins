@@ -171,16 +171,6 @@
        ethernet.srcAddr))))))
 (egress) ipv4.$extracted$: (ite (= (concat #x0 #x800) ethernet.eth_type) true false)
 (egress) ipv4.$valid$: (ite (= (concat #x0 #x800) ethernet.eth_type) true false)
-(egress) ipv4.diffserv: ipv4.diffserv
-(egress) ipv4.dstAddr: ipv4.dstAddr
-(egress) ipv4.flags: ipv4.flags
-(egress) ipv4.fragOffset: ipv4.fragOffset
-(egress) ipv4.hdrChecksum: ipv4.hdrChecksum
-(egress) ipv4.identification: ipv4.identification
-(egress) ipv4.ihl: ipv4.ihl
-(egress) ipv4.protocol: ipv4.protocol
-(egress) ipv4.srcAddr: ipv4.srcAddr
-(egress) ipv4.totalLen: ipv4.totalLen
 (egress) ipv4.ttl: (let ((a!1 (ite (and true (= (bvand ipv4.srcAddr #x21210909) #x21210000))
                 (ite true #b1 #b0)
                 (ite false #b1 #b0)))
