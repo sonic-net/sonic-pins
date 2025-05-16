@@ -5,6 +5,18 @@
 
 namespace pdpi {
 
+bool IsOmittable(const IrMatchFieldDefinition& match_field) {
+  // Note that an unspecified type is not regarded as omittable.
+  return match_field.match_field().match_type() ==
+             p4::config::v1::MatchField::TERNARY ||
+         match_field.match_field().match_type() ==
+             p4::config::v1::MatchField::OPTIONAL ||
+         match_field.match_field().match_type() ==
+             p4::config::v1::MatchField::LPM ||
+         match_field.match_field().match_type() ==
+             p4::config::v1::MatchField::RANGE;
+}
+
 bool HasP4RuntimeTranslatedType(const IrMatchFieldDefinition& match_field) {
   return match_field.match_field().has_type_name() &&
          match_field.format() == pdpi::Format::STRING;

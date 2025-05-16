@@ -1,17 +1,19 @@
 #########################################################
-### Test Case: Switch Has Unique Entry
+### Test Case: Switch Has Unique Entity
 #########################################################
 
-=== Switch Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Switch Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
 }
 
-=== Fuzzer Entries ===
+=== Fuzzer Entities ===
 
 === Mask Function ===
 No mask function was used
@@ -31,17 +33,19 @@ matches {
 
 
 #########################################################
-### Test Case: Fuzzer Has Unique Entry
+### Test Case: Fuzzer Has Unique Entity
 #########################################################
 
-=== Switch Entries ===
+=== Switch Entities ===
 
-=== Fuzzer Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Fuzzer Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
 }
 
@@ -63,27 +67,31 @@ matches {
 
 
 #########################################################
-### Test Case: Switch and Fuzzer entry have same key but different value
+### Test Case: Switch and Fuzzer entity have same key but different value
 #########################################################
 
-=== Switch Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Switch Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
 }
 
-=== Fuzzer Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Fuzzer Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
+  controller_metadata: "Am cookie, much wow"
 }
-controller_metadata: "Am cookie, much wow"
 
 === Mask Function ===
 No mask function was used
@@ -112,24 +120,28 @@ controller_metadata: "Am cookie, much wow"
 
 
 #########################################################
-### Test Case: Switch and Fuzzer have same entries
+### Test Case: Switch and Fuzzer have same entities
 #########################################################
 
-=== Switch Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Switch Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
 }
 
-=== Fuzzer Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Fuzzer Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
 }
 
@@ -143,24 +155,28 @@ OK:
 ### Test Case: Missing metadata is ignored due to mask function
 #########################################################
 
-=== Switch Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Switch Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
 }
 
-=== Fuzzer Entries ===
-table_name: "golden_table"
-matches {
-  name: "field1"
-  exact {
-    hex_str: "0xbe0a0bed"
+=== Fuzzer Entities ===
+table_entry {
+  table_name: "golden_table"
+  matches {
+    name: "field1"
+    exact {
+      hex_str: "0xbe0a0bed"
+    }
   }
+  controller_metadata: "Am cookie, much wow"
 }
-controller_metadata: "Am cookie, much wow"
 
 === Mask Function ===
 Mask ignores metadata field
