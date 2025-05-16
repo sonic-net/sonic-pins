@@ -43,7 +43,7 @@
 (parsed) standard_metadata.instance_type: #x00000000
 (parsed) standard_metadata.mcast_grp: #x0000
 (parsed) standard_metadata.packet_length: standard_metadata.packet_length
-(parsed) standard_metadata.parser_error: #x00000000
+(parsed) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
@@ -57,9 +57,19 @@
 (egress) standard_metadata.deq_qdepth: #b0000000000000000000
 (egress) standard_metadata.deq_timedelta: #x00000000
 (egress) standard_metadata.egress_global_timestamp: #x000000000000
-(egress) standard_metadata.egress_port: (ite (= standard_metadata.ingress_port #b000000000) #b000000001 #b000000000)
+(egress) standard_metadata.egress_port: (let ((a!1 (= (ite (and true (= standard_metadata.ingress_port #b000000000))
+                   #b000000001
+                   #b000000000)
+              #b111111111)))
+  (ite (not a!1)
+       (ite (and true (= standard_metadata.ingress_port #b000000000))
+            #b000000001
+            #b000000000)
+       standard_metadata.egress_port))
 (egress) standard_metadata.egress_rid: #x0000
-(egress) standard_metadata.egress_spec: (ite (= standard_metadata.ingress_port #b000000000) #b000000001 #b000000000)
+(egress) standard_metadata.egress_spec: (ite (and true (= standard_metadata.ingress_port #b000000000))
+     #b000000001
+     #b000000000)
 (egress) standard_metadata.enq_qdepth: #b0000000000000000000
 (egress) standard_metadata.enq_timestamp: #x00000000
 (egress) standard_metadata.ingress_global_timestamp: #x000000000000
@@ -67,7 +77,7 @@
 (egress) standard_metadata.instance_type: #x00000000
 (egress) standard_metadata.mcast_grp: #x0000
 (egress) standard_metadata.packet_length: standard_metadata.packet_length
-(egress) standard_metadata.parser_error: #x00000000
+(egress) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
 (egress) standard_metadata.priority: #b000
 
 (solver constraints)
@@ -75,13 +85,13 @@
 (set-info :status unknown)
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
 (assert
- (let (($x25 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x25)))
+ (let (($x19 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x19)))
 (assert
- (let (($x33 (or false (= (ite (= standard_metadata.ingress_port (_ bv0 9)) (_ bv1 9) (_ bv0 9)) (_ bv0 9)))))
- (let (($x36 (or $x33 (= (ite (= standard_metadata.ingress_port (_ bv0 9)) (_ bv1 9) (_ bv0 9)) (_ bv1 9)))))
- (let (($x6 (= standard_metadata.ingress_port (_ bv0 9))))
- (let ((?x32 (ite $x6 (_ bv1 9) (_ bv0 9))))
- (let (($x29 (= ?x32 (_ bv511 9))))
- (or $x29 $x36)))))))
+ (let (($x10 (= standard_metadata.ingress_port (_ bv0 9))))
+ (let (($x22 (and true $x10)))
+ (let ((?x32 (ite $x22 (_ bv1 9) (_ bv0 9))))
+ (let (($x42 (or (or false (= ?x32 (_ bv0 9))) (= ?x32 (_ bv1 9)))))
+ (let (($x34 (= ?x32 (_ bv511 9))))
+ (or $x34 $x42)))))))
 (check-sat)
