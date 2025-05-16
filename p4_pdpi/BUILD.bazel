@@ -268,17 +268,29 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         "//gutil:proto",
-        "//gutil:status",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
-        "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "p4info_union_test",
+    srcs = ["p4info_union_test.cc"],
+    deps = [
+        ":p4info_union_lib",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
