@@ -16,6 +16,7 @@
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -136,6 +137,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
     return Header::kIpfixHeader;
   if (dest_port == 319)
     return Header::kPtpHeader;
+  if (dest_port == 1000) return Header::kPspHeader;
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const TcpHeader& header) {
@@ -154,6 +156,19 @@ absl::StatusOr<NextHeader> GetNextHeader(const PsampHeader& header) {
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const PtpHeader &header) {
+  return Header::HEADER_NOT_SET;
+}
+absl::StatusOr<NextHeader> GetNextHeader(const PspHeader& header) {
+  if (header.virtualization_cookie_present() == "0x1") {
+    return UnsupportedNextHeader{
+        .reason = "psp_header virtualization_cookie is not supported.",
+    };
+  }
+  // Only parse the UDP header if we have enough unencrypted bits.
+  ASSIGN_OR_RETURN(int crypt_offset,
+                   pdpi::HexStringToInt32(header.crypt_offset()));
+  if (header.next_header() == "0x11" && crypt_offset * 32 >= kUdpHeaderBitwidth)
+    return Header::kUdpHeader;
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
@@ -186,6 +201,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
       return GetNextHeader(header.psamp_header());
     case Header::kPtpHeader:
       return GetNextHeader(header.ptp_header());
+    case Header::kPspHeader:
+      return GetNextHeader(header.psp_header());
     case Header::HEADER_NOT_SET:
       return Header::HEADER_NOT_SET;
   }
@@ -581,6 +598,33 @@ absl::StatusOr<PtpHeader> ParsePtpHeader(pdpi::BitString &data) {
   return header;
 }
 
+absl::StatusOr<PspHeader> ParsePspHeader(pdpi::BitString& data) {
+  if (data.size() < kPspHeaderBitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Packet is too short to parse a PSP header next. Only "
+           << data.size() << " bits left, need at least " << kPspHeaderBitwidth
+           << ".";
+  }
+  PspHeader header;
+
+  header.set_next_header(ParseBits(data, kPspNextHeaderBitwidth));
+  header.set_header_ext_length(ParseBits(data, kPspHeaderExtLengthBitwidth));
+  header.set_reserved0(ParseBits(data, kPspReserved0Bitwidth));
+  header.set_crypt_offset(ParseBits(data, kPspCryptOffsetBitwidth));
+  header.set_sample_bit(ParseBits(data, kPspSampleBitwidth));
+  header.set_drop_bit(ParseBits(data, kPspDropBitwidth));
+  header.set_version(ParseBits(data, kPspVersionBitwidth));
+  header.set_virtualization_cookie_present(
+      ParseBits(data, kPspVirtualizationCookieBitwidth));
+  header.set_reserved1(ParseBits(data, kPspReserved1Bitwidth));
+  header.set_security_parameters_index(
+      ParseBits(data, kPspSecurityParametersIndexBitwidth));
+  header.set_initialization_vector(
+      ParseBits(data, kPspInitializationVectorBitwidth));
+
+  return header;
+}
+
 absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
                                    pdpi::BitString& data) {
   Header result;
@@ -641,6 +685,10 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
     }
     case Header::kPtpHeader: {
       ASSIGN_OR_RETURN(*result.mutable_ptp_header(), ParsePtpHeader(data));
+      return result;
+    }
+    case Header::kPspHeader: {
+      ASSIGN_OR_RETURN(*result.mutable_psp_header(), ParsePspHeader(data));
       return result;
     }
     case Header::HEADER_NOT_SET:
@@ -1013,6 +1061,21 @@ void Ipv6HeaderInvalidReasons(const Ipv6Header& header,
   }
 }
 
+// The UDP checksum is allowed to be zero for tunneling packets:
+//   https://datatracker.ietf.org/doc/html/rfc6935.
+// IpFix should enable UDP checksums, but we make an exception here:
+//   https://datatracker.ietf.org/doc/html/rfc5153
+bool AllowZeroChecksumForUdp(Packet packet, int udp_header_index) {
+  if (udp_header_index + 1 >= packet.headers_size()) {
+    return false;
+  }
+
+  Header::HeaderCase next_header =
+      packet.headers(udp_header_index + 1).header_case();
+  return next_header == Header::kPspHeader ||
+         next_header == Header::kIpfixHeader;
+}
+
 void UdpHeaderInvalidReasons(const UdpHeader& header,
                              const std::string& field_prefix,
                              const Packet& packet, int header_index,
@@ -1051,7 +1114,8 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
         "defined; found no header instead"));
   } else if (auto previous = packet.headers(header_index - 1).header_case();
              previous != Header::kIpv4Header &&
-             previous != Header::kIpv6Header) {
+             previous != Header::kIpv6Header &&
+             previous != Header::kPspHeader) {
     output.push_back(absl::StrCat(
         field_prefix,
         "checksum: UDP header must be preceded by IP header for checksum to be "
@@ -1065,19 +1129,16 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
           field_prefix, "checksum: Couldn't compute expected checksum: ",
           checksum.status().ToString()));
     } else if (packet.headers_size() > header_index + 1) {
-      // UDP is not the latest header.
-      if (packet.headers(header_index + 1).header_case() ==
-              Header::kIpfixHeader &&
-          header.checksum() != UdpChecksum(0)) {
-        // UDP checksum is defaulted to zero in case of Ipfix.
+      if (header.checksum() != UdpChecksum(0) &&
+          AllowZeroChecksumForUdp(packet, header_index)) {
         output.push_back(absl::StrCat(field_prefix,
                                       "checksum: Must be 0, but was ",
                                       header.checksum(), " instead."));
       }
-    } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kUdpChecksumBitwidth>(*checksum));
-      if (header.checksum() != expected) {
+    } else if (checksum->has_value()) {
+      if (std::string expected = pdpi::BitsetToHexString(
+              std::bitset<kUdpChecksumBitwidth>(checksum->value()));
+          header.checksum() != expected) {
         output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
                                       expected, ", but was ", header.checksum(),
                                       " instead."));
@@ -1595,6 +1656,50 @@ void PtpHeaderInvalidReasons(const PtpHeader &header,
   }
 }
 
+void PspHeaderInvalidReasons(const PspHeader& header,
+                             const std::string& field_prefix,
+                             std::vector<std::string>& output) {
+  HexStringInvalidReasons<kPspNextHeaderBitwidth>(
+      header.next_header(), absl::StrCat(field_prefix, "next_header"), output);
+  HexStringInvalidReasons<kPspHeaderExtLengthBitwidth>(
+      header.header_ext_length(),
+      absl::StrCat(field_prefix, "header_ext_length"), output);
+  HexStringInvalidReasons<kPspCryptOffsetBitwidth>(
+      header.crypt_offset(), absl::StrCat(field_prefix, "crypt_offset"),
+      output);
+  HexStringInvalidReasons<kPspSampleBitwidth>(
+      header.sample_bit(), absl::StrCat(field_prefix, "sample_bit"), output);
+  HexStringInvalidReasons<kPspDropBitwidth>(
+      header.drop_bit(), absl::StrCat(field_prefix, "drop_bit"), output);
+  HexStringInvalidReasons<kPspVersionBitwidth>(
+      header.version(), absl::StrCat(field_prefix, "version"), output);
+  HexStringInvalidReasons<kPspVirtualizationCookieBitwidth>(
+      header.virtualization_cookie_present(),
+      absl::StrCat(field_prefix, "virtualization_cookie_present"), output);
+  HexStringInvalidReasons<kPspSecurityParametersIndexBitwidth>(
+      header.security_parameters_index(),
+      absl::StrCat(field_prefix, "security_parameters_index"), output);
+  HexStringInvalidReasons<kPspInitializationVectorBitwidth>(
+      header.initialization_vector(),
+      absl::StrCat(field_prefix, "initialization_vector"), output);
+
+  // Verify that the reserved fields are correct per the PSP spec.
+  bool reserved0_invalid = HexStringInvalidReasons<kPspReserved0Bitwidth>(
+      header.reserved0(), absl::StrCat(field_prefix, "reserved0"), output);
+  if (!reserved0_invalid && header.reserved0() != "0x0") {
+    output.push_back(absl::StrCat(field_prefix,
+                                  "reserved0: Must be 0x0, but was ",
+                                  header.reserved0(), " instead."));
+  }
+  bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
+      header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
+  if (!reserved1_invalid && header.reserved1() != "0x1") {
+    output.push_back(absl::StrCat(field_prefix,
+                                  "reserved1: Must be 0x1, but was ",
+                                  header.reserved1(), " instead."));
+  }
+}
+
 } //namespace
 
 std::string HeaderCaseName(Header::HeaderCase header_case) {
@@ -1627,6 +1732,8 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
       return "PsampHeader";
     case Header::kPtpHeader:
       return "PtpHeader";
+    case Header::kPspHeader:
+      return "PspHeader";
     case Header::HEADER_NOT_SET:
       return "HEADER_NOT_SET";
   }
@@ -1726,6 +1833,10 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
       case Header::kPtpHeader: {
         PtpHeaderInvalidReasons(header.ptp_header(), error_prefix, packet,
                                 index, result);
+        break;
+      }
+      case Header::kPspHeader: {
+        PspHeaderInvalidReasons(header.psp_header(), error_prefix, result);
         break;
       }
       case Header::HEADER_NOT_SET:
@@ -2044,6 +2155,31 @@ absl::Status SerializePtpHeader(const PtpHeader &header,
   return absl::OkStatus();
 }
 
+absl::Status SerializePspHeader(const PspHeader& header,
+                                pdpi::BitString& output) {
+  RETURN_IF_ERROR(
+      SerializeBits<kPspNextHeaderBitwidth>(header.next_header(), output));
+  RETURN_IF_ERROR(SerializeBits<kPspHeaderExtLengthBitwidth>(
+      header.header_ext_length(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPspReserved0Bitwidth>(header.reserved0(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPspCryptOffsetBitwidth>(header.crypt_offset(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPspSampleBitwidth>(header.sample_bit(), output));
+  RETURN_IF_ERROR(SerializeBits<kPspDropBitwidth>(header.drop_bit(), output));
+  RETURN_IF_ERROR(SerializeBits<kPspVersionBitwidth>(header.version(), output));
+  RETURN_IF_ERROR(SerializeBits<kPspVirtualizationCookieBitwidth>(
+      header.virtualization_cookie_present(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPspReserved1Bitwidth>(header.reserved1(), output));
+  RETURN_IF_ERROR(SerializeBits<kPspSecurityParametersIndexBitwidth>(
+      header.security_parameters_index(), output));
+  RETURN_IF_ERROR(SerializeBits<kPspInitializationVectorBitwidth>(
+      header.initialization_vector(), output));
+  return absl::OkStatus();
+}
+
 absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
   switch (header.header_case()) {
     case Header::kEthernetHeader:
@@ -2073,6 +2209,8 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
           header.sai_p4_bmv2_packet_in_header(), output);
     case Header::kPtpHeader:
       return SerializePtpHeader(header.ptp_header(), output);
+    case Header::kPspHeader:
+      return SerializePspHeader(header.psp_header(), output);
     case Header::kCsigHeader:
       return SerializeCsigHeader(header.csig_header(), output);
     case Header::HEADER_NOT_SET:
@@ -2226,11 +2364,15 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           changes = true;
         }
         if (udp_header.checksum().empty() || overwrite) {
-          ASSIGN_OR_RETURN(int checksum,
+          ASSIGN_OR_RETURN(std::optional<int> checksum,
                            UdpHeaderChecksum(packet, header_index),
                            _.SetPrepend() << error_prefix << "checksum: ");
-          udp_header.set_checksum(pdpi::BitsetToHexString(
-              std::bitset<kUdpChecksumBitwidth>(checksum)));
+          if (checksum.has_value()) {
+            udp_header.set_checksum(pdpi::BitsetToHexString(
+                std::bitset<kUdpChecksumBitwidth>(*checksum)));
+          } else {
+            udp_header.set_checksum(UdpChecksum(0));
+          }
           changes = true;
         }
         break;
@@ -2295,9 +2437,6 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         }
         break;
       }
-      case Header::kVlanHeader:
-        // No computed fields.
-        break;
       case Header::kGreHeader: {
         GreHeader& gre_header = *header.mutable_gre_header();
         if (gre_header.checksum_present() == "0x1") {
@@ -2362,9 +2501,12 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         }
         break;
       }
+      case Header::kVlanHeader:
       case Header::kCsigHeader:
+      case Header::kPspHeader: {
         // No computed fields.
         break;
+      }
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
                << "Invalid packet with HEADER_NOT_SET: "
@@ -2413,6 +2555,7 @@ absl::StatusOr<bool> PadPacketToMinimumSizeFromHeaderIndex(Packet& packet,
     case Header::kIpfixHeader:
     case Header::kPsampHeader:
     case Header::kPtpHeader:
+    case Header::kPspHeader:
     case Header::kCsigHeader:
       return PadPacketToMinimumSizeFromHeaderIndex(packet, header_index + 1);
     case Header::HEADER_NOT_SET:
@@ -2518,6 +2661,9 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
       case Header::kPtpHeader:
         size += kPtpHeaderBitwidth;
         break;
+      case Header::kPspHeader:
+        size += kPspHeaderBitwidth;
+        break;
       case Header::kCsigHeader:
         size += kCsigHeaderBitwidth;
         break;
@@ -2568,7 +2714,8 @@ absl::StatusOr<int> Ipv4HeaderChecksum(Ipv4Header header) {
   return OnesComplementChecksum(std::move(data));
 }
 
-absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index) {
+absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
+                                                     int udp_header_index) {
   auto invalid_argument = gutil::InvalidArgumentErrorBuilder()
                           << "UdpHeaderChecksum(packet, udp_header_index = "
                           << udp_header_index << "): ";
@@ -2576,12 +2723,10 @@ absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index) {
     return invalid_argument
            << "udp_header_index must be in [1, " << packet.headers().size()
            << ") since the given packet has " << packet.headers().size()
-           << " headers and the UDP header must be preceded by an IP header";
+           << " headers and the UDP header must be preceded by an IP or PSP "
+           << "header";
   }
-  // If the next header is PSAMP = checksum should be zero.
-  if (udp_header_index < packet.headers().size() - 1 &&
-      packet.headers(udp_header_index + 1).header_case() ==
-          Header::kIpfixHeader) {
+  if (AllowZeroChecksumForUdp(packet, udp_header_index)) {
     return 0;
   }
   const Header& preceding_header = packet.headers(udp_header_index - 1);
@@ -2593,13 +2738,13 @@ absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index) {
   }
   UdpHeader& udp_header =
       *packet.mutable_headers(udp_header_index)->mutable_udp_header();
-  udp_header.set_checksum("0x0000");
 
   // Serialize "pseudo header" for checksum calculation, following
   // https://en.wikipedia.org/wiki/User_Datagram_Protocol#Checksum_computation.
   pdpi::BitString data;
   switch (preceding_header.header_case()) {
     case Header::kIpv4Header: {
+      udp_header.set_checksum("0x0000");
       auto& header = preceding_header.ipv4_header();
       RETURN_IF_ERROR(SerializeIpv4Address(header.ipv4_source(), data));
       RETURN_IF_ERROR(SerializeIpv4Address(header.ipv4_destination(), data));
@@ -2611,6 +2756,7 @@ absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index) {
       break;
     }
     case Header::kIpv6Header: {
+      udp_header.set_checksum("0x0000");
       auto& header = preceding_header.ipv6_header();
       RETURN_IF_ERROR(SerializeIpv6Address(header.ipv6_source(), data));
       RETURN_IF_ERROR(SerializeIpv6Address(header.ipv6_destination(), data));
@@ -2622,9 +2768,12 @@ absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index) {
           SerializeBits<kIpNextHeaderBitwidth>(header.next_header(), data));
       break;
     }
+    case Header::kPspHeader: {
+      return std::nullopt;
+    }
     default:
       return invalid_argument << "expected packet.headers[udp_header_index - "
-                                 "1] to be an IP header, got "
+                                 "1] to be an IP or PSP header, got "
                               << HeaderCaseName(preceding_header.header_case());
   }
   RETURN_IF_ERROR(RawSerializePacket(packet, udp_header_index, data));
