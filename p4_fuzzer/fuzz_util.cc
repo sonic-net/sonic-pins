@@ -82,8 +82,6 @@ constexpr int kBitsInByte = 8;
 // empirically determined to lead to big enough updates so that the test runs
 // fast, but also sometimes generates small updates, which increases coverage.
 constexpr float kAddUpdateProbability = 0.98;
-// The probability of using a wildcard for a ternary or lpm match field.
-constexpr float kFieldMatchWildcardProbability = 0.05;
 
 constexpr char kP4PortTypeName[] = "port_id_t";
 constexpr char kP4QosQueueTypeName[] = "qos_queue_t";
@@ -331,9 +329,12 @@ absl::Status MatchFieldReferenceOverride(absl::BitGen* gen,
         it != reference_map.end()) {
       // TODO: b/324943837 - Move to when creating a FuzzerConfig
       if (match_field_info.match_field().match_type() !=
-          p4::config::v1::MatchField::EXACT) {
+              p4::config::v1::MatchField::EXACT &&
+          match_field_info.match_field().match_type() !=
+              p4::config::v1::MatchField::OPTIONAL) {
         return gutil::InvalidArgumentErrorBuilder()
-               << "Only match fields with type exact can have references.";
+               << "Only match fields with type EXACT or OPTIONAL can have "
+                  "references.";
       }
       match.mutable_exact()->set_value(it->second);
     }
@@ -1519,7 +1520,7 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
                              match_field_info.match_field().match_type() ==
                                  p4::config::v1::MatchField::LPM;
     if (can_have_wildcard &&
-        absl::Bernoulli(*gen, kFieldMatchWildcardProbability)) {
+        absl::Bernoulli(*gen, config.GetMatchFieldWildcardProbability())) {
       continue;
     }
 

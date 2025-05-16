@@ -22,6 +22,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -34,12 +35,12 @@
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/ir_properties.h"
-#include "z3++.h"
 
 namespace p4_fuzzer {
 namespace {
 
 using ::p4::v1::TableEntry;
+using ::p4_constraints::ConstraintSolver;
 
 // Checks whether a key has a P4 runtime translated type.
 absl::StatusOr<bool> HasP4RuntimeTranslatedType(
@@ -97,50 +98,23 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   };
 
   // Construct z3 context and solver.
-  z3::context solver_context;
-  z3::solver solver(solver_context);
-
-  ASSIGN_OR_RETURN(
-      p4_constraints::SymbolicEnvironment environment,
-      p4_constraints::EncodeValidTableEntryInZ3(*table_info, solver, skip_key));
+  ASSIGN_OR_RETURN(ConstraintSolver constraint_solver,
+                   ConstraintSolver::Create(*table_info, skip_key));
 
   // Try to add some randomness to get more unique entries by attempting to fuzz
   // priority, skipping if the initial value yields an unsatisfiable constraint.
   if (table.requires_priority()) {
-    ASSIGN_OR_RETURN(
-        const p4_constraints::SymbolicAttribute symbolic_priority,
-        gutil::FindOrStatus(environment.symbolic_attribute_by_name,
-                            p4_constraints::kSymbolicPriorityAttributeName));
-
-    solver.push();
-    solver.add(symbolic_priority.value ==
-               static_cast<int>(FuzzUint64(&gen, /*bits=*/16)));
-    if (solver.check() != z3::sat) {
-      solver.pop();
-    }
+    RETURN_IF_ERROR(constraint_solver
+                        .AddConstraint(absl::Substitute(
+                            "::priority == $0",
+                            static_cast<int>(FuzzUint64(&gen, /*bits=*/16))))
+                        .status());
   }
 
   // TODO: Add additional randomness for match fields too before
   // generating a model.
 
-  // Solve and check satisfiability.
-  switch (solver.check()) {
-    case z3::unsat:
-      return gutil::InvalidArgumentErrorBuilder()
-             << "unsatisfiable constraint:\n"
-             << solver.to_smt2();
-    case z3::unknown:
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Unknown constraint solution";
-    case z3::sat:
-      // Constraint was satisfiable, so we get a solution from the model.
-      break;
-  }
-  z3::model model = solver.get_model();
-
-  ASSIGN_OR_RETURN(TableEntry table_entry,
-                   p4_constraints::ConcretizeEntry(model, *table_info,
-                                                   environment, skip_key));
+  ASSIGN_OR_RETURN(TableEntry table_entry, constraint_solver.ConcretizeEntry());
 
   // Fuzz all unconstrained keys normally.
   for (const auto& [name, match_field_def] : table.match_fields_by_name()) {

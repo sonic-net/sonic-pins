@@ -155,7 +155,6 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
-        "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/base:endian",
@@ -375,6 +374,8 @@ cc_test(
     deps = [
         ":switch_state",
         "//gutil:collections",
+        "//gutil:proto",
+        "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",

@@ -12,6 +12,7 @@
 #include "absl/types/span.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -30,6 +31,7 @@ using ::p4::config::v1::Table;
 using ::p4::v1::Entity;
 using ::p4::v1::TableEntry;
 using ::pdpi::CreateIrP4Info;
+using ::pdpi::IrEntity;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableEntry;
 
@@ -54,8 +56,8 @@ IrP4Info GetIrP4Info() {
 
 struct TestCase {
   std::string description;
-  std::vector<IrTableEntry> switch_entries;
-  std::vector<IrTableEntry> fuzzer_entries;
+  std::vector<IrEntity> switch_entities;
+  std::vector<IrEntity> fuzzer_entities;
   std::string mask_function_description;
   std::optional<std::function<bool(IrTableEntry, IrTableEntry)>> mask_function;
 };
@@ -64,7 +66,7 @@ struct SwitchStateSummaryTestCase {
   std::string description;
   std::string info;
   IrP4Info ir_info;
-  std::vector<IrTableEntry> entries;
+  std::vector<IrEntity> entities;
   bool delete_entries;
 };
 
@@ -72,28 +74,32 @@ std::vector<TestCase> TestCases() {
   std::vector<TestCase> test_cases;
 
   test_cases.emplace_back(TestCase{
-      .description = "Switch Has Unique Entry",
-      .switch_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .description = "Switch Has Unique Entity",
+      .switch_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
                              }
                            )pb",
                            kGoldenName))},
-      .fuzzer_entries = {},
+      .fuzzer_entities = {},
   });
 
   test_cases.emplace_back(TestCase{
-      .description = "Fuzzer Has Unique Entry",
-      .switch_entries = {},
-      .fuzzer_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .description = "Fuzzer Has Unique Entity",
+      .switch_entities = {},
+      .fuzzer_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
                              }
                            )pb",
                            kGoldenName))},
@@ -101,45 +107,53 @@ std::vector<TestCase> TestCases() {
 
   test_cases.emplace_back(TestCase{
       .description =
-          "Switch and Fuzzer entry have same key but different value",
-      .switch_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+          "Switch and Fuzzer entity have same key but different value",
+      .switch_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
                              }
                            )pb",
                            kGoldenName))},
-      .fuzzer_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .fuzzer_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
+                               controller_metadata: "Am cookie, much wow"
                              }
-                             controller_metadata: "Am cookie, much wow"
                            )pb",
                            kGoldenName))},
   });
 
   test_cases.emplace_back(TestCase{
-      .description = "Switch and Fuzzer have same entries",
-      .switch_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .description = "Switch and Fuzzer have same entities",
+      .switch_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
                              }
                            )pb",
                            kGoldenName))},
-      .fuzzer_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .fuzzer_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
                              }
                            )pb",
                            kGoldenName))},
@@ -147,23 +161,27 @@ std::vector<TestCase> TestCases() {
 
   test_cases.emplace_back(TestCase{
       .description = "Missing metadata is ignored due to mask function",
-      .switch_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .switch_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
                              }
                            )pb",
                            kGoldenName))},
-      .fuzzer_entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+      .fuzzer_entities = {gutil::ParseProtoOrDie<IrEntity>(
           absl::Substitute(R"pb(
-                             table_name: "$0"
-                             matches {
-                               name: "field1"
-                               exact { hex_str: "0xbe0a0bed" }
+                             table_entry {
+                               table_name: "$0"
+                               matches {
+                                 name: "field1"
+                                 exact { hex_str: "0xbe0a0bed" }
+                               }
+                               controller_metadata: "Am cookie, much wow"
                              }
-                             controller_metadata: "Am cookie, much wow"
                            )pb",
                            kGoldenName))},
       .mask_function_description = "Mask ignores metadata field",
@@ -187,16 +205,19 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
         .description = "Summary With No Resource Limits Hit",
         .info = "A single entry added to lpm1 table.",
         .ir_info = pdpi::GetTestIrP4Info(),
-        .entries = {gutil::ParseProtoOrDie<IrTableEntry>(
-            R"pb(table_name: "lpm1_table"
-                 matches {
-                   name: "ipv4"
-                   lpm {
-                     value { ipv4: "10.43.12.0" }
-                     prefix_length: 24
-                   }
-                 }
-                 action { name: "NoAction" }
+        .entities = {gutil::ParseProtoOrDie<IrEntity>(
+            R"pb(
+              table_entry {
+                table_name: "lpm1_table"
+                matches {
+                  name: "ipv4"
+                  lpm {
+                    value { ipv4: "10.43.12.0" }
+                    prefix_length: 24
+                  }
+                }
+                action { name: "NoAction" }
+              }
             )pb")},
         .delete_entries = false,
     });
@@ -221,35 +242,37 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
             .size();
     int32_t per_action_weight = 10;  // > 0
 
-    std::vector<IrTableEntry> excessive_entries;
+    std::vector<IrEntity> excessive_entries;
     excessive_entries.reserve(wcmp_table_size);
     // Construct sufficiently many unique WCMP table entries.
     for (int i = 0; i < wcmp_table_size + 1; i++) {
       excessive_entries.push_back(
-          gutil::ParseProtoOrDie<IrTableEntry>(absl::Substitute(
+          gutil::ParseProtoOrDie<IrEntity>(absl::Substitute(
               R"pb(
-                table_name: "wcmp_table"
-                matches {
-                  name: "ipv4"
-                  lpm {
-                    value { ipv4: "$0.$1.$2.$3" }
-                    prefix_length: 32
-                  }
-                }
-                action_set {
-                  actions {
-                    action {
-                      name: "do_thing_1"
-                      params {
-                        name: "arg2"
-                        value { hex_str: "0x00307831" }
-                      }
-                      params {
-                        name: "arg1"
-                        value { hex_str: "0x00307832" }
-                      }
+                table_entry {
+                  table_name: "wcmp_table"
+                  matches {
+                    name: "ipv4"
+                    lpm {
+                      value { ipv4: "$0.$1.$2.$3" }
+                      prefix_length: 32
                     }
-                    weight: $4
+                  }
+                  action_set {
+                    actions {
+                      action {
+                        name: "do_thing_1"
+                        params {
+                          name: "arg2"
+                          value { hex_str: "0x00307831" }
+                        }
+                        params {
+                          name: "arg1"
+                          value { hex_str: "0x00307832" }
+                        }
+                      }
+                      weight: $4
+                    }
                   }
                 }
               )pb",
@@ -264,7 +287,7 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
             "Summary With Resource Limits Hit using Sum Of Weights Semantics",
         .info = "Excessive entries added to wcmp table.",
         .ir_info = ir_info_sum_of_weights,
-        .entries = excessive_entries,
+        .entities = excessive_entries,
         .delete_entries = false,
     });
 
@@ -274,7 +297,7 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
         .info = "Excessive entries added to wcmp table then removed. Still "
                 "notes that resource limits reached.",
         .ir_info = ir_info_sum_of_weights,
-        .entries = excessive_entries,
+        .entities = excessive_entries,
         .delete_entries = true,
     });
 
@@ -283,7 +306,7 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
             "Summary With Resource Limits Hit using Sum Of Members Semantics",
         .info = "Excessive entries added to wcmp table.",
         .ir_info = ir_info_sum_of_members,
-        .entries = excessive_entries,
+        .entities = excessive_entries,
         .delete_entries = false,
     });
 
@@ -292,7 +315,7 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
                        "Semantics and all entries cleared.",
         .info = "Excessive entries added to wcmp table.",
         .ir_info = ir_info_sum_of_members,
-        .entries = excessive_entries,
+        .entities = excessive_entries,
         .delete_entries = true,
     });
   }
@@ -300,33 +323,20 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
   return test_cases;
 }
 
-std::string EntriesToString(absl::Span<const IrTableEntry> entries) {
+std::string EntitiesToString(absl::Span<const IrEntity> entities) {
   std::string result = "";
-  for (const auto& entry : entries) {
-    absl::StrAppend(&result, gutil::PrintTextProto(entry));
+  for (const auto& entity : entities) {
+    absl::StrAppend(&result, gutil::PrintTextProto(entity));
   }
   return result;
 }
 
-absl::StatusOr<std::vector<TableEntry>> IrToPiVector(
-    absl::Span<const IrTableEntry> ir_entries, const IrP4Info& ir_info) {
-  std::vector<TableEntry> pi_entries;
-  for (const auto& ir_entry : ir_entries) {
-    ASSIGN_OR_RETURN(TableEntry pi_entry,
-                     pdpi::IrTableEntryToPi(ir_info, ir_entry));
-    pi_entries.push_back(pi_entry);
-  }
-  return pi_entries;
-}
-
-// TODO: b/316926338 - Remove once test is refactored to use entities.
-std::vector<Entity> PiEntriesToEntities(std::vector<TableEntry> pi_entries) {
+absl::StatusOr<std::vector<Entity>> IrToPiVector(
+    absl::Span<const IrEntity> ir_entities, const IrP4Info& ir_info) {
   std::vector<Entity> pi_entities;
-  pi_entities.reserve(pi_entries.size());
-  for (const auto& pi_entry : pi_entries) {
-    Entity entity;
-    *entity.mutable_table_entry() = pi_entry;
-    pi_entities.push_back(std::move(entity));
+  for (const auto& ir_entity : ir_entities) {
+    ASSIGN_OR_RETURN(Entity pi_entity, pdpi::IrEntityToPi(ir_info, ir_entity));
+    pi_entities.push_back(pi_entity);
   }
   return pi_entities;
 }
@@ -338,21 +348,30 @@ absl::Status main() {
   for (const auto& test : TestCases()) {
     state.ClearTableEntries();
 
-    ASSIGN_OR_RETURN(std::vector<TableEntry> pi_fuzzer_entries,
-                     IrToPiVector(test.fuzzer_entries, ir_info));
-    ASSIGN_OR_RETURN(std::vector<TableEntry> pi_switch_entries,
-                     IrToPiVector(test.switch_entries, ir_info));
+    ASSIGN_OR_RETURN(std::vector<Entity> pi_fuzzer_entities,
+                     IrToPiVector(test.fuzzer_entities, ir_info));
+    ASSIGN_OR_RETURN(std::vector<Entity> pi_switch_entities,
+                     IrToPiVector(test.switch_entities, ir_info));
 
-    RETURN_IF_ERROR(state.SetEntities(PiEntriesToEntities(pi_fuzzer_entries)));
+    RETURN_IF_ERROR(state.SetEntities(pi_fuzzer_entities));
     RETURN_IF_ERROR(state.CheckConsistency());
+
+    // TODO: b/316926338 - Remove once switch state is refactored to use
+    // entities first.
+    std::vector<TableEntry> table_entries;
+    for (const auto& entity : pi_switch_entities) {
+      if (entity.has_table_entry()) {
+        table_entries.push_back(entity.table_entry());
+      }
+    }
 
     std::cout << "#########################################################\n"
               << "### Test Case: " << test.description << "\n"
               << "#########################################################\n\n"
-              << "=== Switch Entries ===\n"
-              << EntriesToString(test.switch_entries) << "\n"
-              << "=== Fuzzer Entries ===\n"
-              << EntriesToString(test.fuzzer_entries) << "\n"
+              << "=== Switch Entities ===\n"
+              << EntitiesToString(test.switch_entities) << "\n"
+              << "=== Fuzzer Entities ===\n"
+              << EntitiesToString(test.fuzzer_entities) << "\n"
               << "=== Mask Function ===\n"
               << (test.mask_function.has_value()
                       ? test.mask_function_description
@@ -360,15 +379,15 @@ absl::Status main() {
               << "\n\n"
               << "=== Test Output ===\n"
               << gutil::StableStatusToString(state.AssertEntriesAreEqualToState(
-                     pi_switch_entries, test.mask_function))
+                     table_entries, test.mask_function))
               << "\n";
   }
 
   for (const auto& test : SwitchStateSummaryTestCases()) {
     state = SwitchState(test.ir_info);
-    ASSIGN_OR_RETURN(std::vector<TableEntry> pi_entries,
-                     IrToPiVector(test.entries, test.ir_info));
-    RETURN_IF_ERROR(state.SetEntities(PiEntriesToEntities(pi_entries)));
+    ASSIGN_OR_RETURN(std::vector<Entity> pi_entities,
+                     IrToPiVector(test.entities, test.ir_info));
+    RETURN_IF_ERROR(state.SetEntities(pi_entities));
     RETURN_IF_ERROR(state.CheckConsistency());
     if (test.delete_entries) {
       state.ClearTableEntries();
