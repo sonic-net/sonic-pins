@@ -249,7 +249,7 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
 absl::Status MutateDuplicateInsert(absl::BitGen* gen, p4::v1::Update* update,
                                    const FuzzerConfig& config,
                                    const SwitchState& switch_state) {
-  if (switch_state.AllTablesEmpty()) {
+  if (switch_state.AllP4TablesEmpty()) {
     return absl::InvalidArgumentError(
         "Cannot do a duplicate insert when there are no installed entries");
   }
