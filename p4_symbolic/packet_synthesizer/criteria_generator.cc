@@ -21,6 +21,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -93,7 +94,7 @@ GenerateSynthesisCriteriaFor(const EntryCoverageGoal& goal,
         criteria_list.back()
             .mutable_metadata()
             ->mutable_covered_entity_debug_strings()
-            ->Add(entries[i].ShortDebugString());
+            ->Add(gutil::PrintTextProto(entries[i]));
       }
     }
 
@@ -218,17 +219,28 @@ GenerateSynthesisCriteriaFor(const HeaderCoverageGoal& goal,
   return criteria_list;
 }
 
+// Generates a list of packet synthesis criteria for the custom criteria
+// coverage `goal`, consistent with the semantics defined in
+// coverage_goal.proto:CustomCriteriaCoverageGoal.
+absl::StatusOr<std::vector<PacketSynthesisCriteria>>
+GenerateSynthesisCriteriaFor(const CustomCriteriaCoverageGoal& goal,
+                             const symbolic::SolverState& solver_state) {
+  return std::vector<PacketSynthesisCriteria>(goal.criteria_list().begin(),
+                                              goal.criteria_list().end());
+}
+
 // Generates a list of packet synthesis criteria for a given (composite)
 // coverage `goal`, consistent with the semantics defined in
 // coverage_goal.proto:CoverageGoal.
 absl::StatusOr<std::vector<PacketSynthesisCriteria>>
-GenerateSynthesisCriteriaFor(const CoverageGoal& goal,
+GenerateSynthesisCriteriaFor(const CartesianProductCoverageGoal& goal,
                              const symbolic::SolverState& solver_state) {
   // Use a wildcard synthesis criteria for any missing goal.
   PacketSynthesisCriteria wildcard;
   std::vector<PacketSynthesisCriteria> entry_criteria = {wildcard};
   std::vector<PacketSynthesisCriteria> fate_criteria = {wildcard};
   std::vector<PacketSynthesisCriteria> header_criteria = {wildcard};
+  std::vector<PacketSynthesisCriteria> custom_criteria = {wildcard};
 
   // Generate criteria for individual goals.
   if (goal.has_entry_coverage()) {
@@ -248,13 +260,45 @@ GenerateSynthesisCriteriaFor(const CoverageGoal& goal,
         GenerateSynthesisCriteriaFor(goal.header_coverage(), solver_state));
   }
 
+  if (goal.has_custom_criteria_coverage()) {
+    ASSIGN_OR_RETURN(custom_criteria,
+                     GenerateSynthesisCriteriaFor(
+                         goal.custom_criteria_coverage(), solver_state));
+  }
+
   // Combine criteria across goals.
   ASSIGN_OR_RETURN(
-      auto fate_and_entry_criteria,
+      auto fate_entry_criteria,
       MakeCartesianProductConjunction(fate_criteria, entry_criteria));
+  ASSIGN_OR_RETURN(
+      auto header_fate_entry_criteria,
+      MakeCartesianProductConjunction(header_criteria, fate_entry_criteria));
+  return MakeCartesianProductConjunction(header_fate_entry_criteria,
+                                         custom_criteria);
+}
 
-  return MakeCartesianProductConjunction(header_criteria,
-                                         fate_and_entry_criteria);
+// Generates a list of packet synthesis criteria for a given coverage `goal`.
+absl::StatusOr<std::vector<PacketSynthesisCriteria>>
+GenerateSynthesisCriteriaFor(const CoverageGoal& goal,
+                             const symbolic::SolverState& solver_state) {
+  switch (goal.coverage_goal_case()) {
+    case CoverageGoal::kEntryCoverage:
+      return GenerateSynthesisCriteriaFor(goal.entry_coverage(), solver_state);
+    case CoverageGoal::kPacketFateCoverage:
+      return GenerateSynthesisCriteriaFor(goal.packet_fate_coverage(),
+                                          solver_state);
+    case CoverageGoal::kHeaderCoverage:
+      return GenerateSynthesisCriteriaFor(goal.header_coverage(), solver_state);
+    case CoverageGoal::kCartesianProductCoverage:
+      return GenerateSynthesisCriteriaFor(goal.cartesian_product_coverage(),
+                                          solver_state);
+    case CoverageGoal::kCustomCriteriaCoverage:
+      return GenerateSynthesisCriteriaFor(goal.custom_criteria_coverage(),
+                                          solver_state);
+    default:
+      return absl::UnimplementedError(absl::StrCat(
+          "Unsupported coverage goal: ", goal.coverage_goal_case()));
+  }
 }
 
 }  // namespace

@@ -1,7 +1,7 @@
 (ingress) $got_cloned$: false
 (ingress) $got_recirculated$: false
 (ingress) h1.$extracted$: false
-(ingress) h1.$valid$: (ite true true false)
+(ingress) h1.$valid$: true
 (ingress) h1.f1: h1.f1
 (ingress) h1.f2: h1.f2
 (ingress) h1.f3: h1.f3
@@ -30,8 +30,8 @@
 
 (parsed) $got_cloned$: false
 (parsed) $got_recirculated$: false
-(parsed) h1.$extracted$: (ite true true false)
-(parsed) h1.$valid$: (ite true true false)
+(parsed) h1.$extracted$: true
+(parsed) h1.$valid$: true
 (parsed) h1.f1: h1.f1
 (parsed) h1.f2: h1.f2
 (parsed) h1.f3: h1.f3
@@ -60,8 +60,8 @@
 
 (egress) $got_cloned$: false
 (egress) $got_recirculated$: false
-(egress) h1.$extracted$: (ite true true false)
-(egress) h1.$valid$: (ite true true false)
+(egress) h1.$extracted$: true
+(egress) h1.$valid$: true
 (egress) h1.f1: h1.f1
 (egress) h1.f2: h1.f2
 (egress) h1.f3: h1.f3
@@ -75,24 +75,24 @@
 (egress) standard_metadata.deq_qdepth: #b0000000000000000000
 (egress) standard_metadata.deq_timedelta: #x00000000
 (egress) standard_metadata.egress_global_timestamp: #x000000000000
-(egress) standard_metadata.egress_port: (let ((a!1 (= (ite (and true true (= h1.f1 #xff)) 0 (- 1)) (- 1)))
-      (a!2 (distinct (ite (and true true (= h1.f1 #xff)) 0 (- 1)) (- 1))))
-(let ((a!3 (ite (and true a!2 true (= h1.f2 #xff))
-                #b000000010
-                (ite (and true true (= h1.f1 #xff))
-                     #b000000001
-                     (ite true (concat #x00 #b0) #b000000000)))))
-(let ((a!4 (ite (and true a!1 true (= h1.f3 #xff)) #b000000011 a!3)))
+(egress) standard_metadata.egress_port: (let ((a!1 (ite (and true (and true (= h1.f1 #xff))) 0 (- 1)))
+      (a!2 (ite (and true (= h1.f1 #xff)) #b000000001 (concat #x00 #b0))))
+(let ((a!3 (ite (and true (distinct a!1 (- 1)))
+                (ite (and true (= h1.f2 #xff)) #b000000010 a!2)
+                a!2)))
+(let ((a!4 (ite (and true (= a!1 (- 1)))
+                (ite (and true (= h1.f3 #xff)) #b000000011 a!3)
+                a!3)))
   (ite (not (= a!4 #b111111111)) a!4 standard_metadata.egress_port))))
 (egress) standard_metadata.egress_rid: #x0000
-(egress) standard_metadata.egress_spec: (let ((a!1 (= (ite (and true true (= h1.f1 #xff)) 0 (- 1)) (- 1)))
-      (a!2 (distinct (ite (and true true (= h1.f1 #xff)) 0 (- 1)) (- 1))))
-(let ((a!3 (ite (and true a!2 true (= h1.f2 #xff))
-                #b000000010
-                (ite (and true true (= h1.f1 #xff))
-                     #b000000001
-                     (ite true (concat #x00 #b0) #b000000000)))))
-  (ite (and true a!1 true (= h1.f3 #xff)) #b000000011 a!3)))
+(egress) standard_metadata.egress_spec: (let ((a!1 (ite (and true (and true (= h1.f1 #xff))) 0 (- 1)))
+      (a!2 (ite (and true (= h1.f1 #xff)) #b000000001 (concat #x00 #b0))))
+(let ((a!3 (ite (and true (distinct a!1 (- 1)))
+                (ite (and true (= h1.f2 #xff)) #b000000010 a!2)
+                a!2)))
+  (ite (and true (= a!1 (- 1)))
+       (ite (and true (= h1.f3 #xff)) #b000000011 a!3)
+       a!3)))
 (egress) standard_metadata.enq_qdepth: #b0000000000000000000
 (egress) standard_metadata.enq_timestamp: #x00000000
 (egress) standard_metadata.ingress_global_timestamp: #x000000000000
@@ -121,19 +121,18 @@
  (let (($x72 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x67) $x71)))
  (or (or (or (or (or $x72 $x75) $x80) $x85) $x90) $x95))))))))))
 (assert
- (let (($x18 (= h1.f1 (_ bv255 8))))
- (let (($x23 (and true $x18)))
- (let (($x27 (and true $x23)))
- (let ((?x36 (ite $x27 0 (- 1))))
- (let (($x39 (and (distinct ?x36 (- 1)) true)))
- (let (($x40 (and true $x39)))
- (let (($x43 (and $x40 (and true (= h1.f2 (_ bv255 8))))))
- (let (($x49 (= ?x36 (- 1))))
- (let (($x50 (and true $x49)))
- (let (($x53 (and $x50 (and true (= h1.f3 (_ bv255 8))))))
- (let ((?x58 (ite $x53 (_ bv3 9) (ite $x43 (_ bv2 9) (ite $x27 (_ bv1 9) (ite true (concat (_ bv0 8) (_ bv0 1)) (_ bv0 9)))))))
- (let (($x78 (or (or (or (or false (= ?x58 (_ bv0 9))) (= ?x58 (_ bv1 9))) (= ?x58 (_ bv2 9))) (= ?x58 (_ bv3 9)))))
- (let (($x98 (or (or (or (or $x78 (= ?x58 (_ bv4 9))) (= ?x58 (_ bv5 9))) (= ?x58 (_ bv6 9))) (= ?x58 (_ bv7 9)))))
- (let (($x34 (= ?x58 (_ bv511 9))))
- (or $x34 $x98))))))))))))))))
+ (let (($x28 (= h1.f1 (_ bv255 8))))
+ (let (($x25 (and true $x28)))
+ (let ((?x34 (ite $x25 (_ bv1 9) (concat (_ bv0 8) (_ bv0 1)))))
+ (let ((?x27 (ite (and true $x25) 0 (- 1))))
+ (let (($x35 (and (distinct ?x27 (- 1)) true)))
+ (let (($x36 (and true $x35)))
+ (let ((?x43 (ite $x36 (ite (and true (= h1.f2 (_ bv255 8))) (_ bv2 9) ?x34) ?x34)))
+ (let (($x46 (= ?x27 (- 1))))
+ (let (($x47 (and true $x46)))
+ (let ((?x54 (ite $x47 (ite (and true (= h1.f3 (_ bv255 8))) (_ bv3 9) ?x43) ?x43)))
+ (let (($x78 (or (or (or (or false (= ?x54 (_ bv0 9))) (= ?x54 (_ bv1 9))) (= ?x54 (_ bv2 9))) (= ?x54 (_ bv3 9)))))
+ (let (($x98 (or (or (or (or $x78 (= ?x54 (_ bv4 9))) (= ?x54 (_ bv5 9))) (= ?x54 (_ bv6 9))) (= ?x54 (_ bv7 9)))))
+ (let (($x60 (= ?x54 (_ bv511 9))))
+ (or $x60 $x98)))))))))))))))
 (check-sat)

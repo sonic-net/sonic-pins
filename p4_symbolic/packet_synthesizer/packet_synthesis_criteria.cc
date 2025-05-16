@@ -171,20 +171,38 @@ absl::StatusOr<PacketSynthesisCriteria> MakeConjunction(
                      GetCriteriaVariant(rhs, criteria_case));
 
     if (lhs_variant.criteria_case() == CriteriaVariant::CRITERIA_NOT_SET) {
+      // LHS is empty, so we can just copy RHS.
       RETURN_IF_ERROR(
           SetCriteriaVariant(merged_criteria, rhs_variant, criteria_case));
     } else if (rhs_variant.criteria_case() ==
                CriteriaVariant::CRITERIA_NOT_SET) {
+      // RHS is empty, so we can just copy LHS.
       RETURN_IF_ERROR(
           SetCriteriaVariant(merged_criteria, lhs_variant, criteria_case));
     } else if (Equals(lhs_variant, rhs_variant)) {
+      // LHS and RHS are the same.
       RETURN_IF_ERROR(
           SetCriteriaVariant(merged_criteria, lhs_variant, criteria_case));
     } else {
-      return absl::UnimplementedError(absl::Substitute(
-          "Merging of non-empty, non-equal variants of the same type is "
-          "not supported.\nlhs: '$0' \n rhs: '$1'",
-          lhs.ShortDebugString(), rhs.ShortDebugString()));
+      // LHS and RHS are not empty and NOT equal.
+      if (lhs_variant.has_input_packet_header_criteria()) {
+        // Merge input packet header conditions.
+        RETURN_IF_ERROR(
+            SetCriteriaVariant(merged_criteria, lhs_variant, criteria_case));
+        for (const auto& rhs_field_criteria :
+             rhs_variant.input_packet_header_criteria().field_criteria()) {
+          *merged_criteria.mutable_input_packet_header_criteria()
+               ->add_field_criteria() = rhs_field_criteria;
+        }
+      } else {
+        // The rest of the non-empty, non-equal criteria variants are not
+        // supported for merging.
+        return absl::UnimplementedError(
+            absl::Substitute("Merging of non-empty, non-equal variants of the "
+                             "same type (except of header conditions) "
+                             "not supported.\nlhs: '$0' \n rhs: '$1'",
+                             lhs.ShortDebugString(), rhs.ShortDebugString()));
+      }
     }
   }
 
