@@ -32,11 +32,40 @@ inline orion::p4::test::Bmv2Args DefaultSaiP4Bmv2Args() {
   };
 }
 
+enum class InitialBmv2ControlPlane {
+  kInstallCloneEntries,
+  kNoControlPlane,
+};
+
+template <typename Sink>
+void AbslStringify(Sink &sink, InitialBmv2ControlPlane e) {
+  switch (e) {
+    case InitialBmv2ControlPlane::kInstallCloneEntries:
+      sink.Append("kInstallCloneEntries");
+      break;
+    case InitialBmv2ControlPlane::kNoControlPlane:
+      sink.Append("kNoControlPlane");
+      break;
+  }
+}
+
+// Options for setting up BMv2 to run with SAI P4.
+// These options are not arguments that are forwarded to the BMv2 binary.
+// Instead they are used to control the installation of control plane entities
+// on BMv2 after it has been instantiated. For example, whether clone entries
+// should be installed or not.
+struct SaiP4Bmv2SetupOptions {
+  // The BMv2 SAI setup installs a clone configuration, which can be disabled.
+  InitialBmv2ControlPlane initial_bmv2_control_plane =
+      InitialBmv2ControlPlane::kInstallCloneEntries;
+};
+
 // Returns configured BMv2 ready for use with SAI P4.
 // Configures BMv2 by pushing the given `config` and installing the auxiliary
 // clone session entry required for PacketIO.
 absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
-    const p4::v1::ForwardingPipelineConfig& bmv2_config,
+    const p4::v1::ForwardingPipelineConfig &bmv2_config,
+    const SaiP4Bmv2SetupOptions &options = {},
     orion::p4::test::Bmv2Args bmv2_args = DefaultSaiP4Bmv2Args());
 
 // Returns configured BMv2 ready for use with SAI P4.
@@ -44,7 +73,7 @@ absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
 // `instantiation` and installing the auxiliary clone session entry required for
 // PacketIO.
 absl::StatusOr<orion::p4::test::Bmv2> SetUpBmv2ForSaiP4(
-    Instantiation instantiation,
+    Instantiation instantiation, const SaiP4Bmv2SetupOptions &options = {},
     orion::p4::test::Bmv2Args bmv2_args = DefaultSaiP4Bmv2Args());
 
 } // namespace sai
