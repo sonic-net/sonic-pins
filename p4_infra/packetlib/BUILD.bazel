@@ -1,5 +1,5 @@
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
-load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+load("//gutil/gutil:diff_test.bzl", "cmd_diff_test")
 
 package(
     default_visibility = ["//visibility:public"],

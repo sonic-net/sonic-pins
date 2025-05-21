@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+load("//gutil/gutil:diff_test.bzl", "cmd_diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
