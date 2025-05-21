@@ -14,9 +14,9 @@
 
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("//gutil/gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//gutil/gutil/embed_data:build_defs.bzl", "cc_embed_data")
 load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
