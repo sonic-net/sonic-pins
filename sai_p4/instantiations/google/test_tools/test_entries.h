@@ -236,23 +236,23 @@ public:
   EntryBuilder &AddEntryPuntingPacketsWithTtlZeroAndOne();
   EntryBuilder &AddMulticastGroupEntry(int multicast_group_id,
                                        absl::Span<const Replica> replicas);
-  EntryBuilder &
-  AddMulticastGroupEntry(int multicast_group_id,
-                         absl::Span<const std::string> egress_ports);
-  EntryBuilder &AddMulticastRouterInterfaceEntry(
-      const MulticastRouterInterfaceTableEntry &entry);
-  EntryBuilder &AddIngressAclDroppingAllPackets();
-  EntryBuilder &AddDisableVlanChecksEntry();
-  EntryBuilder &
-  AddEntrySettingVrfBasedOnVlanId(absl::string_view vlan_id_hexstr,
-                                  absl::string_view vrf);
-  EntryBuilder &AddEntrySettingVrfForAllPackets(absl::string_view vrf);
-  EntryBuilder &AddEntrySettingVlanIdInPreIngress(
+  EntryBuilder& AddMulticastGroupEntry(
+      int multicast_group_id, absl::Span<const std::string> egress_ports);
+  EntryBuilder& AddMulticastRouterInterfaceEntry(
+      const MulticastRouterInterfaceTableEntry& entry);
+  EntryBuilder& AddIngressAclDroppingAllPackets();
+  EntryBuilder& AddDisableVlanChecksEntry();
+  EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
+      absl::string_view vlan_id_hexstr, absl::string_view vrf);
+  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf,
+                                                int priority = 1);
+  EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
-      std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
-  EntryBuilder &AddIngressAclEntryRedirectingToNexthop(
+      std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt,
+      int priority = 1);
+  EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
-      const MirrorAndRedirectMatchFields& match_fields = {});
+      const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
       const MirrorAndRedirectMatchFields &match_fields = {});

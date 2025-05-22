@@ -1,6 +1,6 @@
 pkg_info {
   name: "tor.p4"
-  version: "2.0.0"
+  version: "2.2.0"
   arch: "v1model"
   organization: "Google"
 }

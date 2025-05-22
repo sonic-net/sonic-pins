@@ -361,17 +361,17 @@ EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVrfForAllPackets(
-    absl::string_view vrf) {
+    absl::string_view vrf, int priority) {
   sai::AclPreIngressTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
   entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
-  entry.set_priority(1);
+  entry.set_priority(priority);
   return *this;
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
     absl::string_view set_vlan_id_hexstr,
-    std::optional<absl::string_view> match_vlan_id_hexstr) {
+    std::optional<absl::string_view> match_vlan_id_hexstr, int priority) {
   sai::AclPreIngressVlanTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
   if (match_vlan_id_hexstr.has_value()) {
@@ -380,7 +380,7 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
   }
   entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
       set_vlan_id_hexstr);
-  entry.set_priority(1);
+  entry.set_priority(priority);
 
   return *this;
 }
@@ -458,7 +458,7 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     absl::string_view nexthop_id,
-    const MirrorAndRedirectMatchFields& match_fields) {
+    const MirrorAndRedirectMatchFields& match_fields, int priority) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
@@ -476,7 +476,7 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
-  entry.set_priority(1);
+  entry.set_priority(priority);
 
   return *this;
 }
