@@ -87,6 +87,20 @@ absl::Status InstallIrEntities(P4RuntimeSession& p4rt,
   return InstallPiEntities(&p4rt, info, pi_entities);
 }
 
+absl::Status InstallIrEntity(P4RuntimeSession& p4rt,
+                             const IrEntity& ir_entity) {
+  // Get P4Info from switch.
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entity on switch: failed "
+                                     "to pull P4Info from switch: ");
+
+  // Convert entity to PI representation.
+  ASSIGN_OR_RETURN(p4::v1::Entity pi_entity, IrEntityToPi(info, ir_entity));
+
+  // Install entity.
+  return InstallPiEntity(&p4rt, pi_entity);
+}
+
 absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
                                  const IrTableEntry& ir_table_entry) {
   // Get P4Info from switch.
@@ -232,21 +246,38 @@ absl::StatusOr<IrP4Info> GetIrP4Info(P4RuntimeSession& p4rt) {
 }
 
 absl::StatusOr<p4::config::v1::P4Info> GetOrSetP4Info(
-    pdpi::P4RuntimeSession& p4rt_session,
-    const p4::config::v1::P4Info& default_p4info) {
+    P4RuntimeSession& p4rt_session, const p4::config::v1::P4Info& p4info) {
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse forwarding_pipeline_config,
-      pdpi::GetForwardingPipelineConfig(&p4rt_session));
+      GetForwardingPipelineConfig(&p4rt_session));
   if (!forwarding_pipeline_config.config().p4info().tables().empty()) {
     return forwarding_pipeline_config.config().p4info();
   }
 
   LOG(INFO) << "Pushing P4Info to device " << p4rt_session.DeviceId();
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  RETURN_IF_ERROR(SetMetadataAndSetForwardingPipelineConfig(
       &p4rt_session,
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      default_p4info));
-  return default_p4info;
+      p4info));
+  return p4info;
+}
+
+absl::Status DeleteIrEntity(P4RuntimeSession& p4rt,
+                            const pdpi::IrEntity& ir_entity) {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot delete entity on switch: failed "
+                                     "to pull P4Info from switch: ");
+  ASSIGN_OR_RETURN(p4::v1::Entity pi_entity,
+                   IrEntityToPi(ir_p4info, ir_entity));
+  return DeletePiEntity(p4rt, pi_entity);
+}
+
+absl::Status DeletePiEntity(P4RuntimeSession& p4rt,
+                            const p4::v1::Entity& pi_entity) {
+  p4::v1::Update updates[1];
+  updates[0].set_type(p4::v1::Update::DELETE);
+  *updates[0].mutable_entity() = pi_entity;
+  return pdpi::SendPiUpdates(&p4rt, updates);
 }
 
 }  // namespace pdpi

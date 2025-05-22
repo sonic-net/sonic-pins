@@ -656,12 +656,11 @@ StatusOr<IrMatch> PiMatchFieldToIr(
 }
 
 // Translates the action invocation from its PI form to IR.
-StatusOr<IrActionInvocation> PiActionToIr(
+absl::Status PiActionToIr(
     const IrP4Info &info, const TranslationOptions &options,
     const p4::v1::Action &pi_action,
-    const google::protobuf::RepeatedPtrField<IrActionReference>
-        &valid_actions) {
-  IrActionInvocation action_entry;
+    const google::protobuf::RepeatedPtrField<IrActionReference> &valid_actions,
+    IrActionInvocation &action_entry) {
   uint32_t action_id = pi_action.action_id();
 
   const auto &status_or_ir_action_definition =
@@ -732,29 +731,28 @@ StatusOr<IrActionInvocation> PiActionToIr(
     return absl::InvalidArgumentError(GenerateFormattedError(
         ActionName(action_entry.name()), absl::StrJoin(invalid_reasons, "\n")));
   }
-  return action_entry;
+  return absl::OkStatus();
 }
 
 // Translates the action set from its PI form to IR.
-StatusOr<IrActionSet> PiActionSetToIr(
+absl::Status PiActionSetToIr(
     const IrP4Info &info, const TranslationOptions &options,
     const p4::v1::ActionProfileActionSet &pi_action_set,
-    const google::protobuf::RepeatedPtrField<IrActionReference>
-        &valid_actions) {
-  IrActionSet ir_action_set;
+    const google::protobuf::RepeatedPtrField<IrActionReference> &valid_actions,
+    IrActionSet &ir_action_set) {
   std::vector<std::string> invalid_reasons;
   for (const auto &pi_profile_action : pi_action_set.action_profile_actions()) {
     auto *ir_action = ir_action_set.add_actions();
-    const absl::StatusOr<IrActionInvocation> &action =
-        PiActionToIr(info, options, pi_profile_action.action(), valid_actions);
+    absl::Status action_status =
+        PiActionToIr(info, options, pi_profile_action.action(), valid_actions,
+                     *ir_action->mutable_action());
     // On failure check the returned status as well as the invalid reasons
     // field.
-    if (!action.ok()) {
+    if (!action_status.ok()) {
       invalid_reasons.push_back(
-          absl::StrCat(kNewBullet, action.status().message()));
+          absl::StrCat(kNewBullet, action_status.message()));
       continue;
     }
-    *ir_action->mutable_action() = *action;
 
     // A action set weight that is not positive does not make sense on a switch.
     if (pi_profile_action.weight() < 1) {
@@ -772,7 +770,7 @@ StatusOr<IrActionSet> PiActionSetToIr(
     return absl::InvalidArgumentError(GenerateFormattedError(
         "Action Set", absl::StrJoin(invalid_reasons, "\n")));
   }
-  return ir_action_set;
+  return absl::OkStatus();
 }
 
 // Generic helper that works for both packet-in and packet-out. For both, I is
@@ -866,11 +864,11 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
 
 // Verifies the contents of the IR representation and translates to the PI
 // message.
-StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
-    const IrP4Info &info, const TranslationOptions &options,
-    const IrMatchFieldDefinition &ir_match_definition,
-    const IrMatch &ir_match) {
-  p4::v1::FieldMatch match_entry;
+absl::Status IrMatchFieldToPi(const IrP4Info &info,
+                              const TranslationOptions &options,
+                              const IrMatchFieldDefinition &ir_match_definition,
+                              const IrMatch &ir_match,
+                              p4::v1::FieldMatch &match_entry) {
   const MatchField &match_field = ir_match_definition.match_field();
   uint32_t bitwidth = match_field.bitwidth();
   absl::string_view match_name = match_field.name();
@@ -1079,15 +1077,15 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
     return absl::InvalidArgumentError(GenerateFormattedError(
         MatchFieldName(match_name), absl::StrJoin(invalid_reasons, "\n")));
   }
-  return match_entry;
+  return absl::OkStatus();
 }
 
 // Translates the action invocation from its IR form to PI.
-StatusOr<p4::v1::Action> IrActionInvocationToPi(
+absl::Status IrActionInvocationToPi(
     const IrP4Info &info, const TranslationOptions &options,
     const IrActionInvocation &ir_table_action,
-    const google::protobuf::RepeatedPtrField<IrActionReference>
-        &valid_actions) {
+    const google::protobuf::RepeatedPtrField<IrActionReference> &valid_actions,
+    p4::v1::Action &action) {
   const std::string &action_name = ir_table_action.name();
 
   const auto &status_or_ir_action_definition =
@@ -1106,7 +1104,6 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
         ActionName(action_name), "It is not a valid action for this table."));
   }
 
-  p4::v1::Action action;
   action.set_action_id(ir_action_definition->preamble().id());
   absl::flat_hash_set<std::string> used_params;
   std::vector<std::string> invalid_reasons;
@@ -1168,27 +1165,26 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
     return absl::InvalidArgumentError(GenerateFormattedError(
         ActionName(action_name), absl::StrJoin(invalid_reasons, "\n")));
   }
-  return action;
+  return absl::OkStatus();
 }
 
 // Translates the action set from its IR form to PI.
-StatusOr<p4::v1::ActionProfileActionSet> IrActionSetToPi(
+absl::Status IrActionSetToPi(
     const IrP4Info &info, const TranslationOptions &options,
     const IrActionSet &ir_action_set,
-    const google::protobuf::RepeatedPtrField<IrActionReference>
-        &valid_actions) {
-  p4::v1::ActionProfileActionSet pi;
+    const google::protobuf::RepeatedPtrField<IrActionReference> &valid_actions,
+    p4::v1::ActionProfileActionSet &pi) {
   std::vector<std::string> invalid_reasons;
   for (const auto &ir_action : ir_action_set.actions()) {
     auto *pi_action = pi.add_action_profile_actions();
-    const absl::StatusOr<p4::v1::Action> action = IrActionInvocationToPi(
-        info, options, ir_action.action(), valid_actions);
-    if (!action.ok()) {
+    absl::Status action_status =
+        IrActionInvocationToPi(info, options, ir_action.action(), valid_actions,
+                               *pi_action->mutable_action());
+    if (!action_status.ok()) {
       invalid_reasons.push_back(
-          absl::StrCat(kNewBullet, action.status().message()));
+          absl::StrCat(kNewBullet, action_status.message()));
       continue;
     }
-    *pi_action->mutable_action() = *action;
     if (ir_action.weight() < 1) {
       invalid_reasons.push_back(absl::StrCat(
           kNewBullet, "Expected positive action set weight, but got ",
@@ -1205,7 +1201,7 @@ StatusOr<p4::v1::ActionProfileActionSet> IrActionSetToPi(
     return absl::InvalidArgumentError(GenerateFormattedError(
         "ActionSet", absl::StrJoin(invalid_reasons, "\n")));
   }
-  return pi;
+  return absl::OkStatus();
 }
 
 // Creates a piece of padding metadata. Metadata with the @padding annotation
@@ -1938,14 +1934,14 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
                   "action instead."));
               break;
             }
-            const absl::StatusOr<IrActionInvocation> &ir_action = PiActionToIr(
-                info, options, pi.action().action(), table->entry_actions());
-            if (!ir_action.ok()) {
+            absl::Status action_status =
+                PiActionToIr(info, options, pi.action().action(),
+                             table->entry_actions(), *ir.mutable_action());
+            if (!action_status.ok()) {
               invalid_reasons.push_back(
-                  absl::StrCat(kNewBullet, ir_action.status().message()));
+                  absl::StrCat(kNewBullet, action_status.message()));
               break;
             }
-            *ir.mutable_action() = *ir_action;
             break;
           }
           case p4::v1::TableAction::kActionProfileActionSet: {
@@ -1956,15 +1952,14 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
                                "oneshot. Got action set instead."));
               break;
             }
-            const absl::StatusOr<IrActionSet> &ir_action_set = PiActionSetToIr(
+            auto action_set_status = PiActionSetToIr(
                 info, options, pi.action().action_profile_action_set(),
-                table->entry_actions());
-            if (!ir_action_set.ok()) {
+                table->entry_actions(), *ir.mutable_action_set());
+            if (!action_set_status.ok()) {
               invalid_reasons.push_back(
-                  absl::StrCat(kNewBullet, ir_action_set.status().message()));
+                  absl::StrCat(kNewBullet, action_set_status.message()));
               break;
             }
-            *ir.mutable_action_set() = *ir_action_set;
             break;
           }
           default: {
@@ -2459,14 +2454,13 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
       continue;
     }
     const auto *match = *status_or_match;
-    const absl::StatusOr<p4::v1::FieldMatch> &match_entry =
-        IrMatchFieldToPi(info, options, *match, ir_match);
-    if (!match_entry.ok()) {
+    absl::Status match_entry_status =
+        IrMatchFieldToPi(info, options, *match, ir_match, *pi.add_match());
+    if (!match_entry_status.ok()) {
       invalid_reasons.push_back(
-          absl::StrCat(kNewBullet, match_entry.status().message()));
+          absl::StrCat(kNewBullet, match_entry_status.message()));
       continue;
     }
-    *pi.add_match() = *match_entry;
 
     if (match->match_field().match_type() == MatchField::EXACT) {
       mandatory_matches.insert(match->match_field().name());
@@ -2515,15 +2509,14 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
               "Action found for table which has no actions defined."));
           break;
         }
-        const absl::StatusOr<p4::v1::Action> &pi_action =
-            IrActionInvocationToPi(info, options, ir.action(),
-                                   table->entry_actions());
-        if (!pi_action.ok()) {
+        absl::Status pi_action_status = IrActionInvocationToPi(
+            info, options, ir.action(), table->entry_actions(),
+            *pi.mutable_action()->mutable_action());
+        if (!pi_action_status.ok()) {
           invalid_reasons.push_back(
-              absl::StrCat(kNewBullet, pi_action.status().message()));
+              absl::StrCat(kNewBullet, pi_action_status.message()));
           break;
         }
-        *pi.mutable_action()->mutable_action() = *pi_action;
         break;
       }
       case IrTableEntry::kActionSet: {
@@ -2539,16 +2532,14 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
               kNewBullet,
               "Action set found for table which has no actions defined."));
         }
-        const absl::StatusOr<p4::v1::ActionProfileActionSet> &pi_action_set =
-            IrActionSetToPi(info, options, ir.action_set(),
-                            table->entry_actions());
-        if (!pi_action_set.ok()) {
+        absl::Status pi_action_set_status = IrActionSetToPi(
+            info, options, ir.action_set(), table->entry_actions(),
+            *pi.mutable_action()->mutable_action_profile_action_set());
+        if (!pi_action_set_status.ok()) {
           invalid_reasons.push_back(
-              absl::StrCat(kNewBullet, pi_action_set.status().message()));
+              absl::StrCat(kNewBullet, pi_action_set_status.message()));
           break;
         }
-        *pi.mutable_action()->mutable_action_profile_action_set() =
-            *pi_action_set;
         break;
       }
       default: {
