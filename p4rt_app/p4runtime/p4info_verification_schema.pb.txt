@@ -117,6 +117,34 @@ tables {
     parameters { name: "src_mac" format: MAC }
   }
   actions { name: "l2_multicast_passthrough" }
+  actions { name: "multicast_l2_passthrough" }
+  actions {
+    name: "multicast_set_src_mac"
+    parameters { name: "src_mac" format: MAC }
+  }
+  actions {
+    name: "multicast_set_src_mac_and_vlan_id"
+    parameters { name: "src_mac" format: MAC }
+    parameters {
+      name: "vlan_id"
+      format: HEX_STRING
+      bitwidth: 12
+    }
+  }
+  actions {
+    name: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
+    parameters { name: "src_mac" format: MAC }
+    parameters { name: "dst_mac" format: MAC }
+    parameters {
+      name: "vlan_id"
+      format: HEX_STRING
+      bitwidth: 12
+    }
+  }
+  actions {
+    name: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
+    parameters { name: "src_mac" format: MAC }
+  }
 }
 tables {
   name: "neighbor_table"
@@ -209,6 +237,26 @@ tables {
     type: TERNARY
   }
   actions { name: "disable_vlan_checks" }
+}
+tables {
+  name: "disable_ingress_vlan_checks_table"
+  match_fields {
+    name: "dummy_match"
+    format: HEX_STRING
+    bitwidth: 1
+    type: LPM
+  }
+  actions { name: "disable_ingress_vlan_checks" }
+}
+tables {
+  name: "disable_egress_vlan_checks_table"
+  match_fields {
+    name: "dummy_match"
+    format: HEX_STRING
+    bitwidth: 1
+    type: LPM
+  }
+  actions { name: "disable_egress_vlan_checks" }
 }
 tables {
   name: "ipv4_multicast_table"

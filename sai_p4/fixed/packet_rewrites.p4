@@ -34,7 +34,6 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
     local_metadata.packet_rewrites.vlan_id = INTERNAL_VLAN_ID;
   }
 
-  @unsupported
   @id(ROUTING_L2_MULTICAST_PASSTHROUGH_ACTION_ID)
   action l2_multicast_passthrough() {}
 
