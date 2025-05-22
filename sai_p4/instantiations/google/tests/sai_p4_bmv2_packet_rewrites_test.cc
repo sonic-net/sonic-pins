@@ -292,19 +292,14 @@ TEST_P(PacketRewritesTest, PacketsAreForwardedWithCorrectRewrites) {
       GetParam().nexthop_rewrite_options;
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(instantiation));
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort),
               ip_version, rewrite_options)
           .LogPdEntries()
-          .GetDedupedPiEntities(
-              sai::GetIrP4Info(instantiation),
-              // TODO: Remove once `@unsupported` annotation is
-              // removed from set_ip_nexthop_and_disable_rewrites.
-              /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(sai::GetIrP4Info(instantiation),
+                                  bmv2.P4RuntimeSession()));
 
   // Use input packet with TTL !=0/1. TTL == 0/1 scenarios are tested in
   // another test below.
@@ -345,19 +340,14 @@ TEST_P(TtlRewriteTest, PacketWithZeroOrOneTtlTest) {
       GetParam().nexthop_rewrite_options;
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(instantiation));
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort),
               ip_version, rewrite_options)
           .LogPdEntries()
-          .GetDedupedPiEntities(
-              sai::GetIrP4Info(instantiation),
-              // TODO: Remove once `@unsupported` annotation is
-              // removed from set_ip_nexthop_and_disable_rewrites.
-              /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(sai::GetIrP4Info(instantiation),
+                                  bmv2.P4RuntimeSession()));
 
   // Input packet with TTL == 1 should be forwarded.
   packetlib::Packet input_packet = GetIpPacket(ip_version, /*ttl=*/"0x01");
@@ -411,13 +401,11 @@ TEST_P(TtlRewriteAndPuntTest, ZeroAndOneTtlPacketsAreTrapped) {
   const sai::IpVersion ip_version = GetParam().ip_version;
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(instantiation));
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddEntryPuntingPacketsWithTtlZeroAndOne()
-          .LogPdEntries()
-          .GetDedupedPiEntities(sai::GetIrP4Info(instantiation)));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingPacketsWithTtlZeroAndOne()
+                .LogPdEntries()
+                .InstallDedupedEntities(sai::GetIrP4Info(instantiation),
+                                        bmv2.P4RuntimeSession()));
 
   // Input packet with TTL == 1 should be trapped.
   packetlib::Packet ttl_1_input_packet =
