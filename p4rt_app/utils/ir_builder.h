@@ -300,6 +300,11 @@ public:
     table_.set_is_unsupported(false);
     return *this;
   }
+  std::string GetTableAsTextProto() const {
+    std::string textproto;
+    google::protobuf::TextFormat::PrintToString(table_, &textproto);
+    return textproto;
+  }
 
 private:
   pdpi::IrTableDefinition table_;
