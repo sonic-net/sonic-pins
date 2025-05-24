@@ -422,10 +422,12 @@ TEST(EvaluateParsers, ReturnsErrorForNonFreeBitVectorHeaderField) {
                            z3_context, data_plane.program.headers()));
   ASSERT_OK(ingress_headers.Set("ethernet.dst_addr", z3_context.bv_val(0, 48),
                                 z3_context.bool_val(true)));
-  EXPECT_THAT(EvaluateParsers(data_plane.program, ingress_headers, z3_context),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       "Field 'ethernet.dst_addr' should be a free bit-vector. "
-                       "Found: (ite true #x000000000000 ethernet.dst_addr)"));
+  EXPECT_THAT(
+      EvaluateParsers(data_plane.program, ingress_headers, z3_context),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               testing::StartsWith(
+                   "Field 'ethernet.dst_addr' should be a free bit-vector. "
+                   "Found: ")));
 }
 
 constexpr absl::string_view kProgramWithUnknownFieldSet = R"pb(

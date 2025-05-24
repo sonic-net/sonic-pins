@@ -20,7 +20,9 @@
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto.h"
 #include "gutil/status_matchers.h"
+#include "gutil/test_artifact_writer.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -93,6 +95,18 @@ TEST(PacketSynthesizerTest, SynthesizePacketSatisfiableCriteriaYieldsAPacket) {
 
   // Check the synthesized packet.
   ASSERT_TRUE(result.has_synthesized_packet());
+}
+
+TEST(PacketSynthesizerTest, SynthesizePacketYieldsPackets) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(
+      const PacketSynthesisResults results,
+      PacketSynthesizer::SynthesizePacketsForPathCoverage(GetParams()));
+  gutil::BazelTestArtifactWriter artifact_writer;
+  ASSERT_OK(artifact_writer.AppendToTestArtifact(
+      "results.txtpb", gutil::PrintTextProto(results)));
+  // Keeping it at 500 to make the test less brittle with changing SAI-P4.
+  ASSERT_GT(results.results_size(), 500);
 }
 
 TEST(PacketSynthesizerTest,
