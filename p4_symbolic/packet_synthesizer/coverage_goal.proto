@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package p4_symbolic.packet_synthesizer;
 
+import "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.proto";
+
 // A list of patterns for string matching.
 // A string s matches pattern p iff s == p or p == "*" (we can expand this in
 // the future if needed).
@@ -101,15 +103,34 @@ message PacketFateCoverageGoal {
 // If a certain field is missing, a list containing only a single synthesis
 // criteria with no constraints (i.e. [WildcardCriteria()]) is used as its
 // criteria list.
-message CoverageGoal {
+message CartesianProductCoverageGoal {
   HeaderCoverageGoal header_coverage = 2;
   PacketFateCoverageGoal packet_fate_coverage = 3;
   EntryCoverageGoal entry_coverage = 1;
+  CustomCriteriaCoverageGoal custom_criteria_coverage = 4;
+}
+
+// A goal corresponding to a list of custom synthesis criteria for packet
+// generation, useful for advanced use cases.
+// Results in [c for c in criteria_list].
+message CustomCriteriaCoverageGoal {
+  repeated PacketSynthesisCriteria criteria_list = 1;
+}
+
+// A oneoff for all coverage goal types.
+message CoverageGoal {
+  oneof coverage_goal {
+    HeaderCoverageGoal header_coverage = 1;
+    PacketFateCoverageGoal packet_fate_coverage = 2;
+    EntryCoverageGoal entry_coverage = 3;
+    CartesianProductCoverageGoal cartesian_product_coverage = 4;
+    CustomCriteriaCoverageGoal custom_criteria_coverage = 5;
+  }
 }
 
 // A list of coverage goals.
 // GenerateCriteria([g1, g2, ...]) = GenerateCriteria(g1) + GenerateCriteria(g2)
-// + ...
+// + ... where `+` denotes list concatenation.
 message CoverageGoals {
   repeated CoverageGoal coverage_goals = 1;
 }
