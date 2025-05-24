@@ -15,7 +15,9 @@
 #include "p4_fuzzer/constraints.h"
 
 #include <functional>
+#include <optional>
 #include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
@@ -28,11 +30,17 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/ast.h"
+#include "p4_constraints/ast.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_constraints/backend/symbolic_interpreter.h"
+#include "p4_constraints/backend/type_checker.h"
+#include "p4_constraints/constraint_source.h"
+#include "p4_constraints/frontend/constraint_kind.h"
+#include "p4_constraints/frontend/parser.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/ir_properties.h"
 
@@ -40,7 +48,12 @@ namespace p4_fuzzer {
 namespace {
 
 using ::p4::v1::TableEntry;
+using ::p4_constraints::ConstraintKind;
 using ::p4_constraints::ConstraintSolver;
+using ::p4_constraints::ConstraintSource;
+using ::p4_constraints::InferAndCheckTypes;
+using ::p4_constraints::ast::Expression;
+using ::p4_constraints::ast::SourceLocation;
 
 // Checks whether a key has a P4 runtime translated type.
 absl::StatusOr<bool> HasP4RuntimeTranslatedType(
@@ -68,7 +81,8 @@ bool UsesP4Constraints(const pdpi::IrTableDefinition& table,
 
 absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
     const FuzzerConfig& config, const SwitchState& switch_state,
-    const pdpi::IrTableDefinition& table, absl::BitGen& gen) {
+    const pdpi::IrTableDefinition& table, absl::BitGen& gen,
+    std::optional<absl::string_view> additional_constraint) {
   auto* table_info = p4_constraints::GetTableInfoOrNull(
       config.GetConstraintInfo(), table.preamble().id());
 
@@ -77,14 +91,39 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
            << "given table with ID '" << table.preamble().id()
            << "' that does not exist in P4Info: " << table.preamble().alias();
   }
-  if (!table_info->constraint.has_value()) {
+  if (!table_info->constraint.has_value() &&
+      !additional_constraint.has_value()) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "given table without P4-Constraints: "
+           << "given table without P4-Constraints or additional constraint: "
            << table.preamble().alias();
   }
 
-  absl::flat_hash_set<std::string> constrained_keys =
-      p4_constraints::ast::GetVariables(*table_info->constraint);
+  std::optional<Expression> additional_constraint_ast;
+  ConstraintSource additional_constraint_source;
+  if (additional_constraint.has_value()) {
+    // TODO: - Create a free function to generate the AST and source
+    // to avoid duplicating this code across several places.
+    SourceLocation location;
+    location.set_table_name(table.preamble().alias());
+    additional_constraint_source = ConstraintSource{
+        .constraint_string = std::string(*additional_constraint),
+        .constraint_location = std::move(location),
+    };
+    ASSIGN_OR_RETURN(additional_constraint_ast,
+                     ParseConstraint(ConstraintKind::kTableConstraint,
+                                     additional_constraint_source));
+    RETURN_IF_ERROR(
+        InferAndCheckTypes(&*additional_constraint_ast, *table_info));
+  }
+
+  absl::flat_hash_set<std::string> constrained_keys;
+  if (table_info->constraint.has_value()) {
+    constrained_keys.merge(GetVariables(*table_info->constraint));
+  }
+
+  if (additional_constraint_ast.has_value()) {
+    constrained_keys.merge(GetVariables(*additional_constraint_ast));
+  }
 
   // We skip unconstrained keys, they will be fuzzed randomly after. Also, since
   // the p4_constraints API does not yet support P4 runtime translated types
@@ -101,6 +140,18 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   ASSIGN_OR_RETURN(ConstraintSolver constraint_solver,
                    ConstraintSolver::Create(*table_info, skip_key));
 
+  if (additional_constraint_ast.has_value()) {
+    ASSIGN_OR_RETURN(bool constraint_added, constraint_solver.AddConstraint(
+                                                *additional_constraint_ast,
+                                                additional_constraint_source));
+    if (!constraint_added) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "additional constraint '" << *additional_constraint
+             << "' not added. The conjunction of the table constraint and "
+                "additional constraint was unsatisfiable.";
+    }
+  }
+
   // Try to add some randomness to get more unique entries by attempting to fuzz
   // priority, skipping if the initial value yields an unsatisfiable constraint.
   if (table.requires_priority()) {
@@ -116,9 +167,17 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
 
   ASSIGN_OR_RETURN(TableEntry table_entry, constraint_solver.ConcretizeEntry());
 
-  // Fuzz all unconstrained keys normally.
-  for (const auto& [name, match_field_def] : table.match_fields_by_name()) {
-    if (!constrained_keys.contains(name)) {
+  // Fuzz all skipped keys normally.
+  for (const auto& [name, match_field_def] :
+       Ordered(table.match_fields_by_name())) {
+    // TODO: - Centralize shared logic with fuzz_util.cc
+    // Skip omittable match fields with probability specified in config.
+    if (pdpi::IsOmittable(match_field_def) &&
+        absl::Bernoulli(gen, config.GetMatchFieldWildcardProbability())) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(bool key_skipped, skip_key(name));
+    if (key_skipped) {
       ASSIGN_OR_RETURN(
           *table_entry.add_match(),
           FuzzFieldMatch(&gen, config, switch_state, match_field_def));
@@ -126,7 +185,7 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   }
 
   // Fuzz an action.
-  // TODO: b/324084334 - Potentially remove when ConcretizeEntry returns an
+  // TODO: - Potentially remove when ConcretizeEntry returns an
   // action too.
   ASSIGN_OR_RETURN(
       *table_entry.mutable_action(),

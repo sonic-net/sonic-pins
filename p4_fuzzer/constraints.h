@@ -14,11 +14,14 @@
 // =============================================================================
 // Handles p4-constraints support for the P4-Fuzzer.
 
-#ifndef PINS_INFRA_P4_FUZZER_CONSTRAINTS_H_
-#define PINS_INFRA_P4_FUZZER_CONSTRAINTS_H_
+#ifndef PINS_P4_FUZZER_CONSTRAINTS_H_
+#define PINS_P4_FUZZER_CONSTRAINTS_H_
+
+#include <optional>
 
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
@@ -33,12 +36,16 @@ bool UsesP4Constraints(const pdpi::IrTableDefinition &table,
 // Checks whether a table uses P4-Constraints.
 bool UsesP4Constraints(int table_id, const FuzzerConfig &config);
 
-// Generates a valid table entry for a table that uses P4-Constraints. Fails if
-// given a table for which `!UsesP4Constraints`.
+// Generates a valid table entry for a table that uses P4-Constraints.
+// Additional constraints that aren't in the p4 program can be added by passing
+// in a P4-constraint string to `additional_constraint`.  Fails if given a table
+// for which `!UsesP4Constraints` and `additional_constraint` is empty or if the
+// table constraint + additional constraint is unsatisfiable.
 absl::StatusOr<p4::v1::TableEntry> FuzzValidConstrainedTableEntry(
-    const FuzzerConfig &config, const SwitchState &switch_state,
-    const pdpi::IrTableDefinition &table, absl::BitGen &gen);
+    const FuzzerConfig& config, const SwitchState& switch_state,
+    const pdpi::IrTableDefinition& table, absl::BitGen& gen,
+    std::optional<absl::string_view> additional_constraint = std::nullopt);
 
 } // namespace p4_fuzzer
 
-#endif // PINS_INFRA_P4_FUZZER_CONSTRAINTS_H_
+#endif // PINS_P4_FUZZER_CONSTRAINTS_H_

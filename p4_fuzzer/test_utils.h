@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
-#define PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
+#ifndef PINS_P4_FUZZER_TEST_UTILS_H_
+#define PINS_P4_FUZZER_TEST_UTILS_H_
 
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -35,14 +35,20 @@ struct FuzzerTestState {
   SwitchState switch_state;
 };
 
-// Constructs a FuzzerTestState from an IrP4Info, only fuzzing tables with the
+// Constructs a FuzzerTestState from a P4Info, only fuzzing tables with the
 // given role.
-absl::StatusOr<FuzzerTestState>
-ConstructFuzzerTestState(const p4::config::v1::P4Info &info,
-                         const std::string &role);
+// The FuzzerConfig will initially:
+// - Have mutation probability set to 0.
+// - Have >1 available ports.
+// - Have >1 available queues with varied names.
+// - Use the given role.
+// - Otherwise, be default.
+absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
+    const p4::config::v1::P4Info& info, const std::string& role);
 
 // Constructs a FuzzerTestState from a standard testing P4Info.
 // By default, this test state should be used for all tests.
+// See the function above for details about the resulting FuzzerConfig.
 inline FuzzerTestState ConstructStandardFuzzerTestState() {
   return ConstructFuzzerTestState(pdpi::GetTestP4Info(), /*role=*/"").value();
 }
@@ -88,4 +94,4 @@ absl::Status SetMaxGroupSizeInActionProfile(FuzzerConfig &config,
 
 } // namespace p4_fuzzer
 
-#endif // PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
+#endif // PINS_P4_FUZZER_TEST_UTILS_H_

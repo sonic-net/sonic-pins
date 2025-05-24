@@ -5,6 +5,9 @@
 
 namespace pdpi {
 
+// Returns true if `match_field` can be absent in a table entry.
+bool IsOmittable(const IrMatchFieldDefinition& match_field);
+
 // Returns true if `match_field` has a P4Runtime-translated translated type,as
 // expressed through an @p4runtime_translation annotation.
 bool HasP4RuntimeTranslatedType(const IrMatchFieldDefinition &match_field);
