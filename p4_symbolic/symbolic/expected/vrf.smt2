@@ -662,7 +662,6 @@
 (set-info :status unknown)
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
 (declare-fun ipv4.srcAddr () (_ BitVec 32))
-(declare-fun ethernet.eth_type () (_ BitVec 16))
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (assert
  (let (($x110 (= standard_metadata.ingress_port (_ bv1 9))))

@@ -33,7 +33,8 @@
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/operators.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -139,13 +140,19 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
 }
 
 absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
-    const symbolic::SolverState &solver_state) {
-  ASSIGN_OR_RETURN(std::string ingress_port_field_name,
-                   GetUserMetadataFieldName(
-                       "ingress_port", solver_state.context.parsed_headers));
+    const symbolic::SolverState &solver_state,
+    std::optional<symbolic::SymbolicPerPacketState> headers) {
+  ASSIGN_OR_RETURN(
+      std::string ingress_port_field_name,
+      GetUserMetadataFieldName("ingress_port",
+                               headers.has_value()
+                                   ? headers.value()
+                                   : solver_state.context.parsed_headers));
   ASSIGN_OR_RETURN(
       z3::expr ingress_port_expr,
-      solver_state.context.parsed_headers.Get(ingress_port_field_name));
+      headers.has_value()
+          ? headers.value().Get(ingress_port_field_name)
+          : solver_state.context.parsed_headers.Get(ingress_port_field_name));
   ASSIGN_OR_RETURN(auto translated_value,
                    symbolic::values::TranslateZ3ValueStringToP4RT(
                        solver_state.solver->get_model()

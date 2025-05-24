@@ -67,7 +67,7 @@
 (parsed) standard_metadata.instance_type: #x00000000
 (parsed) standard_metadata.mcast_grp: #x0000
 (parsed) standard_metadata.packet_length: standard_metadata.packet_length
-(parsed) standard_metadata.parser_error: #x00000000
+(parsed) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
@@ -83,149 +83,28 @@
 (egress) h1.f7: h1.f7
 (egress) h1.f8: h1.f8
 (egress) h1.fr: h1.fr
-(egress) h1.fw: (let ((a!1 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (not (= h1.fr #x09))
-                     (not (= h1.fr #x10))
-                     (not (= h1.fr #x11))
-                     (not (= h1.fr #x12))
-                     (not (= h1.fr #x13))
-                     (not (= h1.fr #x14))
-                     (= h1.fr #x15))
-                #x0f
-                h1.fw)))
-(let ((a!2 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (not (= h1.fr #x09))
-                     (not (= h1.fr #x10))
-                     (not (= h1.fr #x11))
-                     (not (= h1.fr #x12))
-                     (not (= h1.fr #x13))
-                     (= h1.fr #x14))
+(egress) h1.fw: (let ((a!1 (ite (and true (= h1.fr #x14))
                 #x0e
-                a!1)))
-(let ((a!3 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (not (= h1.fr #x09))
-                     (not (= h1.fr #x10))
-                     (not (= h1.fr #x11))
-                     (not (= h1.fr #x12))
-                     (= h1.fr #x13))
-                #x0d
-                a!2)))
-(let ((a!4 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (not (= h1.fr #x09))
-                     (not (= h1.fr #x10))
-                     (not (= h1.fr #x11))
-                     (= h1.fr #x12))
+                (ite (and true (= h1.fr #x15)) #x0f h1.fw))))
+(let ((a!2 (ite (and true (= h1.fr #x12))
                 #x0c
-                a!3)))
-(let ((a!5 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (not (= h1.fr #x09))
-                     (not (= h1.fr #x10))
-                     (= h1.fr #x11))
-                #x0b
-                a!4)))
-(let ((a!6 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (not (= h1.fr #x09))
-                     (= h1.fr #x10))
+                (ite (and true (= h1.fr #x13)) #x0d a!1))))
+(let ((a!3 (ite (and true (= h1.fr #x10))
                 #x0a
-                a!5)))
-(let ((a!7 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (not (= h1.fr #x08))
-                     (= h1.fr #x09))
-                #x09
-                a!6)))
-(let ((a!8 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (not (= h1.fr #x07))
-                     (= h1.fr #x08))
+                (ite (and true (= h1.fr #x11)) #x0b a!2))))
+(let ((a!4 (ite (and true (= h1.fr #x08))
                 #x08
-                a!7)))
-(let ((a!9 (ite (and (not (= h1.fr #x01))
-                     (not (= h1.fr #x02))
-                     (not (= h1.fr #x03))
-                     (not (= h1.fr #x04))
-                     (not (= h1.fr #x05))
-                     (not (= h1.fr #x06))
-                     (= h1.fr #x07))
-                #x07
-                a!8)))
-(let ((a!10 (ite (and (not (= h1.fr #x01))
-                      (not (= h1.fr #x02))
-                      (not (= h1.fr #x03))
-                      (not (= h1.fr #x04))
-                      (not (= h1.fr #x05))
-                      (= h1.fr #x06))
-                 #x06
-                 a!9)))
-(let ((a!11 (ite (and (not (= h1.fr #x01))
-                      (not (= h1.fr #x02))
-                      (not (= h1.fr #x03))
-                      (not (= h1.fr #x04))
-                      (= h1.fr #x05))
-                 #x05
-                 a!10)))
-(let ((a!12 (ite (and (not (= h1.fr #x01))
-                      (not (= h1.fr #x02))
-                      (not (= h1.fr #x03))
-                      (= h1.fr #x04))
-                 #x04
-                 a!11)))
-(let ((a!13 (ite (and (not (= h1.fr #x01)) (not (= h1.fr #x02)) (= h1.fr #x03))
-                 #x03
-                 a!12)))
-(let ((a!14 (ite (and (not (= h1.fr #x01)) (= h1.fr #x02)) #x02 a!13)))
-  (ite (= h1.fr #x01) #x01 a!14)))))))))))))))
+                (ite (and true (= h1.fr #x09)) #x09 a!3))))
+(let ((a!5 (ite (and true (= h1.fr #x06))
+                #x06
+                (ite (and true (= h1.fr #x07)) #x07 a!4))))
+(let ((a!6 (ite (and true (= h1.fr #x04))
+                #x04
+                (ite (and true (= h1.fr #x05)) #x05 a!5))))
+(let ((a!7 (ite (and true (= h1.fr #x02))
+                #x02
+                (ite (and true (= h1.fr #x03)) #x03 a!6))))
+  (ite (and true (= h1.fr #x01)) #x01 a!7))))))))
 (egress) scalars.$extracted$: false
 (egress) scalars.$valid$: false
 (egress) standard_metadata.$extracted$: false
@@ -235,7 +114,9 @@
 (egress) standard_metadata.deq_qdepth: #b0000000000000000000
 (egress) standard_metadata.deq_timedelta: #x00000000
 (egress) standard_metadata.egress_global_timestamp: #x000000000000
-(egress) standard_metadata.egress_port: #b000000000
+(egress) standard_metadata.egress_port: (ite (not (= #b000000000 #b111111111))
+     #b000000000
+     standard_metadata.egress_port)
 (egress) standard_metadata.egress_rid: #x0000
 (egress) standard_metadata.egress_spec: #b000000000
 (egress) standard_metadata.enq_qdepth: #b0000000000000000000
@@ -245,7 +126,7 @@
 (egress) standard_metadata.instance_type: #x00000000
 (egress) standard_metadata.mcast_grp: #x0000
 (egress) standard_metadata.packet_length: standard_metadata.packet_length
-(egress) standard_metadata.parser_error: #x00000000
+(egress) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
 (egress) standard_metadata.priority: #b000
 
 (solver constraints)
@@ -253,10 +134,10 @@
 (set-info :status unknown)
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
 (assert
- (let (($x173 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x173)))
+ (let (($x151 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x151)))
 (assert
- (let (($x176 (or (or false (= (_ bv0 9) (_ bv0 9))) (= (_ bv0 9) (_ bv1 9)))))
- (let (($x107 (= (_ bv0 9) (_ bv511 9))))
- (or $x107 $x176))))
+ (let (($x154 (or (or false (= (_ bv0 9) (_ bv0 9))) (= (_ bv0 9) (_ bv1 9)))))
+ (let (($x143 (= (_ bv0 9) (_ bv511 9))))
+ (or $x143 $x154))))
 (check-sat)
