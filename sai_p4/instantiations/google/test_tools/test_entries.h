@@ -93,6 +93,12 @@ void AbslStringify(Sink &sink, const IpVersion &ip_version) {
   }
 }
 
+template <typename T>
+struct P4RuntimeTernary {
+  T value;
+  T mask;
+};
+
 // Parameters for generating a mirror session table entry with IPFIX
 // encapsulation.
 struct MirrorSessionParams {
@@ -109,10 +115,8 @@ struct MirrorSessionParams {
 
 // Parameters for generating an ipv6 tunnel termination table entry.
 struct Ipv6TunnelTerminationParams {
-  std::optional<netaddr::Ipv6Address> src_ipv6_value;
-  std::optional<netaddr::Ipv6Address> src_ipv6_mask;
-  std::optional<netaddr::Ipv6Address> dst_ipv6_value;
-  std::optional<netaddr::Ipv6Address> dst_ipv6_mask;
+  std::optional<P4RuntimeTernary<netaddr::Ipv6Address>> src_ipv6;
+  std::optional<P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
 // Parameters for generating an ACL table entry to mark packets to be mirrored.
@@ -133,6 +137,10 @@ struct MirrorAndRedirectMatchFields {
   std::optional<absl::string_view> in_port;
   std::optional<bool> ipmc_table_hit;
   std::optional<int> vlan_id;
+  std::optional<bool> is_ipv4;
+  std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
+  std::optional<bool> is_ipv6;
+  std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
