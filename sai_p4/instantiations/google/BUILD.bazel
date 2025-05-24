@@ -213,6 +213,7 @@ cc_test(
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -408,6 +409,19 @@ cc_test(
     ],
 )
 
+cc_binary(
+    name = "sai_nonstandard_platforms_config_generator",
+    srcs = ["sai_nonstandard_platforms_config_generator.cc"],
+    deps = [
+        ":instantiations",
+        ":sai_nonstandard_platforms_cc",
+        "//gutil:proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+    ],
+)
+
 filegroup(
     name = "sai_p4",
     srcs = glob(["**/*.p4"]) + glob(["**/*.h"]),
@@ -463,3 +477,4 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
