@@ -478,6 +478,28 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
         pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
+  if (match_fields.dst_ip.has_value()) {
+    entry.mutable_match()->mutable_dst_ip()->set_value(
+        match_fields.dst_ip->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ip()->set_mask(
+        match_fields.dst_ip->mask.ToString());
+  }
+  if (match_fields.is_ipv4.has_value()) {
+    entry.mutable_match()->mutable_is_ipv4()->set_value(
+        BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.dst_ipv6.has_value()) {
+    entry.mutable_match()->mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
+        match_fields.dst_ipv6->mask.ToString());
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    entry.mutable_match()->mutable_is_ipv6()->set_value(
+        BoolToHexString(*match_fields.is_ipv6));
+  }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
   entry.set_priority(priority);
