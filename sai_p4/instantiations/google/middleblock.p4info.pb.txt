@@ -1,6 +1,6 @@
 pkg_info {
   name: "middleblock.p4"
-  version: "2.0.0"
+  version: "2.2.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -546,7 +546,7 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767362
   direct_resource_ids: 352321792
-  size: 256
+  size: 255
 }
 tables {
   preamble {
@@ -598,6 +598,7 @@ tables {
   match_fields {
     id: 8
     name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)"
     match_type: OPTIONAL
     type_name {
@@ -716,7 +717,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767370
-  size: 256
+  size: 255
 }
 tables {
   preamble {
@@ -1641,7 +1642,6 @@ actions {
     id: 16777247
     name: "egress.packet_rewrites.multicast_rewrites.l2_multicast_passthrough"
     alias: "l2_multicast_passthrough"
-    annotations: "@unsupported"
   }
 }
 action_profiles {

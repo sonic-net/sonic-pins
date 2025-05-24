@@ -29,6 +29,7 @@ cc_binary(
         "//gutil:io",
         "//p4_pdpi/internal:ordered_map",
         "//p4_symbolic/symbolic",
+        "//p4_symbolic/symbolic:solver_state",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/flags:flag",

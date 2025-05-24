@@ -113,15 +113,12 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesPuntPacketIn) {
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(GetParam()));
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort))
           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
-          .GetDedupedPiEntities(ir_p4info));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info, entities));
+          .InstallDedupedEntities(ir_p4info, bmv2.P4RuntimeSession()));
   packetlib::Packet input_packet = GetIpv4TestPacket();
   ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
@@ -167,15 +164,12 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesCopyPacketIn) {
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
 
   // Install table entries for punting packets.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort))
           .AddEntryPuntingAllPackets(sai::PuntAction::kCopy)
-          .GetDedupedPiEntities(ir_p4info));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info, entities));
+          .InstallDedupedEntities(ir_p4info, bmv2.P4RuntimeSession()));
   packetlib::Packet input_packet = GetIpv4TestPacket();
 
   // The output packet that will egress out of kEgressPort.
@@ -231,14 +225,11 @@ TEST_P(BMv2PacketIOTest, P4RuntimePacketOutSubmitToIngressOk) {
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
 
   // Install table entries for routing packets.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort))
-          .GetDedupedPiEntities(ir_p4info));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info, entities));
+          .InstallDedupedEntities(ir_p4info, bmv2.P4RuntimeSession()));
 
   packetlib::Packet input_packet = GetIpv4TestPacket();
   ASSERT_OK_AND_ASSIGN(const std::string raw_input_packet,
@@ -309,15 +300,11 @@ TEST_P(BMv2PacketIOTest, P4RuntimePacketOutSubmitToEgressOk) {
   // here to ensure the switch is not just doing submit to ingress again. Here
   // we set the egress port of the ingress pipeline to the drop port, so if the
   // switch is just doing submit to ingress, packets gonna be dropped.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> entities,
-      sai::EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenPort(
-              pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(
-                  SAI_P4_DROP_PORT))
-          .GetDedupedPiEntities(ir_p4info));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info, entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntriesForwardingIpPacketsToGivenPort(
+                    pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(
+                        SAI_P4_DROP_PORT))
+                .InstallDedupedEntities(ir_p4info, bmv2.P4RuntimeSession()));
 
   packetlib::Packet input_packet = GetIpv4TestPacket();
   ASSERT_OK_AND_ASSIGN(const std::string raw_input_packet,

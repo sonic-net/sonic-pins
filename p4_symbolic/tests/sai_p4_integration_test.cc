@@ -38,6 +38,7 @@
 #include "p4_pdpi/pd.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
@@ -206,8 +207,7 @@ absl::StatusOr<std::string> GenerateSmtForSaiPiplelineWithSimpleEntries() {
 
 // Generate SMT constraints for the SAI pipeline from scratch multiple times and
 // make sure the results remain the same.
-TEST(P4SymbolicIntegrationTest,
-     DISABLED_ConstraintGenerationIsDeterministicForSai) {
+TEST(P4SymbolicIntegrationTest, ConstraintGenerationIsDeterministicForSai) {
   constexpr int kNumberOfRuns = 5;
   ASSERT_OK_AND_ASSIGN(const std::string reference_smt_formula,
                        GenerateSmtForSaiPiplelineWithSimpleEntries());
@@ -309,6 +309,52 @@ TEST(P4SymbolicIntegrationTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // are as expected.
   EXPECT_EQ(Z3ValueStringToInt(egress.at("standard_metadata.egress_port")), 2);
   EXPECT_EQ(Z3ValueStringToInt(egress.at("standard_metadata.egress_spec")), 2);
+}
+
+// TODO: Re-enable this test once the timeout issue is fixed.
+TEST(P4SymbolicIntegrationTest,
+     DISABLED_CanGenerateTestPacketsForSimpleSaiP4EntriesForPathCoverage) {
+  // Some constants.
+  auto env = thinkit::BazelTestEnvironment(/*mask_known_failures=*/false);
+  const auto config = sai::GetNonstandardForwardingPipelineConfig(
+      sai::Instantiation::kMiddleblock, sai::NonstandardPlatform::kP4Symbolic);
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(config.p4info()));
+  EXPECT_OK(env.StoreTestArtifact("ir_p4info.txtpb", ir_p4info));
+  EXPECT_OK(env.StoreTestArtifact("p4_config.json", config.p4_device_config()));
+
+  // Prepare hard-coded table entries.
+  auto pd_entries = ParseProtoOrDie<sai::TableEntries>(kTableEntries);
+  EXPECT_OK(env.StoreTestArtifact("pd_entries.txtpb", pd_entries));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                       pdpi::PdTableEntriesToPiEntities(ir_p4info, pd_entries));
+
+  // Symbolically evaluate program.
+  std::vector<int> ports = {1, 2, 3, 4, 5};
+  symbolic::TranslationPerType translations;
+  translations[p4_symbolic::kPortIdTypeName] =
+      symbolic::values::TranslationData{
+          .static_mapping = {{"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}, {"5", 5}},
+          .dynamic_translation = false,
+      };
+  translations[p4_symbolic::kVrfIdTypeName] = symbolic::values::TranslationData{
+      .static_mapping = {{"", 0}},
+      .dynamic_translation = true,
+  };
+  LOG(INFO) << "building model and synthesizing packets (this may take a "
+               "while) ...";
+  absl::Time start_time = absl::Now();
+  ASSERT_OK_AND_ASSIGN(
+      packet_synthesizer::PacketSynthesisResults results,
+      symbolic::
+          EvaluateP4ProgramAndSynthesizePacketsCoveringAllControlFlowPaths(
+              config, pi_entities, ports, translations));
+  LOG(INFO) << "-> done in " << (absl::Now() - start_time) << " with "
+            << results.results_size() << " packets synthesized.";
+
+  // the current number if 5847 but checking for GT 5000 to make the test
+  // less brittle in face of SAI-P4 changes.
+  ASSERT_GT(results.results_size(), 5000);
 }
 
 TEST(P4SymbolicIntegrationTest,

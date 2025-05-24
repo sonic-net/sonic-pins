@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -28,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/optional.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/built_ins.h"
@@ -37,7 +39,9 @@
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/parser.h"
 #include "p4_symbolic/ir/table_entries.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
@@ -112,16 +116,24 @@ void AddConstraintForStaticallyTranslatedValue(
   solver.add(constraint);
 }
 
+}  // namespace
+
 // Adds solver constraints to restrict the statically translated values (e.g.,
 // values of the type `port_id_t` in SAI-P4) to only the mapped values in the
 // translator.
-absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
+// The optional headers argument is used in case of DFS-style
+// symbolic execution for path coverage (go/p4-path-coverage).
+absl::Status AddConstraintsForStaticallyTranslatedValues(
+    SolverState &state, std::optional<SymbolicPerPacketState> headers) {
   // Restrict the value of all header fields with (purely static, i.e.
   // dynamic_translation = false) P4Runtime translated types to what has been
   // used in the translator.
   for (const auto &[field, type] :
        Ordered(state.translator.fields_p4runtime_type)) {
-    ASSIGN_OR_RETURN(z3::expr value, state.context.ingress_headers.Get(field));
+    ASSIGN_OR_RETURN(z3::expr value,
+                     headers.has_value()
+                         ? headers.value().Get(field)
+                         : state.context.ingress_headers.Get(field));
     AddConstraintForStaticallyTranslatedValue(value, type, state.translator,
                                               *state.context.z3_context,
                                               *state.solver);
@@ -199,30 +211,6 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(SolverState &state) {
   return absl::OkStatus();
 }
 
-}  // namespace
-
-std::string SolverState::GetSolverSMT() {
-  if (!solver) return "";
-  return solver->to_smt2();
-}
-
-std::string SolverState::GetHeadersAndSolverConstraintsSMT() {
-  std::ostringstream result;
-  for (const auto &[field_name, expression] : context.ingress_headers) {
-    result << "(ingress) " << field_name << ": " << expression << std::endl;
-  }
-  result << std::endl;
-  for (const auto &[field_name, expression] : context.parsed_headers) {
-    result << "(parsed) " << field_name << ": " << expression << std::endl;
-  }
-  result << std::endl;
-  for (const auto &[field_name, expression] : context.egress_headers) {
-    result << "(egress) " << field_name << ": " << expression << std::endl;
-  }
-  result << std::endl << "(solver constraints)" << std::endl << GetSolverSMT();
-  return result.str();
-}
-
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
     const ir::P4Program &program, const ir::TableEntries &entries,
     const std::vector<int> &physical_ports,
@@ -271,6 +259,42 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
 
   // Assemble and return result.
   return state;
+}
+
+absl::StatusOr<packet_synthesizer::PacketSynthesisResults>
+EvaluateP4ProgramAndSynthesizePacketsCoveringAllControlFlowPaths(
+    const p4::v1::ForwardingPipelineConfig &config,
+    const std::vector<p4::v1::Entity> &entities,
+    const std::vector<int> &physical_ports,
+    const TranslationPerType &translation_per_type) {
+  ASSIGN_OR_RETURN(ir::Dataplane dataplane, ir::ParseToIr(config, entities));
+  ir::P4Program program = dataplane.program;
+  ir::TableEntries entries = dataplane.entries;
+
+  // Initialize the solver state.
+  auto state = std::make_unique<SolverState>(program);
+  // SymbolicContext &context = state->context;
+
+  LOG(INFO) << "Initialize table entries";
+  // Initialize the table entries.
+  RETURN_IF_ERROR(InitializeTableEntries(*state, entries));
+
+  LOG(INFO) << "Initialize p4runtime translator";
+  // Initialize the p4runtime translator with statically translated types.
+  for (const auto &[type, translation] : translation_per_type) {
+    state->translator.p4runtime_translation_allocators.emplace(
+        type, values::IdAllocator(translation));
+  }
+
+  LOG(INFO) << "Evaluate V1 model";
+  // Evaluate the main program, assuming it conforms to V1 model.
+  ASSIGN_OR_RETURN(
+      auto packet_synthesis_results,
+      v1model::EvaluateV1modelAndSynthesizePacketsCoveringAllControlFlowPaths(
+          *state, physical_ports));
+
+  // Assemble and return result.
+  return packet_synthesis_results;
 }
 
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Program(
