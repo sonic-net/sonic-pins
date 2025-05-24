@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -36,9 +37,12 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/translation_options.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -81,10 +85,27 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
   ASSIGN_OR_RETURN(
       pdpi::IrEntities ir_entities,
       pdpi::PdTableEntriesToIrEntities(
-          ir_p4info, entries_,
+          // We always use the static P4Info when translating from PD to protect
+          // against a mismatch between the PD proto and the argument
+          // `ir_p4info`.
+          sai::GetUnionedIrP4Info(), entries_,
           pdpi::TranslationOptions{.allow_unsupported = allow_unsupported}));
   gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
   return ir_entities;
+}
+
+absl::Status EntryBuilder::InstallDedupedEntities(
+    pdpi::P4RuntimeSession& session, bool allow_unsupported) const {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(session));
+  return InstallDedupedEntities(ir_p4info, session, allow_unsupported);
+}
+
+absl::Status EntryBuilder::InstallDedupedEntities(
+    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session,
+    bool allow_unsupported) const {
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
+                   GetDedupedPiEntities(ir_p4info, allow_unsupported));
+  return pdpi::InstallPiEntities(&session, ir_p4info, pi_entities);
 }
 
 EntryBuilder& EntryBuilder::AddVrfEntry(absl::string_view vrf) {
@@ -344,17 +365,17 @@ EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVrfForAllPackets(
-    absl::string_view vrf) {
+    absl::string_view vrf, int priority) {
   sai::AclPreIngressTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
   entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
-  entry.set_priority(1);
+  entry.set_priority(priority);
   return *this;
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
     absl::string_view set_vlan_id_hexstr,
-    std::optional<absl::string_view> match_vlan_id_hexstr) {
+    std::optional<absl::string_view> match_vlan_id_hexstr, int priority) {
   sai::AclPreIngressVlanTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
   if (match_vlan_id_hexstr.has_value()) {
@@ -363,7 +384,7 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
   }
   entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
       set_vlan_id_hexstr);
-  entry.set_priority(1);
+  entry.set_priority(priority);
 
   return *this;
 }
@@ -441,7 +462,7 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     absl::string_view nexthop_id,
-    const MirrorAndRedirectMatchFields& match_fields) {
+    const MirrorAndRedirectMatchFields& match_fields, int priority) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
@@ -457,9 +478,31 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
         pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
+  if (match_fields.dst_ip.has_value()) {
+    entry.mutable_match()->mutable_dst_ip()->set_value(
+        match_fields.dst_ip->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ip()->set_mask(
+        match_fields.dst_ip->mask.ToString());
+  }
+  if (match_fields.is_ipv4.has_value()) {
+    entry.mutable_match()->mutable_is_ipv4()->set_value(
+        BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.dst_ipv6.has_value()) {
+    entry.mutable_match()->mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
+        match_fields.dst_ipv6->mask.ToString());
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    entry.mutable_match()->mutable_is_ipv6()->set_value(
+        BoolToHexString(*match_fields.is_ipv6));
+  }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
-  entry.set_priority(1);
+  entry.set_priority(priority);
 
   return *this;
 }
@@ -519,21 +562,17 @@ EntryBuilder& EntryBuilder::AddIpv6TunnelTerminationEntry(
   sai::TableEntry pd_entry;
   sai::Ipv6TunnelTerminationTableEntry& tunnel_entry =
       *pd_entry.mutable_ipv6_tunnel_termination_table_entry();
-  if (params.dst_ipv6_value.has_value()) {
+  if (params.dst_ipv6.has_value()) {
     tunnel_entry.mutable_match()->mutable_dst_ipv6()->set_value(
-        params.dst_ipv6_value->ToString());
-  }
-  if (params.dst_ipv6_mask.has_value()) {
+        params.dst_ipv6->value.ToString());
     tunnel_entry.mutable_match()->mutable_dst_ipv6()->set_mask(
-        params.dst_ipv6_mask->ToString());
+        params.dst_ipv6->mask.ToString());
   }
-  if (params.src_ipv6_value.has_value()) {
+  if (params.src_ipv6.has_value()) {
     tunnel_entry.mutable_match()->mutable_src_ipv6()->set_value(
-        params.src_ipv6_value->ToString());
-  }
-  if (params.src_ipv6_mask.has_value()) {
+        params.src_ipv6->value.ToString());
     tunnel_entry.mutable_match()->mutable_src_ipv6()->set_mask(
-        params.src_ipv6_mask->ToString());
+        params.src_ipv6->mask.ToString());
   }
   tunnel_entry.mutable_action()->mutable_tunnel_decap();
   tunnel_entry.set_priority(1);

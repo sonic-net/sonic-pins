@@ -82,6 +82,8 @@ message PacketSynthesisCriteria {
   PortCriteria ingress_port_criteria = 6;
 
   // Axiluary information about the criteria, for debugging purposes only.
+  // TODO: b/337858139 - Exclude metadata from the hash used for caching
+  // formulas.
   Metadata metadata = 7;
   message Metadata {
     repeated string covered_entity_debug_strings = 1;
