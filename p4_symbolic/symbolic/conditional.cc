@@ -19,15 +19,18 @@
 
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "z3++.h"
 
@@ -50,6 +53,10 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
   ASSIGN_OR_RETURN(z3::expr if_guard, operators::And(guard, condition));
   ASSIGN_OR_RETURN(z3::expr else_guard,
                    operators::And(guard, negated_condition));
+
+  // Simplify the guards for better performance (go/p4-symbolic-simplify).
+  if_guard = if_guard.simplify();
+  else_guard = else_guard.simplify();
 
   auto get_next_control_for_branch = [&](const std::string &branch) {
     return branch ==
@@ -91,6 +98,54 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     // merged if/else branches.
     return util::MergeDisjointTableMatches(merged_matches, result);
   }
+}
+
+// Evaluate conditional using DFS style symbolic execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluateConditionalDfs(
+    const ir::Conditional &conditional, SolverState &state,
+    SymbolicPerPacketState &headers, const std::string &pipeline_name,
+    packet_synthesizer::PacketSynthesisResults &results) {
+  // Evaluate the condition.
+  action::ActionContext fake_context = {conditional.name(), {}};
+  ASSIGN_OR_RETURN(
+      z3::expr condition,
+      action::EvaluateRValue(conditional.condition(), headers, fake_context,
+                             *state.context.z3_context));
+  ASSIGN_OR_RETURN(z3::expr negated_condition, operators::Not(condition));
+
+  // Evaluate the conditional by checking if the branch with condition == true
+  // is satisfiable. If there does not exist any solution, this means that no
+  // packet would take this path and the path can be pruned. Else, the path is
+  // taken and the execution moves to the next control point. The same is
+  // repeated for the branch with condition == false.
+
+  // Check for "condition == true" branch.
+  state.solver->push();
+  state.solver->add(condition);
+  auto prune = (state.solver->check() == z3::unsat);
+  if (!prune) {
+    auto if_headers = headers;
+    RETURN_IF_ERROR(control::EvaluateControlDfs(
+        conditional.if_branch(), state, if_headers, pipeline_name, results));
+  }
+  state.solver->pop();
+
+  // Check for "condition == false",
+  // i.e., "negated_condition == true" branch.
+  state.solver->push();
+  state.solver->add(negated_condition);
+  prune = (state.solver->check() == z3::unsat);
+  if (!prune) {
+    auto else_headers = headers;
+    RETURN_IF_ERROR(control::EvaluateControlDfs(conditional.else_branch(),
+                                                state, else_headers,
+                                                pipeline_name, results));
+  }
+  state.solver->pop();
+
+  return absl::OkStatus();
 }
 
 }  // namespace conditional

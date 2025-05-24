@@ -33,7 +33,8 @@
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/operators.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -139,13 +140,19 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
 }
 
 absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
-    const symbolic::SolverState &solver_state) {
-  ASSIGN_OR_RETURN(std::string ingress_port_field_name,
-                   GetUserMetadataFieldName(
-                       "ingress_port", solver_state.context.parsed_headers));
+    const symbolic::SolverState &solver_state,
+    std::optional<symbolic::SymbolicPerPacketState> headers) {
+  ASSIGN_OR_RETURN(
+      std::string ingress_port_field_name,
+      GetUserMetadataFieldName("ingress_port",
+                               headers.has_value()
+                                   ? headers.value()
+                                   : solver_state.context.parsed_headers));
   ASSIGN_OR_RETURN(
       z3::expr ingress_port_expr,
-      solver_state.context.parsed_headers.Get(ingress_port_field_name));
+      headers.has_value()
+          ? headers.value().Get(ingress_port_field_name)
+          : solver_state.context.parsed_headers.Get(ingress_port_field_name));
   ASSIGN_OR_RETURN(auto translated_value,
                    symbolic::values::TranslateZ3ValueStringToP4RT(
                        solver_state.solver->get_model()
@@ -160,6 +167,7 @@ absl::Status AddConstraintsForP4ConstraintsAnnotations(
     symbolic::SolverState &state) {
   RETURN_IF_ERROR(AddConstraintsToForbidVrfZero(state));
   RETURN_IF_ERROR(AddConstraintsForAclPreIngressTable(state));
+  RETURN_IF_ERROR(AddConstraintsForAclIngressTable(state));
   return absl::OkStatus();
 }
 
@@ -328,6 +336,157 @@ absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState &state) {
              << symbolic_entry.index() << " in table "
              << kAclPreIngressTableName;
     }
+
+    state.solver->add(constraints);
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status AddConstraintsForAclIngressTable(symbolic::SolverState &state) {
+  constexpr absl::string_view kAclPreIngressTableName =
+      "ingress.acl_ingress.acl_ingress_table";
+  auto it = state.context.table_entries.find(kAclPreIngressTableName);
+  if (it == state.context.table_entries.end()) {
+    return absl::OkStatus();
+  }
+
+  ASSIGN_OR_RETURN(
+      const ir::Table *table,
+      symbolic::util::GetIrTable(state.program, kAclPreIngressTableName));
+
+  for (const auto &entry : it->second) {
+    if (!entry.has_symbolic_entry()) continue;
+    const ir::SymbolicTableEntry &symbolic_entry = entry.symbolic_entry();
+    z3::expr_vector constraints(*state.context.z3_context);
+
+    // Obtain symbolic variables.
+    ASSIGN_OR_RETURN(auto dscp, symbolic::GetSymbolicMatch(
+                                    symbolic_entry, "dscp", *table,
+                                    state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto dst_ip,
+        symbolic::GetSymbolicMatch(symbolic_entry, "dst_ip", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto src_ip,
+        symbolic::GetSymbolicMatch(symbolic_entry, "src_ip", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto ttl, symbolic::GetSymbolicMatch(
+                                   symbolic_entry, "ttl", *table, state.program,
+                                   *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto dst_ipv6,
+        symbolic::GetSymbolicMatch(symbolic_entry, "dst_ipv6", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto src_ipv6,
+        symbolic::GetSymbolicMatch(symbolic_entry, "src_ipv6", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto ecn, symbolic::GetSymbolicMatch(
+                                   symbolic_entry, "ecn", *table, state.program,
+                                   *state.context.z3_context));
+    ASSIGN_OR_RETURN(auto is_ip, symbolic::GetSymbolicMatch(
+                                     symbolic_entry, "is_ip", *table,
+                                     state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto is_ipv4,
+        symbolic::GetSymbolicMatch(symbolic_entry, "is_ipv4", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto is_ipv6,
+        symbolic::GetSymbolicMatch(symbolic_entry, "is_ipv6", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto ether_type,
+        symbolic::GetSymbolicMatch(symbolic_entry, "ether_type", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto ip_protocol,
+        symbolic::GetSymbolicMatch(symbolic_entry, "ip_protocol", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto arp_tpa,
+        symbolic::GetSymbolicMatch(symbolic_entry, "arp_tpa", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto l4_src_port,
+        symbolic::GetSymbolicMatch(symbolic_entry, "l4_src_port", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto l4_dst_port,
+        symbolic::GetSymbolicMatch(symbolic_entry, "l4_dst_port", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto icmpv6_type,
+        symbolic::GetSymbolicMatch(symbolic_entry, "icmpv6_type", *table,
+                                   state.program, *state.context.z3_context));
+
+    // Forbid using ether_type for IP packets (by convention, use is_ip*
+    // instead).
+    // ether_type != 0x0800 && ether_type != 0x86dd;
+    constraints.push_back(ether_type.mask == 0 || (ether_type.value == 0x0800 &&
+                                                   ether_type.value == 0x86dd));
+
+    // Only allow IP field matches for IP packets.
+    // dst_ip::mask != 0 -> is_ipv4 == 1;
+    constraints.push_back(dst_ip.mask == 0 || is_ipv4.value == 1);
+
+    // "src_ip::mask != 0 -> is_ipv4 == 1;
+    constraints.push_back(src_ip.mask == 0 || is_ipv4.value == 1);
+
+    // "dst_ipv6::mask != 0 -> is_ipv6 == 1;
+    constraints.push_back(dst_ipv6.mask == 0 || is_ipv6.value == 1);
+
+    // src_ipv6::mask != 0 -> is_ipv6 == 1;
+    constraints.push_back(src_ipv6.mask == 0 || is_ipv6.value == 1);
+
+    // ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    constraints.push_back(
+        ttl.mask == 0 ||
+        (is_ip.value == 1 || is_ipv4.value == 1 || is_ipv6.value == 1));
+
+    // dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    constraints.push_back(
+        dscp.mask == 0 ||
+        (is_ip.value == 1 || is_ipv4.value == 1 || is_ipv6.value == 1));
+
+    // ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    constraints.push_back(
+        ip_protocol.mask == 0 ||
+        (is_ip.value == 1 || is_ipv4.value == 1 || is_ipv6.value == 1));
+
+    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
+    // l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol== 17);
+    constraints.push_back(l4_src_port.mask == 0 ||
+                          (ip_protocol.value == 6 || ip_protocol.value == 17));
+    // l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+    constraints.push_back(l4_dst_port.mask == 0 ||
+                          (ip_protocol.value == 6 || ip_protocol.value == 17));
+
+    // Only allow arp_tpa matches for ARP packets.
+    // arp_tpa::mask != 0 -> ether_type == 0x0806;
+    constraints.push_back(arp_tpa.mask == 0 || ether_type.value == 0x0806);
+
+    // icmpv6_type::mask != 0 -> ip_protocol == 58;
+    constraints.push_back(icmpv6_type.mask == 0 || ip_protocol.value == 58);
+
+    // Forbid illegal combinations of IP_TYPE fields.
+    // is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    constraints.push_back(is_ip.mask == 0 ||
+                          (is_ipv4.mask == 0 && is_ipv6.mask == 0));
+    // is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    constraints.push_back(is_ipv4.mask == 0 ||
+                          (is_ip.mask == 0 && is_ipv6.mask == 0));
+    // is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    constraints.push_back(is_ipv6.mask == 0 ||
+                          (is_ip.mask == 0 && is_ipv4.mask == 0));
+
+    // Forbid unsupported combinations of IP_TYPE fields.
+    // is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    constraints.push_back(is_ipv4.mask == 0 || is_ipv4.value == 1);
+    // is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    constraints.push_back(is_ipv6.mask == 0 || is_ipv6.value == 1);
 
     state.solver->add(constraints);
   }
