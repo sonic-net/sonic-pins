@@ -33,6 +33,7 @@ control acl_egress(in headers_t headers,
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_EGRESS_TABLE_ID)
   @sai_acl(EGRESS)
+  @nonessential_for_upgrade
   @entry_restriction("
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
@@ -108,6 +109,7 @@ control acl_egress(in headers_t headers,
   @id(ACL_EGRESS_DHCP_TO_HOST_TABLE_ID)
   @sai_acl(EGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Only allow IP field matches for IP packets.
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
