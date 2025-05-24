@@ -227,10 +227,27 @@ control acl_ingress(in headers_t headers,
     local_metadata.wcmp_group_id_valid = false;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
+  action redirect_to_nexthop(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
+    @refers_to(nexthop_table, nexthop_id)
+    nexthop_id_t nexthop_id) {
+
+    // Set nexthop id.
+    local_metadata.nexthop_id_valid = true;
+    local_metadata.nexthop_id_value = nexthop_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_TABLE_ID)
   @sai_acl(INGRESS)
   @sai_acl_priority(5)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -308,7 +325,8 @@ control acl_ingress(in headers_t headers,
           @id(13) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
 #if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
-      headers.icmp.type : ternary @name("icmp_type") @id(19)
+      headers.icmp.type : ternary
+          @id(19) @name("icmp_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
 #endif
       headers.icmp.type : ternary @name("icmpv6_type") @id(14)
@@ -318,7 +336,8 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary @name("l4_dst_port") @id(15)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_TOR)
-      headers.arp.target_proto_addr : ternary @name("arp_tpa") @id(16)
+      headers.arp.target_proto_addr : ternary
+          @id(16) @name("arp_tpa")
           @composite_field(
               @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
               @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
@@ -330,6 +349,16 @@ control acl_ingress(in headers_t headers,
       local_metadata.route_metadata : optional @name("route_metadata") @id(18)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #endif
+#if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
+      local_metadata.acl_metadata : ternary
+          @id(21) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+#endif
+#if defined(SAI_INSTANTIATION_TOR)
+      local_metadata.vlan_id : ternary
+        @id(22) @name("vlan_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
     }
     actions = {
       @proto_id(1) acl_copy();
@@ -338,6 +367,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
+      @proto_id(7) redirect_to_nexthop();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -492,22 +522,6 @@ control acl_ingress(in headers_t headers,
     const default_action = NoAction;
     counters = acl_ingress_counting_counter;
     size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
-  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
-  action redirect_to_nexthop(
-    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
-    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
-    @refers_to(nexthop_table, nexthop_id)
-    nexthop_id_t nexthop_id) {
-
-    // Set nexthop id.
-    local_metadata.nexthop_id_valid = true;
-    local_metadata.nexthop_id_value = nexthop_id;
-
-    // Cancel other forwarding decisions (if any).
-    local_metadata.wcmp_group_id_valid = false;
-    standard_metadata.mcast_grp = 0;
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID)

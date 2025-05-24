@@ -454,6 +454,11 @@ absl::string_view StripQuotes(absl::string_view string);
 // Strips the beginning and ending brackets ('[', ']') from the `string`.
 absl::string_view StripBrackets(absl::string_view string);
 
+// Returns a set of `ASIC_MAC_LOCAL` loopback mode ports.
+absl::StatusOr<absl::btree_set<std::string>>
+GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
+    gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Returns a map from interface names to their physical transceiver name.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface &gnmi_stub);
