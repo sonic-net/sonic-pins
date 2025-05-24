@@ -268,8 +268,9 @@ TEST(GenerateSynthesisCriteriaTest,
                           });
 }
 
-TEST(GenerateSynthesisCriteriaTest,
-     CoverageGoalWithEntryAndFateCoverageYieldsCorrectResults) {
+TEST(
+    GenerateSynthesisCriteriaTest,
+    CartersianProductCoverageGoalWithEntryAndFateCoverageYieldsCorrectResults) {
   // Get a packet synthesizer object.
   ASSERT_OK_AND_ASSIGN(auto synthesizer,
                        PacketSynthesizer::Create(GetParams()));
@@ -280,8 +281,10 @@ TEST(GenerateSynthesisCriteriaTest,
           ParseProtoOrDie<CoverageGoals>(
               R"pb(
                 coverage_goals {
-                  entry_coverage { tables { patterns: [ "*" ] } }
-                  packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
+                  cartesian_product_coverage {
+                    entry_coverage { tables { patterns: [ "*" ] } }
+                    packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
+                  }
                 }
               )pb"),
           synthesizer->SolverState()));
@@ -593,7 +596,7 @@ TEST(GenerateSynthesisCriteriaTest,
 }
 
 TEST(GenerateSynthesisCriteriaTest,
-     CoverageGoalWithHeaderAndEntryAndFateCoverageYieldsCorrectResults) {
+     CartesianProdCoverageWithHeaderAndEntryAndFateCoverageYieldsCorrectRes) {
   // Get a packet synthesizer object.
   ASSERT_OK_AND_ASSIGN(auto synthesizer,
                        PacketSynthesizer::Create(GetParams()));
@@ -604,9 +607,11 @@ TEST(GenerateSynthesisCriteriaTest,
           ParseProtoOrDie<CoverageGoals>(
               R"pb(
                 coverage_goals {
-                  header_coverage { headers { patterns: [ "ipv4", "ipv6" ] } }
-                  packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
-                  entry_coverage { tables { patterns: [ "*" ] } }
+                  cartesian_product_coverage {
+                    header_coverage { headers { patterns: [ "ipv4", "ipv6" ] } }
+                    packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
+                    entry_coverage { tables { patterns: [ "*" ] } }
+                  }
                 }
               )pb"),
           synthesizer->SolverState()));
@@ -691,6 +696,170 @@ TEST(GenerateSynthesisCriteriaTest,
                 }
               )pb"),
       });
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     CustomCritetiaCoverageGoalYieldsCorrectCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  custom_criteria_coverage {
+                    criteria_list { output_criteria { drop_expected: true } }
+                    criteria_list { output_criteria { drop_expected: false } }
+                  }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    output_criteria { drop_expected: true }
+                                  )pb"),
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    output_criteria { drop_expected: false }
+                                  )pb"),
+                          });
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     CartesianProdCoverageWithFateAndCustomCriteriaYieldsCorrectCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  cartesian_product_coverage {
+                    packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
+                    custom_criteria_coverage {
+                      criteria_list {
+                        input_packet_header_criteria {
+                          field_criteria {
+                            field_match {
+                              name: "ipv4.$valid$"
+                              exact { hex_str: "0x1" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    output_criteria { drop_expected: true }
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv4.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    output_criteria { drop_expected: false }
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv4.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                          });
+}
+
+TEST(
+    GenerateSynthesisCriteriaTest,
+    CartesianProdCoverageWithHeaderAndCustomCriteriaYieldsCorrectCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  cartesian_product_coverage {
+                    header_coverage { headers { patterns: [ "ipv4", "ipv6" ] } }
+                    custom_criteria_coverage {
+                      criteria_list {
+                        input_packet_header_criteria {
+                          field_criteria {
+                            field_match {
+                              name: "vlan.$valid$"
+                              exact { hex_str: "0x1" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv4.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                      field_criteria {
+                                        field_match {
+                                          name: "vlan.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv6.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                      field_criteria {
+                                        field_match {
+                                          name: "vlan.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                          });
 }
 
 }  // namespace
