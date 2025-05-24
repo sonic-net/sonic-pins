@@ -59,9 +59,11 @@
 
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -77,6 +79,22 @@ absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
 absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const std::string &control_name, SolverState &state,
     SymbolicPerPacketState &headers, const z3::expr &guard);
+
+// Evaluate the pipeline (ingress or egress) using DFS style symbolic execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluatePipelineDfs(
+    const std::string &pipeline_name, SolverState &state,
+    SymbolicPerPacketState &headers,
+    packet_synthesizer::PacketSynthesisResults &results);
+
+// Evaluate the control using DFS style symbolic execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluateControlDfs(
+    const std::string &control_name, SolverState &state,
+    SymbolicPerPacketState &headers, const std::string &pipeline_name,
+    packet_synthesizer::PacketSynthesisResults &results);
 
 }  // namespace control
 }  // namespace symbolic

@@ -1,7 +1,7 @@
 (ingress) $got_cloned$: false
 (ingress) $got_recirculated$: false
 (ingress) ethernet.$extracted$: false
-(ingress) ethernet.$valid$: (ite true true false)
+(ingress) ethernet.$valid$: true
 (ingress) ethernet.dst_addr: ethernet.dst_addr
 (ingress) ethernet.ether_type: ethernet.ether_type
 (ingress) ethernet.src_addr: ethernet.src_addr
@@ -29,8 +29,8 @@
 
 (parsed) $got_cloned$: false
 (parsed) $got_recirculated$: false
-(parsed) ethernet.$extracted$: (ite true true false)
-(parsed) ethernet.$valid$: (ite true true false)
+(parsed) ethernet.$extracted$: true
+(parsed) ethernet.$valid$: true
 (parsed) ethernet.dst_addr: ethernet.dst_addr
 (parsed) ethernet.ether_type: ethernet.ether_type
 (parsed) ethernet.src_addr: ethernet.src_addr
@@ -58,15 +58,17 @@
 
 (egress) $got_cloned$: false
 (egress) $got_recirculated$: false
-(egress) ethernet.$extracted$: (ite true true false)
-(egress) ethernet.$valid$: (ite true true false)
-(egress) ethernet.dst_addr: (let ((a!1 (distinct (ite (and true true (= ethernet.ether_type #x0010))
-                          0
-                          (- 1))
-                     (- 1))))
-  (ite (and true a!1 true (= ethernet.src_addr #x000000000100))
-       #x000000000003
-       (ite (and true true (= ethernet.ether_type #x0010))
+(egress) ethernet.$extracted$: true
+(egress) ethernet.$valid$: true
+(egress) ethernet.dst_addr: (let ((a!1 (ite (and true (and true (= ethernet.ether_type #x0010))) 0 (- 1)))
+      (a!2 (ite (and true (= ethernet.src_addr #x000000000100))
+                #x000000000003
+                (ite (and true (= ethernet.ether_type #x0010))
+                     #x000000000002
+                     ethernet.dst_addr))))
+  (ite (and true (distinct a!1 (- 1)))
+       a!2
+       (ite (and true (= ethernet.ether_type #x0010))
             #x000000000002
             ethernet.dst_addr)))
 (egress) ethernet.ether_type: ethernet.ether_type
@@ -81,26 +83,27 @@
 (egress) standard_metadata.deq_timedelta: #x00000000
 (egress) standard_metadata.egress_global_timestamp: #x000000000000
 (egress) standard_metadata.egress_port: (let ((a!1 (ite (and true (and true (= ethernet.ether_type #x0010))) 0 (- 1)))
-      (a!2 (and true (not (and true (= ethernet.ether_type #x0010))))))
-(let ((a!3 (ite (and true (and true (= ethernet.ether_type #x0010)))
-                #b000000010
-                (ite a!2 #b111111111 #b000000000))))
-(let ((a!4 (ite (and true
-                     (distinct a!1 (- 1))
-                     true
-                     (= ethernet.src_addr #x000000000100))
+      (a!2 (ite (and true (= ethernet.src_addr #x000000000100))
                 #b000000011
-                a!3)))
-  (ite (not (= a!4 #b111111111)) a!4 standard_metadata.egress_port))))
+                (ite (and true (= ethernet.ether_type #x0010))
+                     #b000000010
+                     #b111111111))))
+(let ((a!3 (ite (and true (distinct a!1 (- 1)))
+                a!2
+                (ite (and true (= ethernet.ether_type #x0010))
+                     #b000000010
+                     #b111111111))))
+  (ite (not (= a!3 #b111111111)) a!3 standard_metadata.egress_port)))
 (egress) standard_metadata.egress_rid: #x0000
 (egress) standard_metadata.egress_spec: (let ((a!1 (ite (and true (and true (= ethernet.ether_type #x0010))) 0 (- 1)))
-      (a!2 (and true (not (and true (= ethernet.ether_type #x0010))))))
-(let ((a!3 (ite (and true (and true (= ethernet.ether_type #x0010)))
-                #b000000010
-                (ite a!2 #b111111111 #b000000000))))
-  (ite (and true (distinct a!1 (- 1)) true (= ethernet.src_addr #x000000000100))
-       #b000000011
-       a!3)))
+      (a!2 (ite (and true (= ethernet.src_addr #x000000000100))
+                #b000000011
+                (ite (and true (= ethernet.ether_type #x0010))
+                     #b000000010
+                     #b111111111))))
+  (ite (and true (distinct a!1 (- 1)))
+       a!2
+       (ite (and true (= ethernet.ether_type #x0010)) #b000000010 #b111111111)))
 (egress) standard_metadata.enq_qdepth: #b0000000000000000000
 (egress) standard_metadata.enq_timestamp: #x00000000
 (egress) standard_metadata.ingress_global_timestamp: #x000000000000
@@ -118,27 +121,25 @@
 (declare-fun ethernet.ether_type () (_ BitVec 16))
 (declare-fun ethernet.src_addr () (_ BitVec 48))
 (assert
- (let (($x88 (= standard_metadata.ingress_port (_ bv7 9))))
- (let (($x83 (= standard_metadata.ingress_port (_ bv6 9))))
- (let (($x78 (= standard_metadata.ingress_port (_ bv5 9))))
- (let (($x73 (= standard_metadata.ingress_port (_ bv4 9))))
- (let (($x68 (= standard_metadata.ingress_port (_ bv3 9))))
- (let (($x64 (= standard_metadata.ingress_port (_ bv2 9))))
- (let (($x60 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x65 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x60) $x64)))
- (or (or (or (or (or $x65 $x68) $x73) $x78) $x83) $x88))))))))))
+ (let (($x86 (= standard_metadata.ingress_port (_ bv7 9))))
+ (let (($x81 (= standard_metadata.ingress_port (_ bv6 9))))
+ (let (($x76 (= standard_metadata.ingress_port (_ bv5 9))))
+ (let (($x71 (= standard_metadata.ingress_port (_ bv4 9))))
+ (let (($x66 (= standard_metadata.ingress_port (_ bv3 9))))
+ (let (($x62 (= standard_metadata.ingress_port (_ bv2 9))))
+ (let (($x58 (= standard_metadata.ingress_port (_ bv1 9))))
+ (let (($x63 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x58) $x62)))
+ (or (or (or (or (or $x63 $x66) $x71) $x76) $x81) $x86))))))))))
 (assert
- (let ((?x32 (ite (and true (not (and true (= ethernet.ether_type (_ bv16 16))))) (_ bv511 9) (_ bv0 9))))
- (let (($x30 (= ethernet.ether_type (_ bv16 16))))
- (let (($x15 (and true $x30)))
- (let (($x27 (and true $x15)))
- (let ((?x34 (ite $x27 0 (- 1))))
- (let (($x39 (and (distinct ?x34 (- 1)) true)))
- (let (($x40 (and true $x39)))
- (let (($x44 (and $x40 (and true (= ethernet.src_addr (_ bv256 48))))))
- (let ((?x50 (ite $x44 (_ bv3 9) (ite $x27 (_ bv2 9) ?x32))))
- (let (($x71 (or (or (or (or false (= ?x50 (_ bv0 9))) (= ?x50 (_ bv1 9))) (= ?x50 (_ bv2 9))) (= ?x50 (_ bv3 9)))))
- (let (($x91 (or (or (or (or $x71 (= ?x50 (_ bv4 9))) (= ?x50 (_ bv5 9))) (= ?x50 (_ bv6 9))) (= ?x50 (_ bv7 9)))))
- (let (($x52 (= ?x50 (_ bv511 9))))
- (or $x52 $x91))))))))))))))
+ (let (($x6 (= ethernet.ether_type (_ bv16 16))))
+ (let (($x5 (and true $x6)))
+ (let ((?x34 (ite $x5 (_ bv2 9) (_ bv511 9))))
+ (let ((?x22 (ite (and true $x5) 0 (- 1))))
+ (let (($x35 (and (distinct ?x22 (- 1)) true)))
+ (let (($x36 (and true $x35)))
+ (let ((?x47 (ite $x36 (ite (and true (= ethernet.src_addr (_ bv256 48))) (_ bv3 9) ?x34) ?x34)))
+ (let (($x69 (or (or (or (or false (= ?x47 (_ bv0 9))) (= ?x47 (_ bv1 9))) (= ?x47 (_ bv2 9))) (= ?x47 (_ bv3 9)))))
+ (let (($x89 (or (or (or (or $x69 (= ?x47 (_ bv4 9))) (= ?x47 (_ bv5 9))) (= ?x47 (_ bv6 9))) (= ?x47 (_ bv7 9)))))
+ (let (($x50 (= ?x47 (_ bv511 9))))
+ (or $x50 $x89))))))))))))
 (check-sat)

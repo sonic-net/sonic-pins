@@ -14,6 +14,7 @@
 
 #include "p4_symbolic/symbolic/deparser.h"
 
+#include <optional>
 #include <string>
 
 #include "absl/status/statusor.h"
@@ -22,7 +23,7 @@
 #include "p4_pdpi/string_encodings/bit_string.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
@@ -79,13 +80,18 @@ absl::StatusOr<std::string> Deparse(
 }  // namespace
 
 absl::StatusOr<std::string> DeparseIngressPacket(
-    const symbolic::SolverState& state, const z3::model& model) {
+    const symbolic::SolverState& state, const z3::model& model,
+    std::optional<symbolic::SymbolicPerPacketState> headers) {
   // TODO: We are using the deparser header order to serialize
   // ingress packet for now. In the future, we may want to infer parser header
   // order and use that for ingress packets.
   const ir::Deparser& deparser = state.program.deparsers().begin()->second;
-  return Deparse(state.context.ingress_headers, model, deparser.header_order(),
-                 state.program.headers());
+  if (headers.has_value())
+    return Deparse(headers.value(), model, deparser.header_order(),
+                   state.program.headers());
+  else
+    return Deparse(state.context.ingress_headers, model,
+                   deparser.header_order(), state.program.headers());
 }
 
 absl::StatusOr<std::string> DeparseEgressPacket(

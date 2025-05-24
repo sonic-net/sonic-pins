@@ -32,10 +32,15 @@ absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
     const p4::config::v1::P4Info& info, const std::string& role) {
   ASSIGN_OR_RETURN(
       FuzzerConfig config,
-      FuzzerConfig::Create(info, ConfigParams{
-                                     .role = role,
-                                     .mutate_update_probability = 0.0,
-                                 }));
+      FuzzerConfig::Create(
+          info,
+          ConfigParams{
+              .ports = pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings(
+                  {1, 2, 3, 4, 5, 6, 7, 8}),
+              .qos_queues = {"1", "a_queue", "another_queue", "2", "0x1"},
+              .role = role,
+              .mutate_update_probability = 0.0,
+          }));
   return FuzzerTestState{
       .config = config,
       .switch_state = SwitchState(config.GetIrP4Info()),

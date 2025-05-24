@@ -1,5 +1,6 @@
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -33,6 +34,22 @@ TEST(GetNonstandardP4InfoTest, DoesNotCheckCrashForAllPlatforms) {
   }
 }
 
+TEST(NonstandardPlatformsFlagTest, ParsingValidNameSucceeds) {
+  NonstandardPlatform platform;
+  std::string error;
+  ASSERT_TRUE(AbslParseFlag("bmv2", &platform, &error));
+  ASSERT_THAT(platform, testing::Eq(NonstandardPlatform::kBmv2));
+}
+
+TEST(NonstandardPlatformsFlagTest, ParsingInvalidNameFails) {
+  NonstandardPlatform platform;
+  std::string error;
+  ASSERT_FALSE(AbslParseFlag("non-existing-platform-name", &platform, &error));
+}
+
+TEST(NonstandardPlatformsFlagTest, UnparsingWorks) {
+  ASSERT_THAT(AbslUnparseFlag(NonstandardPlatform::kBmv2), testing::Eq("bmv2"));
+}
 
 }  // namespace
 }  // namespace sai
