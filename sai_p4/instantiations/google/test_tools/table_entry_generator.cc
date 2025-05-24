@@ -193,6 +193,18 @@ TableEntryGenerator AclEgressTableGenerator(
   return generator;
 }
 
+TableEntryGenerator AclEgressL2TableGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  TableEntryGenerator generator;
+  auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
+      R"pb(table_name: "acl_egress_l2_table"
+           action { name: "acl_drop" })pb");
+  if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, *base_entry, "src_mac");
+  return generator;
+}
+
 TableEntryGenerator AclEgressDhcpToHostTableGenerator(
     const pdpi::IrTableDefinition& table_definition) {
   TableEntryGenerator generator;
@@ -354,6 +366,7 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"acl_ingress_security_table", AclIngressSecurityTableGenerator},
       {"acl_ingress_counting_table", AclIngressCountingTableGenerator},
       {"acl_egress_table", AclEgressTableGenerator},
+      {"acl_egress_l2_table", AclEgressL2TableGenerator},
       {"acl_egress_dhcp_to_host_table", AclEgressDhcpToHostTableGenerator},
       {"ipv4_table", Ipv4TableGenerator},
       {"ipv6_table", Ipv6TableGenerator},
