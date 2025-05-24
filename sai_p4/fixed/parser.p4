@@ -6,6 +6,7 @@
 #include "ids.h"
 #include "metadata.p4"
 
+// LINT.IfChange(parser)
 parser packet_parser(packet_in packet, out headers_t headers,
                      inout local_metadata_t local_metadata,
                      inout standard_metadata_t standard_metadata) {
@@ -135,7 +136,11 @@ parser packet_parser(packet_in packet, out headers_t headers,
     transition accept;
   }
 }  // parser packet_parser
+// The parser and the deparser need to roundtrip, so if you change the parser,
+// you often need to change the deparser too.
+// LINT.ThenChange(metadata.p4, :deparser)
 
+// LINT.IfChange(deparser)
 control packet_deparser(packet_out packet, in headers_t headers) {
   apply {
     // We always expect the packet_out_header to be invalid at the end of the
@@ -165,5 +170,6 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     packet.emit(headers.udp);
   }
 }  // control packet_deparser
+// LINT.ThenChange(metadata.p4, :parser)
 
 #endif  // SAI_PARSER_P4_
