@@ -26,14 +26,14 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_run_validation.h"
@@ -283,6 +283,15 @@ public:
   // Stores the P4 simulation packet trace for the given config, entries, and
   // input packet.
   virtual absl::Status StorePacketTrace(
+      const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
+      const SwitchInput& switch_input) const = 0;
+
+  // Gets the P4 simulation packet trace for the given config, entries, and
+  // input packet.
+  virtual absl::StatusOr<
+      absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>>
+  GetPacketTraces(
       const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
       const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
       const SwitchInput& switch_input) const = 0;

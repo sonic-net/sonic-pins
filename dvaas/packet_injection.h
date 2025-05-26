@@ -36,6 +36,13 @@ struct PacketStatistics {
   int total_packets_punted = 0;
 };
 
+// Processed information about a PacketIn message with a tagged payload.
+struct TaggedPacketIn {
+  int tag;
+  p4::v1::PacketIn packet_in;
+  packetlib::Packet parsed_inner_packet;
+};
+
 // Type of a function that given an unsolicited (i.e. a packet that is NOT
 // a result of a input test packet) received either from the SUT or
 // the control switch, determines if the packet is among expected such packets
@@ -90,6 +97,20 @@ struct PacketInjectionParams {
   // rather than ignoring all packet-ins.
   bool enable_sut_packet_in_collection = true;
 };
+
+// Injects a packet to the control switch egress with a packet injection delay
+// based on the PacketInjectionParam's maximum packets to send per second.
+// Injects a packet to the control switch egress with a packet injection delay
+// based on the PacketInjectionParam's maximum packets to send per second.
+absl::StatusOr<pins_test::P4rtPortId> GetSutEgressPortFromControlSwitchPacketIn(
+    const pdpi::IrPacketIn& packet_in,
+    const MirrorTestbedP4rtPortIdMap& mirror_testbed_port_map);
+
+absl::StatusOr<std::vector<TaggedPacketIn>>
+CollectStreamMessageResponsesAndReturnTaggedPacketIns(
+    pdpi::P4RuntimeSession& p4rt_session, absl::Duration duration,
+    const IsExpectedUnsolicitedPacketFunctionType&
+        is_expected_unsolicited_packet);
 
 // Determines the switch's behavior when receiving test packets by:
 // - Injecting those packets to the control switch egress to send to the SUT.
