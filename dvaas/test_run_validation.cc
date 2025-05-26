@@ -19,7 +19,6 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -312,7 +311,6 @@ static constexpr absl::string_view kActualBanner =
 static constexpr absl::string_view kExpectationBanner =
     "== EXPECTED OUTPUT "
     "=============================================================";
-
 }  // namespace
 
 PacketTestValidationResult ValidateTestRun(
