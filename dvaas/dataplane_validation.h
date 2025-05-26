@@ -26,21 +26,19 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
+#include "absl/container/btree_map.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
-#include "google/protobuf/descriptor.h"
 #include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/ir.pb.h"
@@ -67,6 +65,17 @@ struct P4Specification {
   // specifically modified for BMv2 due to some missing features, e.g. the
   // lack of support for @p4runtime_translation.
   p4::v1::ForwardingPipelineConfig bmv2_config;
+};
+
+// Stores configurable parameters for `PostProcessTestVectorFailure` for packet
+// failure determinism. Attempt at most
+// `num_of_replication_attempts_per_failure` number of reruns for the first
+// `max_failures_to_attempt_to_replicate` failures.
+struct FailureEnhancementOptions {
+  int num_of_replication_attempts_per_failure = 1000;
+  int max_failures_to_attempt_to_replicate = 10;
+  // If true, print the packet's trace.
+  bool print_packet_trace = true;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
@@ -117,6 +126,10 @@ struct DataplaneValidationParams {
   // enough in most cases.
   std::optional<p4_symbolic::packet_synthesizer::CoverageGoals>
       coverage_goals_override;
+
+  // A struct to store configurable parameters for packet failure determinism.
+  // Parameters in `failure_enhancement_options` are assigned default values.
+  FailureEnhancementOptions failure_enhancement_options;
 };
 
 // Forward declaration. See below for description.
@@ -280,12 +293,21 @@ public:
   virtual absl::StatusOr<P4Specification>
   InferP4Specification(SwitchApi &sut) const = 0;
 
-  // Stores the P4 simulation packet trace for the given config, entries, and
-  // input packet.
-  virtual absl::Status StorePacketTrace(
+  // Gets the P4 simulation packet trace(s) for the given config, entries, and
+  // input packet. Returns a map from input packet's hex string to list of
+  // packet traces each corresponding to one trace for that packet (there may be
+  // multiple traces, e.g. due to exploring WCMP non-determinism).
+  virtual absl::StatusOr<
+      absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>>
+  GetPacketTraces(
       const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
       const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
-      const SwitchInput& switch_input) const = 0;
+      const std::vector<SwitchInput>& switch_inputs) const = 0;
+
+  // Creates entries for v1Model auxiliary tables that model the effects of the
+  // given gNMI configuration in on packet forwarding (e.g. port loopback mode).
+  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryTableEntries(
+      gnmi::gNMI::StubInterface& gnmi_stub, pdpi::IrP4Info ir_p4info) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };

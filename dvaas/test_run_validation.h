@@ -20,7 +20,6 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
-#include "absl/types/span.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"

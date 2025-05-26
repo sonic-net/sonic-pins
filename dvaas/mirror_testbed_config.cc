@@ -15,37 +15,79 @@
 #include "dvaas/mirror_testbed_config.h"
 
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "tests/lib/switch_test_setup_helpers.h"
-#include "thinkit/mirror_testbed_fixture.h"
+#include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
+namespace {
+
+// Tries to configure a subset of SUT's interfaces to map every given P4RT port
+// ID in `p4rt_port_ids` to an enabled Ethernet interface.
+absl::Status ConfigureSutInterfacesWithGivenP4RtPortIds(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub,
+    absl::btree_set<pins_test::P4rtPortId>& p4rt_port_ids) {
+  // Only map to enabled Ethernet interfaces.
+  auto is_enabled_ethernet_interface =
+      [](const pins_test::openconfig::Interfaces::Interface& interface) {
+        return interface.config().enabled() &&
+               // Ethernet interfaces are, so far, best identified by name.
+               absl::StartsWith(interface.name(), "Ethernet");
+      };
+
+  absl::btree_set<int> open_config_p4rt_port_ids;
+  for (const pins_test::P4rtPortId& p4rt_port_id : p4rt_port_ids) {
+    open_config_p4rt_port_ids.insert(p4rt_port_id.GetOpenConfigEncoding());
+  }
+  // Map the required P4RT port IDs to matching interfaces on the SUT.
+  RETURN_IF_ERROR(pins_test::MapP4rtIdsToMatchingInterfaces(
+      sut_gnmi_stub, open_config_p4rt_port_ids, is_enabled_ethernet_interface));
+
+  return absl::OkStatus();
+}
+
+}  // namespace
 
 absl::StatusOr<MirrorTestbedConfigurator> MirrorTestbedConfigurator::Create(
-    std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface) {
-  MirrorTestbedConfigurator configured_testbed(testbed_interface);
-
-  thinkit::MirrorTestbed& testbed = testbed_interface->GetMirrorTestbed();
+    thinkit::MirrorTestbed* testbed) {
+  MirrorTestbedConfigurator configured_testbed(testbed);
 
   ASSIGN_OR_RETURN(configured_testbed.sut_api_.p4rt,
-                   pdpi::P4RuntimeSession::Create(testbed.Sut()));
+                   pdpi::P4RuntimeSession::Create(testbed->Sut()));
   ASSIGN_OR_RETURN(configured_testbed.sut_api_.gnmi,
-                   testbed.Sut().CreateGnmiStub());
+                   testbed->Sut().CreateGnmiStub());
   ASSIGN_OR_RETURN(configured_testbed.control_switch_api_.p4rt,
-                   pdpi::P4RuntimeSession::Create(testbed.ControlSwitch()));
+                   pdpi::P4RuntimeSession::Create(testbed->ControlSwitch()));
   ASSIGN_OR_RETURN(configured_testbed.control_switch_api_.gnmi,
-                   testbed.ControlSwitch().CreateGnmiStub());
+                   testbed->ControlSwitch().CreateGnmiStub());
 
   return configured_testbed;
 }
 
-absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest() {
+absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
+    const MirrorTestbedConfigurator::Params& params) {
   // The testbed must not have been configured before.
   if (original_control_interfaces_.has_value()) {
     return absl::FailedPreconditionError(
         "Configure function called on an already configured testbed.");
+  }
+  if (params.configure_sut_port_ids_for_expected_entries) {
+    if (!params.sut_entries_to_expect_after_configuration.has_value()) {
+      return absl::InvalidArgumentError(
+          "`expected_sut_entries` must have a value when "
+          "`configure_sut_ports_for_expected_entries` is true.");
+    }
+    if (!params.mirror_sut_ports_ids_to_control_switch) {
+      return absl::InvalidArgumentError(
+          "`mirror_sut_ports_to_control_switch` must be true when "
+          "configure_sut_ports_for_expected_entries` is true.");
+    }
   }
 
   // Store the original control switch gNMI interface config before changing
@@ -54,19 +96,48 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest() {
                    pins_test::GetInterfacesAsProto(*control_switch_api_.gnmi,
                                                    gnmi::GetRequest::CONFIG));
 
-  thinkit::MirrorTestbed& testbed = testbed_interface_->GetMirrorTestbed();
+  if (params.configure_sut_port_ids_for_expected_entries) {
+    // Get P4RT port ids in `used_entries`.
+    ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
+                     GetForwardingPipelineConfig(sut_api_.p4rt.get()));
+    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info,
+                     pdpi::CreateIrP4Info(response.config().p4info()));
+    std::vector<pdpi::IrTableEntry> used_entries_list(
+        params.sut_entries_to_expect_after_configuration.value()
+            .entries()
+            .begin(),
+        params.sut_entries_to_expect_after_configuration.value()
+            .entries()
+            .end());
+    ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
+                     pins_test::GetPortsUsed(ir_info, used_entries_list));
 
-  // Set up control switch to be a mirror of SUT.
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(control_switch_api_.p4rt.get()));
-  // Mirror testbed ports.
-  RETURN_IF_ERROR(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
+    // Clear entities on SUT. This is needed to ensure we can modify the
+    // interface configurations.
+    RETURN_IF_ERROR(pdpi::ClearEntities(*sut_api_.p4rt));
+
+    // Change interface configurations on SUT to match `used_p4rt_port_ids`.
+    RETURN_IF_ERROR(ConfigureSutInterfacesWithGivenP4RtPortIds(
+        *sut_api_.gnmi, used_p4rt_port_ids));
+  }
+
+  if (params.mirror_sut_ports_ids_to_control_switch) {
+    // Clear entities on control switch. This is needed to ensure we can modify
+    // the interface configurations.
+    RETURN_IF_ERROR(pdpi::ClearEntities(*control_switch_api_.p4rt));
+
+    // Mirror the SUTs OpenConfig interface <-> P4RT port ID mappings to the
+    // control switch.
+    RETURN_IF_ERROR(
+        pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed_));
+  }
 
   // Ensure that all enabled ports are up.
-  RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed.Sut()))
+  RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed_.Sut()))
           .SetPrepend()
       << "expected enabled interfaces on SUT to be up: ";
   RETURN_IF_ERROR(
-      pins_test::WaitForEnabledInterfacesToBeUp(testbed.ControlSwitch()))
+      pins_test::WaitForEnabledInterfacesToBeUp(testbed_.ControlSwitch()))
           .SetPrepend()
       << "expected enabled interfaces on control switch to be up: ";
 
