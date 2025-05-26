@@ -28,7 +28,11 @@ void AddTestVectorStats(const PacketTestOutcome& outcome,
                         TestVectorStats& stats) {
   stats.num_vectors += 1;
 
-  if (!outcome.test_result().has_failure()) {
+  if (outcome.test_result().has_failure()) {
+    if (outcome.test_result().failure().reproducibility_rate() == 1.0) {
+      stats.num_deterministic_failures += 1;
+    }
+  } else {
     stats.num_vectors_passed += 1;
   }
 
@@ -102,6 +106,11 @@ std::string ExplainTestVectorStats(const TestVectorStats& stats) {
       stats.num_vectors_punting, stats.num_packets_punted);
   absl::StrAppendFormat(&result, "%d test vectors produced no output packets\n",
                         stats.num_vectors_dropping);
+  absl::StrAppendFormat(&result,
+                        "%d of %d test vectors with failures were "
+                        "deterministically reproducible\n",
+                        stats.num_deterministic_failures,
+                        stats.num_vectors - stats.num_vectors_passed);
   return result;
 }
 
