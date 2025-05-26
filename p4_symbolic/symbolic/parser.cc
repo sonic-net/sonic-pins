@@ -19,11 +19,11 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
-#include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/ir.h"

@@ -23,8 +23,8 @@
 #include <optional>
 #include <string>
 
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
-#include "glog/logging.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
