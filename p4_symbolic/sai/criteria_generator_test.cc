@@ -17,11 +17,9 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/types/optional.h"
-#include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/message.h"
-#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -36,6 +34,8 @@
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace p4_symbolic::packet_synthesizer {
 namespace {

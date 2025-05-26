@@ -28,6 +28,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -36,7 +37,6 @@
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "google/protobuf/map.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"

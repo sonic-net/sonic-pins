@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -27,7 +28,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "glog/logging.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"

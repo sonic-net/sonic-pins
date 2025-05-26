@@ -16,19 +16,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_bazelbuild_buildtools"):
         http_archive(
             name = "com_github_bazelbuild_buildtools",
-            # sha256 = "44a6e5acc007e197d45ac3326e7f993f0160af9a58e8777ca7701e00501c0857",
+            sha256 = "e3bb0dc8b0274ea1aca75f1f8c0c835adbe589708ea89bf698069d0790701ea3",
             strip_prefix = "buildtools-5.1.0",
             url = "https://github.com/bazelbuild/buildtools/archive/refs/tags/5.1.0.tar.gz",
-        )
-    if "boringssl" not in native.existing_rules():
-        http_archive(
-            name = "boringssl",
-            sha256 = "9f441d72fccb9a3faf96470478c8ccfaaeb8db1cffd4d78b698f782124dad1b0",
-            strip_prefix = "boringssl-b8a2bffc598f230484ff48a247526a9820facfc2",
-            urls = [
-                "https://storage.googleapis.com/grpc-bazel-mirror/github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
-                "https://github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
-            ],
         )
     if not native.existing_rule("com_github_nelhage_rules_boost"):
         # This version includes the fix for boost failures due to the xz library issue.
@@ -41,9 +31,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/v1.58.0.zip",
-            strip_prefix = "grpc-1.58.0",
-            sha256 = "aa329c7de707a03511c88206ef4483e9346ab6336b6be4378d294060aa7400b3",
+            url = "https://github.com/grpc/grpc/archive/v1.61.0.zip",
+            strip_prefix = "grpc-1.61.0",
+            sha256 = "ba6c53c3924a1d01c663352010e0f73736bad3d99d72108e0f2b1a6466f9be20",
             patch_args = ["-p1"],
             patches = [
                 "//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
@@ -53,9 +43,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_google_absl"):
         http_archive(
             name = "com_google_absl",
-            url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
-            strip_prefix = "abseil-cpp-20230802.0",
-            sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
+            url = "https://github.com/abseil/abseil-cpp/archive/20240116.2.tar.gz",
+            strip_prefix = "abseil-cpp-20240116.2",
+            sha256 = "733726b8c3a6d39a4120d7e45ea8b41a434cdacde401cba500f14236c49b39dc",
         )
     if not native.existing_rule("com_google_googletest"):
         http_archive(
@@ -71,27 +61,19 @@ def pins_infra_deps():
             strip_prefix = "benchmark-1.5.4",
             sha256 = "e3adf8c98bb38a198822725c0fc6c0ae4711f16fbbf6aeb311d5ad11e5a081b5",
         )
-    if not native.existing_rule("com_google_benchmark"):
-        http_archive(
-            name = "com_google_benchmark",
-            urls = ["https://github.com/google/benchmark/archive/v1.5.4.tar.gz"],
-            strip_prefix = "benchmark-1.5.4",
-            sha256 = "e3adf8c98bb38a198822725c0fc6c0ae4711f16fbbf6aeb311d5ad11e5a081b5",
-        )
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
             name = "com_google_protobuf",
-            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v23.1.zip",
-            strip_prefix = "protobuf-23.1",
-            sha256 = "c0ea9f4d75b37ea8e9d78ce4c670d066bcb7cebdba190fa5fc8c57b1f00c0c2c",
+            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v25.2.zip",
+            strip_prefix = "protobuf-25.2",
+            sha256 = "ddd0f5271f31b549efc74eb39061e142132653d5d043071fcec265bd571e73c4",
         )
     if not native.existing_rule("com_googlesource_code_re2"):
         http_archive(
             name = "com_googlesource_code_re2",
-            # Newest commit on "absl" branch as of 2021-03-25.
-            url = "https://github.com/google/re2/archive/72f110e82ccf3a9ae1c9418bfb447c3ba1cf95c2.zip",
-            strip_prefix = "re2-72f110e82ccf3a9ae1c9418bfb447c3ba1cf95c2",
-            sha256 = "146bf2e8796317843106a90543356c1baa4b48236a572e39971b839172f6270e",
+            url = "https://github.com/google/re2/archive/refs/tags/2023-06-01.tar.gz",
+            strip_prefix = "re2-2023-06-01",
+            sha256 = "8b4a8175da7205df2ad02e405a950a02eaa3e3e0840947cd598e92dca453199b",
         )
     if not native.existing_rule("com_google_googleapis"):
         http_archive(
@@ -133,7 +115,7 @@ def pins_infra_deps():
             strip_prefix = "gnmi-0.10.0",
             patch_args = ["-p1"],
             patches = [
-                "@com_github_sonic_net_sonic_pins//:bazel/patches/gnmi-001-fix_virtual_proto_import.patch",
+                "//:bazel/patches/gnmi-001-fix_virtual_proto_import.patch",
             ],
             sha256 = "2231e1cc398a523fa840810fa6fdb8960639f7b91b57bb8f12ed8681e0142a67",
         )
@@ -160,9 +142,9 @@ def pins_infra_deps():
         # rather than a release.
         http_archive(
             name = "com_github_p4lang_p4runtime",
-            # Newest commit on main as of 2024-07-24.
-            urls = ["https://github.com/p4lang/p4runtime/archive/6e8c018fe3b5ead2f13b5b665ba1e77beaa1360a.zip"],
-            strip_prefix = "p4runtime-6e8c018fe3b5ead2f13b5b665ba1e77beaa1360a/proto",
+            # Newest commit on main as of 2024-09-19.
+            urls = ["https://github.com/p4lang/p4runtime/archive/dda9d669cfa846c46116b5e7543479ffe96098b6.zip"],
+            strip_prefix = "p4runtime-dda9d669cfa846c46116b5e7543479ffe96098b6/proto",
         )
     if not native.existing_rule("com_github_p4lang_p4_constraints"):
         http_archive(
@@ -233,11 +215,10 @@ def pins_infra_deps():
         http_archive(
             name = "rules_proto",
             urls = [
-                "https://mirror.bazel.build/github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
-                "https://github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
+                "https://github.com/bazelbuild/rules_proto/archive/5.3.0-21.7.tar.gz",
             ],
-            strip_prefix = "rules_proto-97d8af4dc474595af3900dd85cb3a29ad28cc313",
-            sha256 = "602e7161d9195e50246177e7c55b2f39950a9cf7366f74ed5f22fd45750cd208",
+            strip_prefix = "rules_proto-5.3.0-21.7",
+            sha256 = "dc3fb206a2cb3441b485eb1e423165b231235a1ea9b031b4433cf7bc1fa460dd",
         )
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
