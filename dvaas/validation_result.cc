@@ -50,12 +50,7 @@ ValidationResult::ValidationResult(
 
 absl::Status ValidationResult::HasSuccessRateOfAtLeast(
     double expected_success_rate) const {
-  // Avoid division by 0.
-  if (test_vector_stats_.num_vectors == 0) return absl::OkStatus();
-
-  double success_rate =
-      static_cast<double>(test_vector_stats_.num_vectors_passed) /
-      static_cast<double>(test_vector_stats_.num_vectors);
+  double success_rate = GetSuccessRate();
   if (success_rate < expected_success_rate) {
     auto it =
         absl::c_find_if(test_outcomes_.outcomes(), [](const auto& outcome) {
@@ -69,6 +64,13 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
            << it->test_result().failure().description();
   }
   return absl::OkStatus();
+}
+
+double ValidationResult::GetSuccessRate() const {
+  // Avoid division by 0.
+  if (test_vector_stats_.num_vectors == 0) return 1.0;
+  return static_cast<double>(test_vector_stats_.num_vectors_passed) /
+         static_cast<double>(test_vector_stats_.num_vectors);
 }
 
 const ValidationResult& ValidationResult::LogStatistics() const {
