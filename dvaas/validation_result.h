@@ -57,6 +57,9 @@ public:
   // ```
   absl::Status HasSuccessRateOfAtLeast(double expected_success_rate) const;
 
+  // Returns the fraction of test vectors that passed.
+  double GetSuccessRate() const;
+
   // Logs various statistics about the number of test vectors and how many of
   // them passed.
   const ValidationResult &LogStatistics() const;

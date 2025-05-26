@@ -19,6 +19,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
@@ -48,14 +49,21 @@ ValidationResult::ValidationResult(
   packet_synthesis_result_ = packet_synthesis_result;
 }
 
+std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {
+  if (failure.has_minimization_analysis()) {
+    return absl::StrFormat(
+        "Sending the same input packet reproduces this error %.2f%% of the "
+        "time\n%s",
+        failure.minimization_analysis().reproducibility_rate() * 100,
+        failure.description());
+  } else {
+    return failure.description();
+  }
+}
+
 absl::Status ValidationResult::HasSuccessRateOfAtLeast(
     double expected_success_rate) const {
-  // Avoid division by 0.
-  if (test_vector_stats_.num_vectors == 0) return absl::OkStatus();
-
-  double success_rate =
-      static_cast<double>(test_vector_stats_.num_vectors_passed) /
-      static_cast<double>(test_vector_stats_.num_vectors);
+  double success_rate = GetSuccessRate();
   if (success_rate < expected_success_rate) {
     auto it =
         absl::c_find_if(test_outcomes_.outcomes(), [](const auto& outcome) {
@@ -66,9 +74,16 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
            << ExplainTestVectorStats(test_vector_stats_)
            << "\nShowing the first failure only. Refer to the test artifacts "
               "for the full list of errors.\n"
-           << it->test_result().failure().description();
+           << ExplainFailure(it->test_result().failure());
   }
   return absl::OkStatus();
+}
+
+double ValidationResult::GetSuccessRate() const {
+  // Avoid division by 0.
+  if (test_vector_stats_.num_vectors == 0) return 1.0;
+  return static_cast<double>(test_vector_stats_.num_vectors_passed) /
+         static_cast<double>(test_vector_stats_.num_vectors);
 }
 
 const ValidationResult& ValidationResult::LogStatistics() const {
@@ -86,7 +101,7 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
                    test_vector_stats_.num_vectors_passed);
   for (const auto& outcome : test_outcomes_.outcomes()) {
     if (outcome.test_result().has_failure()) {
-      failures.push_back(outcome.test_result().failure().description());
+      failures.push_back(ExplainFailure(outcome.test_result().failure()));
     }
   }
   return failures;

@@ -84,10 +84,10 @@ MirrorTestbedP4rtPortIdMap::GetSutPortConnectedToControlSwitchPort(
   // Handle explicit map.
   const auto it = control_to_sut_port_map_->find(control_port);
   if (it == control_to_sut_port_map_->end()) {
-    return absl::NotFoundError(
-        absl::Substitute("Control port '$0' was not found in control switch "
-                         "to SUT P4RT port ID map.",
-                         control_port));
+    return absl::NotFoundError(absl::Substitute(
+        "Control port '$0' was not found among keys of control switch "
+        "to SUT P4RT port ID one-to-one map.",
+        control_port));
   }
   return it->second;
 }
@@ -104,10 +104,10 @@ MirrorTestbedP4rtPortIdMap::GetControlSwitchPortConnectedToSutPort(
                                     return control_sut_port.second == sut_port;
                                   });
   if (it == control_to_sut_port_map_->end()) {
-    return absl::NotFoundError(
-        absl::Substitute("SUT port '$0' was not found in control switch "
-                         "to control switch P4RT port ID map.",
-                         sut_port));
+    return absl::NotFoundError(absl::Substitute(
+        "SUT port '$0' was not found among values of control switch "
+        "to SUT P4RT port ID one-to-one map.",
+        sut_port));
   }
   return it->first;
 }
