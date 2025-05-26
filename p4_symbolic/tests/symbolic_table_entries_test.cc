@@ -18,14 +18,12 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/test_artifact_writer.h"
@@ -55,6 +53,8 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/packet_at_port.h"
 #include "z3++.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace p4_symbolic {
 namespace {

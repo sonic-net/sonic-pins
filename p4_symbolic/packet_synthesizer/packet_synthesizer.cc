@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -26,7 +27,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "google/protobuf/duration.pb.h"
 #include "gutil/status.h"
 #include "gutil/timer.h"
