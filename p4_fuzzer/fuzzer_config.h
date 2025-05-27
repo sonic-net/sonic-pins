@@ -31,6 +31,20 @@
 
 namespace p4_fuzzer {
 
+// Returns the fully qualified name of a match field.
+// Returns NOT_FOUND if `table_name` or `match_field_name` is not
+// found in `ir_p4info` or if the match field is not found in the table
+// definition in `ir_p4info`.
+absl::StatusOr<std::string> GetFullyQualifiedMatchFieldName(
+    const pdpi::IrP4Info& ir_p4info, const std::string& table_name,
+    const std::string& match_field_name);
+
+// Returns the fully qualified name of a match field.
+// Returns NOT_FOUND if the match field is not found in `table_def`.
+absl::StatusOr<std::string> GetFullyQualifiedMatchFieldName(
+    const pdpi::IrTableDefinition& table_def,
+    const pdpi::IrMatchFieldDefinition& match_field_def);
+
 struct ConfigParams {
   // -- Required ---------------------------------------------------------------
   // NOTE: These values are required for correct function. All of them are
@@ -67,8 +81,18 @@ struct ConfigParams {
   // Fully qualified names of tables, actions, or match fields to skip during
   // fuzzing. Match field names should be prepended with the relevant table name
   // to uniquely identify them.
-  // Users should ensure that any set that makes it impossible to generate a
-  // valid table entry for a particular table contains the table itself.
+  // - For a table, fully qualified name is preamble.name() in its P4Info table
+  //   definition.
+  // - For an action, fully qualified name is that action's preamble.name() in
+  //   its P4Info action definition.
+  // - For a match field, fully qualified name is <fully qualified name of
+  //   the table it belongs to>.<match field's name>
+  // Users are strongly encouraged to use the helper functions in
+  // fuzzer_config.h to get fully qualified names for match fields for the
+  // additional validation they provide.
+  // Users should ensure that any set that
+  // makes it impossible to generate a valid table entry for a particular table
+  // contains the table itself.
   // TODO: Check the property above instead.
   absl::flat_hash_set<std::string> disabled_fully_qualified_names;
   // TODO: Fully qualified names of tables that do not support

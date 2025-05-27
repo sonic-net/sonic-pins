@@ -2,10 +2,13 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "glog/logging.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
@@ -89,6 +92,43 @@ absl::Status CheckReferenceAssumptions(
   return absl::OkStatus();
 }
 }  // namespace
+
+absl::StatusOr<std::string> GetFullyQualifiedMatchFieldName(
+    const pdpi::IrP4Info& ir_p4info, const std::string& table_name,
+    const std::string& match_field_name) {
+  // P4Infos in pins_infra have been using the last component of a
+  // period-separated fully qualified table name as the table alias and IrP4Info
+  // uses table.preamble().alias() to index table definitions.
+  std::string table_alias =
+      std::vector<std::string>(absl::StrSplit(table_name, '.')).back();
+  if (!ir_p4info.tables_by_name().contains(table_alias)) {
+    return absl::NotFoundError(absl::StrCat("P4Info ", ir_p4info.DebugString(),
+                                            " does not contain table '",
+                                            table_name, "'."));
+  }
+  if (!ir_p4info.tables_by_name()
+           .at(table_alias)
+           .match_fields_by_name()
+           .contains(match_field_name)) {
+    return absl::NotFoundError(absl::StrCat("Table '", table_name,
+                                            "' does not contain match field '",
+                                            match_field_name, "'."));
+  }
+  return absl::StrCat(table_name, ".", match_field_name);
+}
+absl::StatusOr<std::string> GetFullyQualifiedMatchFieldName(
+    const pdpi::IrTableDefinition& table_def,
+    const pdpi::IrMatchFieldDefinition& match_field_def) {
+  if (!table_def.match_fields_by_name().contains(
+          match_field_def.match_field().name())) {
+    return absl::NotFoundError(
+        absl::StrCat("Table '", table_def.preamble().name(),
+                     "' does not contain match field '",
+                     match_field_def.match_field().name(), "'."));
+  }
+  return absl::StrCat(table_def.preamble().name(), ".",
+                      match_field_def.match_field().name());
+}
 
 absl::Status FuzzerConfig::CheckConstraintAssumptions() {
   for (const auto& [table_id, table] : ir_info_.tables_by_id()) {
