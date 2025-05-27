@@ -132,6 +132,52 @@ OutgoingConcreteTableReferencesTestCases() {
       )pb"),
       .description = "Fails if entity does not belong to source table",
   });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field {
+              p4_match_field { field_name: "missing_field" field_id: 7 }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description = "Fails if entity is missing non-optional field",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field { p4_match_field { field_name: "key_1" field_id: 1 } }
+          }
+          destination {
+            match_field {
+              p4_match_field { field_name: "optional_field" is_optional: true }
+            }
+          }
+        }
+      )pb"),
+      .description = "Fails if entity refers to optional field",
+  });
   // NOTE: Similar errors are encountered for the following:
   // P4MatchField-Refers-To-P4ActionField
   // P4MatchField-Refers-To-BuiltInActionField
@@ -206,6 +252,63 @@ OutgoingConcreteTableReferencesTestCases() {
       .description =
           "P4MatchField-Refers-To-P4MatchField reference creates a single "
           "concrete reference.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field {
+              p4_match_field {
+                field_name: "key1"
+                field_id: 1
+                is_optional: true
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description =
+          "P4MatchField-Refers-To-P4MatchField reference creates a single "
+          "concrete reference for present optional field.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field {
+              p4_match_field {
+                field_name: "optional_field"
+                field_id: 7
+                is_optional: true
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description = "P4MatchField-Refers-To-P4MatchField reference creates no "
+                     "concrete reference for absent optional field.",
   });
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = p4_entry,
@@ -422,6 +525,76 @@ OutgoingConcreteTableReferencesTestCases() {
           "single concrete reference.",
   });
   test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field { p4_match_field { field_name: "key1" field_id: 1 } }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+        field_references {
+          source {
+            match_field {
+              p4_match_field {
+                field_name: "key2"
+                field_id: 2
+                is_optional: true
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description = "Two P4MatchField-Refers-To-MatchField references "
+                     "including optional create a single concrete reference "
+                     "with 2 ConcreteFieldReferences if optional is present.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field { p4_match_field { field_name: "key1" field_id: 1 } }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+        field_references {
+          source {
+            match_field {
+              p4_match_field { field_name: "optional_field" is_optional: true }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description = "Two P4MatchField-Refers-To-MatchField references "
+                     "including optional create a single concrete reference "
+                     "with 1 ConcreteFieldReference if optional is absent.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = p4_group_entry_with_multiple_actions,
       .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
         source_table {
@@ -553,6 +726,94 @@ OutgoingConcreteTableReferencesTestCases() {
           "P4ActionField-Refers-To-MatchField references "
           "create a concrete reference for every action (including action with "
           "no reference info).",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_group_entry_with_multiple_actions,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_wcmp_table"
+            table_id: 37604604
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field {
+              p4_match_field {
+                field_name: "key1"
+                field_id: 1
+                is_optional: true
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+        field_references {
+          source {
+            action_field {
+              p4_action_field {
+                action_name: "golden_test_friendly_action"
+                action_id: 31939749
+                parameter_name: "arg1"
+                parameter_id: 1
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description =
+          "P4MatchField-Refers-To-MatchField + "
+          "P4ActionField-Refers-To-MatchField references including optional "
+          "create a concrete reference for every action (including action with "
+          "no reference info) if optional present.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_group_entry_with_multiple_actions,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table {
+          p4_table {
+            table_name: "golden_test_friendly_wcmp_table"
+            table_id: 37604604
+          }
+        }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            match_field {
+              p4_match_field { field_name: "optional_field" is_optional: true }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+        field_references {
+          source {
+            action_field {
+              p4_action_field {
+                action_name: "golden_test_friendly_action"
+                action_id: 31939749
+                parameter_name: "arg1"
+                parameter_id: 1
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description =
+          "P4MatchField-Refers-To-MatchField + "
+          "P4ActionField-Refers-To-MatchField references including optional "
+          "create a concrete reference for every action (except action with "
+          "no reference info) if optional absent.",
   });
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = built_in_entry_with_multiple_actions,
@@ -828,6 +1089,46 @@ PossibleIncomingConcreteTableReferencesTestCases() {
       )pb"),
       .description = "Fails if entity does not belong to destination table",
   });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { p4_table { table_name: "other_table" } }
+        destination_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        field_references {
+          source { match_field { p4_match_field { field_name: "some_field" } } }
+          destination {
+            match_field { p4_match_field { field_name: "missing_field" } }
+          }
+        }
+      )pb"),
+      .description = "Fails if referenced field is missing",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { p4_table { table_name: "other_table" } }
+        destination_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        field_references {
+          source { match_field { p4_match_field { field_name: "some_field" } } }
+          destination {
+            match_field {
+              p4_match_field { field_name: "key_1" is_optional: true }
+            }
+          }
+        }
+      )pb"),
+      .description = "Fails if referenced field is optional",
+  });
   // NOTE: Similar errors are encountered for the following:
   // P4ActionField-Referenced-By-P4MatchField
   // P4ActionField-Referenced-By-BuiltInMatchField
@@ -957,6 +1258,29 @@ PossibleIncomingConcreteTableReferencesTestCases() {
       .description =
           "BuiltInMatchField-Referenced-By-P4MatchField reference creates a "
           "single concrete reference.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = built_in_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { p4_table { table_name: "other_table" } }
+        destination_table {
+          built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+        }
+        field_references {
+          source {
+            match_field {
+              p4_match_field { field_name: "optional_field" is_optional: true }
+            }
+          }
+          destination {
+            match_field {
+              built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+            }
+          }
+        }
+      )pb"),
+      .description = "BuiltInMatchField-Referenced-By-OptionalP4MatchField "
+                     "reference creates a single concrete reference.",
   });
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = built_in_entry,
@@ -1135,6 +1459,55 @@ PossibleIncomingConcreteTableReferencesTestCases() {
         }
         field_references {
           source {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "key1" field_id: 1 } }
+          }
+        }
+        field_references {
+          source {
+            match_field {
+              p4_match_field {
+                field_name: "optional_field_1"
+                is_optional: true
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "key2" field_id: 2 } }
+          }
+        }
+        field_references {
+          source {
+            match_field {
+              p4_match_field {
+                field_name: "optional_field_2"
+                is_optional: true
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "key2" field_id: 2 } }
+          }
+        }
+      )pb"),
+      .description =
+          "Multi P4MatchField-Referenced-By-MatchField including "
+          "multiple optional references creates several concrete references.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { p4_table { table_name: "other_table" } }
+        destination_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        field_references {
+          source {
             action_field {
               p4_action_field { action_name: "action" parameter_name: "arg1" }
             }
@@ -1243,6 +1616,59 @@ PossibleIncomingConcreteTableReferencesTestCases() {
           "P4MatchField-Referenced-By-ActionField "
           "references from different actions create a concrete reference for "
           "every action plus an additional reference for match field only.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = p4_entry,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { p4_table { table_name: "other_table" } }
+        destination_table {
+          p4_table {
+            table_name: "golden_test_friendly_table"
+            table_id: 50151603
+          }
+        }
+        field_references {
+          source {
+            match_field {
+              p4_match_field { field_name: "optional_field" is_optional: true }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "key1" field_id: 1 } }
+          }
+        }
+        field_references {
+          source {
+            action_field {
+              p4_action_field {
+                action_name: "source_action"
+                parameter_name: "source_arg1"
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "key1" field_id: 1 } }
+          }
+        }
+        field_references {
+          source {
+            action_field {
+              p4_action_field {
+                action_name: "other_source_action"
+                parameter_name: "source_arg2"
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "key2" field_id: 2 } }
+          }
+        }
+      )pb"),
+      .description = "P4MatchField-Referenced-By-OptionalMatchField + Multi "
+                     "P4MatchField-Referenced-By-ActionField references from "
+                     "different actions create a concrete reference for "
+                     "every action plus additional copies including and not "
+                     "including the optional.",
   });
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = built_in_entry,
@@ -1480,6 +1906,126 @@ absl::Status PossibleIncomingConcreteTableReferencesTest() {
   return absl::OkStatus();
 }
 
+struct UnsatisfiedReferencesTestCase {
+  std::string description;
+  // PD representation of PI entity used to generate outgoing/possible-incoming
+  // table references. Valid entities must meet the following requirements:
+  // - Entity must be valid for main.p4 program.
+  pdpi::TableEntries entities;
+};
+
+std::vector<UnsatisfiedReferencesTestCase> UnsatisfiedReferencesTestCases() {
+  return {
+      UnsatisfiedReferencesTestCase{
+          .description = "Unsatisfied reference",
+          .entities = gutil::ParseProtoOrDie<pdpi::TableEntries>(R"pb(
+            entries {
+              refers_to_multicast_by_action_table_entry {
+                match { val: "dragon" }
+                action {
+                  refers_to_multicast_action { multicast_group_id: "0x0037" }
+                }
+                controller_metadata: "Has unsatisfied reference"
+              }
+            }
+          )pb")},
+      UnsatisfiedReferencesTestCase{
+          .description = "Satisfied and unsatisfied references",
+          .entities = gutil::ParseProtoOrDie<pdpi::TableEntries>(R"pb(
+            entries {
+              refers_to_multicast_by_action_table_entry {
+                match { val: "dragon" }
+                action {
+                  refers_to_multicast_action { multicast_group_id: "0x0037" }
+                }
+                controller_metadata: "References satisfied"
+              }
+            }
+            entries {
+              multicast_group_table_entry {
+                match { multicast_group_id: "0x0037" }
+                action {
+                  replicate {
+                    replicas { port: "some_port" instance: "0x0031" }
+                  }
+                }
+                metadata: "Has unsatisfied reference"
+              }
+            }
+          )pb")},
+      UnsatisfiedReferencesTestCase{
+          .description = "Satisfied references",
+          .entities = gutil::ParseProtoOrDie<pdpi::TableEntries>(R"pb(
+            entries {
+              refers_to_multicast_by_action_table_entry {
+                match { val: "dragon" }
+                action {
+                  refers_to_multicast_action { multicast_group_id: "0x0037" }
+                }
+                controller_metadata: "References satisfied"
+              }
+
+            }
+            entries {
+              multicast_group_table_entry {
+                match { multicast_group_id: "0x0037" }
+                action {
+                  replicate {
+                    replicas { port: "some_port" instance: "0x0031" }
+                  }
+                }
+                metadata: "References satisfied"
+              }
+            }
+            entries {
+              referenced_by_multicast_replica_table_entry {
+                match { port: "some_port" instance: "0x0031" }
+                action { do_thing_4 {} }
+                controller_metadata: "Has no references"
+              }
+            }
+          )pb")},
+  };
+}
+
+absl::Status UnsatisfiedReferencesTest() {
+  for (const auto& test_case : UnsatisfiedReferencesTestCases()) {
+    std::cout << TestHeader(absl::StrCat("UnsatisfiedReferences: ",
+                                         test_case.description))
+              << "\n";
+
+    std::cout << kInputBanner << "-- PD table entries --\n";
+    std::cout << gutil::PrintTextProto(test_case.entities) << "\n";
+
+    ASSIGN_OR_RETURN(
+        const std::vector<p4::v1::Entity> pi_entities,
+        PdTableEntriesToPiEntities(GetTestIrP4Info(), test_case.entities));
+
+    ASSIGN_OR_RETURN(
+        const std::vector<EntityWithUnsatisfiedReferences>
+            entity_with_unsatisfied_references,
+        UnsatisfiedOutgoingReferences(pi_entities, GetTestIrP4Info()));
+
+    std::cout << kOutputBanner;
+    if (entity_with_unsatisfied_references.empty()) {
+      std::cout << "<empty>\n\n";
+    } else {
+      for (const auto& entity_with_unsatisfied_references :
+           entity_with_unsatisfied_references) {
+        std::cout
+            << "-- Entity with Unsatisfied References --\n"
+            << gutil::PrintTextProto(entity_with_unsatisfied_references.entity)
+            << "-- Unsatisfied References--\n"
+            << absl::StrJoin(
+                   entity_with_unsatisfied_references.unsatisfied_references,
+                   "\n")
+            << "\n";
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
 void main(int argc, char** argv) {
   if (absl::Status test = OutgoingConcreteTableReferencesTest(); !test.ok()) {
     std::cout << "OutgoingConcreteTableReferencesTest failed.\n" << test;
@@ -1489,6 +2035,10 @@ void main(int argc, char** argv) {
       !test.ok()) {
     std::cout << "PossibleIncomingConcreteTableReferencesTest failed.\n"
               << test;
+  }
+
+  if (absl::Status test = UnsatisfiedReferencesTest(); !test.ok()) {
+    std::cout << "UnsatisfiedReferencesTest failed.\n" << test;
   }
 }
 
