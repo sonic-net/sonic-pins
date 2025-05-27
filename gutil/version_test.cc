@@ -17,9 +17,10 @@
 #include <sstream>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "gutil/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status_matchers.h"
 
 namespace gutil {
 namespace {
@@ -35,9 +36,9 @@ bool VersionToStringRoundTrips(const Version& version) {
 }
 
 bool StreamInsertionOperatorRoundTrips(const Version& version) {
-  std::ostringstream oss;
-  oss << version;
-  absl::StatusOr<Version> roundtripped_version = ParseVersion(oss.str());
+  std::ostringstream stream;
+  stream << version;
+  absl::StatusOr<Version> roundtripped_version = ParseVersion(stream.str());
   return roundtripped_version.ok() && *roundtripped_version == version;
 }
 
