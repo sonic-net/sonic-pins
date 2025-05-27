@@ -76,7 +76,10 @@ cc_library(
     srcs = ["p4rt_port.cc"],
     hdrs = ["p4rt_port.h"],
     deps = [
+        "//gutil:status",
+        "//p4_pdpi/string_encodings:byte_string",
         "//p4_pdpi/string_encodings:decimal_string",
+        "@com_google_absl//absl/numeric:bits",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -91,6 +94,8 @@ cc_test(
     deps = [
         ":p4rt_port",
         "//gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
     ],
 )
