@@ -23,14 +23,17 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "z3++.h"
@@ -294,29 +297,6 @@ absl::StatusOr<std::vector<z3::expr>> ConstructMatchConditions(
   return match_conditions;
 }
 
-// Constructs the transition guard for each transition given their
-// `match_conditions`. The transition guard of a given transition `i` is defined
-// as: `guard` && match_conditions[i] && (!match_conditions[j] for all j < i).
-// Namely, the match condition of the given transition `i` is true, while the
-// match conditions of all previous (higher-priority) transitions are false.
-// This ensures that the transition guards of all transitions from the same
-// parse state are mutual exclusive.
-std::vector<z3::expr> ConstructTransitionGuards(
-    const std::vector<z3::expr> &match_conditions, const z3::expr &guard) {
-  std::vector<z3::expr> transition_guards;
-  transition_guards.reserve(match_conditions.size());
-  z3::expr cumulative_reachability_condition = guard;
-
-  for (const auto &match_condition : match_conditions) {
-    transition_guards.push_back(cumulative_reachability_condition &&
-                                match_condition);
-    cumulative_reachability_condition =
-        cumulative_reachability_condition && (!match_condition);
-  }
-
-  return transition_guards;
-}
-
 // Constructs the fall-through guard. The fall-through guard encodes the path
 // condition where all previous transitions in a "select" expression did not get
 // matched with the transition key, which may happen, for example, in the
@@ -419,21 +399,55 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
   ASSIGN_OR_RETURN(
       std::vector<z3::expr> match_conditions,
       ConstructMatchConditions(parse_state, headers, z3_context, guard));
-  // Construct the transition guard of each transition.
-  std::vector<z3::expr> transition_guards =
-      ConstructTransitionGuards(match_conditions, guard);
 
   const std::string &merge_point =
       parse_state.optimized_symbolic_execution_info().merge_point();
 
+  // Create a SymbolicPerPacketState (local map) for each transition choice.
+  // Duplicate existing headers (incoming) to individual local headers
+  // for each transition choice.
+  std::vector<SymbolicPerPacketState> local_headers_per_transition(
+      match_conditions.size(), headers);
+
   // Evaluate each next state that is not the merge point.
-  for (size_t i = 0; i < transition_guards.size(); ++i) {
+  for (size_t i = 0; i < match_conditions.size(); ++i) {
     ASSIGN_OR_RETURN(std::string next_state,
                      GetNextState(parse_state.transitions(i)));
     if (next_state != merge_point) {
-      RETURN_IF_ERROR(EvaluateParseState(program, parser, next_state, headers,
-                                         z3_context, transition_guards[i]));
+      // We pass `true` as the guard expression here (effectively no guard).
+      // The proper guard is applied during the merge process (see below).
+      RETURN_IF_ERROR(EvaluateParseState(
+          program, parser, next_state, local_headers_per_transition[i],
+          z3_context, z3_context.bool_val(true)));
     }
+  }
+
+  // Merge process:
+  // Iterate through each field and merge the results of each transition.
+  // The merge is done using the following formula
+  // (for every field in the header):
+  // resulting_header_field_value =
+  //   if match_conditions[0]
+  //     then local_header_per_transition[0].Get(field)
+  //     else if match_conditions[1]
+  //       then local_header_per_transition[1].Get(field)
+  //       else ...
+  //         ...
+  //         else local_header_per_transition[n].Get(field)
+  // At the end, the resulting_header_field_value is assigned to the
+  // field in the resulting header.
+  for (const auto &[field, _] : headers) {
+    ASSIGN_OR_RETURN(z3::expr resulting_header_field_value, headers.Get(field));
+
+    for (int row = match_conditions.size() - 1; row >= 0; row--) {
+      ASSIGN_OR_RETURN(z3::expr local_header_field_value,
+                       local_headers_per_transition[row].Get(field));
+      ASSIGN_OR_RETURN(
+          resulting_header_field_value,
+          operators::Ite(match_conditions.at(row), local_header_field_value,
+                         resulting_header_field_value));
+    }
+    RETURN_IF_ERROR(headers.Set(field, resulting_header_field_value, guard));
   }
 
   z3::expr merge_point_guard = guard;
@@ -479,6 +493,73 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
   }
 }
 
+absl::Status EvaluateParseStateDfs(
+    const ir::P4Program &program, const ir::Parser &parser,
+    const std::string &state_name, SymbolicPerPacketState &headers,
+    z3::context &z3_context, SolverState &state,
+    packet_synthesizer::PacketSynthesisResults &results) {
+  // Base case. We got to the end of the parser execution path.
+  if (state_name == ir::EndOfParser()) {
+    // At the end of the parser pipeline for a particular path in the parser,
+    // the execution moves to the "ingress" pipeline.
+    // The "ingress" pipeline is the evaluated with the current parser path
+    // and the current headers packet state.
+    RETURN_IF_ERROR(
+        control::EvaluatePipelineDfs("ingress", state, headers, results));
+    return absl::OkStatus();
+  }
+
+  // Get the parse state with the given state name.
+  auto it = parser.parse_states().find(state_name);
+  if (it == parser.parse_states().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Parse state not found: " << state_name;
+  }
+
+  const ir::ParseState &parse_state = it->second;
+
+  // We evaluate a parse state by first evaluating all the parser operations
+  // defined in this state.
+
+  // Evaluate the parser operations in this parse state.
+  action::ActionContext fake_context = {state_name, {}};
+  for (const ir::ParserOperation &op : parse_state.parser_ops()) {
+    RETURN_IF_ERROR(EvaluateParserOperation(program, op, headers, fake_context,
+                                            z3_context,
+                                            z3_context.bool_val(true)));
+  }
+
+  // Construct the match condition of each transition.
+  ASSIGN_OR_RETURN(std::vector<z3::expr> match_conditions,
+                   ConstructMatchConditions(parse_state, headers, z3_context,
+                                            z3_context.bool_val(true)));
+
+  // Evaluate every parser transition one-by-one.
+  // For every transition, the match condition is added to the
+  // solver state to check if the path (with this transition) is satisfiable.
+  // If there is no solution, then the transition is not evaluated
+  // and the path following this transition is pruned and the execution
+  // moves to the next transition.
+  // If the path is valid (a solution exists), then the execution moves to the
+  // next transition.
+  state.solver->push();
+  for (size_t i = 0; i < match_conditions.size(); ++i) {
+    ASSIGN_OR_RETURN(std::string next_state,
+                     GetNextState(parse_state.transitions(i)));
+    state.solver->push();
+    state.solver->add(match_conditions[i]);
+    auto prune = (state.solver->check() == z3::unsat);
+    if (!prune) {
+      RETURN_IF_ERROR(EvaluateParseStateDfs(
+          program, parser, next_state, headers, z3_context, state, results));
+    }
+    state.solver->pop();
+  }
+  state.solver->pop();
+
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
@@ -516,6 +597,27 @@ absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
                                      parsed_headers, z3_context,
                                      z3_context.bool_val(true)));
   return parsed_headers;
+}
+
+absl::Status EvaluateParsersDfs(
+    const ir::P4Program &program, const SymbolicPerPacketState &headers,
+    z3::context &z3_context, SolverState &state,
+    packet_synthesizer::PacketSynthesisResults &results) {
+  // Make sure there is exactly one parser in the P4-Symbolic IR.
+  if (program.parsers_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid number of parsers: " << program.parsers_size();
+  }
+
+  // Duplicate the symbolic headers for evaluating the parsers. This is to
+  // preserve the symbolic state of the ingress packet before entering the
+  // parsers.
+  SymbolicPerPacketState parsed_headers = headers;
+  const ir::Parser &parser = program.parsers().begin()->second;
+  RETURN_IF_ERROR(EvaluateParseStateDfs(program, parser, parser.initial_state(),
+                                        parsed_headers, z3_context, state,
+                                        results));
+  return absl::OkStatus();
 }
 
 }  // namespace p4_symbolic::symbolic::parser

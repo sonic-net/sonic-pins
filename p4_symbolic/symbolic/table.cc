@@ -47,7 +47,7 @@
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -582,26 +582,33 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
 
   // Build each entry's assignment/effect guard by negating
   // higher priority entries.
+  // The accumulator guard and the current guard are simplified at every step
+  // for better performance (go/p4-symbolic-simplify).
   z3::expr default_entry_assignment_guard = guard;
   std::vector<z3::expr> assignment_guards;
   if (!entries_matches.empty()) {
     ASSIGN_OR_RETURN(z3::expr current_guard,
                      operators::And(guard, entries_matches.at(0)));
+    current_guard = current_guard.simplify();
     ASSIGN_OR_RETURN(z3::expr accumulator_guard,
                      operators::Not(entries_matches.at(0)));
+    accumulator_guard = accumulator_guard.simplify();
     assignment_guards.push_back(current_guard);
     for (size_t i = 1; i < entries_matches.size(); i++) {
       ASSIGN_OR_RETURN(z3::expr tmp, operators::And(guard, accumulator_guard));
       ASSIGN_OR_RETURN(current_guard,
                        operators::And(tmp, entries_matches.at(i)));
+      current_guard = current_guard.simplify();
       ASSIGN_OR_RETURN(tmp, operators::Not(entries_matches.at(i)));
       ASSIGN_OR_RETURN(accumulator_guard,
                        operators::And(accumulator_guard, tmp));
+      accumulator_guard = accumulator_guard.simplify();
       assignment_guards.push_back(current_guard);
     }
     ASSIGN_OR_RETURN(
         default_entry_assignment_guard,
         operators::And(default_entry_assignment_guard, accumulator_guard));
+    default_entry_assignment_guard = default_entry_assignment_guard.simplify();
   }
 
   // Build a TableEntry object for the default entry.
@@ -664,9 +671,11 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
             action == ir::TableHitAction()
                 ? (match_index != kDefaultActionEntryIndex)
                 : (match_index == kDefaultActionEntryIndex);
-        ASSIGN_OR_RETURN(SymbolicTableMatches branch_matches,
-                         control::EvaluateControl(next_control, state, headers,
-                                                  guard && branch_condition));
+        z3::expr next_guard = guard && branch_condition;
+        next_guard = next_guard.simplify();
+        ASSIGN_OR_RETURN(
+            SymbolicTableMatches branch_matches,
+            control::EvaluateControl(next_control, state, headers, next_guard));
         ASSIGN_OR_RETURN(merged_matches,
                          util::MergeMatchesOnCondition(
                              branch_condition, branch_matches, merged_matches,
@@ -708,6 +717,94 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   }
 
   return result;
+}
+
+// Evaluate Table using DFS style symbolic execution
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluateTableDfs(
+    const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
+    const std::string &pipeline_name,
+    packet_synthesizer::PacketSynthesisResults &results) {
+  const std::string &table_name = table.table_definition().preamble().name();
+
+  // Sort entries by priority deduced from match types.
+  std::vector<ir::TableEntry> sorted_entries;
+  if (auto it = state.context.table_entries.find(table_name);
+      it != state.context.table_entries.end()) {
+    sorted_entries = SortedEntries(table, it->second);
+  }
+
+  // Find all entries match conditions.
+  std::vector<z3::expr> entries_matches;
+  for (const auto &entry : sorted_entries) {
+    ASSIGN_OR_RETURN(z3::expr entry_match,
+                     EvaluateTableEntryCondition(table, entry, state, headers));
+    entries_matches.push_back(entry_match);
+  }
+
+  // Build a TableEntry object for the default entry.
+  ir::TableEntry default_entry;
+  default_entry.mutable_concrete_entry()->set_index(kDefaultActionEntryIndex);
+
+  auto &default_action = *default_entry.mutable_concrete_entry()
+                              ->mutable_pdpi_ir_entity()
+                              ->mutable_table_entry()
+                              ->mutable_action();
+  default_action.set_name(table.table_implementation().default_action());
+  for (const std::string &parameter_value :
+       table.table_implementation().default_action_parameters()) {
+    ASSIGN_OR_RETURN(*default_action.add_params()->mutable_value(),
+                     values::ParseIrValue(parameter_value));
+  }
+
+  // Evaluate every table entry one-by-one.
+  // For every table entry, the match condition is added to the
+  // solver state to check if the path (with this entry) is satisfiable.
+  // If there is no solution, then the table entry is not evaluated
+  // and the path following this table entry is pruned and the execution
+  // moves to the next entry.
+  // If the path is valid (a solution exists), then the execution moves to the
+  // next control point.
+  state.solver->push();
+  for (int row = 0; row < sorted_entries.size(); row++) {
+    // DFS style symbolic execution for every table entry.
+    state.solver->push();
+    state.solver->add(entries_matches.at(row));
+    auto prune = (state.solver->check() == z3::unsat);
+    if (!prune) {
+      auto local_headers = headers;
+      RETURN_IF_ERROR(EvaluateTableEntryAction(
+          table, sorted_entries.at(row), state, local_headers,
+          state.context.z3_context->bool_val(true)));
+      auto next_control = table.table_implementation()
+                              .optimized_symbolic_execution_info()
+                              .merge_point();
+      RETURN_IF_ERROR(control::EvaluateControlDfs(
+          next_control, state, local_headers, pipeline_name, results));
+    }
+    state.solver->pop();
+    ASSIGN_OR_RETURN(z3::expr not_match,
+                     operators::Not(entries_matches.at(row)));
+    state.solver->add(not_match);
+  }
+  // Finally, the DFS-style symbolic execution
+  // is done for the default entry as well.
+  auto prune = (state.solver->check() == z3::unsat);
+  if (!prune) {
+    auto local_headers = headers;
+    RETURN_IF_ERROR(
+        EvaluateTableEntryAction(table, default_entry, state, local_headers,
+                                 state.context.z3_context->bool_val(true)));
+    auto next_control = table.table_implementation()
+                            .optimized_symbolic_execution_info()
+                            .merge_point();
+    RETURN_IF_ERROR(control::EvaluateControlDfs(
+        next_control, state, local_headers, pipeline_name, results));
+  }
+  state.solver->pop();
+
+  return absl::OkStatus();
 }
 
 }  // namespace table

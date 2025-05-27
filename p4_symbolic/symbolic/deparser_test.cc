@@ -28,6 +28,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/test_util.h"

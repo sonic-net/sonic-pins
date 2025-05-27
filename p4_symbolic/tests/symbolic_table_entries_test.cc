@@ -401,13 +401,19 @@ TEST_F(SymbolicTableEntriesSaiTest, OneSymbolicEntryPerTable) {
 
   // Define criteria to hit certain tables while having the packet forwarded.
   symbolic::Assertion criteria =
-      [&](const symbolic::SymbolicContext& ctx) -> z3::expr {
+      [&](const symbolic::SymbolicContext& ctx) -> absl::StatusOr<z3::expr> {
+    ASSIGN_OR_RETURN(
+        z3::expr recirculated,
+        ctx.egress_headers.Get(symbolic::kGotRecirculatedPseudoField));
     return acl_pre_ingress_table.matched &&
            acl_pre_ingress_table.entry_index == 0 && ipv4_table.matched &&
            ipv4_table.entry_index == 0 && l3_admit_table.matched &&
            l3_admit_table.entry_index == 0 && neighbor_table.matched &&
            neighbor_table.entry_index == 0 && !ctx.trace.dropped &&
-           ctx.egress_port == 2;
+           ctx.egress_port == 2 &&
+           // Otherwise the drop expectation may be inconsistent with BMv2
+           // (b/345589897).
+           !recirculated;
   };
   EXPECT_OK(artifact_writer_.StoreTestArtifact(
       "criteria.smt.txt", symbolic::DebugSMT(state, criteria)));
@@ -550,10 +556,16 @@ TEST_F(SymbolicTableEntriesSaiTest, MixtureOfSymbolicAndConcreteEntries) {
   // Define criteria to hit all concrete entries while having the packet
   // forwarded.
   symbolic::Assertion criteria =
-      [&](const symbolic::SymbolicContext& ctx) -> z3::expr {
+      [&](const symbolic::SymbolicContext& ctx) -> absl::StatusOr<z3::expr> {
+    ASSIGN_OR_RETURN(
+        z3::expr recirculated,
+        ctx.egress_headers.Get(symbolic::kGotRecirculatedPseudoField));
     return router_interface_table.matched &&
            router_interface_table.entry_index == 0 && neighbor_table.matched &&
-           neighbor_table.entry_index == 0 && !ctx.trace.dropped;
+           neighbor_table.entry_index == 0 && !ctx.trace.dropped &&
+           // Otherwise the drop expectation may be inconsistent with BMv2
+           // (b/345589897).
+           !recirculated;
   };
   EXPECT_OK(artifact_writer_.StoreTestArtifact(
       "criteria.smt.txt", symbolic::DebugSMT(state, criteria)));
@@ -671,9 +683,15 @@ TEST_F(SymbolicTableEntriesSaiTest, OneSymbolicEntryPerTableWithTunnelDecap) {
 
   // Define criteria to hit certain tables while having the packet forwarded.
   symbolic::Assertion criteria =
-      [&](const symbolic::SymbolicContext& ctx) -> z3::expr {
+      [&](const symbolic::SymbolicContext& ctx) -> absl::StatusOr<z3::expr> {
+    ASSIGN_OR_RETURN(
+        z3::expr recirculated,
+        ctx.egress_headers.Get(symbolic::kGotRecirculatedPseudoField));
     return tunnel_termination_table.matched &&
-           tunnel_termination_table.entry_index == 0 && !ctx.trace.dropped;
+           tunnel_termination_table.entry_index == 0 && !ctx.trace.dropped &&
+           // Otherwise the drop expectation may be inconsistent with BMv2
+           // (b/345589897).
+           !recirculated;
   };
   EXPECT_OK(artifact_writer_.StoreTestArtifact(
       "criteria.smt.txt", symbolic::DebugSMT(state, criteria)));

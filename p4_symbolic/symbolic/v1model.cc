@@ -25,18 +25,20 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/guarded_map.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/parser.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model_intrinsic.h"
 #include "p4_symbolic/symbolic/values.h"
@@ -341,6 +343,42 @@ absl::Status EvaluateV1model(SolverState &state,
   ASSIGN_OR_RETURN(context.egress_port,
                    context.egress_headers.Get("standard_metadata.egress_spec"));
   return absl::OkStatus();
+}
+
+// The V1 Model is evaluated using DFS-style symbolic execution
+// and the test packets are generated at the end of the execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::StatusOr<packet_synthesizer::PacketSynthesisResults>
+EvaluateV1modelAndSynthesizePacketsCoveringAllControlFlowPaths(
+    SolverState &state, const std::vector<int> &physical_ports) {
+  SymbolicContext &context = state.context;
+
+  // Check input physical ports.
+  RETURN_IF_ERROR(CheckPhysicalPortsConformanceToV1Model(physical_ports));
+
+  // The ingress headers represent the symbolic ingress packet before entering
+  // the parsers or the pipelines. It contains an unconstrained symbolic
+  // variable for each header field.
+  SymbolicPerPacketState headers;
+  ASSIGN_OR_RETURN(headers, SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                                *context.z3_context, state.program.headers()));
+  // Initialize the symbolic ingress packet before evaluation.
+  RETURN_IF_ERROR(
+      InitializeIngressHeaders(state.program, headers, *context.z3_context));
+
+  // Evaluate all parsers in the P4 program.
+  // Because we are using a DFS-style symbolic execution methodology,
+  // the "ingress" pipeline is evaluated after every path in the parser
+  // pipeline and the "egress" pipeline is evaluated at the end of
+  // every path in the "parser-ingress" pipeline.
+  // The packets are synthesized at the end of "egress" pipeline and
+  // added to results.
+  packet_synthesizer::PacketSynthesisResults results;
+  RETURN_IF_ERROR(parser::EvaluateParsersDfs(
+      state.program, headers, *context.z3_context, state, results));
+
+  return results;
 }
 
 }  // namespace v1model

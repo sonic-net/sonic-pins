@@ -18,6 +18,34 @@ enum class NonstandardPlatform {
   kP4Symbolic,
 };
 
+inline absl::flat_hash_map<NonstandardPlatform, std::string>
+NonstandardPlatformNames() {
+  return {
+      {NonstandardPlatform::kBmv2, "bmv2"},
+      {NonstandardPlatform::kP4Symbolic, "p4_symbolic"},
+  };
+}
+
+// Returns a vector of all nonstandard platforms.
+inline std::vector<NonstandardPlatform> AllNonstandardPlatforms() {
+  const auto platform_names = NonstandardPlatformNames();
+  std::vector<NonstandardPlatform> platforms;
+  platforms.reserve(platform_names.size());
+  for (const auto& p : platform_names) platforms.push_back(p.first);
+  return platforms;
+}
+
+// Parses an NonstandardPlatform from the command line flag value
+// `platform_name`. Returns true and sets `*platform` on success;
+// returns false and sets `*error` on failure.
+// See https://abseil.io/docs/cpp/guides/flags#validating-flag-values for more
+// information.
+bool AbslParseFlag(absl::string_view platform_name,
+                   NonstandardPlatform* platform, std::string* error);
+
+// Returns a textual flag value corresponding to the given platform.
+std::string AbslUnparseFlag(NonstandardPlatform platform);
+
 // Returns the name of the given platform.
 std::string PlatformName(NonstandardPlatform platform);
 

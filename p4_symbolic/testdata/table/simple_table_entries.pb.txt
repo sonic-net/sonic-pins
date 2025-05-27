@@ -1,0 +1,359 @@
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x01"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x02"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\02"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x03"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\03"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x04"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\04"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x05"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\05"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x06"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\06"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x07"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\07"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x08"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\10"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x09"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\11"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x10"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\12"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x11"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\13"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x12"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\14"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x13"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\15"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x14"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\16"
+          }
+        }
+      }
+    }
+  }
+}
+
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44621953  # MyIngress.t
+      match {
+        field_id: 1  # hdr.h1.fr
+        exact {
+          value: "\x15"
+        }
+      }
+      action {
+        action {
+          action_id: 23754841  # MyIngress.a1
+          params {
+            param_id: 1  # port
+            value: "\17"
+          }
+        }
+      }
+    }
+  }
+}

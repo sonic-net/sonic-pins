@@ -15,18 +15,22 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_DEPARSER_H_
 #define P4_SYMBOLIC_SYMBOLIC_DEPARSER_H_
 
+#include <optional>
 #include <string>
 
 #include "absl/status/statusor.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 
 // Deparses the ingress packet from the given symbolic solver `state` into a
-// byte string, using values according to the given `model`.
+// byte string, using values according to the given `model` and headers state
+// either from the context or the passed headers.
 absl::StatusOr<std::string> DeparseIngressPacket(
-    const symbolic::SolverState& state, const z3::model& model);
+    const symbolic::SolverState& state, const z3::model& model,
+    std::optional<symbolic::SymbolicPerPacketState> headers = std::nullopt);
 
 // Deparses the egress packet from the given symbolic solver `state` into a byte
 // string, using values according to the given `model`.

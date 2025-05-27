@@ -16,14 +16,12 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -34,135 +32,22 @@
 #include "gutil/timer.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/packet_synthesizer/util.h"
-#include "p4_symbolic/sai/sai.h"
-#include "p4_symbolic/symbolic/deparser.h"
+#include "p4_symbolic/packet_synthesizer/z3_model_to_packet.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
-#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic::packet_synthesizer {
 namespace {
 
 using ::p4_symbolic::symbolic::SolverState;
-
-// Given a Z3 model, prepares a SynthesizedPacket by extracting the relevant
-// fields from the model. The packet payload will be set to the contents of
-// `packet_payload` parameter.
-absl::StatusOr<SynthesizedPacket> SynthesizePacketFromZ3Model(
-    const SolverState& solver_state, absl::string_view packet_payload,
-    std::optional<bool> should_be_dropped) {
-  z3::model model = solver_state.solver->get_model();
-  ASSIGN_OR_RETURN(std::string packet,
-                   DeparseIngressPacket(solver_state, model));
-  ASSIGN_OR_RETURN(const bool dropped,
-                   EvalZ3Bool(solver_state.context.trace.dropped, model));
-  if (should_be_dropped.has_value() && dropped != *should_be_dropped) {
-    return absl::FailedPreconditionError(absl::Substitute(
-        "Z3 model's drop prediction ($0) is inconsistent with the expectation "
-        "($1)",
-        dropped ? "drop" : "no drop", *should_be_dropped ? "drop" : "no drop"));
-  }
-  ASSIGN_OR_RETURN(const bool got_cloned,
-                   EvalZ3Bool(solver_state.context.trace.got_cloned, model));
-
-  // TODO: Remove this hack once we do not need to test older P4
-  // programs that still use 'mirror_session_id_valid' metadata. Get mirrored
-  // from the model.
-  absl::StatusOr<std::string> mirror_session_id_valid_field_name =
-      GetUserMetadataFieldName("mirror_session_id_valid",
-                               solver_state.context.egress_headers);
-  absl::StatusOr<std::string> marked_to_mirror_field_name =
-      GetUserMetadataFieldName("marked_to_mirror",
-                               solver_state.context.egress_headers);
-  bool mirrored = false;
-
-  if (mirror_session_id_valid_field_name.ok()) {
-    ASSIGN_OR_RETURN(z3::expr mirror_session_id_valid,
-                     solver_state.context.egress_headers.Get(
-                         *mirror_session_id_valid_field_name));
-    ASSIGN_OR_RETURN(mirrored, EvalZ3Bool(mirror_session_id_valid == 1, model));
-  } else if (marked_to_mirror_field_name.ok()) {
-    ASSIGN_OR_RETURN(
-        z3::expr marked_to_mirror,
-        solver_state.context.egress_headers.Get(*marked_to_mirror_field_name));
-    ASSIGN_OR_RETURN(mirrored, EvalZ3Bool(marked_to_mirror == 1, model));
-  } else {
-    return absl::InvalidArgumentError(
-        "Unable to get mirror-related metadata, neither "
-        "`mirror_session_id_valid` "
-        "nor `marked_to_mirror`, from egress_headers.");
-  }
-
-  // Get ingress port from the model.
-  ASSIGN_OR_RETURN(std::string local_metadata_ingress_port,
-                   GetLocalMetadataIngressPortFromModel(solver_state));
-
-  // TODO: p4-symbolic might miss that
-  // local_metadata.ingress_port is p4runtime_translated. In such cases,
-  // p4-symbolic returns the raw Z3 bitvector value. As a hacky workaround,
-  // we assign the empty string ("") as the ingress port for such cases,
-  // signaling that no port is picked by the test generator. Note
-  // that we currently assume that local_metadata.ingress_port is a
-  // decimal string in normal cases.
-  if (absl::StartsWith(local_metadata_ingress_port, "#")) {
-    // Z3 raw value is detected.
-    local_metadata_ingress_port = "";
-  }
-
-  // Set packet payload.
-  // TODO: Move this logic to the client.
-  {
-    packetlib::Packet parsed_packet = packetlib::ParsePacket(packet);
-    RET_CHECK(parsed_packet.payload().empty())
-        << "where parsed_packet = " << parsed_packet.DebugString();
-  }
-  absl::StrAppend(&packet, packet_payload);
-
-  SynthesizedPacket synthesized_packet;
-  *synthesized_packet.mutable_packet() = packet;
-  *synthesized_packet.mutable_debug_info()
-       ->mutable_possibly_stale_parsed_version_of_packet() =
-      packetlib::ParsePacket(packet);
-  // Note that we get local_metadata.ingress_port as opposed to
-  // standard_metadata.ingress_port because the former is how the
-  // controller views the ports. Refer to
-  // third_party/pins_infra/sai_p4/fixed/metadata.p4 for more info.
-  synthesized_packet.set_ingress_port(local_metadata_ingress_port);
-  // Currently, p4-symbolic has no generic, built-in support for
-  // predicting whether a packet gets dropped and/or punted to the
-  // controller. As a workaround, we hard-code some program-specific
-  // predictions here; they may break in the future when the program
-  // changes.
-  //
-  // The hard-coded predictions work as follows:
-  // - We predict that a packet gets dropped iff (i) it got
-  //   `mark_to_drop`'ed in the P4 program and (ii) it did not get
-  //   mirrored. Criterion (ii) is needed because mirrored packets are
-  //   not considered dropped, for the purposes of dataplane test.
-  // - We predict that a packet gets punted iff (i) it got cloned in
-  //   the P4 program and (ii) it did not get mirrored. Criterion (ii)
-  //   is needed because mirroring is implemented through cloning, but
-  //   mirrored packets are not considered "punted" (as they are
-  //   forwarded in the dataplane). Luckily we know that mirrored
-  //   packets never get punted, so the prediction should be sound.
-  //
-  // TODO: these hard-coded predictions are major tech debt
-  // that has led to hard-to-debug problems in the past; replacing
-  // them with sound, generic predictions is high priority.
-  synthesized_packet.set_drop_expected(dropped && !mirrored);
-  synthesized_packet.set_punt_expected(got_cloned && !mirrored);
-  synthesized_packet.set_mirror_expected(mirrored);
-
-  return synthesized_packet;
-}
 
 // Adds logical assertions corresponding to the given `criteria` (for packet
 // input header) to `solver_state`.
@@ -269,6 +154,43 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
   // SMT formula corresponding to the inputs (P4 program, entries, etc.) passed
   // to Create.
   return absl::WrapUnique(new PacketSynthesizer(std::move(*solver_state)));
+}
+
+// Performs DFS based symbolic execution
+// and synthesizes packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::StatusOr<PacketSynthesisResults>
+PacketSynthesizer::SynthesizePacketsForPathCoverage(
+    const PacketSynthesisParams& params) {
+  gutil::Timer timer;
+
+  // Extract data from params.
+  const p4::v1::ForwardingPipelineConfig& config = params.pipeline_config();
+  std::vector<p4::v1::Entity> entities(params.pi_entities().begin(),
+                                       params.pi_entities().end());
+  std::vector<int> physical_ports(params.physical_port().begin(),
+                                  params.physical_port().end());
+  symbolic::TranslationPerType translation_per_type;
+  for (const auto& [type_name, data] : params.translation_per_type()) {
+    symbolic::values::TranslationData translation;
+    translation.dynamic_translation = data.dynamic_translation();
+    for (const auto& mapping : data.static_mapping()) {
+      translation.static_mapping.push_back(
+          {mapping.string_value(), mapping.integer_value()});
+    }
+    translation_per_type.insert({type_name, translation});
+  }
+
+  // Evaluate P4 pipeline to get solver_state.
+  ASSIGN_OR_RETURN(
+      auto packet_synthesis_results,
+      symbolic::
+          EvaluateP4ProgramAndSynthesizePacketsCoveringAllControlFlowPaths(
+              config, entities, physical_ports, translation_per_type));
+
+  LOG(INFO) << "Evaluated and Synthesized packets in " << timer.GetDuration();
+
+  return packet_synthesis_results;
 }
 
 absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(

@@ -57,19 +57,17 @@
 (egress) standard_metadata.deq_qdepth: #b0000000000000000000
 (egress) standard_metadata.deq_timedelta: #x00000000
 (egress) standard_metadata.egress_global_timestamp: #x000000000000
-(egress) standard_metadata.egress_port: (let ((a!1 (= (ite (and true
-                        true
-                        (= standard_metadata.ingress_port #b000000000))
+(egress) standard_metadata.egress_port: (let ((a!1 (= (ite (and true (= standard_metadata.ingress_port #b000000000))
                    #b000000001
                    #b000000000)
               #b111111111)))
   (ite (not a!1)
-       (ite (and true true (= standard_metadata.ingress_port #b000000000))
+       (ite (and true (= standard_metadata.ingress_port #b000000000))
             #b000000001
             #b000000000)
        standard_metadata.egress_port))
 (egress) standard_metadata.egress_rid: #x0000
-(egress) standard_metadata.egress_spec: (ite (and true true (= standard_metadata.ingress_port #b000000000))
+(egress) standard_metadata.egress_spec: (ite (and true (= standard_metadata.ingress_port #b000000000))
      #b000000001
      #b000000000)
 (egress) standard_metadata.enq_qdepth: #b0000000000000000000
@@ -90,11 +88,10 @@
  (let (($x19 (= standard_metadata.ingress_port (_ bv1 9))))
  (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x19)))
 (assert
- (let (($x10 (= standard_metadata.ingress_port (_ bv0 9))))
- (let (($x22 (and true $x10)))
- (let (($x17 (and true $x22)))
- (let ((?x38 (ite $x17 (_ bv1 9) (_ bv0 9))))
- (let (($x42 (or (or false (= ?x38 (_ bv0 9))) (= ?x38 (_ bv1 9)))))
- (let (($x29 (= ?x38 (_ bv511 9))))
- (or $x29 $x42))))))))
+ (let (($x25 (= standard_metadata.ingress_port (_ bv0 9))))
+ (let (($x10 (and true $x25)))
+ (let ((?x32 (ite $x10 (_ bv1 9) (_ bv0 9))))
+ (let (($x42 (or (or false (= ?x32 (_ bv0 9))) (= ?x32 (_ bv1 9)))))
+ (let (($x34 (= ?x32 (_ bv511 9))))
+ (or $x34 $x42)))))))
 (check-sat)

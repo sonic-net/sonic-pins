@@ -56,6 +56,9 @@ class PacketSynthesizer {
   static absl::StatusOr<std::unique_ptr<PacketSynthesizer>> Create(
       const PacketSynthesisParams& params);
 
+  static absl::StatusOr<PacketSynthesisResults>
+  SynthesizePacketsForPathCoverage(const PacketSynthesisParams& params);
+
   // Attempts to synthesize and return a packet (if any) for the given
   // `criteria`.
   absl::StatusOr<PacketSynthesisResult> SynthesizePacket(

@@ -27,11 +27,13 @@
 #ifndef P4_FUZZER_FUZZ_UTIL_H_
 #define P4_FUZZER_FUZZ_UTIL_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
@@ -232,17 +234,21 @@ int FuzzModifiableTableId(absl::BitGen *gen, const FuzzerConfig &config,
 
 // Randomly generates a table entry that conforms to the given table info.
 // The p4 info is used to lookup action references. See go/p4-fuzzer-design for
-// details about which TableEntry values are valid.
-// May fail if a reference to another table is required.
-absl::StatusOr<p4::v1::TableEntry>
-FuzzValidTableEntry(absl::BitGen *gen, const FuzzerConfig &config,
-                    const SwitchState &switch_state,
-                    const pdpi::IrTableDefinition &ir_table_info);
+// details about which TableEntry values are valid. Additional constraints that
+// aren't in the p4 program can be added by passing in a P4-constraint string to
+// `additional_constraint`. May fail if a reference to another table is
+// required.
+absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrTableDefinition& ir_table_info,
+    std::optional<absl::string_view> additional_constraint = std::nullopt);
 
 // Same as above, but for a table_id.
-absl::StatusOr<p4::v1::TableEntry>
-FuzzValidTableEntry(absl::BitGen *gen, const FuzzerConfig &config,
-                    const SwitchState &switch_state, const uint32_t table_id);
+absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state, const uint32_t table_id,
+    std::optional<absl::string_view> additional_constraint = std::nullopt);
 
 // Randomly generates a multicast group entry. May fail if a reference to
 // another table is required.

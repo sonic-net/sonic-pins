@@ -91,3 +91,9 @@ message PacketSynthesisCriteriaAndResult {
   PacketSynthesisCriteria criteria = 1;
   PacketSynthesisResult result = 2;
 }
+
+// Stores all the packet synthesis results
+// synthesized during path coverage (go/p4-symbolic-path-coverage).
+message PacketSynthesisResults {
+  repeated PacketSynthesisResult results = 1;
+}

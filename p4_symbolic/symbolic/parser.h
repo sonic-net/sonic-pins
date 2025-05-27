@@ -15,8 +15,14 @@
 #ifndef PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_
 #define PINS_P4_SYMBOLIC_SYMBOLIC_PARSER_H_
 
+#include <string>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -43,6 +49,14 @@ absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
 absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
     const ir::P4Program &program, const SymbolicPerPacketState &ingress_headers,
     z3::context &z3_context);
+
+// Evaluates the parse state using a DFS-style symbolic execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluateParsersDfs(
+    const ir::P4Program &program, const SymbolicPerPacketState &headers,
+    z3::context &z3_context, SolverState &state,
+    packet_synthesizer::PacketSynthesisResults &results);
 
 }  // namespace parser
 }  // namespace symbolic

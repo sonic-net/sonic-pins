@@ -16,12 +16,19 @@
 
 #include "p4_symbolic/symbolic/guarded_map.h"
 
+#include <string>
+
 #include "absl/container/btree_map.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "gutil/status.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -69,6 +76,8 @@ absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
   // This will return an absl error if the sorts are incompatible, and will pad
   // shorter bit vectors.
   ASSIGN_OR_RETURN(old_value, operators::Ite(guard, value, old_value));
+  // Simplifying the guard every time the map is updated.
+  old_value = old_value.simplify();
   return absl::OkStatus();
 }
 

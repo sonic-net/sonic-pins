@@ -15,6 +15,7 @@
 #ifndef PINS_P4_SYMBOLIC_SAI_SAI_H_
 #define PINS_P4_SYMBOLIC_SAI_SAI_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,7 +23,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 
 namespace p4_symbolic {
 
@@ -53,7 +54,8 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
 // the existence of `local_metadata_t` header type and that the header type has
 // a field called `ingress_port`.
 absl::StatusOr<std::string> GetLocalMetadataIngressPortFromModel(
-    const symbolic::SolverState& solver_state);
+    const symbolic::SolverState& solver_state,
+    std::optional<symbolic::SymbolicPerPacketState> headers = std::nullopt);
 
 // Adds solver constraints for entry restrictions.
 // Right now only the entry restrictions of "vrf_table" and
@@ -73,6 +75,13 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState& state);
 // TODO: Note that this is for testing only and is not needed once
 // P4-Constraints is integrated with P4-Symbolic.
 absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState& state);
+
+// Adds solver constraints for "acl_ingress_table" (for middleblock).
+// Reference:
+// third_party/pins_infra/sai_p4/instantiations/google/acl_ingress.p4.
+// TODO: Note that this is for testing only and is not needed once
+// P4-Constraints is integrated with P4-Symbolic.
+absl::Status AddConstraintsForAclIngressTable(symbolic::SolverState& state);
 
 }  // namespace p4_symbolic
 

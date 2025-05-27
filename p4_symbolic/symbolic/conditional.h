@@ -18,10 +18,14 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
 #define P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
 
+#include <string>
+
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -31,6 +35,14 @@ namespace conditional {
 absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const ir::Conditional &conditional, SolverState &state,
     SymbolicPerPacketState &headers, const z3::expr &guard);
+
+// Evaluate Conditional using DFS style symbolic execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluateConditionalDfs(
+    const ir::Conditional &conditional, SolverState &state,
+    SymbolicPerPacketState &headers, const std::string &pipeline_name,
+    packet_synthesizer::PacketSynthesisResults &results);
 
 }  // namespace conditional
 }  // namespace symbolic

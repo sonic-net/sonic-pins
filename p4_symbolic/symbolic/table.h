@@ -21,10 +21,14 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_TABLE_H_
 #define P4_SYMBOLIC_SYMBOLIC_TABLE_H_
 
+#include <string>
+
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -54,6 +58,14 @@ TableEntryPriorityType GetTableEntryPriorityType(const ir::Table &table);
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
     const z3::expr &guard);
+
+// Evaluate Table using DFS style symbolic execution.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::Status EvaluateTableDfs(
+    const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
+    const std::string &pipeline_name,
+    packet_synthesizer::PacketSynthesisResults &results);
 
 }  // namespace table
 }  // namespace symbolic

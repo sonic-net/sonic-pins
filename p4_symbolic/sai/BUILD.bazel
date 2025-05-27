@@ -27,7 +27,8 @@ cc_library(
         "//p4_pdpi/internal:ordered_map",
         "//p4_symbolic/ir",
         "//p4_symbolic/ir:ir_cc_proto",
-        "//p4_symbolic/symbolic",
+        "//p4_symbolic/symbolic:operators",
+        "//p4_symbolic/symbolic:solver_state",
         "//p4_symbolic/symbolic:values",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -73,10 +74,13 @@ cc_test(
 
 cc_test(
     name = "packet_synthesizer_test",
+    timeout = "long",
     srcs = ["packet_synthesizer_test.cc"],
     deps = [
         ":sai",
+        "//gutil:proto",
         "//gutil:status_matchers",
+        "//gutil:test_artifact_writer",
         "//gutil:testing",
         "//p4_pdpi:pd",
         "//p4_pdpi/packetlib",
