@@ -27,7 +27,7 @@ cc_library(
     hdrs = ["util.h"],
     deps = [
         "//gutil/gutil:status",
-        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
+        "//p4_infra/netaddr:ipv6_address",
         "//p4_infra/p4_pdpi/utils:ir",
         "//p4_infra/string_encodings:decimal_string",
         "//p4_infra/string_encodings:hex_string",

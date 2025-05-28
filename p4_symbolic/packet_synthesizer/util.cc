@@ -24,7 +24,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_infra/netaddr/ipv6_address.h"
 #include "p4_infra/p4_pdpi/utils/ir.h"
 #include "p4_infra/string_encodings/decimal_string.h"
 #include "p4_infra/string_encodings/hex_string.h"
