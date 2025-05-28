@@ -67,7 +67,8 @@ using ::gnoi::system::RebootStatusRequest;
 using ::gnoi::system::RebootStatusResponse;
 using ::google::protobuf::util::MessageDifferencer;
 using ::grpc::ClientContext;
-using ::p4::v1::Entity;
+using ::p4::v1::ReadRequest;
+using ::p4::v1::ReadResponse;
 
 constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(8);
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
@@ -96,6 +97,18 @@ absl::Status Not(const absl::Status& status, absl::string_view status_tag) {
     return absl::InternalError(absl::StrCat(status_tag, " is still ok."));
   }
   return absl::OkStatus();
+}
+
+// Fields in P4 snapshot which needs to be ignored during comparison.
+void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
+  if (differencer == nullptr) return;
+  const google::protobuf::Descriptor& descriptor =
+      *p4::v1::TableEntry().GetDescriptor();
+  differencer->IgnoreField(descriptor.FindFieldByName("counter_data"));
+  differencer->IgnoreField(descriptor.FindFieldByName("meter_counter_data"));
+  differencer->set_report_ignores(false);
+  differencer->set_report_moves(false);
+  differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
 }
 
 }  // namespace
@@ -388,33 +401,43 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
                             ssh_client, GetConnectedInterfacesForSut(testbed));
 }
 
-absl::StatusOr<std::vector<Entity>> TakeP4FlowSnapshot(Testbed& testbed) {
+absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   thinkit::Switch& sut = GetSut(testbed);
+  ReadRequest read_request;
+  read_request.add_entities()->mutable_table_entry();
+  read_request.add_entities()->mutable_packet_replication_engine_entry();
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    pdpi::P4RuntimeSession::Create(sut));
-  return pdpi::ReadPiEntities(session.get());
+  return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
 }
 
-absl::Status CompareP4FlowSnapshots(absl::Span<const Entity> a,
-                                    absl::Span<const Entity> b) {
+absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
+                                    ReadResponse snapshot_2) {
   MessageDifferencer differencer;
-  size_t iterations = std::max(a.size(), b.size());
-  std::vector<std::string> differences;
-  differences.reserve(iterations);
-  for (int i = 0; i < iterations; ++i) {
-    std::string diff;
-    differencer.ReportDifferencesToString(&diff);
-    const Entity& a_entity = a.size() > i ? a[i] : Entity();
-    const Entity& b_entity = b.size() > i ? b[i] : Entity();
-    if (!differencer.Compare(a[i], b[i])) {
-      differences.push_back(std::move(diff));
-    }
-  }
+  std::string diff_report;
+  AppendIgnoredP4SnapshotFields(&differencer);
+  differencer.ReportDifferencesToString(&diff_report);
 
-  if (differences.empty()) return absl::OkStatus();
-  return gutil::InternalErrorBuilder()
-         << "Differences found between the P4 flow snapshots:\n"
-         << absl::StrJoin(differences, "\n");
+  if (!differencer.Compare(snapshot_1, snapshot_2)) {
+    return gutil::InternalErrorBuilder()
+           << "Differences found between the P4 flow snapshots:\n"
+           << diff_report;
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
+                                absl::string_view file_name) {
+  thinkit::TestEnvironment& environment = std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> thinkit::TestEnvironment& { return testbed->Environment(); },
+          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
+            return testbed->Environment();
+          }},
+      testbed);
+
+  return environment.StoreTestArtifact(file_name, snapshot.DebugString());
 }
 
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
