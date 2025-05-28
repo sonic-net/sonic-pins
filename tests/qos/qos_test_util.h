@@ -58,6 +58,8 @@ inline std::string SwtichRoleToDisableQoSToString(
 struct QueueCounters {
   int64_t num_packets_transmitted = 0;
   int64_t num_packets_dropped = 0;
+  int64_t max_queue_len = 0;
+  int64_t max_periodic_queue_len = 0;
 };
 
 // Operator to pretty print Queue Counters.
@@ -66,9 +68,12 @@ inline std::ostream &operator<<(std::ostream &os,
   return os << absl::StreamFormat(
              "QueueCounters{"
              ".num_packets_transmitted = %d, "
-             ".num_packets_dropped = %d"
+             ".num_packets_dropped = %d, "
+             ".max_queue_len = %d, "
+             ".max_periodic_queue_len = %d,"
              "}",
-             counters.num_packets_transmitted, counters.num_packets_dropped);
+             counters.num_packets_transmitted, counters.num_packets_dropped,
+             counters.max_queue_len, counters.max_periodic_queue_len);
 }
 
 QueueCounters operator-(const QueueCounters &x, const QueueCounters &y);
