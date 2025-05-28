@@ -74,8 +74,7 @@ TEST_P(SmokeTestFixture, CanEstablishConnections) {
 TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -85,6 +84,9 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+  ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                        pdpi::GetIrP4Info(*sut_p4rt_session));
 
   const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
@@ -166,8 +168,7 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
 TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -177,6 +178,9 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   p4::v1::WriteRequest pi_request;
   ASSERT_OK_AND_ASSIGN(
@@ -250,8 +254,7 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
 TEST_P(SmokeTestFixture, InsertTableEntry) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -261,6 +264,9 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -281,8 +287,7 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
 TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -292,6 +297,9 @@ TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -322,8 +330,7 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -333,6 +340,9 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   std::vector<sai::TableEntry> write_pd_entries =
       sai_pd::CreateUpTo255GenericTableEntries(3);
@@ -385,8 +395,7 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 TEST_P(SmokeTestFixture, EnsureClearTables) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -396,6 +405,9 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   // The table should be clear after setup.
   ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
@@ -440,8 +452,7 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
 TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
+
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -451,6 +462,9 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   // All tables should be clear after setup.
   ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
@@ -486,8 +500,6 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
 TEST_P(SmokeTestFixture, DeleteReferencedEntryNotOk) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4info));
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
@@ -498,6 +510,9 @@ TEST_P(SmokeTestFixture, DeleteReferencedEntryNotOk) {
       pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
+
+ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
+                      pdpi::GetIrP4Info(*sut_p4rt_session));
 
   constexpr absl::string_view kRifId = "rif";
   constexpr absl::string_view kNeighborId = "::1";

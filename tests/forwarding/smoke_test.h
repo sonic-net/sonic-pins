@@ -15,6 +15,8 @@
 #ifndef PINS_TESTS_FORWARDING_SMOKE_TEST_H_
 #define PINS_TESTS_FORWARDING_SMOKE_TEST_H_
 
+#include <optional>
+
 #include "tests/forwarding/mirror_blackbox_test_fixture.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
@@ -27,7 +29,7 @@ struct SmokeTestParams {
   // The test assumes that the switch is pre-configured if no `gnmi_config` is
   // given (default), or otherwise pushes the given config before starting.
   std::optional<std::string> gnmi_config;
-  p4::config::v1::P4Info p4info;
+  std::optional<p4::config::v1::P4Info> p4info;
   // Use on platforms that don't support GRE tunnels to avoid using them in
   // tests.
   bool does_not_support_gre_tunnels;

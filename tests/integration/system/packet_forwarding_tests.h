@@ -15,11 +15,24 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_PACKET_FORWARDING_TESTS_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_PACKET_FORWARDING_TESTS_H_
 
+#include <optional>
+
+#include "p4/config/v1/p4info.pb.h"
 #include "thinkit/generic_testbed_fixture.h"
 
 namespace pins_test {
 
-class PacketForwardingTestFixture : public thinkit::GenericTestbedFixture<> {};
+// Parameters for the PacketForwardingTestFixture.
+struct PacketForwardingTestParams {
+  // For access to the SUTs.
+  thinkit::GenericTestbedInterface* testbed_interface;
+  // If true, push the P4Info to the SUT.
+  bool push_p4_info;
+  std::optional<p4::config::v1::P4Info> p4_info;
+};
+
+class PacketForwardingTestFixture
+    : public thinkit::GenericTestbedFixture<PacketForwardingTestParams> {};
 
 } // namespace pins_test
 
