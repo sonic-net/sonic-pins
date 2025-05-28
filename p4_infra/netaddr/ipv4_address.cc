@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
+
+#include "p4_infra/netaddr/ipv4_address.h"
 
 #include <bitset>
 #include <cstdint>
@@ -24,7 +25,6 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/netaddr/network_address.h"
 
 namespace netaddr {
 
