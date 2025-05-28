@@ -25,6 +25,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "google/protobuf/message.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
@@ -105,11 +106,14 @@ absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         Testbed& testbed, thinkit::SSHClient& ssh_client);
 
-absl::StatusOr<std::vector<p4::v1::Entity>> TakeP4FlowSnapshot(
-    Testbed& testbed);
+absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
 
-absl::Status CompareP4FlowSnapshots(absl::Span<const p4::v1::Entity> a,
-                                    absl::Span<const p4::v1::Entity> b);
+absl::Status CompareP4FlowSnapshots(::p4::v1::ReadResponse snapshot_1,
+                                    ::p4::v1::ReadResponse snapshot_2);
+
+absl::Status SaveP4FlowSnapshot(Testbed& testbed,
+                                ::p4::v1::ReadResponse snapshot,
+                                absl::string_view file_name);
 
 // Stores the healthz debug artifacts of the SUT with the given `prefix` as:
 // "{prefix}_healthz"
