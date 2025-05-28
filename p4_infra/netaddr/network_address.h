@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_NETADDR_NETWORK_ADDRESS_H_
-#define PINS_P4_INFRA_P4_PDPI_NETADDR_NETWORK_ADDRESS_H_
+#ifndef PINS_INFRA_P4_INFRA_NETADDR_NETWORK_ADDRESS_H_
+#define PINS_INFRA_P4_INFRA_NETADDR_NETWORK_ADDRESS_H_
 
 #include <bitset>
 #include <cstddef>
@@ -207,4 +207,4 @@ absl::StatusOr<int> NetworkAddress<N, T>::ToLpmPrefixLength() const {
 
 }  // namespace netaddr
 
-#endif  // PINS_P4_INFRA_P4_PDPI_NETADDR_NETWORK_ADDRESS_H_
+#endif  // PINS_INFRA_P4_INFRA_NETADDR_NETWORK_ADDRESS_H_

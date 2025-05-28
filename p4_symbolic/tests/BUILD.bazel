@@ -10,11 +10,11 @@ cc_test(
     deps = [
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
+        "//p4_infra/netaddr:ipv4_address",
+        "//p4_infra/netaddr:mac_address",
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:pd",
-        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
-        "//p4_infra/p4_pdpi/netaddr:mac_address",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/sai",
         "//p4_symbolic/symbolic",

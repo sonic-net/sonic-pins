@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_NETADDR_MAC_ADDRESS_H_
-#define PINS_P4_INFRA_P4_PDPI_NETADDR_MAC_ADDRESS_H_
+#ifndef PINS_INFRA_P4_INFRA_NETADDR_MAC_ADDRESS_H_
+#define PINS_INFRA_P4_INFRA_NETADDR_MAC_ADDRESS_H_
 
 #include <cstdint>
 #include <string>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/netaddr/network_address.h"
+#include "p4_infra/netaddr/ipv6_address.h"
+#include "p4_infra/netaddr/network_address.h"
 
 namespace netaddr {
 
@@ -75,4 +75,4 @@ class MacAddress : public NetworkAddress<48, MacAddress> {
 
 }  // namespace netaddr
 
-#endif  // PINS_P4_INFRA_P4_PDPI_NETADDR_MAC_ADDRESS_H_
+#endif  // PINS_INFRA_P4_INFRA_NETADDR_MAC_ADDRESS_H_

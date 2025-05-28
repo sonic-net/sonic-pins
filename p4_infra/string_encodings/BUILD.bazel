@@ -43,9 +43,9 @@ cc_library(
     deps = [
         "//gutil/gutil:status",
         ":hex_string",
-        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
-        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
-        "//p4_infra/p4_pdpi/netaddr:mac_address",
+        "//p4_infra/netaddr:ipv4_address",
+        "//p4_infra/netaddr:ipv6_address",
+        "//p4_infra/netaddr:mac_address",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
