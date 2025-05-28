@@ -15,6 +15,7 @@
 #ifndef PINS_THINKIT_IXIA_INTERFACE_H_
 #define PINS_THINKIT_IXIA_INTERFACE_H_
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -30,6 +31,7 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
@@ -68,15 +70,12 @@ absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp);
 // IP address of chassis appended with the card number and port.
 absl::StatusOr<IxiaPortInfo> ExtractPortInfo(absl::string_view ixia_interface);
 
-// WaitForComplete - Checks the http response provided and if 202 was returned,
-// then check for IN_PROGRESS and if so polls until complete.  it returns
-// the href url from the response or an error. the timeout can be provided
-// if desired, and defaults to 1 minute if not. the timeout determines how
-// long we'll wait for the IN_PROGRESS to resolve. if the elapsed time exceeds
-// the timeout provided we'll return an error.
-absl::Status WaitForComplete(const thinkit::HttpResponse &response,
-                             thinkit::GenericTestbed &generic_testbed,
-                             absl::Duration timeout = absl::Seconds(60));
+// Sends the operation to the Ixia as a POST request
+// and waits for it to finish if the operation returns IN_PROGRESS.
+absl::Status SendAndWaitForComplete(absl::string_view operation_url,
+                                    absl::string_view payload,
+                                    thinkit::GenericTestbed &generic_testbed,
+                                    absl::Duration timeout = absl::Seconds(60));
 
 // IxiaConnect - connect to the Ixia.  returns the href from the response
 // or an error.  takes the IP address of the Ixia as a string parameter,
@@ -113,13 +112,13 @@ IxiaSession(absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
 // to as a tref is this namespace. Takes in the vref returned by Ixia ports
 // as parameters.
-absl::StatusOr<std::string>
-SetUpTrafficItem(absl::string_view vref_src, absl::string_view vref_dst,
-                 thinkit::GenericTestbed &generic_testbed);
-absl::StatusOr<std::string>
-SetUpTrafficItem(absl::string_view vref_src, absl::string_view vref_dst,
-                 absl::string_view traffic_name,
-                 thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed,
+    bool is_raw_pkt = false);
 
 // Deletes traffic item. Takes in the tref returned by IxiaSession.
 // Deleting a traffic item manually is not strictly required, but is useful
@@ -134,10 +133,13 @@ absl::Status DeleteTrafficItem(absl::string_view tref,
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed);
 
-// Same as above, except that `trefs` accept multiple traffics.
+// Same as above, except that `trefs` accept multiple traffics.By default,
+// the traffics in `trefs` start in parallel; set `run_in_parallel` to false
+// to start traffics sequentially.
 absl::Status StartTraffic(absl::Span<const std::string> trefs,
                           absl::string_view href,
-                          thinkit::GenericTestbed &generic_testbed);
+                          thinkit::GenericTestbed &generic_testbed,
+                          bool run_in_parallel = true);
 
 // StopTraffic - stops traffic running from the Ixia. StartTraffic is
 // presumed to have been run first. Takes in the tref returned by IxiaSession
@@ -245,6 +247,8 @@ absl::Status AppendProtocolAtStack(absl::string_view tref,
                                    absl::string_view stack,
                                    thinkit::GenericTestbed &generic_testbed);
 
+absl::Status AppendPfc(absl::string_view tref, absl::string_view stack,
+                       thinkit::GenericTestbed &generic_testbed);
 // -- High-level API for setting traffic item parameters -----------------------
 
 // The priority fields of an IP packet. Aka "type of service" for IPv4 and
@@ -266,6 +270,11 @@ struct Ipv6TrafficParameters {
   netaddr::Ipv6Address dst_ipv6 =
       netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 2); // 2000::2;
   std::optional<IpPriority> priority;
+};
+
+struct PfcTrafficParameters {
+  uint8_t priority_enable_vector = 0;
+  std::array<uint16_t, 8> pause_quanta_per_queue = {0, 0, 0, 0, 0, 0, 0, 0};
 };
 
 // The number of frames to send per second.
@@ -296,6 +305,7 @@ struct TrafficParameters {
   // header will be sent.
   std::optional<std::variant<Ipv4TrafficParameters, Ipv6TrafficParameters>>
       ip_parameters;
+  std::optional<PfcTrafficParameters> pfc_parameters;
 };
 
 // Sets any given parameters for the given traffic item.
@@ -303,6 +313,16 @@ struct TrafficParameters {
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
                                   thinkit::GenericTestbed &testbed);
+
+// Sets the priority enable vector field in the PFC header.
+absl::Status SetPfcPriorityEnableVector(
+    absl::string_view tref, uint8_t priority_enable_vector,
+    thinkit::GenericTestbed &generic_testbed);
+
+// Sets the pause quanta values for queues in the PFC header.
+absl::Status SetPfcQueuePauseQuanta(
+    absl::string_view tref, const std::array<uint16_t, 8> &queue_pause_quanta,
+    thinkit::GenericTestbed &generic_testbed);
 
 // -- Statistics ---------------------------------------------------------------
 
@@ -329,6 +349,10 @@ GetAllTrafficItemStats(absl::string_view href,
 
 // Computes average rate (bytes/s) at which traffic was received back by Ixia.
 inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
+  // If the first timestamp is 0, this means no traffic has been received.
+  if (stats.first_time_stamp() == 0.0) {
+    return 0.0;
+  }
   return stats.rx_bytes() /
          (stats.last_time_stamp() - stats.first_time_stamp());
 }
