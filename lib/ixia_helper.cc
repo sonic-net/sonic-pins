@@ -14,11 +14,12 @@
 
 #include "lib/ixia_helper.h"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -46,6 +47,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.pb.h"
 #include "lib/utils/json_utils.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
@@ -273,13 +275,19 @@ absl::StatusOr<std::string> SetUpTrafficItem(
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1"
 absl::StatusOr<std::string> SetUpTrafficItem(
     absl::string_view vref_src, absl::string_view vref_dst,
-    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed) {
+    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed,
+    bool is_raw_pkt) {
   // POST to /traffic/trafficItem with:
   // [{"name":"Unicast Traffic"}]
   constexpr absl::string_view kTrafficPath = "/ixnetwork/traffic/trafficItem";
-  const Json kTrafficJson = Json::array({
-      Json::object({{"name", traffic_name}}),
-  });
+  Json kTrafficJson;
+  if (is_raw_pkt == true) {
+    kTrafficJson = Json::array(
+        {Json::object({{"name", traffic_name}, {"trafficType", "raw"}})});
+  } else {
+    kTrafficJson = Json::array({Json::object({{"name", traffic_name}})});
+  }
+
   LOG(INFO) << "path " << kTrafficPath;
   LOG(INFO) << "json " << kTrafficJson;
   ASSIGN_OR_RETURN(
@@ -353,17 +361,16 @@ absl::Status DeleteTrafficItem(absl::string_view tref,
   return gutil::InternalErrorBuilder() << "unexpected response: " << response;
 }
 
-// WaitForComplete - If 202 returned, check for IN_PROGRESS and if so poll
-//                   returned url until complete
-//
-// An example response:
-// {"id":"","url":"","resultUrl":"","executionTimeMs":57.0,"state":"SUCCESS","progress":100,"message":null,"result":"kVoid"}
-//
-absl::Status WaitForComplete(const thinkit::HttpResponse &response,
-                             thinkit::GenericTestbed &generic_testbed,
-                             absl::Duration timeout) {
+absl::Status SendAndWaitForComplete(absl::string_view operation_url,
+                                    absl::string_view payload,
+                                    thinkit::GenericTestbed &generic_testbed,
+                                    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(thinkit::HttpResponse response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, operation_url, payload));
+
   LOG(INFO) << "Returns " << response.response_code;
-  LOG(INFO) << "Returns " << response.response;
+  LOG(INFO) << "Returns " << FormatJsonBestEffort(response.response);
 
   if (response.response_code == 200) return absl::OkStatus();
 
@@ -382,11 +389,14 @@ absl::Status WaitForComplete(const thinkit::HttpResponse &response,
   }
 
   if (state != "IN_PROGRESS")
-    return absl::InternalError(absl::StrFormat("unexpected state %s", state));
+    return absl::InternalError(
+        absl::StrFormat("unexpected state %s: %s", state,
+                        FormatJsonBestEffort(response.response)));
 
   Json url_json = resp_json["url"];
   if (url_json.empty()) return absl::InternalError("no url");
   std::string url = url_json.get<std::string>();
+  LOG(INFO) << "Waiting on operation " << url;
 
   // allow up to a minute for the state to resolve
   absl::Time t1 = absl::Now();
@@ -401,7 +411,8 @@ absl::Status WaitForComplete(const thinkit::HttpResponse &response,
                                                  get_response.response_code));
 
     LOG(INFO) << "Get (poll) returns " << get_response.response_code;
-    LOG(INFO) << "Get (poll) returns " << get_response.response;
+    LOG(INFO) << "Get (poll) returns "
+              << FormatJsonBestEffort(get_response.response);
 
     resp_json = Json::parse(get_response.response);
     state_json = resp_json["state"];
@@ -413,12 +424,36 @@ absl::Status WaitForComplete(const thinkit::HttpResponse &response,
     }
 
     if (absl::Now() >= t1 + timeout)
-      return absl::DeadlineExceededError("Poll limit expired");
+      return absl::DeadlineExceededError(
+          absl::StrCat("Poll limit expired, last response: ",
+                       FormatJsonBestEffort(get_response.response)));
   }
 
   LOG(INFO) << "polling is complete";
   return absl::OkStatus();
 }
+
+namespace {
+// When `run_in_parallel` is true, we generate a single config to start all
+// traffics in `trefs` at once in one call, such as:
+// {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
+// "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
+// Otherwise, we generate a separate config for each traffic so that we can
+// start them sequentially.
+std::vector<std::string> GetTrefConfigs(
+    const absl::Span<const std::string> &trefs, bool run_in_parallel) {
+  std::vector<std::string> json_configs;
+  if (run_in_parallel) {
+    json_configs.push_back(
+        absl::StrFormat(R"({"arg1":["%s"]})", absl::StrJoin(trefs, R"(",")")));
+  } else {
+    for (const std::string &tref : trefs) {
+      json_configs.push_back(absl::StrFormat(R"({"arg1":["%s"]})", tref));
+    }
+  }
+  return json_configs;
+}
+}  // namespace
 
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed) {
@@ -428,7 +463,8 @@ absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
 
 absl::Status StartTraffic(absl::Span<const std::string> trefs,
                           absl::string_view href,
-                          thinkit::GenericTestbed &generic_testbed) {
+                          thinkit::GenericTestbed &generic_testbed,
+                          bool run_in_parallel) {
   LOG(INFO) << "\n\n\n\n\n---------- Starting... ----------\n\n\n\n\n";
 
   // Extract IxRef from href which is the substring ending at /ixnetwork
@@ -453,13 +489,8 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
       absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << generate_path;
   LOG(INFO) << "json " << generate_json;
-  ASSIGN_OR_RETURN(
-      thinkit::HttpResponse generate_response,
-      generic_testbed.SendRestRequestToIxia(thinkit::RequestType::kPost,
-                                            generate_path, generate_json));
-  // Returns something like
-  // {"id":"","url":"","resultUrl":"","executionTimeMs":57.0,"state":"SUCCESS","progress":100,"message":null,"result":"kVoid"}
-  RETURN_IF_ERROR(WaitForComplete(generate_response, generic_testbed));
+  RETURN_IF_ERROR(
+      SendAndWaitForComplete(generate_path, generate_json, generic_testbed));
 
   // POST to /ixnetwork/traffic/operations/apply with
   // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic"}
@@ -467,13 +498,8 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
   std::string apply_json = absl::StrCat("{\"arg1\":\"", ixref, "/traffic\"}");
   LOG(INFO) << "path " << apply_path;
   LOG(INFO) << "json " << apply_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse apply_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, apply_path, apply_json));
-  // returns something like:
-  // {"id":"","url":"","resultUrl":"","executionTimeMs":111.0,"state":"ERROR","progress":100,"message":null,"result":"Error
-  // in L2/L3 Traffic Apply\n"}
-  RETURN_IF_ERROR(WaitForComplete(generate_response, generic_testbed));
+  RETURN_IF_ERROR(
+      SendAndWaitForComplete(apply_path, apply_json, generic_testbed));
 
   // POST to
   // /ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking
@@ -484,11 +510,12 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
   std::string start_json =
       absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << start_path;
-  LOG(INFO) << "json " << start_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse start_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, start_path, start_json));
-  RETURN_IF_ERROR(WaitForComplete(start_response, generic_testbed));
+
+  for (const std::string &start_json : GetTrefConfigs(trefs, run_in_parallel)) {
+    LOG(INFO) << "json " << start_json;
+    RETURN_IF_ERROR(
+        SendAndWaitForComplete(start_path, start_json, generic_testbed));
+  }
 
   // GET to /ixnetwork/traffic/trafficItem
   std::string titem_path = "/ixnetwork/traffic/trafficItem";
@@ -544,10 +571,8 @@ absl::Status StopTraffic(absl::Span<const std::string> trefs,
       absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << stop_path;
   LOG(INFO) << "json " << stop_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse stop_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, stop_path, stop_json));
-  RETURN_IF_ERROR(WaitForComplete(stop_response, generic_testbed));
+  RETURN_IF_ERROR(
+      SendAndWaitForComplete(stop_path, stop_json, generic_testbed));
 
   LOG(INFO) << "\n\n\n\n\n---------- Stopped ----------\n\n\n\n\n";
   return absl::OkStatus();
@@ -719,13 +744,7 @@ absl::Status AppendIPv4(absl::string_view tref,
                    "/configElement/1/stack/1\",\"arg2\":\"", ipref, "\"}");
   LOG(INFO) << "path " << append_path;
   LOG(INFO) << "json " << append_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, append_path, append_json));
-  LOG(INFO) << "Received code: " << append_response.response_code;
-  LOG(INFO) << "Received response: "
-            << FormatJsonBestEffort(append_response.response);
-  return WaitForComplete(append_response, generic_testbed);
+  return SendAndWaitForComplete(append_path, append_json, generic_testbed);
 }
 
 absl::Status SetSrcIPv4(absl::string_view tref, absl::string_view sip,
@@ -813,13 +832,7 @@ absl::Status AppendIPv6(absl::string_view tref,
                    "/configElement/1/stack/1\",\"arg2\":\"", ipref, "\"}");
   LOG(INFO) << "path " << append_path;
   LOG(INFO) << "json " << append_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, append_path, append_json));
-  LOG(INFO) << "Received code: " << append_response.response_code;
-  LOG(INFO) << "Received response: "
-            << FormatJsonBestEffort(append_response.response);
-  return ixia::WaitForComplete(append_response, generic_testbed);
+  return SendAndWaitForComplete(append_path, append_json, generic_testbed);
 }
 
 absl::Status SetSrcIPv6(absl::string_view tref, absl::string_view sip,
@@ -976,13 +989,7 @@ absl::Status AppendTcp(absl::string_view tref,
                    "/configElement/1/stack/2\",\"arg2\":\"", tcpref, "\"}");
   LOG(INFO) << "path " << append_path;
   LOG(INFO) << "json " << append_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, append_path, append_json));
-  LOG(INFO) << "Received code: " << append_response.response_code;
-  LOG(INFO) << "Received response: "
-            << FormatJsonBestEffort(append_response.response);
-  return ixia::WaitForComplete(append_response, generic_testbed);
+  return SendAndWaitForComplete(append_path, append_json, generic_testbed);
 }
 
 absl::Status AppendUdp(absl::string_view tref,
@@ -1026,13 +1033,108 @@ absl::Status AppendUdp(absl::string_view tref,
       absl::StrCat("{\"arg1\":\"", tref,
                    "/configElement/1/stack/2\",\"arg2\":\"", tcpref, "\"}");
   LOG(INFO) << "json " << append_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
+  return SendAndWaitForComplete(kAppendPath, append_json, generic_testbed);
+}
+
+absl::Status AppendPfc(absl::string_view tref,
+                       thinkit::GenericTestbed &generic_testbed) {
+  // GET to /ixnetwork/traffic/protocolTemplate to find the correct protocol
+  // template to use.
+  constexpr absl::string_view kProtoPath =
+      "/ixnetwork/traffic/protocolTemplate?stackTypeId=pfcPause";
+  ASSIGN_OR_RETURN(thinkit::HttpResponse proto_response,
                    generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, kAppendPath, append_json));
-  LOG(INFO) << "Received code: " << append_response.response_code;
-  LOG(INFO) << "Received response: "
-            << FormatJsonBestEffort(append_response.response);
-  return ixia::WaitForComplete(append_response, generic_testbed);
+                       thinkit::RequestType::kGet, kProtoPath, ""));
+  LOG(INFO) << "Returns " << proto_response.response_code;
+  if (proto_response.response_code != 200)
+    return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                               proto_response.response_code));
+  LOG(INFO) << "response: " << proto_response.response;
+  std::size_t ixname =
+      proto_response.response.find("\"displayName\":\"PFC PAUSE (802.1Qbb)\"");
+  if (ixname == std::string::npos)
+    return absl::InternalError("no PFC template");
+  std::size_t ixhref = proto_response.response.find("\"href\":", ixname);
+  if (ixhref == std::string::npos)
+    return absl::InternalError("no PFC template");
+  std::size_t ixqt = proto_response.response.find('"', ixhref + 8);
+  if (ixqt == std::string::npos) return absl::InternalError("no PFC template");
+  std::string pfcref =
+      proto_response.response.substr(ixhref + 8, ixqt - ixhref - 8);
+  std::size_t ixfield = pfcref.find("/field");
+  if (ixfield != std::string::npos) {
+    pfcref = pfcref.substr(0, ixfield);
+  }
+
+  // POST to
+  // /ixnetwork/traffic/trafficItem/configElement/stack/operations/appendprotocol
+  // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/configElement/1/stack/<stack>","arg2":"/api/v1/sessions/1/ixnetwork/traffic/protocolTemplate/<template>"}
+  constexpr absl::string_view kAppendPath =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "appendprotocol";
+
+  std::string append_json =
+      absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/1",
+                   "\",\"arg2\":\"", pfcref, "\"}");
+  LOG(INFO) << "json " << append_json;
+  if (!SendAndWaitForComplete(kAppendPath, append_json, generic_testbed).ok()) {
+    return absl::InternalError("Failed to complete append PFC protocol");
+  };
+
+  // Remove the ethernet header.
+  std::string remove_json =
+      absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/1", "\"}");
+  constexpr absl::string_view kRemovePath =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "remove";
+  LOG(INFO) << "json " << append_json;
+  return SendAndWaitForComplete(kRemovePath, remove_json, generic_testbed);
+}
+
+absl::Status SetPfcPriorityEnableVector(
+    absl::string_view tref, uint8_t priority_enable_vector,
+    thinkit::GenericTestbed &generic_testbed) {
+  // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/5
+  // with {"singleValue":"1"} to set the priroity enable vector.
+  std::string path = absl::StrCat(tref, "/configElement/1/stack/1/field/5");
+  std::string json =
+      absl::StrCat("{\"singleValue\":\"",
+                   absl::Hex(priority_enable_vector, absl::kZeroPad2), "\"}");
+  LOG(INFO) << "path " << path;
+  LOG(INFO) << "json " << json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, path, json));
+  LOG(INFO) << "Returns " << sip_response.response_code;
+  if (sip_response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", sip_response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetPfcQueuePauseQuanta(
+    absl::string_view tref, const std::array<uint16_t, 8> &queue_pause_quanta,
+    thinkit::GenericTestbed &generic_testbed) {
+  // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/6+i
+  // with {"singleValue":"ffff"} to set the pause quanta for queue i.
+  for (int i = 0; i < 8; ++i) {
+    if (queue_pause_quanta[i] == 0) continue;
+    std::string path =
+        absl::StrCat(tref, "/configElement/1/stack/1/field/", 6 + i);
+    std::string json =
+        absl::StrCat("{\"singleValue\":\"",
+                     absl::StrFormat("%X", queue_pause_quanta[i]), "\"}");
+    LOG(INFO) << "path " << path;
+    LOG(INFO) << "json " << json;
+    ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
+                     generic_testbed.SendRestRequestToIxia(
+                         thinkit::RequestType::kPatch, path, json));
+    LOG(INFO) << "Returns " << sip_response.response_code;
+    if (sip_response.response_code != 200)
+      return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                                 sip_response.response_code));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status AppendProtocolAtStack(absl::string_view tref,
@@ -1082,13 +1184,7 @@ absl::Status AppendProtocolAtStack(absl::string_view tref,
       absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/", stack,
                    "\",\"arg2\":\"", tcpref, "\"}");
   LOG(INFO) << "json " << append_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, kAppendPath, append_json));
-  LOG(INFO) << "Received code: " << append_response.response_code;
-  LOG(INFO) << "Received response: "
-            << FormatJsonBestEffort(append_response.response);
-  return ixia::WaitForComplete(append_response, generic_testbed);
+  return SendAndWaitForComplete(kAppendPath, append_json, generic_testbed);
 }
 
 absl::StatusOr<std::string> GetRawStatsView(
@@ -1213,20 +1309,14 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     {
       ASSIGN_OR_RETURN(std::string raw, gutil::FindOrStatus(value_by_caption,
                                                             "First TimeStamp"));
-      if (raw.empty()) {
-        return gutil::UnavailableErrorBuilder()
-               << "'First TimeStamp' not available yet";
-      }
-      ASSIGN_OR_RETURN(auto value,
-                       ParseTimeStampAsSeconds(raw, "First TimeStamp"));
-      parsed_row.set_first_time_stamp(value);
+      parsed_row.set_first_time_stamp(
+          ParseTimeStampAsSeconds(raw, "First TimeStamp").value_or(0.0));
     }
     {
       ASSIGN_OR_RETURN(std::string raw,
                        gutil::FindOrStatus(value_by_caption, "Last TimeStamp"));
-      ASSIGN_OR_RETURN(auto value,
-                       ParseTimeStampAsSeconds(raw, "Last TimeStamp"));
-      parsed_row.set_last_time_stamp(value);
+      parsed_row.set_last_time_stamp(
+          ParseTimeStampAsSeconds(raw, "Last TimeStamp").value_or(0.0));
     }
   }
 
@@ -1279,8 +1369,11 @@ absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
 
 absl::Status SetIpTrafficParameters(absl::string_view tref,
                                     const Ipv4TrafficParameters &params,
-                                    thinkit::GenericTestbed &testbed) {
-  RETURN_IF_ERROR(AppendIPv4(tref, testbed));
+                                    thinkit::GenericTestbed &testbed,
+                                    bool is_update) {
+  if (!is_update) {
+    RETURN_IF_ERROR(AppendIPv4(tref, testbed));
+  }
   RETURN_IF_ERROR(SetSrcIPv4(tref, params.src_ipv4.ToString(), testbed));
   RETURN_IF_ERROR(SetDestIPv4(tref, params.dst_ipv4.ToString(), testbed));
   if (params.priority.has_value()) {
@@ -1293,8 +1386,11 @@ absl::Status SetIpTrafficParameters(absl::string_view tref,
 
 absl::Status SetIpTrafficParameters(absl::string_view tref,
                                     const Ipv6TrafficParameters &params,
-                                    thinkit::GenericTestbed &testbed) {
-  RETURN_IF_ERROR(AppendIPv6(tref, testbed));
+                                    thinkit::GenericTestbed &testbed,
+                                    bool is_update) {
+  if (!is_update) {
+    RETURN_IF_ERROR(AppendIPv6(tref, testbed));
+  }
   RETURN_IF_ERROR(SetSrcIPv6(tref, params.src_ipv6.ToString(), testbed));
   RETURN_IF_ERROR(SetDestIPv6(tref, params.dst_ipv6.ToString(), testbed));
   if (params.priority.has_value()) {
@@ -1305,9 +1401,25 @@ absl::Status SetIpTrafficParameters(absl::string_view tref,
   return absl::OkStatus();
 }
 
+absl::Status SetPfcTrafficParameters(absl::string_view tref,
+                                     const PfcTrafficParameters &params,
+                                     thinkit::GenericTestbed &testbed,
+                                     bool is_update) {
+  if (!is_update) {
+    RETURN_IF_ERROR(AppendPfc(tref, testbed));
+  }
+  RETURN_IF_ERROR(
+      SetPfcPriorityEnableVector(tref, params.priority_enable_vector, testbed));
+  RETURN_IF_ERROR(
+      SetPfcQueuePauseQuanta(tref, params.pause_quanta_per_queue, testbed));
+
+  return absl::OkStatus();
+}
+
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
-                                  thinkit::GenericTestbed &testbed) {
+                                  thinkit::GenericTestbed &testbed,
+                                  bool is_update) {
   if (params.frame_count.has_value()) {
     RETURN_IF_ERROR(SetFrameCount(tref, *params.frame_count, testbed));
   }
@@ -1324,13 +1436,17 @@ absl::Status SetTrafficParameters(absl::string_view tref,
           }},
       params.traffic_speed));
 
-  RETURN_IF_ERROR(SetSrcMac(tref, params.src_mac.ToString(), testbed));
-  RETURN_IF_ERROR(SetDestMac(tref, params.dst_mac.ToString(), testbed));
-
+  if (params.pfc_parameters.has_value()) {
+    RETURN_IF_ERROR(SetPfcTrafficParameters(tref, *params.pfc_parameters,
+                                            testbed, is_update));
+  } else {
+    RETURN_IF_ERROR(SetSrcMac(tref, params.src_mac.ToString(), testbed));
+    RETURN_IF_ERROR(SetDestMac(tref, params.dst_mac.ToString(), testbed));
+  }
   if (params.ip_parameters.has_value()) {
     RETURN_IF_ERROR(std::visit(
         [&](const auto &ip_params) {
-          return SetIpTrafficParameters(tref, ip_params, testbed);
+          return SetIpTrafficParameters(tref, ip_params, testbed, is_update);
         },
         *params.ip_parameters));
   }
