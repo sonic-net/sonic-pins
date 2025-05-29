@@ -24,6 +24,7 @@ cc_library(
         "packet_capture_test.h",
     ],
     deps = [
+        ":packet_capture_test_util",
         "//gutil:collections",
         "//gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
@@ -58,4 +59,21 @@ cc_library(
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
+)
+
+cc_library(
+    name = "packet_capture_test_util",
+    srcs = ["packet_capture_test_util.cc"],
+    hdrs = ["packet_capture_test_util.h"],
+    deps = [
+        "//lib/gnmi:gnmi_helper",
+        "//thinkit:mirror_testbed",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+    ],
 )
