@@ -225,6 +225,16 @@ message MulticastRouterInterfaceTableEntry {
     oneof action {
       SetMulticastSrcMacAction set_multicast_src_mac = 1;
       L2MulticastPassthroughAction l2_multicast_passthrough = 2;
+      // CAUTION: This action is not (yet) supported.
+      MulticastSetSrcMacAction multicast_set_src_mac = 3;
+      // CAUTION: This action is not (yet) supported.
+      MulticastSetSrcMacAndVlanIdAction multicast_set_src_mac_and_vlan_id = 4;
+      // CAUTION: This action is not (yet) supported.
+      MulticastSetSrcMacAndDstMacAndVlanIdAction
+          multicast_set_src_mac_and_dst_mac_and_vlan_id = 5;
+      // CAUTION: This action is not (yet) supported.
+      MulticastSetSrcMacAndPreserveIngressVlanIdAction
+          multicast_set_src_mac_and_preserve_ingress_vlan_id = 6;
     }
   }
   Action action = 2;
@@ -347,11 +357,7 @@ message AclIngressTableEntry {
     Ternary icmp_type = 19;     // ternary match / Format::HEX_STRING / 8 bits
     Ternary l4_src_port = 20;   // ternary match / Format::HEX_STRING / 16 bits
     Ternary acl_metadata = 21;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary psp_next_header =
-        22;                 // ternary match / Format::HEX_STRING / 8 bits
-    Ternary psp_info = 23;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary inner_psp_udp_dst =
-        24;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary vlan_id = 22;       // ternary match / Format::HEX_STRING / 12 bits
   }
   Match match = 1;
   message Action {
@@ -361,6 +367,7 @@ message AclIngressTableEntry {
       AclForwardAction acl_forward = 3;
       AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
+      RedirectToNexthopAction redirect_to_nexthop = 7;
       // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
     }
@@ -612,6 +619,7 @@ message AclIngressQosTableEntry {
     Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary icmp_type = 14;     // ternary match / Format::HEX_STRING / 8 bits
     Ternary route_metadata = 15;  // ternary match / Format::HEX_STRING / 6 bits
+    Ternary vlan_id = 16;  // ternary match / Format::HEX_STRING / 12 bits
   }
   Match match = 1;
   message Action {
@@ -784,6 +792,19 @@ message AclIngressMirrorAndRedirectTableEntry {
   bytes controller_metadata = 8;
 }
 
+message AclEgressL2TableEntry {
+  message Match {
+    Ternary src_mac = 1;  // ternary match / Format::MAC
+  }
+  Match match = 1;
+  message Action {
+    AclDropAction acl_drop = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 // Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
 // of the v1model architecture and is not explicitly present in the P4 program.
 message MulticastGroupTableEntry {
@@ -917,6 +938,29 @@ message EgressLoopbackAction {}
 
 message L2MulticastPassthroughAction {}
 
+// CAUTION: This action is not (yet) supported.
+message MulticastSetSrcMacAction {
+  string src_mac = 1;  // Format::MAC
+}
+
+// CAUTION: This action is not (yet) supported.
+message MulticastSetSrcMacAndVlanIdAction {
+  string src_mac = 1;  // Format::MAC
+  string vlan_id = 2;  // Format::HEX_STRING / 12 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message MulticastSetSrcMacAndDstMacAndVlanIdAction {
+  string src_mac = 1;  // Format::MAC
+  string dst_mac = 2;  // Format::MAC
+  string vlan_id = 3;  // Format::HEX_STRING / 12 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message MulticastSetSrcMacAndPreserveIngressVlanIdAction {
+  string src_mac = 1;  // Format::MAC
+}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -1048,6 +1092,7 @@ message TableEntry {
     AclIngressSecurityTableEntry acl_ingress_security_table_entry = 266;
     AclIngressMirrorAndRedirectTableEntry
         acl_ingress_mirror_and_redirect_table_entry = 267;
+    AclEgressL2TableEntry acl_egress_l2_table_entry = 268;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }

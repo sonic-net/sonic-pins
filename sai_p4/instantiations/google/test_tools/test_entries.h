@@ -263,11 +263,14 @@ public:
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
-      const MirrorAndRedirectMatchFields &match_fields = {});
-  EntryBuilder &
-  AddIpv6TunnelTerminationEntry(const Ipv6TunnelTerminationParams &params);
-  EntryBuilder &AddMirrorSessionTableEntry(const MirrorSessionParams &params);
-  EntryBuilder &AddMarkToMirrorAclEntry(const MarkToMirrorParams &params);
+      const MirrorAndRedirectMatchFields& match_fields = {});
+  EntryBuilder& AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
+      const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
+  EntryBuilder& AddIpv6TunnelTerminationEntry(
+      const Ipv6TunnelTerminationParams& params);
+  EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
+  EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
+  EntryBuilder& AddEgressPortLoopbackEntry(absl::string_view out_port);
 
 private:
   sai::TableEntries entries_;
