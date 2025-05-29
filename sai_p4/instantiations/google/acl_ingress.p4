@@ -7,7 +7,7 @@
 #include "../../fixed/packet_io.p4"
 #include "acl_common_actions.p4"
 #include "ids.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 control acl_ingress(in headers_t headers,
                     inout local_metadata_t local_metadata,
@@ -49,6 +49,8 @@ control acl_ingress(in headers_t headers,
   // In ToRs, the acl_ingress_table copy action will not apply a rate limit.
   // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
   @sai_action(SAI_PACKET_ACTION_COPY)
+  //TODO: Rename parameter to `cpu_queue`.
+  //TODO: Rename type to `cpu_queue_t`.
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
     local_metadata.marked_to_copy = true;
@@ -56,6 +58,8 @@ control acl_ingress(in headers_t headers,
 #else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
+  //TODO: Rename parameter to `cpu_queue`.
+  //TODO: Rename type to `cpu_queue_t`.
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
     acl_ingress_meter.read(local_metadata.color);
@@ -76,6 +80,8 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
 #endif
+  //TODO: Rename parameter to `cpu_queue`.
+  //TODO: Rename type to `cpu_queue_t`.
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_copy(qos_queue);
     // TODO: Use `acl_drop(local_metadata)` instead when supported
@@ -148,13 +154,13 @@ control acl_ingress(in headers_t headers,
       @id(1) @sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP) bit<6> dscp,
       @id(2) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
       @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_multicast_queue,
+        multicast_queue_t green_multicast_queue,
       @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue,
+        multicast_queue_t red_multicast_queue,
       @id(5) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_unicast_queue,
+        unicast_queue_t green_unicast_queue,
       @id(6) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_unicast_queue) {
+        unicast_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -187,13 +193,13 @@ control acl_ingress(in headers_t headers,
   @unsupported
   action set_forwarding_queues(
       @id(1) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_multicast_queue,
+        multicast_queue_t green_multicast_queue,
       @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue,
+        multicast_queue_t red_multicast_queue,
       @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_unicast_queue,
+        unicast_queue_t green_unicast_queue,
       @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_unicast_queue) {
+        unicast_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
   }
 
@@ -227,10 +233,27 @@ control acl_ingress(in headers_t headers,
     local_metadata.wcmp_group_id_valid = false;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
+  action redirect_to_nexthop(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
+    @refers_to(nexthop_table, nexthop_id)
+    nexthop_id_t nexthop_id) {
+
+    // Set nexthop id.
+    local_metadata.nexthop_id_valid = true;
+    local_metadata.nexthop_id_value = nexthop_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_TABLE_ID)
   @sai_acl(INGRESS)
   @sai_acl_priority(5)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -308,7 +331,8 @@ control acl_ingress(in headers_t headers,
           @id(13) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
 #if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
-      headers.icmp.type : ternary @name("icmp_type") @id(19)
+      headers.icmp.type : ternary
+          @id(19) @name("icmp_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
 #endif
       headers.icmp.type : ternary @name("icmpv6_type") @id(14)
@@ -318,7 +342,8 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary @name("l4_dst_port") @id(15)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_TOR)
-      headers.arp.target_proto_addr : ternary @name("arp_tpa") @id(16)
+      headers.arp.target_proto_addr : ternary
+          @id(16) @name("arp_tpa")
           @composite_field(
               @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
               @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
@@ -330,6 +355,16 @@ control acl_ingress(in headers_t headers,
       local_metadata.route_metadata : optional @name("route_metadata") @id(18)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #endif
+#if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
+      local_metadata.acl_metadata : ternary
+          @id(21) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+#endif
+#if defined(SAI_INSTANTIATION_TOR)
+      local_metadata.vlan_id : ternary
+        @id(22) @name("vlan_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
     }
     actions = {
       @proto_id(1) acl_copy();
@@ -338,6 +373,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
+      @proto_id(7) redirect_to_nexthop();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -409,6 +445,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+      local_metadata.acl_metadata : ternary
+          @id(13) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
       local_metadata.route_metadata : ternary
           @id(15) @name("route_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
@@ -433,9 +472,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
-      local_metadata.acl_metadata : ternary
-          @id(13) @name("acl_metadata")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+      local_metadata.vlan_id : ternary
+          @id(16) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
 #endif
     }
     actions = {
@@ -492,22 +531,6 @@ control acl_ingress(in headers_t headers,
     const default_action = NoAction;
     counters = acl_ingress_counting_counter;
     size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
-  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
-  action redirect_to_nexthop(
-    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
-    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
-    @refers_to(nexthop_table, nexthop_id)
-    nexthop_id_t nexthop_id) {
-
-    // Set nexthop id.
-    local_metadata.nexthop_id_valid = true;
-    local_metadata.nexthop_id_value = nexthop_id;
-
-    // Cancel other forwarding decisions (if any).
-    local_metadata.wcmp_group_id_valid = false;
-    standard_metadata.mcast_grp = 0;
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID)

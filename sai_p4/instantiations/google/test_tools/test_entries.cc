@@ -157,29 +157,76 @@ EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
 EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     absl::string_view egress_port, IpVersion ip_version, absl::string_view vrf,
     const NexthopRewriteOptions& rewrite_options) {
-  const std::string kNexthopId =
+  struct IpForwardingParams ip_forwarding_params;
+  if (ip_version == IpVersion::kIpv4) {
+    ip_forwarding_params.ipv6_lpm = std::nullopt;
+  } else if (ip_version == IpVersion::kIpv6) {
+    ip_forwarding_params.ipv4_lpm = std::nullopt;
+  }
+
+  return AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+      egress_port, vrf, ip_forwarding_params, rewrite_options);
+}
+
+EntryBuilder& EntryBuilder::AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+    absl::string_view egress_port, absl::string_view vrf,
+    const IpForwardingParams& ip_forwarding_params,
+    const NexthopRewriteOptions& rewrite_options) {
+  const std::string nexthop_id =
       absl::StrFormat("nexthop(%s, %s)", egress_port, vrf)
           // Ideally we would use the whole ID, but it may be longer than BMv2
           // can support.
           .substr(0, 31);
 
-  // Add IPv4 default route.
-  if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
-    auto& ipv4_entry = *entries_.add_entries()->mutable_ipv4_table_entry();
-    ipv4_entry.mutable_match()->set_vrf_id(vrf);
-    ipv4_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
-        kNexthopId);
+  if (ip_forwarding_params.ipv4_lpm.has_value()) {
+    AddIpv4EntrySettingNexthopId(nexthop_id, vrf,
+                                 ip_forwarding_params.ipv4_lpm.value());
+  }
+  if (ip_forwarding_params.ipv6_lpm.has_value()) {
+    AddIpv6EntrySettingNexthopId(nexthop_id, vrf,
+                                 ip_forwarding_params.ipv6_lpm.value());
+  }
+  return AddNexthopRifNeighborEntries(nexthop_id, egress_port, rewrite_options);
+}
+
+EntryBuilder& EntryBuilder::EntryBuilder::AddIpv4EntrySettingNexthopId(
+    absl::string_view nexthop_id, absl::string_view vrf,
+    const Ipv4Lpm& ipv4_lpm) {
+  sai::Ipv4TableEntry& ipv4_entry =
+      *entries_.add_entries()->mutable_ipv4_table_entry();
+  ipv4_entry.mutable_match()->set_vrf_id(vrf);
+
+  if (!ipv4_lpm.dst_ip.IsAllZeros()) {
+    ipv4_entry.mutable_match()->mutable_ipv4_dst()->set_value(
+        ipv4_lpm.dst_ip.ToString());
+    ipv4_entry.mutable_match()->mutable_ipv4_dst()->set_prefix_length(
+        ipv4_lpm.prefix_len);
   }
 
-  // Add IPv6 default route.
-  if (ip_version == IpVersion::kIpv6 || ip_version == IpVersion::kIpv4And6) {
-    auto& ipv6_entry = *entries_.add_entries()->mutable_ipv6_table_entry();
-    ipv6_entry.mutable_match()->set_vrf_id(vrf);
-    ipv6_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
-        kNexthopId);
+  ipv4_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+      nexthop_id);
+
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIpv6EntrySettingNexthopId(
+    absl::string_view nexthop_id, absl::string_view vrf,
+    const Ipv6Lpm& ipv6_lpm) {
+  sai::Ipv6TableEntry& ipv6_entry =
+      *entries_.add_entries()->mutable_ipv6_table_entry();
+  ipv6_entry.mutable_match()->set_vrf_id(vrf);
+
+  if (!ipv6_lpm.dst_ip.IsAllZeros()) {
+    ipv6_entry.mutable_match()->mutable_ipv6_dst()->set_value(
+        ipv6_lpm.dst_ip.ToString());
+    ipv6_entry.mutable_match()->mutable_ipv6_dst()->set_prefix_length(
+        ipv6_lpm.prefix_len);
   }
 
-  return AddNexthopRifNeighborEntries(kNexthopId, egress_port, rewrite_options);
+  ipv6_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+      nexthop_id);
+
+  return *this;
 }
 
 EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
@@ -192,6 +239,20 @@ EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
       .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id, ip_version)
       .AddDefaultRouteForwardingAllPacketsToGivenPort(egress_port, ip_version,
                                                       vrf_id, rewrite_options);
+}
+
+EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
+    absl::string_view egress_port,
+    const IpForwardingParams& ip_forwarding_params,
+    const NexthopRewriteOptions& rewrite_options) {
+  const std::string vrf_id = "vrf";
+
+  return AddEntryAdmittingAllPacketsToL3()
+      .AddVrfEntry(vrf_id)
+      .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id,
+                                                       IpVersion::kIpv4And6)
+      .AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+          egress_port, vrf_id, ip_forwarding_params, rewrite_options);
 }
 
 EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
@@ -395,8 +456,12 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
   // Create router interface entry.
   sai::RouterInterfaceTableEntry& rif_entry =
       *entries_.add_entries()->mutable_router_interface_table_entry();
-  const netaddr::MacAddress src_mac =
-      rewrite_options.src_mac_rewrite.value_or(netaddr::MacAddress::AllZeros());
+  // If no SMAC is provided, SMAC rewrite will be disabled for nexthop. In that
+  // case, we can use any valid value for RIF's SMAC rewrite, we choose
+  // 22:22:22:22:22:22 arbitrarily. Note that value 0 won't be accepted by the
+  // switch 
+  const netaddr::MacAddress src_mac = rewrite_options.src_mac_rewrite.value_or(
+      netaddr::MacAddress(0x22, 0x22, 0x22, 0x22, 0x22, 0x22));
   const std::string kRifId =
       absl::StrFormat("rif(%s,%s,%s)", egress_port, src_mac.ToString(),
                       rewrite_options.egress_rif_vlan.value_or("no_vlan"))
@@ -422,8 +487,11 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
   // Create neighbor table entry.
   sai::NeighborTableEntry& neighbor_entry =
       *entries_.add_entries()->mutable_neighbor_table_entry();
-  const netaddr::MacAddress dst_mac =
-      rewrite_options.dst_mac_rewrite.value_or(netaddr::MacAddress::AllZeros());
+  // If no DST is provided, DMAC rewrite will be disabled for nexthop. In that
+  // case, we can use any valid value for RIF's DST rewrite, we choose
+  // 22:22:22:22:22:22 arbitrary.
+  const netaddr::MacAddress dst_mac = rewrite_options.dst_mac_rewrite.value_or(
+      netaddr::MacAddress(0x22, 0x22, 0x22, 0x22, 0x22, 0x22));
   const std::string neighbor_id = dst_mac.ToLinkLocalIpv6Address().ToString();
   neighbor_entry.mutable_match()->set_router_interface_id(kRifId);
   neighbor_entry.mutable_match()->set_neighbor_id(neighbor_id);
@@ -481,7 +549,6 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   if (match_fields.dst_ip.has_value()) {
     entry.mutable_match()->mutable_dst_ip()->set_value(
         match_fields.dst_ip->value.ToString());
-
     entry.mutable_match()->mutable_dst_ip()->set_mask(
         match_fields.dst_ip->mask.ToString());
   }
@@ -492,7 +559,6 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   if (match_fields.dst_ipv6.has_value()) {
     entry.mutable_match()->mutable_dst_ipv6()->set_value(
         match_fields.dst_ipv6->value.ToString());
-
     entry.mutable_match()->mutable_dst_ipv6()->set_mask(
         match_fields.dst_ipv6->mask.ToString());
   }
@@ -524,11 +590,75 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToMulticastGroup(
         pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
+  if (match_fields.is_ipv4.has_value()) {
+    entry.mutable_match()->mutable_is_ipv4()->set_value(
+        BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    entry.mutable_match()->mutable_is_ipv6()->set_value(
+        BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.dst_ip.has_value()) {
+    entry.mutable_match()->mutable_dst_ip()->set_value(
+        match_fields.dst_ip->value.ToString());
+    entry.mutable_match()->mutable_dst_ip()->set_mask(
+        match_fields.dst_ip->mask.ToString());
+  }
+  if (match_fields.dst_ipv6.has_value()) {
+    entry.mutable_match()->mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
+        match_fields.dst_ipv6->mask.ToString());
+  }
   entry.mutable_action()
       ->mutable_redirect_to_ipmc_group()
       ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
   entry.set_priority(1);
 
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
+    const MirrorAndRedirectMatchFields& match_fields, int priority) {
+  sai::AclIngressMirrorAndRedirectTableEntry& entry =
+      *entries_.add_entries()
+           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+  if (match_fields.in_port.has_value()) {
+    entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (match_fields.ipmc_table_hit.has_value()) {
+    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
+        BoolToHexString(*match_fields.ipmc_table_hit));
+  }
+  if (match_fields.vlan_id.has_value()) {
+    entry.mutable_match()->mutable_vlan_id()->set_value(
+        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
+  }
+  if (match_fields.dst_ip.has_value()) {
+    entry.mutable_match()->mutable_dst_ip()->set_value(
+        match_fields.dst_ip->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ip()->set_mask(
+        match_fields.dst_ip->mask.ToString());
+  }
+  if (match_fields.is_ipv4.has_value()) {
+    entry.mutable_match()->mutable_is_ipv4()->set_value(
+        BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.dst_ipv6.has_value()) {
+    entry.mutable_match()->mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
+        match_fields.dst_ipv6->mask.ToString());
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    entry.mutable_match()->mutable_is_ipv6()->set_value(
+        BoolToHexString(*match_fields.is_ipv6));
+  }
+  entry.mutable_action()->mutable_acl_forward();
+  entry.set_priority(priority);
   return *this;
 }
 

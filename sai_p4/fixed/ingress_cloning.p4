@@ -6,7 +6,7 @@
 #include "metadata.p4"
 #include "ids.h"
 #include "roles.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 control ingress_cloning(inout headers_t headers,
                         inout local_metadata_t local_metadata,
