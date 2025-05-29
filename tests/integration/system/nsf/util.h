@@ -16,15 +16,16 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UTIL_H_
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "google/protobuf/message.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
@@ -77,12 +78,11 @@ absl::Status InstallRebootPushConfig(
 
 // Validates P4, gNMI, SSH connections and port status of the SUT and Control
 // Switch (if present) along with validating the stack version of the SUT.
-// Also optionally validates the gNMI config convergence if a gNMI config is
-// provided.
-absl::Status
-ValidateTestbedState(absl::string_view version, Testbed &testbed,
-                     thinkit::SSHClient &ssh_client,
-                     const std::optional<absl::string_view> &gnmi_config);
+// Also optionally validates the gNMI config convergence if an
+// `image_config_param` is provided.
+absl::Status ValidateTestbedState(
+    Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr);
 
 absl::Status ValidateComponents(
     absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed&),
@@ -105,11 +105,14 @@ absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         Testbed& testbed, thinkit::SSHClient& ssh_client);
 
-absl::StatusOr<std::vector<p4::v1::Entity>> TakeP4FlowSnapshot(
-    Testbed& testbed);
+absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
 
-absl::Status CompareP4FlowSnapshots(absl::Span<const p4::v1::Entity> a,
-                                    absl::Span<const p4::v1::Entity> b);
+absl::Status CompareP4FlowSnapshots(::p4::v1::ReadResponse snapshot_1,
+                                    ::p4::v1::ReadResponse snapshot_2);
+
+absl::Status SaveP4FlowSnapshot(Testbed& testbed,
+                                ::p4::v1::ReadResponse snapshot,
+                                absl::string_view file_name);
 
 // Stores the healthz debug artifacts of the SUT with the given `prefix` as:
 // "{prefix}_healthz"
