@@ -54,6 +54,10 @@
 // Indicates the switch supports multicast group entry metadata.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_MULTICAST_METADATA "2.2.0"
 
+// Indicates the switch supports the `acl_egress_l2_table` (if of the right
+// instantiation).
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_EGRESS_L2_TABLE "2.3.0"
+
 // Indicates that the program supports ternary rather than optional route
 // metadata in the acl_ingress_table.
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
@@ -64,6 +68,6 @@
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_SUPPORTS_MULTICAST_METADATA
+  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_EGRESS_L2_TABLE
 
 #endif // PINS_SAI_VERSIONS_H_

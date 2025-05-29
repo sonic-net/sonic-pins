@@ -23,6 +23,10 @@ const ipv4_addr_t IPV4_BROADCAST_VALUE = 0xff_ff_ff_ff;
 const ipv4_addr_t IPV4_LOOPBACK_MASK = 0xff_00_00_00;
 const ipv4_addr_t IPV4_LOOPBACK_VALUE = 0x7f_00_00_00;
 
+// 0.X.Y.Z/8
+const ipv4_addr_t IPV4_THIS_HOST_ON_THIS_NETWORK_MASK = 0xff_00_00_00;
+const ipv4_addr_t IPV4_THIS_HOST_ON_THIS_NETWORK_VALUE = 0x00_00_00_00;
+
 #define IS_MULTICAST_IPV6(address) \
   (address & IPV6_MULTICAST_MASK == IPV6_MULTICAST_VALUE)
 
@@ -37,6 +41,9 @@ const ipv4_addr_t IPV4_LOOPBACK_VALUE = 0x7f_00_00_00;
 
 #define IS_LOOPBACK_IPV4(address) \
   (address & IPV4_LOOPBACK_MASK == IPV4_LOOPBACK_VALUE)
+
+#define IS_THIS_HOST_ON_THIS_NETWORK_IPV4(address) \
+  (address & IPV4_THIS_HOST_ON_THIS_NETWORK_MASK == IPV4_THIS_HOST_ON_THIS_NETWORK_VALUE)
 
 // I/G bit = 1 means multicast.
 #define IS_UNICAST_MAC(address) \
@@ -56,12 +63,15 @@ control drop_martians(in headers_t headers,
     // - Src IPv6 address is in multicast range; or
     // - Src IPv4 address is in multicast or broadcast range; or
     // - Src/Dst IPv4/IPv6 address is a loopback address; or
+    // - Dst IPv4 address is 0.X.Y.Z; or
     // - Dst IPv4/IPv6 is the all-zero address.
     // Rationale:
     // Src IP multicast drop: https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
     // Src/Dst IP loopback drop: https://en.wikipedia.org/wiki/Localhost#Packet_processing
     //    "Packets received on a non-loopback interface with a loopback source
     //     or destination address must be dropped."
+    // Drop Dst IP signifying "this host on this network" (i.e. 0.X.Y.Z):
+    //    https://datatracker.ietf.org/doc/html/rfc6890#section-2.2.2
     // Dst IP all zeroes drop: https://en.wikipedia.org/wiki/0.0.0.0
     //    "RFC 1122 [...] prohibits this as a destination address."
     if ((headers.ipv6.isValid() &&
@@ -75,6 +85,7 @@ control drop_martians(in headers_t headers,
              IS_BROADCAST_IPV4(headers.ipv4.dst_addr) ||
              IS_LOOPBACK_IPV4(headers.ipv4.src_addr) ||
              IS_LOOPBACK_IPV4(headers.ipv4.dst_addr) ||
+             IS_THIS_HOST_ON_THIS_NETWORK_IPV4(headers.ipv4.dst_addr) ||
              headers.ipv4.dst_addr == 0))
        ) {
         mark_to_drop(standard_metadata);
