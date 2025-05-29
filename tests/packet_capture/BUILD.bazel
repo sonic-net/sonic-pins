@@ -20,6 +20,9 @@ package(
 cc_library(
     name = "packet_capture_test",
     testonly = True,
+    srcs = [
+        "packet_capture_test.cc",
+    ],
     hdrs = [
         "packet_capture_test.h",
     ],
