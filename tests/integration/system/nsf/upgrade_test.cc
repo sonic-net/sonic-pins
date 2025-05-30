@@ -45,13 +45,15 @@ ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
 
 namespace pins_test {
 
-using ::p4::v1::Entity;
+using ::p4::v1::ReadResponse;
 
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
 constexpr int kErrorPercentage = 1;
 constexpr absl::Duration kTrafficRunDuration = absl::Minutes(15);
 
+// TODO: Compare and look into possibility of using a better
+// approach than using std::variant (eg. type-erasure or typed tests).
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
   traffic_helper_ = GetParam().create_traffic_helper();
@@ -69,9 +71,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label;
 
-  RETURN_IF_ERROR(ValidateTestbedState(curr_image_config.image_label, testbed_,
-                                       *ssh_client_,
-                                       curr_image_config.gnmi_config));
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &curr_image_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
                                      component_validators_,
                                      curr_image_config.image_label, testbed_));
@@ -82,13 +83,15 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot1,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot1, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot1,
+                         "p4flow_snapshot1_before_programming_flows.txt"));
 
   // Program all the flows.
   LOG(INFO) << "Programming flows before starting the traffic";
-  RETURN_IF_ERROR(
-      flow_programmer_->ProgramFlows(curr_image_config.p4_info, testbed_));
+  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(curr_image_config.p4_info,
+                                                 testbed_, *ssh_client_));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowProgram,
                                      component_validators_,
                                      curr_image_config.image_label, testbed_));
@@ -101,8 +104,10 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // P4 snapshot before Upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot2,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot2, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot2,
+                         "p4flow_snapshot2_before_upgrade_and_nsf.txt"));
 
   LOG(INFO) << "Starting NSF Upgrade";
   // Copy image to the switch for installation.
@@ -112,15 +117,15 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnImageCopy,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
+  // TODO: Validate uptime and boot-type once they are supported.
 
   // Perform NSF Reboot.
   RETURN_IF_ERROR(NsfReboot(testbed_));
   RETURN_IF_ERROR(WaitForNsfReboot(testbed_, *ssh_client_));
 
   // Perform validations after reboot is completed.
-  RETURN_IF_ERROR(ValidateTestbedState(next_image_config.image_label, testbed_,
-                                       *ssh_client_,
-                                       next_image_config.gnmi_config));
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
@@ -130,14 +135,15 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot3,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot3, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
+                         "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
   // Push the new config and validate.
   RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateTestbedState(next_image_config.image_label, testbed_,
-                                       *ssh_client_,
-                                       next_image_config.gnmi_config));
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
@@ -150,15 +156,23 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   LOG(INFO) << "Stopping the traffic";
   RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed_));
 
+  // TODO: For now, we validate traffic only after stopping
+  // traffic. Ideally we would want to validate traffic while injection is in
+  // progress to narrow down when the traffic loss occurred (i.e. before reboot,
+  // during reboot or after reconciliation). Although this is possible in OTG
+  // traffic generator, DVaaS traffic generator for now does not support traffic
+  // validation before stopping the traffic. This is a good-to-have feature and
+  // we will update the skeleton to validate traffic while injection is ongoing
+  // once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
   RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
 
-  // Selectively clear flows (eg. not clearing nexthop entries for host
-  // testbeds).
-  LOG(INFO) << "Clearing the flows";
+  // TODO: Look into resetting the testbed state, including the
+  // flows on the SUT, in the same state as that before the test.
+  LOG(INFO) << "Clearing the flows from SUT";
   RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed_));
 
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowCleanup,
@@ -167,15 +181,16 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot4,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot4, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(SaveP4FlowSnapshot(
+      testbed_, p4flow_snapshot4, "p4flow_snapshot4_after_clearing_flows.txt"));
 
   LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
                "Clearing Flows";
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
+  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
   LOG(INFO) << "Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs. After "
                "Upgrade + NSF Reboot";
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
+  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
   LOG(INFO) << "NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label << " is complete.";
   return absl::OkStatus();
