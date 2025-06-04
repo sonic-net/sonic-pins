@@ -97,6 +97,24 @@ absl::StatusOr<IrEntities> ValidIrEntities() {
 
 using VectorTranslationTest = testing::TestWithParam<pdpi::TranslationOptions>;
 
+TEST(CloneSessionTest, IrToPdCloneSessionEntryTranslationFails) {
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntity ir_entity,
+                       gutil::ParseTextProto<pdpi::IrEntity>(R"pb(
+                         packet_replication_engine_entry {
+                           clone_session_entry {
+                             session_id: 7
+                             replicas { port: "some_port" instance: 1 }
+                             replicas { port: "some_port" instance: 2 }
+                             replicas { port: "some_other_port" instance: 1 }
+                           }
+                         }
+                       )pb"));
+  TableEntry clone_session_pd;
+  EXPECT_THAT(
+      IrEntityToPdTableEntry(GetTestIrP4Info(), ir_entity, &clone_session_pd),
+      StatusIs(absl::StatusCode::kUnimplemented));
+}
+
 TEST_P(VectorTranslationTest,
        FooTableEntriesToBarPointWiseEqualFooTableEntryToBar) {
   const TranslationOptions options = GetParam();
