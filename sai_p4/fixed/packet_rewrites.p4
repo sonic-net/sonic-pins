@@ -34,6 +34,51 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
     local_metadata.packet_rewrites.vlan_id = INTERNAL_VLAN_ID;
   }
 
+  @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_VLAN_ID_ACTION_ID)
+  @unsupported
+  action set_src_mac_and_vlan_id(
+      @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
+      @id(2) vlan_id_t vlan_id) {
+    local_metadata.enable_src_mac_rewrite = true;
+    local_metadata.packet_rewrites.src_mac = src_mac;
+
+    local_metadata.enable_vlan_rewrite = true;
+    local_metadata.packet_rewrites.vlan_id = vlan_id;
+  }
+
+  @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_ACTION_ID)
+  @unsupported
+  action set_src_mac(@id(1) @format(MAC_ADDRESS)
+                               ethernet_addr_t src_mac) {
+    set_src_mac_and_vlan_id(src_mac, INTERNAL_VLAN_ID);
+  }
+
+  @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_DST_MAC_AND_VLAN_ID_ACTION_ID)
+  @unsupported
+  action set_src_mac_and_dst_mac_and_vlan_id(
+      @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
+      @id(2) @format(MAC_ADDRESS) ethernet_addr_t dst_mac,
+      @id(3) vlan_id_t vlan_id) {
+    local_metadata.enable_src_mac_rewrite = true;
+    local_metadata.packet_rewrites.src_mac = src_mac;
+
+    local_metadata.enable_dst_mac_rewrite = true;
+    local_metadata.packet_rewrites.dst_mac = dst_mac;
+
+    local_metadata.enable_vlan_rewrite = true;
+    local_metadata.packet_rewrites.vlan_id = vlan_id;
+  }
+
+  @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_PRESERVE_INGRESS_VLAN_ID_ACTION_ID)
+  @unsupported
+  action set_src_mac_and_preserve_ingress_vlan_id(
+      @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac) {
+    local_metadata.enable_src_mac_rewrite = true;
+    local_metadata.packet_rewrites.src_mac = src_mac;
+
+    local_metadata.enable_vlan_rewrite = false;
+  }
+
   @id(ROUTING_L2_MULTICAST_PASSTHROUGH_ACTION_ID)
   action l2_multicast_passthrough() {}
 
@@ -75,8 +120,14 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
         @id(2);
     }
     actions = {
+      // such an image is rolled out.
+      // Deprecated: use `set_src_mac` instead.
       @proto_id(1) set_multicast_src_mac;
       @proto_id(2) l2_multicast_passthrough;
+      @proto_id(3) set_src_mac;
+      @proto_id(4) set_src_mac_and_vlan_id;
+      @proto_id(5) set_src_mac_and_dst_mac_and_vlan_id;
+      @proto_id(6) set_src_mac_and_preserve_ingress_vlan_id;
     }
     size = ROUTING_MULTICAST_SOURCE_MAC_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
