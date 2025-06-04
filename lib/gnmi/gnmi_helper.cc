@@ -1490,6 +1490,40 @@ absl::string_view StripBrackets(absl::string_view string) {
   return absl::StripPrefix(absl::StripSuffix(string, "]"), "[");
 }
 
+absl::StatusOr<absl::btree_set<std::string>>
+GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      std::string response,
+      pins_test::GetGnmiStatePathInfo(&gnmi_stub, "interfaces",
+                                      "openconfig-interfaces:interfaces"));
+
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json interfaces, GetField(response_json, "interface"));
+
+  absl::btree_set<std::string> loopback_mode_set;
+  for (const auto& interface : interfaces.items()) {
+    ASSIGN_OR_RETURN(json config, GetField(interface.value(), "config"));
+    // Skip if the config doesn't have loopback-mode.
+    if (config.find("loopback-mode") == config.end()) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(json loopback_mode, GetField(config, "loopback-mode"));
+    if (loopback_mode.get<std::string>() == "ASIC_MAC_LOCAL") {
+      if (config.find("openconfig-p4rt:id") == config.end()) {
+        return gutil::InternalErrorBuilder().LogError()
+               << "openconfig-p4rt:id is missing in gNMI configuration and is "
+                  "required for ASIC_MAC_LOCAL loopback mode.";
+      }
+      ASSIGN_OR_RETURN(json port, GetField(config, "openconfig-p4rt:id"));
+      P4rtPortId p4rt_port_id =
+          P4rtPortId::MakeFromOpenConfigEncoding(port.get<int>());
+      loopback_mode_set.insert(p4rt_port_id.GetP4rtEncoding());
+    }
+  }
+  return loopback_mode_set;
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub) {
   ASSIGN_OR_RETURN(

@@ -48,6 +48,7 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "sai_p4/tools/auxiliary_entries_for_v1model_targets.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -177,10 +178,17 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "sut_bmv2_config.txt", p4_spec.bmv2_config.DebugString()));
 
-  // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
+
+  // Retrieve loopback info from gNMI configuration and create table entries.
+  ASSIGN_OR_RETURN(
+      pdpi::IrEntities loopback_table_entries,
+      sai::CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+
+  // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
                    pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+  entities.MergeFrom(loopback_table_entries);
 
   // Get enabled Ethernet ports from SUT's GNMI config.
   ASSIGN_OR_RETURN(std::vector<pins_test::P4rtPortId> ports,

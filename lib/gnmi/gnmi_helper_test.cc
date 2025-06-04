@@ -2318,6 +2318,56 @@ TEST(InterfaceToTransceiver, WorksProperly) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(LoopbackMode, WorksProperly) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+          {
+            "name":"EthernetEnabled0",
+            "config":{
+              "loopback-mode":"ASIC_MAC_LOCAL",
+              "openconfig-p4rt:id": 2
+            }
+          },
+          {
+            "name":"EthernetEnabled1",
+            "config":{
+              "loopback-mode":"NOT_ASIC_MAC_LOCAL",
+              "openconfig-p4rt:id": 4
+            }
+          },
+          {
+            "name":"EthernetEnabled2",
+            "config":{
+              "loopback-mode":"ASIC_MAC_LOCAL",
+              "openconfig-p4rt:id": 5
+            }
+          },
+          {
+            "name":"EthernetEnabled3",
+            "config":{
+              "openconfig-p4rt:id": 7
+            }
+          }
+        ]
+      }
+    })";
+
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::btree_set<std::string> expected_set{"2", "5"};
+  LOG(INFO) << "loopback_mode: ";
+  EXPECT_THAT(GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_set)));
+}
+
 TEST(TransceiverPartInformation, WorksProperly) {
   gnmi::GetResponse response;
   *response.add_notification()
