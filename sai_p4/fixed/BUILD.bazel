@@ -30,7 +30,7 @@ filegroup(
         "ipv4_checksum.p4",
         "l3_admit.p4",
         "metadata.p4",
-        "minimum_guaranteed_sizes.p4",
+        "minimum_guaranteed_sizes.h",
         "mirroring.p4",
         "packet_io.p4",
         "packet_rewrites.p4",
@@ -40,6 +40,11 @@ filegroup(
         "tunnel_termination.p4",
         "vlan.p4",
     ],
+)
+
+cc_library(
+    name = "minimum_guaranteed_sizes",
+    hdrs = ["minimum_guaranteed_sizes.h"],
 )
 
 cc_library(

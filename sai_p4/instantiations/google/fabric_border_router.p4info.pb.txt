@@ -196,6 +196,32 @@ tables {
 }
 tables {
   preamble {
+    id: 33554518
+    name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks_table"
+    alias: "disable_ingress_vlan_checks_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777256
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
     id: 33554507
     name: "ingress.tunnel_termination.ipv6_tunnel_termination_table"
     alias: "ipv6_tunnel_termination_table"
@@ -717,6 +743,13 @@ tables {
     match_type: TERNARY
   }
   match_fields {
+    id: 13
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
     id: 15
     name: "route_metadata"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
@@ -1117,6 +1150,96 @@ tables {
 }
 tables {
   preamble {
+    id: 33554519
+    name: "egress.egress_vlan_checks.disable_egress_vlan_checks_table"
+    alias: "disable_egress_vlan_checks_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777257
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
+    id: 33554515
+    name: "egress.egress_vlan_checks.vlan_table"
+    alias: "vlan_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Disallow creating reserved VLANs to rule out vendor specific behavior.\n    vlan_id != 0 && vlan_id != 4095;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vlan_id"
+    bitwidth: 12
+    match_type: EXACT
+  }
+  action_refs {
+    id: 24742814
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 4096
+}
+tables {
+  preamble {
+    id: 33554516
+    name: "egress.egress_vlan_checks.vlan_membership_table"
+    alias: "vlan_membership_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vlan_id"
+    annotations: "@refers_to(vlan_table , vlan_id)"
+    bitwidth: 12
+    match_type: EXACT
+  }
+  match_fields {
+    id: 2
+    name: "port"
+    match_type: EXACT
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  action_refs {
+    id: 16777252
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777253
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1024
+}
+tables {
+  preamble {
     id: 33554692
     name: "egress.acl_egress.acl_egress_table"
     alias: "acl_egress_table"
@@ -1270,6 +1393,13 @@ actions {
     name: "acl_metadata"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)"
     bitwidth: 8
+  }
+}
+actions {
+  preamble {
+    id: 16777256
+    name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks"
+    alias: "disable_ingress_vlan_checks"
   }
 }
 actions {
@@ -1487,7 +1617,7 @@ actions {
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1495,7 +1625,7 @@ actions {
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1503,7 +1633,7 @@ actions {
     name: "green_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
   params {
@@ -1511,7 +1641,7 @@ actions {
     name: "red_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
 }
@@ -1561,7 +1691,7 @@ actions {
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1569,7 +1699,7 @@ actions {
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1577,7 +1707,7 @@ actions {
     name: "green_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
   params {
@@ -1585,7 +1715,7 @@ actions {
     name: "red_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
 }
@@ -1929,8 +2059,8 @@ actions {
 actions {
   preamble {
     id: 16777249
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_vlan_id"
-    alias: "set_src_mac_and_vlan_id"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
+    alias: "multicast_set_src_mac_and_vlan_id"
     annotations: "@unsupported"
   }
   params {
@@ -1948,8 +2078,8 @@ actions {
 actions {
   preamble {
     id: 16777248
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac"
-    alias: "set_src_mac"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
+    alias: "multicast_set_src_mac"
     annotations: "@unsupported"
   }
   params {
@@ -1962,8 +2092,8 @@ actions {
 actions {
   preamble {
     id: 16777250
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_dst_mac_and_vlan_id"
-    alias: "set_src_mac_and_dst_mac_and_vlan_id"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
+    alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
     annotations: "@unsupported"
   }
   params {
@@ -1987,8 +2117,8 @@ actions {
 actions {
   preamble {
     id: 16777251
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_preserve_ingress_vlan_id"
-    alias: "set_src_mac_and_preserve_ingress_vlan_id"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
+    alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
     annotations: "@unsupported"
   }
   params {
@@ -2005,11 +2135,34 @@ actions {
     alias: "l2_multicast_passthrough"
   }
 }
+actions {
+  preamble {
+    id: 16777257
+    name: "egress.egress_vlan_checks.disable_egress_vlan_checks"
+    alias: "disable_egress_vlan_checks"
+  }
+}
+actions {
+  preamble {
+    id: 16777252
+    name: "egress.egress_vlan_checks.make_tagged_member"
+    alias: "make_tagged_member"
+  }
+}
+actions {
+  preamble {
+    id: 16777253
+    name: "egress.egress_vlan_checks.make_untagged_member"
+    alias: "make_untagged_member"
+  }
+}
 action_profiles {
   preamble {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
+    annotations: "@selector_size_semantics(\"sum_of_weights\")"
+    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
@@ -2154,6 +2307,15 @@ type_info {
     }
   }
   new_types {
+    key: "multicast_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "nexthop_id_t"
     value {
       translated_type {
@@ -2191,6 +2353,15 @@ type_info {
   }
   new_types {
     key: "tunnel_id_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
+    key: "unicast_queue_t"
     value {
       translated_type {
         sdn_string {

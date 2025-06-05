@@ -6,7 +6,7 @@
 #include "../../fixed/metadata.p4"
 #include "acl_common_actions.p4"
 #include "ids.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 #include "roles.h"
 
 control acl_egress(in headers_t headers,
@@ -19,6 +19,9 @@ control acl_egress(in headers_t headers,
 
   @id(ACL_EGRESS_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_egress_counter;
+
+  @id(ACL_EGRESS_L2_COUNTER_ID)
+  direct_counter(CounterType.packets_and_bytes) acl_egress_l2_counter;
 
   @id(ACL_EGRESS_DHCP_TO_HOST_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_egress_dhcp_to_host_counter;
@@ -169,6 +172,7 @@ control acl_egress(in headers_t headers,
       @defaultonly NoAction;
     }
     const default_action = NoAction;
+    counters = acl_egress_l2_counter;
     size = ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 

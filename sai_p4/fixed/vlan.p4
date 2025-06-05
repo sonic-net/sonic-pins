@@ -4,8 +4,10 @@
 #define SAI_VLAN_P4_
 
 #include <v1model.p4>
+#include "common_actions.p4"
 #include "headers.p4"
 #include "metadata.p4"
+#include "minimum_guaranteed_sizes.h"
 
 
 control vlan_untag(inout headers_t headers,
@@ -72,8 +74,50 @@ control vlan_untag(inout headers_t headers,
 control ingress_vlan_checks(inout headers_t headers,
                             inout local_metadata_t local_metadata,
                             inout standard_metadata_t standard_metadata) {
+  // Ingress VLAN checks are enabled by default.
+  bool enable_ingress_vlan_checks = true;
+
+  @id(DISABLE_INGRESS_VLAN_CHECKS_ACTION_ID)
+  action disable_ingress_vlan_checks() {
+    enable_ingress_vlan_checks = false;
+  }
+
+  // Models SAI_DISABLE_INGRESS_VLAN_CHECKS.
+  // If ingress VLAN checks are enabled (i.e. if the table is empty) and the
+  // ingress port is not a member of packet's VLAN at the end of the ingress
+  // pipeline, then the packet gets dropped (except for reserved VLANs 0 and
+  // 4095). With ingress VLAN checks disabled, such drops do not happen.
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(DISABLE_INGRESS_VLAN_CHECKS_TABLE_ID)
+  @entry_restriction("
+    // Force the dummy_match to be wildcard.
+    dummy_match::prefix_length == 0;
+  ")
+  // Remove @unsupported once the table is supported in the
+  // switch.
+  @unsupported
+  table disable_ingress_vlan_checks_table {
+    key = {
+      // Note: In the P4_16 specification, a table with no match keys cannot
+      // have entries (only the default action can be programmed which does not
+      // fit well in our SDN ecosystem). To alleviate this, we add a dummy match
+      // but force it to always be wildcard. We use LPM as match type to prevent
+      // having multiple entires with different priorities.
+      1w1 : lpm
+        @id(1) @name("dummy_match");
+    }
+    actions = {
+      @proto_id(1) disable_ingress_vlan_checks;
+    }
+    size = 1;
+  }
+
   apply {
+    // Ingress VLAN checks.
+    disable_ingress_vlan_checks_table.apply();
+
     if (local_metadata.enable_vlan_checks &&
+        enable_ingress_vlan_checks &&
         !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
       mark_to_drop(standard_metadata);
     }
@@ -86,16 +130,112 @@ control ingress_vlan_checks(inout headers_t headers,
 control egress_vlan_checks(inout headers_t headers,
                            inout local_metadata_t local_metadata,
                            inout standard_metadata_t standard_metadata) {
+  port_id_t port = (port_id_t)standard_metadata.egress_port;
+  bool egress_port_is_member_of_vlan = false;
+  // Egress VLAN checks are enabled by default.
+  bool enable_egress_vlan_checks = true;
+
+  @id(DISABLE_EGRESS_VLAN_CHECKS_ACTION_ID)
+  action disable_egress_vlan_checks() {
+    enable_egress_vlan_checks = false;
+  }
+
+  // Models SAI_DISABLE_EGRESS_VLAN_CHECKS.
+  // If egress VLAN checks are enabled (i.e. if the table is empty) and the
+  // egress port is not a member of packet's VLAN at the end of the egress
+  // pipeline, then the packet gets dropped (except for reserved VLANs 0 and
+  // 4095). With egress VLAN checks disabled, such drops do not happen.
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(DISABLE_EGRESS_VLAN_CHECKS_TABLE_ID)
+  @entry_restriction("
+    // Force the dummy_match to be wildcard.
+    dummy_match::prefix_length == 0;
+  ")
+  // Remove @unsupported once the table is supported in the
+  // switch.
+  @unsupported
+  table disable_egress_vlan_checks_table {
+    key = {
+      // Note: In the P4_16 specification, a table with no match keys cannot
+      // have entries (only the default action can be programmed which does not
+      // fit well in our SDN ecosystem). To alleviate this, we add a dummy match
+      // but force it to always be wildcard. We use LPM as match type to prevent
+      // having multiple entires with different priorities.
+      1w1 : lpm
+        @id(1) @name("dummy_match");
+    }
+    actions = {
+      @proto_id(1) disable_egress_vlan_checks;
+    }
+    size = 1;
+  }
+
+  @id(VLAN_MAKE_TAGGED_MEMBER_ACTION_ID)
+  action make_tagged_member() {
+    egress_port_is_member_of_vlan = true;
+  }
+
+  @id(VLAN_MAKE_UNTAGGED_MEMBER_ACTION_ID)
+  action make_untagged_member() {
+    egress_port_is_member_of_vlan = true;
+    local_metadata.omit_vlan_tag_on_egress_packet = true;
+  }
+
+  // Programming this table does not affect packet forwarding directly -- the
+  // table performs no actions -- but results in the creation/deletion of VLANs.
+  // This is a prerequisite to adding members to these VLANs in the
+  // `vlan_membership_table`, as is indicated by the
+  // `@refers_to(vlan_table, vlan_id)` annotations. Note that entries are ONLY
+  // needed for the VLAN membership table (e.g. matching on or setting VLAN
+  // does not require entries in this table).
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(VLAN_TABLE_ID)
+  @entry_restriction("
+    // Disallow creating reserved VLANs to rule out vendor specific behavior.
+    vlan_id != 0 && vlan_id != 4095;
+  ")
+  @unsupported
+  table vlan_table {
+    key = {
+      local_metadata.vlan_id : exact
+        @id(1) @name("vlan_id");
+    }
+    actions = {
+      @proto_id(1) no_action;
+    }
+    size = VLAN_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(VLAN_MEMBERSHIP_TABLE_ID)
+  // TODO: Remove @unsupported once the table is supported in SWSS.
+  @unsupported
+  table vlan_membership_table {
+    key = {
+      local_metadata.vlan_id : exact
+        @id(1) @name("vlan_id") @refers_to(vlan_table, vlan_id);
+      port: exact
+        @id(2) @name("port");
+    }
+    actions = {
+      @proto_id(1) make_tagged_member;
+      @proto_id(2) make_untagged_member;
+      @defaultonly NoAction;
+    }
+  }
+
   apply {
-    if (local_metadata.enable_vlan_checks) {
-      // For mirrored-encapped packets, the encapped VLAN header's VLAN ID
-      // metadata is different from that of normal VLAN header.
-      if (IS_MIRROR_COPY(standard_metadata) &&
-          !IS_RESERVED_VLAN_ID(local_metadata.mirror_encap_vlan_id)) {
+    // Egress VLAN checks.
+    disable_egress_vlan_checks_table.apply();
+    vlan_table.apply();
+    if (!IS_PACKET_IN_COPY(standard_metadata) &&
+        !IS_MIRROR_COPY(standard_metadata)) {
+      vlan_membership_table.apply();
+      if (local_metadata.enable_vlan_checks &&
+          enable_egress_vlan_checks &&
+          !egress_port_is_member_of_vlan &&
+          !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
         mark_to_drop(standard_metadata);
-      } else if (!IS_PACKET_IN_COPY(standard_metadata) &&
-                 !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
-          mark_to_drop(standard_metadata);
       }
     }
   }
@@ -107,7 +247,8 @@ control vlan_tag(inout headers_t headers,
                  inout standard_metadata_t standard_metadata) {
   apply {
     if (!IS_RESERVED_VLAN_ID(local_metadata.vlan_id) &&
-        !IS_MIRROR_COPY(standard_metadata)) {
+        !IS_MIRROR_COPY(standard_metadata) &&
+        !local_metadata.omit_vlan_tag_on_egress_packet) {
       // Mirroring encapsulates a series of headers, including a VLAN header.
       // To seperate concerns, vlan encapping for mirroring is skipped here.
       headers.vlan.setValid();
