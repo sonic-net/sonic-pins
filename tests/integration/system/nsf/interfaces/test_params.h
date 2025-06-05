@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -46,6 +47,7 @@ struct NsfTestParams {
   std::function<std::vector<std::string>(NsfUpgradeScenario)> get_test_case_ids;
   bool enable_interface_validation_during_nsf = true;
   bool enable_dynamic_replay = false;
+  sai::Instantiation sut_instantiation = sai::Instantiation::kTor;
 };
 
 }  // namespace pins_test

@@ -14,24 +14,21 @@
 
 #include "tests/qos/frontpanel_qos_test.h"
 
-#include <algorithm>
 #include <cmath>
-#include <complex>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
@@ -40,12 +37,13 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
@@ -80,7 +78,6 @@
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
@@ -873,7 +870,8 @@ TEST_P(FrontpanelQosTest,
                 ixia::BytesPerSecondReceived(kIxiaTrafficStats);
             LOG(INFO) << "observed traffic rate (bytes/second): "
                       << kObservedTrafficRate;
-            const int kAbsoluteError = kObservedTrafficRate - kTargetQueuePir;
+            const int64_t kAbsoluteError =
+                kObservedTrafficRate - kTargetQueuePir;
             const double kRelativeErrorPercent =
                 100. * kAbsoluteError / kTargetQueuePir;
             constexpr double kTolerancePercent = 10;  // +-10% tolerance.

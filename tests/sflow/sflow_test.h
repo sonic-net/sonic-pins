@@ -52,6 +52,10 @@ struct SflowTestParams {
   int sample_size;
   // For sampling rate tests.
   int sample_rate;
+  uint64_t traffic_speed;
+  uint64_t run_time;
+  int iterations;
+  bool measure_cpumem;
   // For NSF tests.
   bool nsf_enabled;
   NosParameters nos_param;
@@ -98,6 +102,8 @@ class SampleSizeTest : public SflowTestFixture {};
 class SampleRateTest : public SflowTestFixture {};
 
 class BackoffTest : public SflowTestFixture {};
+
+class MeasurementTest : public SflowTestFixture {};
 
 class SflowNsfTestFixture : public SflowTestFixture {
   void TearDown() override;
