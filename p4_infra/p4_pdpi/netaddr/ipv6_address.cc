@@ -34,7 +34,7 @@ namespace netaddr {
 
 absl::StatusOr<Ipv6Address> Ipv6Address::OfString(absl::string_view address) {
   std::string bytes = std::string(128 / 8, '\x0');
-  if (inet_pton(AF_INET6, address.data(), bytes.data()) == 1) {
+  if (inet_pton(AF_INET6, std::string(address).c_str(), bytes.data()) == 1) {
     auto ip = Ipv6Address::OfByteString(bytes);
     if (ip.ok()) return ip;
     LOG(DFATAL) << "failed to parse IPv6 byte string produced by inet_pton: "
