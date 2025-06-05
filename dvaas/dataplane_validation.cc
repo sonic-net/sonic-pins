@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -26,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_run_validation.h"
@@ -183,7 +185,7 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   // Retrieve loopback info from gNMI configuration and create table entries.
   ASSIGN_OR_RETURN(
       pdpi::IrEntities loopback_table_entries,
-      sai::CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+      backend.CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
 
   // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
@@ -311,27 +313,83 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
         ValidateTestRun(test_run, params.switch_output_diff_params);
   }
 
-  ValidationResult validation_result(
-      test_outcomes, generate_test_vectors_result.packet_synthesis_result);
-  RETURN_IF_ERROR(writer->AppendToTestArtifact(
-      "test_vector_failures.txt",
-      absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
-
-  // Store the packet trace for the first failed test packet (if any).
+  // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
                    InferP4Specification(params, *backend_, sut));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
-  for (const dvaas::PacketTestOutcome& test_outcome :
-       test_outcomes.outcomes()) {
+  std::vector<SwitchInput> failed_switch_inputs;
+  for (dvaas::PacketTestOutcome& test_outcome :
+       *test_outcomes.mutable_outcomes()) {
     if (test_outcome.test_result().has_failure()) {
-      LOG(INFO) << "Storing packet trace for the first failed test packet";
-      const SwitchInput& switch_input =
-          test_outcome.test_run().test_vector().input();
-      RETURN_IF_ERROR(backend_->StorePacketTrace(p4_spec.bmv2_config, ir_p4info,
-                                                 entities, switch_input));
-      break;
+      failed_switch_inputs.push_back(
+          test_outcome.test_run().test_vector().input());
     }
   }
+
+  if (!failed_switch_inputs.empty()) {
+    LOG(INFO) << "Storing packet traces for failed test packets";
+
+    // Read P4Info and control plane entities from SUT, sorted for
+    // determinism.
+    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
+                     pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+    // Retrieve loopback info from gNMI configuration and create table
+    // entries.
+    ASSIGN_OR_RETURN(
+        pdpi::IrEntities loopback_table_entries,
+        backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+
+    v1model_augmented_entities.MergeFrom(loopback_table_entries);
+
+    ASSIGN_OR_RETURN(auto packet_traces,
+                     backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
+                                               v1model_augmented_entities,
+                                               failed_switch_inputs));
+
+    for (dvaas::PacketTestOutcome& test_outcome :
+         *test_outcomes.mutable_outcomes()) {
+      if (test_outcome.test_result().has_failure()) {
+        ASSIGN_OR_RETURN(int test_id,
+                         dvaas::ExtractTestPacketTag(test_outcome.test_run()
+                                                         .test_vector()
+                                                         .input()
+                                                         .packet()
+                                                         .parsed()));
+
+        const std::string packet_hex =
+            test_outcome.test_run().test_vector().input().packet().hex();
+
+        if (!packet_traces.contains(packet_hex) ||
+            packet_traces[packet_hex].empty()) {
+          return absl::InternalError(
+              absl::StrCat("Packet trace not found for packet ", packet_hex));
+        }
+
+        std::string summarized_packet_trace;
+        for (auto& table_apply : packet_traces[packet_hex][0].table_apply()) {
+          absl::StrAppend(&summarized_packet_trace,
+                          table_apply.hit_or_miss_textual_log(), "\n\n");
+        }
+        test_outcome.mutable_test_result()->mutable_failure()->set_description(
+            absl::StrCat(
+                test_outcome.test_result().failure().description(),
+                "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY "
+                "=========================\n",
+                summarized_packet_trace));
+
+        RETURN_IF_ERROR(writer->AppendToTestArtifact(
+            "packet_" + std::to_string(test_id) + ".trace.txt",
+            packet_traces[packet_hex][0].bmv2_textual_log()));
+      }
+    }
+  }
+
+  ValidationResult validation_result(
+      std::move(test_outcomes),
+      generate_test_vectors_result.packet_synthesis_result);
+  RETURN_IF_ERROR(writer->AppendToTestArtifact(
+      "test_vector_failures.txt",
+      absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
 
   return validation_result;
 }
@@ -375,8 +433,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
           .SetPrepend()
       << "expected enabled interfaces on SUT to be up: ";
 
-  // Do not return on error in order to restore the original control switch gNMI
-  // interface config's P4RT IDs.
+  // Do not return on error in order to restore the original control switch
+  // gNMI interface config's P4RT IDs.
   absl::StatusOr<ValidationResult> result =
       ValidateDataplane(sut, control_switch, params);
 
