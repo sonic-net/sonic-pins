@@ -5,7 +5,7 @@
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 #include "bmv2_intrinsics.h"
 
 control mirror_session_lookup(inout headers_t headers,

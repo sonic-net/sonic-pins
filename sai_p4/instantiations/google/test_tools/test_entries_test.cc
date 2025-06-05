@@ -290,6 +290,98 @@ TEST(EntryBuilder, AddDefaultRouteForwardingAllPacketsToGivenPortAddsEntries) {
   EXPECT_THAT(entities.entities(), SizeIs(13));
 }
 
+TEST(EntryBuilder, AddIpv4EntryAddsDefaultEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIpv4EntrySettingNexthopId("nexthop", "vrf")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "ipv4_table" }
+              )pb"))));
+  EXPECT_THAT(entities.entities(), Not(Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv4_table"
+                  matches { name: "ipv4_dst" }
+                }
+              )pb")))));
+}
+
+TEST(EntryBuilder, AddIpv4EntryAddsLpmEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIpv4EntrySettingNexthopId(
+              "nexthop", "vrf",
+              Ipv4Lpm{.dst_ip = netaddr::Ipv4Address(10, 0, 0, 0),
+                      .prefix_len = 24})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv4_table"
+                  matches {
+                    name: "ipv4_dst"
+                    lpm {
+                      value { ipv4: "10.0.0.0" }
+                      prefix_length: 24
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddIpv6EntryAddsDefaultEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIpv6EntrySettingNexthopId("nexthop", "vrf")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "ipv6_table" }
+              )pb"))));
+  EXPECT_THAT(entities.entities(), Not(Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv6_table"
+                  matches { name: "ipv6_dst" }
+                }
+              )pb")))));
+}
+
+TEST(EntryBuilder, AddIpv6EntryAddsLpmEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIpv6EntrySettingNexthopId(
+              "nexthop", "vrf",
+              Ipv6Lpm{
+                  .dst_ip = netaddr::Ipv6Address(0x2001, 0x102),
+                  .prefix_len = 64,
+              })
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv6_table"
+                  matches {
+                    name: "ipv6_dst"
+                    lpm {
+                      value { ipv6: "2001:102::" }
+                      prefix_length: 64
+                    }
+                  }
+                }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
