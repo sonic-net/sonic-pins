@@ -130,6 +130,40 @@ constexpr std::array<absl::string_view, 2> kAclFlows = {
       }
     )pb"};
 
+constexpr std::array<absl::string_view, 2> kAclFlowsForMiddleBlock = {
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_4" } }
+          priority: 2050
+        }
+      }
+      entries {
+        acl_ingress_security_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action { acl_deny {} }
+          priority: 4600
+        }
+      }
+    )pb",
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_3" } }
+          priority: 2031
+        }
+      }
+      entries {
+        acl_ingress_security_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action { acl_deny {} }
+          priority: 4600
+        }
+      }
+    )pb"};
+
 std::string GetSwitchStateString(SwitchState state) {
   switch (state) {
     case SwitchState::kUp:
@@ -166,10 +200,13 @@ void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
   differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
 }
 
-sai::TableEntries GetAclFlowEntries() {
+sai::TableEntries GetAclFlowEntries(sai::Instantiation instantiation) {
   absl::BitGen gen;
-  int random_index = absl::Uniform<int>(gen, 0, kAclFlows.size());
-  return gutil::ParseProtoOrDie<sai::TableEntries>(kAclFlows[random_index]);
+  auto acl_flows = instantiation == sai::Instantiation::kMiddleblock
+                       ? kAclFlowsForMiddleBlock
+                       : kAclFlows;
+  int random_index = absl::Uniform<int>(gen, 0, acl_flows.size());
+  return gutil::ParseProtoOrDie<sai::TableEntries>(acl_flows[random_index]);
 }
 
 }  // namespace
@@ -836,8 +873,9 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
 }
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
-                             const P4Info& p4_info) {
-  sai::TableEntries entries = GetAclFlowEntries();
+                             const P4Info& p4_info,
+                             sai::Instantiation sut_instantiation) {
+  sai::TableEntries entries = GetAclFlowEntries(sut_instantiation);
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
                    pdpi::P4RuntimeSession::Create(thinkit_switch));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));

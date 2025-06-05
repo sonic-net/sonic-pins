@@ -65,6 +65,7 @@ cc_library(
         "//p4_pdpi:p4_runtime_session_extras",
         "//p4_pdpi:pd",
         "//p4_pdpi:sequencing",
+        "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//sai_p4/instantiations/google/test_tools:table_entry_generator",
         "//tests/integration/system/nsf/interfaces:component_validator",

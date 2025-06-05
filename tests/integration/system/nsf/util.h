@@ -31,6 +31,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -238,7 +239,8 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         bool is_inband_testbed = false);
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
-                             const p4::config::v1::P4Info& p4_info);
+                             const p4::config::v1::P4Info& p4_info,
+                             sai::Instantiation sut_instantiation);
 
 // Program flows based on table_name to the capacity.
 absl::Status ProgramFlowsBasedOnTable(thinkit::Switch& thinkit_switch,
