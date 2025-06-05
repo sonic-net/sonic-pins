@@ -679,6 +679,7 @@ absl::Status ClearEntities(
       gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST));
 
   absl::Status status;
+  absl::Time start_time = absl::Now();
   if (current_version >= first_version_with_fail_on_first) {
     status = SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE));
   } else {
@@ -687,6 +688,12 @@ absl::Status ClearEntities(
     status = SplitSortedUpdatesIntoBatchesAndSend(
         session, info, CreatePiUpdates(entities, Update::DELETE));
   }
+  // Record size and timing
+  LOG(INFO) << absl::StrFormat("Number of entities cleared from the switch: %d",
+                               entities.size());
+  LOG(INFO) << absl::StrFormat("Amount of time taken to clear entities: %s",
+                               absl::StrCat(absl::Now() - start_time));
+
   if (!status.ok()) {
     if (execute_on_failure != nullptr) {
       RETURN_IF_ERROR(execute_on_failure(entities))

@@ -20,6 +20,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/support/status.h"
@@ -421,6 +422,109 @@ TEST(DeletePiEntity, DeletesPiEntity) {
         return grpc::Status::OK;
       });
   ASSERT_OK(DeletePiEntity(*p4rt_session, kPiEntity));
+}
+
+TEST(DeletePiEntities, DeletesPiEntities) {
+  // Constants.
+  const P4RuntimeSessionOptionalArgs metadata;
+
+  ASSERT_OK_AND_ASSIGN((auto [p4rt_session, mock_p4rt_stub]),
+                       MakeP4SessionWithMockStub(metadata));
+  std::vector<p4::v1::Entity> kPiEntities = {
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
+          R"pb(
+            packet_replication_engine_entry {
+              multicast_group_entry { multicast_group_id: 1 }
+            }
+          )pb"),
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
+          R"pb(
+            packet_replication_engine_entry {
+              multicast_group_entry { multicast_group_id: 2 }
+            }
+          )pb"),
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
+          R"pb(
+            table_entry { table_id: 1 }
+          )pb"),
+  };
+  std::vector<p4::v1::Update> expected_updates =
+      CreatePiUpdates(kPiEntities, p4::v1::Update::DELETE);
+
+  EXPECT_CALL(mock_p4rt_stub, Write)
+      .WillOnce([&](auto, const WriteRequest& request, auto) {
+        EXPECT_THAT(request.updates(),
+                    testing::Pointwise(EqualsProto(), expected_updates));
+        return grpc::Status::OK;
+      });
+  ASSERT_OK(DeletePiEntities(*p4rt_session, kPiEntities));
+}
+
+TEST(DeleteIrEntities, PullsP4InfoFromSwitchAndDeletesIrEntities) {
+  // Constants.
+  const P4Info& p4info = GetTestP4Info();
+  const IrP4Info& ir_p4info = GetTestIrP4Info();
+  const P4RuntimeSessionOptionalArgs metadata;
+
+  ASSERT_OK_AND_ASSIGN((auto [p4rt_session, mock_p4rt_stub]),
+                       MakeP4SessionWithMockStub(metadata));
+  // Expect function to pull P4Info from switch.
+  EXPECT_CALL(mock_p4rt_stub, GetForwardingPipelineConfig)
+      .WillOnce(
+          [&](Unused, Unused, GetForwardingPipelineConfigResponse* response) {
+            *response->mutable_config()->mutable_p4info() = p4info;
+            return grpc::Status::OK;
+          });
+  pdpi::IrEntities kIrEntities = {
+      gutil::ParseProtoOrDie<pdpi::IrEntities>(
+          R"pb(
+            entities {
+              packet_replication_engine_entry {
+                multicast_group_entry { multicast_group_id: 1 }
+              }
+            }
+            entities {
+              packet_replication_engine_entry {
+                multicast_group_entry { multicast_group_id: 2 }
+              }
+            }
+            entities {
+              table_entry {
+                table_name: "id_test_table"
+                matches {
+                  name: "ipv6"
+                  exact { ipv6: "::ff22" }
+                }
+                matches {
+                  name: "ipv4"
+                  exact { ipv4: "16.36.50.82" }
+                }
+                action {
+                  name: "do_thing_1"
+                  params {
+                    name: "arg2"
+                    value { hex_str: "0x00000008" }
+                  }
+                  params {
+                    name: "arg1"
+                    value { hex_str: "0x00000009" }
+                  }
+                }
+              }
+            }
+          )pb"),
+  };
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                       IrEntitiesToPi(ir_p4info, kIrEntities));
+  std::vector<p4::v1::Update> expected_updates =
+      CreatePiUpdates(pi_entities, p4::v1::Update::DELETE);
+  EXPECT_CALL(mock_p4rt_stub, Write)
+      .WillOnce([&](auto, const WriteRequest& request, auto) {
+        EXPECT_THAT(request.updates(),
+                    testing::Pointwise(EqualsProto(), expected_updates));
+        return grpc::Status::OK;
+      });
+  ASSERT_OK(DeleteIrEntities(*p4rt_session, kIrEntities));
 }
 
 TEST(InstallIrTableEntry, PullsP4InfoFromSwitchAndWritesPdpiTranslatedEntry) {
