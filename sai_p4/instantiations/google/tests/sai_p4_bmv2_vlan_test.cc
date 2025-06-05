@@ -14,7 +14,6 @@
 
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
@@ -546,29 +545,10 @@ TEST_P(VlanTest,
   }
 }
 
-sai::TableEntries EntriesForwardingAndRewritingVlanInRifTable(
-    absl::string_view vlan_id_hexstr, absl::string_view egress_port,
-    bool disable_vlan_checks) {
-  sai::TableEntries entries =
-      sai::EntryBuilder()
-          .AddEntrySettingVrfForAllPackets("vrf-forward")
-          .AddEntryAdmittingAllPacketsToL3()
-          .AddDefaultRouteForwardingAllPacketsToGivenPort(
-              egress_port, sai::IpVersion::kIpv4, "vrf-forward",
-              /*vlan_hexstr=*/vlan_id_hexstr)
-          .GetDedupedEntries();
-  if (disable_vlan_checks) {
-    *entries.add_entries() = sai::EntryBuilder()
-                                 .AddDisableVlanChecksEntry()
-                                 .GetDedupedEntries()
-                                 .entries()[0];
-  }
-  return entries;
-}
-
-TEST(VlanTest,
-     SettingNonReservedVidInRifWithoutVlanChecksResultsInPacketWithThatId) {
-  const sai::Instantiation kInstantiation = GetParam();
+// See go/orion-vlan-modification for details on VLAN modification semantics.
+TEST(TorVlanTest,
+     VlanIdSetInPreIngressAclGoesToEgressIfNexthopVlanRewriteIsDisabled) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -629,8 +609,8 @@ TEST(VlanTest,
   }
 }
 
-TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
-  const sai::Instantiation kInstantiation = GetParam();
+TEST(TorVlanTest, NexthopOverridesVlanIdSetInPreIngressAclByDefault) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -667,8 +647,8 @@ TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
   }
 }
 
-TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
-  const sai::Instantiation kInstantiation = GetParam();
+TEST(TorVlanTest, MatchOnVlanIdInPreIngressAclWorksAsExpected) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -694,7 +674,61 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
         PacketsByPort output_by_port,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
-    // The packet must be forwarded with no VLAN tag.
+    // The packet must be forwarded with VLAN 0x00b (packet's original VLAN
+    // tag).
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
+    ASSERT_THAT(output_by_port.at(kEgressPort)
+                    .packets()
+                    .at(0)
+                    .headers()
+                    .at(1)
+                    .vlan_header()
+                    .vlan_identifier(),
+                Eq("0x00b"));
+  }
+  {
+    // Inject VLAN packet with VLAN 0x00a (value matched by pre-ingress
+    // VLAN table entry)
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort,
+                        GetVlanIpv4PacketOrDie(kPreIngressMatchVlan)));
+    // The packet must be forwarded with VLAN 0x00c (value set by pre-ingress
+    // VLAN table entry).
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
+    ASSERT_THAT(output_by_port.at(kEgressPort)
+                    .packets()
+                    .at(0)
+                    .headers()
+                    .at(1)
+                    .vlan_header()
+                    .vlan_identifier(),
+                Eq(kPreIngressSetVlan));
+  }
+}
+
+TEST(TorVlanTest, PacketWithoutVlanTagMatchesPreIngressMatchOnVlan4095) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  constexpr absl::string_view kPreIngressMatchVlan = "0xfff";  // 4095.
+  constexpr absl::string_view kPreIngressSetVlan = "0x00c";
+  // Disable VLAN check, disable VLAN rewrite, and set VLAN id in pre-ingress.
+  ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
+      bmv2, kIrP4Info, /*egress_rif_vlan=*/std::nullopt, kEgressPortProto,
+      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/true));
+  ASSERT_OK(
+      InstallEntries(bmv2, kIrP4Info,
+                     sai::EntryBuilder().AddEntrySettingVlanIdInPreIngress(
+                         kPreIngressSetVlan, kPreIngressMatchVlan)));
+
+  {
+    // Inject packet without a VLAN tag.
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded with VLAN 0x00c (value set by pre-ingress
+    // VLAN table entry).
     ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
@@ -715,7 +749,7 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
 }
 
 // VLAN-tagged punt packets keep their VLAN tags regardless of their IDs.
-TEST(ButerTorVlanTest, VlanPreservedForPuntedPackets) {
+TEST(TorVlanTest, VlanPreservedForPuntedPackets) {
   const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
@@ -763,8 +797,11 @@ sai::MirrorSessionParams GetMirrorSessionParamsForTest() {
 // vlan id should not be mirrored.
 // Only test ToR instantiation since only it supports
 // acl_ingress_mirror_and_redirect_table.
-TEST(MirrorVlanTest,
-     IpfixEncappedMirroredPktWithNonReservedVidIsDroppedWhenVlanChecksEnabled) {
+// TODO: Enable and update the test when vlan with mirrored packets
+// behavior is well-defined.
+TEST(
+    MirrorVlanTest,
+    DISABLED_IpfixEncappedMirroredPktWithNonReservedVidIsDroppedWhenVlanChecksEnabled) {  // NOLINT
   const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
   sai::MirrorSessionParams mirror_session_params =
