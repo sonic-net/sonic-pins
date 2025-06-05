@@ -16,7 +16,12 @@
 #include "lib/p4rt/p4rt_port.h"
 
 #include <cstdint>
+#include <limits>
+#include <string>
+#include <vector>
 
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
@@ -26,6 +31,7 @@ namespace {
 
 using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 using ::testing::Eq;
 using ::testing::Not;
 
@@ -54,6 +60,33 @@ TEST(P4rtPortId, RoundtripsFromString) {
   EXPECT_EQ(
       P4rtPortId::MakeFromOpenConfigEncoding(port_id.GetOpenConfigEncoding()),
       port_id);
+}
+
+TEST(P4rtPortId, GetBmv2P4rtEncodingWorksForPortsFittingIn9Bits) {
+  EXPECT_THAT(P4rtPortId::MakeFromOpenConfigEncoding(0).GetBmv2P4rtEncoding(),
+              IsOkAndHolds(Eq(std::string(1, '\0'))));
+
+  EXPECT_THAT(P4rtPortId::MakeFromOpenConfigEncoding(1).GetBmv2P4rtEncoding(),
+              IsOkAndHolds(Eq("\x01")));
+
+  EXPECT_THAT(
+      P4rtPortId::MakeFromOpenConfigEncoding(0x2a).GetBmv2P4rtEncoding(),
+      IsOkAndHolds(Eq("\x2a")));
+
+  EXPECT_THAT(
+      P4rtPortId::MakeFromOpenConfigEncoding(0x01ff).GetBmv2P4rtEncoding(),
+      IsOkAndHolds(Eq("\x01\xff")));
+}
+
+TEST(P4rtPortId, GetBmv2P4rtEncodingFailsForPortsNotFittingIn9Bits) {
+  EXPECT_THAT(
+      P4rtPortId::MakeFromOpenConfigEncoding(0x0200).GetBmv2P4rtEncoding(),
+      StatusIs(absl::StatusCode::kFailedPrecondition));
+
+  EXPECT_THAT(P4rtPortId::MakeFromOpenConfigEncoding(
+                  std::numeric_limits<uint32_t>::max())
+                  .GetBmv2P4rtEncoding(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(P4rtPortId, PointwiseIntEquivalence) {
