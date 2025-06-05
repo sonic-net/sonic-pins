@@ -269,8 +269,7 @@ public:
   EntryBuilder& AddIpv6TunnelTerminationEntry(
       const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
-  EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
-  EntryBuilder& AddEgressPortLoopbackEntry(absl::string_view out_port);
+  EntryBuilder &AddMarkToMirrorAclEntry(const MarkToMirrorParams &params);
 
 private:
   sai::TableEntries entries_;
