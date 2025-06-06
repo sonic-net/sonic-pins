@@ -19,12 +19,12 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -67,7 +67,8 @@ using ::gnoi::system::RebootStatusRequest;
 using ::gnoi::system::RebootStatusResponse;
 using ::google::protobuf::util::MessageDifferencer;
 using ::grpc::ClientContext;
-using ::p4::v1::Entity;
+using ::p4::v1::ReadRequest;
+using ::p4::v1::ReadResponse;
 
 constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(8);
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
@@ -98,6 +99,18 @@ absl::Status Not(const absl::Status& status, absl::string_view status_tag) {
   return absl::OkStatus();
 }
 
+// Fields in P4 snapshot which needs to be ignored during comparison.
+void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
+  if (differencer == nullptr) return;
+  const google::protobuf::Descriptor& descriptor =
+      *p4::v1::TableEntry().GetDescriptor();
+  differencer->IgnoreField(descriptor.FindFieldByName("counter_data"));
+  differencer->IgnoreField(descriptor.FindFieldByName("meter_counter_data"));
+  differencer->set_report_ignores(false);
+  differencer->set_report_moves(false);
+  differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
+}
+
 }  // namespace
 
 std::vector<std::string> GetConnectedInterfacesForSut(Testbed& testbed) {
@@ -119,6 +132,9 @@ absl::Status RunReadyValidations(thinkit::Switch& thinkit_switch,
   RETURN_IF_ERROR(SwitchReadyWithSsh(thinkit_switch, ssh_client, interfaces,
                                      check_interfaces_state, with_healthz));
 
+  // TODO: Still needs confirmation as to whether we want to have
+  // this whitebox check or if it is redundant.
+  // return CheckContainersUp(thinkit_switch.ChassisName(), ssh_client);
   return absl::OkStatus();
 }
 
@@ -279,10 +295,10 @@ absl::Status InstallRebootPushConfig(
   return absl::OkStatus();
 }
 
-absl::Status
-ValidateTestbedState(absl::string_view version, Testbed &testbed,
-                     thinkit::SSHClient &ssh_client,
-                     const std::optional<absl::string_view> &gnmi_config) {
+absl::Status ValidateTestbedState(
+    Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param) {
+  // TODO: Add validation for SUT stack image label.
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
   absl::Status sut_status = RunReadyValidations(
@@ -320,6 +336,8 @@ absl::Status ValidateComponents(
 }
 
 absl::Status NsfReboot(Testbed& testbed) {
+  // TODO: Once supported, record/return uptime and boot-type
+  // before NSF reboot.
   return Reboot(RebootMethod::NSF, testbed);
 }
 
@@ -354,8 +372,7 @@ absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
     // Invoke the RPC and validate the results.
     grpc::Status reboot_status =
         sut_gnoi_system_stub->RebootStatus(&context, req, &resp);
-    // If the RPC fails or the NSF reboot is still active, continue to
-    // poll.
+    // If the RPC fails or the NSF reboot is still active, continue to poll.
     if (!reboot_status.ok() || resp.active()) {
       LOG(WARNING) << "Reboot Status: " << reboot_status.error_message();
       LOG(WARNING) << "Reboot Status Response: " << resp.DebugString();
@@ -378,47 +395,57 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
   // Push Config.
   thinkit::Switch& sut = GetSut(testbed);
   LOG(INFO) << "Pushing config on " << sut.ChassisName();
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          sut, image_config_param.gnmi_config, image_config_param.p4_info));
+  RETURN_IF_ERROR(pins_test::ConfigureSwitch(
+      sut, PinsConfigView{.gnmi_config = image_config_param.gnmi_config,
+                          .p4info = image_config_param.p4_info}));
 
-  LOG(INFO) << "Verifying config push on " << sut.ChassisName();
   return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
                             ssh_client, GetConnectedInterfacesForSut(testbed));
 }
 
-absl::StatusOr<std::vector<Entity>> TakeP4FlowSnapshot(Testbed& testbed) {
+absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   thinkit::Switch& sut = GetSut(testbed);
+  ReadRequest read_request;
+  read_request.add_entities()->mutable_table_entry();
+  read_request.add_entities()->mutable_packet_replication_engine_entry();
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    pdpi::P4RuntimeSession::Create(sut));
-  return pdpi::ReadPiEntities(session.get());
+  return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
 }
 
-absl::Status CompareP4FlowSnapshots(absl::Span<const Entity> a,
-                                    absl::Span<const Entity> b) {
+absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
+                                    ReadResponse snapshot_2) {
   MessageDifferencer differencer;
-  size_t iterations = std::max(a.size(), b.size());
-  std::vector<std::string> differences;
-  differences.reserve(iterations);
-  for (int i = 0; i < iterations; ++i) {
-    std::string diff;
-    differencer.ReportDifferencesToString(&diff);
-    const Entity& a_entity = a.size() > i ? a[i] : Entity();
-    const Entity& b_entity = b.size() > i ? b[i] : Entity();
-    if (!differencer.Compare(a[i], b[i])) {
-      differences.push_back(std::move(diff));
-    }
-  }
+  std::string diff_report;
+  AppendIgnoredP4SnapshotFields(&differencer);
+  differencer.ReportDifferencesToString(&diff_report);
 
-  if (differences.empty()) return absl::OkStatus();
-  return gutil::InternalErrorBuilder()
-         << "Differences found between the P4 flow snapshots:\n"
-         << absl::StrJoin(differences, "\n");
+  if (!differencer.Compare(snapshot_1, snapshot_2)) {
+    return gutil::InternalErrorBuilder()
+           << "Differences found between the P4 flow snapshots:\n"
+           << diff_report;
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
+                                absl::string_view file_name) {
+  thinkit::TestEnvironment& environment = std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> thinkit::TestEnvironment& { return testbed->Environment(); },
+          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
+            return testbed->Environment();
+          }},
+      testbed);
+
+  return environment.StoreTestArtifact(file_name, snapshot.DebugString());
 }
 
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
                                     Testbed& testbed) {
+  // TODO: Implement gNMI state path validation for comparison of
+  // the various state paths before and after NSF Upgrade/Reboot.
   return absl::OkStatus();
 }
 
