@@ -439,6 +439,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+      local_metadata.acl_metadata : ternary
+          @id(13) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
       local_metadata.route_metadata : ternary
           @id(15) @name("route_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
@@ -463,9 +466,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
-      local_metadata.acl_metadata : ternary
-          @id(13) @name("acl_metadata")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+      local_metadata.vlan_id : ternary
+          @id(16) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
 #endif
     }
     actions = {
