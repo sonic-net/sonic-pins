@@ -94,17 +94,22 @@ GetPortNameToIdMapFromJsonString(absl::string_view json_string,
   VLOG(2) << "Getting Port Name -> ID Map from JSON string: " << json_string;
   const nlohmann::basic_json<> response_json = json::parse(json_string);
 
-  const auto oc_intf_json =
-      response_json.find("openconfig-interfaces:interfaces");
-  if (oc_intf_json == response_json.end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
-                     response_json.dump()));
-  }
-  const auto oc_intf_list_json = oc_intf_json->find("interface");
-  if (oc_intf_list_json == oc_intf_json->end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  // TODO: Only check for "openconfig-interfaces:interfaces" once
+  // LegoHerc responses are scoped at the correct level.
+  auto oc_intf_list_json = response_json.find("interface");
+  if (oc_intf_list_json == response_json.end()) {
+    const auto oc_intf_json =
+        response_json.find("openconfig-interfaces:interfaces");
+    if (oc_intf_json == response_json.end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
+                       response_json.dump()));
+    }
+    oc_intf_list_json = oc_intf_json->find("interface");
+    if (oc_intf_list_json == oc_intf_json->end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+    }
   }
 
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id;
@@ -368,11 +373,10 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
   ASSIGN_OR_RETURN(counters.out_discards,
                    ParseJsonValueAsUint(interface_json,
                                         {"state", "counters", "out-discards"}));
-  ASSIGN_OR_RETURN(
-      counters.in_buffer_discards,
-      ParseJsonValueAsUint(
-          interface_json,
-          {"state", "counters", "google-pins-interfaces:in-buffer-discards"}));
+  ASSIGN_OR_RETURN(counters.in_buffer_discards,
+                   ParseJsonValueAsUint(
+                       interface_json, {"state", "counters",
+                                        "pins-interfaces:in-buffer-discards"}));
   ASSIGN_OR_RETURN(
       counters.in_maxsize_exceeded,
       ParseJsonValueAsUint(interface_json,
@@ -795,15 +799,21 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
 
   const auto resp_json = nlohmann::json::parse(
       resp.notification(0).update(0).val().json_ietf_val());
-  const auto oc_intf_json = resp_json.find("openconfig-interfaces:interfaces");
-  if (oc_intf_json == resp_json.end()) {
-    return absl::NotFoundError(absl::StrCat(
-        "'openconfig-interfaces:interfaces' not found: ", resp_json.dump()));
-  }
-  const auto oc_intf_list_json = oc_intf_json->find("interface");
-  if (oc_intf_list_json == oc_intf_json->end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  // TODO: Only check for "openconfig-interfaces:interfaces" once
+  // LegoHerc responses are scoped at the correct level.
+  auto oc_intf_list_json = resp_json.find("interface");
+  if (oc_intf_list_json == resp_json.end()) {
+    const auto oc_intf_json =
+        resp_json.find("openconfig-interfaces:interfaces");
+    if (oc_intf_json == resp_json.end()) {
+      return absl::NotFoundError(absl::StrCat(
+          "'openconfig-interfaces:interfaces' not found: ", resp_json.dump()));
+    }
+    oc_intf_list_json = oc_intf_json->find("interface");
+    if (oc_intf_list_json == oc_intf_json->end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+    }
   }
 
   absl::flat_hash_map<std::string, std::string> interface_to_oper_status_map;
@@ -816,7 +826,7 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
     std::string name = std::string(StripQuotes(element_name_json->dump()));
 
     // TODO: Remove once CPU contains the oper-state subtree.
-    if (absl::StartsWith(name, "CPU")) {
+    if (absl::StartsWith(name, "CPU") || absl::StartsWith(name, "br")) {
       LOG(INFO) << "Skipping " << name << ".";
       continue;
     }
@@ -1012,6 +1022,19 @@ absl::StatusOr<absl::flat_hash_set<std::string>> GetConfigDisabledInterfaces(
     }
   }
   return disabled_interfaces;
+}
+
+absl::StatusOr<absl::flat_hash_set<std::string>>
+GetConfigEnabledInterfaces(gnmi::gNMI::StubInterface &stub) {
+  absl::flat_hash_set<std::string> enabled_interfaces;
+  ASSIGN_OR_RETURN(auto all_interfaces, pins_test::GetInterfacesAsProto(
+                                            stub, gnmi::GetRequest::CONFIG));
+  for (const auto &interface : all_interfaces.interfaces()) {
+    if (interface.config().enabled() == true) {
+      enabled_interfaces.insert(interface.name());
+    }
+  }
+  return enabled_interfaces;
 }
 
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
@@ -1502,7 +1525,10 @@ GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
   ASSIGN_OR_RETURN(json interfaces, GetField(response_json, "interface"));
 
   absl::btree_set<std::string> loopback_mode_set;
-  for (const auto& interface : interfaces.items()) {
+  for (const auto &interface : interfaces.items()) {
+    if (interface.value().find("config") == interface.value().end()) {
+      continue;
+    }
     ASSIGN_OR_RETURN(json config, GetField(interface.value(), "config"));
     // Skip if the config doesn't have loopback-mode.
     if (config.find("loopback-mode") == config.end()) {
@@ -1986,6 +2012,32 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
                                       GnmiSetType::kUpdate, config_json);
 }
 
+absl::StatusOr<std::string> GetPortPfcRxEnable(
+    const absl::string_view interface_name,
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/state/google-pins-interfaces:enable-pfc-rx");
+  const std::string parse_str = "google-pins-interfaces:enable-pfc-rx";
+
+  ASSIGN_OR_RETURN(std::string enable_pfc_rx,
+                   GetGnmiStatePathInfo(&gnmi_stub, config_path, parse_str));
+  return enable_pfc_rx;
+}
+
+absl::Status SetPortPfcRxEnable(const absl::string_view interface_name,
+                                std::string port_pfc_rx_enable,
+                                gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/config/enable-pfc-rx");
+  std::string config_json = absl::StrCat(
+      "{\"openconfig-interfaces:enable-pfc-rx\":", port_pfc_rx_enable, "}");
+
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, config_json);
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
   ASSIGN_OR_RETURN(
@@ -2024,6 +2076,52 @@ absl::StatusOr<std::string> ParseJsonValue(absl::string_view json) {
            << "Cannot parse empty JSON '" << json << "'";
   }
   return parsed_json.begin().value();
+}
+
+absl::StatusOr<uint64_t> GetGnmiSystemUpTime(gnmi::gNMI::StubInterface &stub) {
+  ASSIGN_OR_RETURN(auto uptime_str, pins_test::GetGnmiStatePathInfo(
+                                        &stub, "/system/state/up-time",
+                                        "openconfig-system:up-time"));
+  uint64_t uptime;
+  if (!absl::SimpleAtoi(std::string(pins_test::StripQuotes(uptime_str)),
+                        &uptime)) {
+    return absl::InternalError(absl::StrCat("Unable to parse up-time: ", uptime,
+                                            ". Not a valid integer."));
+  }
+  return uptime;
+}
+
+absl::StatusOr<std::string>
+GetOcOsNetworkStackGnmiStatePathInfo(gnmi::gNMI::StubInterface &stub,
+                                     absl::string_view key,
+                                     absl::string_view field) {
+  return pins_test::GetGnmiStatePathInfo(
+      &stub,
+      absl::Substitute("/components/component[name=$0]/state/$1", key, field),
+      absl::Substitute("openconfig-platform:$0", field));
+}
+
+absl::StatusOr<uint64_t>
+GetInterfaceCounter(absl::string_view stat_name, absl::string_view interface,
+                    gnmi::gNMI::StubInterface *gnmi_stub) {
+  std::string ops_state_path;
+  std::string ops_parse_str;
+
+  ops_state_path = absl::StrCat("interfaces/interface[name=", interface,
+                                "]/state/counters/", stat_name);
+  ops_parse_str = absl::StrCat("openconfig-interfaces:", stat_name);
+
+  ASSIGN_OR_RETURN(
+      std::string ops_response,
+      GetGnmiStatePathInfo(gnmi_stub, ops_state_path, ops_parse_str));
+
+  uint64_t stat;
+  // Skip over the quotes.
+  if (!absl::SimpleAtoi(StripQuotes(ops_response), &stat)) {
+    return absl::InternalError(
+        absl::StrCat("Unable to parse counter from ", ops_response));
+  }
+  return stat;
 }
 
 }  // namespace pins_test
