@@ -65,7 +65,7 @@
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
 // The test can be run over a unix socket or TCP connection. In general (i.e.
-// verify for your own enviornment) the socket will be unsecured while the TCP
+// verify for your own environment) the socket will be unsecured while the TCP
 // connection requires authentication.
 //
 // NOTE: if not using a socket then the server_address should be formatted as
@@ -457,7 +457,7 @@ class P4rtRouteTest : public testing::Test {
 };
 
 // When testing we randomly generate routes to program. RouteEntryInfo acts as a
-// cache of table entries subsiquent flows can build upon. This also makes the
+// cache of table entries subsequent flows can build upon. This also makes the
 // order this object is built important! For example we should have a list of
 // usable port IDs before creating RIFs which rely on port IDs. Similarly for
 // NextHops which requires RIFs.

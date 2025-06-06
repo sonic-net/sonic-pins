@@ -69,9 +69,9 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/packetlib/packetlib.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -1626,7 +1626,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
         }
         continue;
       }
-      // Punt packets to CPU with flow rate set to atleast 10 packets
+      // Punt packets to CPU with flow rate set to at least 10 packets
       // higher than the queue rate. This means that the queue limits will
       // be the bottleneck.
       ASSERT_OK(SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(

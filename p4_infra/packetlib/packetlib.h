@@ -25,7 +25,7 @@
 #include "absl/numeric/bits.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_infra/string_encodings/hex_string.h"
 
 namespace packetlib {
@@ -71,7 +71,7 @@ absl::Status ValidatePacket(const Packet& packet);
 // valid instead.
 std::vector<std::string> PacketInvalidReasons(const Packet& packet);
 
-// Seralizes a given packet to the bytestring format. The packet may miss
+// Serializes a given packet to the bytestring format. The packet may miss
 // computed fields, which will be filled in automatically when missing (but not
 // changed if they are present). Serialization succeeds iff
 // `ValidatePacket(packet).ok()` after calling `PadPacketToMinimumSize(packet);
@@ -83,7 +83,7 @@ absl::StatusOr<std::string> SerializePacket(Packet packet);
 absl::StatusOr<std::string> SerializePacket(
     absl::string_view packet_text_proto);
 
-// Seralizes a given packet without checking header invariants. All fields must
+// Serializes a given packet without checking header invariants. All fields must
 // be present and use a valid value (according to ir::Format), but otherwise no
 // requirements are made on the set of headers; they will just be serialized in
 // order without checking, if computed fields are correct, header order is
@@ -156,7 +156,7 @@ absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
 absl::StatusOr<int> IcmpHeaderChecksum(Packet packet, int icmp_header_index);
 
 // Computes the 16-bit GRE checksum for the given `packet` and
-// `gre_header_index`. The header at the given index must be an GRE header. All
+// `gre_header_index`. The header at the given index must be a GRE header. All
 // fields in all headers following that GRE header must be set and valid except
 // possibly the GRE checksum field, which is ignored.
 absl::StatusOr<int> GreHeaderChecksum(Packet packet, int gre_header_index);

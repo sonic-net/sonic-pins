@@ -35,7 +35,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/lib/packet_generator.h"

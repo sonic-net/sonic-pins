@@ -44,7 +44,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 

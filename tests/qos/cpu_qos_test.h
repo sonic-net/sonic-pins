@@ -28,7 +28,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"

@@ -22,7 +22,7 @@
 #include "glog/logging.h"
 #include "gutil/gutil/testing.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 namespace {

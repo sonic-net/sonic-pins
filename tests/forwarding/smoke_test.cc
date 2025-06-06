@@ -145,7 +145,7 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
                                                    pi_insert));
 
   // ACL table entries are expected to contain counter data. However, it's
-  // updated periodically and may not be avaialable immediatly after writing so
+  // updated periodically and may not be available immediately after writing so
   // we poll the entry for a few seconds until we see the data.
   absl::Time timeout = absl::Now() + absl::Seconds(11);
   p4::v1::ReadResponse pi_read_response;

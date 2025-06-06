@@ -36,6 +36,7 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -67,9 +68,9 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/packetlib/packetlib.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -952,7 +953,7 @@ TEST_P(FrontpanelQosTest,
 //   We expect each round robin queue to forward a portion of traffic that is
 //   proportional to the queue's weight.
 // - Auxilliary IPv4 traffic to a strictly prioritized queue, at 95% line rate.
-//   This reduces the available bandwith for the round-robin-scheduled queues
+//   This reduces the available bandwidth for the round-robin-scheduled queues
 //   to 5%, which ensures all round robin queues remain nonempty and the
 //   scheduler is able to schedule packets based on weights assigned.
 TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
@@ -975,8 +976,8 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   thinkit::Switch &sut = testbed->Sut();
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
-  // so we can oversubsribe the egress port. We inject the traffic for the
-  // round-robin queues via one ingress port, and auxilliary traffic for a
+  // so we can oversubscribe the egress port. We inject the traffic for the
+  // round-robin queues via one ingress port, and auxiliary traffic for a
   // strictly-prioritized queue via another ingress port.
   LOG(INFO) << "picking test packet links";
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
@@ -1205,7 +1206,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
       queue_by_traffic_item_name[kTrafficName] = queue_name;
     }
   }
-  // Set up auxilliary traffic to strictly prioritized queue.
+  // Set up auxiliary traffic to strictly prioritized queue.
   const std::string kAuxiliaryTrafficName = absl::StrFormat(
       "Auxiliary IPv4 packets with DSCP %d targeting strictly prioritized "
       "queue '%s' with PIR = %d bytes/second",
@@ -1296,9 +1297,9 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 // prioritized over all lower-priority queues.
 // We test one strict "queue under test" at a time by injecting two types of
 // traffic:
-// - Main traffic: IPv{4,6} packets targetting the strict queue, at >= 100%
+// - Main traffic: IPv{4,6} packets targeting the strict queue, at >= 100%
 //   egress line rate.
-// - Background traffic: mixed IPv{4,6} packets targetting all queues, at 100%
+// - Background traffic: mixed IPv{4,6} packets targeting all queues, at 100%
 //   egress line rate overall.
 //
 // We then verify that the queue under test forwards traffic at a rate
@@ -1321,8 +1322,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
 
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
-  // so we can oversubsribe the egress port. We inject the traffic for the
-  // round-robin queues via one ingress port, and auxilliary traffic for a
+  // so we can oversubscribe the egress port. We inject the traffic for the
+  // round-robin queues via one ingress port, and auxiliary traffic for a
   // strictly-prioritized queue via another ingress port.
   LOG(INFO) << "picking test packet links";
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
@@ -1495,9 +1496,9 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
 
     // We run the test in two variants:
     // - Without CIRs. In this case, the strict queue under test competes
-    //   for egress bandwith only with higher prioritized strict queues.
+    //   for egress bandwidth only with higher prioritized strict queues.
     // - With CIRs. In this case, the strict queue under test competes
-    //   for egress bandwith also with all queues with a CIR, since CIRs get
+    //   for egress bandwidth also with all queues with a CIR, since CIRs get
     //   served first. We configure CIRs uniformly, for round robin queues only.
     for (const double kCirsFractionOfEgressLineRate : {0., .40}) {
       SCOPED_TRACE(absl::StrCat("CIR fraction of egress line rate: ",
@@ -1537,7 +1538,7 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         }
       });
       for (bool ipv4 : {true, false}) {
-        // Configuring main traffic targetting queue under test.
+        // Configuring main traffic targeting queue under test.
         {
           ASSERT_THAT(kDscpsByQueueName,
                       Optional(Contains(

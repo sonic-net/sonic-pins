@@ -26,7 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"

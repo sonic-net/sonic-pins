@@ -57,7 +57,7 @@ proto_library(
     srcs = ["packet_synthesizer.proto"],
     deps = [
         ":packet_synthesis_criteria_proto",
-        "//p4_infra/p4_pdpi/packetlib:packetlib_proto",
+        "//p4_infra/packetlib:packetlib_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_proto",
     ],
 )
@@ -164,7 +164,7 @@ cc_library(
     hdrs = ["z3_model_to_packet.h"],
     deps = [
         ":packet_synthesizer_cc_proto",
-        "//p4_infra/p4_pdpi/packetlib",
+        "//p4_infra/packetlib",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/sai",
         "//p4_symbolic/symbolic:solver_state",

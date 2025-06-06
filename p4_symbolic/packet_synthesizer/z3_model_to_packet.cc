@@ -24,7 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.h"
+#include "p4_infra/packetlib/packetlib.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/deparser.h"

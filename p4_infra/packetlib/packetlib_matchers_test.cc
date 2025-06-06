@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/packetlib/packetlib_matchers.h"
+#include "p4_infra/packetlib/packetlib_matchers.h"
 
 #include "gmock/gmock.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/testing.h"
-#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/packetlib/packetlib.pb.h"
 
 namespace packetlib {
 namespace {
