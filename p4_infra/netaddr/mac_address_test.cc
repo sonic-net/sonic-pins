@@ -116,12 +116,12 @@ TEST(MacAddressTest, Ipv6AddressOfString_NegativeTests) {
   }
 }
 
-struct MacAndCoresspondingLinkLocalIpv6Address {
+struct MacAndCorrespondingLinkLocalIpv6Address {
   std::string mac;
   std::string ip;
 };
 
-std::vector<MacAndCoresspondingLinkLocalIpv6Address>
+std::vector<MacAndCorrespondingLinkLocalIpv6Address>
 ValidMacAndCorrespondLinkLocalIpv6Addresses() {
   // Cases can be generated using tools such as https://ben.akrin.com/?p=1347.
   return {

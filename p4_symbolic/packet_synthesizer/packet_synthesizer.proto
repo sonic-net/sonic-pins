@@ -17,7 +17,7 @@ syntax = "proto3";
 package p4_symbolic.packet_synthesizer;
 
 import "p4/v1/p4runtime.proto";
-import "p4_infra/p4_pdpi/packetlib/packetlib.proto";
+import "p4_infra/packetlib/packetlib.proto";
 import "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.proto";
 
 message TranslationData {
