@@ -767,6 +767,13 @@ tables {
     match_type: TERNARY
   }
   match_fields {
+    id: 13
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
     id: 15
     name: "route_metadata"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
@@ -813,10 +820,10 @@ tables {
     }
   }
   match_fields {
-    id: 13
-    name: "acl_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
-    bitwidth: 8
+    id: 16
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
     match_type: TERNARY
   }
   action_refs {
@@ -2445,8 +2452,8 @@ actions {
 actions {
   preamble {
     id: 16777249
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_vlan_id"
-    alias: "set_src_mac_and_vlan_id"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
+    alias: "multicast_set_src_mac_and_vlan_id"
     annotations: "@unsupported"
   }
   params {
@@ -2464,8 +2471,8 @@ actions {
 actions {
   preamble {
     id: 16777248
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac"
-    alias: "set_src_mac"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
+    alias: "multicast_set_src_mac"
     annotations: "@unsupported"
   }
   params {
@@ -2478,8 +2485,8 @@ actions {
 actions {
   preamble {
     id: 16777250
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_dst_mac_and_vlan_id"
-    alias: "set_src_mac_and_dst_mac_and_vlan_id"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
+    alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
     annotations: "@unsupported"
   }
   params {
@@ -2503,8 +2510,8 @@ actions {
 actions {
   preamble {
     id: 16777251
-    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_preserve_ingress_vlan_id"
-    alias: "set_src_mac_and_preserve_ingress_vlan_id"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
+    alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
     annotations: "@unsupported"
   }
   params {
