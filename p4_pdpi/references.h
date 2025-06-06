@@ -18,12 +18,15 @@
 #include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -90,6 +93,30 @@ OutgoingConcreteTableReferences(const IrTableReference &reference_info,
 absl::StatusOr<absl::flat_hash_set<ConcreteTableReference>>
 PossibleIncomingConcreteTableReferences(const IrTableReference &reference_info,
                                         const ::p4::v1::Entity &entity);
+
+// Represents an entity whose references were not satisfied. "Satisfied" is
+// relative to a group of entities and whether the entity has outgoing or
+// incoming references.
+// Outgoing: The entity is referring to an entity that does not exist.
+// Incoming: The entity is being referenced by an entity that does not exist.
+struct EntityWithUnsatisfiedReferences {
+  // Entity that has unsatisfied references.
+  ::p4::v1::Entity entity;
+  // Concrete table references that are unsatisfied.
+  std::vector<ConcreteTableReference> unsatisfied_references;
+};
+
+// Returns list of `UnsatisfiedReference`s. An unsatisfied reference is an
+// outgoing reference from an entity in `entities` that does not refer to any
+// entity in `entities`. Returns error if `entities` or `info` are malformed.
+absl::StatusOr<std::vector<EntityWithUnsatisfiedReferences>>
+UnsatisfiedOutgoingReferences(const std::vector<::p4::v1::Entity>& pi_entities,
+                              const pdpi::IrP4Info& info);
+
+// Returns outgoing table references from `info` that are associated with
+// `entity`. Returns error if `entity` is unsupported or unknown.
+absl::StatusOr<google::protobuf::RepeatedPtrField<IrTableReference>>
+GetOutgoingTableReferences(const IrP4Info& info, const p4::v1::Entity& entity);
 
 // Reference Field operators.
 bool operator==(const ConcreteFieldReference &lhs,
