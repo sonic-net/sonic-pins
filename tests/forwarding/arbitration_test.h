@@ -21,6 +21,13 @@
 #include <string>
 #include <utility>
 
+#include <cstdint>
+#include <memory>
+#include <new>
+#include <optional>
+#include <string>
+#include <utility>
+
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
