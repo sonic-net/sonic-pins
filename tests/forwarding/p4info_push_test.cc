@@ -14,6 +14,9 @@
 
 #include "tests/forwarding/p4info_push_test.h"
 
+#include <memory>
+
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
@@ -22,6 +25,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "tests/lib/switch_test_setup_helpers.h"
+#include "thinkit/switch.h"
 
 // Note: "gutil/status_matchers.h" is needed for GitHub builds to succeed.
 
@@ -35,12 +39,16 @@ TEST_P(P4InfoPushTestFixture, P4InfoPushTest) {
                 .mirror_testbed->GetMirrorTestbed()
                 .Environment()
                 .StoreTestArtifact("pushed_p4info.pb.txt", GetParam().p4info));
+
   // Push the gNMI configuration and P4Info to the SUT.
-  LOG(INFO) << "Pushing gNMI config & P4info";
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
-                           GetParam().gnmi_config, GetParam().p4info));
+  thinkit::Switch& thinkit_switch =
+      GetParam().mirror_testbed->GetMirrorTestbed().Sut();
+  LOG(INFO) << "Pushing gNMI config & P4info to "
+            << thinkit_switch.ChassisName();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          thinkit_switch, GetParam().gnmi_config, GetParam().p4info));
 
   // Pull P4Info, make sure it is the same as the pushed one.
   LOG(INFO) << "Pulling P4Info";
