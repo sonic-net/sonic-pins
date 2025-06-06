@@ -15,13 +15,14 @@
 #include "tests/integration/system/packet_forwarding_tests.h"
 
 #include <memory>
+#include <new>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/flags/flag.h"
 #include "absl/numeric/int128.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
@@ -30,40 +31,33 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
-#include "gutil/proto.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/basic_traffic/basic_p4rt_util.h"
 #include "lib/basic_traffic/basic_traffic.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/p4rt_programming_context.h"
 #include "lib/utils/generic_testbed_utils.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
-#include "p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_pdpi/pd.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "tests/lib/p4info_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
-
-ABSL_FLAG(bool, push_p4_info, true, "Push P4 info to SUT.");
 
 namespace pins_test {
 namespace {
@@ -97,12 +91,25 @@ constexpr absl::string_view kTestPacket = R"pb(
   headers { udp_header { source_port: "0x0000" destination_port: "0x0000" } }
   payload: "Basic L3 test packet")pb";
 
-// Pushes the P4 Info to SUT if the flag push_p4_info is set to true and returns
-// the P4 Runtime Session
+absl::StatusOr<p4::config::v1::P4Info> GetP4InfoFromParamOrSUT(
+    const pins_test::PacketForwardingTestParams& params, thinkit::Switch& sut) {
+  static const auto* const kP4Info =
+      new auto([&]() -> absl::StatusOr<p4::config::v1::P4Info> {
+        if (params.p4_info.has_value()) {
+          return *params.p4_info;
+        }
+        return pins::GetP4InfoFromSUT(sut);
+      }());
+  return *kP4Info;
+}
+
+// Pushes the P4 Info to SUT if the param push_p4_info is set to true and
+// returns the P4 Runtime Session
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> P4InfoPush(
-    const p4::config::v1::P4Info& p4_info, thinkit::GenericTestbed& testbed) {
+    bool push_p4_info, const p4::config::v1::P4Info& p4_info,
+    thinkit::GenericTestbed& testbed) {
   std::optional<p4::config::v1::P4Info> p4info = std::nullopt;
-  if (absl::GetFlag(FLAGS_push_p4_info)) {
+  if (push_p4_info) {
     p4info = p4_info;
   }
   return ConfigureSwitchAndReturnP4RuntimeSession(
@@ -118,46 +125,50 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
                })pb");
 
   ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
-  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> sut_interface_info =
-      testbed->GetSutInterfaceInfo();
-  std::vector<InterfaceLink> control_interfaces =
-      GetAllControlLinks(sut_interface_info);
+  std::vector<InterfaceLink> control_links =
+      FromTestbed(GetAllControlLinks, *testbed);
 
   ASSERT_OK_AND_ASSIGN(auto stub, testbed->Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(auto port_id_by_interface,
                        GetAllInterfaceNameToPortId(*stub));
 
-  // Set the `source_interface` to the first SUT control interface.
-  const InterfaceLink& source_interface = control_interfaces[0];
-  ASSERT_OK_AND_ASSIGN(std::string source_port_id_value,
+  // Set the `source_link` to the first SUT control link.
+  const InterfaceLink& source_link = control_links[0];
+  ASSERT_OK_AND_ASSIGN(
+      std::string source_port_id_value,
+      gutil::FindOrStatus(port_id_by_interface, source_link.sut_interface));
+
+  // Set the `destination_link` to the second SUT control link.
+  const InterfaceLink& destination_link = control_links[1];
+  ASSERT_OK_AND_ASSIGN(std::string destination_port_id_value,
                        gutil::FindOrStatus(port_id_by_interface,
-                                           source_interface.sut_interface));
-  int source_port_id;
-  ASSERT_TRUE(absl::SimpleAtoi(source_port_id_value, &source_port_id));
+                                           destination_link.sut_interface));
 
-  // Set the `destination_interface` to the second SUT control interface.
-  const InterfaceLink& destination_interface = control_interfaces[1];
-  ASSERT_OK_AND_ASSIGN(
-      std::string destination_port_id_value,
-      gutil::FindOrStatus(port_id_by_interface,
-                          destination_interface.sut_interface));
-  int destination_port_id;
-  ASSERT_TRUE(
-      absl::SimpleAtoi(destination_port_id_value, &destination_port_id));
+  LOG(INFO) << "Source port: " << source_link.sut_interface
+            << " port id: " << source_port_id_value;
+  LOG(INFO) << "Destination port: " << destination_link.sut_interface
+            << " port id: " << destination_port_id_value;
 
-  LOG(INFO) << "Source port: " << source_interface.sut_interface
-            << " port id: " << source_port_id;
-  LOG(INFO) << "Destination port: " << destination_interface.sut_interface
-            << " port id: " << destination_port_id;
-
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-          testbed->Sut(), sai::GetP4Info(sai::Instantiation::kMiddleblock)));
-
+  ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info p4_info,
+                       GetP4InfoFromParamOrSUT(GetParam(), testbed->Sut()));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                       P4InfoPush(GetParam().push_p4_info, p4_info, *testbed));
   // Set up a route between the source and destination interfaces.
   ASSERT_OK_AND_ASSIGN(auto port_id_from_sut_interface,
                        GetAllInterfaceNameToPortId(*stub));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(p4_info));
+  P4rtProgrammingContext p4rt_context(p4_session.get(),
+                                      pdpi::SetMetadataAndSendPiWriteRequest);
+  ASSERT_OK(basic_traffic::ProgramRoutes(
+      p4rt_context.GetWriteRequestFunction(), ir_p4info,
+      port_id_from_sut_interface,
+      {{.ingress_interface = source_link.sut_interface,
+        .egress_interface = destination_link.sut_interface}}));
+
+  int destination_port_id;
+  ASSERT_TRUE(
+      absl::SimpleAtoi(destination_port_id_value, &destination_port_id));
 
   // Make test packet based on destination port ID.
   const auto test_packet =
@@ -173,20 +184,20 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
     ASSERT_OK_AND_ASSIGN(auto finalizer,
                          testbed.get()->ControlDevice().CollectPackets());
 
-    LOG(INFO) << "Sending Packet to " << source_interface.peer_interface;
+    LOG(INFO) << "Sending Packet to " << source_link.peer_interface;
     LOG(INFO) << "Test packet data: " << test_packet.DebugString();
 
     for (int i = 0; i < kPacketsToSend; i++) {
       // Send packet to SUT.
-      ASSERT_OK(testbed->ControlDevice().SendPacket(
-          source_interface.peer_interface, test_packet_data))
+      ASSERT_OK(testbed->ControlDevice().SendPacket(source_link.peer_interface,
+                                                    test_packet_data))
           << "failed to inject the packet.";
       LOG(INFO) << "SendPacket completed";
     }
     ASSERT_OK(finalizer->HandlePacketsFor(
         absl::Seconds(30),
         [&](absl::string_view interface, absl::string_view packet) {
-          if (interface != destination_interface.peer_interface) {
+          if (interface != destination_link.peer_interface) {
             return;
           }
           packetlib::Packet parsed_packet = packetlib::ParsePacket(packet);
@@ -216,10 +227,13 @@ TEST_P(PacketForwardingTestFixture, AllPortsPacketForwardingTest) {
 
   std::vector<std::string> sut_interfaces =
       GetSutInterfaces(FromTestbed(GetAllControlLinks, *testbed));
+
+  ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info p4_info,
+                       GetP4InfoFromParamOrSUT(GetParam(), testbed->Sut()));
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                       P4InfoPush(GetParam().p4_info, *testbed));
+                       P4InfoPush(GetParam().push_p4_info, p4_info, *testbed));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4_info));
+                       pdpi::CreateIrP4Info(p4_info));
 
   // Collect counters before the test.
   ASSERT_OK_AND_ASSIGN(InterfaceCounters pretraffic_counters,
@@ -281,10 +295,12 @@ TEST_P(PacketForwardingTestFixture, MtuPacketForwardingTest) {
   std::vector<std::string> sut_interfaces =
       GetSutInterfaces(FromTestbed(GetAllControlLinks, *testbed));
 
+  ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info p4_info,
+                       GetP4InfoFromParamOrSUT(GetParam(), testbed->Sut()));
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                       P4InfoPush(GetParam().p4_info, *testbed));
+                       P4InfoPush(GetParam().push_p4_info, p4_info, *testbed));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4_info));
+                       pdpi::CreateIrP4Info(p4_info));
 
   for (int mtu : kMtu) {
     // Collect counters before the test.
@@ -337,7 +353,6 @@ TEST_P(PacketForwardingTestFixture, MtuPacketForwardingTest) {
         absl::StrCat("sut_counters_mtu", mtu, ".csv"), sut_counters_csv));
   }
 }
-
 
 }  // namespace
 }  // namespace pins_test
