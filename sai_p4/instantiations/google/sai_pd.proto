@@ -619,6 +619,7 @@ message AclIngressQosTableEntry {
     Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary icmp_type = 14;     // ternary match / Format::HEX_STRING / 8 bits
     Ternary route_metadata = 15;  // ternary match / Format::HEX_STRING / 6 bits
+    Ternary vlan_id = 16;  // ternary match / Format::HEX_STRING / 12 bits
   }
   Match match = 1;
   message Action {
