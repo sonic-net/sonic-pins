@@ -14,6 +14,7 @@
 #include "lib/utils/json_utils.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -29,6 +30,7 @@ namespace {
 
 using ::Json::Reader;
 using ::Json::Value;
+using ::testing::HasSubstr;
 
 }  // namespace
 
@@ -1572,6 +1574,105 @@ TEST(IsJsonSubset, TestTargetEmpty) {
   EXPECT_THAT(differences,
               ElementsAre(testing::HasSubstr(
                   "Missing: [/outer_element/leaf] with value 'value'")));
+}
+
+TEST(IsJsonSubset, LeafListUnstableOrderSuccess) {
+  constexpr char kSourceConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip1", "ip2"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json source, ParseJson(kSourceConfigJson));
+
+  constexpr char kTargetConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip2", "ip1"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json target, ParseJson(kTargetConfigJson));
+
+  std::vector<std::string> differences;
+  const auto path_map = StringSetMap({
+      {"/outer_element/leaf", {}},
+  });
+  EXPECT_THAT(IsJsonSubset(source, target, path_map, differences),
+              gutil::IsOkAndHolds(true));
+}
+
+TEST(IsJsonSubset, LeafListSubsetFail) {
+  constexpr char kSourceConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip1", "ip2"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json source, ParseJson(kSourceConfigJson));
+
+  constexpr char kTargetConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip1"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json target, ParseJson(kTargetConfigJson));
+
+  std::vector<std::string> differences;
+  const auto path_map = StringSetMap({
+      {"/outer_element/leaf", {}},
+  });
+  EXPECT_THAT(IsJsonSubset(source, target, path_map, differences),
+              gutil::IsOkAndHolds(false));
+  EXPECT_THAT(differences,
+              ElementsAre(HasSubstr(
+                  "Missing: [/outer_element/leaf['ip2']] with value 'ip2'")));
+}
+TEST(IsJsonSubset, LeafSubsetFail) {
+  constexpr char kSourceConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip1", "ip2"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json source, ParseJson(kSourceConfigJson));
+
+  constexpr char kTargetConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : "ip1"
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json target, ParseJson(kTargetConfigJson));
+
+  std::vector<std::string> differences;
+  const auto path_map = StringSetMap({
+      {"/outer_element/leaf", {}},
+  });
+  EXPECT_THAT(IsJsonSubset(source, target, path_map, differences),
+              gutil::IsOkAndHolds(false));
+  EXPECT_THAT(
+      differences,
+      testing::UnorderedElementsAre(
+          HasSubstr("Missing: [/outer_element/leaf['ip1']] with value 'ip1'"),
+          HasSubstr("Missing: [/outer_element/leaf['ip2']] with value 'ip2'")));
+}
+
+TEST(IsJsonSubset, LeafListSupersetSuccess) {
+  constexpr char kSourceConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip1"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json source, ParseJson(kSourceConfigJson));
+
+  constexpr char kTargetConfigJson[] = R"({
+    "outer_element": {
+      "leaf" : ["ip1",  "ip2"]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json target, ParseJson(kTargetConfigJson));
+
+  std::vector<std::string> differences;
+  const auto path_map = StringSetMap({
+      {"/outer_element/leaf", {}},
+  });
+  EXPECT_THAT(IsJsonSubset(source, target, path_map, differences),
+              gutil::IsOkAndHolds(true));
 }
 
 TEST(IsJsonSubset, TestIsSubset) {

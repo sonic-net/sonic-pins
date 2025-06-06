@@ -2353,6 +2353,9 @@ TEST(LoopbackMode, WorksProperly) {
             "config":{
               "openconfig-p4rt:id": 7
             }
+          },
+          {
+            "name":"EthernetEnabled4"
           }
         ]
       }
@@ -3469,6 +3472,176 @@ TEST(ParseJsonValue, ReturnsJsonValue) {
   EXPECT_THAT(ParseJsonValue("{ \"name\" : \"value\"}"), IsOkAndHolds("value"));
   EXPECT_THAT(ParseJsonValue("{ \"name\" : \"value\" }"),
               IsOkAndHolds("value"));
+}
+
+TEST(GetGnmiSystemUpTime, FailedRPCReturnsError) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "state" }
+                                   elem { name: "up-time" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetGnmiSystemUpTime, InvalidResponsesFail) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "state" }
+                                   elem { name: "up-time" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      // More than one notification.
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" }
+                           update {
+                             path {
+                               elem { name: "system" }
+                               elem { name: "state" }
+                               elem { name: "up-time" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                         }
+                         notification {})pb")),
+                Return(grpc::Status::OK)))
+      // More than one update.
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" }
+                           update {
+                             path {
+                               elem { name: "system" }
+                               elem { name: "state" }
+                               elem { name: "up-time" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                           update {}
+                         })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiSystemUpTime(stub),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-system:up-time not present in JSON")));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub), StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(GetGnmiSystemUpTime, EmptySubtreeReturnsNoUpTime) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "state" }
+                                   elem { name: "up-time" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" }
+                           update {
+                             path {
+                               elem { name: "system" }
+                               elem { name: "state" }
+                               elem { name: "up-time" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                         })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiSystemUpTime(stub),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-system:up-time not present in JSON")));
+}
+
+TEST(GetGnmiSystemUpTime, ReturnsNoUpTime) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "state" }
+                                   elem { name: "up-time" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                     timestamp: 1619721040593669829
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "system" }
+                         elem { name: "state" }
+                         elem { name: "up-time" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-system:up-time\":\"\"}"
+                       }
+                     }
+                   })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Unable to parse up-time")));
+}
+
+TEST(GetGnmiSystemUpTime, UpTimeSuccess) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "state" }
+                                   elem { name: "up-time" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(
+                    gutil::ParseProtoOrDie<gnmi::GetResponse>(absl::Substitute(
+                        R"pb(notification {
+                     timestamp: 1619721040593669829
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "system" }
+                         elem { name: "state" }
+                         elem { name: "up-time" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-system:up-time\":\"145274000000000\"}"
+                       }
+                     }
+                   })pb"))),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub), IsOkAndHolds(145274000000000));
 }
 
 class MalformedJson : public testing::TestWithParam<std::string> {};
