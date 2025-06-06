@@ -695,6 +695,12 @@ absl::Status PushGnmiConfig(gnmi::gNMI::StubInterface& stub,
   gnmi::SetResponse resp;
   grpc::ClientContext context;
   grpc::Status status = stub.Set(&context, req, &resp);
+  if (status.error_code() == grpc::StatusCode::UNAVAILABLE) {
+    // Retry the config push if the return code was UNAVAILABLE.
+    LOG(INFO) << "SET returned UNAVAILABLE: " << resp.ShortDebugString();
+    absl::SleepFor(absl::Seconds(5));
+    status = stub.Set(&context, req, &resp);
+  }
   if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
   LOG(INFO) << "Config push response: " << resp.ShortDebugString();
   return absl::OkStatus();
@@ -1502,7 +1508,10 @@ GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
   ASSIGN_OR_RETURN(json interfaces, GetField(response_json, "interface"));
 
   absl::btree_set<std::string> loopback_mode_set;
-  for (const auto& interface : interfaces.items()) {
+  for (const auto &interface : interfaces.items()) {
+    if (interface.value().find("config") == interface.value().end()) {
+      continue;
+    }
     ASSIGN_OR_RETURN(json config, GetField(interface.value(), "config"));
     // Skip if the config doesn't have loopback-mode.
     if (config.find("loopback-mode") == config.end()) {

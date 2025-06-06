@@ -2353,6 +2353,9 @@ TEST(LoopbackMode, WorksProperly) {
             "config":{
               "openconfig-p4rt:id": 7
             }
+          },
+          {
+            "name":"EthernetEnabled4"
           }
         ]
       }
