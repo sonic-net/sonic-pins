@@ -6,4 +6,11 @@ package dvaas;
 // processor.
 message PacketTrace {
   string bmv2_textual_log = 1;
+  repeated TableApply table_apply = 2;
+}
+
+message TableApply {
+  string table_name = 1;
+  bool table_was_hit = 2;
+  string hit_or_miss_textual_log = 3;
 }
