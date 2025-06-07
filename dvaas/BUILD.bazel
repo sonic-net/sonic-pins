@@ -175,10 +175,41 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "mirror_testbed_config",
+    srcs = ["mirror_testbed_config.cc"],
+    hdrs = ["mirror_testbed_config.h"],
+    deps = [
+        ":switch_api",
+        "//lib/gnmi:gnmi_helper",
+        "//lib/gnmi:openconfig_cc_proto",
+        "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//tests/lib:switch_test_setup_helpers",
+        "//thinkit:mirror_testbed",
+        "//thinkit:mirror_testbed_fixture",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
 proto_library(
     name = "packet_trace_proto",
     testonly = False,
     srcs = ["packet_trace.proto"],
+
+)
+
+cc_proto_library(
+    name = "packet_trace_cc_proto",
+    testonly = False,
+    deps = [":packet_trace_proto"],
 )
 
 cc_proto_library(
@@ -234,22 +265,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "mirror_testbed_config",
-    testonly = True,
-    srcs = ["mirror_testbed_config.cc"],
-    hdrs = ["mirror_testbed_config.h"],
-    deps = [
-        ":switch_api",
-        "//gutil:status",
-        "//lib/gnmi:gnmi_helper",
-        "//lib/gnmi:openconfig_cc_proto",
-        "//p4_pdpi:p4_runtime_session",
-        "//tests/lib:switch_test_setup_helpers",
-        "//thinkit:mirror_testbed_fixture",
-        "@com_google_absl//absl/status",
-    ],
-)
 cc_library(
     name = "switch_api",
     hdrs = ["switch_api.h"],
@@ -324,6 +339,40 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "traffic_generator",
+    srcs = ["traffic_generator.cc"],
+    hdrs = ["traffic_generator.h"],
+    deps = [
+        ":dataplane_validation",
+        ":mirror_testbed_config",
+        ":packet_injection",
+        ":port_id_map",
+        ":switch_api",
+        ":test_vector",
+        ":test_vector_cc_proto",
+        ":validation_result",
+        "//gutil:test_artifact_writer",
+        "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:p4_runtime_session_extras",
+        "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
+        "//tests/forwarding:util",
+        "//thinkit:mirror_testbed",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
     ],
 )
 

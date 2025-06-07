@@ -26,11 +26,16 @@ namespace pins_test {
 namespace {
 
 TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
-  ASSERT_OK_AND_ASSIGN(
-      dvaas::MirrorTestbedConfigurator configured_testbed,
-      dvaas::MirrorTestbedConfigurator::Create(GetParam().mirror_testbed));
+  ASSERT_OK_AND_ASSIGN(dvaas::MirrorTestbedConfigurator configured_testbed,
+                       dvaas::MirrorTestbedConfigurator::Create(
+                           &GetParam().mirror_testbed->GetMirrorTestbed()));
 
-  ASSERT_OK(configured_testbed.ConfigureForForwardingTest());
+  ASSERT_OK(configured_testbed.ConfigureForForwardingTest({
+      .configure_sut_port_ids_for_expected_entries = true,
+      .sut_entries_to_expect_after_configuration =
+          GetParam().arriba_test_vector.ir_table_entries(),
+      .mirror_sut_ports_ids_to_control_switch = true,
+  }));
 
   EXPECT_OK(dvaas::ValidateAgaistArribaTestVector(
       *configured_testbed.SutApi().p4rt,
