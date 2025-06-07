@@ -22,8 +22,9 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -33,7 +34,7 @@ namespace pins {
 
 struct L3AdmitTestParams {
   thinkit::MirrorTestbedInterface *testbed_interface;
-  p4::config::v1::P4Info p4info;
+  std::optional<p4::config::v1::P4Info> p4info;
 };
 
 // This test assumes that the switch is set up with a gNMI config.
@@ -51,7 +52,7 @@ protected:
         std::tie(sut_p4rt_session_, control_switch_p4rt_session_),
         pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
             testbed.Sut(), testbed.ControlSwitch(),
-            /*gnmi_config=*/std::nullopt, GetParam().p4info));
+            /*gnmi_config=*/std::nullopt, /*p4_info=*/GetParam().p4info));
 
     // The L3Admit tests assume identical P4RT port IDs are used between the SUT
     // and control switch. So sending a packet from a given port ID on the
@@ -60,7 +61,8 @@ protected:
     // mapping to the control switch.
     ASSERT_OK(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
 
-    ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(GetParam().p4info));
+    // Fetch P4 Info from Switch Under Test.
+    ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::GetIrP4Info(*sut_p4rt_session_));
   }
 
   void TearDown() override { GetParam().testbed_interface->TearDown(); }
