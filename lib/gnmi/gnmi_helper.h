@@ -79,6 +79,8 @@ enum class GnmiFieldType {
   kState,
 };
 
+enum class DelayType : std::uint8_t { kIngressDelay, kEgressDelay };
+
 // Describes a single interface in a gNMI config.
 struct OpenConfigInterfaceDescription {
   std::string port_name;
@@ -312,6 +314,10 @@ GetUpInterfacesOverGnmi(gnmi::gNMI::StubInterface &stub,
 // Returns a set of interfaces which are in the disabled state.
 absl::StatusOr<absl::flat_hash_set<std::string>>
 GetConfigDisabledInterfaces(gnmi::gNMI::StubInterface &stub);
+
+// Returns a set of interfaces which are in the enabled state.
+absl::StatusOr<absl::flat_hash_set<std::string>>
+GetConfigEnabledInterfaces(gnmi::gNMI::StubInterface &stub);
 
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus>
@@ -560,5 +566,20 @@ void StripSymbolFromString(std::string &str, char symbol);
 //   {"field":"value"}
 absl::StatusOr<std::string> ParseJsonValue(absl::string_view json);
 
+// Gets switch up time over gNMI since the last reboot.
+absl::StatusOr<uint64_t> GetGnmiSystemUpTime(gnmi::gNMI::StubInterface &stub);
+
+// Gets the PINS Stack related details over gNMI. Supported keys are
+// "network_stack0", "network_stack1", "os0", "os1" and supported fields are
+// "name", "oper-status", "software-version" "parent" and "type".
+absl::StatusOr<std::string>
+GetOcOsNetworkStackGnmiStatePathInfo(gnmi::gNMI::StubInterface &stub,
+                                     absl::string_view key,
+                                     absl::string_view field);
+
+// Gets the interface stat value over gNMI.
+absl::StatusOr<uint64_t>
+GetInterfaceCounter(absl::string_view stat_name, absl::string_view interface,
+                    gnmi::gNMI::StubInterface *gnmi_stub);
 } // namespace pins_test
 #endif // PINS_LIB_GNMI_GNMI_HELPER_H_
