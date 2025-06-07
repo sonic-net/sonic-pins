@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -26,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_run_validation.h"
@@ -311,27 +313,50 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
         ValidateTestRun(test_run, params.switch_output_diff_params);
   }
 
-  ValidationResult validation_result(
-      test_outcomes, generate_test_vectors_result.packet_synthesis_result);
-  RETURN_IF_ERROR(writer->AppendToTestArtifact(
-      "test_vector_failures.txt",
-      absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
-
   // Store the packet trace for the first failed test packet (if any).
   ASSIGN_OR_RETURN(P4Specification p4_spec,
                    InferP4Specification(params, *backend_, sut));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
-  for (const dvaas::PacketTestOutcome& test_outcome :
-       test_outcomes.outcomes()) {
+  for (dvaas::PacketTestOutcome& test_outcome :
+       *test_outcomes.mutable_outcomes()) {
     if (test_outcome.test_result().has_failure()) {
       LOG(INFO) << "Storing packet trace for the first failed test packet";
       const SwitchInput& switch_input =
           test_outcome.test_run().test_vector().input();
-      RETURN_IF_ERROR(backend_->StorePacketTrace(p4_spec.bmv2_config, ir_p4info,
+      ASSIGN_OR_RETURN(auto packet_traces,
+                       backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
                                                  entities, switch_input));
+      const std::string packet_hex =
+          test_outcome.test_run().test_vector().input().packet().hex();
+
+      if (!packet_traces.contains(packet_hex) ||
+          packet_traces[packet_hex].empty()) {
+        return absl::InternalError(
+            absl::StrCat("Packet trace not found for packet ", packet_hex));
+      }
+
+      std::string bmv2_textual_log =
+          packet_traces[packet_hex][0].bmv2_textual_log();
+
+      test_outcome.mutable_test_result()->mutable_failure()->set_description(
+          absl::StrCat(test_outcome.test_result().failure().description(),
+                       "\n== P4 SIMULATION PACKET TRACE "
+                       "==================================================\n",
+                       bmv2_textual_log));
+
+      RETURN_IF_ERROR(writer->AppendToTestArtifact(
+          "packet_" + packet_hex.substr(packet_hex.length() - 8) + ".trace.txt",
+          bmv2_textual_log));
       break;
     }
   }
+
+  ValidationResult validation_result(
+      std::move(test_outcomes),
+      generate_test_vectors_result.packet_synthesis_result);
+  RETURN_IF_ERROR(writer->AppendToTestArtifact(
+      "test_vector_failures.txt",
+      absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
 
   return validation_result;
 }
