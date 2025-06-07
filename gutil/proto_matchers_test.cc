@@ -16,13 +16,11 @@
 #include <utility>
 #include <vector>
 
-#include "absl/strings/str_replace.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/proto_test.pb.h"
 #include "gutil/testing.h"
-#include "p4_pdpi/ir.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace gutil {
 namespace {
@@ -30,52 +28,57 @@ namespace {
 using ::testing::Not;
 
 TEST(ProtoMatcher, EqualsProto) {
-  pdpi::IrTableEntry table_entry;
-  table_entry.set_table_name("router_interface_table");
-  table_entry.set_priority(123);
+  TestMessage message;
+  message.set_int_field(123);
+  message.set_string_field("foo");
+  message.set_bool_field(true);
 
-  EXPECT_THAT(table_entry, EqualsProto(table_entry));
+  EXPECT_THAT(message, EqualsProto(message));
 }
 
 TEST(ProtoMatcher, EqualsProtoFromText) {
-  pdpi::IrTableEntry table_entry;
-  table_entry.set_table_name("router_interface_table");
-  table_entry.set_priority(123);
+  TestMessage message;
+  message.set_int_field(123);
+  message.set_string_field("foo");
+  message.set_bool_field(true);
 
-  EXPECT_THAT(table_entry, EqualsProto(R"pb(
-                table_name: "router_interface_table"
-                priority: 123)pb"));
+  EXPECT_THAT(message, EqualsProto(R"pb(int_field: 123
+                                        string_field: "foo"
+                                        bool_field: true)pb"));
 }
 
 TEST(ProtoMatcher, DescribeEqualsProto) {
-  auto matcher = EqualsProto(gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-    table_name: "router_interface_table"
-    priority: 123
+  auto matcher = EqualsProto(gutil::ParseProtoOrDie<TestMessage>(R"pb(
+    int_field: 123
+    string_field: "foo"
+    bool_field: true
   )pb"));
 
-  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(matcher),
-            R"(is equal to pdpi.IrTableEntry <
-table_name: "router_interface_table"
-priority: 123
+  EXPECT_EQ(testing::DescribeMatcher<TestMessage>(matcher),
+            R"(is equal to gutil.TestMessage <
+int_field: 123
+string_field: "foo"
+bool_field: true
 >)");
-  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher)),
-            R"(is not equal to pdpi.IrTableEntry <
-table_name: "router_interface_table"
-priority: 123
+  EXPECT_EQ(testing::DescribeMatcher<TestMessage>(Not(matcher)),
+            R"(is not equal to gutil.TestMessage <
+int_field: 123
+string_field: "foo"
+bool_field: true
 >)");
 }
 
 TEST(ProtoMatcher, DescribeEqualsProtoFromText) {
   std::string text =
-      R"pb(table_name: "router_interface_table" priority: 123)pb";
+      R"pb(int_field: 123 string_field: "foo" bool_field: true)pb";
   auto matcher = EqualsProto(text);
 
-  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(matcher),
+  EXPECT_EQ(testing::DescribeMatcher<TestMessage>(matcher),
             R"(is equal to <
-table_name: "router_interface_table" priority: 123>)");
-  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher)),
+int_field: 123 string_field: "foo" bool_field: true>)");
+  EXPECT_EQ(testing::DescribeMatcher<TestMessage>(Not(matcher)),
             R"(is not equal to <
-table_name: "router_interface_table" priority: 123>)");
+int_field: 123 string_field: "foo" bool_field: true>)");
 }
 
 TEST(BinaryEqualsProtoTest, EqualPairWorks) {
@@ -132,37 +135,34 @@ TEST(EqualsProtoSequenceTest, UnequalSequencesWork) {
 }
 
 TEST(PartiallyMatcherTest, IdenticalProtosAreAlsoPartiallyEqual) {
-  pdpi::IrTableEntry table_entry;
-  table_entry.set_table_name("router_interface_table");
-  table_entry.set_priority(123);
+  TestMessage message;
+  message.set_int_field(123);
 
-  EXPECT_THAT(table_entry, Partially(EqualsProto(table_entry)));
+  EXPECT_THAT(message, Partially(EqualsProto(message)));
 }
 
 TEST(PartiallyMatcherTest, PartiallyEqualsProtoOnlyComparePresentFields) {
-  pdpi::IrTableEntry table_entry;
-  table_entry.set_table_name("router_interface_table");
-  table_entry.set_priority(123);
+  TestMessage message;
+  message.set_int_field(123);
 
-  EXPECT_THAT(table_entry, Partially(EqualsProto(R"pb(
-                table_name: "router_interface_table"
-                priority: 123)pb")));
+  EXPECT_THAT(message, Partially(EqualsProto(R"pb(
+                int_field: 123)pb")));
 }
 
 TEST(PartiallyMatcherTest, DifferentlProtosDoNotMatch) {
-  pdpi::IrTableEntry table_entry;
-  table_entry.set_table_name("router_interface_table");
-  table_entry.set_priority(123);
+  TestMessage message;
+  message.set_int_field(123);
+  message.set_string_field("foo");
 
   // Proto differs in one field and remains the same for another field does not
   // match.
-  EXPECT_THAT(table_entry, Not(Partially(EqualsProto(R"pb(
-                table_name: "big_table"
-                priority: 123)pb"))));
+  EXPECT_THAT(message, Not(Partially(EqualsProto(R"pb(
+                int_field: 1234
+                string_field: "foo")pb"))));
   // Proto differs in both fields should not match.
-  EXPECT_THAT(table_entry, Not(Partially(EqualsProto(R"pb(
-                table_name: "big_table"
-                priority: 1234)pb"))));
+  EXPECT_THAT(message, Not(Partially(EqualsProto(R"pb(
+                int_field: 1234
+                string_field: "bar")pb"))));
 }
 
 TEST(HasOneofCaseTest, NotHasOneofCase) {
