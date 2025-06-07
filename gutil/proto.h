@@ -66,6 +66,9 @@ bool ProtoEqual(const google::protobuf::Message &message1,
                 const google::protobuf::Message &message2,
                 google::protobuf::util::MessageDifferencer &differ);
 
+bool ProtoEqual(const google::protobuf::Message &message1,
+                const google::protobuf::Message &message2);
+
 // Get the name of the oneof enum that is set.
 // Eg:
 // message IrValue {
