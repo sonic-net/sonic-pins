@@ -49,12 +49,7 @@ absl::StatusOr<pdpi::IrP4Info> GetIrP4Info(
   return pdpi::CreateIrP4Info(response.config().p4info());
 }
 
-// Processed information about a PacketIn message with a tagged payload.
-struct TaggedPacketIn {
-  int tag;
-  p4::v1::PacketIn packet_in;
-  packetlib::Packet parsed_inner_packet;
-};
+}  // namespace
 
 absl::StatusOr<std::vector<TaggedPacketIn>>
 CollectStreamMessageResponsesAndReturnTaggedPacketIns(
@@ -116,8 +111,6 @@ absl::StatusOr<P4rtPortId> GetSutEgressPortFromControlSwitchPacketIn(
   return mirror_testbed_port_map.GetSutPortConnectedToControlSwitchPort(
       control_switch_ingress_port);
 }
-
-}  // namespace
 
 absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
     const pdpi::IrPacketIn& packet_in) {

@@ -18,7 +18,9 @@
 #define PINS_LIB_P4RT_P4RT_PORT_H_
 
 #include <cstdint>
+#include <ostream>
 #include <string>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -29,12 +31,13 @@ namespace pins_test {
 
 // Class representing a P4Runtime port ID.
 //
-// For historical reasons, there exists two encodings of P4Runtime port IDs:
+// For historical reasons, there exists three encodings of P4Runtime port IDs:
 // - As an integer (uint32_t) `42`, e.g. in OpenConfig.
 // - As a decimal string `"42"`, e.g. in P4Runtime messages such as table
 // entries.
-//
-// This class represents a P4Runtime port ID, abstracting away the encoding.
+// - As a binary string `"\x2A"`, e.g. in P4Runtime messages to BMv2, which
+// doesn't currently support decimal strings. This class represents a P4Runtime
+// port ID, abstracting away the encoding.
 // TODO: Agree on a single encoding so this class becomes obsolete.
 class P4rtPortId {
 public:
@@ -59,6 +62,10 @@ public:
 
   // Returns P4Runtime encoding of the port ID, e.g. the string `"42"`.
   std::string GetP4rtEncoding() const;
+
+  // Returns BMv2 P4Runtime encoding of the port ID, e.g. the byte string
+  // `"\x2A"`.
+  absl::StatusOr<std::string> GetBmv2P4rtEncoding() const;
 
   bool operator==(const P4rtPortId &other) const;
   bool operator<(const P4rtPortId &other) const;

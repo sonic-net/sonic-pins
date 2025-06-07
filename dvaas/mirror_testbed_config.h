@@ -18,9 +18,11 @@
 #include <memory>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "dvaas/switch_api.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
 namespace dvaas {
@@ -29,23 +31,46 @@ namespace dvaas {
 // prepare them for forwarding related tests (e.g. Arriba, DVaaS, Ouroboros) and
 // restoring the testbed to its original configuration after the test.
 class MirrorTestbedConfigurator {
-public:
+ public:
+  struct Params {
+    // If true, configures interfaces on SUT to make sure
+    // for any P4RT port id in `sut_entries_to_expect_after_configuration` there
+    // is exactly one enabled ethernet interface with that id. Existing SUT
+    // table entries get wiped out during the process.
+    bool configure_sut_port_ids_for_expected_entries = false;
+    // Entries that are expected to be installed on SUT after configuration by
+    // the client of the configurator. Only used for determining interface port
+    // ids during configuration. Must have a value if
+    // `configure_sut_port_ids_for_expected_entries` is true.
+    // NOTE: The configurator won't install these entries on SUT. It is expected
+    // that the client will install the entries after calling
+    // `ConfigureForForwardingTest`.
+    std::optional<pdpi::IrTableEntries>
+        sut_entries_to_expect_after_configuration;
+
+    // If true, sets up control switch ports to be a mirror of SUT
+    // Must be true if `configure_sut_port_ids_for_expected_entries` is true.
+    // Existing control switch table entries get wiped out during the process.
+    bool mirror_sut_ports_ids_to_control_switch = false;
+  };
+
   // Creates and returns MirrorTestbedConfigurator object from the given
   // testbed. Establishes connections to SUT and control switch.
-  static absl::StatusOr<MirrorTestbedConfigurator>
-  Create(std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface);
+  // Note: The returned configurator object does not take ownership of the given
+  // testbed, and the caller is responsible for ensuring it outlives the created
+  // configurator.
+  static absl::StatusOr<MirrorTestbedConfigurator> Create(
+      thinkit::MirrorTestbed* testbed);
 
   // Prepares the testbed for forwarding related tests by:
-  //    - Setting up control switch ports to be a mirror of SUT.
-  //      TODO: Remove the above functionality after the bug is
-  //      resolved.
-  //    - Ensure that all enabled ports are up.
+  //    - Configuring the SUT and control switch according to the `params`.
+  //    - Ensuring that all enabled ports are up.
   //    - Keeping the original config for later restoration.
   //
   // Pre-condition: The control switch must be in its original config (i.e.
   // original_control_interfaces_ must be empty), otherwise an error will be
   // returned.
-  absl::Status ConfigureForForwardingTest();
+  absl::Status ConfigureForForwardingTest(const Params& params);
 
   // Restores the testbed to the original configuration it had before the call
   // to `ConfigureForForwardingTest`.
@@ -72,12 +97,11 @@ public:
 
 private:
   // May only be called by `Create`.
-  MirrorTestbedConfigurator(
-      std::shared_ptr<thinkit::MirrorTestbedInterface> &testbed_interface)
-      : testbed_interface_(testbed_interface) {}
+  MirrorTestbedConfigurator(thinkit::MirrorTestbed* testbed)
+      : testbed_(*testbed) {}
 
   // The testbed to be configured.
-  std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface_;
+  thinkit::MirrorTestbed& testbed_;
 
   // APIs to SUT and control switch.
   // Invariant: Pointers in both SwitchApis are not null.
