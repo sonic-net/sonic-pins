@@ -16,11 +16,17 @@
 #include "lib/p4rt/p4rt_port.h"
 
 #include <cstdint>
+#include <ostream>
+#include <string>
+#include <vector>
 
+#include "absl/numeric/bits.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "gutil/status.h"
+#include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 
 namespace pins_test {
@@ -59,6 +65,18 @@ uint32_t P4rtPortId::GetOpenConfigEncoding() const { return p4rt_port_id_; }
 
 std::string P4rtPortId::GetP4rtEncoding() const {
   return absl::StrCat(p4rt_port_id_);
+}
+
+absl::StatusOr<std::string> P4rtPortId::GetBmv2P4rtEncoding() const {
+  constexpr int kBmv2PortBitWidth = 9;
+
+  if (int width = absl::bit_width(p4rt_port_id_); width > kBmv2PortBitWidth) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "BMv2 requires the P4RT port ID to fit into 9 bits,"
+              "but the present P4RT port ID "
+           << p4rt_port_id_ << " has " << width << " bits.";
+  }
+  return pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitWidth>(p4rt_port_id_);
 }
 
 bool P4rtPortId::operator==(const P4rtPortId& other) const {
