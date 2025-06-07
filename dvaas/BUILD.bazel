@@ -39,6 +39,7 @@ cc_library(
     deps = [
         ":output_writer",
         ":packet_injection",
+        ":packet_trace_cc_proto",
         ":port_id_map",
         ":switch_api",
         ":test_run_validation",
@@ -64,8 +65,7 @@ cc_library(
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -177,7 +177,14 @@ cc_library(
 
 proto_library(
     name = "packet_trace_proto",
+    testonly = False,
     srcs = ["packet_trace.proto"],
+)
+
+cc_proto_library(
+    name = "packet_trace_cc_proto",
+    testonly = False,
+    deps = [":packet_trace_proto"],
 )
 
 proto_library(
