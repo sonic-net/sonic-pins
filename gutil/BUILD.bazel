@@ -56,8 +56,6 @@ cc_test(
         ":proto_matchers",
         ":proto_test_cc_proto",
         ":testing",
-        "//p4_pdpi:ir_cc_proto",
-        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -199,9 +197,11 @@ cc_test(
         ":proto",
         ":proto_matchers",
         ":proto_test_cc_proto",
+        ":status",
         ":status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -247,6 +247,7 @@ cc_test(
         ":status_matchers",
         ":version",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
