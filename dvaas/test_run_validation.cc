@@ -312,7 +312,6 @@ static constexpr absl::string_view kActualBanner =
 static constexpr absl::string_view kExpectationBanner =
     "== EXPECTED OUTPUT "
     "=============================================================";
-
 }  // namespace
 
 PacketTestValidationResult ValidateTestRun(
