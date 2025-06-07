@@ -118,6 +118,7 @@ cc_library(
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
         "//thinkit:generic_testbed",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -137,9 +138,13 @@ cc_test(
     srcs = ["ixia_helper_test.cc"],
     deps = [
         ":ixia_helper",
+        ":ixia_helper_cc_proto",
+        "//gutil:proto",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//thinkit:generic_testbed",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
     ],
 )
