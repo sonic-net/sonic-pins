@@ -212,6 +212,12 @@ cc_proto_library(
     deps = [":packet_trace_proto"],
 )
 
+cc_proto_library(
+    name = "packet_trace_cc_proto",
+    testonly = False,
+    deps = [":packet_trace_proto"],
+)
+
 proto_library(
     name = "test_vector_proto",
     srcs = ["test_vector.proto"],
