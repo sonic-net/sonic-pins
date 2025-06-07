@@ -256,12 +256,6 @@ absl::StatusOr<p4::v1::MulticastGroupEntry>
 FuzzValidMulticastGroupEntry(absl::BitGen *gen, const FuzzerConfig &config,
                              const SwitchState &switch_state);
 
-// Randomly generates a set of valid table entries that, when installed in order
-// to an empty switch state, all install correctly.
-std::vector<AnnotatedTableEntry>
-ValidForwardingEntries(absl::BitGen *gen, const FuzzerConfig &config,
-                       const int num_entries);
-
 // Randomly generates a set of updates, both valid and invalid. Optionally takes
 // a max_batch_size parameter determining the maximum number of updates in a
 // request.
