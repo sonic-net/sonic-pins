@@ -16,9 +16,11 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
@@ -187,8 +189,50 @@ absl::Status SetUnionFirstRepeatedFieldIntoSecond(const T& fields,
   return absl::OkStatus();
 }
 
-// Unions `PkgInfo`s by combining their names, asserting all other fields
-// are equal and returning InvalidArgumentError if that is not the case.
+// Unions the `PlatformProperties` fields by taking the max of all respective
+// sizes. Returns an InvalidArgumentError if there are unexpected fields.
+absl::Status UnionFirstPlatformPropertiesIntoSecond(
+    const p4::config::v1::PlatformProperties& properties,
+    p4::config::v1::PlatformProperties& unioned_properties) {
+  unioned_properties.set_multicast_group_table_size(
+      std::max(unioned_properties.multicast_group_table_size(),
+               properties.multicast_group_table_size()));
+  unioned_properties.set_multicast_group_table_total_replicas(
+      std::max(unioned_properties.multicast_group_table_total_replicas(),
+               properties.multicast_group_table_total_replicas()));
+  unioned_properties.set_multicast_group_table_max_replicas_per_entry(std::max(
+      unioned_properties.multicast_group_table_max_replicas_per_entry(),
+      properties.multicast_group_table_max_replicas_per_entry()));
+
+  // Ensure only the 3 fields mentioned above are present in either proto.
+  std::vector<const google::protobuf::FieldDescriptor*> fields;
+  unioned_properties.GetReflection()->ListFields(unioned_properties, &fields);
+  if (fields.size() <= 3) {
+    fields.clear();
+    unioned_properties.GetReflection()->ListFields(properties, &fields);
+  };
+  if (fields.size() > 3) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "PlatformProperties has unexpected fields: ",
+        absl::StrJoin(
+            fields, ",",
+            [](std::string* out,
+               const google::protobuf::FieldDescriptor* field) {
+              if (field->name() != "multicast_group_table_size" &&
+                  field->name() != "multicast_group_table_total_replicas" &&
+                  field->name() ==
+                      "multicast_group_table_max_replicas_per_entry") {
+                // Only append the unexpected fields.
+                return absl::StrAppend(out, field->name());
+              }
+            })));
+  }
+  return absl::OkStatus();
+}
+
+// Unions `PkgInfo`s by combining their names, versions, and PlatformProperties,
+// asserting all other fields are equal and returning InvalidArgumentError if
+// that is not the case.
 absl::Status UnionFirstPkgInfoIntoSecond(
     const p4::config::v1::PkgInfo& info,
     p4::config::v1::PkgInfo& unioned_info) {
@@ -204,9 +248,18 @@ absl::Status UnionFirstPkgInfoIntoSecond(
   absl::StrAppend(unioned_info.mutable_name(), ", ", info.name());
   absl::StrAppend(unioned_info.mutable_version(), ", ", info.version());
 
+  // Take union of `platform_properties` field.
+  if (info.has_platform_properties() ||
+      unioned_info.has_platform_properties()) {
+    RETURN_IF_ERROR(UnionFirstPlatformPropertiesIntoSecond(
+        info.platform_properties(),
+        *unioned_info.mutable_platform_properties()));
+  }
+
   // Ensure all other fields are equal.
-  if (auto diff = DiffMessages(info, unioned_info,
-                               /*ignored_fields=*/{"name", "version"});
+  if (auto diff = DiffMessages(
+          info, unioned_info,
+          /*ignored_fields=*/{"name", "version", "platform_properties"});
       diff.has_value()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "PkgInfos are incompatible. Relevant differences: ", *diff));
