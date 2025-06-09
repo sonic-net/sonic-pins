@@ -285,6 +285,10 @@ struct AclPreIngressVlanTableMatchFields {
   std::optional<std::string> in_port;
 };
 
+struct AclIngressQosMatchFields {
+  pdpi::Ternary<netaddr::MacAddress> dst_mac;
+};
+
 // -- Entry Builder ------------------------------------------------------------
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
@@ -465,6 +469,8 @@ class EntryBuilder {
   EntryBuilder& AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
       AclQueueAssignments queue_assignments,
       AclMeterConfiguration meter_configuration);
+  EntryBuilder& AddAclIngressQosDropTableEntry(
+      const AclIngressQosMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddVlanEntry(absl::string_view vlan_id_hexstr);
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
