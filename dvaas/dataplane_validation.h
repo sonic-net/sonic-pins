@@ -280,13 +280,6 @@ public:
   virtual absl::StatusOr<P4Specification>
   InferP4Specification(SwitchApi &sut) const = 0;
 
-  // Stores the P4 simulation packet trace for the given config, entries, and
-  // input packet.
-  virtual absl::Status StorePacketTrace(
-      const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
-      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
-      const SwitchInput& switch_input) const = 0;
-
   // Gets the P4 simulation packet trace for the given config, entries, and
   // input packet.
   virtual absl::StatusOr<
@@ -295,6 +288,11 @@ public:
       const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
       const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
       const SwitchInput& switch_input) const = 0;
+
+  // Creates entries for v1Model auxiliary tables that model the effects of the
+  // given gNMI configuration in on packet forwarding (e.g. port loopback mode).
+  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryTableEntries(
+      gnmi::gNMI::StubInterface& gnmi_stub, pdpi::IrP4Info ir_p4info) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };

@@ -20,18 +20,6 @@ package(
     licenses = ["notice"],
 )
 
-# Since DVaaS's user-facing API is still in development and subject to change, we restrict
-# visibility to an explicit allow list. Send us a CL or come talk to us if you'd like to be added.
-DVAAS_USER_ALLOW_LIST = [
-    "//platforms/networking/gpins/testing/blackbox/p4:__subpackages__",
-    "//platforms/networking/gpins/testing/blackbox/replay:__subpackages__",
-    "//platforms/networking/gpins/testing/ondatra/thinkit/tests:__pkg__",
-    "//tests/forwarding:__pkg__",
-    "//tests/ondatra/thinkit:__pkg__",
-    "//p4testgen:__pkg__",
-    "//platforms/networking/gpins/testing/lib/nsf/traffic_helpers:__subpackages__",
-]
-
 cc_library(
     name = "dataplane_validation",
     srcs = ["dataplane_validation.cc"],
@@ -204,12 +192,6 @@ proto_library(
     testonly = False,
     srcs = ["packet_trace.proto"],
 
-)
-
-cc_proto_library(
-    name = "packet_trace_cc_proto",
-    testonly = False,
-    deps = [":packet_trace_proto"],
 )
 
 cc_proto_library(

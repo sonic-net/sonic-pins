@@ -114,7 +114,6 @@ message PacketTestValidationResult {
 message PacketTestOutcome {
   PacketTestRun test_run = 1;
   PacketTestValidationResult test_result = 2;
-  PacketTrace p4_packet_trace = 3;
 }
 
 // A list of test outcomes.
