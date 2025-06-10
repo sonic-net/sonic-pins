@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _COMMON_ANNOTATION_PARSER_H_
-#define _COMMON_ANNOTATION_PARSER_H_
+#ifndef PINS_P4_INFRA_P4_PDPI_ANNOTATION_PARSER_H_
+#define PINS_P4_INFRA_P4_PDPI_ANNOTATION_PARSER_H_
 
 #include <functional>
 #include <string>
@@ -181,4 +181,4 @@ GetAllAnnotationBodies(absl::string_view label, const Container &annotations) {
 
 } // namespace pdpi
 
-#endif // _COMMON_ANNOTATION_PARSER_H_
+#endif  // PINS_P4_INFRA_P4_PDPI_ANNOTATION_PARSER_H_
