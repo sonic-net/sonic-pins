@@ -12,25 +12,27 @@
 // --- Tables ------------------------------------------------------------------
 
 // IDs of fixed SAI tables (8 most significant bits = 0x02).
-#define ROUTING_VRF_TABLE_ID 0x0200004A                        // 33554506
-#define ROUTING_NEIGHBOR_TABLE_ID 0x02000040                   // 33554496
-#define ROUTING_ROUTER_INTERFACE_TABLE_ID 0x02000041           // 33554497
-#define ROUTING_NEXTHOP_TABLE_ID 0x02000042                    // 33554498
-#define ROUTING_WCMP_GROUP_TABLE_ID 0x02000043                 // 33554499
-#define ROUTING_IPV4_TABLE_ID 0x02000044                       // 33554500
-#define ROUTING_IPV6_TABLE_ID 0x02000045                       // 33554501
-#define ROUTING_IPV4_MULTICAST_TABLE_ID 0x0200004E             // 33554510
-#define ROUTING_IPV6_MULTICAST_TABLE_ID 0x0200004F             // 33554511
-#define ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_ID 0x0200004C // 33554508
-#define MIRROR_SESSION_TABLE_ID 0x02000046                     // 33554502
-#define L3_ADMIT_TABLE_ID 0x02000047                           // 33554503
-#define MIRROR_PORT_TO_PRE_SESSION_TABLE_ID 0x02000048         // 33554504
-#define ECMP_HASHING_TABLE_ID 0x02000049                       // 33554505
-#define ROUTING_TUNNEL_TABLE_ID 0x02000050                     // 33554512
-#define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B            // 33554507
-#define DISABLE_VLAN_CHECKS_TABLE_ID 0x0200004D                // 33554509
-#define INGRESS_CLONE_TABLE_ID 0x02000051                      // 33554513
-// Next available table id: 0x02000052 (33554514)
+#define ROUTING_VRF_TABLE_ID 0x0200004A                         // 33554506
+#define ROUTING_NEIGHBOR_TABLE_ID 0x02000040                    // 33554496
+#define ROUTING_ROUTER_INTERFACE_TABLE_ID 0x02000041            // 33554497
+#define ROUTING_NEXTHOP_TABLE_ID 0x02000042                     // 33554498
+#define ROUTING_WCMP_GROUP_TABLE_ID 0x02000043                  // 33554499
+#define ROUTING_IPV4_TABLE_ID 0x02000044                        // 33554500
+#define ROUTING_IPV6_TABLE_ID 0x02000045                        // 33554501
+#define ROUTING_IPV4_MULTICAST_TABLE_ID 0x0200004E              // 33554510
+#define ROUTING_IPV6_MULTICAST_TABLE_ID 0x0200004F              // 33554511
+#define ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_ID 0x0200004C  // 33554508
+#define MIRROR_SESSION_TABLE_ID 0x02000046                      // 33554502
+#define L3_ADMIT_TABLE_ID 0x02000047                            // 33554503
+#define MIRROR_PORT_TO_PRE_SESSION_TABLE_ID 0x02000048          // 33554504
+#define ECMP_HASHING_TABLE_ID 0x02000049                        // 33554505
+#define ROUTING_TUNNEL_TABLE_ID 0x02000050                      // 33554512
+#define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B             // 33554507
+#define DISABLE_VLAN_CHECKS_TABLE_ID 0x0200004D                 // 33554509
+#define INGRESS_CLONE_TABLE_ID 0x02000051                       // 33554513
+#define EGRESS_PORT_LOOPBACK_TABLE_ID 0x02000052                // 33554514
+#define VLAN_MEMBERSHIP_TABLE_ID 0x02000054                     // 33554516
+// Next available table id: 0x02000055 (33554517)
 
 // --- Actions -----------------------------------------------------------------
 
@@ -75,7 +77,9 @@
 #define TUNNEL_DECAP_ACTION_ID 0x01000016                   // 16777238
 #define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A            // 16777242
 #define EGRESS_LOOPBACK_ACTION_ID 0x0100001E                // 16777246
-// Next available action id: 0x01000024 (16777252)
+#define VLAN_MAKE_TAGGED_MEMBER_ACTION_ID 0x01000024        // 16777252
+#define VLAN_MAKE_UNTAGGED_MEMBER_ACTION_ID 0x01000025      // 16777253
+// Next available action id: 0x01000026 (16777254)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
