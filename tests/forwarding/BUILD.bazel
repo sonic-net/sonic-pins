@@ -541,5 +541,8 @@ cc_library(
     hdrs = [
         "packet_at_port.h",
     ],
-    deps = ["@com_google_absl//absl/strings"],
+    deps = [
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
 )

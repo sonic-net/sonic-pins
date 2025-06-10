@@ -1,14 +1,14 @@
 #ifndef PINS_TESTS_FORWARDING_PACKET_H_
 #define PINS_TESTS_FORWARDING_PACKET_H_
 
-#include <cstdint>
-#include <memory>
 #include <ostream>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "absl/strings/escaping.h"
-#include "absl/strings/string_view.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 
 namespace pins {
 
@@ -18,23 +18,26 @@ struct PacketAtPort {
   // TODO Change it to string type port.
   int port;
   std::string data;
+};
 
-  bool operator==(const PacketAtPort& other) const {
-    return port == other.port && data == other.data;
-  }
+inline bool operator==(const PacketAtPort& lhs, const PacketAtPort& rhs) {
+  return lhs.port == rhs.port && lhs.data == rhs.data;
+}
 
-  bool operator<(const PacketAtPort& other) const {
-    return std::tie(port, data) < std::tie(other.port, other.data);
-  }
+inline bool operator<(const PacketAtPort& lhs, const PacketAtPort& rhs) {
+  return std::tie(lhs.port, lhs.data) < std::tie(rhs.port, rhs.data);
+}
 
-  template <typename H>
-  friend H AbslHashValue(H h, const PacketAtPort& m);
+// Only intended for debugging purposes.  Do not assume output consistency.
+template <typename Sink>
+inline void AbslStringify(Sink& sink, const pins::PacketAtPort& packet) {
+  absl::Format(&sink, "{port: %d length: %d data: \"%s\"}", packet.port,
+               packet.data.size(), absl::BytesToHexString(packet.data));
 };
 
 inline std::ostream& operator<<(std::ostream& os,
                                 const ::pins::PacketAtPort& packet) {
-  return os << "{port: " << packet.port << " length: " << packet.data.size()
-            << " data: \"" << absl::BytesToHexString(packet.data) << "\"}";
+  return os << absl::StrCat(packet);
 }
 
 template <typename H>
