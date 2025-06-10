@@ -1228,6 +1228,43 @@ tables {
 }
 tables {
   preamble {
+    id: 33554516
+    name: "egress.egress_vlan_checks.vlan_membership_table"
+    alias: "vlan_membership_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vlan_id"
+    bitwidth: 12
+    match_type: EXACT
+  }
+  match_fields {
+    id: 2
+    name: "port"
+    match_type: EXACT
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  action_refs {
+    id: 16777252
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777253
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1024
+}
+tables {
+  preamble {
     id: 33554692
     name: "egress.acl_egress.acl_egress_table"
     alias: "acl_egress_table"
@@ -1688,7 +1725,7 @@ actions {
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1696,7 +1733,7 @@ actions {
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1704,7 +1741,7 @@ actions {
     name: "green_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
   params {
@@ -1712,7 +1749,7 @@ actions {
     name: "red_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
 }
@@ -1762,7 +1799,7 @@ actions {
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1770,7 +1807,7 @@ actions {
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -1778,7 +1815,7 @@ actions {
     name: "green_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
   params {
@@ -1786,7 +1823,7 @@ actions {
     name: "red_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
 }
@@ -2224,6 +2261,20 @@ actions {
 }
 actions {
   preamble {
+    id: 16777252
+    name: "egress.egress_vlan_checks.make_tagged_member"
+    alias: "make_tagged_member"
+  }
+}
+actions {
+  preamble {
+    id: 16777253
+    name: "egress.egress_vlan_checks.make_untagged_member"
+    alias: "make_untagged_member"
+  }
+}
+actions {
+  preamble {
     id: 16777485
     name: "egress.acl_egress.acl_egress_forward"
     alias: "acl_egress_forward"
@@ -2389,6 +2440,15 @@ type_info {
     }
   }
   new_types {
+    key: "multicast_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "nexthop_id_t"
     value {
       translated_type {
@@ -2426,6 +2486,15 @@ type_info {
   }
   new_types {
     key: "tunnel_id_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
+    key: "unicast_queue_t"
     value {
       translated_type {
         sdn_string {

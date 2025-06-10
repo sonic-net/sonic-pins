@@ -9,7 +9,11 @@
 // This header has to come first, to override its fixed counterpart.
 #include "bitwidths.p4"
 #include "../../fixed/parser.p4"
-#include "../../fixed/ipv4_checksum.p4"
+
+control MinimalVerifyChecksum(inout headers_t headers,
+                              inout local_metadata_t local_metadata) {
+  apply {}
+}
 
 control MinimalIngress(inout headers_t headers,
                        inout local_metadata_t local_metadata,
@@ -25,5 +29,11 @@ control MinimalEgress(inout headers_t headers,
   apply {}
 }
 
-V1Switch(packet_parser(), verify_ipv4_checksum(), MinimalIngress(),
-         MinimalEgress(), compute_ipv4_checksum(), packet_deparser()) main;
+control MinimalComputeChecksum(inout headers_t headers,
+                               inout local_metadata_t local_metadata) {
+  apply {}
+}
+
+
+V1Switch(packet_parser(), MinimalVerifyChecksum(), MinimalIngress(),
+         MinimalEgress(), MinimalComputeChecksum(), packet_deparser()) main;

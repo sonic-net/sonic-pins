@@ -49,6 +49,8 @@ control acl_ingress(in headers_t headers,
   // In ToRs, the acl_ingress_table copy action will not apply a rate limit.
   // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
   @sai_action(SAI_PACKET_ACTION_COPY)
+  //TODO: Rename parameter to `cpu_queue`.
+  //TODO: Rename type to `cpu_queue_t`.
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
     local_metadata.marked_to_copy = true;
@@ -56,6 +58,8 @@ control acl_ingress(in headers_t headers,
 #else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
+  //TODO: Rename parameter to `cpu_queue`.
+  //TODO: Rename type to `cpu_queue_t`.
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
     acl_ingress_meter.read(local_metadata.color);
@@ -76,6 +80,8 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
 #endif
+  //TODO: Rename parameter to `cpu_queue`.
+  //TODO: Rename type to `cpu_queue_t`.
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_copy(qos_queue);
     // TODO: Use `acl_drop(local_metadata)` instead when supported
@@ -148,13 +154,13 @@ control acl_ingress(in headers_t headers,
       @id(1) @sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP) bit<6> dscp,
       @id(2) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
       @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_multicast_queue,
+        multicast_queue_t green_multicast_queue,
       @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue,
+        multicast_queue_t red_multicast_queue,
       @id(5) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_unicast_queue,
+        unicast_queue_t green_unicast_queue,
       @id(6) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_unicast_queue) {
+        unicast_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -187,13 +193,13 @@ control acl_ingress(in headers_t headers,
   @unsupported
   action set_forwarding_queues(
       @id(1) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_multicast_queue,
+        multicast_queue_t green_multicast_queue,
       @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue,
+        multicast_queue_t red_multicast_queue,
       @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
-        qos_queue_t green_unicast_queue,
+        unicast_queue_t green_unicast_queue,
       @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_unicast_queue) {
+        unicast_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
   }
 
