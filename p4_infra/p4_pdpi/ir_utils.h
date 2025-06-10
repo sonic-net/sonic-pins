@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_UTILS_IR_H_
-#define PINS_P4_INFRA_P4_PDPI_UTILS_IR_H_
+#ifndef PINS_P4_INFRA_P4_PDPI_IR_UTILS_H_
+#define PINS_P4_INFRA_P4_PDPI_IR_UTILS_H_
 
 #include <stdint.h>
 
@@ -170,4 +170,4 @@ bool IsElementDeprecated(
 
 }  // namespace pdpi
 
-#endif  // PINS_P4_INFRA_P4_PDPI_UTILS_IR_H_
+#endif  // PINS_P4_INFRA_P4_PDPI_IR_UTILS_H_

@@ -26,9 +26,9 @@ cc_library(
     deps = [
         "//gutil/gutil:status",
         "//p4_infra/netaddr:ipv6_address",
+        "//p4_infra/p4_pdpi:ir_utils",
         "//p4_infra/string_encodings:decimal_string",
         "//p4_infra/string_encodings:hex_string",
-        "//p4_infra/p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
 	"//p4_symbolic/sai",
         "//p4_symbolic/symbolic",

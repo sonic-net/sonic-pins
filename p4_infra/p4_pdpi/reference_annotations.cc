@@ -27,10 +27,10 @@
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_infra/p4_pdpi/annotation_parser.h"
 #include "p4_infra/p4_pdpi/built_ins.h"
 #include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/utils/annotation_parser.h"
 
 namespace pdpi {
 namespace {

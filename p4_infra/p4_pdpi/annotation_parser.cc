@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/utils/annotation_parser.h"
+#include "p4_infra/p4_pdpi/annotation_parser.h"
 
 #include <stack>
 #include <string>

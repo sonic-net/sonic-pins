@@ -31,7 +31,7 @@
 #include "absl/types/optional.h"
 #include "gutil/gutil/status.h"
 #include "include/nlohmann/json.hpp"
-#include "p4_infra/p4_pdpi/utils/annotation_parser.h"
+#include "p4_infra/p4_pdpi/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/rediscommand.h"
 #include "swss/saiaclschema.h"

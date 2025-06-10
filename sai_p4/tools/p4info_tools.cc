@@ -20,7 +20,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_infra/p4_pdpi/utils/annotation_parser.h"
+#include "p4_infra/p4_pdpi/annotation_parser.h"
 
 namespace sai {
 

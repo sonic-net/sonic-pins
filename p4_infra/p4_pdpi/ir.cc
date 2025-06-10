@@ -51,9 +51,9 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/built_ins.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir_utils.h"
 #include "p4_infra/p4_pdpi/reference_annotations.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
-#include "p4_infra/p4_pdpi/utils/ir.h"
 
 namespace pdpi {
 

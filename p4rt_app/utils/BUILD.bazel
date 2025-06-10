@@ -22,8 +22,8 @@ cc_library(
     hdrs = ["table_utility.h"],
     deps = [
         "//gutil/gutil:status",
+        "//p4_infra/p4_pdpi:annotation_parser",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi/utils:annotation_parser",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

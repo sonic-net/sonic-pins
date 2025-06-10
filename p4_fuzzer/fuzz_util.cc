@@ -57,8 +57,8 @@
 #include "p4_infra/p4_pdpi/entity_keys.h"
 #include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir_utils.h"
 #include "p4_infra/p4_pdpi/references.h"
-#include "p4_infra/p4_pdpi/utils/ir.h"
 #include "p4_infra/string_encodings/byte_string.h"
 
 namespace p4_fuzzer {

@@ -22,7 +22,7 @@ cc_library(
     srcs = ["p4info_tools.cc"],
     hdrs = ["p4info_tools.h"],
     deps = [
-        "//p4_infra/p4_pdpi/utils:annotation_parser",
+        "//p4_infra/p4_pdpi:annotation_parser",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

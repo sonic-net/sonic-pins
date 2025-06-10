@@ -45,8 +45,8 @@ cc_library(
     deps = [
         "//gutil/gutil:status",
         "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_utils",
         "//p4_infra/string_encodings:bit_string",
-        "//p4_infra/p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
         "@com_github_z3prover_z3//:api",
         "@com_gnu_gmp//:gmp",

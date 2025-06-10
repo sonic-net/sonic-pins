@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_UTILS_ANNOTATION_PARSER_H_
-#define PINS_P4_INFRA_P4_PDPI_UTILS_ANNOTATION_PARSER_H_
+#ifndef PINS_P4_INFRA_P4_PDPI_ANNOTATION_PARSER_H_
+#define PINS_P4_INFRA_P4_PDPI_ANNOTATION_PARSER_H_
 
 #include <functional>
 #include <string>
@@ -178,4 +178,4 @@ absl::StatusOr<std::vector<std::string>> GetAllAnnotationBodies(
 
 }  // namespace pdpi
 
-#endif  // PINS_P4_INFRA_P4_PDPI_UTILS_ANNOTATION_PARSER_H_
+#endif  // PINS_P4_INFRA_P4_PDPI_ANNOTATION_PARSER_H_
