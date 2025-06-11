@@ -24,8 +24,10 @@ cc_library(
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
+        ":built_ins",
         ":ir_cc_proto",
         ":reference_annotations",
+        "//gutil:collections",
         "//gutil:proto",
         "//gutil:status",
         "//p4_pdpi/string_encodings:byte_string",
@@ -37,6 +39,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -165,7 +168,6 @@ cc_library(
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
-        ":built_ins",
         ":ir_cc_proto",
         ":names",
         ":references",
