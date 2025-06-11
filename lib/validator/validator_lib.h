@@ -93,6 +93,14 @@ absl::Status PortsDown(thinkit::Switch &thinkit_switch,
                        bool with_healthz = true,
                        absl::Duration timeout = kDefaultTimeout);
 
+// Checks if "oper-status" of all interfaces are "NOT_PRESENT". If the
+// interfaces are provided, checks only those interfaces.
+// Will wait up to `timeout` for the RPC to return. Performs one request.
+absl::Status PortsNotPresent(thinkit::Switch &thinkit_switch,
+                             absl::Span<const std::string> interfaces = {},
+                             bool with_healthz = true,
+                             absl::Duration timeout = kDefaultTimeout);
+
 inline absl::Status AllPortsUp(thinkit::Switch &thinkit_switch,
                                bool with_healthz = true,
                                absl::Duration timeout = kDefaultTimeout) {
