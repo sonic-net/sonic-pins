@@ -427,7 +427,8 @@ StatusOr<std::string> IrP4InfoToPdProto(const IrP4Info& info,
   absl::StrAppend(&result, R"(
 // P4 PD proto
 
-// NOTE: This file is automatically created from the P4 program, do not modify manually.
+// NOTE: This file is automatically created from the P4 program using the pdgen
+//       library in p4_pdpi. DO NOT modify it manually.
 
 syntax = "proto3";
 package )" + options.package + R"(;
@@ -512,11 +513,12 @@ message MulticastGroupTableEntry {
   message Match {
     string multicast_group_id = 1;  // exact match / Format::HEX_STRING / 16 bits
   }
-  Match match = 1;
   message Action {
     ReplicateAction replicate = 1;
   }
+  Match match = 1;
   Action action = 2;
+  bytes metadata = 3;
 }
 
 )");
