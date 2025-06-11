@@ -307,6 +307,23 @@ message TunnelTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+message VlanMembershipTableEntry {
+  message Match {
+    string vlan_id = 1;  // exact match / Format::HEX_STRING / 12 bits
+    string port = 2;     // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    oneof action {
+      MakeTaggedMemberAction make_tagged_member = 1;
+      MakeUntaggedMemberAction make_untagged_member = 2;
+    }
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
 // Table entry restrictions:
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
@@ -935,8 +952,6 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
   string mirror_encap_udp_dst_port = 10;  // Format::HEX_STRING / 16 bits
 }
 
-message EgressLoopbackAction {}
-
 message L2MulticastPassthroughAction {}
 
 // CAUTION: This action is not (yet) supported.
@@ -961,6 +976,10 @@ message MulticastSetSrcMacAndDstMacAndVlanIdAction {
 message MulticastSetSrcMacAndPreserveIngressVlanIdAction {
   string src_mac = 1;  // Format::MAC
 }
+
+message MakeTaggedMemberAction {}
+
+message MakeUntaggedMemberAction {}
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
@@ -1081,6 +1100,8 @@ message TableEntry {
     Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
     Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
+    // CAUTION: This table is not (yet) supported.
+    VlanMembershipTableEntry vlan_membership_table_entry = 84;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
     AclWbbIngressTableEntry acl_wbb_ingress_table_entry = 259;
