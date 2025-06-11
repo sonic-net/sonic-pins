@@ -85,7 +85,9 @@ constexpr int kBitsInByte = 8;
 constexpr float kAddUpdateProbability = 0.98;
 
 constexpr char kP4PortTypeName[] = "port_id_t";
-constexpr char kP4QosQueueTypeName[] = "qos_queue_t";
+constexpr char kP4UnknownQosQueueTypeName[] = "qos_queue_t";
+constexpr char kP4UnicastQosQueueTypeName[] = "unicast_queue_t";
+constexpr char kP4MulticastQosQueueTypeName[] = "multicast_queue_t";
 constexpr char kP4NeighborTypeName[] = "neighbor_id_t";
 
 bool IsPort(
@@ -95,11 +97,11 @@ bool IsPort(
   return type_name.name() == kP4PortTypeName;
 }
 
-bool IsQosQueue(
+bool IsUnknownQosQueue(
     const p4::config::v1::P4NamedType& type_name,
     const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
         references) {
-  return type_name.name() == kP4QosQueueTypeName;
+  return type_name.name() == kP4UnknownQosQueueTypeName;
 }
 
 bool IsNeighbor(
@@ -881,7 +883,8 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
         break;
 
       case Mutation::INVALID_QOS_QUEUE:
-        mutation_table_ids = GetTableIdsWithValuePredicate(config, IsQosQueue);
+        mutation_table_ids =
+            GetTableIdsWithValuePredicate(config, IsUnknownQosQueue);
         break;
 
       case Mutation::INVALID_NEIGHBOR_ID:
@@ -1183,8 +1186,22 @@ absl::StatusOr<std::string> FuzzValue(
   }
 
   // A qos queue: pick any valid qos queue randomly.
-  if (IsQosQueue(type_name)) {
+  if (IsUnknownQosQueue(type_name)) {
     return UniformFromSpan(gen, config.GetQosQueues());
+  }
+
+  // Add proper support for Unicast and Multicast Qos
+  // Queues.
+  if (type_name.name() == kP4UnicastQosQueueTypeName) {
+    // Hardcoded value that seems to work for now.
+    return "0x6";
+  }
+
+  //  Add proper support for Unicast and Multicast Qos
+  // Queues.
+  if (type_name.name() == kP4MulticastQosQueueTypeName) {
+    // Hardcoded value that seems to work for now.
+    return "0xa";
   }
 
   // A neighbor ID (not referring to anything): Pick a random IPv6 address.
