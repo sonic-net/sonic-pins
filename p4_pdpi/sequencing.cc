@@ -37,7 +37,6 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/names.h"
 #include "p4_pdpi/references.h"
@@ -368,28 +367,6 @@ absl::Status SortTableEntries(const IrP4Info& info,
   return absl::OkStatus();
 }
 
-absl::StatusOr<google::protobuf::RepeatedPtrField<IrTableReference>>
-GetOutgoingReferences(const IrP4Info& info, const p4::v1::Entity& entity) {
-  if (entity.has_table_entry()) {
-    ASSIGN_OR_RETURN(auto* table_def,
-                     gutil::FindPtrOrStatus(info.tables_by_id(),
-                                            entity.table_entry().table_id()));
-    return table_def->outgoing_references();
-  }
-  if (entity.packet_replication_engine_entry().has_multicast_group_entry()) {
-    ASSIGN_OR_RETURN(
-        std::string multicast_table,
-        IrBuiltInTableToString(BUILT_IN_TABLE_MULTICAST_GROUP_TABLE));
-    ASSIGN_OR_RETURN(
-        auto* multicast_group_def,
-        gutil::FindPtrOrStatus(info.built_in_tables(), multicast_table));
-    return multicast_group_def->outgoing_references();
-  }
-
-  return gutil::InvalidArgumentErrorBuilder()
-         << "Unsupported entity type: " << entity.DebugString();
-}
-
 // Returns true if the table of `first` comes before the table of `second` in
 // the dependency order contained in `info`. I.e. if installing `first` before
 // `second` never fails due to dependency issues between them.
@@ -518,7 +495,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
   while (!frontier_indices.empty()) {
     const p4::v1::Entity& frontier_entity = entities[frontier_indices.front()];
     ASSIGN_OR_RETURN(auto outgoing_references,
-                     GetOutgoingReferences(ir_p4info, frontier_entity));
+                     GetOutgoingTableReferences(ir_p4info, frontier_entity));
     reached_indices.insert(frontier_indices.front());
     frontier_indices.pop();
     for (const auto& reference_info : outgoing_references) {
