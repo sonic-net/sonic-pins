@@ -345,6 +345,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Remove and re-enable in `GetGenerator` once
           // resource modeling is fixed.
           "multicast_router_interface_table",
+          // TODO: Add support for this table once the switch
+          // supports it.
+          "vlan_membership_table",
       });
   return *kUnsupportedTables;
 }
