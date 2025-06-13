@@ -261,6 +261,32 @@ tables {
 }
 tables {
   preamble {
+    id: 33554518
+    name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks_table"
+    alias: "disable_ingress_vlan_checks_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777256
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
     id: 33554503
     name: "ingress.l3_admit.l3_admit_table"
     alias: "l3_admit_table"
@@ -937,6 +963,14 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
+    id: 16777494
+    annotations: "@proto_id(5)"
+  }
+  action_refs {
+    id: 16777495
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1225,6 +1259,32 @@ tables {
     scope: DEFAULT_ONLY
   }
   size: 1024
+}
+tables {
+  preamble {
+    id: 33554519
+    name: "egress.egress_vlan_checks.disable_egress_vlan_checks_table"
+    alias: "disable_egress_vlan_checks_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777257
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
 }
 tables {
   preamble {
@@ -1554,6 +1614,13 @@ actions {
     name: "acl_metadata"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)"
     bitwidth: 8
+  }
+}
+actions {
+  preamble {
+    id: 16777256
+    name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks"
+    alias: "disable_ingress_vlan_checks"
   }
 }
 actions {
@@ -1903,6 +1970,48 @@ actions {
     annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
+  }
+}
+actions {
+  preamble {
+    id: 16777494
+    name: "ingress.acl_ingress.redirect_to_port"
+    alias: "redirect_to_port"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "redirect_port"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777495
+    name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
+    alias: "acl_mirror_and_redirect_to_port"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "redirect_port"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
+    type_name {
+      name: "port_id_t"
+    }
   }
 }
 actions {
@@ -2285,6 +2394,13 @@ actions {
     id: 16777247
     name: "egress.packet_rewrites.multicast_rewrites.l2_multicast_passthrough"
     alias: "l2_multicast_passthrough"
+  }
+}
+actions {
+  preamble {
+    id: 16777257
+    name: "egress.egress_vlan_checks.disable_egress_vlan_checks"
+    alias: "disable_egress_vlan_checks"
   }
 }
 actions {
