@@ -5,8 +5,7 @@
 // These headers have to come first, to override their fixed counterparts.
 #include "roles.h"
 #include "bitwidths.p4"
-#include "versions.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
 #include "../../fixed/parser.p4"
@@ -24,7 +23,6 @@
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
-//#include "hashing.p4"
 #include "ids.h"
 #include "versions.h"
 

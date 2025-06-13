@@ -157,29 +157,76 @@ EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
 EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     absl::string_view egress_port, IpVersion ip_version, absl::string_view vrf,
     const NexthopRewriteOptions& rewrite_options) {
-  const std::string kNexthopId =
+  struct IpForwardingParams ip_forwarding_params;
+  if (ip_version == IpVersion::kIpv4) {
+    ip_forwarding_params.ipv6_lpm = std::nullopt;
+  } else if (ip_version == IpVersion::kIpv6) {
+    ip_forwarding_params.ipv4_lpm = std::nullopt;
+  }
+
+  return AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+      egress_port, vrf, ip_forwarding_params, rewrite_options);
+}
+
+EntryBuilder& EntryBuilder::AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+    absl::string_view egress_port, absl::string_view vrf,
+    const IpForwardingParams& ip_forwarding_params,
+    const NexthopRewriteOptions& rewrite_options) {
+  const std::string nexthop_id =
       absl::StrFormat("nexthop(%s, %s)", egress_port, vrf)
           // Ideally we would use the whole ID, but it may be longer than BMv2
           // can support.
           .substr(0, 31);
 
-  // Add IPv4 default route.
-  if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
-    auto& ipv4_entry = *entries_.add_entries()->mutable_ipv4_table_entry();
-    ipv4_entry.mutable_match()->set_vrf_id(vrf);
-    ipv4_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
-        kNexthopId);
+  if (ip_forwarding_params.ipv4_lpm.has_value()) {
+    AddIpv4EntrySettingNexthopId(nexthop_id, vrf,
+                                 ip_forwarding_params.ipv4_lpm.value());
+  }
+  if (ip_forwarding_params.ipv6_lpm.has_value()) {
+    AddIpv6EntrySettingNexthopId(nexthop_id, vrf,
+                                 ip_forwarding_params.ipv6_lpm.value());
+  }
+  return AddNexthopRifNeighborEntries(nexthop_id, egress_port, rewrite_options);
+}
+
+EntryBuilder& EntryBuilder::EntryBuilder::AddIpv4EntrySettingNexthopId(
+    absl::string_view nexthop_id, absl::string_view vrf,
+    const Ipv4Lpm& ipv4_lpm) {
+  sai::Ipv4TableEntry& ipv4_entry =
+      *entries_.add_entries()->mutable_ipv4_table_entry();
+  ipv4_entry.mutable_match()->set_vrf_id(vrf);
+
+  if (!ipv4_lpm.dst_ip.IsAllZeros()) {
+    ipv4_entry.mutable_match()->mutable_ipv4_dst()->set_value(
+        ipv4_lpm.dst_ip.ToString());
+    ipv4_entry.mutable_match()->mutable_ipv4_dst()->set_prefix_length(
+        ipv4_lpm.prefix_len);
   }
 
-  // Add IPv6 default route.
-  if (ip_version == IpVersion::kIpv6 || ip_version == IpVersion::kIpv4And6) {
-    auto& ipv6_entry = *entries_.add_entries()->mutable_ipv6_table_entry();
-    ipv6_entry.mutable_match()->set_vrf_id(vrf);
-    ipv6_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
-        kNexthopId);
+  ipv4_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+      nexthop_id);
+
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIpv6EntrySettingNexthopId(
+    absl::string_view nexthop_id, absl::string_view vrf,
+    const Ipv6Lpm& ipv6_lpm) {
+  sai::Ipv6TableEntry& ipv6_entry =
+      *entries_.add_entries()->mutable_ipv6_table_entry();
+  ipv6_entry.mutable_match()->set_vrf_id(vrf);
+
+  if (!ipv6_lpm.dst_ip.IsAllZeros()) {
+    ipv6_entry.mutable_match()->mutable_ipv6_dst()->set_value(
+        ipv6_lpm.dst_ip.ToString());
+    ipv6_entry.mutable_match()->mutable_ipv6_dst()->set_prefix_length(
+        ipv6_lpm.prefix_len);
   }
 
-  return AddNexthopRifNeighborEntries(kNexthopId, egress_port, rewrite_options);
+  ipv6_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+      nexthop_id);
+
+  return *this;
 }
 
 EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
@@ -192,6 +239,20 @@ EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
       .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id, ip_version)
       .AddDefaultRouteForwardingAllPacketsToGivenPort(egress_port, ip_version,
                                                       vrf_id, rewrite_options);
+}
+
+EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
+    absl::string_view egress_port,
+    const IpForwardingParams& ip_forwarding_params,
+    const NexthopRewriteOptions& rewrite_options) {
+  const std::string vrf_id = "vrf";
+
+  return AddEntryAdmittingAllPacketsToL3()
+      .AddVrfEntry(vrf_id)
+      .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id,
+                                                       IpVersion::kIpv4And6)
+      .AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+          egress_port, vrf_id, ip_forwarding_params, rewrite_options);
 }
 
 EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
