@@ -95,6 +95,21 @@ cc_library(
 )
 
 cc_library(
+    name = "pfc_test",
+    testonly = True,
+    srcs = ["pfc_test.cc"],
+    hdrs = ["pfc_test.h"],
+    deps = [
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//thinkit:generic_testbed_fixture",
+        "//thinkit:ssh_client",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_googletest//:gtest",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
     name = "frontpanel_qos_test",
     testonly = True,
     srcs = ["frontpanel_qos_test.cc"],

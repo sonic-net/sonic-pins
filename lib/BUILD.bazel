@@ -143,6 +143,7 @@ cc_test(
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//thinkit:generic_testbed",
+        "//thinkit:mock_generic_testbed",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
