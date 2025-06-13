@@ -8,7 +8,7 @@
 #include "metadata.p4"
 #include "ids.h"
 #include "roles.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 // This file contains two control blocks that together model the L3 routing
 // pipeline: routing_lookup and routing_resolution.
@@ -520,16 +520,22 @@ control routing_resolution(in headers_t headers,
   }
 
 #if defined(SAI_INSTANTIATION_TOR)
-  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR)
+  @selector_size_semantics(WCMP_GROUP_DEFAULT_SELECTOR_SIZE_SEMANTICS_TOR)
 #else
-  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_NON_TOR)
+  @selector_size_semantics(WCMP_GROUP_DEFAULT_SELECTOR_SIZE_SEMANTICS_NON_TOR)
+#endif
+  @max_member_weight(WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT)
+#if defined(SAI_INSTANTIATION_TOR) 
+  @max_group_size(WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR)
+#else
+  @max_group_size(WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR)
 #endif
   @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
   action_selector(HashAlgorithm.identity,
-#if defined(SAI_INSTANTIATION_TOR)
- WCMP_GROUP_SELECTOR_SIZE_TOR,
+#if defined(SAI_INSTANTIATION_TOR) 
+ WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR,
 #else
- WCMP_GROUP_SELECTOR_SIZE_NON_TOR,
+ WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR,
 #endif
                   WCMP_SELECTOR_INPUT_BITWIDTH)
       wcmp_group_selector;
@@ -585,7 +591,10 @@ control routing_resolution(in headers_t headers,
     // Add metadata that is relevant for punted packets.
     local_metadata.packet_in_target_egress_port = standard_metadata.egress_spec;
     local_metadata.packet_in_ingress_port = standard_metadata.ingress_port;
-    // Act on ACL drop after routing resolution.
+
+    // Act on ACL drop after routing resolution. That way ACL drop has higher
+    // precedence than L3 routing or ACL ingress redirect actions, even if the
+    // redirect action comes from an ingress ACL table with higher priority.
     if (local_metadata.acl_drop) {
       mark_to_drop(standard_metadata);
     }

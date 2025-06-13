@@ -1206,6 +1206,32 @@ tables {
 }
 tables {
   preamble {
+    id: 33554515
+    name: "egress.egress_vlan_checks.vlan_table"
+    alias: "vlan_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Disallow creating reserved VLANs to rule out vendor specific behavior.\n    vlan_id != 0 && vlan_id != 4095;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vlan_id"
+    bitwidth: 12
+    match_type: EXACT
+  }
+  action_refs {
+    id: 24742814
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 4096
+}
+tables {
+  preamble {
     id: 33554516
     name: "egress.egress_vlan_checks.vlan_membership_table"
     alias: "vlan_membership_table"
@@ -1215,6 +1241,7 @@ tables {
   match_fields {
     id: 1
     name: "vlan_id"
+    annotations: "@refers_to(vlan_table , vlan_id)"
     bitwidth: 12
     match_type: EXACT
   }
@@ -1564,6 +1591,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  direct_resource_ids: 318767371
   size: 127
 }
 tables {
@@ -2646,6 +2674,8 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
+    annotations: "@selector_size_semantics(\"sum_of_weights\")"
+    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
@@ -2717,6 +2747,17 @@ direct_counters {
     unit: BOTH
   }
   direct_table_id: 33554698
+}
+direct_counters {
+  preamble {
+    id: 318767371
+    name: "egress.acl_egress.acl_egress_l2_counter"
+    alias: "acl_egress_l2_counter"
+  }
+  spec {
+    unit: BOTH
+  }
+  direct_table_id: 33554700
 }
 direct_counters {
   preamble {
