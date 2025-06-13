@@ -78,6 +78,22 @@ enum class IpVersion {
   kIpv4And6,
 };
 
+struct Ipv4Lpm {
+  netaddr::Ipv4Address dst_ip;
+  int prefix_len = 0;  // Default is wildcard.
+};
+
+struct Ipv6Lpm {
+  netaddr::Ipv6Address dst_ip;
+  int prefix_len = 0;  // Default is wildcard.
+};
+
+struct IpForwardingParams {
+  // If nullopt, no forwarding for that IP version.
+  std::optional<Ipv4Lpm> ipv4_lpm = Ipv4Lpm{};
+  std::optional<Ipv6Lpm> ipv6_lpm = Ipv6Lpm{};
+};
+
 template <typename Sink>
 void AbslStringify(Sink &sink, const IpVersion &ip_version) {
   switch (ip_version) {
@@ -204,6 +220,15 @@ public:
       IpVersion ip_version = IpVersion::kIpv4And6,
       const NexthopRewriteOptions &rewrite_options = {});
 
+  // Constructs all entries required to forward IP packets to `egress_port`
+  // based on `ip_forwarding_params` and modify them using `rewrite_options`.
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way.
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
+      absl::string_view egress_port,
+      const IpForwardingParams& ip_forwarding_params,
+      const NexthopRewriteOptions& rewrite_options = {});
+
   // Constructs a default IP route matching packets of `ip_version` with `vrf`
   // and sending them to `egress_port`. Matching packets will be modified using
   // `rewrite_options`.
@@ -214,6 +239,30 @@ public:
   EntryBuilder &AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
       absl::string_view vrf, const NexthopRewriteOptions &rewrite_options = {});
+
+  // Constructs an IP route matching packets with `vrf` and
+  // `ip_forwarding_params` and sending them to `egress_port`. Matching packets
+  // will be modified using `rewrite_options`. Note: For packets to hit this
+  // route, additional entries are required! At a minimum an L3 admit entry and
+  // entries that assign the given `vrf`. Note: Cannot be combined with other
+  // entries that forward *all* IP packets in a specific way unless they specify
+  // a different `vrf`.
+  EntryBuilder& AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
+      absl::string_view egress_port, absl::string_view vrf,
+      const IpForwardingParams& ip_forwarding_params = {},
+      const NexthopRewriteOptions& rewrite_options = {});
+
+  // Constructs an IPv4 table entry matching packets with `vrf` and 'ipv4_lpm`
+  // and setting next hop to `nexthop_id`.
+  EntryBuilder& AddIpv4EntrySettingNexthopId(absl::string_view nexthop_id,
+                                             absl::string_view vrf,
+                                             const Ipv4Lpm& ipv4_lpm = {});
+
+  // Constructs an IPv6 table entry matching packets with `vrf` and 'ipv6_lpm`
+  // and setting next hop to `nexthop_id`.
+  EntryBuilder& AddIpv6EntrySettingNexthopId(absl::string_view nexthop_id,
+                                             absl::string_view vrf,
+                                             const Ipv6Lpm& ipv6_lpm = {});
 
   // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
   // entry and RIF entry all characterized by `nexthop_rewrite_options`. The RIF

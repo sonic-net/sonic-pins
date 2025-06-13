@@ -60,21 +60,26 @@
 #define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_NON_TOR 3968
 #define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR 960
 
-// The size semantics for WCMP group selectors.
-#define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_NON_TOR "sum_of_weights"
-#define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR "sum_of_weights"
+// The default size semantics for WCMP group selectors.
+#define WCMP_GROUP_DEFAULT_SELECTOR_SIZE_SEMANTICS_NON_TOR "sum_of_weights"
+#define WCMP_GROUP_DEFAULT_SELECTOR_SIZE_SEMANTICS_TOR "sum_of_weights"
 
 // The maximum sum of weights across all wcmp groups.
-#define WCMP_GROUP_SELECTOR_SIZE_NON_TOR 49152 // 48k
-#define WCMP_GROUP_SELECTOR_SIZE_TOR 31296  // 31K
+#define WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR 49152  // 48k
+#define WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR 31296      // 31K
+
+// The maximum sum of members across all wcmp groups when using the
+// SUM_OF_MEMBERS size semantics.
+#define WCMP_GROUP_SUM_OF_MEMBERS_SIZE 12228  // 12k
 
 // The maximum sum of weights for each wcmp group.
-#define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_NON_TOR 512
-#define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR 256
+#define WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR 512
+#define WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR 256
+#define WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE 256
 
 // The max weight of an individual member when using the SUM_OF_MEMBERS size 
 // semantics.
-#define WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT 4096
+#define WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT 4095
 
 // -- ACL Table sizes ----------------------------------------------------------
 

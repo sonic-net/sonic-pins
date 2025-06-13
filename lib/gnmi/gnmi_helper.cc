@@ -94,17 +94,22 @@ GetPortNameToIdMapFromJsonString(absl::string_view json_string,
   VLOG(2) << "Getting Port Name -> ID Map from JSON string: " << json_string;
   const nlohmann::basic_json<> response_json = json::parse(json_string);
 
-  const auto oc_intf_json =
-      response_json.find("openconfig-interfaces:interfaces");
-  if (oc_intf_json == response_json.end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
-                     response_json.dump()));
-  }
-  const auto oc_intf_list_json = oc_intf_json->find("interface");
-  if (oc_intf_list_json == oc_intf_json->end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  // TODO: Only check for "openconfig-interfaces:interfaces" once
+  // LegoHerc responses are scoped at the correct level.
+  auto oc_intf_list_json = response_json.find("interface");
+  if (oc_intf_list_json == response_json.end()) {
+    const auto oc_intf_json =
+        response_json.find("openconfig-interfaces:interfaces");
+    if (oc_intf_json == response_json.end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
+                       response_json.dump()));
+    }
+    oc_intf_list_json = oc_intf_json->find("interface");
+    if (oc_intf_list_json == oc_intf_json->end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+    }
   }
 
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id;
@@ -794,15 +799,21 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
 
   const auto resp_json = nlohmann::json::parse(
       resp.notification(0).update(0).val().json_ietf_val());
-  const auto oc_intf_json = resp_json.find("openconfig-interfaces:interfaces");
-  if (oc_intf_json == resp_json.end()) {
-    return absl::NotFoundError(absl::StrCat(
-        "'openconfig-interfaces:interfaces' not found: ", resp_json.dump()));
-  }
-  const auto oc_intf_list_json = oc_intf_json->find("interface");
-  if (oc_intf_list_json == oc_intf_json->end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  // TODO: Only check for "openconfig-interfaces:interfaces" once
+  // LegoHerc responses are scoped at the correct level.
+  auto oc_intf_list_json = resp_json.find("interface");
+  if (oc_intf_list_json == resp_json.end()) {
+    const auto oc_intf_json =
+        resp_json.find("openconfig-interfaces:interfaces");
+    if (oc_intf_json == resp_json.end()) {
+      return absl::NotFoundError(absl::StrCat(
+          "'openconfig-interfaces:interfaces' not found: ", resp_json.dump()));
+    }
+    oc_intf_list_json = oc_intf_json->find("interface");
+    if (oc_intf_list_json == oc_intf_json->end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+    }
   }
 
   absl::flat_hash_map<std::string, std::string> interface_to_oper_status_map;

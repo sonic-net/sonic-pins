@@ -6,7 +6,7 @@
 #include "roles.h"
 #include "versions.h"
 #include "bitwidths.p4"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
