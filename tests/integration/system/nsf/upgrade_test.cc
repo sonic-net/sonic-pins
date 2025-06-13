@@ -15,7 +15,9 @@
 #include "tests/integration/system/nsf/upgrade_test.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/flags/flag.h"
@@ -52,6 +54,8 @@ using ::p4::v1::ReadResponse;
 constexpr int kErrorPercentage = 1;
 constexpr absl::Duration kTrafficRunDuration = absl::Minutes(15);
 
+// TODO: Compare and look into possibility of using a better
+// approach than using std::variant (eg. type-erasure or typed tests).
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
   traffic_helper_ = GetParam().create_traffic_helper();
@@ -63,15 +67,14 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
-absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
-    const ImageConfigParams& curr_image_config,
-    const ImageConfigParams& next_image_config) {
+absl::Status
+NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
+                                   ImageConfigParams &next_image_config) {
   LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label;
 
-  RETURN_IF_ERROR(ValidateTestbedState(curr_image_config.image_label, testbed_,
-                                       *ssh_client_,
-                                       curr_image_config.gnmi_config));
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &curr_image_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
                                      component_validators_,
                                      curr_image_config.image_label, testbed_));
@@ -89,8 +92,12 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // Program all the flows.
   LOG(INFO) << "Programming flows before starting the traffic";
-  RETURN_IF_ERROR(
-      flow_programmer_->ProgramFlows(curr_image_config.p4_info, testbed_));
+  ASSIGN_OR_RETURN(std::optional<std::string> updated_gnmi_config,
+                   flow_programmer_->ProgramFlows(curr_image_config.p4_info,
+                                                  testbed_, *ssh_client_));
+  if (updated_gnmi_config.has_value()) {
+    next_image_config.gnmi_config = *std::move(updated_gnmi_config);
+  }
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowProgram,
                                      component_validators_,
                                      curr_image_config.image_label, testbed_));
@@ -116,15 +123,15 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnImageCopy,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
+  // TODO: Validate uptime and boot-type once they are supported.
 
   // Perform NSF Reboot.
   RETURN_IF_ERROR(NsfReboot(testbed_));
   RETURN_IF_ERROR(WaitForNsfReboot(testbed_, *ssh_client_));
 
   // Perform validations after reboot is completed.
-  RETURN_IF_ERROR(ValidateTestbedState(next_image_config.image_label, testbed_,
-                                       *ssh_client_,
-                                       next_image_config.gnmi_config));
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
@@ -141,9 +148,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // Push the new config and validate.
   RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateTestbedState(next_image_config.image_label, testbed_,
-                                       *ssh_client_,
-                                       next_image_config.gnmi_config));
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
@@ -156,15 +162,23 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   LOG(INFO) << "Stopping the traffic";
   RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed_));
 
+  // TODO: For now, we validate traffic only after stopping
+  // traffic. Ideally we would want to validate traffic while injection is in
+  // progress to narrow down when the traffic loss occurred (i.e. before reboot,
+  // during reboot or after reconciliation). Although this is possible in OTG
+  // traffic generator, DVaaS traffic generator for now does not support traffic
+  // validation before stopping the traffic. This is a good-to-have feature and
+  // we will update the skeleton to validate traffic while injection is ongoing
+  // once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
   RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
                                      component_validators_,
                                      next_image_config.image_label, testbed_));
 
-  // Selectively clear flows (eg. not clearing nexthop entries for host
-  // testbeds).
-  LOG(INFO) << "Clearing the flows";
+  // TODO: Look into resetting the testbed state, including the
+  // flows on the SUT, in the same state as that before the test.
+  LOG(INFO) << "Clearing the flows from SUT";
   RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed_));
 
   RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowCleanup,
@@ -189,26 +203,29 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 }
 
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
+  std::vector<ImageConfigParams> image_config_params =
+      GetParam().image_config_params;
+
   // The test needs at least 1 image_config_param to run.
-  if (GetParam().image_config_params.empty()) {
+  if (image_config_params.empty()) {
     GTEST_SKIP() << "No image config params provided";
   }
 
-  // The first element of the given `image_config_params` is considered as the
-  // "base" image that will be installed and configured on the SUT before going
-  // ahead with NSF Upgrade/Reboot for the following `image_config_params` (if
-  // present) in order.
-  ASSERT_OK(InstallRebootPushConfig(GetParam().image_config_params[0], testbed_,
-                                    *ssh_client_));
+  // The first element of the given `image_config_params` is considered
+  // as the "base" image that will be installed and configured on the
+  // SUT before going ahead with NSF Upgrade/Reboot for the following
+  // `image_config_params` (if present) in order.
+  ASSERT_OK(
+      InstallRebootPushConfig(image_config_params[0], testbed_, *ssh_client_));
   // If only a single config param is provided, we do an N to N upgrade.
-  if (GetParam().image_config_params.size() == 1) {
-    ASSERT_OK(NsfUpgradeOrReboot(GetParam().image_config_params[0],
-                                 GetParam().image_config_params[0]));
+  if (image_config_params.size() == 1) {
+    ASSERT_OK(
+        NsfUpgradeOrReboot(image_config_params[0], image_config_params[0]));
     return;
   }
   // If multiple config params are provided, we do N - 1 to N upgrades.
-  for (auto image_config_param = GetParam().image_config_params.begin();
-       image_config_param + 1 != GetParam().image_config_params.end();
+  for (auto image_config_param = image_config_params.begin();
+       image_config_param + 1 != image_config_params.end();
        ++image_config_param) {
     ASSERT_OK(
         NsfUpgradeOrReboot(*image_config_param, *(image_config_param + 1)));
