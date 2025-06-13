@@ -74,8 +74,50 @@ control vlan_untag(inout headers_t headers,
 control ingress_vlan_checks(inout headers_t headers,
                             inout local_metadata_t local_metadata,
                             inout standard_metadata_t standard_metadata) {
+  // Ingress VLAN checks are enabled by default.
+  bool enable_ingress_vlan_checks = true;
+
+  @id(DISABLE_INGRESS_VLAN_CHECKS_ACTION_ID)
+  action disable_ingress_vlan_checks() {
+    enable_ingress_vlan_checks = false;
+  }
+
+  // Models SAI_DISABLE_INGRESS_VLAN_CHECKS.
+  // If ingress VLAN checks are enabled (i.e. if the table is empty) and the
+  // ingress port is not a member of packet's VLAN at the end of the ingress
+  // pipeline, then the packet gets dropped (except for reserved VLANs 0 and
+  // 4095). With ingress VLAN checks disabled, such drops do not happen.
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(DISABLE_INGRESS_VLAN_CHECKS_TABLE_ID)
+  @entry_restriction("
+    // Force the dummy_match to be wildcard.
+    dummy_match::prefix_length == 0;
+  ")
+  // Remove @unsupported once the table is supported in the
+  // switch.
+  @unsupported
+  table disable_ingress_vlan_checks_table {
+    key = {
+      // Note: In the P4_16 specification, a table with no match keys cannot
+      // have entries (only the default action can be programmed which does not
+      // fit well in our SDN ecosystem). To alleviate this, we add a dummy match
+      // but force it to always be wildcard. We use LPM as match type to prevent
+      // having multiple entires with different priorities.
+      1w1 : lpm
+        @id(1) @name("dummy_match");
+    }
+    actions = {
+      @proto_id(1) disable_ingress_vlan_checks;
+    }
+    size = 1;
+  }
+
   apply {
+    // Ingress VLAN checks.
+    disable_ingress_vlan_checks_table.apply();
+
     if (local_metadata.enable_vlan_checks &&
+        enable_ingress_vlan_checks &&
         !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
       mark_to_drop(standard_metadata);
     }
@@ -90,6 +132,43 @@ control egress_vlan_checks(inout headers_t headers,
                            inout standard_metadata_t standard_metadata) {
   port_id_t port = (port_id_t)standard_metadata.egress_port;
   bool egress_port_is_member_of_vlan = false;
+  // Egress VLAN checks are enabled by default.
+  bool enable_egress_vlan_checks = true;
+
+  @id(DISABLE_EGRESS_VLAN_CHECKS_ACTION_ID)
+  action disable_egress_vlan_checks() {
+    enable_egress_vlan_checks = false;
+  }
+
+  // Models SAI_DISABLE_EGRESS_VLAN_CHECKS.
+  // If egress VLAN checks are enabled (i.e. if the table is empty) and the
+  // egress port is not a member of packet's VLAN at the end of the egress
+  // pipeline, then the packet gets dropped (except for reserved VLANs 0 and
+  // 4095). With egress VLAN checks disabled, such drops do not happen.
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(DISABLE_EGRESS_VLAN_CHECKS_TABLE_ID)
+  @entry_restriction("
+    // Force the dummy_match to be wildcard.
+    dummy_match::prefix_length == 0;
+  ")
+  // Remove @unsupported once the table is supported in the
+  // switch.
+  @unsupported
+  table disable_egress_vlan_checks_table {
+    key = {
+      // Note: In the P4_16 specification, a table with no match keys cannot
+      // have entries (only the default action can be programmed which does not
+      // fit well in our SDN ecosystem). To alleviate this, we add a dummy match
+      // but force it to always be wildcard. We use LPM as match type to prevent
+      // having multiple entires with different priorities.
+      1w1 : lpm
+        @id(1) @name("dummy_match");
+    }
+    actions = {
+      @proto_id(1) disable_egress_vlan_checks;
+    }
+    size = 1;
+  }
 
   @id(VLAN_MAKE_TAGGED_MEMBER_ACTION_ID)
   action make_tagged_member() {
@@ -146,11 +225,14 @@ control egress_vlan_checks(inout headers_t headers,
   }
 
   apply {
+    // Egress VLAN checks.
+    disable_egress_vlan_checks_table.apply();
     vlan_table.apply();
     if (!IS_PACKET_IN_COPY(standard_metadata) &&
         !IS_MIRROR_COPY(standard_metadata)) {
       vlan_membership_table.apply();
       if (local_metadata.enable_vlan_checks &&
+          enable_egress_vlan_checks &&
           !egress_port_is_member_of_vlan &&
           !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
         mark_to_drop(standard_metadata);
