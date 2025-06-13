@@ -34,7 +34,7 @@ SHARED_DEPS = [
     "versions.h",
     "roles.h",
     "bitwidths.p4",
-    "minimum_guaranteed_sizes.p4",
+    "minimum_guaranteed_sizes.h",
     "admit_google_system_mac.p4",
     "//sai_p4/fixed",
 ]
@@ -55,7 +55,7 @@ WBB_DEPS = [
     "roles.h",
     "versions.h",
     "bitwidths.p4",
-    "minimum_guaranteed_sizes.p4",
+    "minimum_guaranteed_sizes.h",
     "//sai_p4/fixed",
 ]
 
@@ -78,6 +78,11 @@ INSTANTIATIONS = [
     )
     for (instantiation, deps) in INSTANTIATIONS
 ]
+
+cc_library(
+    name = "minimum_guaranteed_sizes",
+    hdrs = ["minimum_guaranteed_sizes.h"],
+)
 
 cc_library(
     name = "p4_ids",

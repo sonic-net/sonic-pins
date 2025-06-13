@@ -7,7 +7,7 @@
 #include "../../fixed/packet_io.p4"
 #include "acl_common_actions.p4"
 #include "ids.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 control acl_ingress(in headers_t headers,
                     inout local_metadata_t local_metadata,
