@@ -109,8 +109,8 @@ inline absl::Status AllPortsUp(thinkit::Switch &thinkit_switch,
 }
 
 // Checks to make sure no alarms are set.
-// Will wait up to `timeout` for the RPC to return. Peforms one request.
-absl::Status NoAlarms(thinkit::Switch &thinkit_switch,
+// Will wait up to `timeout` for the RPC to return. Performs one request.
+absl::Status NoAlarms(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if the switch is ready by running the following validations:
