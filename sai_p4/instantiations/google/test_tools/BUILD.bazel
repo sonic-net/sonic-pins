@@ -24,9 +24,7 @@ cc_library(
     srcs = ["test_entries.cc"],
     hdrs = ["test_entries.h"],
     deps = [
-        "//gutil:proto",
         "//gutil:proto_ordering",
-        "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
