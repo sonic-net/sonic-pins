@@ -20,6 +20,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -44,9 +45,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/util/json_util.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/overload.h"
 #include "gutil/proto.h"
@@ -80,6 +79,8 @@
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/forwarding/util.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "tests/integration/system/nsf/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
 #include "tests/qos/packet_in_receiver.h"
@@ -87,9 +88,13 @@
 #include "tests/sflow/sflow_util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 ABSL_DECLARE_FLAG(std::optional<sai::Instantiation>, switch_instantiation);
 
@@ -119,6 +124,16 @@ constexpr int kFrameCheckSequenceSize = 4;
 // TODO: Instead of hard-coding this time, tests should dynamically
 // poll the state of the switch to ensure config has been applied.
 constexpr absl::Duration kTimeToWaitForGnmiConfigToApply = absl::Seconds(30);
+
+absl::Status NsfRebootHelper(Testbed &testbed,
+                             std::shared_ptr<thinkit::SSHClient> ssh_client) {
+  // TODO: Add punt flow before reboot,
+  // send traffic and measure downtine based on traffic drop.
+  RETURN_IF_ERROR(NsfReboot(testbed));
+  RETURN_IF_ERROR(WaitForNsfReboot(testbed, *ssh_client));
+
+  return absl::OkStatus();
+}
 
 // Set up the switch to punt packets to CPU.
 absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
@@ -914,6 +929,13 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
       pdpi::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry),
       IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    pins_test::Testbed testbed = &Testbed();
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   // Send test packet hitting the ACL table entry.
   ASSERT_OK_AND_ASSIGN(
       packetlib::Packet test_packet,
@@ -1100,6 +1122,13 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_acl_entry));
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    pins_test::Testbed testbed = &Testbed();
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   for (packetlib::Packet &test_packet : test_packets) {
     // Start from fresh P4RT session.
     ASSERT_OK_AND_ASSIGN(sut_p4rt_session, pdpi::P4RuntimeSession::Create(sut));
@@ -1173,6 +1202,13 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    pins_test::Testbed testbed = &Testbed();
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   std::vector<PacketAndExpectedTargetQueue> test_packets =
       GetParam().test_packet_generator_function(
           sut_gnmi_config, absl::GetFlag(FLAGS_switch_instantiation));
@@ -1232,6 +1268,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
           /*packet=*/raw_packet, ir_p4info, control_p4rt_session.get(),
           /*packet_delay=*/std::nullopt));
     }
+
     // Read counter of the target queue again.
     absl::Time time_packet_sent = absl::Now();
     QueueCounters queue_counters_after_test_packet;
@@ -1353,11 +1390,19 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
                              *sut_p4rt_session));
   }
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    pins_test::Testbed testbed = &Testbed();
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   // Inject the test packets
   constexpr netaddr::Ipv4Address kSrcIp(std::bitset<32>(0x0B000000));
   for (const auto &[queue, setup] : test_cases) {
     packetlib::Packet packet =
         BuildPuntToCpuPacket(kDestMac, kSrcIp, setup.dst_ip);
+
     ASSERT_OK_AND_ASSIGN(std::string raw_packet,
                          packetlib::SerializePacket(packet));
     LOG(INFO) << "Injecting " << setup.packets << " packets into CPU Queue "
@@ -1572,6 +1617,13 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   constexpr absl::string_view kLoopbackPuntTest = "to_loopback_punt_test";
   constexpr absl::string_view kPuntTtl0Test = "ttl0_punt_test";
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    Testbed testbed = std::move(generic_testbed);
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   for (auto test_case : {kPuntOnlyTest, kPuntTtl0Test}) {
     LOG(INFO) << "\n\nTesting case: " << test_case;
     LOG(INFO) << "\n===================\n\n";
@@ -1585,6 +1637,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
                                           /*is_ipv4=*/false, *generic_testbed));
       LOG(INFO) << "Traffic with TTL=0";
     }
+
     for (auto &[queue_name, queue_info] : queues) {
       // Skip unconfigured queues.
       if (queue_info.rate_packets_per_second == 0) {
@@ -1881,6 +1934,13 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   bool has_acl_qos_table =
       ir_p4info.tables_by_name().contains(kAclIngressQosTable);
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    Testbed testbed = std::move(generic_testbed);
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   for (auto &[queue_name, queue_info] : queues) {
     // Skip unconfigured queues.
     if (queue_info.rate_packets_per_second == 0) {
@@ -1979,6 +2039,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
       ASSERT_OK(ixia::SetTrafficParameters(
           kIxiaTrafficHandle, traffic_parameters, *generic_testbed));
+
       // Occasionally the Ixia API cannot keep up and starting traffic fails,
       // so we try up to 3 times.
       ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
@@ -2283,6 +2344,13 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
     packet_receive_info.num_packets_punted++;
     return;
   });
+
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    Testbed testbed = std::move(generic_testbed);
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(

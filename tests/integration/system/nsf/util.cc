@@ -19,12 +19,12 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -132,6 +132,9 @@ absl::Status RunReadyValidations(thinkit::Switch& thinkit_switch,
   RETURN_IF_ERROR(SwitchReadyWithSsh(thinkit_switch, ssh_client, interfaces,
                                      check_interfaces_state, with_healthz));
 
+  // TODO: Still needs confirmation as to whether we want to have
+  // this whitebox check or if it is redundant.
+  // return CheckContainersUp(thinkit_switch.ChassisName(), ssh_client);
   return absl::OkStatus();
 }
 
@@ -292,10 +295,10 @@ absl::Status InstallRebootPushConfig(
   return absl::OkStatus();
 }
 
-absl::Status
-ValidateTestbedState(absl::string_view version, Testbed &testbed,
-                     thinkit::SSHClient &ssh_client,
-                     const std::optional<absl::string_view> &gnmi_config) {
+absl::Status ValidateTestbedState(
+    Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param) {
+  // TODO: Add validation for SUT stack image label.
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
   absl::Status sut_status = RunReadyValidations(
@@ -333,6 +336,8 @@ absl::Status ValidateComponents(
 }
 
 absl::Status NsfReboot(Testbed& testbed) {
+  // TODO: Once supported, record/return uptime and boot-type
+  // before NSF reboot.
   return Reboot(RebootMethod::NSF, testbed);
 }
 
@@ -367,8 +372,7 @@ absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
     // Invoke the RPC and validate the results.
     grpc::Status reboot_status =
         sut_gnoi_system_stub->RebootStatus(&context, req, &resp);
-    // If the RPC fails or the NSF reboot is still active, continue to
-    // poll.
+    // If the RPC fails or the NSF reboot is still active, continue to poll.
     if (!reboot_status.ok() || resp.active()) {
       LOG(WARNING) << "Reboot Status: " << reboot_status.error_message();
       LOG(WARNING) << "Reboot Status Response: " << resp.DebugString();
@@ -391,12 +395,10 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
   // Push Config.
   thinkit::Switch& sut = GetSut(testbed);
   LOG(INFO) << "Pushing config on " << sut.ChassisName();
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          sut, image_config_param.gnmi_config, image_config_param.p4_info));
+  RETURN_IF_ERROR(pins_test::ConfigureSwitch(
+      sut, PinsConfigView{.gnmi_config = image_config_param.gnmi_config,
+                          .p4info = image_config_param.p4_info}));
 
-  LOG(INFO) << "Verifying config push on " << sut.ChassisName();
   return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
                             ssh_client, GetConnectedInterfacesForSut(testbed));
 }
@@ -442,6 +444,8 @@ absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
 
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
                                     Testbed& testbed) {
+  // TODO: Implement gNMI state path validation for comparison of
+  // the various state paths before and after NSF Upgrade/Reboot.
   return absl::OkStatus();
 }
 
