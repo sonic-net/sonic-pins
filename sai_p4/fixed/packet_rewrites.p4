@@ -30,7 +30,10 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
                                ethernet_addr_t src_mac) {
     local_metadata.enable_src_mac_rewrite = true;
     local_metadata.packet_rewrites.src_mac = src_mac;
-    // Hard-coded for now. We may make the VLAN ID programmable when needed.
+
+    // By default VLAN is removed (if present). This is modeled by rewriting
+    // vlan_id to the INTERNAL_VLAN_ID.
+    local_metadata.enable_vlan_rewrite = true;
     local_metadata.packet_rewrites.vlan_id = INTERNAL_VLAN_ID;
   }
 
@@ -120,7 +123,7 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
         @id(2);
     }
     actions = {
-      // such an image is rolled out.
+      // TODO: Remove once no longer in use.
       // Deprecated: use `set_src_mac` instead.
       @proto_id(1) set_multicast_src_mac;
       @proto_id(2) l2_multicast_passthrough;
