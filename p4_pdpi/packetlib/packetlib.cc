@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4_pdpi/packetlib/packetlib.h"
 
+#include <algorithm>
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
@@ -1739,6 +1740,54 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
   }
   LOG(DFATAL) << "unexpected HeaderCase: " << header_case;
   return "";
+}
+
+absl::StatusOr<std::string> GetEthernetTrailer(const Packet& packet) {
+  // Make sure that the start contains a ETH header.
+  if (packet.headers().empty() || !packet.headers(0).has_ethernet_header()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "The packet must start with an Ethernet header, but does not: "
+           << gutil::PrintTextProto(packet);
+  }
+  // Skip VLAN and CSIG headers.
+  int header_index = 1;
+  while (header_index < packet.headers().size() &&
+         (packet.headers(header_index).has_vlan_header() ||
+          packet.headers(header_index).has_csig_header())) {
+    ++header_index;
+  }
+  if (header_index >= packet.headers().size()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "The packet must contain at least one header after the "
+              "Ethernet/VLAN/CSIG headers, but none were found: "
+           << gutil::PrintTextProto(packet);
+  }
+  const Header& header = packet.headers(header_index);
+  switch (header.header_case()) {
+    case Header::kIpv4Header: {
+      ASSIGN_OR_RETURN(
+          const int inner_length,
+          pdpi::HexStringToInt(header.ipv4_header().total_length()));
+      static constexpr int kByteSize = 8;
+      return packet.payload().substr(inner_length -
+                                     kStandardIpv4HeaderBitwidth / kByteSize);
+    }
+    case Header::kIpv6Header: {
+      ASSIGN_OR_RETURN(
+          const int payload_length,
+          pdpi::HexStringToInt(header.ipv6_header().payload_length()));
+      return packet.payload().substr(payload_length);
+    }
+    case Header::kArpHeader: {
+      return packet.payload();
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Expected an IPv4/IPv6/ARP header directly after the "
+                "Ethernet/VLAN/CSIG headers, but didn't find one:"
+             << gutil::PrintTextProto(packet);
+    }
+  }
 }
 
 std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
