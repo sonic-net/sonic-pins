@@ -23,6 +23,7 @@ cc_library(
     hdrs = ["p4info_tools.h"],
     deps = [
         "//p4_pdpi/utils:annotation_parser",
+        "//sai_p4/instantiations/google:minimum_guaranteed_sizes",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -88,6 +89,7 @@ cc_test(
         ":p4info_tools",
         "//gutil:proto_matchers",
         "//gutil:testing",
+        "//sai_p4/instantiations/google:minimum_guaranteed_sizes",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",

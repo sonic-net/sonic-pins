@@ -550,6 +550,51 @@ control acl_ingress(in headers_t headers,
     local_metadata.wcmp_group_id_valid = false;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID)
+  // TODO: Remove the unsupported annotation once we properly model
+  // the behavior of redirect to port.
+  @unsupported
+  action redirect_to_port(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
+    port_id_t redirect_port) {
+
+    standard_metadata.egress_spec = (bit<9>)redirect_port;
+
+    // Cancel other forwarding decisions (if any).
+    // TODO: Properly model the behavior once we understand the
+    // correct behavior of how the switch works as this is likely not reflected
+    // in the P4 model.
+    local_metadata.nexthop_id_valid = false;
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
+  @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID)
+  @unsupported
+  action acl_mirror_and_redirect_to_port(
+    @id(1)
+      @refers_to(mirror_session_table, mirror_session_id)
+      mirror_session_id_t mirror_session_id,
+    @id(2)
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+      @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
+    port_id_t redirect_port) {
+
+    acl_ingress_counter.count();
+    local_metadata.marked_to_mirror = true;
+    local_metadata.mirror_session_id = mirror_session_id;
+    standard_metadata.egress_spec = (bit<9>)redirect_port;
+
+    // Cancel other forwarding decisions (if any).
+    // TODO: Properly model the behavior once we understand the
+    // correct behavior of how the switch works as this is likely not reflected
+    // in the P4 model.
+    local_metadata.nexthop_id_valid = false;
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
@@ -634,6 +679,8 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();
+      @proto_id(5) redirect_to_port();
+      @proto_id(6) acl_mirror_and_redirect_to_port();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
