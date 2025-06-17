@@ -341,6 +341,38 @@ message VlanMembershipTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+// Table entry restrictions:
+// ## Force the dummy_match to be wildcard.
+//   dummy_match::prefix_length == 0;
+message DisableIngressVlanChecksTableEntry {
+  message Match {
+    Lpm dummy_match = 1;  // lpm match / Format::HEX_STRING / 1 bits
+  }
+  Match match = 1;
+  message Action {
+    DisableIngressVlanChecksAction disable_ingress_vlan_checks = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+// CAUTION: This table is not (yet) supported.
+// Table entry restrictions:
+// ## Force the dummy_match to be wildcard.
+//   dummy_match::prefix_length == 0;
+message DisableEgressVlanChecksTableEntry {
+  message Match {
+    Lpm dummy_match = 1;  // lpm match / Format::HEX_STRING / 1 bits
+  }
+  Match match = 1;
+  message Action {
+    DisableEgressVlanChecksAction disable_egress_vlan_checks = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
 // Table entry restrictions:
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
@@ -999,6 +1031,10 @@ message MakeTaggedMemberAction {}
 
 message MakeUntaggedMemberAction {}
 
+message DisableIngressVlanChecksAction {}
+
+message DisableEgressVlanChecksAction {}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -1122,6 +1158,12 @@ message TableEntry {
     VlanTableEntry vlan_table_entry = 83;
     // CAUTION: This table is not (yet) supported.
     VlanMembershipTableEntry vlan_membership_table_entry = 84;
+    // CAUTION: This table is not (yet) supported.
+    DisableIngressVlanChecksTableEntry disable_ingress_vlan_checks_table_entry =
+        86;
+    // CAUTION: This table is not (yet) supported.
+    DisableEgressVlanChecksTableEntry disable_egress_vlan_checks_table_entry =
+        87;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
     AclWbbIngressTableEntry acl_wbb_ingress_table_entry = 259;
