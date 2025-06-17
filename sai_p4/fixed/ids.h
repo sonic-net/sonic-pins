@@ -33,7 +33,9 @@
 #define EGRESS_PORT_LOOPBACK_TABLE_ID 0x02000052                // 33554514
 #define VLAN_TABLE_ID 0x02000053                                // 33554515
 #define VLAN_MEMBERSHIP_TABLE_ID 0x02000054                     // 33554516
-// Next available table id: 0x02000055 (33554517)
+#define DISABLE_INGRESS_VLAN_CHECKS_TABLE_ID 0x02000056         // 33554518
+#define DISABLE_EGRESS_VLAN_CHECKS_TABLE_ID 0x02000057          // 33554519
+// Next available table id: 0x02000058 (33554520)
 
 // --- Actions -----------------------------------------------------------------
 
@@ -80,7 +82,9 @@
 #define EGRESS_LOOPBACK_ACTION_ID 0x0100001E                // 16777246
 #define VLAN_MAKE_TAGGED_MEMBER_ACTION_ID 0x01000024        // 16777252
 #define VLAN_MAKE_UNTAGGED_MEMBER_ACTION_ID 0x01000025      // 16777253
-// Next available action id: 0x01000026 (16777254)
+#define DISABLE_INGRESS_VLAN_CHECKS_ACTION_ID 0x01000028    // 16777256
+#define DISABLE_EGRESS_VLAN_CHECKS_ACTION_ID 0x01000029     // 16777257
+// Next available action id: 0x01000030 (16777258)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for

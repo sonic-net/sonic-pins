@@ -547,6 +547,30 @@ TEST(EntryBuilder, AddIngressAclDroppingAllPacketsAddsEntry) {
               )pb"))));
 }
 
+TEST(EntryBuilder, AddEgressAclDroppingIpPacketsAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEgressAclDroppingIpPackets()
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(),
+              ElementsAre(Partially(EqualsProto(R"pb(
+                            table_entry {
+                              table_name: "acl_egress_table"
+                              matches { name: "is_ipv4" }
+                              action { name: "acl_drop" }
+                            }
+                          )pb")),
+                          Partially(EqualsProto(R"pb(
+                            table_entry {
+                              table_name: "acl_egress_table"
+                              matches { name: "is_ipv6" }
+                              action { name: "acl_drop" }
+                            }
+                          )pb"))));
+}
+
 TEST(EntryBuilder, AddMirrorSessionTableEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   ASSERT_OK_AND_ASSIGN(

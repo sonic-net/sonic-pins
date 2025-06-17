@@ -298,6 +298,8 @@ public:
   EntryBuilder& AddMulticastRouterInterfaceEntry(
       const MulticastRouterInterfaceTableEntry& entry);
   EntryBuilder& AddIngressAclDroppingAllPackets();
+  EntryBuilder& AddEgressAclDroppingIpPackets(
+      IpVersion ip_version = IpVersion::kIpv4And6);
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
