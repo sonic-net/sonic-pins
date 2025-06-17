@@ -261,6 +261,32 @@ tables {
 }
 tables {
   preamble {
+    id: 33554518
+    name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks_table"
+    alias: "disable_ingress_vlan_checks_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777256
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
     id: 33554503
     name: "ingress.l3_admit.l3_admit_table"
     alias: "l3_admit_table"
@@ -1228,6 +1254,32 @@ tables {
 }
 tables {
   preamble {
+    id: 33554519
+    name: "egress.egress_vlan_checks.disable_egress_vlan_checks_table"
+    alias: "disable_egress_vlan_checks_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777257
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
     id: 33554515
     name: "egress.egress_vlan_checks.vlan_table"
     alias: "vlan_table"
@@ -1554,6 +1606,13 @@ actions {
     name: "acl_metadata"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)"
     bitwidth: 8
+  }
+}
+actions {
+  preamble {
+    id: 16777256
+    name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks"
+    alias: "disable_ingress_vlan_checks"
   }
 }
 actions {
@@ -2285,6 +2344,13 @@ actions {
     id: 16777247
     name: "egress.packet_rewrites.multicast_rewrites.l2_multicast_passthrough"
     alias: "l2_multicast_passthrough"
+  }
+}
+actions {
+  preamble {
+    id: 16777257
+    name: "egress.egress_vlan_checks.disable_egress_vlan_checks"
+    alias: "disable_egress_vlan_checks"
   }
 }
 actions {

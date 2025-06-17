@@ -342,6 +342,8 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Add support for this table once the switch
           // supports it.
           "disable_vlan_checks_table",
+          "disable_egress_vlan_checks_table",
+          "disable_ingress_vlan_checks_table",
           // TODO: Remove and re-enable in `GetGenerator` once
           // resource modeling is fixed.
           "multicast_router_interface_table",
