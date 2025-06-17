@@ -52,20 +52,15 @@ control acl_wbb_ingress(in headers_t headers,
         (is_ipv4::mask == 0 && is_ipv6 == 1)) &&
       // TTL 0, 1, and 2
       (ttl == 0 || ttl == 1 || ttl == 2) &&
-      ether_type::mask == 0 && outer_vlan_id::mask == 0
+      ether_type::mask == 0
     ) ||
     // LLDP
     (
       ether_type == 0x88cc &&
-      is_ipv4::mask == 0 && is_ipv6::mask == 0 && ttl::mask == 0 &&
-      outer_vlan_id::mask == 0
+      is_ipv4::mask == 0 && is_ipv6::mask == 0 && ttl::mask == 0
     ) ||
     // ND
     (
-    // TODO remove optional match for VLAN ID once VLAN ID is
-    // completely removed from ND flows.
-      (( outer_vlan_id::mask == 0xfff && outer_vlan_id == 0x0FA0) ||
-      outer_vlan_id::mask == 0);
       ether_type == 0x6007;
       is_ipv4::mask == 0;
       is_ipv6::mask == 0;
@@ -83,10 +78,6 @@ control acl_wbb_ingress(in headers_t headers,
       // Field for v4 TTL and v6 hop_limit
       ttl : ternary @name("ttl") @id(4)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL);
-      // TODO: actually model vlan headers. For now, we just some
-      // arbitrary 12 bits from the checksum.
-      headers.ipv4.header_checksum[11:0] : ternary @name("outer_vlan_id") @id(5)
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
     }
     actions = {
       @proto_id(1) acl_wbb_ingress_copy();

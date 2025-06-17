@@ -13,7 +13,9 @@ parser packet_parser(packet_in packet, out headers_t headers,
   state start {
     // Initialize local metadata fields.
     local_metadata.enable_vlan_checks = false;
+    local_metadata.ingress_port_is_member_of_vlan = false;
     local_metadata.vlan_id = 0;
+    local_metadata.input_packet_is_vlan_tagged = false;
     local_metadata.omit_vlan_tag_on_egress_packet = false;
     local_metadata.admit_to_l3 = false;
     local_metadata.vrf_id = kDefaultVrf;

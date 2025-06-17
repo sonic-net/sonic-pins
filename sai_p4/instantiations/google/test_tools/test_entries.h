@@ -159,6 +159,12 @@ struct MirrorAndRedirectMatchFields {
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
+// Tagging mode for VLAN membership entries.
+enum class VlanTaggingMode {
+  kTagged,
+  kUntagged,
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -295,9 +301,27 @@ public:
                                        absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
       int multicast_group_id, absl::Span<const std::string> egress_ports);
+  // TODO: Remove once `mulitcast_set_src_mac` is exclusively used
+  // and such an image is rolled out. Replace all calls with
+  // `AddMrifEntryRewritingSrcMac`.
   EntryBuilder& AddMulticastRouterInterfaceEntry(
       const MulticastRouterInterfaceTableEntry& entry);
+  EntryBuilder& AddMrifEntryRewritingSrcMac(absl::string_view egress_port,
+                                            int replica_instance,
+                                            const netaddr::MacAddress& src_mac);
+  EntryBuilder& AddMrifEntryRewritingSrcMacAndVlanId(
+      absl::string_view egress_port, int replica_instance,
+      const netaddr::MacAddress& src_mac, int vlan_id);
+  EntryBuilder& AddMrifEntryRewritingSrcMacDstMacAndVlanId(
+      absl::string_view egress_port, int replica_instance,
+      const netaddr::MacAddress& src_mac, const netaddr::MacAddress& dst_mac,
+      int vlan_id);
+  EntryBuilder& AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
+      absl::string_view egress_port, int replica_instance,
+      const netaddr::MacAddress& src_mac);
   EntryBuilder& AddIngressAclDroppingAllPackets();
+  EntryBuilder& AddEgressAclDroppingIpPackets(
+      IpVersion ip_version = IpVersion::kIpv4And6);
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
@@ -315,10 +339,17 @@ public:
       const MirrorAndRedirectMatchFields& match_fields = {});
   EntryBuilder& AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
+  EntryBuilder& AddIngressAclEntryRedirectingToPort(
+      absl::string_view port,
+      const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIpv6TunnelTerminationEntry(
       const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
-  EntryBuilder &AddMarkToMirrorAclEntry(const MarkToMirrorParams &params);
+  EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
+  EntryBuilder& AddVlanEntry(absl::string_view vlan_id_hexstr);
+  EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
+                                       absl::string_view port,
+                                       VlanTaggingMode tagging_mode);
 
 private:
   sai::TableEntries entries_;
