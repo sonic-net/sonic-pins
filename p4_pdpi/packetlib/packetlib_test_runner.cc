@@ -1093,7 +1093,7 @@ void RunPacketParseTests() {
         payload: 0x 22 22 22 22 22 22 22 22
         payload: 0x 22 22
       )pb");
-  RunPacketParseTest("PTP packet (valid)",
+  RunPacketParseTest("PTP event packet (valid)",
                      R"pb(
                        # Ethernet header.
                        ethernet_destination: 0xffeeddccbbaa
@@ -1112,6 +1112,47 @@ void RunPacketParseTests() {
                        # UDP Header
                        source_port: 0x08ae       # 2222
                        destination_port: 0x013f  # 319
+                       length: 0x003c
+                       checksum: 0x0000
+                       # PTP Header
+                       transport_specific: 0x0
+                       message_type: 0x0
+                       reserved0: 0x0
+                       version_ptp: 0x0
+                       message_length: 0x0034
+                       domain_number: 0x00
+                       reserved1: 0x00
+                       flags: 0x0000
+                       correction_field: 0x0000000000000000
+                       reserved2: 0x00000000
+                       source_port_identity: 0x00000000000000000000
+                       sequence_id: 0x0000
+                       control_field: 0x00
+                       log_message_interval: 0x00
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+                     )pb");
+  RunPacketParseTest("PTP general packet (valid)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x003c
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP Header
+                       source_port: 0x08ae       # 2222
+                       destination_port: 0x0140  # 320
                        length: 0x003c
                        checksum: 0x0000
                        # PTP Header
@@ -2264,6 +2305,56 @@ void RunProtoPacketTests() {
                                 udp_header {
                                   source_port: "0x08ae"       # 2222
                                   destination_port: "0x013f"  # 319
+                                  length: "0x003e"
+                                  checksum: "0x0000"
+                                }
+                              }
+                              headers {
+                                ptp_header {
+                                  transport_specific: "0x0"
+                                  message_type: "0x0"
+                                  reserved0: "0x0"
+                                  version_ptp: "0x0"
+                                  message_length: "0x0036"
+                                  domain_number: "0x00"
+                                  reserved1: "0x00"
+                                  flags: "0x0000"
+                                  correction_field: "0x0000000000000000"
+                                  reserved2: "0x00000000"
+                                  source_port_identity: "0x00000000000000000000"
+                                  sequence_id: "0x0000"
+                                  control_field: "0x00"
+                                  log_message_interval: "0x00"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PTP packet with UDP port 320 (valid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x86dd"
+                                }
+                              }
+                              headers {
+                                ipv6_header {
+                                  version: "0x6"
+                                  dscp: "0x00"
+                                  ecn: "0x0"
+                                  flow_label: "0x12345"
+                                  payload_length: "0x003e"
+                                  next_header: "0x11"  # UDP
+                                  hop_limit: "0x42"
+                                  ipv6_source: "2607:f8b0:11::"
+                                  ipv6_destination: "2607:f8b0:12::"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0x08ae"       # 2222
+                                  destination_port: "0x0140"  # 320
                                   length: "0x003e"
                                   checksum: "0x0000"
                                 }
