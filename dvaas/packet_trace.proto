@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package dvaas;
 
+import "p4_pdpi/ir.proto";
+
 // A proto representation of the trace of a packet through a P4 packet
 // processor.
 message PacketTrace {
@@ -11,6 +13,13 @@ message PacketTrace {
 
 message TableApply {
   string table_name = 1;
-  bool table_was_hit = 2;
-  string hit_or_miss_textual_log = 3;
+  string hit_or_miss_textual_log = 2;
+
+  message Hit { pdpi.IrTableEntry table_entry = 3; }
+  message Miss {}
+
+  oneof result {
+    Hit hit = 4;
+    Miss miss = 5;
+  }
 }
