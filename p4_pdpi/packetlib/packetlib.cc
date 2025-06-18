@@ -138,6 +138,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
     return Header::kIpfixHeader;
   if (dest_port == 319)
     return Header::kPtpHeader;
+  if (dest_port == 320) return Header::kPtpHeader;
   if (dest_port == 1000) return Header::kPspHeader;
   return Header::HEADER_NOT_SET;
 }
