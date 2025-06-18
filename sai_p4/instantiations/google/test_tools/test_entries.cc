@@ -22,12 +22,10 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "gutil/proto.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
@@ -368,6 +366,71 @@ EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMac(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action = *pd_entry.mutable_action()->mutable_multicast_set_src_mac();
+  action.set_src_mac(src_mac.ToString());
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacAndVlanId(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac, int vlan_id) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action =
+      *pd_entry.mutable_action()->mutable_multicast_set_src_mac_and_vlan_id();
+  action.set_src_mac(src_mac.ToString());
+  action.set_vlan_id(pdpi::BitsetToHexString<12>(vlan_id));
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacDstMacAndVlanId(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac, const netaddr::MacAddress& dst_mac,
+    int vlan_id) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action = *pd_entry.mutable_action()
+                      ->mutable_multicast_set_src_mac_and_dst_mac_and_vlan_id();
+  action.set_src_mac(src_mac.ToString());
+  action.set_dst_mac(dst_mac.ToString());
+  action.set_vlan_id(pdpi::BitsetToHexString<12>(vlan_id));
+  return *this;
+}
+
+EntryBuilder&
+EntryBuilder::AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action =
+      *pd_entry.mutable_action()
+           ->mutable_multicast_set_src_mac_and_preserve_ingress_vlan_id();
+  action.set_src_mac(src_mac.ToString());
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddMulticastRoute(
     absl::string_view vrf, const netaddr::Ipv4Address& dst_ip,
     int multicast_group_id) {
@@ -682,6 +745,51 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
         BoolToHexString(*match_fields.is_ipv6));
   }
   entry.mutable_action()->mutable_acl_forward();
+  entry.set_priority(priority);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
+    absl::string_view port, const MirrorAndRedirectMatchFields& match_fields,
+    int priority) {
+  sai::AclIngressMirrorAndRedirectTableEntry& entry =
+      *entries_.add_entries()
+           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+  if (match_fields.in_port.has_value()) {
+    entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (match_fields.ipmc_table_hit.has_value()) {
+    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
+        BoolToHexString(*match_fields.ipmc_table_hit));
+  }
+  if (match_fields.vlan_id.has_value()) {
+    entry.mutable_match()->mutable_vlan_id()->set_value(
+        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
+  }
+  if (match_fields.dst_ip.has_value()) {
+    entry.mutable_match()->mutable_dst_ip()->set_value(
+        match_fields.dst_ip->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ip()->set_mask(
+        match_fields.dst_ip->mask.ToString());
+  }
+  if (match_fields.is_ipv4.has_value()) {
+    entry.mutable_match()->mutable_is_ipv4()->set_value(
+        BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.dst_ipv6.has_value()) {
+    entry.mutable_match()->mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+
+    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
+        match_fields.dst_ipv6->mask.ToString());
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    entry.mutable_match()->mutable_is_ipv6()->set_value(
+        BoolToHexString(*match_fields.is_ipv6));
+  }
+  entry.mutable_action()->mutable_redirect_to_port()->set_redirect_port(port);
   entry.set_priority(priority);
   return *this;
 }

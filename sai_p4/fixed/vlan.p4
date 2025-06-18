@@ -55,6 +55,9 @@ control vlan_untag(inout headers_t headers,
         // language's limitations) to ethernet.ether_type.
         headers.ethernet.ether_type = headers.vlan.ether_type;
         headers.vlan.setInvalid();
+        // Store that the input packet has a VLAN tag. This is used to model the
+        // behavior of SET_OUTER_VLAN_ID action in the pre-ingress ACL.
+        local_metadata.input_packet_is_vlan_tagged = true;
      } else {
         // Otherwise, use native VID (4095 for all ports given the current
         // configuration).
