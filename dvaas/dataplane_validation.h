@@ -27,7 +27,6 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -40,7 +39,6 @@ limitations under the License.
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
-#include "google/protobuf/descriptor.h"
 #include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/ir.pb.h"
@@ -280,14 +278,16 @@ public:
   virtual absl::StatusOr<P4Specification>
   InferP4Specification(SwitchApi &sut) const = 0;
 
-  // Gets the P4 simulation packet trace for the given config, entries, and
-  // input packet.
+  // Gets the P4 simulation packet trace(s) for the given config, entries, and
+  // input packet. Returns a map from input packet's hex string to list of
+  // packet traces each corresponding to one trace for that packet (there may be
+  // multiple traces, e.g. due to exploring WCMP non-determinism).
   virtual absl::StatusOr<
       absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>>
   GetPacketTraces(
-      const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
-      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
-      const SwitchInput& switch_input) const = 0;
+      const p4::v1::ForwardingPipelineConfig &bmv2_compatible_config,
+      const pdpi::IrP4Info &ir_p4info, const pdpi::IrEntities &ir_entities,
+      const std::vector<SwitchInput> &switch_inputs) const = 0;
 
   // Creates entries for v1Model auxiliary tables that model the effects of the
   // given gNMI configuration in on packet forwarding (e.g. port loopback mode).
