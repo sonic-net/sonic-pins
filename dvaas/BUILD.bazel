@@ -59,7 +59,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -191,7 +190,7 @@ proto_library(
     name = "packet_trace_proto",
     testonly = False,
     srcs = ["packet_trace.proto"],
-
+    deps = ["//p4_pdpi:ir_proto"],
 )
 
 cc_proto_library(

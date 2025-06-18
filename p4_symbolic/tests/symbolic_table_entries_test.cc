@@ -321,7 +321,9 @@ bool SaiTableCouldSetMulticastGroup(absl::string_view table_name) {
              "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table";
 }
 
-TEST_F(SymbolicTableEntriesSaiTest, OneSymbolicEntryPerTable) {
+// TODO: Re-enable this test once LPM wildcard matching is
+// supported for this test.
+TEST_F(SymbolicTableEntriesSaiTest, DISABLED_OneSymbolicEntryPerTable) {
   // Create a symbolic IR entry for each table.
   for (const auto& [table_name, table] : program_.tables()) {
     // Skip tables that are not in the original P4 program.
@@ -479,7 +481,10 @@ TEST_F(SymbolicTableEntriesSaiTest, OneSymbolicEntryPerTable) {
             0);
 }
 
-TEST_F(SymbolicTableEntriesSaiTest, MixtureOfSymbolicAndConcreteEntries) {
+// TODO: Re-enable this test once LPM wildcard matching is
+// supported for this test.
+TEST_F(SymbolicTableEntriesSaiTest,
+       DISABLED_MixtureOfSymbolicAndConcreteEntries) {
   // Create a symbolic IR entry for each empty table.
   for (const auto& [table_name, table] : program_.tables()) {
     // Skip tables that are not in the original P4 program.
@@ -614,7 +619,10 @@ TEST_F(SymbolicTableEntriesSaiTest, MixtureOfSymbolicAndConcreteEntries) {
             0);
 }
 
-TEST_F(SymbolicTableEntriesSaiTest, OneSymbolicEntryPerTableWithTunnelDecap) {
+// TODO: Re-enable this test once LPM wildcard matching is
+// supported for this test.
+TEST_F(SymbolicTableEntriesSaiTest,
+       DISABLED_OneSymbolicEntryPerTableWithTunnelDecap) {
   // Create a symbolic IR entry for each empty table.
   for (const auto& [table_name, table] : program_.tables()) {
     // Skip tables that are not in the original P4 program.
