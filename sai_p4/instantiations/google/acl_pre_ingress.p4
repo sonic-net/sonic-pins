@@ -27,6 +27,9 @@ control acl_pre_ingress(in headers_t headers,
   // IPv4 IP protocol or IPv6 next_header (or 0, for non-IP packets)
   bit<8> ip_protocol = 0;
 
+  bool set_outer_vlan_id_action_applied = false;
+  vlan_id_t set_outer_vlan_id_action_vlan_id = 0;
+
   @id(ACL_PRE_INGRESS_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_pre_ingress_counter;
 
@@ -51,7 +54,8 @@ control acl_pre_ingress(in headers_t headers,
   action set_outer_vlan_id(
       @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)
         vlan_id_t vlan_id) {
-    local_metadata.vlan_id = vlan_id;
+    set_outer_vlan_id_action_applied = true;
+    set_outer_vlan_id_action_vlan_id = vlan_id;
     acl_pre_ingress_vlan_counter.count();
   }
 
@@ -263,6 +267,13 @@ control acl_pre_ingress(in headers_t headers,
     acl_pre_ingress_metadata_table.apply();
     acl_pre_ingress_table.apply();
 #endif
+
+    // The SET_OUTER_VLAN_ID action affects the packet if and only if the input
+    // packet is VLAN tagged.
+    if (set_outer_vlan_id_action_applied &&
+        local_metadata.input_packet_is_vlan_tagged) {
+      local_metadata.vlan_id = set_outer_vlan_id_action_vlan_id;
+    }
   }
 }  // control acl_pre_ingress
 

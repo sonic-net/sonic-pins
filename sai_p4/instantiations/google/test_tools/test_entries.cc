@@ -368,6 +368,71 @@ EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMac(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action = *pd_entry.mutable_action()->mutable_multicast_set_src_mac();
+  action.set_src_mac(src_mac.ToString());
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacAndVlanId(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac, int vlan_id) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action =
+      *pd_entry.mutable_action()->mutable_multicast_set_src_mac_and_vlan_id();
+  action.set_src_mac(src_mac.ToString());
+  action.set_vlan_id(pdpi::BitsetToHexString<12>(vlan_id));
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacDstMacAndVlanId(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac, const netaddr::MacAddress& dst_mac,
+    int vlan_id) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action = *pd_entry.mutable_action()
+                      ->mutable_multicast_set_src_mac_and_dst_mac_and_vlan_id();
+  action.set_src_mac(src_mac.ToString());
+  action.set_dst_mac(dst_mac.ToString());
+  action.set_vlan_id(pdpi::BitsetToHexString<12>(vlan_id));
+  return *this;
+}
+
+EntryBuilder&
+EntryBuilder::AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(egress_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(replica_instance));
+  auto& action =
+      *pd_entry.mutable_action()
+           ->mutable_multicast_set_src_mac_and_preserve_ingress_vlan_id();
+  action.set_src_mac(src_mac.ToString());
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddMulticastRoute(
     absl::string_view vrf, const netaddr::Ipv4Address& dst_ip,
     int multicast_group_id) {
