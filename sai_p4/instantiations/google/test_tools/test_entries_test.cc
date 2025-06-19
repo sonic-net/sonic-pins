@@ -464,8 +464,89 @@ TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
                   .LogPdEntries()
                   .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
-                table_entry { table_name: "multicast_router_interface_table" }
+                table_entry {
+                  table_name: "multicast_router_interface_table"
+                  action { name: "set_multicast_src_mac" }
+                }
               )pb"))));
+}
+
+TEST(EntryBuilder, AddMrifEntryRewritingSrcMacAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"\1", /*replica_instance=*/15,
+              /*src_mac=*/netaddr::MacAddress(1, 2, 3, 4, 5, 6))
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "multicast_router_interface_table"
+                  action { name: "multicast_set_src_mac" }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddMrifEntryRewritingSrcMacAndVlanIdAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMrifEntryRewritingSrcMacAndVlanId(
+              /*egress_port=*/"\1", /*replica_instance=*/15,
+              /*src_mac=*/netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+              /*vlan_id=*/123)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "multicast_router_interface_table"
+                  action { name: "multicast_set_src_mac_and_vlan_id" }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddMrifEntryRewritingSrcMacDstMacAndVlanIdAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMrifEntryRewritingSrcMacDstMacAndVlanId(
+              /*egress_port=*/"\1", /*replica_instance=*/15,
+              /*src_mac=*/netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+              /*dst_mac=*/netaddr::MacAddress(7, 8, 9, 10, 11, 12),
+              /*vlan_id=*/123)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry {
+          table_name: "multicast_router_interface_table"
+          action { name: "multicast_set_src_mac_and_dst_mac_and_vlan_id" }
+        }
+      )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddMrifEntryRewritingSrcMacAndPreservingIngressVlanIdAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
+              /*egress_port=*/"\1", /*replica_instance=*/15,
+              /*src_mac=*/netaddr::MacAddress(1, 2, 3, 4, 5, 6))
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry {
+          table_name: "multicast_router_interface_table"
+          action { name: "multicast_set_src_mac_and_preserve_ingress_vlan_id" }
+        }
+      )pb"))));
 }
 
 TEST(EntryBuilder, AddMulticastRouteAddsIpv4Entry) {

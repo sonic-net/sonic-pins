@@ -295,8 +295,24 @@ public:
                                        absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
       int multicast_group_id, absl::Span<const std::string> egress_ports);
+  // TODO: Remove once `mulitcast_set_src_mac` is exclusively used
+  // and such an image is rolled out. Replace all calls with
+  // `AddMrifEntryRewritingSrcMac`.
   EntryBuilder& AddMulticastRouterInterfaceEntry(
       const MulticastRouterInterfaceTableEntry& entry);
+  EntryBuilder& AddMrifEntryRewritingSrcMac(absl::string_view egress_port,
+                                            int replica_instance,
+                                            const netaddr::MacAddress& src_mac);
+  EntryBuilder& AddMrifEntryRewritingSrcMacAndVlanId(
+      absl::string_view egress_port, int replica_instance,
+      const netaddr::MacAddress& src_mac, int vlan_id);
+  EntryBuilder& AddMrifEntryRewritingSrcMacDstMacAndVlanId(
+      absl::string_view egress_port, int replica_instance,
+      const netaddr::MacAddress& src_mac, const netaddr::MacAddress& dst_mac,
+      int vlan_id);
+  EntryBuilder& AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
+      absl::string_view egress_port, int replica_instance,
+      const netaddr::MacAddress& src_mac);
   EntryBuilder& AddIngressAclDroppingAllPackets();
   EntryBuilder& AddEgressAclDroppingIpPackets(
       IpVersion ip_version = IpVersion::kIpv4And6);
