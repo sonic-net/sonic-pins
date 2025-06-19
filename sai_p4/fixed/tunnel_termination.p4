@@ -78,11 +78,29 @@ control tunnel_termination(inout headers_t headers,
       headers.ipv6.setInvalid();
       if (headers.inner_ipv4.isValid()) {
         headers.ethernet.ether_type = ETHERTYPE_IPV4;
+        // In case of multicast inner header, the DMAC gets overwritten to a 
+        // multicast address drived from the destination IP address.
+        if (IS_MULTICAST_IPV4(headers.inner_ipv4.dst_addr)){
+          // MAC Address for IPv4 multicast is 01:00:5E:xx:xx:xx where the 24th
+          // LSB is 0 and the 23 LSBs are the 23 LSBs of IPv4 dst address.
+          // https://en.wikipedia.org/wiki/Multicast_address#Ethernet
+          headers.ethernet.dst_addr = (bit<24>)0x01005E++(bit<1>)0++
+              headers.inner_ipv4.dst_addr[22:0];
+        }
         headers.ipv4 = headers.inner_ipv4;
         headers.inner_ipv4.setInvalid();
       }
       if (headers.inner_ipv6.isValid()) {
         headers.ethernet.ether_type = ETHERTYPE_IPV6;
+        // In case of multicast inner header, the DMAC gets overwritten to a 
+        // multicast address drived from the destination IP address.
+        if (IS_MULTICAST_IPV6(headers.inner_ipv6.dst_addr)){
+          // MAC Address for IPv6 multicast is 33:33:xx:xx:xx:xx where the 32
+          // LSBs are the 32 LSBs of the IPv6 dst address.
+          // https://en.wikipedia.org/wiki/Multicast_address#Ethernet
+          headers.ethernet.dst_addr = (bit<16>)0x3333++
+              headers.inner_ipv6.dst_addr[31:0];
+        }
         headers.ipv6 = headers.inner_ipv6;
         headers.inner_ipv6.setInvalid();
       }

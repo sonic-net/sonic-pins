@@ -1778,7 +1778,7 @@ tables {
     alias: "acl_wbb_ingress_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@sai_acl(INGRESS)"
-    annotations: "@entry_restriction(\"\n    // WBB only allows for very specific table entries:\n\n    // Traceroute (6 entries)\n    (\n      // IPv4 or IPv6\n      ((is_ipv4 == 1 && is_ipv6::mask == 0) ||\n        (is_ipv4::mask == 0 && is_ipv6 == 1)) &&\n      // TTL 0, 1, and 2\n      (ttl == 0 || ttl == 1 || ttl == 2) &&\n      ether_type::mask == 0 && outer_vlan_id::mask == 0\n    ) ||\n    // LLDP\n    (\n      ether_type == 0x88cc &&\n      is_ipv4::mask == 0 && is_ipv6::mask == 0 && ttl::mask == 0 &&\n      outer_vlan_id::mask == 0\n    ) ||\n    // ND\n    (\n    // TODO remove optional match for VLAN ID once VLAN ID is\n    // completely removed from ND flows.\n      (( outer_vlan_id::mask == 0xfff && outer_vlan_id == 0x0FA0) ||\n      outer_vlan_id::mask == 0);\n      ether_type == 0x6007;\n      is_ipv4::mask == 0;\n      is_ipv6::mask == 0;\n      ttl::mask == 0\n    )\n  \")"
+    annotations: "@entry_restriction(\"\n    // WBB only allows for very specific table entries:\n\n    // Traceroute (6 entries)\n    (\n      // IPv4 or IPv6\n      ((is_ipv4 == 1 && is_ipv6::mask == 0) ||\n        (is_ipv4::mask == 0 && is_ipv6 == 1)) &&\n      // TTL 0, 1, and 2\n      (ttl == 0 || ttl == 1 || ttl == 2) &&\n      ether_type::mask == 0\n    ) ||\n    // LLDP\n    (\n      ether_type == 0x88cc &&\n      is_ipv4::mask == 0 && is_ipv6::mask == 0 && ttl::mask == 0\n    ) ||\n    // ND\n    (\n      ether_type == 0x6007;\n      is_ipv4::mask == 0;\n      is_ipv6::mask == 0;\n      ttl::mask == 0\n    )\n  \")"
   }
   match_fields {
     id: 1
@@ -1806,13 +1806,6 @@ tables {
     name: "ttl"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL)"
     bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 5
-    name: "outer_vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
     match_type: TERNARY
   }
   action_refs {
