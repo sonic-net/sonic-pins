@@ -205,6 +205,10 @@ struct local_metadata_t {
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bool enable_vlan_checks;
 
+  // If false when VLAN checks are enabled, the packet does not get admitted to
+  // L3 routing.
+  bool ingress_port_is_member_of_vlan;
+
   // If true, the egress packet goes out WITHOUT a VLAN tag, otherwise if the
   // packet does not get dropped (e.g. by egress VLAN filtering, egress ACLs,
   // etc) it goes out tagged with the VID in the egress pipeline (except for
@@ -221,6 +225,10 @@ struct local_metadata_t {
   // used at the end of the egress pipeline to determine whether or not the
   // packet should be VLAN tagged (if not dropped).
   vlan_id_t vlan_id;
+  // This is used to model the behavior of SET_OUTER_VLAN_ID action in the
+  // pre-ingress ACL, which affects the packet if and only if the input packet
+  // is VLAN tagged.
+  bool input_packet_is_vlan_tagged;
 
   bool admit_to_l3;
   vrf_id_t vrf_id;
