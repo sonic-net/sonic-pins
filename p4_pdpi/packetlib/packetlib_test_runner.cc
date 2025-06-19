@@ -652,7 +652,57 @@ void RunPacketParseTests() {
     # other headers:
     payload: 0x12
   )pb");
-
+    RunPacketParseTest("PTP in L2 packet (valid)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ethertype: 0x88F7
+                       # PTP Header
+                       transport_specific: 0x0
+                       message_type: 0x0
+                       reserved0: 0x0
+                       version_ptp: 0x0
+                       message_length: 0x0034
+                       domain_number: 0x00
+                       reserved1: 0x00
+                       flags: 0x0000
+                       correction_field: 0x0000000000000000
+                       reserved2: 0x00000000
+                       source_port_identity: 0x00000000000000000000
+                       sequence_id: 0x0000
+                       control_field: 0x00
+                       log_message_interval: 0x00
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+                     )pb");
+  RunPacketParseTest("PTP in L2 packet (short)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ethertype: 0x88F7
+                       # PTP Header
+                       transport_specific: 0x0
+                       message_type: 0x0
+                       reserved0: 0x0
+                       version_ptp: 0x0
+                       message_length: 0x0034
+                       domain_number: 0x00
+                       reserved1: 0x00
+                       flags: 0x0000
+                       correction_field: 0x0000000000000000
+                       reserved2: 0x00000000
+                       source_port_identity: 0x00000000000000000000
+                       sequence_id: 0x0000
+                       control_field: 0x00
+                       log_message_interval: 0x00
+                       # Payload - 10 octets (short) - correct is 18
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+                     )pb");
   RunPacketParseTest("Packet too short to parse a GRE header (Invalid)", R"pb(
     # Ethernet header
     ethernet_destination: 0x c2 01 51 fa 00 00
@@ -2378,6 +2428,100 @@ void RunProtoPacketTests() {
                                 }
                               }
                               payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PTP in L2 packet (valid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x88f7"
+                                }
+                              }
+                              headers {
+                                ptp_header {
+                                  transport_specific: "0x0"
+                                  message_type: "0x0"
+                                  reserved0: "0x0"
+                                  version_ptp: "0x0"
+                                  message_length: "0x0036"
+                                  domain_number: "0x00"
+                                  reserved1: "0x00"
+                                  flags: "0x0000"
+                                  correction_field: "0x0000000000000000"
+                                  reserved2: "0x00000000"
+                                  source_port_identity: "0x00000000000000000000"
+                                  sequence_id: "0x0000"
+                                  control_field: "0x00"
+                                  log_message_interval: "0x00"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PTP in L2 packet without payload (invalid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x88f7"
+                                }
+                              }
+                              payload: "123456789012345678901234567890"
+                                       "12345678901234"
+                         )pb"));
+  RunProtoPacketTest("PTP in L2 packet incorrect L3 header (invalid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x88f7"
+                                }
+                              }
+                              headers {
+                                arp_header {
+                                  hardware_type: "0x0001"
+                                  protocol_type: "0x0800"
+                                  hardware_length: "0x06"
+                                  protocol_length: "0x04"
+                                  operation: "0x0001"
+                                  sender_hardware_address: "00:11:22:33:44:55"
+                                  sender_protocol_address: "10.0.0.1"
+                                  target_hardware_address: "00:00:00:00:00:00"
+                                  target_protocol_address: "10.0.0.2"
+                                }
+                              }
+                              payload: "12345678901234567890123456789012345678"
+                         )pb"));
+  RunProtoPacketTest("PTP in L2 packet message_length incorrect (invalid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x88f7"
+                                }
+                              }
+                              headers {
+                                ptp_header {
+                                  transport_specific: "0x0"
+                                  message_type: "0x0"
+                                  reserved0: "0x0"
+                                  version_ptp: "0x0"
+                                  message_length: "0x0036"
+                                  domain_number: "0x00"
+                                  reserved1: "0x00"
+                                  flags: "0x0000"
+                                  correction_field: "0x0000000000000000"
+                                  reserved2: "0x00000000"
+                                  source_port_identity: "0x00000000000000000000"
+                                  sequence_id: "0x0000"
+                                  control_field: "0x00"
+                                  log_message_interval: "0x00"
+                                }
+                              }
+                              payload: "123456789012"  # 12 octets
                          )pb"));
   RunProtoPacketTest("PTP packet does not set message_length (valid)",
                      gutil::ParseProtoOrDie<Packet>(
