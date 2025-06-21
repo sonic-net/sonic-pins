@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -59,6 +60,41 @@ namespace {
 
 using ::p4_symbolic::packet_synthesizer::SynthesizedPacket;
 using ::pins_test::P4rtPortId;
+
+// Determines the reproducibility rate of a test failure and sets it in
+// `test_outcome`.
+absl::Status DetermineReproducibilityRate(
+    const DataplaneValidationParams& params,
+    const PacketInjectionParams& parameters, pdpi::P4RuntimeSession& sut,
+    pdpi::P4RuntimeSession& control_switch,
+    dvaas::PacketTestOutcome& test_outcome) {
+  // Duplicate the packet that caused a test failure.
+  PacketTestVectorById test_vectors;
+  PacketStatistics statistics;
+  for (int tag_id = 0; tag_id < params.failure_enhancement_options
+                                    .num_of_replication_attempts_per_failure;
+       ++tag_id) {
+    PacketTestVector packet_test_vector = test_outcome.test_run().test_vector();
+    RETURN_IF_ERROR(UpdateTestTag(packet_test_vector, tag_id));
+    test_vectors[tag_id] = std::move(packet_test_vector);
+  }
+
+  // Call SendTestPacketsAndCollectOutputs.
+  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
+                   SendTestPacketsAndCollectOutputs(
+                       sut, control_switch, test_vectors, parameters,
+                       statistics, /*log_injection_progress=*/false));
+
+  ValidationResult validation_result =
+      ValidationResult(test_runs, params.switch_output_diff_params,
+                       /*packet_synthesis_result=*/{});
+
+  test_outcome.mutable_test_result()
+      ->mutable_failure()
+      ->set_reproducibility_rate(1 - validation_result.GetSuccessRate());
+
+  return absl::OkStatus();
+}
 
 std::string ToString(
     const std::vector<SynthesizedPacket>& synthesized_packets) {
@@ -232,6 +268,19 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   return generate_test_vectors_result;
 }
 
+absl::Status HandleFailure(const DataplaneValidationParams& params,
+                           const PacketInjectionParams& parameters,
+                           int failure_count, pdpi::P4RuntimeSession& sut,
+                           pdpi::P4RuntimeSession& control_switch,
+                           dvaas::PacketTestOutcome& test_outcome) {
+  if (failure_count <
+      params.failure_enhancement_options.max_failures_to_attempt_to_replicate) {
+    RETURN_IF_ERROR(DetermineReproducibilityRate(params, parameters, sut,
+                                                 control_switch, test_outcome));
+  }
+  return absl::OkStatus();
+}
+
 absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
     SwitchApi& sut, SwitchApi& control_switch,
     const DataplaneValidationParams& params) {
@@ -285,23 +334,21 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   RETURN_IF_ERROR(
       writer->AppendToTestArtifact("test_vectors.txt", ToString(test_vectors)));
 
+  PacketInjectionParams packet_injection_params = {
+      .max_packets_to_send_per_second = params.max_packets_to_send_per_second,
+      .is_expected_unsolicited_packet = [&](const packetlib::Packet packet)
+          -> bool { return backend_->IsExpectedUnsolicitedPacket(packet); },
+      .mirror_testbed_port_map = mirror_testbed_port_map,
+  };
+
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(
-      PacketTestRuns test_runs,
-      SendTestPacketsAndCollectOutputs(
-          *sut.p4rt.get(), *control_switch.p4rt.get(), test_vectors,
-          {
-              .max_packets_to_send_per_second =
-                  params.max_packets_to_send_per_second,
-              .is_expected_unsolicited_packet =
-                  [&](const packetlib::Packet packet) -> bool {
-                return backend_->IsExpectedUnsolicitedPacket(packet);
-              },
-              .mirror_testbed_port_map = mirror_testbed_port_map,
-          },
-          packet_statistics_));
-  RETURN_IF_ERROR(writer->AppendToTestArtifact("test_runs.textproto",
-                                               test_runs.DebugString()));
+  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
+                   SendTestPacketsAndCollectOutputs(
+                       *sut.p4rt.get(), *control_switch.p4rt.get(),
+                       test_vectors, packet_injection_params,
+                       packet_statistics_));
+  RETURN_IF_ERROR(writer->AppendToTestArtifact(
+      "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
   dvaas::PacketTestOutcomes test_outcomes;
@@ -346,16 +393,30 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                                                v1model_augmented_entities,
                                                failed_switch_inputs));
 
-    for (dvaas::PacketTestOutcome &test_outcome :
+    int current_failures_count = 0;
+    // Rerun at most `num_failures_to_rerun` to avoid timeouts if there are too
+    // many failures.
+    for (dvaas::PacketTestOutcome& test_outcome :
          *test_outcomes.mutable_outcomes()) {
       if (test_outcome.test_result().has_failure()) {
+        // Handle failures.
+        RETURN_IF_ERROR(HandleFailure(
+            params, packet_injection_params, ++current_failures_count,
+            *sut.p4rt.get(), *control_switch.p4rt.get(), test_outcome));
+        double reproducibility_rate =
+            test_outcome.test_result().failure().reproducibility_rate();
+        LOG(INFO) << (reproducibility_rate == 1.0
+                          ? "Deterministic failure"
+                          : absl::StrCat(
+                                "Non-deterministic failure. Success rate is ",
+                                reproducibility_rate));
+
         ASSIGN_OR_RETURN(int test_id,
                          dvaas::ExtractTestPacketTag(test_outcome.test_run()
                                                          .test_vector()
                                                          .input()
                                                          .packet()
                                                          .parsed()));
-
         const std::string packet_hex =
             test_outcome.test_run().test_vector().input().packet().hex();
 
@@ -364,7 +425,6 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
           return absl::InternalError(
               absl::StrCat("Packet trace not found for packet ", packet_hex));
         }
-
         std::string summarized_packet_trace;
         for (auto &table_apply : packet_traces[packet_hex][0].table_apply()) {
           absl::StrAppend(&summarized_packet_trace,
