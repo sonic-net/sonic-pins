@@ -37,6 +37,7 @@ cc_library(
     hdrs = ["flow_programmer.h"],
     deps = [
         ":testbed",
+        "//thinkit:ssh_client",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
     ],
