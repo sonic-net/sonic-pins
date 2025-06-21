@@ -444,20 +444,20 @@ TEST(ArbitraryByteStringToIrValueTest, EmptyBytestringReturnsError) {
   EXPECT_THAT(
       ArbitraryByteStringToIrValue(Format::IPV6, /*bitwidth=*/kNumBitsInIpv6,
                                    /*bytes=*/""),
-      StatusIs(absl::StatusCode::kInvalidArgument));
+      StatusIs(absl::StatusCode::kOutOfRange));
 }
 
 TEST(ArbitraryToNormalizedByteString, EmptyBytestringReturnsError) {
   EXPECT_THAT(
       ArbitraryToNormalizedByteString(/*bytes=*/"", /*expected_bitwidth=*/8),
-      StatusIs(absl::StatusCode::kInvalidArgument));
+      StatusIs(absl::StatusCode::kOutOfRange));
 }
 
 TEST(IrValueToNormalizedByteString, kStrWithEmptyStringReturnsError) {
   IrValue empty_string;
   empty_string.set_str("");
   EXPECT_THAT(IrValueToNormalizedByteString(empty_string, /*bitwidth=*/8),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kOutOfRange));
 }
 
 class Ipv6BitwidthTest : public testing::TestWithParam<int> {};
