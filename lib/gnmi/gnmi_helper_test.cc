@@ -3881,6 +3881,65 @@ TEST(GetOcOsNetworkStackGnmiStatePathInfo, NetworkStackNameSuccess) {
       IsOkAndHolds("\"network_stack0\""));
 }
 
+TEST(SetPortPfcRxEnableValue, SetPfcRxEnableValueSuccess) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Set(_,
+          EqualsProto(gutil::ParseProtoOrDie<gnmi::SetRequest>(
+              R"pb(prefix { origin: "openconfig" }
+                   update {
+                     path {
+                       elem { name: "interfaces" }
+                       elem {
+                         name: "interface"
+                         key { key: "name" value: "Ethernet8" }
+                       }
+                       elem { name: "ethernet" }
+                       elem { name: "config" }
+                       elem { name: "enable-pfc-rx" }
+                     }
+                     val {
+                       json_ietf_val: "{\"openconfig-interfaces:enable-pfc-rx\":true}"
+                     }
+                   })pb")),
+          _))
+      .WillOnce(Return(grpc::Status::OK));
+  EXPECT_OK(SetPortPfcRxEnable("Ethernet8", "true", stub));
+}
+
+TEST(GetPortPfcRxEnableValue, ReturnsPfcRxEnableValue) {
+  gnmi::GetResponse response;
+  constexpr char RxEnableValue[] =
+      R"({"openconfig-interfaces:enable-pfc-rx":"true"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/config/enable-pfc-rx");
+  update->mutable_val()->set_json_ietf_val(RxEnableValue);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:enable-pfc-rx"),
+      IsOkAndHolds(HasSubstr("true")));
+}
+
+TEST(GetPortPfcRxEnableValue, ReturnsErrorForMalformedPfcRxEnableValue) {
+  gnmi::GetResponse response;
+  constexpr char RxEnableValue[] =
+      R"({"openconfig-interfaces:enable-pfc-rx":"TESTERROR"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/config/enable-pfc-rx");
+  update->mutable_val()->set_json_ietf_val(RxEnableValue);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:enable-pfc-rx"),
+      IsOkAndHolds(Not(HasSubstr("true"))));
+}
+
 class MalformedJson : public testing::TestWithParam<std::string> {};
 
 const absl::btree_map<std::string /*name*/, std::string /*text*/> &
