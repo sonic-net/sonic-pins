@@ -660,6 +660,10 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
+    id: 16777494
+    annotations: "@proto_id(5)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1506,6 +1510,23 @@ actions {
     annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
+  }
+}
+actions {
+  preamble {
+    id: 16777494
+    name: "ingress.acl_ingress.redirect_to_port"
+    alias: "redirect_to_port"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "redirect_port"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
+    type_name {
+      name: "port_id_t"
+    }
   }
 }
 actions {

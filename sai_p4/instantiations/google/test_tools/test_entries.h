@@ -333,6 +333,9 @@ public:
       const MirrorAndRedirectMatchFields& match_fields = {});
   EntryBuilder& AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
+  EntryBuilder& AddIngressAclEntryRedirectingToPort(
+      absl::string_view port,
+      const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIpv6TunnelTerminationEntry(
       const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
