@@ -14,8 +14,6 @@
 #include <net/ethernet.h>
 #include <netinet/in.h>
 
-#include <cstdint>
-#include <iostream>
 #include <string>
 
 #include "absl/status/status.h"
@@ -26,6 +24,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 #include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -551,6 +550,105 @@ TEST(PacketLib, ExperimentalEncapsulatedPacket) {
   packet.set_payload("000000000000000000");  // 18 octets
 
   ASSERT_OK(SerializePacket(packet));
+}
+
+TEST(GetEthernetTrailerTest, WorksForIpv4PacketWithVlanAndCsig) {
+  packetlib::Packet packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
+    headers {
+      ethernet_header {
+        ethernet_destination: "aa:bb:cc:dd:ee:ff"
+        ethernet_source: "11:22:33:44:55:66"
+        ethertype: "0x0800"
+      }
+    }
+    headers { vlan_header {} }
+    headers { csig_header {} }
+    headers {
+      ipv4_header {
+        dscp: "0x1b"
+        ecn: "0x1"
+        identification: "0xa3cd"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x10"
+        protocol: "0x05"
+        ipv4_source: "10.0.0.1"
+        ipv4_destination: "20.0.0.3"
+      }
+    }
+    payload: "IPv4 packet payload"
+  )pb");
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet));
+  const std::string trailer = "Hi, I am the trailer, nice to meet you :)";
+  packet.mutable_payload()->append(trailer);
+
+  ASSERT_THAT(packetlib::GetEthernetTrailer(packet), IsOkAndHolds(Eq(trailer)));
+}
+
+TEST(GetEthernetTrailerTest, WorksForIpv6PacketWithVlanAndCsig) {
+  packetlib::Packet packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
+    headers {
+      ethernet_header {
+        ethernet_destination: "aa:bb:cc:dd:ee:ff"
+        ethernet_source: "11:22:33:44:55:66"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv6_header {
+        dscp: "0x1b"
+        ecn: "0x1"
+        flow_label: "0x12345"
+        next_header: "0x05"
+        hop_limit: "0x10"
+        ipv6_source: "::"
+        ipv6_destination: "f::f"
+      }
+    }
+    payload: "IPv6 packet payload"
+  )pb");
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet));
+  const std::string trailer = "Hi, I am the trailer, nice to meet you :)";
+  packet.mutable_payload()->append(trailer);
+  ASSERT_THAT(packetlib::GetEthernetTrailer(packet), IsOkAndHolds(Eq(trailer)));
+}
+
+TEST(GetEthernetTrailerTest, PacketHeaderMustContainEthernetHeader) {
+  packetlib::Packet packet;
+  ASSERT_THAT(packetlib::GetEthernetTrailer(packet),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetEthernetTrailerTest,
+     PacketHeaderDoesNotContainAnyHeadersAfterEthernetHeader) {
+  packetlib::Packet packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
+    headers {
+      ethernet_header {
+        ethernet_destination: "aa:bb:cc:dd:ee:ff"
+        ethernet_source: "11:22:33:44:55:66"
+        ethertype: "0x0800"
+      }
+    }
+  )pb");
+  ASSERT_THAT(packetlib::GetEthernetTrailer(packet),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetEthernetTrailerTest,
+     PacketHeaderDoesNotContainAnyHeadersAfterVlanOrCsig) {
+  packetlib::Packet packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
+    headers {
+      ethernet_header {
+        ethernet_destination: "aa:bb:cc:dd:ee:ff"
+        ethernet_source: "11:22:33:44:55:66"
+        ethertype: "0x0800"
+      }
+    }
+    headers { vlan_header {} }
+    headers { csig_header {} }
+  )pb");
+  ASSERT_THAT(packetlib::GetEthernetTrailer(packet),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace
