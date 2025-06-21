@@ -2012,6 +2012,32 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
                                       GnmiSetType::kUpdate, config_json);
 }
 
+absl::StatusOr<std::string> GetPortPfcRxEnable(
+    const absl::string_view interface_name,
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/state/google-pins-interfaces:enable-pfc-rx");
+  const std::string parse_str = "google-pins-interfaces:enable-pfc-rx";
+
+  ASSIGN_OR_RETURN(std::string enable_pfc_rx,
+                   GetGnmiStatePathInfo(&gnmi_stub, config_path, parse_str));
+  return enable_pfc_rx;
+}
+
+absl::Status SetPortPfcRxEnable(const absl::string_view interface_name,
+                                std::string port_pfc_rx_enable,
+                                gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/config/enable-pfc-rx");
+  std::string config_json = absl::StrCat(
+      "{\"openconfig-interfaces:enable-pfc-rx\":", port_pfc_rx_enable, "}");
+
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, config_json);
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
   ASSIGN_OR_RETURN(

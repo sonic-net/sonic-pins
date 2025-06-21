@@ -1369,8 +1369,11 @@ absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
 
 absl::Status SetIpTrafficParameters(absl::string_view tref,
                                     const Ipv4TrafficParameters &params,
-                                    thinkit::GenericTestbed &testbed) {
-  RETURN_IF_ERROR(AppendIPv4(tref, testbed));
+                                    thinkit::GenericTestbed &testbed,
+                                    bool is_update) {
+  if (!is_update) {
+    RETURN_IF_ERROR(AppendIPv4(tref, testbed));
+  }
   RETURN_IF_ERROR(SetSrcIPv4(tref, params.src_ipv4.ToString(), testbed));
   RETURN_IF_ERROR(SetDestIPv4(tref, params.dst_ipv4.ToString(), testbed));
   if (params.priority.has_value()) {
@@ -1383,8 +1386,11 @@ absl::Status SetIpTrafficParameters(absl::string_view tref,
 
 absl::Status SetIpTrafficParameters(absl::string_view tref,
                                     const Ipv6TrafficParameters &params,
-                                    thinkit::GenericTestbed &testbed) {
-  RETURN_IF_ERROR(AppendIPv6(tref, testbed));
+                                    thinkit::GenericTestbed &testbed,
+                                    bool is_update) {
+  if (!is_update) {
+    RETURN_IF_ERROR(AppendIPv6(tref, testbed));
+  }
   RETURN_IF_ERROR(SetSrcIPv6(tref, params.src_ipv6.ToString(), testbed));
   RETURN_IF_ERROR(SetDestIPv6(tref, params.dst_ipv6.ToString(), testbed));
   if (params.priority.has_value()) {
@@ -1397,8 +1403,11 @@ absl::Status SetIpTrafficParameters(absl::string_view tref,
 
 absl::Status SetPfcTrafficParameters(absl::string_view tref,
                                      const PfcTrafficParameters &params,
-                                     thinkit::GenericTestbed &testbed) {
-  RETURN_IF_ERROR(AppendPfc(tref, testbed));
+                                     thinkit::GenericTestbed &testbed,
+                                     bool is_update) {
+  if (!is_update) {
+    RETURN_IF_ERROR(AppendPfc(tref, testbed));
+  }
   RETURN_IF_ERROR(
       SetPfcPriorityEnableVector(tref, params.priority_enable_vector, testbed));
   RETURN_IF_ERROR(
@@ -1409,7 +1418,8 @@ absl::Status SetPfcTrafficParameters(absl::string_view tref,
 
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
-                                  thinkit::GenericTestbed &testbed) {
+                                  thinkit::GenericTestbed &testbed,
+                                  bool is_update) {
   if (params.frame_count.has_value()) {
     RETURN_IF_ERROR(SetFrameCount(tref, *params.frame_count, testbed));
   }
@@ -1427,8 +1437,8 @@ absl::Status SetTrafficParameters(absl::string_view tref,
       params.traffic_speed));
 
   if (params.pfc_parameters.has_value()) {
-    RETURN_IF_ERROR(
-        SetPfcTrafficParameters(tref, *params.pfc_parameters, testbed));
+    RETURN_IF_ERROR(SetPfcTrafficParameters(tref, *params.pfc_parameters,
+                                            testbed, is_update));
   } else {
     RETURN_IF_ERROR(SetSrcMac(tref, params.src_mac.ToString(), testbed));
     RETURN_IF_ERROR(SetDestMac(tref, params.dst_mac.ToString(), testbed));
@@ -1436,7 +1446,7 @@ absl::Status SetTrafficParameters(absl::string_view tref,
   if (params.ip_parameters.has_value()) {
     RETURN_IF_ERROR(std::visit(
         [&](const auto &ip_params) {
-          return SetIpTrafficParameters(tref, ip_params, testbed);
+          return SetIpTrafficParameters(tref, ip_params, testbed, is_update);
         },
         *params.ip_parameters));
   }
