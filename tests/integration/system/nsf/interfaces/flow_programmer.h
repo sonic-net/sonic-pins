@@ -18,6 +18,7 @@
 #include "absl/status/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -30,10 +31,10 @@ class FlowProgrammer {
  public:
   virtual ~FlowProgrammer() = default;
 
-  // Programs a predefined flow on the SUT based on the given IP version and
-  // protocol.
+  // Programs predefined flows on the SUT.
   virtual absl::Status ProgramFlows(const p4::config::v1::P4Info &p4_info,
-                                    Testbed &testbed) = 0;
+                                    Testbed &testbed,
+                                    thinkit::SSHClient &ssh_client) = 0;
 
   // Clears all flows on the SUT.
   virtual absl::Status ClearFlows(Testbed& testbed) = 0;
