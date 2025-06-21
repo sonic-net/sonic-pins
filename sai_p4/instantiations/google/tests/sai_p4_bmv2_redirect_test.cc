@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <optional>
 #include <string>
-#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
@@ -30,7 +28,6 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
-#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
@@ -115,17 +112,15 @@ TEST(RedirectTest, RedirectToNextHopOverridesLpmDecision) {
 
   // Install entries to forwards all packets to kEgressPort and redirect
   // the ones with in_port kRedirectIngressPort to kRedirectEgressPort.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenPort(kEgressPortProto)
-          .AddIngressAclEntryRedirectingToNexthop(
-              kRedirectNexthopId, {.in_port = kRedirectIngressPortProto})
-          .AddNexthopRifNeighborEntries(kRedirectNexthopId,
-                                        kRedirectEgressPortProto)
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntriesForwardingIpPacketsToGivenPort(kEgressPortProto)
+                .AddIngressAclEntryRedirectingToNexthop(
+                    kRedirectNexthopId, {.in_port = kRedirectIngressPortProto})
+                .AddNexthopRifNeighborEntries(kRedirectNexthopId,
+                                              kRedirectEgressPortProto)
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                        /*allow_unsupported=*/true));
 
   {
     // Inject a test packet to kIngressPort.
@@ -170,8 +165,7 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
   // Install entries to multicast packets destined to kDstIpv4 to
   // kMulticastEgressPort{1,2} and redirect the ones with in_port
   // kRedirectIngressPort to kRedirectEgressPort.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
+  ASSERT_OK(
       sai::EntryBuilder()
           // Multicast entries.
           .AddVrfEntry(kVrf)
@@ -198,8 +192,8 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
           .AddNexthopRifNeighborEntries(kRedirectNexthopId,
                                         kRedirectEgressPortProto)
           .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+          .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                  /*allow_unsupported=*/true));
 
   {
     // Inject a test packet destined to kDstIpv4 though kIngressPort.
@@ -227,18 +221,16 @@ TEST(RedirectTest, RedirectToMulticastGroupMulticastsPacket) {
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddIngressAclEntryRedirectingToMulticastGroup(42)
-          .AddMulticastGroupEntry(42,
-                                  {
-                                      sai::Replica{.egress_port = "\1"},
-                                      sai::Replica{.egress_port = "\2"},
-                                  })
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddIngressAclEntryRedirectingToMulticastGroup(42)
+                .AddMulticastGroupEntry(42,
+                                        {
+                                            sai::Replica{.egress_port = "\1"},
+                                            sai::Replica{.egress_port = "\2"},
+                                        })
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                        /*allow_unsupported=*/true));
 
   const packetlib::Packet input_packet = GetIpv4PacketOrDie();
   ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
@@ -269,36 +261,79 @@ TEST(RedirectTest, RedirectToMulticastGroupOverridesMulticastTableAction) {
   // IPv4 multicast MAC address.
   constexpr auto kDstMac = netaddr::MacAddress(0x01, 0, 0x5e, 0x01, 0x02, 0x03);
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddVrfEntry("vrf")
-          .AddEntrySettingVrfForAllPackets("vrf")
-          .AddEntryAdmittingAllPacketsToL3()
-          .AddMulticastRoute("vrf", kDstIpv4, kDefaultMulticastGroupId)
-          .AddIngressAclEntryRedirectingToMulticastGroup(
-              kOverrideMulticastGroupId,
-              sai::MirrorAndRedirectMatchFields{
-                  .in_port = kOverrideIngressPortStr,
-              })
-          .AddMulticastGroupEntry(kDefaultMulticastGroupId,
-                                  {
-                                      sai::Replica{.egress_port = "\1"},
-                                  })
-          .AddMulticastGroupEntry(kOverrideMulticastGroupId,
-                                  {
-                                      sai::Replica{.egress_port = "\2"},
-                                      sai::Replica{.egress_port = "\3"},
-                                  })
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddVrfEntry("vrf")
+                .AddEntrySettingVrfForAllPackets("vrf")
+                .AddEntryAdmittingAllPacketsToL3()
+                .AddMulticastRoute("vrf", kDstIpv4, kDefaultMulticastGroupId)
+                .AddIngressAclEntryRedirectingToMulticastGroup(
+                    kOverrideMulticastGroupId,
+                    sai::MirrorAndRedirectMatchFields{
+                        .in_port = kOverrideIngressPortStr,
+                    })
+                .AddMulticastGroupEntry(kDefaultMulticastGroupId,
+                                        {
+                                            sai::Replica{.egress_port = "\1"},
+                                        })
+                .AddMulticastGroupEntry(kOverrideMulticastGroupId,
+                                        {
+                                            sai::Replica{.egress_port = "\2"},
+                                            sai::Replica{.egress_port = "\3"},
+                                        })
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                        /*allow_unsupported=*/true));
 
   const packetlib::Packet kInputPacket = GetIpv4PacketOrDie(kDstIpv4, kDstMac);
   ASSERT_THAT(bmv2.SendPacket(kDefaultIngressPort, kInputPacket),
               IsOkAndHolds(UnorderedElementsAre(Key(1))));
   ASSERT_THAT(bmv2.SendPacket(kOverrideIngressPort, kInputPacket),
               IsOkAndHolds(UnorderedElementsAre(Key(2), Key(3))));
+}
+
+TEST(RedirectTest, RedirectToPort) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  constexpr int kIngressPort = 42;
+  constexpr int kEgressPort = 1;
+  constexpr absl::string_view kEgressPortProto = "\001";
+
+  constexpr int kRedirectIngressPort = 2;
+  constexpr absl::string_view kRedirectIngressPortProto = "\002";
+  constexpr int kRedirectEgressPort = 3;
+  constexpr absl::string_view kRedirectEgressPortProto = "\003";
+
+  // Install entries to forward all packets to kEgressPort and redirect
+  // the ones with in_port kRedirectIngressPort to kRedirectEgressPort.
+  ASSERT_OK(
+      sai::EntryBuilder()
+          .AddEntriesForwardingIpPacketsToGivenPort(kEgressPortProto)
+          .AddIngressAclEntryRedirectingToPort(
+              kRedirectEgressPortProto, {.in_port = kRedirectIngressPortProto})
+          .LogPdEntries()
+          .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                  /*allow_unsupported=*/true));
+
+  {
+    // Inject a test packet to kIngressPort.
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded to kEgressPort
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
+  }
+  {
+    // Inject a test packet to kRedirectIngressPort.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kRedirectIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded to kRedirectEgressPort.
+    // TODO: Add tests that check the ethernet and ip headers of
+    // the egress packet after we correctly model the redirect_to_port behavior
+    // in P4.
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kRedirectEgressPort)));
+  }
 }
 
 }  // namespace
