@@ -119,7 +119,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
     const PacketTestVectorById &packet_test_vector_by_id,
-    const PacketInjectionParams &parameters, PacketStatistics &statistics);
+    const PacketInjectionParams &parameters, PacketStatistics &statistics,
+    bool log_injection_progress = true);
 
 } // namespace dvaas
 
