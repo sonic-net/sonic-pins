@@ -14,12 +14,371 @@
 
 #include "tests/qos/pfc_test.h"
 
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <vector>
+
+#include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"  // IWYU pragma: keep to avoid ClangTidy complaining about this.
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep to avoid ClangTidy complaining about this.
+#include "gutil/testing.h"
+#include "lib/gnmi/gnmi_helper.h"
+#include "lib/ixia_helper.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/mac_address.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
+#include "tests/forwarding/util.h"
+#include "tests/lib/switch_test_setup_helpers.h"
+#include "tests/qos/qos_test_util.h"
+#include "thinkit/generic_testbed.h"
+#include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
-TEST_P(PfcTestWithIxia, PfcRx) {
-  // TODO: Implement PFC Rx test.
+constexpr int kDefaultFrameSize = 1500;
+
+// Function  will try and find 2 Ixia links for ingress and 1 for egress such
+// that ingress ports have speed at least that of egress port.
+absl::StatusOr<IxiaLinks> GetIxiaLinks(thinkit::GenericTestbed &testbed,
+                                       gnmi::gNMI::StubInterface &gnmi_stub) {
+  IxiaLinks links;
+  // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
+  // 1 for forwarding them back. We use the faster links for injecting packets
+  // so we can oversubsribe the egress port.
+  LOG(INFO) << "picking test packet links";
+  ASSIGN_OR_RETURN(std::vector<ixia::IxiaLink> ready_links,
+                   ixia::GetReadyIxiaLinks(testbed, gnmi_stub));
+  absl::c_sort(ready_links, [&](auto &x, auto &y) -> bool {
+    return x.sut_interface_bits_per_second < y.sut_interface_bits_per_second;
+  });
+  RET_CHECK(ready_links.size() >= 3)
+      << "Test requires at least 3 SUT ports connected to an Ixia";
+  const auto [kEgressLink, kIngressLink1, kIngressLink2] =
+      std::make_tuple(ready_links[0], ready_links[1], ready_links[2]);
+  RET_CHECK(kEgressLink.sut_interface_bits_per_second <=
+            kIngressLink1.sut_interface_bits_per_second);
+  RET_CHECK(kEgressLink.sut_interface_bits_per_second <=
+            kIngressLink2.sut_interface_bits_per_second);
+  links.ingress_links[0] = kIngressLink1;
+  links.ingress_links[1] = kIngressLink2;
+  links.egress_link = kEgressLink;
+
+  return links;
+}
+
+const sai::NexthopRewriteOptions kNextHopRewriteOptions = {
+    .src_mac_rewrite = netaddr::MacAddress(0x66, 0x55, 0x44, 0x33, 0x22, 0x11),
+    .dst_mac_rewrite = netaddr::MacAddress(2, 2, 2, 2, 2, 2),
+};
+
+void PfcTestWithIxia::SetUp() {
+  // Initialize Biglab Testbed.
+  GetParam().testbed_interface->SetUp();
+
+  // Initialize Ixia.
+  // Pick a testbed with an Ixia Traffic Generator.
+  auto requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 1
+                 interface_mode: TRAFFIC_GENERATOR
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(
+      generic_testbed_,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+
+  thinkit::Switch &sut = generic_testbed_->Sut();
+
+  ASSERT_OK_AND_ASSIGN(gnmi_stub_, sut.CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*gnmi_stub_));
+  EXPECT_OK(generic_testbed_->Environment().StoreTestArtifact(
+      "gnmi_config.json", sut_gnmi_config));
+
+  EXPECT_OK(generic_testbed_->Environment().StoreTestArtifact(
+      "p4info.textproto", *GetParam().p4info));
+
+  // Configure SUT.
+  ASSERT_OK_AND_ASSIGN(sut_p4rt_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, std::nullopt, std::nullopt));
+
+  // Flow details.
+  const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
+  const auto pfc_dmac = netaddr::MacAddress(0x01, 0x80, 0xc2, 0x00, 0x00, 0x01);
+  const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
+  const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
+  const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
+
+  const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
+      interface_info = generic_testbed_->GetSutInterfaceInfo();
+
+  ASSERT_OK_AND_ASSIGN(ixia_links_,
+                       GetIxiaLinks(*generic_testbed_, *gnmi_stub_));
+
+  std::string ixia_interface = ixia_links_.ingress_links[0].ixia_interface;
+  std::string sut_interface = ixia_links_.ingress_links[0].sut_interface;
+  std::string ixia_rx_interface = ixia_links_.egress_link.ixia_interface;
+  std::string sut_egress_interface = ixia_links_.egress_link.sut_interface;
+
+  LOG(INFO) << absl::StrFormat(
+      "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
+      ixia_interface, sut_interface, sut_egress_interface, ixia_rx_interface);
+
+  // TODO: Configure PFC enable on egress port
+
+  // We will perform the following steps with Ixia:
+  // Setup main Ixia forwarded traffic.
+  // Setup PFC traffic.
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_port,
+                       ixia::ExtractPortInfo(ixia_interface));
+
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_rx_port,
+                       ixia::ExtractPortInfo(ixia_rx_interface));
+
+  ASSERT_OK_AND_ASSIGN(
+      ixia_connection_reference_,
+      pins_test::ixia::IxiaConnect(ixia_port.hostname, *generic_testbed_));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string kIxiaSrcPortHandle,
+      pins_test::ixia::IxiaVport(ixia_connection_reference_, ixia_port.card,
+                                 ixia_port.port, *generic_testbed_));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string kIxiaDstPortHandle,
+      pins_test::ixia::IxiaVport(ixia_connection_reference_, ixia_rx_port.card,
+                                 ixia_rx_port.port, *generic_testbed_));
+
+  main_traffic_.traffic_name = "Main traffic";
+  ASSERT_OK_AND_ASSIGN(
+      main_traffic_.traffic_item,
+      ixia::SetUpTrafficItem(kIxiaSrcPortHandle, kIxiaDstPortHandle,
+                             main_traffic_.traffic_name, *generic_testbed_));
+  port_speed_bytes_per_second_ =
+      ixia_links_.egress_link.sut_interface_bits_per_second / 8;
+  const int kIngressLineRateFramesPerSecond =
+      0.95 * port_speed_bytes_per_second_ / kDefaultFrameSize;
+  main_traffic_parameters_ = ixia::TrafficParameters{
+      .frame_size_in_bytes = kDefaultFrameSize,
+      .traffic_speed = ixia::FramesPerSecond{kIngressLineRateFramesPerSecond},
+      .src_mac = source_mac,
+      .dst_mac = dest_mac,
+      .ip_parameters = ixia::Ipv4TrafficParameters{
+          .src_ipv4 = source_ip,
+          .dst_ipv4 = dest_ip,
+          // Set ECN 0 to avoid RED drops.
+          .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
+      }};
+  ASSERT_OK(ixia::SetTrafficParameters(
+      main_traffic_.traffic_item, main_traffic_parameters_, *generic_testbed_));
+
+  pfc_traffic_parameters_ = ixia::TrafficParameters{
+      .frame_size_in_bytes = 200,
+      .traffic_speed = ixia::FramesPerSecond{100},
+      .src_mac = source_mac,
+      .dst_mac = pfc_dmac,
+      .pfc_parameters = ixia::PfcTrafficParameters{
+          .priority_enable_vector = 0x00,
+          .pause_quanta_per_queue = {0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
+                                     0xffff, 0xffff, 0xffff}}};
+
+  pfc_traffic_.traffic_name = "PFC traffic";
+  ASSERT_OK_AND_ASSIGN(
+      pfc_traffic_.traffic_item,
+      ixia::SetUpTrafficItem(kIxiaDstPortHandle, kIxiaSrcPortHandle,
+                             pfc_traffic_.traffic_name, *generic_testbed_));
+  ASSERT_OK(ixia::SetTrafficParameters(
+      pfc_traffic_.traffic_item, pfc_traffic_parameters_, *generic_testbed_));
+
+  // Construct forwarding entry and install.
+  // Get P4RT ID of the SUT egress port.
+  absl::flat_hash_map<std::string, std::string> p4rt_id_by_interface;
+  ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface,
+                       GetAllInterfaceNameToPortId(*gnmi_stub_));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutEgressPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface, sut_egress_interface));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntriesForwardingIpPacketsToGivenPort(
+                    /*egress_port=*/kSutEgressPortP4rtId,
+                    /*ip_version=*/sai::IpVersion::kIpv4And6,
+                    /*rewrite_options*/ kNextHopRewriteOptions)
+                .LogPdEntries()
+                .InstallDedupedEntities(*sut_p4rt_session_));
+}
+
+void PfcTestWithIxia::TearDown() {
+  ASSERT_OK(
+      ixia::DeleteTrafficItem(main_traffic_.traffic_item, *generic_testbed_));
+  ASSERT_OK(
+      ixia::DeleteTrafficItem(pfc_traffic_.traffic_item, *generic_testbed_));
+  GetParam().testbed_interface->TearDown();
+}
+
+// Utility function to get queue counters change on
+// back to back counter update cycle.
+absl::StatusOr<QueueCounters> GetQueueCountersChange(
+    absl::string_view port, absl::string_view queue,
+    gnmi::gNMI::StubInterface &gnmi) {
+  // Wait for at least one queue counter cycle (10 seconds).
+  absl::SleepFor(absl::Seconds(15));
+  // Read counters of the target queue.
+  ASSIGN_OR_RETURN(const pins_test::QueueCounters queue_counters_pre,
+                   GetGnmiQueueCounters(/*port=*/port,
+                                        /*queue=*/queue, gnmi));
+  absl::SleepFor(absl::Seconds(15));
+  // Read counters of the target queue.
+  ASSIGN_OR_RETURN(const pins_test::QueueCounters queue_counters_post,
+                   GetGnmiQueueCounters(/*port=*/port,
+                                        /*queue=*/queue, gnmi));
+  return queue_counters_post - queue_counters_pre;
+}
+
+TEST_P(PfcTestWithIxia, PfcWatchdog) {
+  for (auto [prio, queue] : *GetParam().queue_by_pfc_priority) {
+    LOG(INFO) << "\n\n====== DSCP: " << GetParam().dscp_by_queue->at(queue)
+              << ", Queue: " << queue << ", PFC Priority: " << prio
+              << " ======";
+    // Setup main traffic DSCP.
+    ixia::Ipv4TrafficParameters &ip_params =
+        std::get<ixia::Ipv4TrafficParameters>(
+            main_traffic_parameters_.ip_parameters.value());
+    ip_params.priority->dscp = GetParam().dscp_by_queue->at(queue);
+    ASSERT_OK(ixia::SetTrafficParameters(main_traffic_.traffic_item,
+                                         main_traffic_parameters_,
+                                         *generic_testbed_));
+
+    // Setup PFC traffic priority.
+    // TODO : Remove masking failure when issue is fixed.
+    if (!generic_testbed_->Environment().MaskKnownFailures()) {
+      pfc_traffic_parameters_.pfc_parameters->priority_enable_vector = 1
+                                                                       << prio;
+    } else {
+      pfc_traffic_parameters_.pfc_parameters->priority_enable_vector = 0xff;
+    }
+
+    // Calculate PFC frame rate required for deadlock.
+    LOG(INFO) << "SUT interface bits per second: "
+              << ixia_links_.egress_link.sut_interface_bits_per_second;
+
+    const int kPauseQuantaBits = 512;
+    const int kPauseQuantas = 0xffff;
+    uint64_t pause_duration_ns =
+        (kPauseQuantaBits * kPauseQuantas) /
+        (ixia_links_.egress_link.sut_interface_bits_per_second / 1'000'000'000);
+    int rate_of_pfc_frames = 1'000'000'000 / pause_duration_ns;
+    LOG(INFO) << "Rate of PFC frames (pps): " << rate_of_pfc_frames;
+
+    for (bool create_deadlock : {true, false}) {
+      LOG(INFO) << "==== PFC Deadlock: " << create_deadlock << " ====";
+      if (create_deadlock) {
+        pfc_traffic_parameters_.traffic_speed =
+            ixia::FramesPerSecond{rate_of_pfc_frames + 100};
+      } else {
+        pfc_traffic_parameters_.traffic_speed =
+            ixia::FramesPerSecond{rate_of_pfc_frames - 100};
+      }
+      ASSERT_OK(ixia::SetTrafficParameters(pfc_traffic_.traffic_item,
+                                           pfc_traffic_parameters_,
+                                           *generic_testbed_));
+
+      // Read counters of the target queue.
+      pins_test::QueueCounters queue_counters_before_test;
+      ASSERT_OK(pins::TryUpToNTimes(10, /*delay=*/absl::Seconds(5), [&] {
+        // Read counters of the target queue.
+        ASSIGN_OR_RETURN(
+            queue_counters_before_test,
+            GetGnmiQueueCounters(/*port=*/ixia_links_.egress_link.sut_interface,
+                                 /*queue=*/queue, *gnmi_stub_));
+        LOG(INFO) << "Queue counters before test: "
+                  << queue_counters_before_test;
+        // Wait till max periodic queue length is negligible.
+        if (queue_counters_before_test.max_periodic_queue_len <=
+            kDefaultFrameSize) {
+          return absl::OkStatus();
+        }
+        return absl::InternalError("Max periodic queue len is not 0");
+      }));
+      LOG(INFO) << "-- starting " << main_traffic_.traffic_name;
+      LOG(INFO) << "-- starting " << pfc_traffic_.traffic_name;
+      // Occasionally the Ixia API cannot keep up and starting traffic
+      // fails, so we try up to 3 times.
+      ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+        return ixia::StartTraffic(
+            {main_traffic_.traffic_item, pfc_traffic_.traffic_item},
+            ixia_connection_reference_, *generic_testbed_);
+      }));
+
+      // Wait for deadlock detection time.
+      absl::SleepFor(GetParam().deadlock_detection_time);
+      if (create_deadlock) {
+        // TODO: Assert WD counters incremented by 1
+
+        // Assert DROP COUNTERS ARE NOT INCREMENTING anymore
+        ASSERT_OK_AND_ASSIGN(QueueCounters queue_counters_delta,
+                             GetQueueCountersChange(
+                                 /*port=*/ixia_links_.egress_link.sut_interface,
+                                 /*queue=*/queue, *gnmi_stub_));
+        EXPECT_EQ(queue_counters_delta.num_packets_dropped, 0);
+      } else {
+        // TODO: Assert WD counters did not increment.
+
+        // Assert DROP COUNTERS ARE INCREMENTING.
+        ASSERT_OK_AND_ASSIGN(QueueCounters queue_counters_delta,
+                             GetQueueCountersChange(
+                                 /*port=*/ixia_links_.egress_link.sut_interface,
+                                 /*queue=*/queue, *gnmi_stub_));
+        ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(5), [&] {
+          if (queue_counters_delta.num_packets_dropped > 0) {
+            return absl::OkStatus();
+          }
+          return absl::InternalError("Drops are not incrementing");
+        }));
+      }
+      ASSERT_OK(
+          ixia::StopTraffic(pfc_traffic_.traffic_item, *generic_testbed_));
+      LOG(INFO) << "-- stopped " << pfc_traffic_.traffic_name;
+      // Read counters of the target queue.
+      ASSERT_OK_AND_ASSIGN(
+          const pins_test::QueueCounters queue_counters_after_test,
+          GetGnmiQueueCounters(/*port=*/ixia_links_.egress_link.sut_interface,
+                               /*queue=*/queue, *gnmi_stub_));
+
+      auto delta_counters =
+          queue_counters_after_test - queue_counters_before_test;
+      LOG(INFO) << "Delta counters: " << delta_counters;
+
+      auto drop_duration =
+          (delta_counters.num_packets_dropped * kDefaultFrameSize +
+           queue_counters_after_test.max_periodic_queue_len) *
+          1000 / port_speed_bytes_per_second_;
+      LOG(INFO) << ((create_deadlock)
+                        ? "Drop duration before deadlock was detected(ms): "
+                        : "Drop duration due to PFC pause (ms): ")
+                << drop_duration;
+      ASSERT_OK(
+          ixia::StopTraffic(main_traffic_.traffic_item, *generic_testbed_));
+      LOG(INFO) << "-- stopped " << main_traffic_.traffic_name;
+    }
+  }
 }
 
 }  // namespace pins_test

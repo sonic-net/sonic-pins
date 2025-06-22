@@ -19,13 +19,15 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
 class FuzzerReplayProgrammer : public FlowProgrammer {
  public:
    absl::Status ProgramFlows(const p4::config::v1::P4Info &p4_info,
-                             Testbed &testbed) override {
+                             Testbed &testbed,
+                             thinkit::SSHClient &ssh_client) override {
      return absl::OkStatus();
    };
   absl::Status ClearFlows(Testbed& testbed) override {

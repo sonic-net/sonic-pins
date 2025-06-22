@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4_pdpi/packetlib/packetlib.h"
 
+#include <algorithm>
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
@@ -1061,21 +1062,6 @@ void Ipv6HeaderInvalidReasons(const Ipv6Header& header,
   }
 }
 
-// The UDP checksum is allowed to be zero for tunneling packets:
-//   https://datatracker.ietf.org/doc/html/rfc6935.
-// IpFix should enable UDP checksums, but we make an exception here:
-//   https://datatracker.ietf.org/doc/html/rfc5153
-bool AllowZeroChecksumForUdp(Packet packet, int udp_header_index) {
-  if (udp_header_index + 1 >= packet.headers_size()) {
-    return false;
-  }
-
-  Header::HeaderCase next_header =
-      packet.headers(udp_header_index + 1).header_case();
-  return next_header == Header::kPspHeader ||
-         next_header == Header::kIpfixHeader;
-}
-
 void UdpHeaderInvalidReasons(const UdpHeader& header,
                              const std::string& field_prefix,
                              const Packet& packet, int header_index,
@@ -1107,42 +1093,23 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
     }
   }
   // Check computed field: checksum.
-  if (header_index <= 0) {
-    output.push_back(absl::StrCat(
-        field_prefix,
-        "checksum: UDP header must be preceded by IP header for checksum to be "
-        "defined; found no header instead"));
-  } else if (auto previous = packet.headers(header_index - 1).header_case();
-             previous != Header::kIpv4Header &&
-             previous != Header::kIpv6Header &&
-             previous != Header::kPspHeader) {
-    output.push_back(absl::StrCat(
-        field_prefix,
-        "checksum: UDP header must be preceded by IP header for checksum to be "
-        "defined; found ",
-        HeaderCaseName(previous), " at headers[", (header_index - 1),
-        "] instead"));
-  } else if (!checksum_invalid) {
-    if (auto checksum = UdpHeaderChecksum(packet, header_index);
+  if (!checksum_invalid) {
+    if (absl::StatusOr<std::optional<int>> checksum =
+            UdpHeaderChecksum(packet, header_index);
         !checksum.ok()) {
       output.push_back(absl::StrCat(
           field_prefix, "checksum: Couldn't compute expected checksum: ",
           checksum.status().ToString()));
-    } else if (packet.headers_size() > header_index + 1) {
-      if (header.checksum() != UdpChecksum(0) &&
-          AllowZeroChecksumForUdp(packet, header_index)) {
-        output.push_back(absl::StrCat(field_prefix,
-                                      "checksum: Must be 0, but was ",
-                                      header.checksum(), " instead."));
-      }
-    } else if (checksum->has_value()) {
-      if (std::string expected = pdpi::BitsetToHexString(
-              std::bitset<kUdpChecksumBitwidth>(checksum->value()));
-          header.checksum() != expected) {
-        output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
-                                      expected, ", but was ", header.checksum(),
-                                      " instead."));
-      }
+    } else if (header.checksum() == UdpChecksum(0) || !checksum->has_value()) {
+      // We always allow the UDP checksum to be zero. In certain cases we also
+      // allow the checksum to be anything (i.e. UdpHeaderChecksum returns
+      // nullopt).
+    } else if (std::string expected = pdpi::BitsetToHexString(
+                   std::bitset<kUdpChecksumBitwidth>(checksum->value()));
+               header.checksum() != expected) {
+      output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
+                                    expected, ", but was ", header.checksum(),
+                                    " instead."));
     }
   }
 }
@@ -1741,6 +1708,54 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
   return "";
 }
 
+absl::StatusOr<std::string> GetEthernetTrailer(const Packet& packet) {
+  // Make sure that the start contains a ETH header.
+  if (packet.headers().empty() || !packet.headers(0).has_ethernet_header()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "The packet must start with an Ethernet header, but does not: "
+           << gutil::PrintTextProto(packet);
+  }
+  // Skip VLAN and CSIG headers.
+  int header_index = 1;
+  while (header_index < packet.headers().size() &&
+         (packet.headers(header_index).has_vlan_header() ||
+          packet.headers(header_index).has_csig_header())) {
+    ++header_index;
+  }
+  if (header_index >= packet.headers().size()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "The packet must contain at least one header after the "
+              "Ethernet/VLAN/CSIG headers, but none were found: "
+           << gutil::PrintTextProto(packet);
+  }
+  const Header& header = packet.headers(header_index);
+  switch (header.header_case()) {
+    case Header::kIpv4Header: {
+      ASSIGN_OR_RETURN(
+          const int inner_length,
+          pdpi::HexStringToInt(header.ipv4_header().total_length()));
+      static constexpr int kByteSize = 8;
+      return packet.payload().substr(inner_length -
+                                     kStandardIpv4HeaderBitwidth / kByteSize);
+    }
+    case Header::kIpv6Header: {
+      ASSIGN_OR_RETURN(
+          const int payload_length,
+          pdpi::HexStringToInt(header.ipv6_header().payload_length()));
+      return packet.payload().substr(payload_length);
+    }
+    case Header::kArpHeader: {
+      return packet.payload();
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Expected an IPv4/IPv6/ARP header directly after the "
+                "Ethernet/VLAN/CSIG headers, but didn't find one:"
+             << gutil::PrintTextProto(packet);
+    }
+  }
+}
+
 std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
   std::vector<std::string> result;
 
@@ -2262,8 +2277,13 @@ absl::StatusOr<std::string> SerializePacket(
 absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
   bool changes = false;
 
-  int header_index = 0;
-  for (Header& header : *packet.mutable_headers()) {
+  // When updating fields we start with the innermost header. This is important
+  // for things like checksum computations. For example, IPFIX headers are
+  // inside a UDP header and we would want to update IPFIX's length before
+  // updating UDP's checksum.
+  for (int header_index = packet.headers_size() - 1; header_index >= 0;
+       --header_index) {
+    Header& header = *packet.mutable_headers(header_index);
     std::string error_prefix =
         absl::StrFormat("%s: failed to compute packet.headers[%d].",
                         HeaderCaseName(header.header_case()), header_index);
@@ -2367,13 +2387,20 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           ASSIGN_OR_RETURN(std::optional<int> checksum,
                            UdpHeaderChecksum(packet, header_index),
                            _.SetPrepend() << error_prefix << "checksum: ");
+	  // If UdpHeaderChecksum returns a value then we will always use that
+          // expected value. If it did not return a value that means the
+          // checksum can be anything. So we take into consideration the current
+          // header:
+          //   * checksum was set then leave it as is.
+          //   * checksum is empty then assign it 0.
           if (checksum.has_value()) {
             udp_header.set_checksum(pdpi::BitsetToHexString(
                 std::bitset<kUdpChecksumBitwidth>(*checksum)));
-          } else {
+	      changes = true;
+          } else if (udp_header.checksum().empty()) {
             udp_header.set_checksum(UdpChecksum(0));
+            changes = true;
           }
-          changes = true;
         }
         break;
       }
@@ -2512,7 +2539,6 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
                << "Invalid packet with HEADER_NOT_SET: "
                << packet.DebugString();
     }
-    header_index += 1;
   }
 
   return changes;
@@ -2716,25 +2742,25 @@ absl::StatusOr<int> Ipv4HeaderChecksum(Ipv4Header header) {
 
 absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
                                                      int udp_header_index) {
-  auto invalid_argument = gutil::InvalidArgumentErrorBuilder()
-                          << "UdpHeaderChecksum(packet, udp_header_index = "
-                          << udp_header_index << "): ";
-  if (udp_header_index < 1 || udp_header_index >= packet.headers().size()) {
-    return invalid_argument
-           << "udp_header_index must be in [1, " << packet.headers().size()
-           << ") since the given packet has " << packet.headers().size()
-           << " headers and the UDP header must be preceded by an IP or PSP "
-           << "header";
+  if (udp_header_index < 1) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("UDP header must be preceded by an IP or PSP header, "
+                        "but no header was found"));
   }
-  if (AllowZeroChecksumForUdp(packet, udp_header_index)) {
-    return 0;
+  if (udp_header_index >= packet.headers().size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("UDP header index %d is too large for the packet which "
+                        "only has %d header(s).",
+                        udp_header_index, packet.headers().size()));
   }
   const Header& preceding_header = packet.headers(udp_header_index - 1);
   if (auto header_case = packet.headers(udp_header_index).header_case();
       header_case != Header::kUdpHeader) {
-    return invalid_argument << "packet.headers[" << udp_header_index
-                            << "] is a " << HeaderCaseName(header_case)
-                            << ", expected UdpHeader";
+    return gutil::InvalidArgumentErrorBuilder()
+           << "UdpHeaderChecksum(packet, udp_header_index = "
+           << udp_header_index << "): packet.headers[" << udp_header_index
+           << "] is a " << HeaderCaseName(header_case)
+           << ", expected UdpHeader";
   }
   UdpHeader& udp_header =
       *packet.mutable_headers(udp_header_index)->mutable_udp_header();
@@ -2772,9 +2798,9 @@ absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
       return std::nullopt;
     }
     default:
-      return invalid_argument << "expected packet.headers[udp_header_index - "
-                                 "1] to be an IP or PSP header, got "
-                              << HeaderCaseName(preceding_header.header_case());
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "UDP header must be preceded by an IP or PSP header, but got %s",
+          HeaderCaseName(preceding_header.header_case())));
   }
   RETURN_IF_ERROR(RawSerializePacket(packet, udp_header_index, data));
   return OnesComplementChecksum(std::move(data));

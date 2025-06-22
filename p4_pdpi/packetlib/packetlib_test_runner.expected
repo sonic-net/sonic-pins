@@ -2041,7 +2041,7 @@ headers {
 payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
 reasons_invalid: "in Ipv6Header headers[1]: payload_length: Must be 0x0046, but was 0x0000 instead."
 reasons_invalid: "in UdpHeader headers[2]: length: Must be 0x0046, but was 0x0000 instead."
-reasons_invalid: "in UdpHeader headers[2]: checksum: Must be 0, but was 0x0012 instead."
+reasons_invalid: "in UdpHeader headers[2]: checksum: Must be 0xbb79, but was 0x0012 instead."
 reasons_invalid: "in IpfixHeader headers[3]: length: Must be 0x003e, but was 0x0000 instead."
 reasons_invalid: "in PsampHeader headers[4]: length: Must be 0x002e, but was 0x0000 instead."
 reasons_invalid: "in PsampHeader headers[4]: packet_sampled_length: Must be 0x0012, but was 0x0013 instead."
@@ -2214,6 +2214,304 @@ PadPacketToMinimumSize(packet) = false
 UpdateAllComputedFields(packet) = true
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - headers[3]: header missing - expected PtpHeader
+================================================================================
+Parsing test: Inner and outer UDP checksums can both be zero (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header
+                       ethernet_destination: 0xaabbccddeeff
+                       ethernet_source: 0x112233445566
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0032
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP header
+                       source_port: 0x0014
+                       destination_port: 0x03e8  # 1000
+                       length: 0x0032
+                       checksum: 0x0000
+                       # PSP Header
+                       next_header: 0x11  # UDP
+                       header_ext_length: 0x00
+                       reserved0: 0b00
+                       crypt_offset: 0b000010
+                       sample_bit: 0b0
+                       drop_bit: 0b0
+                       version: 0x1
+                       virtualization_cookie_present: 0b0
+                       reserved1: 0b1
+                       security_parameters_index: 0x00000000
+                       initialization_vector: 0x0000000000000000
+                       # Inner UDP Header
+                       source_port: 0xbeef
+                       destination_port: 0xabcd
+                       length: 0x001a
+                       checksum: 0x0000
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "aa:bb:cc:dd:ee:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0032"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x0014"
+    destination_port: "0x03e8"
+    length: "0x0032"
+    checksum: "0x0000"
+  }
+}
+headers {
+  psp_header {
+    next_header: "0x11"
+    header_ext_length: "0x00"
+    reserved0: "0x0"
+    crypt_offset: "0x02"
+    sample_bit: "0x0"
+    drop_bit: "0x0"
+    version: "0x1"
+    virtualization_cookie_present: "0x0"
+    reserved1: "0x1"
+    security_parameters_index: "0x00000000"
+    initialization_vector: "0x0000000000000000"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0xbeef"
+    destination_port: "0xabcd"
+    length: "0x001a"
+    checksum: "0x0000"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+
+================================================================================
+Parsing test: Inner UDP checksum can be anything, but the outer checksum must be correct (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header
+        ethernet_destination: 0xaabbccddeeff
+        ethernet_source: 0x112233445566
+        ethertype: 0x86DD
+        # IPv6 header.
+        version: 0x6
+        dscp: 0b000000
+        ecn: 0b00
+        flow_label: 0x12345
+        payload_length: 0x0032
+        next_header: 0x11  # UDP
+        hop_limit: 0x42
+        ipv6_source: 0x00001111222233334444555566667777
+        ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+        # UDP header
+        source_port: 0x0014
+        destination_port: 0x03e8  # 1000
+        length: 0x0032
+        checksum: 0x4a7d
+        # PSP Header
+        next_header: 0x11  # UDP
+        header_ext_length: 0x00
+        reserved0: 0b00
+        crypt_offset: 0b000010
+        sample_bit: 0b0
+        drop_bit: 0b0
+        version: 0x1
+        virtualization_cookie_present: 0b0
+        reserved1: 0b1
+        security_parameters_index: 0x00000000
+        initialization_vector: 0x0000000000000000
+        # Inner UDP Header
+        source_port: 0xbeef
+        destination_port: 0xabcd
+        length: 0x001a
+        checksum: 0x0002
+        # Payload - 18 octets
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "aa:bb:cc:dd:ee:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0032"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x0014"
+    destination_port: "0x03e8"
+    length: "0x0032"
+    checksum: "0x4a7d"
+  }
+}
+headers {
+  psp_header {
+    next_header: "0x11"
+    header_ext_length: "0x00"
+    reserved0: "0x0"
+    crypt_offset: "0x02"
+    sample_bit: "0x0"
+    drop_bit: "0x0"
+    version: "0x1"
+    virtualization_cookie_present: "0x0"
+    reserved1: "0x1"
+    security_parameters_index: "0x00000000"
+    initialization_vector: "0x0000000000000000"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0xbeef"
+    destination_port: "0xabcd"
+    length: "0x001a"
+    checksum: "0x0002"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+
+================================================================================
+Parsing test: Inner UDP checksum can be anything, but the outer checksum must be correct (invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header
+        ethernet_destination: 0xaabbccddeeff
+        ethernet_source: 0x112233445566
+        ethertype: 0x86DD
+        # IPv6 header.
+        version: 0x6
+        dscp: 0b000000
+        ecn: 0b00
+        flow_label: 0x12345
+        payload_length: 0x0032
+        next_header: 0x11  # UDP
+        hop_limit: 0x42
+        ipv6_source: 0x00001111222233334444555566667777
+        ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+        # UDP header
+        source_port: 0x0014
+        destination_port: 0x03e8  # 1000
+        length: 0x0032
+        checksum: 0x0001
+        # PSP Header
+        next_header: 0x11  # UDP
+        header_ext_length: 0x00
+        reserved0: 0b00
+        crypt_offset: 0b000010
+        sample_bit: 0b0
+        drop_bit: 0b0
+        version: 0x1
+        virtualization_cookie_present: 0b0
+        reserved1: 0b1
+        security_parameters_index: 0x00000000
+        initialization_vector: 0x0000000000000000
+        # Inner UDP Header
+        source_port: 0xbeef
+        destination_port: 0xabcd
+        length: 0x001a
+        checksum: 0x0001
+        # Payload - 18 octets
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "aa:bb:cc:dd:ee:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0032"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x0014"
+    destination_port: "0x03e8"
+    length: "0x0032"
+    checksum: "0x0001"
+  }
+}
+headers {
+  psp_header {
+    next_header: "0x11"
+    header_ext_length: "0x00"
+    reserved0: "0x0"
+    crypt_offset: "0x02"
+    sample_bit: "0x0"
+    drop_bit: "0x0"
+    version: "0x1"
+    virtualization_cookie_present: "0x0"
+    reserved1: "0x1"
+    security_parameters_index: "0x00000000"
+    initialization_vector: "0x0000000000000000"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0xbeef"
+    destination_port: "0xabcd"
+    length: "0x001a"
+    checksum: "0x0001"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+reasons_invalid: "in UdpHeader headers[2]: checksum: Must be 0x4a7e, but was 0x0001 instead."
+
+PadPacketToMinimumSize(packet) = false
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = OK
 ================================================================================
 Parsing test: PSP packet unencrypted UDP (valid)
 ================================================================================
@@ -2548,7 +2846,6 @@ headers {
 }
 payload: "\021\000\000\005\000\000\000\000"
 reasons_invalid: "Packet is too short to parse a PSP header next. Only 64 bits left, need at least 128."
-reasons_invalid: "in UdpHeader headers[2]: checksum: Must be 0xeacd, but was 0x0000 instead."
 reasons_invalid: "headers[3]: header missing - expected PspHeader"
 
 PadPacketToMinimumSize(packet) = false
@@ -2572,14 +2869,14 @@ payload: "Hi"
 
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in UdpHeader headers[0]: checksum: UDP header must be preceded by IP header for checksum to be defined; found no header instead
+- in UdpHeader headers[0]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: UDP header must be preceded by an IP or PSP header, but no header was found
 
 PadPacketToMinimumSize(packet) = false
 
 UpdateMissingComputedFields(packet) = false
 
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in UdpHeader headers[0]: checksum: UDP header must be preceded by IP header for checksum to be defined; found no header instead
+- in UdpHeader headers[0]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: UDP header must be preceded by an IP or PSP header, but no header was found
 
 ================================================================================
 Proto packet test: UDP header not preceded by IP header
@@ -2605,7 +2902,7 @@ payload: "Hi"
 
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in UdpHeader headers[1]: checksum: UDP header must be preceded by IP header for checksum to be defined; found EthernetHeader at headers[0] instead
+- in UdpHeader headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: UDP header must be preceded by an IP or PSP header, but got EthernetHeader
 - in UdpHeader headers[1]: expected no header (because the previous header demands either no header or an unsupported header), got UdpHeader
 
 PadPacketToMinimumSize(packet) = true
@@ -2616,7 +2913,7 @@ UpdateMissingComputedFields(packet) = false
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in EthernetHeader headers[0]: ethertype: value 0x000a is <= 1500 and should thus match payload size, but payload size is 46 bytes
 - in UdpHeader headers[1]: length: Must be 0x002e, but was 0x000a instead.
-- in UdpHeader headers[1]: checksum: UDP header must be preceded by IP header for checksum to be defined; found EthernetHeader at headers[0] instead
+- in UdpHeader headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: UDP header must be preceded by an IP or PSP header, but got EthernetHeader
 - in UdpHeader headers[1]: expected no header (because the previous header demands either no header or an unsupported header), got UdpHeader
 
 ================================================================================
@@ -4163,14 +4460,14 @@ payload: "AAAAAAAAAAAAAAAAAA"
 
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in UdpHeader headers[2]: checksum: Must be 0, but was 0x0011 instead.
+- in UdpHeader headers[2]: checksum: Must be 0x28a1, but was 0x0011 instead.
 
 PadPacketToMinimumSize(packet) = false
 
 UpdateMissingComputedFields(packet) = false
 
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in UdpHeader headers[2]: checksum: Must be 0, but was 0x0011 instead.
+- in UdpHeader headers[2]: checksum: Must be 0x28a1, but was 0x0011 instead.
 
 ================================================================================
 Proto packet test: PTP packet with UDP port 319 (valid)
@@ -4603,7 +4900,7 @@ ValidatePacket(packet) = OK
 Serialize(Packet) = OK
 
 ================================================================================
-Proto packet test: PSP packet with inner UDP checksum empty (valid)
+Proto packet test: PSP packet with empty computed fields (valid except for computed fields)
 ================================================================================
 -- INPUT -----------------------------------------------------------------------
 packet =
@@ -4620,7 +4917,6 @@ headers {
     dscp: "0x00"
     ecn: "0x0"
     flow_label: "0x12345"
-    payload_length: "0x0034"
     next_header: "0x11"
     hop_limit: "0x42"
     ipv6_source: "2607:f8b0:11::"
@@ -4631,8 +4927,6 @@ headers {
   udp_header {
     source_port: "0x08ae"
     destination_port: "0x03e8"
-    length: "0x0034"
-    checksum: "0x0000"
   }
 }
 headers {
@@ -4654,13 +4948,16 @@ headers {
   udp_header {
     source_port: "0xbeef"
     destination_port: "0xabcd"
-    length: "0x001c"
   }
 }
 payload: "ABCDABCDABCDABCDABCD"
 
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in Ipv6Header headers[1]: payload_length: missing
+- in UdpHeader headers[2]: length: missing
+- in UdpHeader headers[2]: checksum: missing
+- in UdpHeader headers[4]: length: missing
 - in UdpHeader headers[4]: checksum: missing
 
 PadPacketToMinimumSize(packet) = false
@@ -4692,7 +4989,7 @@ headers {
     source_port: "0x08ae"
     destination_port: "0x03e8"
     length: "0x0034"
-    checksum: "0x0000"
+    checksum: "0xa0de"
   }
 }
 headers {

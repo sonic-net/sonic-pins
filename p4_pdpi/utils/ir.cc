@@ -66,9 +66,8 @@ using ::pdpi::IrValue;
 
 absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
     const std::string &bytes, int expected_bitwidth) {
-  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
   if (bytes.empty()) {
-    return gutil::InvalidArgumentErrorBuilder()
+    return gutil::OutOfRangeErrorBuilder()
            << "Bytestrings must have non-zero length.";
   }
   std::string canonical_string = ArbitraryToCanonicalByteString(bytes);
@@ -187,9 +186,8 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
 absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
                                                      const int bitwidth,
                                                      const std::string &bytes) {
-  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
   if (bytes.empty()) {
-    return gutil::InvalidArgumentErrorBuilder()
+    return gutil::OutOfRangeErrorBuilder()
            << "Bytestrings must have non-zero length.";
   }
 
@@ -324,9 +322,8 @@ absl::StatusOr<std::string> IrValueToNormalizedByteString(
       return ipv6.ToPaddedByteString();
     }
     case IrValue::kStr: {
-      // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
       if (ir_value.str().empty()) {
-        return gutil::InvalidArgumentErrorBuilder()
+        return gutil::OutOfRangeErrorBuilder()
                << "Bytestrings must have non-zero length.";
       }
       return ir_value.str();

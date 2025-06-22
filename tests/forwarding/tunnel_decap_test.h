@@ -31,6 +31,12 @@
 
 namespace pins_test {
 
+enum class TunnelMatchType {
+  kExactMatch,         // exact match on src-ip and dst-ip
+  kTernaryMatchSrcIp,  // ternary match on src-ip and exact match on dst-ip
+  kTernaryMatchDstIp,  // ternary match on dst-ip and exact match on src-ip
+};
+
 struct TunnelDecapTestParams {
   // Using a shared_ptr because parameterized tests require objects to be
   // copyable.
@@ -38,6 +44,7 @@ struct TunnelDecapTestParams {
   // Pushed to the SUT if given, otherwise assumes the correct one is already
   // configured.
   std::optional<p4::config::v1::P4Info> sut_p4info;
+  TunnelMatchType tunnel_type;
   std::string test_name;
   dvaas::DataplaneValidationParams dvaas_params;
   std::shared_ptr<dvaas::DataplaneValidator> dvaas;
