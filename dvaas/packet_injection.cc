@@ -22,10 +22,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -122,9 +124,10 @@ absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
 }
 
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
-    const PacketTestVectorById& packet_test_vector_by_id,
-    const PacketInjectionParams& parameters, PacketStatistics& statistics) {
+    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
+    const PacketTestVectorById &packet_test_vector_by_id,
+    const PacketInjectionParams &parameters, PacketStatistics &statistics,
+    bool log_injection_progress) {
   LOG(INFO) << "Injecting test packets into the dataplane "
             << packet_test_vector_by_id.size();
   statistics.total_packets_injected += packet_test_vector_by_id.size();
@@ -205,7 +208,7 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
             sut, kCollectionDuration,
             parameters.is_expected_unsolicited_packet);
     RETURN_IF_ERROR(sut_packet_ins.status())
-        << "while  collecting the output of SUT";
+        << "while collecting the output of SUT";
     LOG(INFO) << "Collected " << sut_packet_ins->size()
               << " punted packets (from SUT)";
     statistics.total_packets_punted += sut_packet_ins->size();

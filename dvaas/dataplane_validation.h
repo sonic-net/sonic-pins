@@ -67,6 +67,15 @@ struct P4Specification {
   p4::v1::ForwardingPipelineConfig bmv2_config;
 };
 
+// Stores configurable parameters for `HandleFailure` for packet failure
+// determinism. Attempt at most `num_of_replication_attempts_per_failure`
+// number of reruns for the first `max_failures_to_attempt_to_replicate`
+// failures.
+struct FailureEnhancementOptions {
+  int num_of_replication_attempts_per_failure = 1000;
+  int max_failures_to_attempt_to_replicate = 10;
+};
+
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
 // are likely to vary across tests.
 struct DataplaneValidationParams {
@@ -115,6 +124,10 @@ struct DataplaneValidationParams {
   // enough in most cases.
   std::optional<p4_symbolic::packet_synthesizer::CoverageGoals>
       coverage_goals_override;
+
+  // A struct to store configurable parameters for packet failure determinism.
+  // Parameters in `failure_enhancement_options` are assigned default values.
+  FailureEnhancementOptions failure_enhancement_options;
 };
 
 // Forward declaration. See below for description.
