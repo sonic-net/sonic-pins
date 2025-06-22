@@ -55,13 +55,19 @@ static const auto dst_mac =
     netaddr::MacAddress(0x00, 0xaa, 0xbb, 0xcc, 0xcc, 0xdd);
 static const auto tunnel_dst_ipv6 = netaddr::Ipv6Address(
     0x11, 0x2233, 0x4455, 0x6677, 0x8899, 0xaabb, 0xccdd, 0xeeff);
+static const auto tunnel_dst_ipv6_wildcard =
+    netaddr::Ipv6Address(0x11, 0x2233, 0x4455, 0x6677, 0x8899, 0xaabb, 0, 0);
 static const auto tunnel_src_ipv6 = netaddr::Ipv6Address(
     0x1122, 0x1122, 0x3344, 0x3344, 0x5566, 0x5566, 0x7788, 0x7788);
+static const auto tunnel_src_ipv6_wildcard =
+    netaddr::Ipv6Address(0x1122, 0x1122, 0x3344, 0x3344, 0x5566, 0x5566, 0, 0);
 static const auto inner_dst_ipv4 = netaddr::Ipv4Address(0x10, 0, 0, 0x1);
 static const auto incorrect_dst_ipv6 = netaddr::Ipv6Address(
     0x77, 0x2233, 0x4455, 0x5577, 0x8899, 0xaabb, 0xccdd, 0xeeff);
 static const auto exact_match_mask = netaddr::Ipv6Address(
     0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff);
+static const auto ternary_match_mask =
+    netaddr::Ipv6Address(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0, 0);
 static const auto inner_dst_ipv6 = netaddr::Ipv6Address(
     0x2001, 0xdb8, 0x3333, 0x4444, 0x5555, 0x6666, 0x7777, 0x8888);
 
@@ -250,14 +256,24 @@ dvaas::PacketTestVector Ipv4InIpv6DecapTestVector(
 
 // Helper routine to install L3 route
 absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
-    pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info) {
+    pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
+    const pins_test::TunnelMatchType tunnel_type) {
   std::vector<p4::v1::Entity> pi_entities;
   LOG(INFO) << "Installing Tunnel term table";
-  sai::Ipv6TunnelTerminationParams params;
-  params.dst_ipv6_value = tunnel_dst_ipv6;
-  params.dst_ipv6_mask = exact_match_mask;
-  params.src_ipv6_value = tunnel_src_ipv6;
-  params.src_ipv6_mask = exact_match_mask;
+  sai::Ipv6TunnelTerminationParams params{
+      .src_ipv6_value = tunnel_src_ipv6,
+      .src_ipv6_mask = exact_match_mask,
+      .dst_ipv6_value = tunnel_dst_ipv6,
+      .dst_ipv6_mask = exact_match_mask,
+  };
+
+  if (tunnel_type == pins_test::TunnelMatchType::kTernaryMatchSrcIp) {
+    params.src_ipv6_value = tunnel_src_ipv6_wildcard;
+    params.src_ipv6_mask = ternary_match_mask;
+  } else if (tunnel_type == pins_test::TunnelMatchType::kTernaryMatchDstIp) {
+    params.dst_ipv6_value = tunnel_dst_ipv6_wildcard;
+    params.dst_ipv6_mask = ternary_match_mask;
+  }
 
   sai::EntryBuilder entry_builder =
       sai::EntryBuilder().AddIpv6TunnelTerminationEntry(params);
@@ -324,7 +340,8 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
   // Install tunnel term table entry on SUT
   ASSERT_OK_AND_ASSIGN(
       const auto tunnel_entities,
-      InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info));
+      InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info,
+                             GetParam().tunnel_type));
 
   LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ing:" << in_port
             << " to eng:" << out_port;
@@ -347,14 +364,14 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 
   // Send IPv4-in-IPv6 with wrong dst_ipv6 Packet and Verify
-  pins_test::TunnelDecapTestVectorParams tunel_v6_mismatch{
+  pins_test::TunnelDecapTestVectorParams tunnel_v6_mismatch{
       .in_port = in_port,
       .out_port = out_port,
       .dst_mac = dst_mac,
       .inner_dst_ipv4 = inner_dst_ipv4,
       .dst_ipv6 = incorrect_dst_ipv6};
   dvaas::PacketTestVector test_vector =
-      Ipv4InIpv6DecapTestVector(tunel_v6_mismatch);
+      Ipv4InIpv6DecapTestVector(tunnel_v6_mismatch);
 
   for (dvaas::SwitchOutput& output :
        *test_vector.mutable_acceptable_outputs()) {
@@ -404,7 +421,8 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv6Inv6) {
   // Install tunnel term table entry on SUT
   ASSERT_OK_AND_ASSIGN(
       const auto tunnel_entities,
-      InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info));
+      InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info,
+                             GetParam().tunnel_type));
 
   LOG(INFO) << "Sending IPv6-in-IPv6 Packet for packet match from in:"
             << in_port << " to out:" << out_port;
