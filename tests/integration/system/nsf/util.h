@@ -16,10 +16,10 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UTIL_H_
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -78,12 +78,11 @@ absl::Status InstallRebootPushConfig(
 
 // Validates P4, gNMI, SSH connections and port status of the SUT and Control
 // Switch (if present) along with validating the stack version of the SUT.
-// Also optionally validates the gNMI config convergence if a gNMI config is
-// provided.
-absl::Status
-ValidateTestbedState(absl::string_view version, Testbed &testbed,
-                     thinkit::SSHClient &ssh_client,
-                     const std::optional<absl::string_view> &gnmi_config);
+// Also optionally validates the gNMI config convergence if an
+// `image_config_param` is provided.
+absl::Status ValidateTestbedState(
+    Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr);
 
 absl::Status ValidateComponents(
     absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed&),

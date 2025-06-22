@@ -114,8 +114,7 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   ImageConfigParams image_config_param = GetParam().image_config_params[0];
   thinkit::Switch& sut = GetSut(testbed_);
 
-  ASSERT_OK(ValidateTestbedState(image_config_param.image_label, testbed_,
-                                 *ssh_client_, image_config_param.gnmi_config));
+  ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_, &image_config_param));
   ASSERT_OK(StoreSutDebugArtifacts(
       absl::StrCat(image_config_param.image_label, "_before_nsf_reboot"),
       testbed_));
@@ -132,8 +131,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
-  ASSERT_OK(
-      flow_programmer_->ProgramFlows(image_config_param.p4_info, testbed_));
+  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param.p4_info, testbed_,
+                                           *ssh_client_));
   LOG(INFO) << "Programming ACL flows";
   ASSERT_OK(ProgramAclFlows(sut, image_config_param.p4_info));
 
@@ -152,8 +151,7 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   ASSERT_OK(pins_test::NsfReboot(testbed_));
   ASSERT_OK(WaitForNsfReboot(testbed_, *ssh_client_));
 
-  ASSERT_OK(ValidateTestbedState(image_config_param.image_label, testbed_,
-                                 *ssh_client_, image_config_param.gnmi_config));
+  ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_, &image_config_param));
   ASSERT_OK(StoreSutDebugArtifacts(
       absl::StrCat(image_config_param.image_label, "_after_nsf_reboot"),
       testbed_));

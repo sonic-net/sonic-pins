@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/netaddr/mac_address.h"
@@ -34,6 +33,8 @@
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "thinkit/ssh_client.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 // Structure holds packet and expected target queue passed in to test as
@@ -49,6 +50,10 @@ struct ParamsForTestsWithoutIxia {
   // Using a shared_ptr because parameterized tests require objects to be
   // copyable.
   std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface;
+  std::shared_ptr<thinkit::SSHClient> ssh_client_for_nsf;
+  // If enabled, ensure punt traffic and QoS features are verified post NSF
+  // Reboot and the traffic drop is within the expected NSF duration.
+  bool nsf_reboot;
   // The test assumes that the switch is pre-configured if no `gnmi_config` is
   // given (default), or otherwise pushes the given config before starting.
   std::optional<std::string> gnmi_config;
@@ -125,7 +130,10 @@ struct AclIngressTablePuntFlowRateLimitAction {
 // Parameters used by the tests that require an Ixia.
 struct ParamsForTestsWithIxia {
   thinkit::GenericTestbedInterface* testbed_interface;
-
+  std::shared_ptr<thinkit::SSHClient> ssh_client_for_nsf;
+  // If enabled, ensure punt traffic and QoS features are verified post NSF
+  // Reboot and the traffic drop is within the expected NSF duration.
+  bool nsf_reboot;
   p4::config::v1::P4Info p4info;
   // Number of pipes supported by Vendor across which the Buffer is split.
   int num_pipes;

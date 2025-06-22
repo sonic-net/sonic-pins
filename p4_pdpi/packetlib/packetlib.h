@@ -14,9 +14,11 @@
 #ifndef PINS_P4_PDPI_PACKETLIB_PACKETLIB_H_
 #define PINS_P4_PDPI_PACKETLIB_PACKETLIB_H_
 
+#include <bitset>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/numeric/bits.h"
 #include "absl/status/statusor.h"
@@ -159,6 +161,16 @@ absl::StatusOr<int> IcmpHeaderChecksum(Packet packet, int icmp_header_index);
 absl::StatusOr<int> GreHeaderChecksum(Packet packet, int gre_header_index);
 
 std::string HeaderCaseName(Header::HeaderCase header_case);
+
+// Returns the Ethernet trailer of the given packet as a raw byte string. If
+// there is no Ethernet trailer, returns the empty string. The Ethernet trailer
+// is defined to be the suffix of the packet that is not upper protocol data,
+// where "upper protocols" means ARP, IPv4, or IPv6 (see e.g.
+// https://ask.wireshark.org/question/8809/what-is-the-trailer-in-the-ethernet-frame-and-why-is-the-fcs-incorrect/
+// for more details).Returns an error if the packet does not start with an
+// ethernet header or if there are no headers after the "lower protocol" headers
+// (Ethernet/VLAN/CSIG).
+absl::StatusOr<std::string> GetEthernetTrailer(const packetlib::Packet& packet);
 
 // Helper functions to translate the header fields to hex string. It abstracts
 // the bitwidth limitation away from the client and provides the validation that
