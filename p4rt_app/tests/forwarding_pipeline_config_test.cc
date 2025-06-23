@@ -46,7 +46,7 @@
 #include "p4_infra/p4_pdpi/annotation_parser.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
@@ -277,9 +277,9 @@ class ForwardingPipelineConfigTest : public testing::Test {
     // Reset the P4RT client.
     std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
     LOG(INFO) << "Opening P4RT connection to " << address << ".";
-    auto stub =
-        pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+    auto stub = p4_runtime::CreateP4RuntimeStub(
+        address, grpc::InsecureChannelCredentials());
+    ASSIGN_OR_RETURN(p4rt_session_, p4_runtime::P4RuntimeSession::Create(
                                         std::move(stub), device_id));
 
     return absl::OkStatus();
@@ -322,7 +322,7 @@ class ForwardingPipelineConfigTest : public testing::Test {
   std::unique_ptr<test_lib::P4RuntimeGrpcService> p4rt_service_;
 
   // A gRPC client session to send and receive gRPC calls.
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session_;
 };
 
 using VerifyTest = ForwardingPipelineConfigTest;
@@ -874,7 +874,7 @@ TEST_F(ForwardingPipelineConfigTest,
   p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
       "ACL_TABLE_DEFINITION_TABLE:ACL_ACL_PRE_INGRESS_TABLE",
       "SWSS_RC_INVALID_PARAM", "my error message");
-  ASSERT_THAT(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_THAT(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
                   p4rt_session_.get(),
                   SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
                   sai::GetP4Info(sai::Instantiation::kMiddleblock)),
@@ -883,9 +883,9 @@ TEST_F(ForwardingPipelineConfigTest,
   // Because we failed to program the forwarding pipeline config we should not
   // be able to write to the table.
   p4::v1::WriteRequest request;
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kInternal));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_F(ForwardingPipelineConfigTest, InvalidP4ConstraintDoesNotGoCritical) {
@@ -904,7 +904,7 @@ TEST_F(ForwardingPipelineConfigTest, InvalidP4ConstraintDoesNotGoCritical) {
   }
 
   ASSERT_THAT(
-      pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
           p4rt_session_.get(),
           SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info),
       StatusIs(absl::StatusCode::kInvalidArgument));
@@ -914,7 +914,7 @@ TEST_F(ForwardingPipelineConfigTest,
        ReconcileFailsIfNewConfigDoesNotSupportCurrentFlows) {
   // Push the baseline P4Info.
   auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info));
 
@@ -932,8 +932,8 @@ TEST_F(ForwardingPipelineConfigTest,
   ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
                        pdpi::IrTableEntryToPi(ir_p4_info, ir_entry));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Create a P4Info without the entry's match field.
   for (auto& table : *p4_info.mutable_tables()) {
@@ -953,7 +953,7 @@ TEST_F(ForwardingPipelineConfigTest,
        ReconcileFailsIfNewConfigDiffersForCurrentFlows) {
   // Push the baseline P4Info.
   auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info));
 
@@ -971,8 +971,8 @@ TEST_F(ForwardingPipelineConfigTest,
   ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
                        pdpi::IrTableEntryToPi(ir_p4_info, ir_entry));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Modify the match field name to change the translation.
   for (auto& table : *p4_info.mutable_tables()) {
@@ -991,7 +991,7 @@ TEST_F(ForwardingPipelineConfigTest,
        ReconcileIsNotBlockedIfNewConfigSupportsCurrentFlows) {
   // Push the baseline P4Info.
   auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info));
 
@@ -1009,8 +1009,8 @@ TEST_F(ForwardingPipelineConfigTest,
   ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
                        pdpi::IrTableEntryToPi(ir_p4_info, ir_entry));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Add a match field, which will not impact the translation.
   for (auto& table : *p4_info.mutable_tables()) {
@@ -1026,7 +1026,7 @@ TEST_F(ForwardingPipelineConfigTest,
   }
 
   ASSERT_THAT(
-      pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
           p4rt_session_.get(),
           SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info),
       Not(StatusIs(absl::StatusCode::kInvalidArgument)));

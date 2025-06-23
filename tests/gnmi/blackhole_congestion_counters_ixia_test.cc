@@ -45,7 +45,7 @@
 #include "lib/ixia_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/utils/json_utils.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -408,7 +408,7 @@ void BlackholeCongestionCountersIxiaTestFixture::SetUp() {
 void BlackholeCongestionCountersIxiaTestFixture::TearDown() {
   // Restores the gNMI config and clears table entries.
   ASSERT_OK(PushGnmiConfig(generic_testbed_->Sut(), GetParam().gnmi_config));
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4_session_));
   ASSERT_OK(sut_p4_session_->Finish());
   thinkit::GenericTestbedFixture<>::TearDown();
 }
@@ -523,7 +523,7 @@ BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
                        kDefaultFrameSizeinBytes, traffic_frame_rate, kNc1Dscp));
 
   // Clear entries and install entries forwarding all packets to egress port.
-  RETURN_IF_ERROR(pdpi::ClearEntities(*sut_p4_session_));
+  RETURN_IF_ERROR(p4_runtime::ClearEntities(*sut_p4_session_));
   RETURN_IF_ERROR(sai::EntryBuilder()
                       .AddEntriesForwardingIpPacketsToGivenPort(
                           sut_out_port_id, sai::IpVersion::kIpv4And6)

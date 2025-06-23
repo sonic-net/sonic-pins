@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_H_
-#define PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_H_
+#ifndef PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_H_
+#define PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_H_
 
 #include <stdint.h>
 
@@ -49,7 +49,7 @@
 #include "sai_p4/fixed/roles.h"
 #include "thinkit/switch.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 // The maximum metadata size that a P4Runtime client should accept.  This is
 // necessary, because the P4Runtime protocol returns individual errors to
@@ -426,7 +426,7 @@ absl::Status InstallPiTableEntry(P4RuntimeSession* session,
 
 // Installs the given PI (program independent) table entries on the switch.
 absl::Status InstallPiTableEntries(
-    P4RuntimeSession* session, const IrP4Info& info,
+    P4RuntimeSession* session, const pdpi::IrP4Info& info,
     absl::Span<const p4::v1::TableEntry> pi_entries);
 
 // Installs the given PI (program independent) entity on the switch.
@@ -434,7 +434,8 @@ absl::Status InstallPiEntity(P4RuntimeSession* session,
                              p4::v1::Entity pi_entity);
 
 // Installs the given PI (program independent) entity on the switch.
-absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
+absl::Status InstallPiEntities(P4RuntimeSession* session,
+                               const pdpi::IrP4Info& info,
                                absl::Span<const p4::v1::Entity> pi_entities);
 
 // Sends the given PI updates to the switch.
@@ -477,5 +478,6 @@ GetForwardingPipelineConfig(
 // the form `MAJOR.MINOR.PATCH`.
 absl::StatusOr<gutil::Version> GetPkgInfoVersion(P4RuntimeSession* session);
 
-}  // namespace pdpi
-#endif  // PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_H_
+}  // namespace p4_runtime
+
+#endif  // PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_H_

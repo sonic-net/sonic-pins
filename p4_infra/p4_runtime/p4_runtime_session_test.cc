@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 #include <memory>
 #include <string>
@@ -29,11 +29,11 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
 #include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 #include "thinkit/mock_switch.h"
 
-namespace pdpi {
+namespace p4_runtime {
 namespace {
 
 using ::gutil::EqualsProto;
@@ -41,6 +41,7 @@ using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
 using ::gutil::Partially;
 using ::gutil::StatusIs;
+using ::pdpi::GetTestP4Info;
 using ::testing::_;
 using ::testing::ByMove;
 using ::testing::Eq;
@@ -409,4 +410,4 @@ TEST(ClearTableEntryCountersTest,
 }
 
 }  // namespace
-}  // namespace pdpi
+}  // namespace p4_runtime

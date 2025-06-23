@@ -36,8 +36,8 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/string_encodings/hex_string.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
@@ -65,9 +65,9 @@ class FakePacketIoTest : public testing::Test {
     ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id_));
     const std::string address =
         absl::StrCat("localhost:", p4rt_service_.GrpcPort());
-    auto stub =
-        pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+    auto stub = p4_runtime::CreateP4RuntimeStub(
+        address, grpc::InsecureChannelCredentials());
+    ASSERT_OK_AND_ASSIGN(p4rt_session_, p4_runtime::P4RuntimeSession::Create(
                                             std::move(stub), device_id_));
   }
 
@@ -109,12 +109,12 @@ class FakePacketIoTest : public testing::Test {
 
   test_lib::P4RuntimeGrpcService p4rt_service_ =
       test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session_;
   uint64_t device_id_ = 100406;
 };
 
 TEST_F(FakePacketIoTest, VerifyPacketIn) {
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -152,7 +152,7 @@ TEST_F(FakePacketIoTest, VerifyPacketIn) {
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -171,7 +171,7 @@ TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
 }
 
 TEST_F(FakePacketIoTest, PacketInFailsWithoutPortTranslation) {
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -229,7 +229,7 @@ TEST_F(FakePacketIoTest, PacketOutFailBeforeP4InfoPush) {
 }
 
 TEST_F(FakePacketIoTest, PacketOutFailAfterPortRemoval) {
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -298,7 +298,7 @@ TEST_F(FakePacketIoTest, PacketOutFailForSecondary) {
 
 TEST_F(FakePacketIoTest, VerifyPacketOut) {
   // Needed for PacketOut.
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -331,7 +331,7 @@ TEST_F(FakePacketIoTest, VerifyPacketOut) {
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketInWithPortNames) {
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -377,7 +377,7 @@ TEST_F(FakePacketIoTest, PacketInMessageFailsWhenNoPrimaryExists) {
 TEST_F(FakePacketIoTest, PacketInCanBeSentToMultiplePrimaries) {
   // p4rt_session_ is a primary client with role: "sdn_controller".
   // Use that client to push the pipeline config.
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -388,9 +388,9 @@ TEST_F(FakePacketIoTest, PacketInCanBeSentToMultiplePrimaries) {
       absl::StrCat("localhost:", p4rt_service_.GrpcPort());
   ASSERT_OK_AND_ASSIGN(
       auto default_role,
-      pdpi::P4RuntimeSession::Create(
+      p4_runtime::P4RuntimeSession::Create(
           address, grpc::InsecureChannelCredentials(), device_id_,
-          pdpi::P4RuntimeSessionOptionalArgs{.role = ""}));
+          p4_runtime::P4RuntimeSessionOptionalArgs{.role = ""}));
 
   // Push the expected PacketIn.
   EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
@@ -428,9 +428,9 @@ TEST_F(FakePacketIoTest, PacketInMessageFailsWhenPrimaryHasNonAuthorizeRole) {
       absl::StrCat("localhost:", p4rt_service_.GrpcPort());
   ASSERT_OK_AND_ASSIGN(
       auto default_role,
-      pdpi::P4RuntimeSession::Create(
+      p4_runtime::P4RuntimeSession::Create(
           address, grpc::InsecureChannelCredentials(), device_id_,
-          pdpi::P4RuntimeSessionOptionalArgs{.role = "NonAuthorized"}));
+          p4_runtime::P4RuntimeSessionOptionalArgs{.role = "NonAuthorized"}));
 
   // Push a dummy PacketIn message.
   ASSERT_OK(AddPacketIoPort("Ethernet1/1/0", "0"));

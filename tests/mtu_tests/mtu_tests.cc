@@ -31,9 +31,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "sai_p4/instantiations/google/instantiations.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -251,12 +250,12 @@ TEST_P(MtuRoutingTestFixture, MtuTest) {
   ASSERT_TRUE(absl::SimpleAtoi(state_path_response, &orig_mtu));
 
   // Set up a route between the source and destination interfaces.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            testbed_->Sut(), /*gnmi_config=*/std::nullopt,
                            MtuRoutingTestFixture::GetParam().p4_info));
-  P4rtProgrammingContext p4rt_context(p4_session.get(),
-                                      pdpi::SetMetadataAndSendPiWriteRequest);
+  P4rtProgrammingContext p4rt_context(
+      p4_session.get(), p4_runtime::SetMetadataAndSendPiWriteRequest);
   ASSERT_OK(SetupRoute(&p4rt_context));
 
   // Configure test mtu values on port under test on SUT.
@@ -318,12 +317,12 @@ TEST_P(MtuRoutingTestFixture, VerifyTrafficWithMtuChangeTest) {
              std::to_string(kMtu4500));
 
   // Set up a route between the source and destination interfaces.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            testbed_->Sut(), /*gnmi_config=*/std::nullopt,
                            MtuRoutingTestFixture::GetParam().p4_info));
-  P4rtProgrammingContext p4rt_context(p4_session.get(),
-                                      pdpi::SetMetadataAndSendPiWriteRequest);
+  P4rtProgrammingContext p4rt_context(
+      p4_session.get(), p4_runtime::SetMetadataAndSendPiWriteRequest);
   ASSERT_OK(SetupRoute(&p4rt_context));
 
   // Send 4k size packet from peer switch to SUT to be routed out of port

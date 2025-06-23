@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 
 #include <vector>
 
@@ -33,14 +33,14 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.pb.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 
-namespace pdpi {
+namespace p4_runtime {
 namespace {
 
 using ::gutil::EqualsProto;
@@ -50,6 +50,14 @@ using ::gutil::StatusIs;
 using ::p4::config::v1::P4Info;
 using ::p4::v1::GetForwardingPipelineConfigResponse;
 using ::p4::v1::WriteRequest;
+using ::pdpi::GetTestIrP4Info;
+using ::pdpi::GetTestP4Info;
+using ::pdpi::IrEntities;
+using ::pdpi::IrEntity;
+using ::pdpi::IrP4Info;
+using ::pdpi::IrTableEntries;
+using ::pdpi::IrTableEntry;
+using ::pdpi::PiEntities;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
 using ::testing::Not;
@@ -1107,8 +1115,8 @@ TEST(GetIrP4Info, GetsConfigAndReturnsContainedP4InfoIfItisNonEmpty) {
 
 TEST(GetOrSetP4Info, GetsP4Info) {
   ASSERT_OK_AND_ASSIGN(
-      pdpi::P4SessionWithMockStub stub,
-      pdpi::MakeP4SessionWithMockStub(pdpi::P4RuntimeSessionOptionalArgs()));
+      P4SessionWithMockStub stub,
+      MakeP4SessionWithMockStub(P4RuntimeSessionOptionalArgs()));
 
   const p4::config::v1::P4Info existing_p4_info = GetTestP4Info();
   p4::config::v1::P4Info default_p4_info = existing_p4_info;
@@ -1127,8 +1135,8 @@ TEST(GetOrSetP4Info, GetsP4Info) {
 
 TEST(GetOrSetP4Info, SetsP4InfoIfGetIsEmpty) {
   ASSERT_OK_AND_ASSIGN(
-      pdpi::P4SessionWithMockStub stub,
-      pdpi::MakeP4SessionWithMockStub(pdpi::P4RuntimeSessionOptionalArgs()));
+      P4SessionWithMockStub stub,
+      MakeP4SessionWithMockStub(P4RuntimeSessionOptionalArgs()));
 
   p4::v1::GetForwardingPipelineConfigResponse response;
   EXPECT_CALL(stub.mock_p4rt_stub, GetForwardingPipelineConfig)
@@ -1146,8 +1154,8 @@ TEST(GetOrSetP4Info, SetsP4InfoIfGetIsEmpty) {
 
 TEST(GetOrSetP4Info, ReturnsErrorIfGetFails) {
   ASSERT_OK_AND_ASSIGN(
-      pdpi::P4SessionWithMockStub stub,
-      pdpi::MakeP4SessionWithMockStub(pdpi::P4RuntimeSessionOptionalArgs()));
+      P4SessionWithMockStub stub,
+      MakeP4SessionWithMockStub(P4RuntimeSessionOptionalArgs()));
 
   EXPECT_CALL(stub.mock_p4rt_stub, GetForwardingPipelineConfig)
       .WillOnce(Return(absl::UnknownError("error")));
@@ -1158,8 +1166,8 @@ TEST(GetOrSetP4Info, ReturnsErrorIfGetFails) {
 
 TEST(GetOrSetP4Info, ReturnsErrorIfSetFails) {
   ASSERT_OK_AND_ASSIGN(
-      pdpi::P4SessionWithMockStub stub,
-      pdpi::MakeP4SessionWithMockStub(pdpi::P4RuntimeSessionOptionalArgs()));
+      P4SessionWithMockStub stub,
+      MakeP4SessionWithMockStub(P4RuntimeSessionOptionalArgs()));
   EXPECT_CALL(stub.mock_p4rt_stub, GetForwardingPipelineConfig)
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(stub.mock_p4rt_stub, SetForwardingPipelineConfig)
@@ -1255,4 +1263,4 @@ INSTANTIATE_TEST_SUITE_P(SendsValidRequestAndReturnsValidResponse,
                          });
 
 }  // namespace
-}  // namespace pdpi
+}  // namespace p4_runtime

@@ -57,8 +57,8 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -254,7 +254,8 @@ std::string ReadFileOrEmpty(const std::string& path) {
   return "";
 }
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> OpenP4RuntimeSession() {
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>
+OpenP4RuntimeSession() {
   std::string server_address = absl::GetFlag(FLAGS_server_address);
   uint64_t device_id = absl::GetFlag(FLAGS_p4rt_device_id);
   int64_t election_id_high = absl::GetFlag(FLAGS_election_id) == -1
@@ -264,21 +265,21 @@ absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> OpenP4RuntimeSession() {
   LOG(INFO) << "Opening P4RT connection to: " << server_address;
   std::unique_ptr<p4::v1::P4Runtime::Stub> stub;
   if (absl::GetFlag(FLAGS_insecure)) {
-    stub = pdpi::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
-                                     grpc::InsecureChannelCredentials());
+    stub = p4_runtime::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
+                                           grpc::InsecureChannelCredentials());
   } else {
     grpc::SslCredentialsOptions sslOpts;
     sslOpts.pem_root_certs = ReadFileOrEmpty(absl::GetFlag(FLAGS_ca_cert));
     sslOpts.pem_private_key = ReadFileOrEmpty(absl::GetFlag(FLAGS_key));
     sslOpts.pem_cert_chain = ReadFileOrEmpty(absl::GetFlag(FLAGS_cert));
-    stub = pdpi::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
-                                     grpc::SslCredentials(sslOpts),
-                                     absl::GetFlag(FLAGS_host_name));
+    stub = p4_runtime::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
+                                           grpc::SslCredentials(sslOpts),
+                                           absl::GetFlag(FLAGS_host_name));
   }
 
-  return pdpi::P4RuntimeSession::Create(
+  return p4_runtime::P4RuntimeSession::Create(
       std::move(stub), device_id,
-      pdpi::P4RuntimeSessionOptionalArgs{
+      p4_runtime::P4RuntimeSessionOptionalArgs{
           .election_id = absl::MakeUint128(election_id_high, 0),
       });
 }
@@ -286,10 +287,11 @@ absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> OpenP4RuntimeSession() {
 // Checks the switch for any active P4Info configs and returns that, or defaults
 // to a middleblock config.
 absl::StatusOr<pdpi::IrP4Info> GetExistingP4InfoOrSetDefault(
-    pdpi::P4RuntimeSession& session, sai::Instantiation default_instance) {
+    p4_runtime::P4RuntimeSession& session,
+    sai::Instantiation default_instance) {
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
-      pdpi::GetForwardingPipelineConfig(
+      p4_runtime::GetForwardingPipelineConfig(
           &session, p4::v1::GetForwardingPipelineConfigRequest::ALL));
   if (response.has_config()) {
     LOG(INFO) << "Switch already has an active config.";
@@ -298,7 +300,7 @@ absl::StatusOr<pdpi::IrP4Info> GetExistingP4InfoOrSetDefault(
 
   LOG(INFO) << "Pushing a " << sai::InstantiationToString(default_instance)
             << " config to the switch for testing.";
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       &session,
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(default_instance)));
@@ -409,14 +411,14 @@ class P4rtRouteTest : public testing::Test {
                              *p4rt_session_, sai::Instantiation::kMiddleblock));
 
     // Clear the current table entries, if any.
-    ASSERT_OK(pdpi::ClearEntities(*p4rt_session_.get()));
+    ASSERT_OK(p4_runtime::ClearEntities(*p4rt_session_.get()));
   }
 
   void TearDown() override {
     // Remove table entries that were created.
     if (p4rt_session_ != nullptr) {
       if (absl::GetFlag(FLAGS_cleanup)) {
-        ASSERT_OK(pdpi::ClearEntities(*p4rt_session_.get()));
+        ASSERT_OK(p4_runtime::ClearEntities(*p4rt_session_.get()));
       }
     }
   }
@@ -452,7 +454,7 @@ class P4rtRouteTest : public testing::Test {
     return total_execution_time;
   }
 
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session_;
   pdpi::IrP4Info ir_p4info_;
 };
 

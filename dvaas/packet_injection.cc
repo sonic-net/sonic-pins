@@ -34,7 +34,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir_utils.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "tests/forwarding/util.h"
@@ -47,9 +47,9 @@ using pins_test::P4rtPortId;
 // Utils.
 // Reads P4Info from the `device` and convert it to IrP4Info.
 absl::StatusOr<pdpi::IrP4Info> GetIrP4Info(
-    pdpi::P4RuntimeSession& p4rt_session) {
+    p4_runtime::P4RuntimeSession& p4rt_session) {
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   pdpi::GetForwardingPipelineConfig(&p4rt_session));
+                   p4_runtime::GetForwardingPipelineConfig(&p4rt_session));
   return pdpi::CreateIrP4Info(response.config().p4info());
 }
 
@@ -57,7 +57,7 @@ absl::StatusOr<pdpi::IrP4Info> GetIrP4Info(
 
 absl::StatusOr<std::vector<TaggedPacketIn>>
 CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-    pdpi::P4RuntimeSession& p4rt_session, absl::Duration duration,
+    p4_runtime::P4RuntimeSession& p4rt_session, absl::Duration duration,
     const IsExpectedUnsolicitedPacketFunctionType&
         is_expected_unsolicited_packet) {
   // Collect all unread stream messages responses from the P4RT session that
@@ -134,9 +134,10 @@ absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
 }
 
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
-    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
-    const PacketTestVectorById &packet_test_vector_by_id,
-    const PacketInjectionParams &parameters, PacketStatistics &statistics,
+    p4_runtime::P4RuntimeSession& sut,
+    p4_runtime::P4RuntimeSession& control_switch,
+    const PacketTestVectorById& packet_test_vector_by_id,
+    const PacketInjectionParams& parameters, PacketStatistics& statistics,
     bool log_injection_progress) {
   LOG(INFO) << "Injecting test packets into the dataplane "
             << packet_test_vector_by_id.size();

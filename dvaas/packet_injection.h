@@ -27,7 +27,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 
 namespace dvaas {
@@ -111,7 +111,7 @@ absl::StatusOr<pins_test::P4rtPortId> GetSutEgressPortFromControlSwitchPacketIn(
 
 absl::StatusOr<std::vector<TaggedPacketIn>>
 CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-    pdpi::P4RuntimeSession& p4rt_session, absl::Duration duration,
+    p4_runtime::P4RuntimeSession& p4rt_session, absl::Duration duration,
     const IsExpectedUnsolicitedPacketFunctionType&
         is_expected_unsolicited_packet);
 
@@ -120,9 +120,10 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
 // - Determining the set of packets that were forwarded (punted from control
 //   switch) and punted (punted from SUT) for each input packet.
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
-    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
-    const PacketTestVectorById &packet_test_vector_by_id,
-    const PacketInjectionParams &parameters, PacketStatistics &statistics,
+    p4_runtime::P4RuntimeSession& sut,
+    p4_runtime::P4RuntimeSession& control_switch,
+    const PacketTestVectorById& packet_test_vector_by_id,
+    const PacketInjectionParams& parameters, PacketStatistics& statistics,
     bool log_injection_progress = true);
 
 } // namespace dvaas

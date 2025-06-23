@@ -34,7 +34,7 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
@@ -223,8 +223,8 @@ public:
   absl::Status UpdateSutP4Info(const p4::config::v1::P4Info& p4_info);
 
   // Accessors for the persistent P4 sessions for the test.
-  pdpi::P4RuntimeSession& sut_p4_session() { return *sut_p4_session_; }
-  pdpi::P4RuntimeSession& control_switch_p4_session() {
+  p4_runtime::P4RuntimeSession& sut_p4_session() { return *sut_p4_session_; }
+  p4_runtime::P4RuntimeSession& control_switch_p4_session() {
     return *control_p4_session_;
   }
 
@@ -253,8 +253,8 @@ protected:
   // Testbed accessors.
   thinkit::MirrorTestbedInterface* mirror_testbed_;
 
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> control_p4_session_;
 
   p4::config::v1::P4Info test_p4info_;
   p4::config::v1::P4Info control_switch_p4info_;

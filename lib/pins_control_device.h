@@ -31,7 +31,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "system/system.grpc.pb.h"
@@ -52,7 +52,7 @@ public:
 
   PinsControlDevice(
       std::unique_ptr<thinkit::Switch> sut, pdpi::IrP4Info ir_p4_info,
-      std::unique_ptr<pdpi::P4RuntimeSession> control_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> control_session,
       absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
 
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
@@ -104,7 +104,7 @@ public:
 private:
   std::unique_ptr<thinkit::Switch> sut_;
   pdpi::IrP4Info ir_p4_info_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> control_session_;
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id_;
   absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;
 };

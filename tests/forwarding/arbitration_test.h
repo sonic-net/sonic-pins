@@ -33,7 +33,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "tests/lib/p4info_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -77,25 +77,27 @@ public:
     upper_election_id_ = absl::ToUnixSeconds(absl::Now());
   }
 
-  // TODO: b/361102830 - Support P4 and config restore on teardown.
+  // TODO: Support P4 and config restore on teardown.
   void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 
   // Puts the switch into a known state:
   //  * Forwarding pipeline is configured
   //  * No P4RT entries are programmed.
-  absl::Status NormalizeSwitchState(pdpi::P4RuntimeSession *p4rt_session) {
+  absl::Status NormalizeSwitchState(
+      p4_runtime::P4RuntimeSession* p4rt_session) {
     ASSIGN_OR_RETURN(p4::config::v1::P4Info p4_info, GetP4InfoFromParamOrSUT());
     // Set the forwarding pipeline.
-    RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+    RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session,
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
         p4_info));
 
     // Clear entries here in case the previous test did not (e.g. because it
     // crashed).
-    RETURN_IF_ERROR(pdpi::ClearTableEntries(p4rt_session));
+    RETURN_IF_ERROR(p4_runtime::ClearTableEntries(p4rt_session));
     // Check that switch is in a clean state.
-    ASSIGN_OR_RETURN(auto entries, pdpi::ReadPiTableEntries(p4rt_session));
+    ASSIGN_OR_RETURN(auto entries,
+                     p4_runtime::ReadPiTableEntries(p4rt_session));
     if (!entries.empty()) {
       return gutil::FailedPreconditionErrorBuilder()
              << "Read back '" << entries.size()
@@ -120,18 +122,18 @@ public:
   }
 
   // Attempts to become primary on a given stub.
-  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
-  BecomePrimary(std::unique_ptr<P4Runtime::StubInterface> stub,
-                uint64_t lower_election_id) const {
-    return pdpi::P4RuntimeSession::Create(
+  absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>> BecomePrimary(
+      std::unique_ptr<P4Runtime::StubInterface> stub,
+      uint64_t lower_election_id) const {
+    return p4_runtime::P4RuntimeSession::Create(
         std::move(stub), device_id_,
-        pdpi::P4RuntimeSessionOptionalArgs{
+        p4_runtime::P4RuntimeSessionOptionalArgs{
             .election_id = ElectionIdFromLower(lower_election_id)});
   }
 
   // Attempts to become primary on a new stub.
-  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
-  BecomePrimary(uint64_t lower_election_id) {
+  absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>> BecomePrimary(
+      uint64_t lower_election_id) {
     ASSIGN_OR_RETURN(auto stub, Stub());
     return BecomePrimary(std::move(stub), lower_election_id);
   }

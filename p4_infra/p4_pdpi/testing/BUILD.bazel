@@ -135,18 +135,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "mock_p4_runtime_server",
-    testonly = True,
-    hdrs = ["mock_p4_runtime_server.h"],
-    deps = [
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest",
-    ],
-)
-
 cc_test(
     name = "sequencing_test_runner",
     srcs = ["sequencing_test_runner.cc"],
@@ -414,18 +402,6 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "mock_p4_runtime_server_test",
-    srcs = ["mock_p4_runtime_server_test.cc"],
-    deps = [
-        ":mock_p4_runtime_server",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
 )

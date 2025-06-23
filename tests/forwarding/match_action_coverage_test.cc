@@ -39,7 +39,8 @@
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/ir_properties.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/string_encodings/hex_string.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -226,7 +227,7 @@ absl::Status ModifyEntityToAvoidKnownBug(const pdpi::IrP4Info& info,
 absl::Status ModifyDeleteAndReinstallEntity(
     const FuzzerConfig& config, const SwitchState& state,
     const Entity& initial_entity, bool skip_modify, bool mask_known_failures,
-    absl::BitGen& gen, pdpi::P4RuntimeSession& session) {
+    absl::BitGen& gen, p4_runtime::P4RuntimeSession& session) {
   p4::v1::Update update;
   update.set_type(p4::v1::Update::MODIFY);
   *update.mutable_entity() = initial_entity;
@@ -258,14 +259,14 @@ absl::Status ModifyDeleteAndReinstallEntity(
     // Perform the modification if it was correctly generated.
     ASSIGN_OR_RETURN(entity_to_modify_to,
                      pdpi::PiEntityToIr(config.GetIrP4Info(), update.entity()));
-    RETURN_IF_ERROR(pdpi::SendPiUpdates(&session, {update}))
+    RETURN_IF_ERROR(p4_runtime::SendPiUpdates(&session, {update}))
         << "during modification from original entity to new entity:\n"
         << entity_to_modify_to.DebugString();
   }
 
   if (!skip_modify) {
     *update.mutable_entity() = initial_entity;
-    RETURN_IF_ERROR(pdpi::SendPiUpdates(&session, {update}))
+    RETURN_IF_ERROR(p4_runtime::SendPiUpdates(&session, {update}))
         << "during modification back to original entity from new entity:\n"
         << entity_to_modify_to.DebugString();
   }
@@ -279,7 +280,7 @@ absl::Status ModifyDeleteAndReinstallEntity(
 // a valid P4-Constraints string representing an additional constraint enforced
 // on the generated entry, if empty, no additional constraint is enforced.
 absl::Status GenerateAndInstallEntryThatMeetsPredicate(
-    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    absl::BitGen& gen, p4_runtime::P4RuntimeSession& session,
     const FuzzerConfig& config, SwitchState& state,
     thinkit::TestEnvironment& environment, absl::string_view table_name,
     const EntityPredicate& predicate,
@@ -341,7 +342,7 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
       "install_requests_and_responses.txt",
       absl::StrCat("# IR Entity:\n", ir_entity.DebugString())));
 
-  if (absl::Status status = pdpi::InstallPiEntity(&session, entity);
+  if (absl::Status status = p4_runtime::InstallPiEntity(&session, entity);
       status.ok()) {
     RETURN_IF_ERROR(environment.AppendToTestArtifact(
         "install_requests_and_responses.txt", "# Successfully installed!\n"));
@@ -374,7 +375,7 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
 // be treated like any other table.
 // Installs a multicast group entry with and without replicas.
 absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
-    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    absl::BitGen& gen, p4_runtime::P4RuntimeSession& session,
     const FuzzerConfig& config, SwitchState& state,
     thinkit::TestEnvironment& environment,
     const p4::config::v1::P4Info& p4info) {
@@ -447,7 +448,7 @@ absl::StatusOr<std::string> FieldPresenceConstraintString(
 // then Table B will be installed first.
 // Remove p4info param and use config to get P4Info.
 absl::Status AddTableEntryForEachMatchAndEachAction(
-    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    absl::BitGen& gen, p4_runtime::P4RuntimeSession& session,
     const FuzzerConfig& config, SwitchState& state,
     thinkit::TestEnvironment& environment,
     const p4::config::v1::P4Info& p4info) {
@@ -660,7 +661,7 @@ TEST_P(MatchActionCoverageTestFixture,
 
   // Initialize the connection and clear table entries for the SUT.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
 

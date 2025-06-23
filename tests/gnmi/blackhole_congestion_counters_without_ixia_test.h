@@ -23,7 +23,7 @@
 #include "absl/status/statusor.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "thinkit/generic_testbed.h"
@@ -69,7 +69,7 @@ class BlackholeCongestionCountersWithoutIxiaTestFixture
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::vector<InterfaceLink> control_links_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
   // Takes ownership of the SSHClient parameter.
   std::unique_ptr<thinkit::SSHClient> ssh_client_ =
       absl::WrapUnique<thinkit::SSHClient>(this->GetParam().ssh_client);

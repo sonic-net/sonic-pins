@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_MATCHERS_H_
-#define PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_MATCHERS_H_
+#ifndef PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_MATCHERS_H_
+#define PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_MATCHERS_H_
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -24,7 +24,7 @@
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 // gMock matcher that checks if its argument, a
 // `p4::v1::StreamMessageResponse`, contains a `p4::v1::PacketIn`.
@@ -85,6 +85,6 @@ MATCHER_P(ParsedPayloadIs, parsed_payload_matcher,
                                      result_listener);
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime
 
-#endif  // PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_MATCHERS_H_
+#endif  // PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_MATCHERS_H_

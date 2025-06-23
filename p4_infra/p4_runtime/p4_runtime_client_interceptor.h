@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_CLIENT_INTERCEPTOR_H_
-#define PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_CLIENT_INTERCEPTOR_H_
+#ifndef PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_CLIENT_INTERCEPTOR_H_
+#define PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_CLIENT_INTERCEPTOR_H_
 
 #include "grpcpp/support/client_interceptor.h"
 #include "grpcpp/support/interceptor.h"
 #include "p4/v1/p4runtime.pb.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 // Base class for intercepting P4Runtime RPC requests and responses on the
 // client side.
@@ -79,6 +79,6 @@ class P4RuntimeClientInterceptor
       grpc::experimental::ClientRpcInfo* info) final;
 };
 
-}  // namespace pdpi
+}  // namespace p4_runtime
 
-#endif  // PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_CLIENT_INTERCEPTOR_H_
+#endif  // PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_CLIENT_INTERCEPTOR_H_

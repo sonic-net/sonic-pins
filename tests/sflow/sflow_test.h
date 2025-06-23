@@ -22,7 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
@@ -68,7 +68,7 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   pdpi::IrP4Info ir_p4_info_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::string gnmi_config_with_sflow_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
   thinkit::SSHClient* ssh_client_ = GetParam().ssh_client;
 
   std::vector<IxiaLink> ready_links_;
@@ -124,8 +124,8 @@ class SflowMirrorTestFixture
 
   p4::config::v1::P4Info sut_p4_info_, control_p4_info_;
   pdpi::IrP4Info sut_ir_p4_info_, control_ir_p4_info_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> control_p4_session_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
   std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
 

@@ -37,8 +37,8 @@
 #include "p4_infra/netaddr/ipv6_address.h"
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/ternary.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -317,14 +317,16 @@ class EntryBuilder {
 
   // Deduplicates then installs the entities encoded by the EntryBuilder using
   // `session`.
-  absl::Status InstallDedupedEntities(pdpi::P4RuntimeSession& session) const;
+  absl::Status InstallDedupedEntities(
+      p4_runtime::P4RuntimeSession& session) const;
 
   // Extracts and deduplicates the entities encoded by the EntryBuilder using
   // `ir_p4info`, then install them using `session`. This is especially useful
   // for BMv2 where you may *NOT* wish to use the P4Info on the switch for
   // translation.
-  absl::Status InstallDedupedEntities(const pdpi::IrP4Info& ir_p4info,
-                                      pdpi::P4RuntimeSession& session) const;
+  absl::Status InstallDedupedEntities(
+      const pdpi::IrP4Info& ir_p4info,
+      p4_runtime::P4RuntimeSession& session) const;
 
   absl::StatusOr<std::vector<p4::v1::Entity>> GetDedupedPiEntities(
       const pdpi::IrP4Info& ir_p4info) const;

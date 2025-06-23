@@ -54,8 +54,8 @@
 #include "lib/ixia_helper.h"
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
@@ -101,23 +101,23 @@ absl::Status TrapToCPU(thinkit::Switch &sut,
 
   LOG(INFO) << "p4_session";
   ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-      pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
+      std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
+      p4_runtime::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
   LOG(INFO) << "CreateIrP4Info";
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   LOG(INFO) << "SetForwardingPipelineConfig";
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   LOG(INFO) << "ClearTableEntries";
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(p4_session.get()));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(p4_session.get()));
   // Check that switch is in a clean state.
   ASSIGN_OR_RETURN(auto read_back_entries,
-                   pdpi::ReadPiTableEntries(p4_session.get()));
+                   p4_runtime::ReadPiTableEntries(p4_session.get()));
   EXPECT_EQ(read_back_entries.size(), 0);
 
   LOG(INFO) << "for loop";
@@ -133,7 +133,8 @@ absl::Status TrapToCPU(thinkit::Switch &sut,
   }
 
   LOG(INFO) << "InstallPiTableEntries";
-  return (pdpi::InstallPiTableEntries(p4_session.get(), ir_p4info, pi_entries));
+  return (p4_runtime::InstallPiTableEntries(p4_session.get(), ir_p4info,
+                                            pi_entries));
 }
 
 // Set up the switch to forward inbound packets to the egress port
@@ -237,23 +238,23 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
 
   LOG(INFO) << "p4_session";
   ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-      pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
+      std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
+      p4_runtime::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
   LOG(INFO) << "CreateIrP4Info";
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   LOG(INFO) << "SetForwardingPipelineConfig";
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   LOG(INFO) << "ClearTableEntries";
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(p4_session.get()));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(p4_session.get()));
   // Check that switch is in a clean state.
   ASSIGN_OR_RETURN(auto read_back_entries,
-                   pdpi::ReadPiTableEntries(p4_session.get()));
+                   p4_runtime::ReadPiTableEntries(p4_session.get()));
   EXPECT_EQ(read_back_entries.size(), 0);
 
   LOG(INFO) << "for loop";
@@ -271,7 +272,8 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
   }
 
   LOG(INFO) << "InstallPiTableEntries";
-  return (pdpi::InstallPiTableEntries(p4_session.get(), ir_p4info, pi_entries));
+  return (p4_runtime::InstallPiTableEntries(p4_session.get(), ir_p4info,
+                                            pi_entries));
 }
 
 // Tear down any forwarding rules set up
@@ -280,13 +282,13 @@ absl::Status ForwardTeardown(thinkit::Switch &sut) {
                    sut.CreateP4RuntimeStub());
 
   ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-      pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
+      std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
+      p4_runtime::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(p4_session.get()));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(p4_session.get()));
   // Check that switch is in a clean state.
   ASSIGN_OR_RETURN(auto read_back_entries,
-                   pdpi::ReadPiTableEntries(p4_session.get()));
+                   p4_runtime::ReadPiTableEntries(p4_session.get()));
   EXPECT_EQ(read_back_entries.size(), 0);
 
   return absl::OkStatus();
@@ -1190,15 +1192,15 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
                             const netaddr::Ipv4Address &dst_ip,
                             absl::string_view p4_queue,
                             const p4::config::v1::P4Info &p4info,
-                            pdpi::P4RuntimeSession &p4_session) {
+                            p4_runtime::P4RuntimeSession &p4_session) {
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
-  
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+
+  RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       &p4_session,
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(&p4_session));
 
   auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
@@ -1221,7 +1223,7 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
                      << acl_entry.DebugString() << " error: ");
 
   LOG(INFO) << "InstallPiTableEntries";
-  return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
+  return p4_runtime::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
 }
 
 // Ixia configurations:
@@ -1255,9 +1257,10 @@ TEST_P(CountersTestFixture, TestCPUOutDiscards) {
   // Configure SUT.
   EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
       "p4info.textproto", GetParam().p4_info));
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut, absl::nullopt, GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(sut, absl::nullopt,
+                                                          GetParam().p4_info));
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
@@ -1358,7 +1361,7 @@ absl::Status SetUpForwarding(absl::string_view out_port,
                              absl::string_view source_mac,
                              absl::string_view dest_mac,
                              const p4::config::v1::P4Info &p4info,
-                             pdpi::P4RuntimeSession &p4_session) {
+                             p4_runtime::P4RuntimeSession &p4_session) {
   constexpr absl::string_view kVrfId = "vrf-80";
   constexpr absl::string_view kRifOutId = "router-interface";
   constexpr absl::string_view kNextHopId = "nexthop-1";
@@ -1456,8 +1459,8 @@ absl::Status SetUpForwarding(absl::string_view out_port,
           )pb",
           dest_mac)));
 
-   // Clear table entries
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+  // Clear table entries
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(&p4_session));
 
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
   std::vector<p4::v1::TableEntry> pi_entries;
@@ -1470,7 +1473,8 @@ absl::Status SetUpForwarding(absl::string_view out_port,
     pi_entries.push_back(pi_entry);
   }
 
-  return (pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries));
+  return (
+      p4_runtime::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries));
 }
 
 struct DiscardTestIxiaSetUpResult {
@@ -1545,7 +1549,7 @@ TEST_P(CountersTestFixture, TestFrontPanelOutDiscards) {
 
   // Set up P4Runtime session.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/absl::nullopt, GetParam().p4_info));
 

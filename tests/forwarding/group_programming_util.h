@@ -26,7 +26,7 @@
 #include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/test_environment.h"
 
 // Set of helper functions to program and verify group operations.
@@ -45,31 +45,31 @@ struct GroupMember {
 // router interfaces and neighbor entries.
 // members.nexthop is an output here with the updated nexthop object that was
 // created.
-absl::Status ProgramNextHops(thinkit::TestEnvironment &test_environment,
-                             pdpi::P4RuntimeSession &p4_session,
-                             const pdpi::IrP4Info &ir_p4info,
-                             std::vector<pins::GroupMember> &members);
+absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
+                             p4_runtime::P4RuntimeSession& p4_session,
+                             const pdpi::IrP4Info& ir_p4info,
+                             std::vector<pins::GroupMember>& members);
 
 // Programs (insert/modify) a nexthop group on the switch with the given
 // set of nexthops and weights. It is expected that the dependant nexthops are
 // already created for an insert/modify operation.
-absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment &test_environment,
-                                     pdpi::P4RuntimeSession &p4_session,
-                                     const pdpi::IrP4Info &ir_p4info,
+absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment& test_environment,
+                                     p4_runtime::P4RuntimeSession& p4_session,
+                                     const pdpi::IrP4Info& ir_p4info,
                                      absl::string_view group_id,
                                      absl::Span<const GroupMember> members,
                                      const p4::v1::Update_Type &type);
 
 // Deletes the group with the given group_id. It is expected that the caller
 // takes care of cleaning up the dependant nexthops.
-absl::Status DeleteGroup(pdpi::P4RuntimeSession &p4_session,
-                         const pdpi::IrP4Info &ir_p4info,
+absl::Status DeleteGroup(p4_runtime::P4RuntimeSession& p4_session,
+                         const pdpi::IrP4Info& ir_p4info,
                          absl::string_view group_id);
 
 // Verifies the actual members received from P4 read response matches the
 // expected members.
 absl::Status VerifyGroupMembersFromP4Read(
-    pdpi::P4RuntimeSession &p4_session, const pdpi::IrP4Info &ir_p4info,
+    p4_runtime::P4RuntimeSession& p4_session, const pdpi::IrP4Info& ir_p4info,
     absl::string_view group_id, absl::Span<const GroupMember> expected_members);
 
 // Generates N random weights that add up to total_weight, with at least 1 in

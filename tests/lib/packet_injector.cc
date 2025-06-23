@@ -30,16 +30,17 @@
 #include "glog/logging.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins_test {
 
 absl::StatusOr<std::unique_ptr<PacketInjector>> PacketInjector::Create(
-    pdpi::P4RuntimeSession& injector_p4rt_session, pdpi::IrP4Info ir_p4info,
-    P4rtPortId port, std::vector<std::string> packets, absl::Duration interval,
+    p4_runtime::P4RuntimeSession& injector_p4rt_session,
+    pdpi::IrP4Info ir_p4info, P4rtPortId port, std::vector<std::string> packets,
+    absl::Duration interval,
     absl::AnyInvocable<
         absl::Status(const std::string& /*port*/, const std::string& /*packet*/,
-                     const pdpi::IrP4Info&, pdpi::P4RuntimeSession*,
+                     const pdpi::IrP4Info&, p4_runtime::P4RuntimeSession*,
                      std::optional<absl::Duration>)>
         injector) {
   if (packets.empty()) {
@@ -53,11 +54,12 @@ absl::StatusOr<std::unique_ptr<PacketInjector>> PacketInjector::Create(
 }
 
 PacketInjector::PacketInjector(
-    pdpi::P4RuntimeSession& injector_p4rt_session, pdpi::IrP4Info ir_p4info,
-    P4rtPortId port, std::vector<std::string> packets, absl::Duration interval,
+    p4_runtime::P4RuntimeSession& injector_p4rt_session,
+    pdpi::IrP4Info ir_p4info, P4rtPortId port, std::vector<std::string> packets,
+    absl::Duration interval,
     absl::AnyInvocable<absl::Status(
         const std::string&, const std::string&, const pdpi::IrP4Info&,
-        pdpi::P4RuntimeSession*, std::optional<absl::Duration>)>
+        p4_runtime::P4RuntimeSession*, std::optional<absl::Duration>)>
         injector)
     : p4rt_session_(injector_p4rt_session),
       ir_p4info_(std::move(ir_p4info)),

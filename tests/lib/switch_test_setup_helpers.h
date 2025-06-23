@@ -32,7 +32,7 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 
@@ -56,13 +56,13 @@ struct PinsConfigView {
 // * Pushes the given P4Info, if any, via RECONCILE_AND_COMMIT.
 absl::Status ConfigureSwitch(
     thinkit::Switch& thinkit_switch, const PinsConfigView& config,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata = {});
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata = {});
 
 // Like `ConfigureSwitch`, but for 2 switches in parallel.
 absl::Status ConfigureSwitchPair(
     thinkit::Switch& switch1, const PinsConfigView& config1,
     thinkit::Switch& switch2, const PinsConfigView& config2,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata = {});
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata = {});
 
 // Reads the enabled interfaces from the switch and waits up to `timeout` until
 // they are all up. Calls `on_failure` prior to returning status if it is not
@@ -108,12 +108,12 @@ absl::Status RewritePortsInTableEntriesToEnabledEthernetPorts(
 
 // Like `ConfigureSwitch`, but also returns the P4Runtime session used during
 // configuration.
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>
 ConfigureSwitchAndReturnP4RuntimeSession(
     thinkit::Switch& thinkit_switch,
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata = {});
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata = {});
 
 // Configures a pair of switches and sets up P4 Runtime Sessions. If you are
 // setting up a pair of switches (e.g. in a mirror testbed) with the same gNMI
@@ -127,13 +127,13 @@ ConfigureSwitchAndReturnP4RuntimeSession(
 ABSL_DEPRECATED(
     "Use `ConfigureSwitchPair` instead, since this function works only for "
     "mirror testbeds.")
-absl::StatusOr<std::pair<std::unique_ptr<pdpi::P4RuntimeSession>,
-                         std::unique_ptr<pdpi::P4RuntimeSession>>>
+absl::StatusOr<std::pair<std::unique_ptr<p4_runtime::P4RuntimeSession>,
+                         std::unique_ptr<p4_runtime::P4RuntimeSession>>>
 ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
     thinkit::Switch& thinkit_switch1, thinkit::Switch& thinkit_switch2,
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata = {});
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata = {});
 
 // Like `ConfigureSwitchPairAndReturnP4RuntimeSessionPair`, but does not return
 // the P4Runtime sessions created during configuration.
@@ -144,7 +144,7 @@ absl::Status ConfigureSwitchPair(
     thinkit::Switch& thinkit_switch1, thinkit::Switch& thinkit_switch2,
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata = {});
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata = {});
 
 // Mirrors the P4RT port IDs of the SUT onto the control switch and ensures that
 // the state of the switch is properly updated (i.e. that the IDs are reflected

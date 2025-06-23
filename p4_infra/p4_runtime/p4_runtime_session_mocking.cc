@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 
 #include <cstdint>
 #include <string>
@@ -31,12 +31,12 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4/v1/p4runtime_mock.grpc.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 // TODO: b/317362020 - Remove version setting once the version check in
 // `p4_runtime_session.cc` is removed.
 #include "sai_p4/instantiations/google/versions.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 namespace {
 
@@ -360,4 +360,4 @@ absl::StatusOr<P4SessionWithMockStub> MakeP4SessionWithMockStub(
   };
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime

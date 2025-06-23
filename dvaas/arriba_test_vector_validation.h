@@ -25,7 +25,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace dvaas {
 
@@ -81,7 +81,8 @@ absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
 //   - Control switch contains entries to punt all packets.
 //   - SUT constains the entries in arriba_test_vector.ir_entries.
 absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    p4_runtime::P4RuntimeSession& sut,
+    p4_runtime::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params = {});
 

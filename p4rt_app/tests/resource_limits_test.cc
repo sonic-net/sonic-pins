@@ -27,7 +27,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -143,7 +143,8 @@ TEST_F(ResourceLimitsTest, WcmpAccountingRejectsInsertsBeyondLimit) {
   // Using more resources than available should result in a RESOURCE_EXHAUSTED
   // error.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown,
                HasSubstr(
                    "#2: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
@@ -161,7 +162,8 @@ TEST_F(ResourceLimitsTest, WcmpAccountingRejectsGroupSizeThatIsTooLarge) {
                              /*group_id=*/"group-1", max_group_size + 1));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(
           absl::StatusCode::kUnknown,
           HasSubstr("#1: RESOURCE_EXHAUSTED: [P4RT App] too many actions")));
@@ -193,19 +195,19 @@ TEST_F(ResourceLimitsTest, WcmpAccountingSupportsModifyingUpToTheLimit) {
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
                              /*group_id=*/"group-3", /*size=*/1));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // We're only verifyifying the accounting behavior so reusing the same value
   // should not matter.
   request.mutable_updates(0)->set_type(p4::v1::Update::MODIFY);
   request.mutable_updates(1)->set_type(p4::v1::Update::MODIFY);
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             overflow_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   overflow_request),
       StatusIs(absl::StatusCode::kUnknown,
                HasSubstr(
                    "#1: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
@@ -242,15 +244,15 @@ TEST_F(ResourceLimitsTest, WcmpAccountingModifyCanReduceResources) {
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
                              /*group_id=*/"group-3", /*size=*/1));
 
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   insert_request));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   modify_request));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   valid_insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         modify_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         valid_insert_request));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             overflow_insert_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   overflow_insert_request),
       StatusIs(absl::StatusCode::kUnknown,
                HasSubstr(
                    "#1: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
@@ -283,21 +285,22 @@ TEST_F(ResourceLimitsTest, WcmpAccountingSupportsDelete) {
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
                              /*group_id=*/"group-3", /*size=*/5));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_1));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_2));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         group_1));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         group_2));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_3),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   group_3),
       StatusIs(absl::StatusCode::kUnknown,
                HasSubstr(
                    "#1: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
 
   group_2.mutable_updates(0)->set_type(p4::v1::Update::DELETE);
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_2));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_3));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         group_2));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         group_3));
 }
 
 TEST_F(ResourceLimitsTest, WcmpAccountingHandlesBatchRequests) {
@@ -320,8 +323,8 @@ TEST_F(ResourceLimitsTest, WcmpAccountingHandlesBatchRequests) {
                              /*group_id=*/"group-3", /*size=*/1));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             insert_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   insert_request),
       StatusIs(
           absl::StatusCode::kUnknown,
           AllOf(HasSubstr(
@@ -358,10 +361,10 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesModifyWillPass) {
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
                              /*group_id=*/"group-3", /*size=*/1));
 
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   insert_request));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   batch_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         batch_request));
 }
 
 TEST_F(ResourceLimitsTest, WcmpAccountingAssumesDeleteWillPass) {
@@ -391,10 +394,10 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesDeleteWillPass) {
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
                              /*group_id=*/"group-3", /*size=*/1));
 
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   insert_request));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   batch_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         batch_request));
 }
 
 }  // namespace

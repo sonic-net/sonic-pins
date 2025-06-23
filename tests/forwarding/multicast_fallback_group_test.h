@@ -28,7 +28,7 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -63,8 +63,8 @@ class MulticastFallbackGroupTestFixture
   pdpi::IrP4Info ir_p4info_;
   std::string test_config_key_;
   TestData test_data_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> control_p4_session_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
   std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
   std::vector<pins_test::P4rtPortId> controller_port_ids_;

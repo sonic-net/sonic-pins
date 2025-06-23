@@ -40,7 +40,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/sonic/packetio_interface.h"
@@ -221,10 +221,10 @@ class WarmRestartTest : public testing::Test {
     // Reset the P4RT client.
     std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
     LOG(INFO) << "Opening P4RT connection to " << address << ".";
-    auto stub =
-        pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
+    auto stub = p4_runtime::CreateP4RuntimeStub(
+        address, grpc::InsecureChannelCredentials());
 
-      ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+      ASSIGN_OR_RETURN(p4rt_session_, p4_runtime::P4RuntimeSession::Create(
                                           std::move(stub), kDeviceId));
 
     return absl::OkStatus();
@@ -267,7 +267,7 @@ class WarmRestartTest : public testing::Test {
   std::unique_ptr<test_lib::P4RuntimeGrpcService> p4rt_service_;
 
   // A gRPC client session to send and receive gRPC calls.
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session_;
 
   std::unique_ptr<p4::v1::P4Runtime::Stub> primary_stub_;
   std::unique_ptr<p4::v1::P4Runtime::Stub> backup_stub_;
@@ -371,8 +371,8 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithAclEntries) {
                        .AddMatchField("is_ip", "0x1")
                        .SetAction("set_vrf")
                        .AddActionParam("vrf_id", "vrf-1");
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_->GetP4rtAppDbTable().ReadTableEntry(acl_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(acl_entry.GetValueMap())));
@@ -433,8 +433,8 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
 
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_->GetP4rtAppDbTable().ReadTableEntry(
           expected_entry.GetKey()),

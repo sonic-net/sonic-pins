@@ -24,8 +24,8 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -33,7 +33,7 @@
 namespace pins {
 
 absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
-                             pdpi::P4RuntimeSession& p4_session,
+                             p4_runtime::P4RuntimeSession& p4_session,
                              const pdpi::IrP4Info& ir_p4info,
                              std::vector<pins::GroupMember>& members) {
   std::vector<std::string> nexthops;
@@ -102,7 +102,7 @@ absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
 
   // Program the switch.
   RETURN_IF_ERROR(
-      (pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries)));
+      (p4_runtime::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries)));
 
   // Write the PI & PD entries to artifacts.
   for (const auto& pi : pi_entries) {
@@ -123,7 +123,7 @@ absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
 }
 
 absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment& test_environment,
-                                     pdpi::P4RuntimeSession& p4_session,
+                                     p4_runtime::P4RuntimeSession& p4_session,
                                      const pdpi::IrP4Info& ir_p4info,
                                      absl::string_view group_id,
                                      absl::Span<const GroupMember> members,
@@ -167,7 +167,7 @@ absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment& test_environment,
   update->set_type(type);
   *update->mutable_entity()->mutable_table_entry() = pi_entry;
   RETURN_IF_ERROR(
-      pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request));
+      p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session, write_request));
 
   // Append the PI & PD entries.
   RETURN_IF_ERROR(test_environment.AppendToTestArtifact(
@@ -177,7 +177,7 @@ absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment& test_environment,
   return absl::OkStatus();
 }
 
-absl::Status DeleteGroup(pdpi::P4RuntimeSession& p4_session,
+absl::Status DeleteGroup(p4_runtime::P4RuntimeSession& p4_session,
                          const pdpi::IrP4Info& ir_p4info,
                          absl::string_view group_id) {
   ASSIGN_OR_RETURN(
@@ -195,20 +195,21 @@ absl::Status DeleteGroup(pdpi::P4RuntimeSession& p4_session,
               )pb",
               group_id))));
 
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // Verifies  the actual members received from P4 read response matches the
 // expected members.
 absl::Status VerifyGroupMembersFromP4Read(
-    pdpi::P4RuntimeSession& p4_session, const pdpi::IrP4Info& ir_p4info,
+    p4_runtime::P4RuntimeSession& p4_session, const pdpi::IrP4Info& ir_p4info,
     absl::string_view group_id,
     absl::Span<const GroupMember> expected_members) {
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
   ASSIGN_OR_RETURN(
       p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(&p4_session, read_request));
+      p4_runtime::SetMetadataAndSendPiReadRequest(&p4_session, read_request));
 
   // Filter out WCMP group entries separately from the whole read response.
   absl::flat_hash_map<std::string, p4::v1::TableEntry>

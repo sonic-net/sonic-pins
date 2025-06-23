@@ -5,7 +5,7 @@
 
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins_test {
 
@@ -21,7 +21,7 @@ namespace pins_test {
 //      receiver.Destroy();
 class PacketInReceiver final {
  public:
-  PacketInReceiver(pdpi::P4RuntimeSession &session,
+  PacketInReceiver(p4_runtime::P4RuntimeSession &session,
                    std::function<void(p4::v1::StreamMessageResponse)> callback)
       : session_(session), receiver_([this, callback = std::move(callback)]() {
           absl::StatusOr<p4::v1::StreamMessageResponse> pi_response;
@@ -47,7 +47,7 @@ class PacketInReceiver final {
   ~PacketInReceiver() { Destroy(); }
 
  private:
-  pdpi::P4RuntimeSession &session_;
+  p4_runtime::P4RuntimeSession &session_;
   std::thread receiver_;
   absl::Notification stop_receiving_;
 };

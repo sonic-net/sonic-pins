@@ -19,7 +19,7 @@
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/io.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
@@ -63,8 +63,8 @@ TEST_F(DebugDataDumpTest, VerifyDebugDumpPacketIoCountersToCorrectFile) {
                              }
                            )pb",
                            ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   std::string temp_dir = testing::TempDir();
   EXPECT_OK(p4rt_service_.GetP4rtServer().DumpDebugData(temp_dir, "alert"));

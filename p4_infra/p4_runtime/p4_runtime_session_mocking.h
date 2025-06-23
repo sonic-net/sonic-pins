@@ -14,8 +14,8 @@
 
 // Auxiliary functions for mocking P4RuntimeSession behaviors.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
-#define PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
+#ifndef PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_MOCKING_H_
+#define PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_MOCKING_H_
 
 #include <vector>
 
@@ -24,9 +24,9 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4/v1/p4runtime_mock.grpc.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 // A fixed P4Runtime device ID used in requests returned by the
 // `Construct*Request` functions in this file.
@@ -131,6 +131,6 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
                            const p4::config::v1::P4Info& p4info,
                            const P4RuntimeSessionOptionalArgs& metadata);
 
-}  // namespace pdpi
+}  // namespace p4_runtime
 
-#endif  // PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
+#endif  // PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_MOCKING_H_

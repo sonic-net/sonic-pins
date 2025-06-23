@@ -18,7 +18,7 @@
 #include "absl/strings/str_cat.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
 namespace p4rt_app {
@@ -54,14 +54,14 @@ void P4RuntimeComponentTestFixture::SetUp() {
 
   // Open a P4RT client connection to the gRPC server.
   std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
-  auto stub =
-      pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-  ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+  auto stub = p4_runtime::CreateP4RuntimeStub(
+      address, grpc::InsecureChannelCredentials());
+  ASSERT_OK_AND_ASSIGN(p4rt_session_, p4_runtime::P4RuntimeSession::Create(
                                           std::move(stub), device_id_));
   LOG(INFO) << "Opening P4RT connection to " << address << ".";
 
   // Push a P4Info file to enable the reading, and writing of entries.
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));

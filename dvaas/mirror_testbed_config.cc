@@ -23,8 +23,8 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
@@ -63,11 +63,12 @@ absl::StatusOr<MirrorTestbedConfigurator> MirrorTestbedConfigurator::Create(
   MirrorTestbedConfigurator configured_testbed(testbed);
 
   ASSIGN_OR_RETURN(configured_testbed.sut_api_.p4rt,
-                   pdpi::P4RuntimeSession::Create(testbed->Sut()));
+                   p4_runtime::P4RuntimeSession::Create(testbed->Sut()));
   ASSIGN_OR_RETURN(configured_testbed.sut_api_.gnmi,
                    testbed->Sut().CreateGnmiStub());
-  ASSIGN_OR_RETURN(configured_testbed.control_switch_api_.p4rt,
-                   pdpi::P4RuntimeSession::Create(testbed->ControlSwitch()));
+  ASSIGN_OR_RETURN(
+      configured_testbed.control_switch_api_.p4rt,
+      p4_runtime::P4RuntimeSession::Create(testbed->ControlSwitch()));
   ASSIGN_OR_RETURN(configured_testbed.control_switch_api_.gnmi,
                    testbed->ControlSwitch().CreateGnmiStub());
 
@@ -98,7 +99,7 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
   if (params.p4rt_port_ids_to_configure.has_value()) {
     // Clear entities on SUT. This is needed to ensure we can modify the
     // interface configurations.
-    RETURN_IF_ERROR(pdpi::ClearEntities(*sut_api_.p4rt));
+    RETURN_IF_ERROR(p4_runtime::ClearEntities(*sut_api_.p4rt));
 
     // Change interface configurations on SUT to match `used_p4rt_port_ids`.
     RETURN_IF_ERROR(ConfigureSutInterfacesWithGivenP4RtPortIds(
@@ -108,7 +109,7 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
   if (params.mirror_sut_ports_ids_to_control_switch) {
     // Clear entities on control switch. This is needed to ensure we can modify
     // the interface configurations.
-    RETURN_IF_ERROR(pdpi::ClearEntities(*control_switch_api_.p4rt));
+    RETURN_IF_ERROR(p4_runtime::ClearEntities(*control_switch_api_.p4rt));
 
     // Mirror the SUTs OpenConfig interface <-> P4RT port ID mappings to the
     // control switch.

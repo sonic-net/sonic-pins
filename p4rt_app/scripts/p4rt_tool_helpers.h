@@ -21,7 +21,7 @@
 #include "absl/flags/declare.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 // Flags to configure the P4RT connection.
 ABSL_DECLARE_FLAG(std::string, p4rt_server_address);
@@ -38,7 +38,8 @@ void Info(absl::string_view message);    // default color to stdout
 void Warning(absl::string_view message); // yellow color to stderr
 void Error(absl::string_view message);   // red color to stderr
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> CreateP4rtSession();
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>
+CreateP4rtSession();
 
 } // namespace p4rt_app
 

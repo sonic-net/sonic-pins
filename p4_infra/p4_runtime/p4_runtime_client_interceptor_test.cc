@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_client_interceptor.h"
+#include "p4_infra/p4_runtime/p4_runtime_client_interceptor.h"
 
 #include <memory>
 #include <optional>
@@ -30,9 +30,9 @@
 #include "net/google::protobuf/public/repeated_field.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/testing/mock_p4_runtime_server.h"
+#include "p4_infra/p4_runtime/mock_p4_runtime_server.h"
 
-namespace pdpi {
+namespace p4_runtime {
 namespace {
 
 using ::grpc::experimental::ClientInterceptorFactoryInterface;
@@ -474,4 +474,4 @@ TEST(P4RuntimeClientInterceptorTest, StreamMessageInterceptionWorks) {
 }
 
 }  // namespace
-}  // namespace pdpi
+}  // namespace p4_runtime

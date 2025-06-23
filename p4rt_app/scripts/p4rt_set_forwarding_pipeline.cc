@@ -29,7 +29,7 @@
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -124,10 +124,10 @@ absl::Status Main() {
       break;
   }
 
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
                    CreateP4rtSession());
-  return pdpi::SetMetadataAndSetForwardingPipelineConfig(session.get(), action,
-                                                         config);
+  return p4_runtime::SetMetadataAndSetForwardingPipelineConfig(session.get(),
+                                                               action, config);
 }
 
 }  // namespace

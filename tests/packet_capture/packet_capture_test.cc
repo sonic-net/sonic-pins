@@ -48,9 +48,9 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/ternary.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_infra/string_encodings/decimal_string.h"
@@ -105,7 +105,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   thinkit::Switch& control_device = Testbed().ControlSwitch();
 
   // Configure mirror testbed.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_p4rt_session;
   ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
@@ -116,9 +116,9 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
                            control_device, std::nullopt, std::nullopt));
 
   ASSERT_OK_AND_ASSIGN(const P4Info& p4info,
-                       pdpi::GetP4Info(*sut_p4rt_session));
+                       p4_runtime::GetP4Info(*sut_p4rt_session));
   ASSERT_OK_AND_ASSIGN(const P4Info& control_p4info,
-                       pdpi::GetP4Info(*control_p4rt_session));
+                       p4_runtime::GetP4Info(*control_p4rt_session));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_control_p4info,
@@ -138,8 +138,8 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
                            .AddEntryPuntingAllPackets(sai::PuntAction::kCopy)
                            .GetDedupedPiEntities(ir_control_p4info));
 
-  ASSERT_OK(pdpi::InstallPiEntities(control_p4rt_session.get(),
-                                    ir_control_p4info, pi_entities));
+  ASSERT_OK(p4_runtime::InstallPiEntities(control_p4rt_session.get(),
+                                          ir_control_p4info, pi_entities));
 
   // Pick links to be used for packet injection and mirroring.
   ASSERT_OK_AND_ASSIGN(
@@ -183,8 +183,8 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   ASSERT_OK_AND_ASSIGN(auto entries, CreateEntriesToMirrorTrafficWithVlanTag(
                                          ir_p4info, kSutIngressPortP4rtId,
                                          mirror_session_params));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(sut_p4rt_session.get(), ir_p4info, entries));
+  ASSERT_OK(p4_runtime::InstallPiEntities(sut_p4rt_session.get(), ir_p4info,
+                                          entries));
 
   LOG(INFO) << "injecting test packet: "
             << GetParam().test_packet.DebugString();
@@ -947,8 +947,8 @@ TEST_P(ControllerPacketCaptureTestWithoutIxia,
           /*gnmi_config=*/std::nullopt, GetParam().sut_p4info));
 
   ASSERT_OK_AND_ASSIGN(auto sut_ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
 
   // Collect port IDs.
   // Get SUT and control ports to test on.
@@ -971,8 +971,8 @@ TEST_P(ControllerPacketCaptureTestWithoutIxia,
           sut_ir_p4info, controller_packet_capture_params.ingress_port,
           controller_packet_capture_params.ingress_vlan_ids,
           controller_packet_capture_params.forwarded_packet_vlan_id));
-  ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session.get(), sut_ir_p4info,
-                                    acl_entities));
+  ASSERT_OK(p4_runtime::InstallPiEntities(sut_p4rt_session.get(), sut_ir_p4info,
+                                          acl_entities));
 
   // Configure mirror session attributes.
   const sai::MirrorSessionParams mirror_session_params =
@@ -995,8 +995,8 @@ TEST_P(ControllerPacketCaptureTestWithoutIxia,
           sut_ir_p4info, mirror_session_params,
           controller_packet_capture_params.ingress_vlan_ids,
           controller_packet_capture_params.egress_port, kMirrorSessionId));
-  ASSERT_OK(
-      pdpi::InstallPiEntities(sut_p4rt_session.get(), sut_ir_p4info, entries));
+  ASSERT_OK(p4_runtime::InstallPiEntities(sut_p4rt_session.get(), sut_ir_p4info,
+                                          entries));
   // Build test vectors.
   ASSERT_OK_AND_ASSIGN(
       std::vector<dvaas::PacketTestVector> test_vector,

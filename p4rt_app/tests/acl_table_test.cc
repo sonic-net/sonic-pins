@@ -32,8 +32,8 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
@@ -78,8 +78,8 @@ TEST_F(MiddleblockAclTableTest, ReadCounters) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Fake OrchAgent updating the counters.
   //
@@ -104,9 +104,9 @@ TEST_F(MiddleblockAclTableTest, ReadCounters) {
   // Verify the entry we read back has counter information.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
 
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0).table_entry().counter_data(),
@@ -135,15 +135,15 @@ TEST_F(MiddleblockAclTableTest, ReadMeters) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Verify we can read back the meter information.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
 
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0).table_entry().meter_config(),
@@ -173,7 +173,8 @@ TEST_F(MiddleblockAclTableTest, CannotInsertEntryThatFailsAConstraintCheck) {
           )pb",
           ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
 }
 
@@ -217,8 +218,8 @@ TEST_F(FbrAclTableTest, VrfClassificationCanMatchOnDstMac) {
           .SetAction("set_vrf")
           .AddActionParam("vrf_id", "vrf-1");
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(acl_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(acl_entry.GetValueMap())));

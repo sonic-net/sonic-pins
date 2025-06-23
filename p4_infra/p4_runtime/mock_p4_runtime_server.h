@@ -1,5 +1,19 @@
-#ifndef PINS_P4_INFRA_P4_PDPI_TESTING_MOCK_P4_RUNTIME_SERVER_H_
-#define PINS_P4_INFRA_P4_PDPI_TESTING_MOCK_P4_RUNTIME_SERVER_H_
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef PINS_P4_INFRA_PR_RUNTIME_MOCK_P4_RUNTIME_SERVER_H_
+#define PINS_P4_INFRA_PR_RUNTIME_MOCK_P4_RUNTIME_SERVER_H_
 
 #include <memory>
 #include <string>
@@ -13,7 +27,7 @@
 #include "grpcpp/support/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 // A mocked `P4Runtime::Service` class.
 class MockP4RuntimeService final : public p4::v1::P4Runtime::Service {
@@ -89,6 +103,6 @@ class MockP4RuntimeServer {
   std::string address_ = absl::StrCat("localhost:", port_);
 };
 
-}  // namespace pdpi
+}  // namespace p4_runtime
 
-#endif  // PINS_P4_INFRA_P4_PDPI_TESTING_MOCK_P4_RUNTIME_SERVER_H_
+#endif  // PINS_P4_INFRA_PR_RUNTIME_MOCK_P4_RUNTIME_SERVER_H_

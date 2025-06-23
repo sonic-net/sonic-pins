@@ -45,7 +45,7 @@
 #include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -67,7 +67,7 @@ constexpr absl::string_view kNoVlanId = "";
 // to inject a packet into the ingress pipeline.
 constexpr absl::string_view kSendToIngress = "send_to_ingress";
 
-absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
+absl::Status AddAndSetDefaultVrf(p4_runtime::P4RuntimeSession& session,
                                  const pdpi::IrP4Info& ir_p4info,
                                  const std::string& vrf_id) {
   LOG(INFO) << "Assigning all packets to VRF " << vrf_id << ".";
@@ -97,10 +97,11 @@ absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
                    VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
   ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
                    pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&session,
+                                                      pi_write_request);
 }
 
-absl::Status AllowVrfTrafficToDstMac(pdpi::P4RuntimeSession& session,
+absl::Status AllowVrfTrafficToDstMac(p4_runtime::P4RuntimeSession& session,
                                      const pdpi::IrP4Info& ir_p4info,
                                      const std::string& dst_mac,
                                      const std::string& vrf_id) {
@@ -138,10 +139,10 @@ absl::Status AllowVrfTrafficToDstMac(pdpi::P4RuntimeSession& session,
                    VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
   ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
                    pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
 }
 
-absl::Status PuntAllPacketsToController(pdpi::P4RuntimeSession& session,
+absl::Status PuntAllPacketsToController(p4_runtime::P4RuntimeSession& session,
                                         const pdpi::IrP4Info& ir_p4info) {
   pdpi::IrWriteRequest ir_write_request;
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
@@ -167,7 +168,7 @@ absl::Status PuntAllPacketsToController(pdpi::P4RuntimeSession& session,
 
   ASSIGN_OR_RETURN(p4::v1::WriteRequest pi_write_request,
                    pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
 }
 
 // L3 routing configurations that can be shared when generating the L3 routing
@@ -186,7 +187,7 @@ struct L3Route {
   std::string nexthop_id;
 };
 
-absl::Status AddL3Route(pdpi::P4RuntimeSession& session,
+absl::Status AddL3Route(p4_runtime::P4RuntimeSession& session,
                         const pdpi::IrP4Info& ir_p4info,
                         const L3Route& options) {
   LOG(INFO) << absl::StreamFormat(
@@ -220,10 +221,10 @@ absl::Status AddL3Route(pdpi::P4RuntimeSession& session,
                           .nexthop_id = options.nexthop_id,
                       }));
 
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&session, write_request);
 }
 
-absl::Status AdmitL3Route(pdpi::P4RuntimeSession& session,
+absl::Status AdmitL3Route(p4_runtime::P4RuntimeSession& session,
                           const pdpi::IrP4Info& ir_p4info,
                           const L3AdmitOptions& options) {
   if (options.in_port.has_value()) {
@@ -238,7 +239,7 @@ absl::Status AdmitL3Route(pdpi::P4RuntimeSession& session,
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),
       L3AdmitTableUpdate(ir_p4info, p4::v1::Update::INSERT, options));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&session, write_request);
 }
 
 absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
@@ -290,7 +291,7 @@ absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
   return packetlib::SerializePacket(packet);
 }
 
-absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
+absl::Status SendUdpPacket(p4_runtime::P4RuntimeSession& session,
                            const pdpi::IrP4Info& ir_p4info,
                            absl::string_view port_id, int packet_count,
                            absl::string_view dst_mac, absl::string_view vlan_id,
@@ -843,8 +844,8 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
   ASSERT_OK_AND_ASSIGN(
       p4::v1::WriteRequest pi_set_default_vlan,
       pdpi::IrWriteRequestToPi(ir_p4info_, ir_set_default_vlan));
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session_.get(),
-                                                   pi_set_default_vlan));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(
+      sut_p4rt_session_.get(), pi_set_default_vlan));
 
   // Send 100 packets to the switch with an Outer VLAN that is not the default
   // PINs VLAN (i.e. 4095).
@@ -985,8 +986,8 @@ TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
     ASSERT_OK_AND_ASSIGN(
         p4::v1::WriteRequest pi_write_request,
         pdpi::IrWriteRequestToPi(ir_p4info_, ir_write_request));
-    ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session_.get(),
-                                                     pi_write_request));
+    ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(
+        sut_p4rt_session_.get(), pi_write_request));
   }
 
   // Send 2 sets of packets to the switch. The packets are exactly the same, but

@@ -28,8 +28,8 @@
 #include "grpcpp/grpcpp.h"
 #include "gutil/gutil/io.h"
 #include "gutil/gutil/proto.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -83,7 +83,7 @@ absl::StatusOr<std::vector<sai::Update>> ConvertToPdEntries(
 // Class to help in programming P4RT table entries on the switch.
 class P4rtTableWriter {
  public:
-  P4rtTableWriter(std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
+  P4rtTableWriter(std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session,
                   bool cleanup, bool cleanall)
       : p4rt_session_(std::move(p4rt_session)),
         cleanup_(cleanup),
@@ -92,7 +92,7 @@ class P4rtTableWriter {
   ~P4rtTableWriter() {
     // Cleanup all entries, if specified.
     if (cleanall_) {
-      auto status = pdpi::ClearEntities(*p4rt_session_);
+      auto status = p4_runtime::ClearEntities(*p4rt_session_);
       if (!status.ok()) {
         LOG(ERROR) << "Unable to clear enries on the switch: "
                    << status.ToString();
@@ -105,7 +105,7 @@ class P4rtTableWriter {
         (*it).set_type(p4::v1::Update::DELETE);
         p4::v1::WriteRequest write_request;
         *write_request.add_updates() = *it;
-        auto write_status = pdpi::SetMetadataAndSendPiWriteRequest(
+        auto write_status = p4_runtime::SetMetadataAndSendPiWriteRequest(
             p4rt_session_.get(), write_request);
         if (!write_status.ok()) {
           LOG(ERROR) << "Error : " << write_status.ToString()
@@ -122,14 +122,14 @@ class P4rtTableWriter {
     p4::v1::WriteRequest write_request;
     write_request.set_device_id(p4rt_session_->DeviceId());
     *write_request.add_updates() = pi_entry;
-    RETURN_IF_ERROR(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                           write_request));
+    RETURN_IF_ERROR(p4_runtime::SetMetadataAndSendPiWriteRequest(
+        p4rt_session_.get(), write_request));
     pi_entries_.push_back(pi_entry);
     return absl::OkStatus();
   }
 
  private:
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session_;
   std::vector<p4::v1::Update> pi_entries_;
   bool cleanup_ = false;
   bool cleanall_ = false;
@@ -140,16 +140,16 @@ int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
 
   // Create connection to P4RT server.
-  auto stub = pdpi::CreateP4RuntimeStub(
+  auto stub = p4_runtime::CreateP4RuntimeStub(
       "unix:/sock/p4rt.sock", grpc::experimental::LocalCredentials(UDS));
-  auto p4rt_session_or = pdpi::P4RuntimeSession::Create(
+  auto p4rt_session_or = p4_runtime::P4RuntimeSession::Create(
       std::move(stub), absl::GetFlag(FLAGS_p4rt_device_id));
   if (!p4rt_session_or.ok()) {
     LOG(ERROR) << "Failed to create P4Runtime session, error : "
                << p4rt_session_or.status();
     return -1;
   }
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session =
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session =
       std::move(*p4rt_session_or);
 
   sai::Instantiation switch_instantiation =
@@ -159,10 +159,11 @@ int main(int argc, char** argv) {
 
   // Push P4 Info Config file if specified.
   if (absl::GetFlag(FLAGS_push_config)) {
-    auto push_p4info_status = pdpi::SetMetadataAndSetForwardingPipelineConfig(
-        p4rt_session.get(),
-        p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-        p4info);
+    auto push_p4info_status =
+        p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
+            p4rt_session.get(),
+            p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+            p4info);
     if (!push_p4info_status.ok()) {
       LOG(ERROR) << "Failed to push P4Info to the switch, error : "
                  << push_p4info_status.ToString();

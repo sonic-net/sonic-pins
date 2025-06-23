@@ -32,7 +32,7 @@ cc_library(
         "//gutil/gutil:status",
         "//lib/p4rt:p4rt_port",
         "//lib/utils:json_utils",
-        "//p4_infra/p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_runtime:p4_runtime_session",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",

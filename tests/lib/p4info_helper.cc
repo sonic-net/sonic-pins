@@ -20,7 +20,7 @@
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/switch.h"
 
 namespace pins {
@@ -49,10 +49,10 @@ bool TableHasMatchField(const pdpi::IrP4Info& ir_p4info,
 }
 
 absl::StatusOr<p4::config::v1::P4Info> GetP4InfoFromSUT(thinkit::Switch& sut) {
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(sut));
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
+                   p4_runtime::P4RuntimeSession::Create(sut));
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   pdpi::GetForwardingPipelineConfig(session.get()));
+                   p4_runtime::GetForwardingPipelineConfig(session.get()));
   return response.config().p4info();
 }
 

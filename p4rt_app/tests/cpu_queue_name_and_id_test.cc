@@ -17,7 +17,7 @@
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
@@ -66,8 +66,8 @@ TEST_F(CpuQueueTest, CpuQueueIdsResultInAppDbQueueIds) {
                             .SetPriority(10)
                             .SetAction("acl_copy")
                             .AddActionParam("qos_queue", "0xa");
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -99,8 +99,8 @@ TEST_F(CpuQueueTest, CpuQueueNamesResultInAppDbQueueIds) {
                             .SetPriority(10)
                             .SetAction("acl_copy")
                             .AddActionParam("qos_queue", "0xa");
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -126,15 +126,15 @@ TEST_F(CpuQueueTest, CpuQueueIdsReadBackAsIds) {
                            )pb",
                            ir_p4_info_));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Reading back the entry should result in the same table_entry.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
@@ -160,15 +160,15 @@ TEST_F(CpuQueueTest, CpuQueueNamesReadBackAsNames) {
                            )pb",
                            ir_p4_info_));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Reading back the entry should result in the same table_entry.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
@@ -191,8 +191,8 @@ TEST_F(CpuQueueTest, PreservesIdsIfCpuQueueTranslatorIsNeverSet) {
                            )pb",
                            ir_p4_info_));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   auto expected_entry = test_lib::AppDbEntryBuilder{}
                             .SetTableName("ACL_ACL_INGRESS_TABLE")
@@ -207,9 +207,9 @@ TEST_F(CpuQueueTest, PreservesIdsIfCpuQueueTranslatorIsNeverSet) {
   // Reading back the entry should result in the same table_entry.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
@@ -235,8 +235,8 @@ TEST_F(CpuQueueTest, ForwardsUnknownQueueNamesToAppDb) {
                            )pb",
                            ir_p4_info_));
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   auto expected_entry = test_lib::AppDbEntryBuilder{}
                             .SetTableName("ACL_ACL_INGRESS_TABLE")
@@ -251,9 +251,9 @@ TEST_F(CpuQueueTest, ForwardsUnknownQueueNamesToAppDb) {
   // Reading back the entry should result in the same table_entry.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));

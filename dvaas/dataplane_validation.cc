@@ -56,8 +56,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_infra/string_encodings/hex_string.h"
@@ -104,8 +104,8 @@ absl::StatusOr<SynthesizedPacket> GetSynthesizedPacketFromFromTestVector(
 absl::Status DetermineReproducibilityRate(
     const DataplaneValidationParams& params,
     const PacketInjectionParams& parameters,
-    pdpi::P4RuntimeSession& sut_session,
-    pdpi::P4RuntimeSession& control_switch_session,
+    p4_runtime::P4RuntimeSession& sut_session,
+    p4_runtime::P4RuntimeSession& control_switch_session,
     dvaas::PacketTestOutcome& test_outcome) {
   // Duplicate the packet that caused a test failure.
   PacketTestVectorById test_vectors;
@@ -147,23 +147,24 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
         test_and_validate_callback) {
   // Get the `pi_entities` from the SUT.
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
-                   pdpi::ReadPiEntities(sut_api.p4rt.get()));
+                   p4_runtime::ReadPiEntities(sut_api.p4rt.get()));
 
   // Clear and reinstall table entries on the SUT.
   absl::Cleanup cleanup = [&pi_entities, &sut_api]() {
-    auto status = pdpi::ClearEntities(*sut_api.p4rt);
+    auto status = p4_runtime::ClearEntities(*sut_api.p4rt);
     if (!status.ok()) {
       LOG(WARNING) << "Failed to clear entities on the switch: "
                    << status.message();
     }
-    status = pdpi::InstallPiEntities(*sut_api.p4rt, pi_entities);
+    status = p4_runtime::InstallPiEntities(*sut_api.p4rt, pi_entities);
     if (!status.ok()) {
       LOG(WARNING) << "Failed to reinstall entities on the switch: "
                    << status.message();
     }
   };
 
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut_api.p4rt));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
+                   p4_runtime::GetIrP4Info(*sut_api.p4rt));
 
   // Create a synthesized packet from `test_outcome`.
   ASSIGN_OR_RETURN(SynthesizedPacket synthesized_packet,
@@ -211,7 +212,7 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
       // If there is no failure, reinstall the entity on the switch and add
       // the entity back to the result.
       reinstall_attempts++;
-      RETURN_IF_ERROR(pdpi::InstallIrEntity(*sut_api.p4rt, ir_entity))
+      RETURN_IF_ERROR(p4_runtime::InstallIrEntity(*sut_api.p4rt, ir_entity))
           << "Failed to reinstall entity that we just deleted from switch:"
           << gutil::PrintTextProto(ir_entity);
       *result.add_entities() = ir_entity;
@@ -300,7 +301,7 @@ absl::StatusOr<P4Specification> InferP4Specification(
       gutil::ParseVersion(
           p4_spec.p4_symbolic_config.p4info().pkg_info().version()));
   ASSIGN_OR_RETURN(gutil::Version sut_config_version,
-                   pdpi::GetPkgInfoVersion(sut.p4rt.get()));
+                   p4_runtime::GetPkgInfoVersion(sut.p4rt.get()));
   if (p4_symbolic_config_version != bmv2_config_version) {
     if (params.specification_override.has_value()) {
       LOG(WARNING) << "P4 specification override you provided is inconsistent: "
@@ -391,11 +392,12 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "sut_bmv2_config.txt", p4_spec.bmv2_config.DebugString()));
 
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
+                   p4_runtime::GetIrP4Info(*sut.p4rt));
 
   // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
-                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+                   p4_runtime::ReadIrEntitiesSorted(*sut.p4rt));
   // Retrieve auxiliary entries for v1model targets.
   ASSIGN_OR_RETURN(
       pdpi::IrEntities v1model_auxiliary_table_entries,
@@ -603,7 +605,7 @@ absl::Status PostProcessTestVectorFailure(
         pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
   ASSIGN_OR_RETURN(pdpi::IrEntities best_known_set_of_entities,
-                   pdpi::ReadIrEntities(*sut_api.p4rt));
+                   p4_runtime::ReadIrEntities(*sut_api.p4rt));
   // Duplicate packet that caused test failure.
   if (failure_count <
       params.failure_enhancement_options.max_failures_to_attempt_to_replicate) {
@@ -645,7 +647,7 @@ absl::Status PostProcessTestVectorFailure(
       best_known_set_of_entities;
   dvaas_regression_test_proto.set_currently_failing(true);
   ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info,
-                   pdpi::GetP4Info(*sut_api.p4rt));
+                   p4_runtime::GetP4Info(*sut_api.p4rt));
   *dvaas_regression_test_proto.mutable_p4info() = p4info;
 
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
@@ -678,7 +680,7 @@ absl::Status PostProcessTestVectorFailure(
 absl::Status IncreasePerEntryRateLimitsToAvoidBogusDrops(
     const std::vector<p4::v1::Entity>& original_entities, SwitchApi& sut) {
   ASSIGN_OR_RETURN(gutil::Version switch_p4_version,
-                   pdpi::GetPkgInfoVersion(sut.p4rt.get()));
+                   p4_runtime::GetPkgInfoVersion(sut.p4rt.get()));
   ASSIGN_OR_RETURN(
       gutil::Version minimum_version,
       gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_METER_CONFIG_USES_INT64));
@@ -719,7 +721,7 @@ absl::Status IncreasePerEntryRateLimitsToAvoidBogusDrops(
     }
   }
   // Send MODIFY updates to the switch.
-  return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
+  return p4_runtime::SendPiUpdates(sut.p4rt.get(), pi_updates);
 }
 
 // Undoes the rate limit increase performed by
@@ -734,7 +736,7 @@ absl::Status ResetRateLimitsToOriginal(
       *update.mutable_entity() = entity;
     }
   }
-  return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
+  return p4_runtime::SendPiUpdates(sut.p4rt.get(), pi_updates);
 }
 
 absl::StatusOr<ValidationResult>
@@ -743,7 +745,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     const DataplaneValidationParams& params) {
   // Read all entities.
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> original_entities,
-                   pdpi::ReadPiEntitiesSorted(*sut.p4rt));
+                   p4_runtime::ReadPiEntitiesSorted(*sut.p4rt));
 
   RETURN_IF_ERROR(
       IncreasePerEntryRateLimitsToAvoidBogusDrops(original_entities, sut));
@@ -763,14 +765,14 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   {
     // Read P4Info from control switch.
     ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info,
-                     pdpi::GetIrP4Info(*control_switch.p4rt));
+                     p4_runtime::GetIrP4Info(*control_switch.p4rt));
 
     // Clear control switch entities and install punt entries instead.
-    RETURN_IF_ERROR(pdpi::ClearEntities(*control_switch.p4rt));
+    RETURN_IF_ERROR(p4_runtime::ClearEntities(*control_switch.p4rt));
     ASSIGN_OR_RETURN(pdpi::IrEntities punt_entries,
                      backend_->GetEntitiesToPuntAllPackets(ir_info));
     RETURN_IF_ERROR(
-        pdpi::InstallIrEntities(*control_switch.p4rt, punt_entries));
+        p4_runtime::InstallIrEntities(*control_switch.p4rt, punt_entries));
   }
 
   if (params.reset_and_collect_counters) {
@@ -779,11 +781,11 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     //
     // CAUTION: As of 2024, this is a not supported by SONIC PINS, and behaves
     // as a no-op on such switches.
-    RETURN_IF_ERROR(pdpi::ClearTableEntryCounters(*sut.p4rt));
+    RETURN_IF_ERROR(p4_runtime::ClearTableEntryCounters(*sut.p4rt));
 
     // Read and store table entries on SUT as an artifact.
     ASSIGN_OR_RETURN(pdpi::IrEntities entities,
-                     pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+                     p4_runtime::ReadIrEntitiesSorted(*sut.p4rt));
     RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
         "sut_ir_entities.pre_packet_injection.txtpb",
         gutil::PrintTextProto(entities)));
@@ -809,7 +811,8 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                                          dvaas_test_artifact_writer));
   } else {
     LOG(INFO) << "Checking user-provided test vectors for well-formedness";
-    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info, pdpi::GetIrP4Info(*sut.p4rt));
+    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info,
+                     p4_runtime::GetIrP4Info(*sut.p4rt));
     ASSIGN_OR_RETURN(test_vectors,
                      LegitimizeUserProvidedTestVectors(
                          params.packet_test_vector_override, ir_info));
@@ -818,7 +821,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   // Store the test vectors in ArribaTestVector format as an artifact.
   dvaas::ArribaTestVector arriba_test_vector;
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
-                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+                   p4_runtime::ReadIrEntitiesSorted(*sut.p4rt));
   for (const pdpi::IrEntity& ir_entity : entities.entities()) {
     // TODO: Add support for other entity types.
     if (ir_entity.has_table_entry()) {
@@ -859,7 +862,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
                    InferP4Specification(params, *backend_, sut));
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, p4_runtime::GetIrP4Info(*sut.p4rt));
   std::vector<SwitchInput> failed_switch_inputs;
   for (const dvaas::PacketTestOutcome& test_outcome :
        test_outcomes.outcomes()) {
@@ -876,7 +879,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       // Read P4Info and control plane entities from SUT, sorted for
       // determinism.
       ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
-                       pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+                       p4_runtime::ReadIrEntitiesSorted(*sut.p4rt));
       // Retrieve auxiliary entries for v1model targets.
       ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
                        backend_->CreateV1ModelAuxiliaryEntities(
@@ -989,7 +992,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     }
 
     ASSIGN_OR_RETURN(pdpi::IrEntities entities,
-                     pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+                     p4_runtime::ReadIrEntitiesSorted(*sut.p4rt));
     RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
         "sut_ir_entities.post_packet_injection.txtpb",
         gutil::PrintTextProto(entities)));
@@ -1002,11 +1005,12 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
     thinkit::MirrorTestbed& testbed, const DataplaneValidationParams& params) {
   // Set up connections.
   SwitchApi sut, control_switch;
-  ASSIGN_OR_RETURN(sut.p4rt, pdpi::P4RuntimeSession::Create(testbed.Sut()));
+  ASSIGN_OR_RETURN(sut.p4rt,
+                   p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
   ASSIGN_OR_RETURN(sut.gnmi, testbed.Sut().CreateGnmiStub());
 
-  ASSIGN_OR_RETURN(control_switch.p4rt,
-                   pdpi::P4RuntimeSession::Create(testbed.ControlSwitch()));
+  ASSIGN_OR_RETURN(control_switch.p4rt, p4_runtime::P4RuntimeSession::Create(
+                                            testbed.ControlSwitch()));
   ASSIGN_OR_RETURN(control_switch.gnmi,
                    testbed.ControlSwitch().CreateGnmiStub());
 
@@ -1021,7 +1025,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                      pins_test::GetInterfacesAsProto(*control_switch.gnmi,
                                                      gnmi::GetRequest::CONFIG));
     // Set up control switch to be a mirror of SUT.
-    RETURN_IF_ERROR(pdpi::ClearEntities(*control_switch.p4rt));
+    RETURN_IF_ERROR(p4_runtime::ClearEntities(*control_switch.p4rt));
     // Mirror testbed ports.
     RETURN_IF_ERROR(
         pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));

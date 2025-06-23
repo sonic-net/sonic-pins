@@ -62,8 +62,8 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -84,17 +84,17 @@ using ::otg::Openapi;
 // according to `p4info`.
 absl::Status InstallPdTableEntries(const sai::TableEntries &entries,
                                    const pdpi::IrP4Info &p4info,
-                                   pdpi::P4RuntimeSession &p4rt_session) {
+                                   p4_runtime::P4RuntimeSession &p4rt_session) {
   std::vector<p4::v1::TableEntry> pi_entries;
   for (const sai::TableEntry &entry : entries.entries()) {
     ASSIGN_OR_RETURN(pi_entries.emplace_back(),
                      pdpi::PartialPdTableEntryToPiTableEntry(p4info, entry));
   }
-  return pdpi::InstallPiTableEntries(&p4rt_session, p4info, pi_entries);
+  return p4_runtime::InstallPiTableEntries(&p4rt_session, p4info, pi_entries);
 }
 absl::Status InstallPdTableEntries(const sai::TableEntries &entries,
                                    const p4::config::v1::P4Info &p4info,
-                                   pdpi::P4RuntimeSession &p4rt_session) {
+                                   p4_runtime::P4RuntimeSession &p4rt_session) {
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
   return InstallPdTableEntries(entries, ir_p4info, p4rt_session);
 }
@@ -213,7 +213,7 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
   // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
       ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(

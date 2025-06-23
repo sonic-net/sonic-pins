@@ -43,7 +43,7 @@
 #include "lib/utils/generic_testbed_utils.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "thinkit/control_device.h"
@@ -252,7 +252,7 @@ std::vector<InterfacePair> AllToAll(absl::Span<const std::string> interfaces) {
 }
 
 absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
-    thinkit::GenericTestbed& testbed, pdpi::P4RuntimeSession* session,
+    thinkit::GenericTestbed& testbed, p4_runtime::P4RuntimeSession* session,
     const pdpi::IrP4Info& ir_p4info, absl::Span<const InterfacePair> pairs,
     absl::Span<const packetlib::Packet> packets, absl::Duration duration,
     SendTrafficOptions options) {

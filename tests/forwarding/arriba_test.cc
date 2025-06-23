@@ -28,8 +28,8 @@
 #include "gutil/gutil/status_matchers.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 
 namespace pins_test {
 namespace {
@@ -46,7 +46,7 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       GetParam().arriba_test_vector.ir_table_entries().entries().end());
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info,
-                       pdpi::GetIrP4Info(*configured_testbed.SutApi().p4rt));
+                       p4_runtime::GetIrP4Info(*configured_testbed.SutApi().p4rt));
 
   ASSERT_OK_AND_ASSIGN(
       absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,

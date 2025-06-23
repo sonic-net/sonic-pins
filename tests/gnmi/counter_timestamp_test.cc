@@ -19,8 +19,8 @@
 #include "lib/ixia_helper.pb.h"
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
 #include "tests/gnmi/ethcounter_ixia_test.h"
@@ -37,17 +37,17 @@ namespace pins_test {
 // according to `p4info`.
 absl::Status InstallPdTableEntries(const sai::TableEntries &entries,
                                    const pdpi::IrP4Info &p4info,
-                                   pdpi::P4RuntimeSession &p4rt_session) {
+                                   p4_runtime::P4RuntimeSession &p4rt_session) {
   std::vector<p4::v1::TableEntry> pi_entries;
   for (const sai::TableEntry &entry : entries.entries()) {
     ASSIGN_OR_RETURN(pi_entries.emplace_back(),
                      pdpi::PartialPdTableEntryToPiTableEntry(p4info, entry));
   }
-  return pdpi::InstallPiTableEntries(&p4rt_session, p4info, pi_entries);
+  return p4_runtime::InstallPiTableEntries(&p4rt_session, p4info, pi_entries);
 }
 absl::Status InstallPdTableEntries(const sai::TableEntries &entries,
                                    const p4::config::v1::P4Info &p4info,
-                                   pdpi::P4RuntimeSession &p4rt_session) {
+                                   p4_runtime::P4RuntimeSession &p4rt_session) {
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
   return InstallPdTableEntries(entries, ir_p4info, p4rt_session);
 }
@@ -321,14 +321,14 @@ TEST_P(CountersTestFixture, PortQueueCountersTimestamp) {
   // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
       ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4_info));
   ASSERT_OK_AND_ASSIGN(
       const sai::TableEntries table_entries,
       ConstructEntriesToForwardAllTrafficToGivenPort(sut_egress_port_p4rt_id));
   const auto cleanup = absl::Cleanup([&] {
-    EXPECT_OK(pdpi::ClearTableEntries(sut_p4rt.get()))
+    EXPECT_OK(p4_runtime::ClearTableEntries(sut_p4rt.get()))
         << "failed to clean p4 entries";
   });
   ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",

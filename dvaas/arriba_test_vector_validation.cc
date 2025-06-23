@@ -36,8 +36,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 
@@ -61,7 +61,8 @@ absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
 }
 
 absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    p4_runtime::P4RuntimeSession& sut,
+    p4_runtime::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
   // Prepare the control switch.
@@ -75,14 +76,14 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                        .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
                        .GetDedupedPiEntities(ir_p4info));
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&control_switch));
-  RETURN_IF_ERROR(pdpi::InstallPiEntities(control_switch, punt_entities));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(&control_switch));
+  RETURN_IF_ERROR(p4_runtime::InstallPiEntities(control_switch, punt_entities));
 
   // Prepare the SUT.
   LOG(INFO) << "Installing entries from the given test vector on the SUT";
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&sut));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(&sut));
   RETURN_IF_ERROR(
-      pdpi::InstallIrTableEntries(sut, arriba_test_vector.ir_table_entries()));
+      p4_runtime::InstallIrTableEntries(sut, arriba_test_vector.ir_table_entries()));
 
   // Prepare single packet test vectors.
   PacketTestVectorById test_vector_by_id;
@@ -111,13 +112,13 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                        packet_statistics));
 
   ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
-                   pdpi::ReadIrTableEntries(sut));
+                   p4_runtime::ReadIrTableEntries(sut));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "sut_installed_entries.txtpb",
       gutil::PrintTextProto(installed_entries_sut)));
 
   ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_control,
-                   pdpi::ReadIrTableEntries(control_switch));
+                   p4_runtime::ReadIrTableEntries(control_switch));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "control_installed_entries.txtpb",
       gutil::PrintTextProto(installed_entries_control)));

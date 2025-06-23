@@ -39,7 +39,7 @@
 #include "lib/utils/json_utils.h"
 #include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -401,7 +401,7 @@ void BlackholeCongestionCountersWithoutIxiaTestFixture::SetUp() {
 void BlackholeCongestionCountersWithoutIxiaTestFixture::TearDown() {
   // Restores the gNMI config and clears table entries.
   ASSERT_OK(PushGnmiConfig(generic_testbed_->Sut(), GetParam().gnmi_config));
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4_session_));
   ASSERT_OK(sut_p4_session_->Finish());
   thinkit::GenericTestbedFixture<
       BlackholeCongestionCountersWithoutIxiaTestFixtureParams>::TearDown();
@@ -422,7 +422,7 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
 
   thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
 
-  RETURN_IF_ERROR(pdpi::ClearEntities(*sut_p4_session_));
+  RETURN_IF_ERROR(p4_runtime::ClearEntities(*sut_p4_session_));
   RETURN_IF_ERROR(sai::EntryBuilder()
                       .AddEntriesForwardingIpPacketsToGivenPort(
                           sut_port_id, kIpForwardingParams)
@@ -508,7 +508,7 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerOutDiscards(
   // Clear entries and set up a route to forward all packets to the SUT port.
   // Set up egress ACL to drop all IPv6 packets for testing out-discard
   // counters.
-  RETURN_IF_ERROR(pdpi::ClearEntities(*sut_p4_session_));
+  RETURN_IF_ERROR(p4_runtime::ClearEntities(*sut_p4_session_));
   RETURN_IF_ERROR(sai::EntryBuilder()
                       .AddEntriesForwardingIpPacketsToGivenPort(sut_port_id)
                       .AddEgressAclDroppingIpPackets(sai::IpVersion::kIpv6)

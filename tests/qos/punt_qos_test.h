@@ -22,7 +22,7 @@
 
 #include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
@@ -69,7 +69,7 @@ class PuntQoSTestWithIxia
   std::string ixia_traffic_handle_;
   std::string ixia_traffic_name_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
   std::string sut_gnmi_config_;
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   absl::flat_hash_map<std::string, std::string> p4rt_id_by_interface_;

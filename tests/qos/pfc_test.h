@@ -27,7 +27,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "gtest/gtest.h"
 #include "lib/ixia_helper.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
@@ -73,7 +73,7 @@ class PfcTestWithIxia
     : public testing::TestWithParam<ParamsForPfcTestsWithIxia> {
  protected:
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session_;
   pdpi::IrP4Info sut_ir_p4info_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::string ixia_connection_reference_;

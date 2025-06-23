@@ -25,8 +25,8 @@
 #include "gutil/gutil/status_matchers.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 
 namespace pins_test {
 namespace {
@@ -46,21 +46,22 @@ constexpr absl::Duration kTimeout = absl::Seconds(1);
 
 absl::Status OkInjector(const std::string& /*port*/,
                         const std::string& /*packet*/, const pdpi::IrP4Info&,
-                        pdpi::P4RuntimeSession*,
+                        p4_runtime::P4RuntimeSession*,
                         std::optional<absl::Duration>) {
   return absl::OkStatus();
 }
 
 absl::Status CountingOkInjector(int& call_count, const std::string& /*port*/,
                                 const std::string& /*packet*/,
-                                const pdpi::IrP4Info&, pdpi::P4RuntimeSession*,
+                                const pdpi::IrP4Info&,
+                                p4_runtime::P4RuntimeSession*,
                                 std::optional<absl::Duration>) {
   ++call_count;
   return absl::OkStatus();
 }
 
 TEST(PacketInjector, CanDestructWhilePaused) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   ASSERT_OK_AND_ASSIGN(
       auto injector, PacketInjector::Create(
@@ -70,7 +71,7 @@ TEST(PacketInjector, CanDestructWhilePaused) {
 }
 
 TEST(PacketInjector, CanDestructWhileRunning) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   ASSERT_OK_AND_ASSIGN(
       auto injector, PacketInjector::Create(
@@ -79,7 +80,7 @@ TEST(PacketInjector, CanDestructWhileRunning) {
 }
 
 TEST(PacketInjector, CanDestructWhileResumed) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   ASSERT_OK_AND_ASSIGN(
       auto injector, PacketInjector::Create(
@@ -90,7 +91,7 @@ TEST(PacketInjector, CanDestructWhileResumed) {
 }
 
 TEST(PacketInjector, InjectsPackets) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   int call_count = 0;
   ASSERT_OK_AND_ASSIGN(
@@ -111,7 +112,7 @@ TEST(PacketInjector, InjectsPackets) {
 }
 
 TEST(PacketInjector, InjectsEvenDistributionOfPackets) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   int call_count = 0;
   ASSERT_OK_AND_ASSIGN(
@@ -133,13 +134,13 @@ TEST(PacketInjector, InjectsEvenDistributionOfPackets) {
 }
 
 TEST(PacketInjector, StopsEarlyAndReportsError) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
 
   int successes = 5;
   auto func = [&successes](const std::string& port, const std::string& packet,
                            const pdpi::IrP4Info& p4info,
-                           pdpi::P4RuntimeSession* session,
+                           p4_runtime::P4RuntimeSession* session,
                            std::optional<absl::Duration> duration) {
     if (successes-- > 0) {
       return OkInjector(port, packet, p4info, session, duration);
@@ -164,7 +165,7 @@ TEST(PacketInjector, StopsEarlyAndReportsError) {
 }
 
 TEST(PacketInjector, CanPause) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   ASSERT_OK_AND_ASSIGN(
       auto injector, PacketInjector::Create(
@@ -183,7 +184,7 @@ TEST(PacketInjector, CanPause) {
 }
 
 TEST(PacketInjector, CanResume) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   int call_count = 0;
   ASSERT_OK_AND_ASSIGN(
@@ -214,7 +215,7 @@ TEST(PacketInjector, CanResume) {
 }
 
 TEST(PacketInjector, InjectorWithNoPacketsFails) {
-  ASSERT_OK_AND_ASSIGN(auto mock, pdpi::MakeP4SessionWithMockStub({}));
+  ASSERT_OK_AND_ASSIGN(auto mock, p4_runtime::MakeP4SessionWithMockStub({}));
   ASSERT_OK_AND_ASSIGN(auto port, P4rtPortId::MakeFromP4rtEncoding("12"));
   ASSERT_THAT(PacketInjector::Create(*mock.p4rt_session, pdpi::IrP4Info(), port,
                                      {}, absl::ZeroDuration(), &OkInjector),

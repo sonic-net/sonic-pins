@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 
 #include <vector>
 
@@ -29,10 +29,20 @@
 #include "p4_infra/p4_pdpi/entity_keys.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
-namespace pdpi {
+namespace p4_runtime {
+
+using ::pdpi::EntityKey;
+using ::pdpi::IrEntities;
+using ::pdpi::IrEntity;
+using ::pdpi::IrP4Info;
+using ::pdpi::IrTableEntries;
+using ::pdpi::IrTableEntry;
+using ::pdpi::IrWriteRpcStatus;
+using ::pdpi::PiEntities;
+using ::pdpi::TableEntryKey;
 
 absl::Status InstallPdTableEntries(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entries) {
@@ -239,8 +249,8 @@ absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
 
   for (const auto& update : updates) *request.add_updates() = update;
 
-  return GrpcStatusToIrWriteRpcStatus(p4rt.WriteAndReturnGrpcStatus(request),
-                                      request.updates_size());
+  return pdpi::GrpcStatusToIrWriteRpcStatus(
+      p4rt.WriteAndReturnGrpcStatus(request), request.updates_size());
 }
 
 absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
@@ -260,7 +270,7 @@ absl::StatusOr<p4::config::v1::P4Info> GetP4Info(P4RuntimeSession& p4rt) {
 
 absl::StatusOr<IrP4Info> GetIrP4Info(P4RuntimeSession& p4rt) {
   ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info, GetP4Info(p4rt));
-  return CreateIrP4Info(p4info);
+  return pdpi::CreateIrP4Info(p4info);
 }
 
 absl::StatusOr<p4::config::v1::P4Info> GetOrSetP4Info(
@@ -282,7 +292,7 @@ absl::StatusOr<p4::config::v1::P4Info> GetOrSetP4Info(
 
 absl::Status DeleteIrEntity(P4RuntimeSession& p4rt,
                             const pdpi::IrEntity& ir_entity) {
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(p4rt),
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, GetIrP4Info(p4rt),
                    _.SetPrepend() << "cannot delete entity on switch: failed "
                                      "to pull P4Info from switch: ");
   ASSIGN_OR_RETURN(p4::v1::Entity pi_entity,
@@ -293,12 +303,12 @@ absl::Status DeleteIrEntity(P4RuntimeSession& p4rt,
 // Deletes the given `ir_entities` from the switch.
 absl::Status DeleteIrEntities(P4RuntimeSession& p4rt,
                               const IrEntities& ir_entities) {
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(p4rt),
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, GetIrP4Info(p4rt),
                    _.SetPrepend() << "cannot delete entity on switch: failed "
                                      "to pull P4Info from switch: ");
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
                    IrEntitiesToPi(ir_p4info, ir_entities));
-  return pdpi::DeletePiEntities(p4rt, pi_entities);
+  return DeletePiEntities(p4rt, pi_entities);
 }
 
 absl::Status DeletePiEntity(P4RuntimeSession& p4rt,
@@ -306,7 +316,7 @@ absl::Status DeletePiEntity(P4RuntimeSession& p4rt,
   p4::v1::Update updates[1];
   updates[0].set_type(p4::v1::Update::DELETE);
   *updates[0].mutable_entity() = pi_entity;
-  return pdpi::SendPiUpdates(&p4rt, updates);
+  return SendPiUpdates(&p4rt, updates);
 }
 
 // Deletes the given `pi_entities` from the switch.
@@ -316,4 +326,4 @@ absl::Status DeletePiEntities(P4RuntimeSession& p4rt,
                        CreatePiUpdates(pi_entities, p4::v1::Update::DELETE));
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime

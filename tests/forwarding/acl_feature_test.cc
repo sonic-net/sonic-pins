@@ -39,9 +39,9 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -55,7 +55,7 @@ using ::google::protobuf::contrib::fixtures::ProtoFixtureRepository;
 
 // Setup ingress ACL forward all packets.
 absl::Status SetUpIngressAclForwardingAllPackets(
-    pdpi::P4RuntimeSession* p4_session, const pdpi::IrP4Info& ir_p4info) {
+    p4_runtime::P4RuntimeSession* p4_session, const pdpi::IrP4Info& ir_p4info) {
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
         acl_ingress_table_entry {
@@ -68,7 +68,7 @@ absl::Status SetUpIngressAclForwardingAllPackets(
   ASSIGN_OR_RETURN(
       const p4::v1::TableEntry pi_entry,
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
-  return pdpi::InstallPiTableEntry(p4_session, pi_entry);
+  return p4_runtime::InstallPiTableEntry(p4_session, pi_entry);
 }
 
 // Helper function to build a UDP packet
@@ -177,7 +177,7 @@ dvaas::PacketTestVector UdpPacket(
 }
 
 // Helper routine to install L3 route
-absl::Status InstallL3Route(pdpi::P4RuntimeSession* switch_session,
+absl::Status InstallL3Route(p4_runtime::P4RuntimeSession* switch_session,
                             const pdpi::IrP4Info& ir_p4info,
                             absl::string_view egress_port,
                             const sai::NexthopRewriteOptions& rewrite_options,
@@ -198,7 +198,7 @@ absl::Status InstallL3Route(pdpi::P4RuntimeSession* switch_session,
   ASSIGN_OR_RETURN(
       pi_entities,
       entry_builder.LogPdEntries().GetDedupedPiEntities(ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallPiEntities(*switch_session, pi_entities));
+  RETURN_IF_ERROR(p4_runtime::InstallPiEntities(*switch_session, pi_entities));
   return absl::OkStatus();
 }
 
@@ -213,11 +213,11 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), /*gnmi_config=*/std::nullopt, GetParam().sut_p4info));
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> control_switch_p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.ControlSwitch(), /*gnmi_config=*/std::nullopt,
           /*p4info=*/std::nullopt));
@@ -226,7 +226,7 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
 
   ASSERT_OK_AND_ASSIGN(
       p4::v1::GetForwardingPipelineConfigResponse sut_config,
-      pdpi::GetForwardingPipelineConfig(sut_p4rt_session.get()));
+      p4_runtime::GetForwardingPipelineConfig(sut_p4rt_session.get()));
   ASSERT_OK(testbed.Environment().StoreTestArtifact(
       "sut_p4Info.textproto", sut_config.config().p4info().DebugString()));
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
@@ -259,7 +259,7 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 
   ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
-                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+                       p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
 
   // Install AclDeny
   ASSERT_OK_AND_ASSIGN(auto proto_entry,
@@ -269,7 +269,7 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
                                 action { name: "acl_deny" }
                            )pb"));
 
-  EXPECT_OK(pdpi::InstallIrTableEntry(*sut_p4rt_session.get(), proto_entry));
+  EXPECT_OK(p4_runtime::InstallIrTableEntry(*sut_p4rt_session.get(), proto_entry));
   for (dvaas::SwitchOutput& output :
        *test_vector.mutable_acceptable_outputs()) {
     output.clear_packet_ins();

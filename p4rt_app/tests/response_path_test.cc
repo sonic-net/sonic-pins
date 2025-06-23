@@ -30,7 +30,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
@@ -105,8 +105,8 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
 
   // The insert write request should not fail, and once complete the entry
   // should exist in the P4RT AppDb table.
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -114,9 +114,9 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
   // Reading back the entry should result in the same table_entry.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(write_request.updates(0).entity()));
@@ -132,15 +132,16 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
 
   // The delete write request should not fail, and once complete the entry
   // should no longer exist in the P4RT AppDb table.
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       StatusIs(absl::StatusCode::kNotFound));
 
   // Reading back the entry should result in nothing being returned.
-  ASSERT_OK_AND_ASSIGN(read_response, pdpi::SetMetadataAndSendPiReadRequest(
-                                          p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   EXPECT_EQ(read_response.entities_size(), 0);
 }
 
@@ -173,8 +174,8 @@ TEST_F(ResponsePathTest, TableEntryModify) {
 
   // The insert write request should not fail, and once complete the entry
   // should exist in the P4RT AppDb table.
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
   ASSERT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(
@@ -192,8 +193,8 @@ TEST_F(ResponsePathTest, TableEntryModify) {
           ->mutable_entity()
           ->mutable_table_entry()
           ->mutable_action()));
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(
@@ -223,21 +224,21 @@ TEST_F(ResponsePathTest, DuplicateTableEntryInsertFails) {
           ir_p4_info_));
 
   // The first insert is expected to pass since the entry does not exist.
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   // The second insert is expected to fail since the entry already exists.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             write_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("ALREADY_EXISTS")));
 
   // Reading back we should only see one result.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(write_request.updates(0).entity()));
@@ -262,13 +263,13 @@ TEST_F(ResponsePathTest, DuplicatePacketReplicationEngineEntryInsertFails) {
       &write_request));
 
   // The first insert is expected to pass since the entry does not exist.
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   // The second insert is expected to fail since the entry already exists.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             write_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("ALREADY_EXISTS")));
 
   // Reading back we should only see one result.
@@ -276,9 +277,9 @@ TEST_F(ResponsePathTest, DuplicatePacketReplicationEngineEntryInsertFails) {
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(write_request.updates(0).entity()));
@@ -304,8 +305,8 @@ TEST_F(ResponsePathTest, TableEntryModifyFailsIfEntryDoesNotExist) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     write_request),
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           write_request),
               StatusIs(absl::StatusCode::kUnknown, HasSubstr("NOT_FOUND")));
 }
 
@@ -329,8 +330,8 @@ TEST_F(ResponsePathTest, TableEntryDeleteFailsIfEntryDoesNotExist) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     write_request),
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           write_request),
               StatusIs(absl::StatusCode::kUnknown, HasSubstr("NOT_FOUND")));
 }
 
@@ -375,17 +376,17 @@ TEST_F(ResponsePathTest, InsertRequestFails) {
 
   // We expect the invalid argument error to be propagated all the way back to
   // the gRPC response.
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown,
-               HasSubstr("#1: INVALID_ARGUMENT: my error message")));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request),
+              StatusIs(absl::StatusCode::kUnknown,
+                       HasSubstr("#1: INVALID_ARGUMENT: my error message")));
 
   // We expect to read back no entries because the request failed.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 0);
 }
 
@@ -442,7 +443,8 @@ TEST_F(ResponsePathTest, ErrorResponseHandlesNonPrintableCharacters) {
   // it's done with absl::CHexEscape so we verify some of those characters exist
   // in the response.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("\0x80\0x81\0x82")));
 }
 
@@ -463,8 +465,8 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
                              }
                            )pb",
                            ir_p4_info_));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         insert_request));
 
   // Verify that the expected entry exists.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
@@ -496,8 +498,8 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
                            )pb",
                            ir_p4_info_));
 
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     modify_request),
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           modify_request),
               StatusIs(absl::StatusCode::kUnknown));
 
   // Verify that the original entry was not modified.
@@ -508,9 +510,9 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
   // Verify that we can still read back the original insert.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(insert_request.updates(0).entity()));
@@ -533,8 +535,8 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
                              }
                            )pb",
                            ir_p4_info_));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         insert_request));
 
   // Verify that the expected entry exists.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
@@ -567,8 +569,8 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
                            )pb",
                            ir_p4_info_));
 
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     delete_request),
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           delete_request),
               StatusIs(absl::StatusCode::kUnknown));
 
   // Verify that the original entry was not modified.
@@ -579,9 +581,9 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
   // Verify that we can still read back the original insert.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(insert_request.updates(0).entity()));
@@ -644,7 +646,8 @@ TEST_F(ResponsePathTest, OneOfManyInsertRequestFails) {
   // When one of the requests fails, but the other succeeds we expect the
   // response to tell us the status both separately.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: OK"),
                      HasSubstr("#2: INVALID_ARGUMENT: my error message"))));
@@ -704,11 +707,11 @@ TEST_F(ResponsePathTest, RequestWithDuplicateKeysFails) {
   // With the fail on first error behavior, P4RT App will detect the duplicate
   // in the first entry and mark that as the INVALID_ARGUMENT error but the
   // subsequent one is marked as ABORTED (not attempted).
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown,
-               AllOf(HasSubstr("#1: INVALID_ARGUMENT:"),
-                     HasSubstr("#2: ABORTED:"))));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request),
+              StatusIs(absl::StatusCode::kUnknown,
+                       AllOf(HasSubstr("#1: INVALID_ARGUMENT:"),
+                             HasSubstr("#2: ABORTED:"))));
 }
 
 TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorAffectsVrfTable) {
@@ -770,8 +773,8 @@ TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorAffectsVrfTable) {
       failed_ipv6_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "error with vrf-2");
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             write_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: OK"),
                      HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
@@ -828,8 +831,8 @@ TEST_F(ResponsePathTest, FailOnFirstErrorInVrfTable) {
       "vrf-1", "SWSS_RC_INVALID_PARAM", "error with vrf-1");
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             write_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: INVALID_ARGUMENT: error with vrf-1"),
                      HasSubstr("#2: ABORTED: Not attempted"),
@@ -885,8 +888,8 @@ TEST_F(ResponsePathTest, FailsOnFirstErrorInP4rtTable) {
           ir_p4_info_));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             write_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request),
       StatusIs(
           absl::StatusCode::kUnknown,
           AllOf(HasSubstr("#1: OK"),
@@ -960,8 +963,8 @@ TEST_F(ResponsePathTest, FailOnFirstErrorFromAppdbResponses) {
       "SWSS_RC_NOT_EXECUTED");
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                             write_request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: OK"),
                      HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
@@ -977,9 +980,9 @@ TEST_F(ResponsePathTest, ReadingIgnoresRedisDbValues) {
   // read path.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   EXPECT_EQ(read_response.entities_size(), 0);
 }
 
@@ -1006,19 +1009,19 @@ TEST_F(ResponsePathTest, WriteRequestsUpdateStatistics) {
 
   // Statistics should monitor INSERT, MODIFY, and DELETE requests. It should
   // not include the requests count that did not make it to APP_DB layer.
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     write_request),
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           write_request),
               Not(IsOk()));
 
   write_request.mutable_updates(0)->set_type(p4::v1::Update::MODIFY);
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   write_request.mutable_updates(0)->set_type(p4::v1::Update::DELETE);
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   // Runtime can be unpredictible so we simply verify that it is no longer 0s
   // for writes.
@@ -1043,10 +1046,10 @@ TEST_F(ResponsePathTest, WriteRequestsUpdateStatistics) {
 TEST_F(ResponsePathTest, ReadRequestsUpdateStatistics) {
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiReadRequest(p4rt_session_.get(),
+                                                        read_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiReadRequest(p4rt_session_.get(),
+                                                        read_request));
 
   // Runtime can be unpredictible so we simply verify that it is no longer 0s
   // for reads.
@@ -1102,8 +1105,8 @@ TEST_F(ResponsePathTest, WriteRequestsStatisticsHandleBatchRequests) {
 
   // Statistics should monitor INSERT, MODIFY, and DELETE requests. It should
   // also include time for requests that fail.
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   ASSERT_OK_AND_ASSIGN(
       FlowProgrammingStatistics flow_stats,
@@ -1172,8 +1175,8 @@ TEST_F(ResponsePathTest, WriteRequestsStatisticsDoNotIncludeInvalidPiEntries) {
 
   // Because of the invalid input we expect the 2nd request to be invalid and
   // the 3rd request to get aborted.
-  ASSERT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     write_request),
+  ASSERT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           write_request),
               StatusIs(absl::StatusCode::kUnknown));
 
   // Only the 1st request makes it through the translation step so we should
@@ -1252,13 +1255,13 @@ TEST_F(ResponsePathTest, ReadCacheUsesCanonicalFormToStoreTableEntries) {
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
 
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   insert_request));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   modify_request));
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         insert_request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         modify_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
 
   // Because we only inserted and modified one entry we should only read back
   // that entry.
@@ -1318,8 +1321,8 @@ TEST_F(ResponsePathTest, OnlyTheFirstErrorShouldNotBeMarkedAborted) {
   p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
       table_entry2.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
 
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                     write_request),
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           write_request),
               StatusIs(absl::StatusCode::kUnknown,
                        AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
                              HasSubstr("#2: ABORTED"))));

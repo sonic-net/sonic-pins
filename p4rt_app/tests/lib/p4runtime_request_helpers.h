@@ -18,6 +18,7 @@
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace p4rt_app {
 namespace test_lib {

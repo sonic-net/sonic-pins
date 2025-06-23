@@ -21,7 +21,7 @@
 
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins_test {
 
@@ -36,11 +36,12 @@ public:
   // The optional `write_request` function is meant for testing purposes or
   // overriding the write behavior.
   explicit P4rtProgrammingContext(
-      pdpi::P4RuntimeSession *session,
-      std::function<absl::Status(pdpi::P4RuntimeSession *,
-                                 p4::v1::WriteRequest &)>
-          write_request = pdpi::SetMetadataAndSendPiWriteRequest)
-      : session_(session), write_request_(std::move(write_request)),
+      p4_runtime::P4RuntimeSession* session,
+      std::function<absl::Status(p4_runtime::P4RuntimeSession*,
+                                 p4::v1::WriteRequest&)>
+          write_request = p4_runtime::SetMetadataAndSendPiWriteRequest)
+      : session_(session),
+        write_request_(std::move(write_request)),
         inverse_programming_requests_(),
         write_request_function_(
             absl::bind_front(&P4rtProgrammingContext::SendWriteRequest, this)) {
@@ -72,9 +73,10 @@ public:
   // with INSERT replaced by DELETE and vice versa.
   absl::Status Revert();
 
-private:
-  pdpi::P4RuntimeSession *session_;
-  std::function<absl::Status(pdpi::P4RuntimeSession *, p4::v1::WriteRequest &)>
+ private:
+  p4_runtime::P4RuntimeSession* session_;
+  std::function<absl::Status(p4_runtime::P4RuntimeSession*,
+                             p4::v1::WriteRequest&)>
       write_request_;
   std::vector<p4::v1::WriteRequest> inverse_programming_requests_;
   std::function<absl::Status(p4::v1::WriteRequest &)> write_request_function_;

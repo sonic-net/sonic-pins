@@ -25,8 +25,8 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
@@ -74,7 +74,8 @@ protected:
     ASSERT_OK(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
 
     // Fetch P4 Info from Switch Under Test.
-    ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::GetIrP4Info(*sut_p4rt_session_));
+    ASSERT_OK_AND_ASSIGN(ir_p4info_,
+                         p4_runtime::GetIrP4Info(*sut_p4rt_session_));
   }
 
   void TearDown() override {
@@ -95,8 +96,8 @@ protected:
 
   // This test runs on a mirror testbed setup so we open a P4RT connection to
   // both switches.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> control_switch_p4rt_session_;
 
   pdpi::IrP4Info ir_p4info_;
 

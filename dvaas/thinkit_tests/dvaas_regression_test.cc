@@ -15,8 +15,8 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -28,12 +28,13 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
       GetParam().mirror_testbed->GetMirrorTestbed();
   if (GetParam().dvaas_regression_test_proto.has_p4info()) {
     ASSERT_OK_AND_ASSIGN(
-        std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+        std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
         pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
             testbed.Sut(), /*gnmi_config=*/std::nullopt,
             GetParam().dvaas_regression_test_proto.p4info()));
     ASSERT_OK_AND_ASSIGN(
-        std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session,
+        std::unique_ptr<p4_runtime::P4RuntimeSession>
+            control_switch_p4rt_session,
         pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
             testbed.ControlSwitch(), /*gnmi_config=*/std::nullopt,
             /*p4info=*/GetParam().dvaas_regression_test_proto.p4info()));
@@ -60,8 +61,9 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
     }
   }
 
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info,
-                       pdpi::GetIrP4Info(*configured_testbed.SutApi().p4rt));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrP4Info ir_p4_info,
+      p4_runtime::GetIrP4Info(*configured_testbed.SutApi().p4rt));
   ASSERT_OK_AND_ASSIGN(
       absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
       pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
@@ -72,7 +74,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
   // Install the entities on the switch.
-  ASSERT_OK(pdpi::InstallIrEntities(
+  ASSERT_OK(p4_runtime::InstallIrEntities(
       *configured_testbed.SutApi().p4rt,
       GetParam().dvaas_regression_test_proto.minimal_set_of_entities()));
   dvaas::DataplaneValidationParams params = GetParam().dvaas_params;

@@ -28,7 +28,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 
 // Flags to write table updates.
@@ -41,9 +41,9 @@ namespace p4rt_app {
 namespace {
 
 absl::StatusOr<pdpi::IrP4Info> GetIrP4infoFromSwitch(
-    pdpi::P4RuntimeSession& session) {
+    p4_runtime::P4RuntimeSession& session) {
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   pdpi::GetForwardingPipelineConfig(&session));
+                   p4_runtime::GetForwardingPipelineConfig(&session));
   return pdpi::CreateIrP4Info(response.config().p4info());
 }
 
@@ -63,7 +63,7 @@ absl::StatusOr<p4::v1::WriteRequest> GetPiWriteRequest(
          << "No write request was selected.";
 }
 
-absl::Status SendWriteRequest(pdpi::P4RuntimeSession& session,
+absl::Status SendWriteRequest(p4_runtime::P4RuntimeSession& session,
                               p4::v1::WriteRequest pi_write_request) {
   pi_write_request.set_device_id(session.DeviceId());
   *pi_write_request.mutable_election_id() = session.ElectionId();
@@ -74,7 +74,7 @@ absl::Status SendWriteRequest(pdpi::P4RuntimeSession& session,
 
 absl::Status Main() {
   // Connect to the P4RT server.
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
                    CreateP4rtSession());
 
   // Before we can handle any requests we need to get the P4Info, and convert it

@@ -21,7 +21,7 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins {
 
@@ -38,7 +38,7 @@ public:
   // should return true for any packets the test wants to collect, and false for
   // any packets the test wants to ignore.
   explicit PacketInHelper(
-      pdpi::P4RuntimeSession *p4rt_session,
+      p4_runtime::P4RuntimeSession *p4rt_session,
       std::function<bool(const p4::v1::StreamMessageResponse &)>
           packet_in_message_filter);
 
@@ -61,7 +61,7 @@ private:
   void PushBackPacketInMessage(const p4::v1::StreamMessageResponse &response)
       ABSL_LOCKS_EXCLUDED(packet_in_lock_);
 
-  pdpi::P4RuntimeSession &p4rt_session_;
+  p4_runtime::P4RuntimeSession &p4rt_session_;
 
   // Thread is spawned in ctor and joined in dtor. It will wait for a PacketIn
   // message then update the PacketIn message queue.

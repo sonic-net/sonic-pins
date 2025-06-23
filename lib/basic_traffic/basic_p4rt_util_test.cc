@@ -20,7 +20,7 @@
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
@@ -33,7 +33,8 @@ using ::testing::MockFunction;
 using ::testing::Return;
 
 TEST(BasicTraffic, ProgramDefaultVrf) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   EXPECT_CALL(
       mock_write_request,
@@ -76,7 +77,8 @@ TEST(BasicTraffic, ProgramDefaultVrf) {
 }
 
 TEST(BasicTraffic, ProgramRouterInterface) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   EXPECT_CALL(mock_write_request,
               Call(_, EqualsProto(R"pb(
@@ -108,7 +110,8 @@ TEST(BasicTraffic, ProgramRouterInterface) {
 }
 
 TEST(BasicTraffic, ProgramIPv4Route) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   // Neighbor entry.
   EXPECT_CALL(
@@ -205,7 +208,8 @@ TEST(BasicTraffic, ProgramIPv4Route) {
 }
 
 TEST(BasicTraffic, ProgramL3AdmitTableEntry) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   EXPECT_CALL(
       mock_write_request,

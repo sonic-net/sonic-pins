@@ -27,8 +27,8 @@ void MirrorBlackboxTestFixture::SetUp() {
 void MirrorBlackboxTestFixture::TearDown() {
   // Clear all table entries to leave the sut and control switch in a clean
   // state.
-  EXPECT_OK(pdpi::ClearTableEntries(&GetSutP4RuntimeSession()));
-  EXPECT_OK(pdpi::ClearTableEntries(&GetControlP4RuntimeSession()));
+  EXPECT_OK(p4_runtime::ClearTableEntries(&GetSutP4RuntimeSession()));
+  EXPECT_OK(p4_runtime::ClearTableEntries(&GetControlP4RuntimeSession()));
 
   MirrorTestbedFixture::TearDown();
 }

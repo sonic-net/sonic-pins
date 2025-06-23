@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 #include <algorithm>
 #include <memory>
@@ -52,7 +52,7 @@
 #include "sai_p4/instantiations/google/versions.h"
 #include "thinkit/switch.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 using ::p4::config::v1::P4Info;
 using ::p4::v1::Entity;
@@ -64,6 +64,10 @@ using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::p4::v1::Update_Type;
 using ::p4::v1::WriteRequest;
+using ::pdpi::CreateIrP4Info;
+using ::pdpi::IrP4Info;
+using ::pdpi::StableSortEntities;
+using ::pdpi::TableEntryKey;
 
 namespace {
 
@@ -71,7 +75,7 @@ namespace {
 constexpr absl::Duration kNonStreamingGRPCReqTimeout = absl::Minutes(2);
 
 absl::StatusOr<p4::v1::TableEntry> GetPiTableEntryFromSwitch(
-    P4RuntimeSession* session, const pdpi::TableEntryKey& target_key) {
+    P4RuntimeSession* session, const TableEntryKey& target_key) {
   // Some targets only support wildcard reads, so we read back all entries
   // before looking for the one we are interested in.
   std::vector<TableEntry> entries;
@@ -220,8 +224,8 @@ P4RuntimeSession::~P4RuntimeSession() {
 }
 
 absl::Status P4RuntimeSession::Write(const p4::v1::WriteRequest& request) {
-  return WriteRpcGrpcStatusToAbslStatus(WriteAndReturnGrpcStatus(request),
-                                        request.updates_size());
+  return pdpi::WriteRpcGrpcStatusToAbslStatus(WriteAndReturnGrpcStatus(request),
+                                              request.updates_size());
 }
 
 grpc::Status P4RuntimeSession::WriteAndReturnGrpcStatus(
@@ -562,7 +566,7 @@ absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
     const p4::v1::TableEntry& target_entry_signature) {
   ASSIGN_OR_RETURN(p4::v1::TableEntry entry,
                    GetPiTableEntryFromSwitch(
-                       session, pdpi::TableEntryKey(target_entry_signature)));
+                       session, TableEntryKey(target_entry_signature)));
   return entry.counter_data();
 }
 
@@ -571,7 +575,7 @@ absl::StatusOr<p4::v1::MeterCounterData> ReadPiMeterCounterData(
     const p4::v1::TableEntry& target_entry_signature) {
   ASSIGN_OR_RETURN(p4::v1::TableEntry entry,
                    GetPiTableEntryFromSwitch(
-                       session, pdpi::TableEntryKey(target_entry_signature)));
+                       session, TableEntryKey(target_entry_signature)));
   return entry.meter_counter_data();
 }
 
@@ -601,7 +605,7 @@ absl::Status CheckNoEntities(P4RuntimeSession& session) {
 
 namespace {
 
-absl::StatusOr<int> GetEntityRank(const pdpi::IrP4Info& info,
+absl::StatusOr<int> GetEntityRank(const IrP4Info& info,
                                   const p4::v1::Entity& entity) {
   ASSIGN_OR_RETURN(std::string table_name, EntityToTableName(info, entity));
   return gutil::FindOrStatus(info.dependency_rank_by_table_name(), table_name);
@@ -609,7 +613,7 @@ absl::StatusOr<int> GetEntityRank(const pdpi::IrP4Info& info,
 
 // TODO: Move to Sequencing to replace SequencePiUpdates...
 absl::Status SplitSortedUpdatesIntoBatchesAndSend(
-    P4RuntimeSession& session, const pdpi::IrP4Info& info,
+    P4RuntimeSession& session, const IrP4Info& info,
     absl::Span<const p4::v1::Update> updates,
     std::optional<int> max_batch_size = 5000) {
   if (max_batch_size.has_value() && *max_batch_size <= 0) {
@@ -664,7 +668,7 @@ absl::Status ClearEntities(
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(response.config().p4info()));
 
   // Sort by dependency order, then reverse since we will be deleting.
-  RETURN_IF_ERROR(pdpi::StableSortEntities(info, entities));
+  RETURN_IF_ERROR(StableSortEntities(info, entities));
   absl::c_reverse(entities);
 
   // Get current switch version to determine if we need to mask old errors.
@@ -826,7 +830,7 @@ absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
                                absl::Span<const Entity> pi_entities) {
   std::vector<Entity> sorted_pi_entities{pi_entities.begin(),
                                          pi_entities.end()};
-  RETURN_IF_ERROR(pdpi::StableSortEntities(info, sorted_pi_entities));
+  RETURN_IF_ERROR(StableSortEntities(info, sorted_pi_entities));
   return SendPiUpdates(session,
                        CreatePiUpdates(sorted_pi_entities, Update::INSERT));
 }
@@ -928,4 +932,4 @@ absl::Status ClearTableEntryCounters(P4RuntimeSession& session) {
   return absl::OkStatus();
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_client_interceptor.h"
+#include "p4_infra/p4_runtime/p4_runtime_client_interceptor.h"
 
 #include <memory>
 #include <optional>
@@ -24,7 +24,7 @@
 #include "net/google::protobuf/public/message.h"
 #include "p4/v1/p4runtime.pb.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 namespace {
 
@@ -155,4 +155,4 @@ Interceptor* P4RuntimeClientInterceptor::CreateClientInterceptor(
   return new P4RuntimeClientInterceptorImpl(*this);
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime

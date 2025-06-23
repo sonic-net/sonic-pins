@@ -23,8 +23,8 @@
 #include "lib/p4rt/p4rt_programming_context.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/control_device.h"
@@ -40,7 +40,7 @@ public:
   // Calls PacketCallback once a packet is received. `interface_port_id_to_name`
   // needs to outlive this class. `on_finish` will get called when the listener
   // is finished.
-  PacketListener(pdpi::P4RuntimeSession *session,
+  PacketListener(p4_runtime::P4RuntimeSession* session,
                  P4rtProgrammingContext context,
                  sai::Instantiation instantiation,
                  const absl::flat_hash_map<std::string, std::string>*
@@ -56,8 +56,8 @@ public:
     }
   }
 
-private:
-  pdpi::P4RuntimeSession *session_;
+ private:
+  p4_runtime::P4RuntimeSession* session_;
   P4rtProgrammingContext context_;
   sai::Instantiation instantiation_;
   const absl::flat_hash_map<std::string, std::string>&

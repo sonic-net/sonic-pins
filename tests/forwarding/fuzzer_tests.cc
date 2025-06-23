@@ -49,8 +49,8 @@
 #include "p4_fuzzer/switch_state.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/names.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
 #include "proto/gnmi/gnmi.pb.h"
 // TODO: A temporary dependence on SAI to mask a bug. Ideally, safe
@@ -123,9 +123,9 @@ void FuzzerTestFixture::TearDown() {
   // Clear the switch of all entries if flag is enabled.
   if (absl::GetFlag(FLAGS_fuzzer_clear_switch_at_end)) {
     // Attempt to connect to switch and clear tables.
-    auto session = pdpi::P4RuntimeSession::Create(sut);
+    auto session = p4_runtime::P4RuntimeSession::Create(sut);
     absl::Status switch_cleared =
-        session.ok() ? pdpi::ClearEntities(**session) : session.status();
+        session.ok() ? p4_runtime::ClearEntities(**session) : session.status();
 
     // Though the above statement should never fail, it sometimes
     // inadvertently does due to some bug. Then we reboot the switch to
@@ -163,7 +163,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
 
   // Initialize connection, clear switch state, and push the GNMI configuration,
   // if given.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            sut, GetParam().gnmi_config, GetParam().p4info));
 
@@ -290,7 +290,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
 
     // Send to switch.
     ASSERT_OK_AND_ASSIGN(pdpi::IrWriteRpcStatus response,
-                         pdpi::SendPiUpdatesAndReturnPerUpdateStatus(
+                         p4_runtime::SendPiUpdatesAndReturnPerUpdateStatus(
                              *session, request.updates()));
 
     ASSERT_OK(environment.AppendToTestArtifact(
@@ -411,7 +411,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
     if (!GetParam().milestone.has_value()) {
       // Read switch state (to check that reading never fails).
       ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> table_entries,
-                           pdpi::ReadPiTableEntries(session.get()));
+                           p4_runtime::ReadPiTableEntries(session.get()));
       if (mask_known_failures) {
         ASSERT_OK(state.AssertEntriesAreEqualToState(
             table_entries, config.GetTreatAsEqualDuringReadDueToKnownBug()));
@@ -436,7 +436,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
   }
 
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> table_entries,
-                       pdpi::ReadPiTableEntries(session.get()));
+                       p4_runtime::ReadPiTableEntries(session.get()));
   EXPECT_OK(state.AssertEntriesAreEqualToState(
       table_entries, config.GetTreatAsEqualDuringReadDueToKnownBug()));
 
@@ -484,7 +484,8 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
   // during TearDown, but is helpful to detect switch bugs.
   if (!GetParam().milestone.has_value() &&
       absl::GetFlag(FLAGS_fuzzer_clear_switch_at_end)) {
-    ASSERT_OK_AND_ASSIGN(auto entities, pdpi::ReadPiEntities(session.get()));
+    ASSERT_OK_AND_ASSIGN(auto entities,
+                         p4_runtime::ReadPiEntities(session.get()));
     for (const auto& entity : entities) {
       EXPECT_OK(environment.AppendToTestArtifact(
           "clearing_pi_entities_read_from_switch.txt", entity));
@@ -498,7 +499,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
     absl::c_reverse(entities);
 
     std::vector<p4::v1::Update> pi_updates =
-        pdpi::CreatePiUpdates(entities, p4::v1::Update::DELETE);
+        p4_runtime::CreatePiUpdates(entities, p4::v1::Update::DELETE);
 
     std::vector<WriteRequest> batched_clear_requests;
     WriteRequest request;
@@ -552,8 +553,8 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
       EXPECT_OK(environment.AppendToTestArtifact(
           "clearing_delete_write_requests.txt", batched_clear_requests[i]));
     }
-    ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequests(session.get(),
-                                                      batched_clear_requests));
+    ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequests(
+        session.get(), batched_clear_requests));
   }
 }
 

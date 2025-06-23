@@ -27,7 +27,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
@@ -85,17 +85,17 @@ TEST_F(ActionSetTest, WcmpInsertReadAndRemove) {
              }
            })pb",
       &write_request));
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   // Reading back the flows should result in the same table entry.
   p4::v1::ReadRequest read_request;
   auto* entity = read_request.add_entities();
   entity->mutable_table_entry()->set_table_id(0);
   entity->mutable_table_entry()->set_priority(0);
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(write_request.updates(0).entity()));
@@ -103,12 +103,13 @@ TEST_F(ActionSetTest, WcmpInsertReadAndRemove) {
   // Modify the P4 write request to delete the entry which should not fail since
   // we know it does exist.
   write_request.mutable_updates(0)->set_type(p4::v1::Update::DELETE);
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
-                                                   write_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         write_request));
 
   // Reading back the entry should result in nothing being returned.
-  ASSERT_OK_AND_ASSIGN(read_response, pdpi::SetMetadataAndSendPiReadRequest(
-                                          p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   EXPECT_EQ(read_response.entities_size(), 0);
 }
 

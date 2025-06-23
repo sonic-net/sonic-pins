@@ -21,7 +21,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "lib/utils/generic_testbed_utils.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
@@ -58,7 +58,7 @@ class BlackholeCongestionCountersIxiaTestFixture
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::vector<InterfaceLink> traffic_generator_links_;
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session_;
 };
 
 }  // namespace pins_test

@@ -34,7 +34,7 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
@@ -93,8 +93,8 @@ TEST_F(FixedL3TableTest, SupportRouterInterfaceTableFlows) {
                             .AddActionParam("port", "Ethernet4")
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -102,9 +102,9 @@ TEST_F(FixedL3TableTest, SupportRouterInterfaceTableFlows) {
   // Sanity check that port_id_t translations are read back correctly.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
@@ -140,8 +140,8 @@ TEST_F(FixedL3TableTest, SupportNeighborTableFlows) {
           .SetAction("set_dst_mac")
           .AddActionParam("dst_mac", "00:1a:11:17:5f:80");
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(neighbor_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(neighbor_entry.GetValueMap())));
@@ -178,15 +178,12 @@ TEST_F(FixedL3TableTest, SupportNexthopTableRouterInterfaceActionFlows) {
           .AddActionParam("router_interface_id", "8")
           .AddActionParam("neighbor_id", "fe80::21a:11ff:fe17:5f80");
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(nexthop_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(nexthop_entry.GetValueMap())));
 }
-
-// TODO: To be addressed in Nov Release 
-// To add SupportNexthopTableTunnelActionFlows and SupportTunnelTableFlows in November release.
 
 TEST_F(FixedL3TableTest, SupportMyStationFlowWithPort) {
   ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet4", "2"));
@@ -223,8 +220,8 @@ TEST_F(FixedL3TableTest, SupportMyStationFlowWithPort) {
           .AddMatchField("in_port", "Ethernet4")
           .SetAction("admit_to_l3");
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -263,8 +260,8 @@ TEST_F(FixedL3TableTest, SupportMyStationFlowWithoutPort) {
           .AddMatchField("dst_mac", R"(00:aa:bb:cc:00:00&ff:ff:ff:ff:00:00)")
           .SetAction("admit_to_l3");
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -295,7 +292,7 @@ TEST_F(FixedL3TableTest, InvalidPortIdFails) {
                            ir_p4_info_));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
 }
 
@@ -323,7 +320,7 @@ TEST_F(FixedL3TableTest, IncorrectlyFormatedRequestFailsConstraintCheck) {
       &request));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
 }
 
@@ -354,7 +351,7 @@ TEST_F(FixedL3TableTest, MissingActionWhenRequiredFails) {
       ->Clear();
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                              write_request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
 }
@@ -454,8 +451,8 @@ TEST_P(L3LpmTableTest, SupportIpv4TableFlow) {
     expected_entry.AddActionParam(param, value);
   }
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
@@ -492,8 +489,8 @@ TEST_P(L3LpmTableTest, SupportIpv6TableFlow) {
     expected_entry.AddActionParam(param, value);
   }
 
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));

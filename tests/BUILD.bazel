@@ -33,7 +33,7 @@ cc_library(
         "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
-        "//p4_infra/p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_runtime:p4_runtime_session",
         "//thinkit:mirror_testbed",
         "//thinkit:ssh_client",
         "//thinkit:switch",
@@ -130,7 +130,7 @@ cc_library(
     deps = [
         "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
-        "//p4_infra/p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_runtime:p4_runtime_session",
         "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",

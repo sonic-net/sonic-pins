@@ -36,7 +36,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
 ABSL_FLAG(int32_t, number_iterations, 10, "Number of iterations");
@@ -100,8 +100,8 @@ absl::Status Main() {
             << absl::GetFlag(FLAGS_server_address) << std::endl;
   std::unique_ptr<::p4::v1::P4Runtime::Stub> stub;
   if (absl::GetFlag(FLAGS_insecure)) {
-    stub = pdpi::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
-                                     grpc::InsecureChannelCredentials());
+    stub = p4_runtime::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
+                                           grpc::InsecureChannelCredentials());
   } else {
     grpc::SslCredentialsOptions ssl_opts;
     ASSIGN_OR_RETURN(ssl_opts.pem_root_certs,
@@ -110,7 +110,7 @@ absl::Status Main() {
                      gutil::ReadFile(absl::GetFlag(FLAGS_server_key_file)));
     ASSIGN_OR_RETURN(ssl_opts.pem_cert_chain,
                      gutil::ReadFile(absl::GetFlag(FLAGS_server_cert_file)));
-    grpc::ChannelArguments args = pdpi::GrpcChannelArgumentsForP4rt();
+    grpc::ChannelArguments args = p4_runtime::GrpcChannelArgumentsForP4rt();
     args.SetString(GRPC_SSL_TARGET_NAME_OVERRIDE_ARG,
                    absl::GetFlag(FLAGS_hostname));
     stub = ::p4::v1::P4Runtime::NewStub(
@@ -123,16 +123,16 @@ absl::Status Main() {
                              : absl::GetFlag(FLAGS_election_id)),
                         0);
 
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session;
   ASSIGN_OR_RETURN(
       p4rt_session,
-      pdpi::P4RuntimeSession::Create(
+      p4_runtime::P4RuntimeSession::Create(
           std::move(stub), (uint32_t)absl::GetFlag(FLAGS_device_id),
-          pdpi::P4RuntimeSessionOptionalArgs{.election_id = election_id},
+          p4_runtime::P4RuntimeSessionOptionalArgs{.election_id = election_id},
           absl::GetFlag(FLAGS_error_if_not_primary)));
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
-      pdpi::GetForwardingPipelineConfig(
+      p4_runtime::GetForwardingPipelineConfig(
           p4rt_session.get(), p4::v1::GetForwardingPipelineConfigRequest::ALL));
   // Push P4 Info Config, only if not present.
   p4::config::v1::P4Info p4info;
@@ -140,7 +140,7 @@ absl::Status Main() {
     p4info = response.config().p4info();
   } else {
     p4info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
-    RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+    RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
         p4info));
@@ -160,8 +160,8 @@ absl::Status Main() {
                        p4rt_app::RouterInterfaceTableUpdate(
                            ir_p4info, p4::v1::Update::INSERT, "router-intf-1",
                            "1", "00:02:03:04:05:06"));
-      auto status = pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session.get(),
-                                                           write_request);
+      auto status = p4_runtime::SetMetadataAndSendPiWriteRequest(
+          p4rt_session.get(), write_request);
       if (status.ok()) {
         std::cout << "SendWriteRequest successful iteration " << i << std::endl;
       } else {
@@ -173,8 +173,8 @@ absl::Status Main() {
                        p4rt_app::RouterInterfaceTableUpdate(
                            ir_p4info, p4::v1::Update::DELETE, "router-intf-1",
                            "1", "00:02:03:04:05:06"));
-      RETURN_IF_ERROR(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session.get(),
-                                                             write_request));
+      RETURN_IF_ERROR(p4_runtime::SetMetadataAndSendPiWriteRequest(
+          p4rt_session.get(), write_request));
     }
 
     // Below is to introduce some silent time between iterations, if needed
@@ -188,7 +188,7 @@ absl::Status Main() {
   }
 
   if (!is_backup_session) {
-    RETURN_IF_ERROR(pdpi::ClearTableEntries(p4rt_session.get()));
+    RETURN_IF_ERROR(p4_runtime::ClearTableEntries(p4rt_session.get()));
   }
 
   return absl::OkStatus();

@@ -25,7 +25,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/annotation_parser.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -73,19 +73,19 @@ class P4ProgramsTest : public testing::TestWithParam<sai::Instantiation> {
 
     // Create a P4RT session, and connect.
     std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
-    auto stub =
-        pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+    auto stub = p4_runtime::CreateP4RuntimeStub(
+        address, grpc::InsecureChannelCredentials());
+    ASSERT_OK_AND_ASSIGN(p4rt_session_, p4_runtime::P4RuntimeSession::Create(
                                             std::move(stub), device_id));
   }
 
   test_lib::P4RuntimeGrpcService p4rt_service_ =
       test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt_session_;
 };
 
 TEST_P(P4ProgramsTest, CanPushP4InfoWithoutFailure) {
-  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  EXPECT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(GetParam())));
@@ -104,7 +104,7 @@ TEST_P(P4ProgramsTest, CompositeUdfFieldsShouldAlwaysUseHexStrings) {
   };
 
   // Push the P4Info for the instance under test.
-  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  EXPECT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info));

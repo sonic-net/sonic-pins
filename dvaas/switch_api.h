@@ -17,14 +17,14 @@
 
 #include <memory>
 
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace dvaas {
 
 // The API used by dataplane validation related tests (Arriba, DVaaS, Ouroboros,
 // etc.) to interact with a switch.
 struct SwitchApi {
-  std::unique_ptr<pdpi::P4RuntimeSession> p4rt;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> p4rt;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi;
 };
 

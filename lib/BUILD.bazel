@@ -33,8 +33,8 @@ cc_library(
         "//lib/validator:validator_lib",
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi:p4_runtime_session",
         "//p4_infra/p4_pdpi:pd",
+        "//p4_infra/p4_runtime:p4_runtime_session",
         "//p4_infra/packetlib:packetlib_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
@@ -69,7 +69,7 @@ cc_library(
     name = "basic_switch",
     hdrs = ["basic_switch.h"],
     deps = [
-        "//p4_infra/p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_runtime:p4_runtime_session",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnoi//cert:cert_cc_grpc_proto",
@@ -89,7 +89,7 @@ cc_library(
     hdrs = ["alpine_switch.h"],
     deps = [
         ":basic_switch",
-        "//p4_infra/p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_runtime:p4_runtime_session",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc_security_base",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",

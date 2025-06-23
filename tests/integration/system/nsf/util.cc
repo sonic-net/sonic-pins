@@ -46,8 +46,8 @@
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -800,9 +800,9 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
   }
 
   RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch, gnmi_config));
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
-  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
+                   p4_runtime::P4RuntimeSession::Create(thinkit_switch));
+  return p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info);
@@ -829,8 +829,8 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
                              const P4Info& p4_info) {
   sai::TableEntries entries = GetAclFlowEntries();
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
+                   p4_runtime::P4RuntimeSession::Create(thinkit_switch));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));
   std::vector<Entity> pi_entities;
   pi_entities.reserve(entries.entries_size());
@@ -840,7 +840,7 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
   }
   LOG(INFO) << "Installing PI table entries on "
             << thinkit_switch.ChassisName();
-  return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
+  return p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
 }
 
 // Program flows based on table_name to the capacity.
@@ -853,13 +853,13 @@ absl::Status ProgramFlowsBasedOnTable(thinkit::Switch& thinkit_switch,
   ASSIGN_OR_RETURN(auto generator, sai::GetGenerator(table),
                    _ << "Failed to get table entry generator for table "
                      << table.preamble().alias());
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
+                   p4_runtime::P4RuntimeSession::Create(thinkit_switch));
 
   if (!generator.prerequisites.empty()) {
     LOG(INFO) << "Installing prerequisite table entries";
     for (const auto& prerequisite : generator.prerequisites) {
-      RETURN_IF_ERROR(pdpi::InstallIrTableEntry(*sut_p4rt, prerequisite))
+      RETURN_IF_ERROR(p4_runtime::InstallIrTableEntry(*sut_p4rt, prerequisite))
           << "Failed to install prerequisite table entry "
           << absl::StrCat(prerequisite);
     }
@@ -894,8 +894,9 @@ absl::Status ProgramFlowsBasedOnTable(thinkit::Switch& thinkit_switch,
   LOG(INFO) << "Installing entries to capacity on "
             << thinkit_switch.ChassisName();
   absl::Time start = absl::Now();
-  RETURN_IF_ERROR(pdpi::SendPiUpdates(
-      sut_p4rt.get(), pdpi::CreatePiUpdates(sorted_pi_entities, Update::INSERT),
+  RETURN_IF_ERROR(p4_runtime::SendPiUpdates(
+      sut_p4rt.get(),
+      p4_runtime::CreatePiUpdates(sorted_pi_entities, Update::INSERT),
       pre_capacity_entries.entries_size() + 1))
       << "Failed to install entries to capacity";
 
@@ -908,9 +909,10 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(thinkit::Switch& sut) {
   ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
   read_request.add_entities()->mutable_packet_replication_engine_entry();
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(sut));
-  return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
+                   p4_runtime::P4RuntimeSession::Create(sut));
+  return p4_runtime::SetMetadataAndSendPiReadRequest(session.get(),
+                                                     read_request);
 }
 
 absl::Status SaveP4FlowSnapshot(ReadResponse snapshot,

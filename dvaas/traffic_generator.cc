@@ -45,8 +45,8 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "tests/forwarding/util.h"
 #include "thinkit/mirror_testbed.h"
@@ -87,14 +87,14 @@ absl::StatusOr<PacketSynthesisStats> SimpleTrafficGenerator::Init(
   }));
   // Install punt entries on control switch.
   // TODO: Use testbed configurator to do this, instead.
-  pdpi::P4RuntimeSession& control_p4rt =
+  p4_runtime::P4RuntimeSession& control_p4rt =
       *testbed_configurator_->ControlSwitchApi().p4rt;
-  RETURN_IF_ERROR(pdpi::ClearEntities(control_p4rt));
+  RETURN_IF_ERROR(p4_runtime::ClearEntities(control_p4rt));
   ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
-                   pdpi::GetIrP4Info(control_p4rt));
+                   p4_runtime::GetIrP4Info(control_p4rt));
   ASSIGN_OR_RETURN(const pdpi::IrEntities punt_entries,
                    backend_->GetEntitiesToPuntAllPackets(ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallIrEntities(control_p4rt, punt_entries));
+  RETURN_IF_ERROR(p4_runtime::InstallIrEntities(control_p4rt, punt_entries));
 
   // Generate test vectors.
   gutil::BazelTestArtifactWriter writer;
@@ -275,15 +275,15 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
   }));
   // Install punt entries on control switch.
   // TODO: Use testbed configurator to do this, instead.
-  pdpi::P4RuntimeSession& control_p4rt =
+  p4_runtime::P4RuntimeSession& control_p4rt =
       *testbed_configurator_->ControlSwitchApi().p4rt;
-  RETURN_IF_ERROR(pdpi::ClearEntities(control_p4rt));
+  RETURN_IF_ERROR(p4_runtime::ClearEntities(control_p4rt));
   ASSIGN_OR_RETURN(const pdpi::IrP4Info control_switch_ir_p4info,
-                   pdpi::GetIrP4Info(control_p4rt));
+                   p4_runtime::GetIrP4Info(control_p4rt));
   ASSIGN_OR_RETURN(
       const pdpi::IrEntities punt_entries,
       backend_->GetEntitiesToPuntAllPackets(control_switch_ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallIrEntities(control_p4rt, punt_entries));
+  RETURN_IF_ERROR(p4_runtime::InstallIrEntities(control_p4rt, punt_entries));
 
   // Stores P4Specification, P4Info, and entities from SUT to maintain
   // consistency between when expectations are generated and when packet traces
@@ -291,11 +291,11 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
   SwitchApi& sut = testbed_configurator_->SutApi();
   ASSIGN_OR_RETURN(sut_p4_spec_, InferP4Specification(params_.validation_params,
                                                       *backend_, sut));
-  ASSIGN_OR_RETURN(sut_ir_p4info_, pdpi::GetIrP4Info(*sut.p4rt));
+  ASSIGN_OR_RETURN(sut_ir_p4info_, p4_runtime::GetIrP4Info(*sut.p4rt));
 
   // Read P4Info and entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(sut_augmented_entities_,
-                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+                   p4_runtime::ReadIrEntitiesSorted(*sut.p4rt));
 
   // Retrieve auxiliary entries for v1model targets.
   ASSIGN_OR_RETURN(pdpi::IrEntities sut_v1model_auxiliary_table_entries,
@@ -398,7 +398,7 @@ absl::Status TrafficGeneratorWithGuaranteedRate::InjectInputTraffic() {
   // Change state.
   SetState(kTrafficInjectionAndCollection);
 
-  pdpi::P4RuntimeSession& control_switch =
+  p4_runtime::P4RuntimeSession& control_switch =
       *testbed_configurator_->ControlSwitchApi().p4rt;
   const PacketTestVectorById& packet_test_vector_by_id =
       generate_test_vectors_result_.packet_test_vector_by_id;
@@ -467,8 +467,8 @@ absl::Status TrafficGeneratorWithGuaranteedRate::InjectInputTraffic() {
 
 absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
   absl::SleepFor(kMaxPacketInFlightDuration);
-  pdpi::P4RuntimeSession& sut = *testbed_configurator_->SutApi().p4rt;
-  pdpi::P4RuntimeSession& control_switch =
+  p4_runtime::P4RuntimeSession& sut = *testbed_configurator_->SutApi().p4rt;
+  p4_runtime::P4RuntimeSession& control_switch =
       *testbed_configurator_->ControlSwitchApi().p4rt;
   bool enable_sut_packet_in_collection =
       !params_.validation_params.switch_output_diff_params
@@ -658,12 +658,12 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
                      InferP4Specification(params_.validation_params, *backend_,
                                           control_switch));
     ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
-                     pdpi::GetIrP4Info(*control_switch.p4rt));
+                     p4_runtime::GetIrP4Info(*control_switch.p4rt));
 
     // Read P4Info and control plane entities from control switch, sorted for
     // determinism.
     ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
-                     pdpi::ReadIrEntitiesSorted(*control_switch.p4rt));
+                     p4_runtime::ReadIrEntitiesSorted(*control_switch.p4rt));
 
     // Retrieve auxiliary entries for v1model targets.
     ASSIGN_OR_RETURN(

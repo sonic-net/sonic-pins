@@ -35,9 +35,9 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
 #include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -67,7 +67,7 @@ constexpr uint32_t kDeviceId = 100;
 // called.
 void ExpectCallToClearTableEntries(
     thinkit::MockSwitch& mock_switch, const p4::config::v1::P4Info& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   EXPECT_CALL(mock_switch, CreateP4RuntimeStub()).WillOnce([=] {
     InSequence s;
     auto stub = std::make_unique<::p4::v1::MockP4RuntimeStub>();
@@ -135,7 +135,7 @@ void ExpectCallToWaitForGnmiPortIdConvergence(
 void ExpectCallToCreateP4RuntimeSessionAndOptionallyPushP4Info(
     thinkit::MockSwitch& mock_switch,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   EXPECT_CALL(mock_switch, CreateP4RuntimeStub).WillOnce([=] {
     InSequence s;
     auto stub = absl::make_unique<StrictMock<p4::v1::MockP4RuntimeStub>>();
@@ -146,7 +146,7 @@ void ExpectCallToCreateP4RuntimeSessionAndOptionallyPushP4Info(
       EXPECT_CALL(*stub, GetForwardingPipelineConfig).Times(1);
       EXPECT_CALL(*stub, SetForwardingPipelineConfig).Times(1);
     }
-    pdpi::MockCheckNoEntries(*stub, p4info);
+    p4_runtime::MockCheckNoEntries(*stub, p4info);
 
     return stub;
   });
@@ -163,7 +163,7 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
     // function call.
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata,
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata,
     const std::vector<OpenConfigInterfaceDescription>& interfaces) {
   // DeviceId and ChassisName may get called multiple times. The only important
   // point is that they always return the same response.
@@ -193,7 +193,7 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
 TEST(ConfigureSwitchAndReturnP4RuntimeSessionTest,
      WorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
   const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
-  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  const p4_runtime::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch;
   OpenConfigInterfaceDescription interface{
       .port_name = "Ethernet0",
@@ -226,7 +226,7 @@ TEST(ConfigureSwitchAndReturnP4RuntimeSessionTest,
 TEST(ConfigureSwitchPairAndReturnP4RuntimeSessionPairTest,
      WorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
   const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
-  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  const p4_runtime::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch1;
   thinkit::MockSwitch mock_switch2;
   OpenConfigInterfaceDescription interface{
@@ -265,7 +265,7 @@ TEST(ConfigureSwitchPairAndReturnP4RuntimeSessionPairTest,
 TEST(ConfigureSwitchTest,
      WorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
   const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
-  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  const p4_runtime::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch;
   OpenConfigInterfaceDescription interface{
       .port_name = "Ethernet0",
@@ -295,7 +295,7 @@ TEST(ConfigureSwitchTest,
 
 TEST(ConfigureSwitchPairTest,
      NewOverloadWorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
-  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  const p4_runtime::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch1;
   thinkit::MockSwitch mock_switch2;
 
@@ -359,7 +359,7 @@ TEST(ConfigureSwitchPairTest,
 TEST(ConfigureSwitchPairTest,
      OldOverloadWorksWithAllCombinationsOfGivenAndNotGivenGnmiConfigAndP4Info) {
   const p4::config::v1::P4Info& p4info = pdpi::GetTestP4Info();
-  const pdpi::P4RuntimeSessionOptionalArgs metadata;
+  const p4_runtime::P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch1;
   thinkit::MockSwitch mock_switch2;
   OpenConfigInterfaceDescription interface{

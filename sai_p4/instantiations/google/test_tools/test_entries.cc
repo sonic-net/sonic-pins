@@ -43,11 +43,11 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_pdpi/ternary.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/string_encodings/hex_string.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -255,16 +255,17 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
 }
 
 absl::Status EntryBuilder::InstallDedupedEntities(
-    pdpi::P4RuntimeSession& session) const {
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(session));
+    p4_runtime::P4RuntimeSession& session) const {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, p4_runtime::GetIrP4Info(session));
   return InstallDedupedEntities(ir_p4info, session);
 }
 
 absl::Status EntryBuilder::InstallDedupedEntities(
-    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session) const {
+    const pdpi::IrP4Info& ir_p4info,
+    p4_runtime::P4RuntimeSession& session) const {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
                    GetDedupedPiEntities(ir_p4info));
-  return pdpi::InstallPiEntities(&session, ir_p4info, pi_entities);
+  return p4_runtime::InstallPiEntities(&session, ir_p4info, pi_entities);
 }
 
 EntryBuilder& EntryBuilder::AddVrfEntry(absl::string_view vrf) {

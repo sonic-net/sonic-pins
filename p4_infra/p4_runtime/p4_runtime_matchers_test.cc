@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_matchers.h"
+#include "p4_infra/p4_runtime/p4_runtime_matchers.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -21,7 +21,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/packetlib/packetlib.h"
 
-namespace pdpi {
+namespace p4_runtime {
 namespace {
 
 using ::gutil::EqualsProto;
@@ -143,4 +143,4 @@ TEST(HasPacketInParsedPayloadIsTest, Description) {
 }
 
 }  // namespace
-}  // namespace pdpi
+}  // namespace p4_runtime

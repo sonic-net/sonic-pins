@@ -17,7 +17,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
@@ -33,19 +33,19 @@ class MirrorBlackboxTestFixture : public thinkit::MirrorTestbedFixture {
 
   void TearDown() override;
 
-  pdpi::P4RuntimeSession& GetSutP4RuntimeSession() const {
+  p4_runtime::P4RuntimeSession& GetSutP4RuntimeSession() const {
     return *sut_p4rt_session_;
   }
 
-  pdpi::P4RuntimeSession& GetControlP4RuntimeSession() const {
+  p4_runtime::P4RuntimeSession& GetControlP4RuntimeSession() const {
     return *control_switch_p4rt_session_;
   }
 
  private:
   // This test runs on a mirror testbed setup so we open a P4RT connection to
   // both switches.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> control_switch_p4rt_session_;
 };
 
 }  // namespace pins_test

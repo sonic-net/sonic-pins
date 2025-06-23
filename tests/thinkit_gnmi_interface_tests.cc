@@ -97,8 +97,9 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
   ASSERT_TRUE(absl::SimpleAtoi(in_use_port_index_value, &in_use_port_index));
 
   // Configure router interface on selected port to install port dependency.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session;
-  ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session;
+  ASSERT_OK_AND_ASSIGN(sut_p4_session,
+                       p4_runtime::P4RuntimeSession::Create(sut));
   const sai::TableEntry pd_entry =
       gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
           R"pb(
@@ -110,12 +111,12 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
             }
           )pb",
           in_use_port_index));
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       sut_p4_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
-  ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
+  ASSERT_OK(p4_runtime::ClearTableEntries(sut_p4_session.get()));
 
   ASSERT_OK_AND_ASSIGN(auto ir_p4info, pdpi::CreateIrP4Info(p4_info));
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
@@ -123,7 +124,7 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
 
   LOG(INFO) << "Installing router interface on port " << port_in_use
             << " on SUT";
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4_session.get(), pi_entry));
+  ASSERT_OK(p4_runtime::InstallPiTableEntry(sut_p4_session.get(), pi_entry));
 
   // Get breakout config for the new breakout mode.
   gnmi::SetRequest req;
@@ -160,7 +161,7 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
 
     // Delete the created router interface on the port using P4 interface.
     LOG(INFO) << "Deleting router interface on SUT";
-    ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
+    ASSERT_OK(p4_runtime::ClearTableEntries(sut_p4_session.get()));
 
     // Retry port breakout.
     grpc::ClientContext context2;

@@ -21,8 +21,8 @@
 // convenience, not for performance. They are intended for use in testing &
 // experimentation, not for use in production.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
-#define PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#ifndef PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_EXTRAS_H_
+#define PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_EXTRAS_H_
 
 #include <vector>
 
@@ -37,10 +37,10 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.pb.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.pb.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 // -- Installing table entries in PD format ------------------------------------
 
@@ -76,21 +76,22 @@ absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
 
 // Like `InstallPdTableEntries`, but for IR table entries. Reads the P4Info used
 // in translation from the switch.
-absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
-                                   const IrTableEntries& ir_table_entries);
+absl::Status InstallIrTableEntries(
+    P4RuntimeSession& p4rt, const pdpi::IrTableEntries& ir_table_entries);
 absl::Status InstallIrEntities(P4RuntimeSession& p4rt,
-                               const IrEntities& ir_entities);
+                               const pdpi::IrEntities& ir_entities);
 
 // Like `InstallIrEntities`, but for a single entity.
-absl::Status InstallIrEntity(P4RuntimeSession& p4rt, const IrEntity& ir_entity);
+absl::Status InstallIrEntity(P4RuntimeSession& p4rt,
+                             const pdpi::IrEntity& ir_entity);
 
 // Like `InstallIrTableEntries`, but for a single entry.
 absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
-                                 const IrTableEntry& ir_table_entry);
+                                 const pdpi::IrTableEntry& ir_table_entry);
 
 // Installs the given `entities` via the given `P4RuntimeSession`.
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
-                               const PiEntities& entities);
+                               const pdpi::PiEntities& entities);
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                absl::Span<const p4::v1::Entity> entities);
 
@@ -112,32 +113,33 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
 
 // Reads control plane entities from the switch using `p4rt` and returns them in
 // IR representation. Reads the P4Info used in translation from the switch.
-absl::StatusOr<IrEntities> ReadIrEntities(P4RuntimeSession& p4rt);
+absl::StatusOr<pdpi::IrEntities> ReadIrEntities(P4RuntimeSession& p4rt);
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation. Reads the P4Info used in translation from the switch.
 ABSL_DEPRECATED("Prefer ReadIrEntities instead.")
-absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt);
+absl::StatusOr<pdpi::IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt);
 
 // Reads control plane entities from the switch using `p4rt` and returns them in
 // IR representation in an order determined `by pdpi::EntityKey` on the
 // corresponding PI representation. Reads the P4Info used in translation from
 // the switch.
-absl::StatusOr<IrEntities> ReadIrEntitiesSorted(P4RuntimeSession& p4rt);
+absl::StatusOr<pdpi::IrEntities> ReadIrEntitiesSorted(P4RuntimeSession& p4rt);
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation in an order determined by `pdpi::TableEntryKey` on the
 // corresponding PI representation. Reads the P4Info used in translation from
 // the switch.
 ABSL_DEPRECATED("Prefer ReadIrEntitiesSorted instead.")
-absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(P4RuntimeSession& p4rt);
+absl::StatusOr<pdpi::IrTableEntries> ReadIrTableEntriesSorted(
+    P4RuntimeSession& p4rt);
 
 // Constructs a write request with metadata from `p4rt` and sends it to the
 // switch, returning a response containing the per-update status (in the same
 // order as the input `updates`).
-absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     P4RuntimeSession& p4rt, absl::Span<const p4::v1::Update> updates);
-absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     P4RuntimeSession& p4rt,
     const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates);
 
@@ -148,12 +150,12 @@ absl::StatusOr<p4::config::v1::P4Info> GetP4Info(P4RuntimeSession& p4rt);
 // Reads the P4Info currently configured on the switch, converts it to IR
 // format, and returns it, or returns an error if no P4Info is configured or the
 // conversion fails.
-absl::StatusOr<IrP4Info> GetIrP4Info(P4RuntimeSession& p4rt);
+absl::StatusOr<pdpi::IrP4Info> GetIrP4Info(P4RuntimeSession& p4rt);
 
 // Returns the P4Info on the switch. If the switch does not have a P4Info,
 // pushes the supplied P4Info to the switch and returns the supplied P4Info.
 absl::StatusOr<p4::config::v1::P4Info> GetOrSetP4Info(
-    pdpi::P4RuntimeSession& p4rt_session,
+    P4RuntimeSession& p4rt_session,
     const p4::config::v1::P4Info& default_p4info);
 
 // Deletes the given `ir_entity` from the switch.
@@ -192,6 +194,6 @@ absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
   return InstallPdTableEntry(p4rt, parsed_pd_table_entry);
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime
 
-#endif  // PINS_P4_INFRA_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#endif  // PINS_P4_INFRA_P4_RUNTIME_P4_RUNTIME_SESSION_EXTRAS_H_

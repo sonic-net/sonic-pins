@@ -51,9 +51,9 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "re2/re2.h"
@@ -162,13 +162,14 @@ void LogPackets(thinkit::TestEnvironment &environment,
 
 // Sets the P4Info on the switch to the desired P4Info. If the switch requires a
 // reboot, updates the p4 session to a new session after the reboot.
-absl::Status SetP4Info(std::unique_ptr<pdpi::P4RuntimeSession>& p4_session,
-                       thinkit::Switch& device,
-                       const p4::config::v1::P4Info& default_p4info) {
-  absl::Status reconcile = pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      p4_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      default_p4info);
+absl::Status SetP4Info(
+    std::unique_ptr<p4_runtime::P4RuntimeSession>& p4_session,
+    thinkit::Switch& device, const p4::config::v1::P4Info& default_p4info) {
+  absl::Status reconcile =
+      p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
+          p4_session.get(),
+          p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+          default_p4info);
   if (!reconcile.ok()) {
     LOG(WARNING) << "Failed to reconcile P4Info. Attempting P4Info push with "
                     "reboot. Reconcile result: "
@@ -203,8 +204,8 @@ bool ReceivePacket(const pdpi::IrP4Info& ir_p4info,
 
 absl::Status SendPacket(const pdpi::IrP4Info &ir_p4info,
                         packetlib::Packet packet,
-                        pdpi::P4RuntimeSession &control_p4_session,
-                        const P4rtPortId &ingress_port_id) {
+                        p4_runtime::P4RuntimeSession& control_p4_session,
+                        const P4rtPortId& ingress_port_id) {
   ASSIGN_OR_RETURN(
       std::string raw_packet, SerializePacket(packet),
       _ << "Failed to inject packet: " << packet.ShortDebugString());
@@ -427,9 +428,10 @@ std::vector<packetlib::Packet> HashTest::TestData::GetReceivedPacketsOnPort(
 void HashTest::InitializeTestbed() {
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   thinkit::Switch& control_switch = GetMirrorTestbed().ControlSwitch();
-  ASSERT_OK_AND_ASSIGN(sut_p4_session_, pdpi::P4RuntimeSession::Create(sut));
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
+                       p4_runtime::P4RuntimeSession::Create(sut));
   ASSERT_OK_AND_ASSIGN(control_p4_session_,
-                       pdpi::P4RuntimeSession::Create(control_switch));
+                       p4_runtime::P4RuntimeSession::Create(control_switch));
 
   // Wait for ports to come up before the test. We don't need all the ports to
   // be up, but it helps with reproducibility. We're using a short timeout (10
@@ -451,7 +453,7 @@ void HashTest::InitializeTestbed() {
   // Use this function to push P4Info if needed. Then clear the forwarding
   // state.
   ASSERT_OK(SetP4Info(sut_p4_session_, sut, test_p4_info()));
-  ASSERT_OK(pdpi::ClearEntities(sut_p4_session()))
+  ASSERT_OK(p4_runtime::ClearEntities(sut_p4_session()))
       << "failed to clear SUT flows before test.";
 
   // Setup control switch P4 state.
@@ -459,13 +461,13 @@ void HashTest::InitializeTestbed() {
   ASSERT_OK_AND_ASSIGN(
       control_switch_p4info_,
       GetOrSetP4Info(control_switch_p4_session(), test_p4_info()));
-  ASSERT_OK(pdpi::ClearEntities(control_switch_p4_session()))
+  ASSERT_OK(p4_runtime::ClearEntities(control_switch_p4_session()))
       << "failed to clear Control flows before test.";
 
   // Trap all packets on control switch.
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info control_switch_ir_p4info,
                        pdpi::CreateIrP4Info(control_switch_p4_info()));
-  ASSERT_OK(pdpi::InstallIrTableEntry(
+  ASSERT_OK(p4_runtime::InstallIrTableEntry(
       control_switch_p4_session(),
       pins::PuntAllPacketsToControllerIrTableEntry("0x7")));
 }
@@ -492,18 +494,18 @@ void HashTest::TearDown() {
   // here so we continue cleanup.
   EXPECT_OK(SaveSwitchLogs("teardown_before_table_clear"));
   auto control_p4_session =
-      pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch());
+      p4_runtime::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch());
   if (control_p4_session.ok()) {
-    EXPECT_OK(pdpi::ClearEntities(**control_p4_session))
+    EXPECT_OK(p4_runtime::ClearEntities(**control_p4_session))
         << "failed to clean up control switch P4 entries.";
   } else {
     ADD_FAILURE() << "failed to connect to control switch: "
                   << control_p4_session.status();
   }
   auto sut_p4_session =
-      pdpi::P4RuntimeSession::Create(GetMirrorTestbed().Sut());
+      p4_runtime::P4RuntimeSession::Create(GetMirrorTestbed().Sut());
   if (sut_p4_session.ok()) {
-    EXPECT_OK(pdpi::ClearEntities(**sut_p4_session))
+    EXPECT_OK(p4_runtime::ClearEntities(**sut_p4_session))
         << "failed to clean up sut switch P4 entries.";
   } else {
     ADD_FAILURE() << "failed to connect to sut switch: "
@@ -591,8 +593,8 @@ absl::Status HashTest::SendAndReceivePackets(
   SCOPED_TRACE(absl::StrCat("Failed while testing config: ", record_prefix));
   // Set up the receive thread to record packets output by the SUT.
   ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
-      pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch()));
+      std::unique_ptr<p4_runtime::P4RuntimeSession> control_p4_session,
+      p4_runtime::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch()));
 
   for (const auto &packet : packets) {
     RETURN_IF_ERROR(
@@ -721,7 +723,8 @@ void HashTest::ForwardAllPacketsToMembers(
                                           kIpv6DefaultRouteEntry)));
   pi_entities.push_back(pi_entity);
 
-  ASSERT_OK(pdpi::InstallPiEntities(&sut_p4_session(), ir_p4info, pi_entities));
+  ASSERT_OK(
+      p4_runtime::InstallPiEntities(&sut_p4_session(), ir_p4info, pi_entities));
 }
 
 absl::Status HashTest::SendPacketsAndRecordResultsPerTest(
@@ -754,7 +757,7 @@ absl::StatusOr<p4::config::v1::P4Info> HashTest::GetSutP4Info() {
 }
 
 absl::Status HashTest::UpdateSutP4Info(const p4::config::v1::P4Info& p4_info) {
-  auto result = pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  auto result = p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       &sut_p4_session(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info);
