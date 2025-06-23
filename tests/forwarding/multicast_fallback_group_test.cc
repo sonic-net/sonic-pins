@@ -49,8 +49,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -110,7 +110,7 @@ constexpr int kDefaultReplicaPortIndex = 1;
 constexpr absl::string_view multicast_queue_ = "MULTICAST";
 
 // Punts all packets on the control switch.
-absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
+absl::Status SetUpControlSwitch(p4_runtime::P4RuntimeSession& p4_session) {
   // Trap all packets on control switch.
   return sai::EntryBuilder()
       .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
@@ -147,14 +147,15 @@ absl::StatusOr<ReplicaPorts> GetReplicaPorts(
 }
 
 // Program L3 Admit table for the given mac-address.
-absl::Status InstallL3Admit(pdpi::P4RuntimeSession& p4_session,
+absl::Status InstallL3Admit(p4_runtime::P4RuntimeSession& p4_session,
                             const pdpi::IrP4Info& ir_p4info,
                             const L3AdmitOptions& options) {
   p4::v1::WriteRequest write_request;
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),
       L3AdmitTableUpdate(ir_p4info, p4::v1::Update::INSERT, options));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // Returns a map of number of packets received per port.
@@ -182,7 +183,7 @@ absl::StatusOr<packetlib::Packet> GenerateMulticastPacket() {
 absl::Status SendNPacketsToSut(int num_packets,
                                absl::Span<const pins_test::P4rtPortId> port_ids,
                                const pdpi::IrP4Info& ir_p4info,
-                               pdpi::P4RuntimeSession& p4_session,
+                               p4_runtime::P4RuntimeSession& p4_session,
                                int packets_rate) {
   LOG(INFO) << "Starting to send " << num_packets << " packets at a rate of "
             << packets_rate << "packets per second.";
@@ -244,7 +245,7 @@ bool HandleStreamMessage(const pdpi::IrP4Info& ir_p4info,
   return true;
 }
 
-absl::Status InstallVlanMembership(pdpi::P4RuntimeSession& switch_session,
+absl::Status InstallVlanMembership(p4_runtime::P4RuntimeSession& switch_session,
                                    const std::vector<std::string>& ports) {
   sai::EntryBuilder entry_builder;
   entry_builder.AddVlanEntry(kVlanIdStr);
@@ -255,7 +256,7 @@ absl::Status InstallVlanMembership(pdpi::P4RuntimeSession& switch_session,
   return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
 }
 
-absl::Status InstallMulticastRitfs(pdpi::P4RuntimeSession& switch_session,
+absl::Status InstallMulticastRitfs(p4_runtime::P4RuntimeSession& switch_session,
                                    const std::vector<std::string>& ports) {
   std::vector<p4::v1::Entity> entities;
   sai::EntryBuilder entry_builder;
@@ -267,7 +268,7 @@ absl::Status InstallMulticastRitfs(pdpi::P4RuntimeSession& switch_session,
   return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
 }
 
-absl::Status InstallMulticastGroup(pdpi::P4RuntimeSession& switch_session,
+absl::Status InstallMulticastGroup(p4_runtime::P4RuntimeSession& switch_session,
                                    absl::string_view default_replica_port,
                                    const std::vector<std::string>& ports,
                                    int multicast_group_id = kMulticastGroupId) {
@@ -288,7 +289,8 @@ absl::Status InstallMulticastGroup(pdpi::P4RuntimeSession& switch_session,
   return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
 }
 
-absl::Status InstallMulticastRoute(pdpi::P4RuntimeSession& switch_session) {
+absl::Status InstallMulticastRoute(
+    p4_runtime::P4RuntimeSession& switch_session) {
   sai::EntryBuilder entry_builder;
   entry_builder.AddMulticastRoute(kVrfId, kMulticastDstIpv4, kMulticastGroupId);
   return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
@@ -309,8 +311,8 @@ absl::Status MulticastFallbackGroupTestFixture::SetUpSut(
                              action { no_action {} }
                            })pb",
                          kVrfId))));
-  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(sut_p4_session_.get(),
-                                            pi_entity.table_entry()));
+  RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(sut_p4_session_.get(),
+                                                  pi_entity.table_entry()));
 
   // Set default VRF for all packets.
   ASSIGN_OR_RETURN(
@@ -325,10 +327,11 @@ absl::Status MulticastFallbackGroupTestFixture::SetUpSut(
                            })pb",
                          kVrfId))));
 
-  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(sut_p4_session_.get(),
-                                            pi_entity.table_entry()));
-  replica_ports_with_default_port_ = replica_ports_;
-  replica_ports_with_default_port_.push_back(
+  RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(sut_p4_session_.get(),
+                                                  pi_entity.table_entry()));
+
+  std::vector<std::string> replica_ports_with_default_port = replica_ports_;
+  replica_ports_with_default_port.push_back(
       sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding());
   std::vector<std::string> replica_ports_with_default_and_input_port =
       replica_ports_with_default_port_;
@@ -433,7 +436,7 @@ void MulticastFallbackGroupTestFixture::TearDown() {
 
   // Do some general cleanup for control switch.
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearEntities(*control_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearEntities(*control_p4_session_.get()));
   }
   if (control_gnmi_stub_) {
     ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
@@ -447,7 +450,7 @@ void MulticastFallbackGroupTestFixture::TearDown() {
 
   // Clear SUT table entries.
   if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearEntities(*sut_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearEntities(*sut_p4_session_.get()));
     EXPECT_OK(sut_p4_session_->Finish());
   }
 

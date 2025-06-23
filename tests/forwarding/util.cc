@@ -23,7 +23,7 @@
 #include "absl/time/time.h"
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/tools/packetio_tools.h"
 
 namespace pins {
@@ -48,7 +48,7 @@ absl::Status TryUpToNTimes(int n, absl::Duration delay,
 absl::Status InjectEgressPacket(const std::string& port,
                                 const std::string& packet,
                                 const pdpi::IrP4Info& p4info,
-                                pdpi::P4RuntimeSession* p4rt,
+                                p4_runtime::P4RuntimeSession* p4rt,
                                 std::optional<absl::Duration> packet_delay) {
   // Assemble P4Runtime request.
   p4::v1::StreamMessageRequest request;
@@ -78,7 +78,7 @@ absl::Status InjectEgressPacket(const std::string& port,
 
 absl::Status InjectIngressPacket(const std::string& packet,
                                  const pdpi::IrP4Info& p4info,
-                                 pdpi::P4RuntimeSession* p4rt,
+                                 p4_runtime::P4RuntimeSession* p4rt,
                                  std::optional<absl::Duration> packet_delay) {
   // Assemble P4Runtime request.
   p4::v1::StreamMessageRequest request;

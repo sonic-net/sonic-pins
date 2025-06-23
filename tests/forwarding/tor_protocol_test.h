@@ -8,7 +8,7 @@
 #include "dvaas/dataplane_validation.h"
 #include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
@@ -34,11 +34,13 @@ class TorProtocolTest : public testing::TestWithParam<TorProtocolTestParams> {
   static thinkit::MirrorTestbed& testbed() {
     return GetParam().testbed->GetMirrorTestbed();
   }
-  pdpi::P4RuntimeSession& sut_p4rt_session() { return *sut_p4rt_session_; }
+  p4_runtime::P4RuntimeSession& sut_p4rt_session() {
+    return *sut_p4rt_session_;
+  }
   const pdpi::IrP4Info& ir_p4info() { return ir_p4info_; }
 
  private:
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session_;
   pdpi::IrP4Info ir_p4info_;
 };
 

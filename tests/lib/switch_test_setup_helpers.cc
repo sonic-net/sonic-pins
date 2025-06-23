@@ -42,7 +42,6 @@
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
-#include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/gutil/test_artifact_writer.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
@@ -51,7 +50,7 @@
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir_tools.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
@@ -75,9 +74,9 @@ constexpr char kPortNamedType[] = "port_id_t";
 // entities.
 absl::Status TryClearingEntities(
     thinkit::Switch& thinkit_switch,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
-  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> session =
-      pdpi::P4RuntimeSession::Create(thinkit_switch, metadata);
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
+  absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>> session =
+      p4_runtime::P4RuntimeSession::Create(thinkit_switch, metadata);
   if (!session.ok()) {
     LOG(WARNING)
         << "P4RT session could not be established to clear tables. This is "
@@ -86,16 +85,7 @@ absl::Status TryClearingEntities(
     return absl::OkStatus();
   }
 
-  auto store_entities_upon_failure =
-      [&thinkit_switch](const std::vector<p4::v1::Entity>&
-                            entities_that_failed_to_be_deleted) {
-        gutil::BazelTestArtifactWriter artifact_writer;
-        return artifact_writer.StoreTestArtifact(
-            absl::StrCat("entities_that_failed_to_be_deleted_",
-                         thinkit_switch.ChassisName(), ".txt"),
-            absl::StrJoin(entities_that_failed_to_be_deleted, "\n"));
-      };
-  RETURN_IF_ERROR(pdpi::ClearEntities(**session, store_entities_upon_failure));
+  RETURN_IF_ERROR(p4_runtime::ClearEntities(**session));
   RETURN_IF_ERROR(session.value()->Finish());
   return absl::OkStatus();
 }
@@ -115,19 +105,20 @@ absl::Status Reboot(thinkit::Switch& thinkit_switch) {
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>
 CreateP4RuntimeSessionAndOptionallyPushP4Info(
     thinkit::Switch& thinkit_switch,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
+  ASSIGN_OR_RETURN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> session,
+      p4_runtime::P4RuntimeSession::Create(thinkit_switch, metadata));
 
   if (p4info.has_value()) {
     // Check if P4Info already exists, and if so reboot to workaround PINS
     // limitations (b/200209778).
     ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                     pdpi::GetForwardingPipelineConfig(session.get()));
+                     p4_runtime::GetForwardingPipelineConfig(session.get()));
     ASSIGN_OR_RETURN(std::string p4info_diff,
                      gutil::ProtoDiff(response.config().p4info(), *p4info));
     if (response.config().has_p4info() && !p4info_diff.empty()) {
@@ -138,18 +129,18 @@ CreateP4RuntimeSessionAndOptionallyPushP4Info(
       RETURN_IF_ERROR(session->Finish());
       RETURN_IF_ERROR(Reboot(thinkit_switch));
       // Reconnect after reboot.
-      ASSIGN_OR_RETURN(
-          session, pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
+      ASSIGN_OR_RETURN(session, p4_runtime::P4RuntimeSession::Create(
+                                    thinkit_switch, metadata));
     }
 
     // Push P4Info.
-    RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+    RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
         session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
         *p4info));
   }
 
-  RETURN_IF_ERROR(pdpi::CheckNoEntities(*session));
+  RETURN_IF_ERROR(p4_runtime::CheckNoEntities(*session));
   return session;
 }
 
@@ -192,12 +183,12 @@ absl::Status RewritePortsInTableEntries(
 
 }  // namespace
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>
 ConfigureSwitchAndReturnP4RuntimeSession(
     thinkit::Switch& thinkit_switch,
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   // Since the gNMI Config push relies on tables being cleared, we construct a
   // P4RuntimeSession and clear the tables first.
   RETURN_IF_ERROR(TryClearingEntities(thinkit_switch, metadata));
@@ -224,16 +215,16 @@ ConfigureSwitchAndReturnP4RuntimeSession(
   return p4rt_session;
 }
 
-absl::StatusOr<std::pair<std::unique_ptr<pdpi::P4RuntimeSession>,
-                         std::unique_ptr<pdpi::P4RuntimeSession>>>
+absl::StatusOr<std::pair<std::unique_ptr<p4_runtime::P4RuntimeSession>,
+                         std::unique_ptr<p4_runtime::P4RuntimeSession>>>
 ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
     thinkit::Switch& thinkit_switch1, thinkit::Switch& thinkit_switch2,
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   // We configure both switches in parallel, since it may require rebooting the
   // switch which is costly.
-  using T = absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>;
+  using T = absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>;
   T session1, session2;
   {
     std::future<T> future1 = std::async(std::launch::async, [&] {
@@ -260,7 +251,7 @@ absl::Status ConfigureSwitchPair(
     thinkit::Switch& thinkit_switch1, thinkit::Switch& thinkit_switch2,
     const std::optional<absl::string_view>& gnmi_config,
     const std::optional<p4::config::v1::P4Info>& p4info,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   return ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
              thinkit_switch1, thinkit_switch2, std::move(gnmi_config),
              std::move(p4info), metadata)
@@ -528,7 +519,7 @@ absl::Status RewritePortsInTableEntriesToEnabledEthernetPorts(
 
 absl::Status ConfigureSwitch(
     thinkit::Switch& thinkit_switch, const PinsConfigView& config,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   return gutil::StatusBuilder(
              ConfigureSwitchAndReturnP4RuntimeSession(
                  thinkit_switch, config.gnmi_config, config.p4info, metadata)
@@ -541,7 +532,7 @@ absl::Status ConfigureSwitch(
 absl::Status ConfigureSwitchPair(
     thinkit::Switch& switch1, const PinsConfigView& config1,
     thinkit::Switch& switch2, const PinsConfigView& config2,
-    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+    const p4_runtime::P4RuntimeSessionOptionalArgs& metadata) {
   // We configure both switches in parallel, since it may require rebooting the
   // switch which is costly.
   std::future<absl::Status> future1 = std::async(std::launch::async, [&] {

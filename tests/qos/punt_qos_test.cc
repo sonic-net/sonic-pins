@@ -50,7 +50,7 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -336,7 +336,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
       flow_rate_limit_in_bytes_per_second =
           GetParam().control_plane_bandwidth_bytes_per_second / 2;
     }
-    ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+    ASSERT_OK(p4_runtime::ClearEntities(*sut_p4_session_));
     const std::string kDefaultCosQueue = "0x8";
     sai::AclQueueAssignments queue_assignments = {
         .cpu_queue = queue_name,
@@ -382,8 +382,8 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
             .LogPdEntries()
             .GetDedupedPiEntities(ir_p4info));
 
-    ASSERT_OK(
-        pdpi::InstallPiEntities(sut_p4_session_.get(), ir_p4info, entities));
+    ASSERT_OK(p4_runtime::InstallPiEntities(sut_p4_session_.get(), ir_p4info,
+                                            entities));
 
     LOG(INFO) << "\n\n\nTesting Queue : " << queue_info.gnmi_queue_name
               << ", acl_qos_table_action: "
@@ -401,8 +401,9 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
       ASSERT_OK(NsfRebootHelper(generic_testbed_.get(),
                                 GetParam().ssh_client_for_nsf));
       // Create a new P4rt session after NSF Reboot
-      ASSERT_OK_AND_ASSIGN(sut_p4_session_, pdpi::P4RuntimeSession::Create(
-                                                generic_testbed_->Sut()));
+      ASSERT_OK_AND_ASSIGN(
+          sut_p4_session_,
+          p4_runtime::P4RuntimeSession::Create(generic_testbed_->Sut()));
     } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
       FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
     }
@@ -672,7 +673,7 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
       gutil::FindOrStatus(p4rt_id_by_interface_,
                           ixia_sut_link_.sut_mirror_backup_interface));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4_session_));
   // Add forwarding rule and mirror rule.
   sai::MirrorSessionParams mirror_session_params = {
       .mirror_session_id = "1",
@@ -802,7 +803,7 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
       gutil::FindOrStatus(p4rt_id_by_interface_,
                           ixia_sut_link_.sut_mirror_interface));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4_session_));
   ASSERT_OK(
       sai::EntryBuilder()
           .AddVrfEntry("kVrf")

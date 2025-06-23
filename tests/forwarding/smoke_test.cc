@@ -41,9 +41,9 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/test_data.h"
@@ -63,7 +63,7 @@ using ::testing::Not;
 TEST_P(SmokeTestFixture, CanEstablishConnections) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
 
   // Initialize the connection, clear table entries, and push GNMI
@@ -105,7 +105,7 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -114,7 +114,7 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
@@ -165,8 +165,8 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
                        pdpi::PdWriteRequestToPi(ir_p4info, pd_delete));
 
   // Insert works.
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_insert));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_insert));
 
   // ACL table entries are expected to contain counter data. However, it's
   // updated periodically and may not be available immediately after writing so
@@ -177,7 +177,7 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
   pi_read_request.add_entities()->mutable_table_entry();
   do {
     ASSERT_OK_AND_ASSIGN(pi_read_response,
-                         pdpi::SetMetadataAndSendPiReadRequest(
+                         p4_runtime::SetMetadataAndSendPiReadRequest(
                              sut_p4rt_session.get(), pi_read_request));
     ASSERT_EQ(pi_read_response.entities_size(), 1);
 
@@ -186,11 +186,12 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
     }
   } while (!pi_read_response.entities(0).table_entry().has_counter_data());
 
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_modify));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_modify));
+
   // Delete works.
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_delete));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_delete));
 }
 
 TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
@@ -199,7 +200,7 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -208,7 +209,7 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   p4::v1::WriteRequest pi_request;
   ASSERT_OK_AND_ASSIGN(
@@ -230,8 +231,8 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
       pins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT, "nexthop-1",
                                 "router-intf-1",
                                 /*neighbor_id=*/"fe80::0000:00ff:fe17:5f80"));
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_request));
 
   // Add and modify IPV4 table entry with different number of action params.
   pi_request.Clear();
@@ -245,8 +246,8 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
               .action = pins::IpTableOptions::Action::kSetNextHopId,
               .nexthop_id = "nexthop-1",
           }));
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_request));
   pi_request.Clear();
   ASSERT_OK_AND_ASSIGN(
       *pi_request.add_updates(),
@@ -257,8 +258,8 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
                                  .dst_addr_lpm = std::make_pair("20.0.0.1", 32),
                                  .action = pins::IpTableOptions::Action::kDrop,
                              }));
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_request));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_request));
 
   pi_request.Clear();
   ASSERT_OK_AND_ASSIGN(
@@ -270,12 +271,11 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
                                  .dst_addr_lpm = std::make_pair("20.0.0.1", 32),
                                  .action = pins::IpTableOptions::Action::kDrop,
                              }));
+  ASSERT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
+                                                         pi_request));
 
-  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
-                                                   pi_request));
-
-  // This used to fail with a read error.
-  ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
+  // This used to fail with a read error, see b/185508142.
+  ASSERT_OK(p4_runtime::ClearTableEntries(sut_p4rt_session.get()));
 }
 
 TEST_P(SmokeTestFixture, InsertTableEntry) {
@@ -284,7 +284,7 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -293,7 +293,7 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -308,10 +308,10 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
         }
       )pb");
 
-  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
-		       ir_p4info, pd_entry));
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
+  ASSERT_OK_AND_ASSIGN(
+      const p4::v1::TableEntry pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
+  ASSERT_OK(p4_runtime::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
 }
 
 TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
@@ -320,7 +320,7 @@ TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -329,7 +329,7 @@ TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -347,7 +347,7 @@ TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
   ASSERT_OK_AND_ASSIGN(
       const p4::v1::TableEntry pi_entry,
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
-  EXPECT_THAT(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry),
+  EXPECT_THAT(p4_runtime::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry),
               StatusIs(absl::StatusCode::kUnknown));
 }
 
@@ -358,7 +358,7 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -367,7 +367,7 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   std::vector<sai::TableEntry> write_pd_entries =
       sai_pd::CreateUpTo255GenericTableEntries(3);
@@ -387,13 +387,13 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
     write_pi_entries.push_back(std::move(pi_entry));
   }
 
-  ASSERT_OK(pdpi::InstallPiTableEntries(sut_p4rt_session.get(), ir_p4info,
-                                        write_pi_entries));
+  ASSERT_OK(p4_runtime::InstallPiTableEntries(sut_p4rt_session.get(), ir_p4info,
+                                              write_pi_entries));
 
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
-                       pdpi::SetMetadataAndSendPiReadRequest(
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
                            sut_p4rt_session.get(), read_request));
 
   for (const auto& entity : read_response.entities()) {
@@ -423,7 +423,7 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -432,10 +432,11 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // The table should be clear after setup.
-  ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
+  ASSERT_OK(p4_runtime::CheckNoTableEntries(sut_p4rt_session.get()));
+
   // Sets up an example table entry.
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -449,19 +450,19 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
           }
         }
       )pb");
-  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
-		       ir_p4info, pd_entry));
-  ASSERT_OK(
-      pdpi::InstallPiTableEntries(sut_p4rt_session.get(), 
-	      ir_p4info, {pi_entry}));
-  ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::TableEntry pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
+
+  ASSERT_OK(p4_runtime::InstallPiTableEntries(sut_p4rt_session.get(), ir_p4info,
+                                              {pi_entry}));
+
+  ASSERT_OK(p4_runtime::ClearTableEntries(sut_p4rt_session.get()));
   // The table should be clear after clearing.
-  ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
-  
-  ASSERT_OK(
-      pdpi::InstallPiTableEntries(sut_p4rt_session.get(), 
-	      ir_p4info, {pi_entry}));
+  ASSERT_OK(p4_runtime::CheckNoTableEntries(sut_p4rt_session.get()));
+
+  ASSERT_OK(p4_runtime::InstallPiTableEntries(sut_p4rt_session.get(), ir_p4info,
+                                              {pi_entry}));
 
   ASSERT_OK_AND_ASSIGN(
       auto session2,
@@ -469,8 +470,8 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
           testbed.Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
 
   // The table should be clear for both sessions after setting up a new session.
-  ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
-  ASSERT_OK(pdpi::CheckNoTableEntries(session2.get()));
+  ASSERT_OK(p4_runtime::CheckNoTableEntries(sut_p4rt_session.get()));
+  ASSERT_OK(p4_runtime::CheckNoTableEntries(session2.get()));
 }
 
 // Ensures that a GNMI Config can be pushed even with programmed flows already
@@ -483,7 +484,7 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -492,10 +493,11 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // All tables should be clear after setup.
-  ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
+  ASSERT_OK(p4_runtime::CheckNoTableEntries(sut_p4rt_session.get()));
+
   // Get a gNMI config from the switch to use for testing.
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, testbed.Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
@@ -521,8 +523,8 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
                        pdpi::PartialPdTableEntryToPiTableEntry(
 		       ir_p4info, pd_entry));
 
-  ASSERT_OK(pdpi::InstallPiTableEntries(sut_p4rt_session.get(),
-                                        ir_p4info, {pi_entry}));
+  ASSERT_OK(p4_runtime::InstallPiTableEntries(sut_p4rt_session.get(), ir_p4info,
+                                              {pi_entry}));
 
   // Pushing the same Gnmi Config is also OK when entries are programmed.
   ASSERT_OK(pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config));
@@ -534,7 +536,7 @@ TEST_P(SmokeTestFixture, DeleteReferencedNeighborNotOk) {
 
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_switch_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_switch_p4rt_session),
@@ -543,7 +545,7 @@ TEST_P(SmokeTestFixture, DeleteReferencedNeighborNotOk) {
           GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   constexpr absl::string_view kRifId = "rif";
   constexpr absl::string_view kNeighborId = "::1";
@@ -558,7 +560,7 @@ TEST_P(SmokeTestFixture, DeleteReferencedNeighborNotOk) {
                            /*port=*/"1", /*src_mac=*/"00:02:03:04:05:06"));
 
   // Install RIF then Neighbor entries.
-  ASSERT_OK(pdpi::SendPiUpdates(
+  ASSERT_OK(p4_runtime::SendPiUpdates(
       sut_p4rt_session.get(), {rif_update, insert_and_delete_neighbor_update}));
 
   // Install either a tunnel or a nexthop depending on if tunnels are supported.
@@ -567,29 +569,31 @@ TEST_P(SmokeTestFixture, DeleteReferencedNeighborNotOk) {
         const p4::v1::Update nexthop_update,
         pins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                   /*nexthop_id=*/"nid", kRifId, kNeighborId));
-    ASSERT_OK(pdpi::SendPiUpdates(sut_p4rt_session.get(), {nexthop_update}));
+    ASSERT_OK(
+        p4_runtime::SendPiUpdates(sut_p4rt_session.get(), {nexthop_update}));
   } else {
     ASSERT_OK_AND_ASSIGN(
         const p4::v1::Update tunnel_update,
         pins::TunnelTableUpdate(
             ir_p4info, p4::v1::Update::INSERT, /*tunnel_id=*/"tid",
             /*encap_dst_ip=*/kNeighborId, /*encap_src_ip=*/"::2", kRifId));
-    ASSERT_OK(pdpi::SendPiUpdates(sut_p4rt_session.get(), {tunnel_update}));
+    ASSERT_OK(
+        p4_runtime::SendPiUpdates(sut_p4rt_session.get(), {tunnel_update}));
   }
 
   // Cannot delete the neighbor table entry because it is used by the tunnel
   // entry or the nexthop entry.
   insert_and_delete_neighbor_update.set_type(p4::v1::Update::DELETE);
-  EXPECT_THAT(pdpi::SendPiUpdates(sut_p4rt_session.get(),
-                                  {insert_and_delete_neighbor_update}),
+  EXPECT_THAT(p4_runtime::SendPiUpdates(sut_p4rt_session.get(),
+                                        {insert_and_delete_neighbor_update}),
               Not(IsOk()));
 
   // We should always be able to re-install entries read from the switch.
   // Otherwise, the switch is in a corrupted state.
   ASSERT_OK_AND_ASSIGN(const pdpi::IrTableEntries read_entries,
-                       pdpi::ReadIrTableEntries(*sut_p4rt_session));
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
-  EXPECT_OK(pdpi::InstallIrTableEntries(*sut_p4rt_session, read_entries));
+                       p4_runtime::ReadIrTableEntries(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
+  EXPECT_OK(p4_runtime::InstallIrTableEntries(*sut_p4rt_session, read_entries));
 }
 
 TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
@@ -599,12 +603,12 @@ TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
   // Initialize the connection, clear table entries, and push GNMI
   // configuration (if given) for the SUT and Control switch.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   constexpr absl::string_view kVrf = "vrf";
   constexpr int kMulticastGroupId = 1;
@@ -633,7 +637,7 @@ TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
   pdpi::IrEntity multicast_rif_entity;
   pdpi::IrEntity multicast_group_entity;
   ASSERT_OK_AND_ASSIGN(const pdpi::IrEntities entities,
-                       pdpi::ReadIrEntities(*sut_p4rt_session));
+                       p4_runtime::ReadIrEntities(*sut_p4rt_session));
   for (const pdpi::IrEntity& entity : entities.entities()) {
     if (entity.has_packet_replication_engine_entry()) {
       multicast_group_entity = entity;
@@ -651,18 +655,20 @@ TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
          "installing it.";
 
   // Cannot delete the multicast RIF because it is used by the multicast group.
-  EXPECT_THAT(pdpi::DeleteIrEntity(*sut_p4rt_session, multicast_rif_entity),
-              Not(IsOk()));
+  EXPECT_THAT(
+      p4_runtime::DeleteIrEntity(*sut_p4rt_session, multicast_rif_entity),
+      Not(IsOk()));
   // Cannot delete the multicast group because it is used by the IPv6 route.
-  EXPECT_THAT(pdpi::DeleteIrEntity(*sut_p4rt_session, multicast_group_entity),
-              Not(IsOk()));
+  EXPECT_THAT(
+      p4_runtime::DeleteIrEntity(*sut_p4rt_session, multicast_group_entity),
+      Not(IsOk()));
 
   // We should always be able to delete and re-install entities read from the
   // switch. Otherwise, the switch is in a corrupted state.
   ASSERT_OK_AND_ASSIGN(const pdpi::IrEntities read_entities,
-                       pdpi::ReadIrEntities(*sut_p4rt_session));
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
-  EXPECT_OK(pdpi::InstallIrEntities(*sut_p4rt_session, read_entities));
+                       p4_runtime::ReadIrEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
+  EXPECT_OK(p4_runtime::InstallIrEntities(*sut_p4rt_session, read_entities));
 }
 
 // Check that unicast routes with a multicast destination range are accepted by
@@ -671,15 +677,15 @@ TEST_P(SmokeTestFixture, CanInstallIpv4TableEntriesWithMulticastDstIp) {
   thinkit::MirrorTestbed &testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, p4_runtime::GetIrP4Info(*sut));
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
       sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
-  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
-  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+  ASSERT_OK(p4_runtime::InstallPiEntities(sut.get(), p4info, pi_entities));
+  ASSERT_OK(p4_runtime::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
     entries {
       ipv4_table_entry {
         match {
@@ -712,17 +718,17 @@ TEST_P(SmokeTestFixture, CanInstallIpv6TableEntriesWithMulticastDstIp) {
   thinkit::MirrorTestbed &testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, p4_runtime::GetIrP4Info(*sut));
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
       sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
-  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  ASSERT_OK(p4_runtime::InstallPiEntities(sut.get(), p4info, pi_entities));
   // TODO: Use `sai::EntryBuilder` instead of hard-coding the entries
   // here.
-  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+  ASSERT_OK(p4_runtime::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
     entries {
       ipv6_table_entry {
         match {

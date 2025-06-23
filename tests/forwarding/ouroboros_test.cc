@@ -47,8 +47,8 @@
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -80,7 +80,7 @@ absl::Status OutputTableEntriesToArtifact(SwitchApi& sut,
       CreateHeader(absl::StrCat("Entries after iteration ", iteration))));
   // Read sorted entries back (for determinism) and store in an artifact.
   ASSIGN_OR_RETURN(pdpi::IrTableEntries entries,
-                   pdpi::ReadIrTableEntriesSorted(*sut.p4rt));
+                   p4_runtime::ReadIrTableEntriesSorted(*sut.p4rt));
   return environment.AppendToTestArtifact(artifact_name, entries.DebugString());
 }
 
@@ -89,7 +89,7 @@ absl::Status OutputTableEntriesToArtifact(SwitchApi& sut,
 // and setting mutation probability to 0.
 absl::Status AugmentFuzzerConfig(SwitchApi& sut, FuzzerConfig& fuzzer_config) {
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   pdpi::GetForwardingPipelineConfig(sut.p4rt.get()));
+                   p4_runtime::GetForwardingPipelineConfig(sut.p4rt.get()));
 
   RETURN_IF_ERROR(fuzzer_config.SetP4Info(response.config().p4info()));
   ASSIGN_OR_RETURN(auto port_ids,
@@ -163,7 +163,7 @@ absl::Status FuzzSwitchState(absl::BitGen& gen, SwitchApi& sut,
 
     // Send to switch.
     ASSIGN_OR_RETURN(pdpi::IrWriteRpcStatus response,
-                     pdpi::SendPiUpdatesAndReturnPerUpdateStatus(
+                     p4_runtime::SendPiUpdatesAndReturnPerUpdateStatus(
                          *sut.p4rt, request.updates()));
 
     RETURN_IF_ERROR(p4_fuzzer::OutputInterleavedRequestAndResponseToArtifact(
@@ -237,9 +237,10 @@ TEST_P(
           GetParam().gnmi_config, p4info));
 
   {  // Log P4Infos for debugging purposes.
-    ASSERT_OK_AND_ASSIGN(auto sut_ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
+    ASSERT_OK_AND_ASSIGN(auto sut_ir_p4info,
+                         p4_runtime::GetIrP4Info(*sut.p4rt));
     ASSERT_OK_AND_ASSIGN(auto control_switch_ir_p4info,
-                         pdpi::GetIrP4Info(*control_switch.p4rt));
+                         p4_runtime::GetIrP4Info(*control_switch.p4rt));
     ASSERT_OK(environment.AppendToTestArtifact("sut_initial_ir_p4info.txt",
                                                sut_ir_p4info.DebugString()));
     ASSERT_OK(environment.AppendToTestArtifact(
@@ -248,8 +249,8 @@ TEST_P(
   }
 
   // Set up SUT with initial entries.
-  ASSERT_OK(
-      pdpi::InstallIrEntities(*sut.p4rt, GetParam().initial_sut_entities));
+  ASSERT_OK(p4_runtime::InstallIrEntities(*sut.p4rt,
+                                          GetParam().initial_sut_entities));
 
   FuzzerConfig fuzzer_config = GetParam().fuzzer_config;
   ASSERT_OK(AugmentFuzzerConfig(sut, fuzzer_config));

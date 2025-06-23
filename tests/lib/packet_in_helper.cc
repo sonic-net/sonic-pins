@@ -13,17 +13,17 @@
 // limitations under the License.
 #include "tests/lib/packet_in_helper.h"
 
-#include "absl/status/status.h"
-#include "absl/log/log.h"
 #include "absl/log/check.h"
+#include "absl/log/log.h"
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins {
 
 PacketInHelper::PacketInHelper(
-    pdpi::P4RuntimeSession* p4rt_session,
+    p4_runtime::P4RuntimeSession* p4rt_session,
     std::function<bool(const p4::v1::StreamMessageResponse&)>
         packet_in_message_filter)
     : p4rt_session_(*p4rt_session),

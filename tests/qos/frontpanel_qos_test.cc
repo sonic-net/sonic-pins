@@ -58,15 +58,15 @@
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/netaddr/ipv6_address.h"
 #include "p4_infra/netaddr/mac_address.h"
+#include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -525,7 +525,7 @@ TEST_P(FrontpanelQosTest,
   // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
       ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
   netaddr::Ipv6Address kIpv6McastAddresses[64];
@@ -542,7 +542,8 @@ TEST_P(FrontpanelQosTest,
         auto entries, ConstructEntriesToForwardMcastTrafficToGivenPort(
                           ir_p4info, kSutEgressPortP4rtId, kIpv6McastAddresses,
                           kIpv4McastAddresses, 64));
-    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
+    ASSERT_OK(
+        p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
   }
   if (GetParam().queue_by_dscp.has_value()) {
     ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
@@ -553,7 +554,8 @@ TEST_P(FrontpanelQosTest,
                                  /*rewrite_options*/ kNextHopRewriteOptions)
                              .LogPdEntries()
                              .GetDedupedPiEntities(ir_p4info));
-    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
+    ASSERT_OK(
+        p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
   }
 
   // Fix test parameters and PIRs (peak information rates, in bytes
@@ -1040,7 +1042,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
       ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
@@ -1053,7 +1055,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
                                /*rewrite_options*/ kNextHopRewriteOptions)
                            .LogPdEntries()
                            .GetDedupedPiEntities(ir_p4info));
-  ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
+  ASSERT_OK(p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
 
   // Figure out which DSCPs to use for each queue.
   using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
@@ -1251,7 +1253,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(
         testbed.get(), *GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
-    ASSERT_OK_AND_ASSIGN(sut_p4rt, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(sut_p4rt, p4_runtime::P4RuntimeSession::Create(sut));
   }
   // Start traffic.
   Counters kInitialPortCounters;
@@ -1266,7 +1268,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   LOG(INFO) << "clearing table entries to limit buffer drainage after "
                "traffic is stopped";
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt));
   LOG(INFO) << "table entries cleared; stopping traffic";
   std::move(stop_traffic).Invoke();
 
@@ -1400,7 +1402,7 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
   // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
       ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
@@ -1421,7 +1423,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         auto entries, ConstructEntriesToForwardMcastTrafficToGivenPort(
                           ir_p4info, kSutEgressPortP4rtId, kIpv6McastAddresses,
                           kIpv4McastAddresses, /*num_mcast_addresses=*/64));
-    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
+    ASSERT_OK(
+        p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
     ASSERT_OK_AND_ASSIGN(
         kDscpsByQueueName,
         GetQueueToDscpsMapping(*GetParam().multicast_queue_by_dscp));
@@ -1436,7 +1439,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
                                  /*rewrite_options*/ kNextHopRewriteOptions)
                              .LogPdEntries()
                              .GetDedupedPiEntities(ir_p4info));
-    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
+    ASSERT_OK(
+        p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
     ASSERT_OK_AND_ASSIGN(kDscpsByQueueName,
                          GetQueueToDscpsMapping(*GetParam().queue_by_dscp));
   } else {
@@ -1918,7 +1922,7 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   thinkit::Switch &sut = testbed->Sut();
   // Set up P4Runtime session.
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           sut, /*gnmi_config=*/absl::nullopt, GetParam().p4info));
 
@@ -2059,14 +2063,15 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   ASSERT_OK(testbed->Environment().StoreTestArtifact("pd_entries.textproto",
                                                      kTableEntries));
 
-  ASSERT_OK(pdpi::InstallPdTableEntries(*sut_p4_session, kTableEntries));
+  ASSERT_OK(p4_runtime::InstallPdTableEntries(*sut_p4_session, kTableEntries));
 
   if (GetParam().nsf_reboot) {
     // Traffic is verified only once after NSF Reboot is complete.
     ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(
         testbed.get(), *GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
-    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(sut_p4_session,
+                         p4_runtime::P4RuntimeSession::Create(sut));
   }
 
   // Listen for punted packets from the SUT.
@@ -2287,7 +2292,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
-  // so we can oversubsribe the egress port.
+  // so we can oversubscribe the egress port.
   LOG(INFO) << "picking test packet links";
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
   // Get Ixia connected links.
@@ -2324,7 +2329,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
   // Configure the switch to send all incoming packets out of the chosen egress
   // port.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt,
                        ConfigureSwitchAndReturnP4RuntimeSession(
                            testbed->Sut(), /*gnmi_config=*/std::nullopt,
                            GetParam().default_params.p4info));
@@ -2340,7 +2345,8 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
                                  /*rewrite_options*/ kNextHopRewriteOptions)
                              .LogPdEntries()
                              .GetDedupedPiEntities(ir_p4info));
-    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
+    ASSERT_OK(
+        p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
   }
 
   netaddr::Ipv6Address kIpv6McastAddresses[64];
@@ -2353,14 +2359,14 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
   // Install entries for multicast queues.
   if (GetParam().default_params.multicast_queue_by_dscp.has_value()) {
-
     ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
-                         pdpi::GetIrP4Info(*sut_p4rt));
+                         p4_runtime::GetIrP4Info(*sut_p4rt));
     ASSERT_OK_AND_ASSIGN(
         auto entries, ConstructEntriesToForwardMcastTrafficToGivenPort(
                           ir_p4info, kSutEgressPortP4rtId, kIpv6McastAddresses,
                           kIpv4McastAddresses, 64));
-    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
+    ASSERT_OK(
+        p4_runtime::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
   }
 
   // Before we update the scheduler config, save the current config and

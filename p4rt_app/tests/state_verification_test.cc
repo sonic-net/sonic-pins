@@ -16,7 +16,7 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -135,8 +135,8 @@ TEST_F(StateVerificationTest, VerifyAppDbAndP4rtCacheEntries) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // When state verification passes P4RT App should report being healthy.
   EXPECT_OK(p4rt_service_.GetP4rtServer().VerifyState());
@@ -165,8 +165,8 @@ TEST_F(StateVerificationTest, VerifyFailsWhenAppDbDoesNotMatchP4rtCache) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Remove the entry from the AppDb.
   auto app_db_entry =
@@ -215,8 +215,8 @@ TEST_F(StateVerificationTest, VerifyVrfEntriesAreIgnoredFromWriteRequests) {
             }
           )pb",
           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // When state verification passes P4RT App should report being healthy.
   EXPECT_OK(p4rt_service_.GetP4rtServer().VerifyState());
