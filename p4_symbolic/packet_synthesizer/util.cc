@@ -14,12 +14,14 @@
 
 #include "p4_symbolic/packet_synthesizer/util.h"
 
+#include "absl/status/status.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "p4_pdpi/utils/ir.h"
+#include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -135,6 +137,11 @@ absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
 // function would disappear.
 absl::Status AddSanePacketConstraints(
     p4_symbolic::symbolic::SolverState& state) {
+  // TODO: Remove when these constraints are provided as part of
+  // synthesis request.
+  // RETURN_IF_ERROR(
+  //    AddConstraintsPreventingIngressPortBeingInLoopbackMode(state));
+
   z3::context& z3_context = *state.context.z3_context;
 
   // ======Ethernet constraints======
