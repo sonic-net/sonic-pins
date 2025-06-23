@@ -93,8 +93,9 @@ absl::StatusOr<TableEntries> ParseTableEntries(
   // pdpi.ir.IrTableEntry.
   TableEntries output;
   for (const p4::v1::Entity &pi_entity : entities) {
-    ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity,
-                     pdpi::PiEntityToIr(p4info, pi_entity));
+    ASSIGN_OR_RETURN(
+        pdpi::IrEntity ir_entity,
+        pdpi::PiEntityToIr(p4info, pi_entity, {.allow_unsupported = true}));
     // TODO: Consider removing this function call if we switch to
     // using aliases as table/action names in P4-Symbolic.
     RETURN_IF_ERROR(UseFullyQualifiedNamesInEntity(p4info, ir_entity));
