@@ -664,6 +664,10 @@ tables {
     annotations: "@proto_id(5)"
   }
   action_refs {
+    id: 16777495
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1521,6 +1525,31 @@ actions {
   }
   params {
     id: 1
+    name: "redirect_port"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777495
+    name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
+    alias: "acl_mirror_and_redirect_to_port"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
+  }
+  params {
+    id: 2
     name: "redirect_port"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
     annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
