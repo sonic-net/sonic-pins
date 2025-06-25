@@ -31,9 +31,9 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_helper.h"
+#include "p4_infra/p4_pdpi/test_helper.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
 
 using ::gutil::PrintTextProto;
@@ -51,7 +51,7 @@ static void RunPiReadRequestTest(const pdpi::IrP4Info& info,
                                  const std::string& test_name,
                                  const p4::v1::ReadRequest& pi,
                                  pdpi::TranslationOptions options = {}) {
-  RunGenericPiTest<pdpi::IrReadRequest, p4::v1::ReadRequest>(
+  pdpi::RunGenericPiTest<pdpi::IrReadRequest, p4::v1::ReadRequest>(
       info, absl::StrCat("ReadRequest test: ", test_name), pi, options,
       pdpi::PiReadRequestToIr);
 }
@@ -59,9 +59,10 @@ static void RunPiReadRequestTest(const pdpi::IrP4Info& info,
 static void RunPdReadRequestTest(const pdpi::IrP4Info& info,
                                  const std::string& test_name,
                                  const pdpi::ReadRequest& pd,
-                                 const InputValidity validity,
+                                 const pdpi::InputValidity validity,
                                  pdpi::TranslationOptions options = {}) {
-  RunGenericPdTest<pdpi::ReadRequest, pdpi::IrReadRequest, p4::v1::ReadRequest>(
+  pdpi::RunGenericPdTest<pdpi::ReadRequest, pdpi::IrReadRequest,
+                         p4::v1::ReadRequest>(
       info, absl::StrCat("ReadRequest test: ", test_name), pd, options,
       pdpi::PdReadRequestToIr, pdpi::IrReadRequestToPd, pdpi::IrReadRequestToPi,
       pdpi::PiReadRequestToIr, pdpi::PdReadRequestToPi, pdpi::PiReadRequestToPd,
@@ -72,7 +73,7 @@ static void RunPiReadResponseTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const p4::v1::ReadResponse& pi,
                                   pdpi::TranslationOptions options = {}) {
-  RunGenericPiTest<pdpi::IrReadResponse, p4::v1::ReadResponse>(
+  pdpi::RunGenericPiTest<pdpi::IrReadResponse, p4::v1::ReadResponse>(
       info, absl::StrCat("ReadResponse test: ", test_name), pi, options,
       // We cannot pass `PiReadResponseToIr` directly, since it takes an
       // optional third parameter, which `RunGenericPiTest` does not expect.
@@ -85,10 +86,10 @@ static void RunPiReadResponseTest(const pdpi::IrP4Info& info,
 static void RunPdReadResponseTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const pdpi::ReadResponse& pd,
-                                  const InputValidity validity,
+                                  const pdpi::InputValidity validity,
                                   pdpi::TranslationOptions options = {}) {
-  RunGenericPdTest<pdpi::ReadResponse, pdpi::IrReadResponse,
-                   p4::v1::ReadResponse>(
+  pdpi::RunGenericPdTest<pdpi::ReadResponse, pdpi::IrReadResponse,
+                         p4::v1::ReadResponse>(
       info, absl::StrCat("ReadResponse test: ", test_name), pd, options,
       pdpi::PdReadResponseToIr, pdpi::IrReadResponseToPd,
       pdpi::IrReadResponseToPi, pdpi::PiReadResponseToIr,
@@ -99,7 +100,7 @@ static void RunPiUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
                             const p4::v1::Update& pi,
                             pdpi::TranslationOptions options = {}) {
-  RunGenericPiTest<pdpi::IrUpdate, p4::v1::Update>(
+  pdpi::RunGenericPiTest<pdpi::IrUpdate, p4::v1::Update>(
       info, absl::StrCat("Update test: ", test_name), pi, options,
       // We cannot pass `PiUpdateToIr` directly, since it takes an optional
       // third parameter, which `RunGenericPiTest` does not expect.
@@ -112,9 +113,9 @@ static void RunPiUpdateTest(const pdpi::IrP4Info& info,
 static void RunPdUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
                             const pdpi::Update& pd,
-                            const InputValidity validity,
+                            const pdpi::InputValidity validity,
                             pdpi::TranslationOptions options = {}) {
-  RunGenericPdTest<pdpi::Update, pdpi::IrUpdate, p4::v1::Update>(
+  pdpi::RunGenericPdTest<pdpi::Update, pdpi::IrUpdate, p4::v1::Update>(
       info, absl::StrCat("Update test: ", test_name), pd, options,
       pdpi::PdUpdateToIr, pdpi::IrUpdateToPd, pdpi::IrUpdateToPi,
       pdpi::PiUpdateToIr, pdpi::PdUpdateToPi, pdpi::PiUpdateToPd, validity);
@@ -124,7 +125,7 @@ static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const p4::v1::WriteRequest& pi,
                                   pdpi::TranslationOptions options = {}) {
-  RunGenericPiTest<pdpi::IrWriteRequest, p4::v1::WriteRequest>(
+  pdpi::RunGenericPiTest<pdpi::IrWriteRequest, p4::v1::WriteRequest>(
       info, absl::StrCat("WriteRequest test: ", test_name), pi, options,
       // We cannot pass `PiWriteRequestToIr` directly, since it takes an
       // optional third parameter, which `RunGenericPiTest` does not expect.
@@ -137,10 +138,10 @@ static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
 static void RunPdWriteRequestTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const pdpi::WriteRequest& pd,
-                                  const InputValidity validity,
+                                  const pdpi::InputValidity validity,
                                   pdpi::TranslationOptions options = {}) {
-  RunGenericPdTest<pdpi::WriteRequest, pdpi::IrWriteRequest,
-                   p4::v1::WriteRequest>(
+  pdpi::RunGenericPdTest<pdpi::WriteRequest, pdpi::IrWriteRequest,
+                         p4::v1::WriteRequest>(
       info, absl::StrCat("WriteRequest test: ", test_name), pd, options,
       pdpi::PdWriteRequestToIr, pdpi::IrWriteRequestToPd,
       pdpi::IrWriteRequestToPi, pdpi::PiWriteRequestToIr,
@@ -150,7 +151,7 @@ static void RunPdWriteRequestTest(const pdpi::IrP4Info& info,
 static void RunInvalidGrpcFailToTranslateToIrTest(
     const std::string& test_name, int number_of_write_request,
     const grpc::Status& grpc_status) {
-  std::cout << TestHeader(absl::StrCat(
+  std::cout << pdpi::TestHeader(absl::StrCat(
                    "Invalid gRPC WriteRpcStatus should fail test: ", test_name))
             << std::endl
             << std::endl;
@@ -159,7 +160,7 @@ static void RunInvalidGrpcFailToTranslateToIrTest(
 
   // Grpc -> Absl
   std::cout << "--- absl::Status:" << std::endl;
-  std::cout << TestStatusToString(pdpi::WriteRpcGrpcStatusToAbslStatus(
+  std::cout << pdpi::TestStatusToString(pdpi::WriteRpcGrpcStatusToAbslStatus(
                    grpc_status, number_of_write_request))
             << std::endl;
 
@@ -168,17 +169,17 @@ static void RunInvalidGrpcFailToTranslateToIrTest(
       pdpi::GrpcStatusToIrWriteRpcStatus(grpc_status, number_of_write_request);
   if (!status_or_ir.ok()) {
     std::cout << "--- gRPC is invalid/unsupported:" << std::endl;
-    std::cout << TestStatusToString(status_or_ir.status()) << std::endl
+    std::cout << pdpi::TestStatusToString(status_or_ir.status()) << std::endl
               << std::endl;
   } else {
-    Fail(test_name, "Expected gRPC status to be invalid.");
+    pdpi::Fail(test_name, "Expected gRPC status to be invalid.");
   }
 }
 
 static void RunInvalidIrFailToTranslateToGrpcTest(
     const std::string& test_name,
     const pdpi::IrWriteRpcStatus& ir_write_rpc_status) {
-  std::cout << TestHeader(absl::StrCat(
+  std::cout << pdpi::TestHeader(absl::StrCat(
                    "Invalid Ir WriteRpcStatus should fail test: ", test_name))
             << std::endl
             << std::endl;
@@ -188,10 +189,10 @@ static void RunInvalidIrFailToTranslateToGrpcTest(
       pdpi::IrWriteRpcStatusToGrpcStatus(ir_write_rpc_status);
   if (!status_or_grpc.ok()) {
     std::cout << "--- IR is invalid/unsupported:" << std::endl
-              << TestStatusToString(status_or_grpc.status()) << std::endl
+              << pdpi::TestStatusToString(status_or_grpc.status()) << std::endl
               << std::endl;
   } else {
-    Fail(test_name, "Expected IR to be invalid.");
+    pdpi::Fail(test_name, "Expected IR to be invalid.");
   }
 }
 
@@ -200,13 +201,13 @@ static void RunInvalidIrFailToTranslateToGrpcTest(
 static void RunPdWriteRpcStatusTest(const std::string& test_name,
                                     const pdpi::WriteRpcStatus& pd,
                                     int number_of_update_status,
-                                    InputValidity validity,
+                                    pdpi::InputValidity validity,
                                     pdpi::TranslationOptions options = {}) {
-  if (validity == INPUT_IS_VALID) {
-    std::cout << TestHeader(
+  if (validity == pdpi::INPUT_IS_VALID) {
+    std::cout << pdpi::TestHeader(
         absl::StrCat("Pd WriteRpcStatus test (INPUT_IS_VALID): ", test_name));
   } else {
-    std::cout << TestHeader(
+    std::cout << pdpi::TestHeader(
         absl::StrCat("Pd WriteRpcStatus test (INPUT_IS_INVALID): ", test_name));
   }
   std::cout << std::endl << std::endl;
@@ -224,15 +225,16 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   // PD -> IR
   const auto& status_or_ir = pdpi::PdWriteRpcStatusToIr(pd, options);
   if (!status_or_ir.ok()) {
-    if (validity == INPUT_IS_VALID) {
-      Fail(test_name,
-           "Translation from PD to IR failed even though input was marked "
-           "valid.");
+    if (validity == pdpi::INPUT_IS_VALID) {
+      pdpi::Fail(
+          test_name,
+          "Translation from PD to IR failed even though input was marked "
+          "valid.");
       std::cout << status_or_ir.status().message() << std::endl;
       return;
     } else {
       std::cout << "---PD is invalid/unsupported:" << std::endl;
-      std::cout << TestStatusToString(status_or_ir.status()) << std::endl
+      std::cout << pdpi::TestStatusToString(status_or_ir.status()) << std::endl
                 << std::endl
                 << std::endl;
       return;
@@ -245,10 +247,11 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   // IR -> Grpc
   const auto& status_or_grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(ir);
   if (!status_or_grpc_status.ok()) {
-    if (validity == INPUT_IS_VALID) {
-      Fail(test_name,
-           "Translation from IR to gRPC failed even though input was marked "
-           "valid.");
+    if (validity == pdpi::INPUT_IS_VALID) {
+      pdpi::Fail(
+          test_name,
+          "Translation from IR to gRPC failed even though input was marked "
+          "valid.");
       std::cout << status_or_grpc_status.status().message() << std::endl;
       return;
     } else {
@@ -260,10 +263,11 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
       return;
     }
   }
-  if (validity == INPUT_IS_INVALID) {
-    Fail(test_name,
-         "PD was marked invalid but translation from PD to IR and IR to gRPC "
-         "both succeeded.");
+  if (validity == pdpi::INPUT_IS_INVALID) {
+    pdpi::Fail(
+        test_name,
+        "PD was marked invalid but translation from PD to IR and IR to gRPC "
+        "both succeeded.");
     return;
   }
 
@@ -275,7 +279,7 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
 
   // Grpc -> Absl
   std::cout << "--- absl::Status:" << std::endl;
-  std::cout << TestStatusToString(pdpi::WriteRpcGrpcStatusToAbslStatus(
+  std::cout << pdpi::TestStatusToString(pdpi::WriteRpcGrpcStatusToAbslStatus(
                    grpc_write_status, number_of_update_status))
             << std::endl;
 
@@ -283,14 +287,15 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   const auto& status_or_ir2 = pdpi::GrpcStatusToIrWriteRpcStatus(
       grpc_write_status, number_of_update_status);
   if (!status_or_ir2.ok()) {
-    Fail(test_name, "Translation from gRPC to IR failed");
+    pdpi::Fail(test_name, "Translation from gRPC to IR failed");
     std::cout << status_or_ir2.status().message() << std::endl;
     return;
   }
   const auto& ir2 = status_or_ir2.value();
   if (!diff.Compare(ir, ir2)) {
-    Fail(test_name,
-         "Reverse translation from gRPC to IR resulted in a different IR.");
+    pdpi::Fail(
+        test_name,
+        "Reverse translation from gRPC to IR resulted in a different IR.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "IR(after reverse translation):" << std::endl
               << PrintTextProto(ir2) << std::endl;
@@ -302,13 +307,14 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   const auto pd2_translation_status = pdpi::IrWriteRpcStatusToPd(ir, &pd2);
 
   if (!pd2_translation_status.ok()) {
-    Fail(test_name, "Translation from IR2 to PD2 failed");
+    pdpi::Fail(test_name, "Translation from IR2 to PD2 failed");
     std::cout << pd2_translation_status.message() << std::endl;
     return;
   }
   if (!diff.Compare(pd, pd2)) {
-    Fail(test_name,
-         "Reverse translation from IR2 to PD2 resulted in a different PD");
+    pdpi::Fail(
+        test_name,
+        "Reverse translation from IR2 to PD2 resulted in a different PD");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "PD(after reverse translation):" << std::endl
               << PrintTextProto(pd2) << std::endl;
@@ -321,17 +327,19 @@ static void RunPiStreamMessageRequestTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
     const p4::v1::StreamMessageRequest& pi,
     pdpi::TranslationOptions options = {}) {
-  RunGenericPiTest<pdpi::IrStreamMessageRequest, p4::v1::StreamMessageRequest>(
+  pdpi::RunGenericPiTest<pdpi::IrStreamMessageRequest,
+                         p4::v1::StreamMessageRequest>(
       info, absl::StrCat("StreamMessageRequest test: ", test_name), pi, options,
       pdpi::PiStreamMessageRequestToIr);
 }
 
 static void RunPdStreamMessageRequestTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
-    const pdpi::StreamMessageRequest& pd, const InputValidity validity,
+    const pdpi::StreamMessageRequest& pd, const pdpi::InputValidity validity,
     pdpi::TranslationOptions options = {}) {
-  RunGenericPdTest<pdpi::StreamMessageRequest, pdpi::IrStreamMessageRequest,
-                   p4::v1::StreamMessageRequest>(
+  pdpi::RunGenericPdTest<pdpi::StreamMessageRequest,
+                         pdpi::IrStreamMessageRequest,
+                         p4::v1::StreamMessageRequest>(
       info, absl::StrCat("StreamMessageRequest test: ", test_name), pd, options,
       pdpi::PdStreamMessageRequestToIr, pdpi::IrStreamMessageRequestToPd,
       pdpi::IrStreamMessageRequestToPi, pdpi::PiStreamMessageRequestToIr,
@@ -343,18 +351,19 @@ static void RunPiStreamMessageResponseTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
     const p4::v1::StreamMessageResponse& pi,
     pdpi::TranslationOptions options = {}) {
-  RunGenericPiTest<pdpi::IrStreamMessageResponse,
-                   p4::v1::StreamMessageResponse>(
+  pdpi::RunGenericPiTest<pdpi::IrStreamMessageResponse,
+                         p4::v1::StreamMessageResponse>(
       info, absl::StrCat("StreamMessageResponse test: ", test_name), pi,
       options, pdpi::PiStreamMessageResponseToIr);
 }
 
 static void RunPdStreamMessageResponseTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
-    const pdpi::StreamMessageResponse& pd, const InputValidity validity,
+    const pdpi::StreamMessageResponse& pd, const pdpi::InputValidity validity,
     pdpi::TranslationOptions options = {}) {
-  RunGenericPdTest<pdpi::StreamMessageResponse, pdpi::IrStreamMessageResponse,
-                   p4::v1::StreamMessageResponse>(
+  pdpi::RunGenericPdTest<pdpi::StreamMessageResponse,
+                         pdpi::IrStreamMessageResponse,
+                         p4::v1::StreamMessageResponse>(
       info, absl::StrCat("StreamMessageResponse test: ", test_name), pd,
       options, pdpi::PdStreamMessageResponseToIr,
       pdpi::IrStreamMessageResponseToPd, pdpi::IrStreamMessageResponseToPi,
@@ -362,7 +371,7 @@ static void RunPdStreamMessageResponseTest(
       pdpi::PiStreamMessageResponseToPd, validity);
 }
 
-static void RunReadRequestTests(pdpi::IrP4Info info) {
+static void RunReadRequestTests(const pdpi::IrP4Info& info) {
   RunPiReadRequestTest(info, "empty",
                        gutil::ParseProtoOrDie<p4::v1::ReadRequest>(""));
 
@@ -391,29 +400,29 @@ static void RunReadRequestTests(pdpi::IrP4Info info) {
                        gutil::ParseProtoOrDie<pdpi::ReadRequest>(R"pb(
                          device_id: 10
                        )pb"),
-                       INPUT_IS_VALID);
+                       pdpi::INPUT_IS_VALID);
   RunPdReadRequestTest(info, "meter, no counter",
                        gutil::ParseProtoOrDie<pdpi::ReadRequest>(R"pb(
                          device_id: 10
                          read_meter_configs: true
                        )pb"),
-                       INPUT_IS_VALID);
+                       pdpi::INPUT_IS_VALID);
   RunPdReadRequestTest(info, "no meter, counter",
                        gutil::ParseProtoOrDie<pdpi::ReadRequest>(R"pb(
                          device_id: 10
                          read_counter_data: true
                        )pb"),
-                       INPUT_IS_VALID);
+                       pdpi::INPUT_IS_VALID);
   RunPdReadRequestTest(info, "meter, counter",
                        gutil::ParseProtoOrDie<pdpi::ReadRequest>(R"pb(
                          device_id: 10
                          read_meter_configs: true
                          read_counter_data: true
                        )pb"),
-                       INPUT_IS_VALID);
+                       pdpi::INPUT_IS_VALID);
 }
 
-static void RunReadResponseTests(pdpi::IrP4Info info) {
+static void RunReadResponseTests(const pdpi::IrP4Info& info) {
   RunPiReadResponseTest(info, "wrong entity",
                         gutil::ParseProtoOrDie<p4::v1::ReadResponse>(R"pb(
                           entities { action_profile_member {} }
@@ -433,7 +442,7 @@ static void RunReadResponseTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
   RunPdReadResponseTest(
       info, "valid multicast group table",
       gutil::ParseProtoOrDie<pdpi::ReadResponse>(R"pb(
@@ -444,7 +453,7 @@ static void RunReadResponseTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 
   RunPdReadResponseTest(
       info, "multiple tables", gutil::ParseProtoOrDie<pdpi::ReadResponse>(R"pb(
@@ -463,7 +472,7 @@ static void RunReadResponseTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 }
 
 static void RunUpdateTests(pdpi::IrP4Info info) {
@@ -494,7 +503,7 @@ static void RunUpdateTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_INVALID);
+      pdpi::INPUT_IS_INVALID);
 
   RunPdUpdateTest(
       info, "valid ternary table", gutil::ParseProtoOrDie<pdpi::Update>(R"pb(
@@ -507,7 +516,7 @@ static void RunUpdateTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
   RunPdUpdateTest(
       info, "valid mulitcast group table",
       gutil::ParseProtoOrDie<pdpi::Update>(R"pb(
@@ -519,7 +528,7 @@ static void RunUpdateTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 }
 
 static void RunWriteRequestTests(pdpi::IrP4Info info) {
@@ -541,14 +550,14 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
   RunPdWriteRequestTest(info, "empty",
                         gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
                         )pb"),
-                        INPUT_IS_VALID);
+                        pdpi::INPUT_IS_VALID);
 
   RunPdWriteRequestTest(info, "missing updates",
                         gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
                           device_id: 134
                           election_id { high: 23413 low: 2312 }
                         )pb"),
-                        INPUT_IS_VALID);
+                        pdpi::INPUT_IS_VALID);
 
   RunPdWriteRequestTest(
       info, "valid ternary table update",
@@ -566,7 +575,7 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
   RunPdWriteRequestTest(
       info, "valid multicast group table update",
       gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
@@ -582,7 +591,7 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
   RunPdWriteRequestTest(
       info, "multiple updates", gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
         device_id: 113
@@ -608,7 +617,7 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
   RunPdWriteRequestTest(
       info, "multiple updates, some invalid",
       gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
@@ -635,7 +644,7 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_INVALID);
+      pdpi::INPUT_IS_INVALID);
 }
 
 static google::rpc::Status GenerateGoogleRpcStatus(
@@ -773,7 +782,7 @@ static void RunWriteRpcStatusTest() {
                           gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
                             rpc_wide_error: { code: 42 message: "bad_code" }
                           )pb"),
-                          5, INPUT_IS_INVALID);
+                          5, pdpi::INPUT_IS_INVALID);
   RunPdWriteRpcStatusTest("non-ok status with empty message should fail",
                           gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
                             rpc_response: {
@@ -784,7 +793,7 @@ static void RunWriteRpcStatusTest() {
                               statuses: { code: OK message: "error_message" }
                             }
                           )pb"),
-                          5, INPUT_IS_INVALID);
+                          5, pdpi::INPUT_IS_INVALID);
   RunPdWriteRpcStatusTest("invalid status in rpc response",
                           gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
                             rpc_response: {
@@ -795,7 +804,7 @@ static void RunWriteRpcStatusTest() {
                               statuses: { code: UNKNOWN }
                             }
                           )pb"),
-                          5, INPUT_IS_INVALID);
+                          5, pdpi::INPUT_IS_INVALID);
 
   // Tests translation of PD with all ok status should success when
   // number_of_update_status matches with the repeated statuses field in PD
@@ -809,24 +818,24 @@ static void RunWriteRpcStatusTest() {
                               statuses: { code: OK }
                             }
                           )pb"),
-                          5, INPUT_IS_VALID);
+                          5, pdpi::INPUT_IS_VALID);
   // RPC-wide error tests
   RunPdWriteRpcStatusTest("rpc-wide error with ok status code",
                           gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
                             rpc_wide_error: { code: 0 message: "code is ok" }
                           )pb"),
-                          5, INPUT_IS_INVALID);
+                          5, pdpi::INPUT_IS_INVALID);
   RunPdWriteRpcStatusTest("rpc-wide error with invalid status code",
                           gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
                             rpc_wide_error: { code: 42 message: "bad_code" }
                           )pb"),
-                          5, INPUT_IS_INVALID);
+                          5, pdpi::INPUT_IS_INVALID);
   RunPdWriteRpcStatusTest(
       "rpc-wide error with ABORTED status",
       gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
         rpc_wide_error: { code: 10 message: "int value of ABORTED is 10" }
       )pb"),
-      5, INPUT_IS_VALID);
+      5, pdpi::INPUT_IS_VALID);
 
   // Mix of successful and failed batch write update.
   // This is the same error status in p4RT spec example.
@@ -840,7 +849,7 @@ static void RunWriteRpcStatusTest() {
 
         }
       )pb"),
-      3, INPUT_IS_VALID);
+      3, pdpi::INPUT_IS_VALID);
 
   RunPdWriteRpcStatusTest(
       "all write failed", gutil::ParseProtoOrDie<pdpi::WriteRpcStatus>(R"pb(
@@ -853,7 +862,7 @@ static void RunWriteRpcStatusTest() {
           statuses: { code: ALREADY_EXISTS message: "entry already exists." }
         }
       )pb"),
-      3, INPUT_IS_VALID);
+      3, pdpi::INPUT_IS_VALID);
 }
 
 static void RunStreamMessageRequestTests(pdpi::IrP4Info info) {
@@ -866,7 +875,7 @@ static void RunStreamMessageRequestTests(pdpi::IrP4Info info) {
   RunPdStreamMessageRequestTest(
       info, "empty", gutil::ParseProtoOrDie<pdpi::StreamMessageRequest>(R"pb(
       )pb"),
-      INPUT_IS_INVALID);
+      pdpi::INPUT_IS_INVALID);
 
   // Invalid packet values are tested in packet_io_test.cc.
   RunPdStreamMessageRequestTest(
@@ -878,7 +887,7 @@ static void RunStreamMessageRequestTests(pdpi::IrP4Info info) {
           status { code: 0 }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 
   RunPdStreamMessageRequestTest(
       info, "packet", gutil::ParseProtoOrDie<pdpi::StreamMessageRequest>(R"pb(
@@ -887,7 +896,7 @@ static void RunStreamMessageRequestTests(pdpi::IrP4Info info) {
           metadata { submit_to_ingress: "0x1" egress_port: "eth-1/2/3" }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 }
 
 static void RunStreamMessageResponseTests(pdpi::IrP4Info info) {
@@ -900,7 +909,7 @@ static void RunStreamMessageResponseTests(pdpi::IrP4Info info) {
   RunPdStreamMessageResponseTest(
       info, "empty", gutil::ParseProtoOrDie<pdpi::StreamMessageResponse>(R"pb(
       )pb"),
-      INPUT_IS_INVALID);
+      pdpi::INPUT_IS_INVALID);
 
   // Invalid packet values are tested in packet_io_test.cc.
   RunPdStreamMessageResponseTest(
@@ -912,7 +921,7 @@ static void RunStreamMessageResponseTests(pdpi::IrP4Info info) {
           status { code: 0 }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 
   RunPdStreamMessageResponseTest(
       info, "packet", gutil::ParseProtoOrDie<pdpi::StreamMessageResponse>(R"pb(
@@ -921,7 +930,7 @@ static void RunStreamMessageResponseTests(pdpi::IrP4Info info) {
           metadata { ingress_port: "0x034" target_egress_port: "eth-1/2/3" }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 
   RunPdStreamMessageResponseTest(
       info, "error", gutil::ParseProtoOrDie<pdpi::StreamMessageResponse>(R"pb(
@@ -933,7 +942,7 @@ static void RunStreamMessageResponseTests(pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      INPUT_IS_VALID);
+      pdpi::INPUT_IS_VALID);
 }
 
 int main(int argc, char** argv) {
