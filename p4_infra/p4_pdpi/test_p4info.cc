@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+
+#include "p4_infra/p4_pdpi/test_p4info.h"
 
 #include <string>
 #include <utility>
@@ -22,7 +23,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info_embed.h"
+#include "p4_infra/p4_pdpi/test_p4info_embed.h"
 
 namespace pdpi {
 

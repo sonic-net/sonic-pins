@@ -23,8 +23,8 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
 
 constexpr char kPdUpdatestatus[] =
     R"pb(code: UNKNOWN, message: "some_message")pb";

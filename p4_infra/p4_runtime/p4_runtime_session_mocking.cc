@@ -47,7 +47,7 @@ using ::testing::InSequence;
 using ::testing::Return;
 
 // One of the tables and actions from
-// http://google3/blaze-out/genfiles/third_party/pins_infra/p4_infra/p4_pdpi/testing/test_p4info_embed.cc?l=13
+// http://google3/blaze-out/genfiles/third_party/pins_infra/p4_infra/p4_pdpi/test_p4info_embed.cc?l=13
 // These need to correspond to the values in our p4info because it is checked
 // when sequencing updates to clear tables on the switch.
 constexpr uint32_t kTableId = 33554433;

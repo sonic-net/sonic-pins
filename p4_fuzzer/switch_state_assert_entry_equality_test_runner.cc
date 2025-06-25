@@ -20,7 +20,7 @@
 #include "p4_fuzzer/switch_state.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
 
 namespace p4_fuzzer {
 namespace {

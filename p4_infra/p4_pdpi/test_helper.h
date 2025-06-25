@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_TESTING_TEST_HELPER_H_
-#define PINS_P4_INFRA_P4_PDPI_TESTING_TEST_HELPER_H_
+#ifndef PINS_P4_INFRA_P4_PDPI_TEST_HELPER_H_
+#define PINS_P4_INFRA_P4_PDPI_TEST_HELPER_H_
 
 #include <functional>
 #include <iostream>
@@ -33,6 +33,8 @@
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
+
+namespace pdpi {
 
 constexpr char kBanner[] =
     "=========================================================================";
@@ -336,4 +338,5 @@ void RunGenericPdTest(
   std::cout << std::endl;
 }
 
-#endif  // PINS_P4_INFRA_P4_PDPI_TESTING_TEST_HELPER_H_
+}  // namespace pdpi
+#endif  // PINS_P4_INFRA_P4_PDPI_TEST_HELPER_H_

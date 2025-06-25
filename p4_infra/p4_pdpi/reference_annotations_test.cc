@@ -27,7 +27,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
 #include "p4rt_app/utils/ir_builder.h"
 
 namespace pdpi {

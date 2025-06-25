@@ -29,9 +29,9 @@
 #include "gutil/gutil/testing.h"
 #include "p4/config/v1/p4types.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
 
 namespace pdpi {
 namespace {

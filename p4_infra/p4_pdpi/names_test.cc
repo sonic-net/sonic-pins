@@ -23,7 +23,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/built_ins.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
 
 namespace pdpi {
 namespace {

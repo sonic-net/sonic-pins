@@ -14,9 +14,10 @@
 # limitations under the License.
 
 # Updates all golden files.
-bazel run //third_party/pins_infra/p4_infra/p4_pdpi/testing:info_test -- --update
-bazel run //third_party/pins_infra/p4_infra/p4_pdpi/testing:table_entry_test -- --update
-bazel run //third_party/pins_infra/p4_infra/p4_pdpi/testing:packet_io_test -- --update
-bazel run //third_party/pins_infra/p4_infra/p4_pdpi/testing:rpc_test -- --update
-bazel run //third_party/pins_infra/p4_infra/p4_pdpi/testing:main_pd_test -- --update
-bazel run //third_party/pins_infra/p4_infra/p4_pdpi/testing:sequencing_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:p4info_diff_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:table_entry_diff_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:packet_io_diff_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:references_diff_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:rpc_diff_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:main_pd_diff_test -- --update
+bazel run //third_party/pins_infra/p4_infra/p4_pdpi:sequencing_diff_test -- --update

@@ -25,24 +25,27 @@
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/testing/test_helper.h"
-#include "p4_infra/p4_pdpi/testing/union_main_p4_pd.pb.h"
+#include "p4_infra/p4_pdpi/test_helper.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
+#include "p4_infra/p4_pdpi/union_main_p4_pd.pb.h"
+
+namespace pdpi {
+namespace {
 
 using ::p4::config::v1::P4Info;
 
 // Used to configure an IrTableEntryTest.
 struct IrTestConfig {
   // Whether the test is expected to fail or not.
-  InputValidity validity = INPUT_IS_INVALID;
+  pdpi::InputValidity validity = pdpi::INPUT_IS_INVALID;
   // Whether IR->PD should be tested or not.
   bool test_ir_to_pd = true;
 };
 
-static void RunPiEntityTest(const pdpi::IrP4Info& info,
-                            const std::string& test_name,
-                            const p4::v1::Entity& pi,
-                            InputValidity validity = INPUT_IS_INVALID) {
+static void RunPiEntityTest(
+    const pdpi::IrP4Info& info, const std::string& test_name,
+    const p4::v1::Entity& pi,
+    pdpi::InputValidity validity = pdpi::INPUT_IS_INVALID) {
   RunGenericPiTest<pdpi::IrEntity, p4::v1::Entity>(
       info, test_name, pi, pdpi::TranslationOptions(),
       [](const pdpi::IrP4Info& info, const p4::v1::Entity& pi,
@@ -79,7 +82,7 @@ static void RunIrEntityTest(const pdpi::IrP4Info& info,
 static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
                                 std::string test_name,
                                 const pdpi::TableEntry& pd,
-                                InputValidity validity,
+                                pdpi::InputValidity validity,
                                 pdpi::TranslationOptions options = {}) {
   absl::StrAppend(&test_name, "\n", options);
   RunGenericPdTest<pdpi::TableEntry, pdpi::IrEntity, p4::v1::Entity>(
@@ -3124,6 +3127,9 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
       /*validity=*/INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
 }
 
+}  // namespace
+}  // namespace pdpi
+
 int main(int argc, char** argv) {
   // Usage: table_entry_test <p4info file>.
   if (argc != 2) {
@@ -3140,13 +3146,13 @@ int main(int argc, char** argv) {
   }
   pdpi::IrP4Info info = status_or_info.value();
 
-  RunPiTests(info);
-  RunIrTests(info);
-  RunPdTests(info);
-  RunPdTestsOnlyKey(info);
+  pdpi::RunPiTests(info);
+  pdpi::RunIrTests(info);
+  pdpi::RunPdTests(info);
+  pdpi::RunPdTestsOnlyKey(info);
 
   absl::Status meter_and_counter_tests =
-      RunPdTestWithMeterAndCounterDataRemoved(p4info);
+      pdpi::RunPdTestWithMeterAndCounterDataRemoved(p4info);
   if (!meter_and_counter_tests.ok()) {
     std::cerr << meter_and_counter_tests.ToString() << std::endl;
     return 1;

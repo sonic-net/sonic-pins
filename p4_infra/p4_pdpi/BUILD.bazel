@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("//gutil/gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("//gutil/gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -118,11 +122,11 @@ cc_test(
     ],
     deps = [
         ":ir_cc_proto",
+        ":test_p4info_cc",
         ":reference_annotations",
         "//gutil/gutil:proto_matchers",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
-        "//p4_infra/p4_pdpi/testing:test_p4info_cc",
         "//p4rt_app/utils:ir_builder",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -432,10 +436,10 @@ cc_library(
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
+        ":ir_utils",
         ":ir_cc_proto",
         "//gutil/gutil:collections",
         "//gutil/gutil:status",
-        ":ir_utils",
         "@com_google_absl//absl/log",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -490,13 +494,13 @@ cc_test(
     deps = [
         ":ir_cc_proto",
         ":ir_tools",
+        ":test_p4info_cc",
+        ":main_p4_pd_cc_proto",
         ":pd",
         "//gutil/gutil:proto",
         "//gutil/gutil:proto_matchers",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
-        "//p4_infra/p4_pdpi/testing:main_p4_pd_cc_proto",
-        "//p4_infra/p4_pdpi/testing:test_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
@@ -594,9 +598,9 @@ cc_test(
         ":built_ins",
         ":ir_cc_proto",
         ":names",
+        ":test_p4info_cc",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
-        "//p4_infra/p4_pdpi/testing:test_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
@@ -621,5 +625,382 @@ cc_library(
         "//p4_infra/netaddr:ipv4_address",
         "//p4_infra/netaddr:ipv6_address",
         "//p4_infra/netaddr:mac_address",
+    ],
+)
+
+p4_library(
+    name = "main_p4info",
+    src = ":main.p4",
+    p4info_out = "main-p4info.pb.txt",
+)
+
+p4_pd_proto(
+    name = "main_p4_pd",
+    src = "main-p4info.pb.txt",
+    out = "main_p4_pd.proto",
+    format = False,
+    package = "pdpi",
+)
+
+# This P4Info is to be used for tests that require PD fields that may not be
+# present in the P4Info. In practice, this can happen if a unified P4Info
+# consisting of P4Infos for different roles is used to translate entries
+# to PD.
+p4_library(
+    name = "union_main_p4info",
+    src = ":main.p4",
+    extra_args = "-DPDPI_EXTRA_MATCH_FIELD",
+    p4info_out = "union-main-p4info.pb.txt",
+)
+
+p4_pd_proto(
+    name = "union_main_p4_pd",
+    src = "union-main-p4info.pb.txt",
+    out = "union_main_p4_pd.proto",
+    format = False,
+    package = "pdpi",
+)
+
+proto_library(
+    name = "union_main_p4_pd_proto",
+    srcs = ["union_main_p4_pd.proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "union_main_p4_pd_cc_proto",
+    deps = [":union_main_p4_pd_proto"],
+)
+
+cc_library(
+    name = "test_p4info_cc",
+    srcs = ["test_p4info.cc"],
+    hdrs = ["test_p4info.h"],
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":test_p4info_embed",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_embed_data(
+    name = "test_p4info_embed",
+    srcs = ["main-p4info.pb.txt"],
+    cc_file_output = "test_p4info_embed.cc",
+    cpp_namespace = "pdpi",
+    h_file_output = "test_p4info_embed.h",
+)
+
+proto_library(
+    name = "main_p4_pd_proto",
+    srcs = ["main_p4_pd.proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "main_p4_pd_cc_proto",
+    deps = [":main_p4_pd_proto"],
+)
+
+diff_test(
+    name = "main_pd_diff_test",
+    actual = "main_p4_pd.proto",
+    expected = ":main_p4_pd.expected",
+)
+
+cc_library(
+    name = "test_helper",
+    testonly = True,
+    hdrs = ["test_helper.h"],
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":translation_options",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "sequencing_test_runner",
+    srcs = ["sequencing_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":main_p4_pd_cc_proto",
+        ":pd",
+        ":sequencing",
+        ":test_helper",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cmd_diff_test(
+    name = "sequencing_diff_test",
+    actual_cmd = "$(execpath :sequencing_test_runner) $(location :main-p4info.pb.txt)",
+    expected = "//p4_infra/p4_pdpi:sequencing.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":sequencing_test_runner",
+    ],
+)
+
+cc_test(
+    name = "sequencing_util_test_runner",
+    srcs = ["sequencing_util_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":ir_cc_proto",
+        ":main_p4_pd_cc_proto",
+        ":pd",
+        ":sequencing_util",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:testing",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "sequencing_util_diff_test",
+    actual_cmd = "$(execpath :sequencing_util_test_runner) ",
+    expected = ":sequencing_util.expected",
+    tools = [":sequencing_util_test_runner"],
+)
+
+cc_test(
+    name = "references_test_runner",
+    srcs = ["references_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":ir_cc_proto",
+        ":main_p4_pd_cc_proto",
+        ":pd",
+        ":references",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "references_diff_test",
+    actual_cmd = "$(execpath :references_test_runner) ",
+    expected = ":references.expected",
+    tools = [":references_test_runner"],
+)
+
+cc_test(
+    name = "p4info_test_runner",
+    srcs = ["p4info_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":test_helper",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "p4info_diff_test",
+    actual_cmd = "$(execpath :p4info_test_runner) $(location :main-p4info.pb.txt)",
+    expected = ":p4info.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":p4info_test_runner",
+    ],
+)
+
+cc_test(
+    name = "rpc_test_runner",
+    srcs = ["rpc_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":main_p4_pd_cc_proto",
+        ":pd",
+        ":test_helper",
+        ":translation_options",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googleapis//google/rpc:status_cc_proto",
+    ],
+)
+
+cmd_diff_test(
+    name = "rpc_diff_test",
+    actual_cmd = "$(execpath :rpc_test_runner)  $(location :main-p4info.pb.txt)",
+    expected = ":rpc.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":rpc_test_runner",
+    ],
+)
+
+cc_test(
+    name = "packet_io_test_runner",
+    srcs = ["packet_io_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":main_p4_pd_cc_proto",
+        ":pd",
+        ":test_helper",
+        ":translation_options",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "packet_io_diff_test",
+    actual_cmd = "$(execpath :packet_io_test_runner) $(location :main-p4info.pb.txt)",
+    expected = ":packet_io.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":packet_io_test_runner",
+    ],
+)
+
+cc_test(
+    name = "table_entry_test_runner",
+    srcs = ["table_entry_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":pd",
+        ":test_helper",
+        ":translation_options",
+        ":union_main_p4_pd_cc_proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "table_entry_diff_test",
+    actual_cmd = "$(execpath :table_entry_test_runner) $(location :main-p4info.pb.txt)",
+    expected = ":table_entry.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":table_entry_test_runner",
+    ],
+)
+
+cc_test(
+    name = "helper_function_test",
+    srcs = ["helper_function_test.cc"],
+    deps = [
+        "main_p4_pd_cc_proto",
+        ":pd",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "table_entry_gunit_test",
+    srcs = ["table_entry_gunit_test.cc"],
+    deps = [
+        ":ir",
+        ":ir_cc_proto",
+        ":main_p4_pd_cc_proto",
+        ":pd",
+        ":test_p4info_cc",
+        ":translation_options",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest_main",
     ],
 )

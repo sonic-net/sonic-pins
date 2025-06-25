@@ -26,15 +26,18 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/testing.h"
-#include "gutils/status_matchers.h"
+#include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_helper.h"
+#include "p4_infra/p4_pdpi/test_helper.h"
+
+namespace pdpi {
+namespace {
 
 using ::gutil::PrintTextProto;
 using ::p4::config::v1::P4Info;
@@ -1696,13 +1699,16 @@ void RunGetEntriesUnreachableFromRootsTests(const pdpi::IrP4Info& info) {
       });
 }  // NOLINT(readability/fn_size)
 
+}  // namespace
+}  // namespace pdpi
+
 int main(int argc, char** argv) {
   // Usage: sequencing_test <p4info file>.
   if (argc != 2) {
     std::cerr << "Invalid number of arguments." << std::endl;
     return 1;
   }
-  const auto p4info = gutil::ParseProtoFileOrDie<P4Info>(argv[1]);
+  const auto p4info = gutil::ParseProtoFileOrDie<pdpi::P4Info>(argv[1]);
   const auto status_or_info = pdpi::CreateIrP4Info(p4info);
   if (!status_or_info.status().ok()) {
     std::cerr << "Unable to create IrP4Info." << std::endl;
@@ -1710,13 +1716,13 @@ int main(int argc, char** argv) {
   }
   const auto& info = status_or_info.value();
 
-  RunSequenceTests(info);
+  pdpi::RunSequenceTests(info);
 
-  RunSortTests(info);
+  pdpi::RunSortTests(info);
 
-  RunGetEntriesUnreachableFromRootsTests(info);
+  pdpi::RunGetEntriesUnreachableFromRootsTests(info);
 
-  ExtractWriteRequestsTests();
+  pdpi::ExtractWriteRequestsTests();
   // TODO: b/208439664 - Add negative test (where updates and P4Info are out of
   // sync).
   return 0;

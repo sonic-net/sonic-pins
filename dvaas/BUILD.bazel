@@ -525,7 +525,7 @@ cc_test(
         "//gutil/gutil:proto",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
-        "//p4_infra/p4_pdpi/testing:test_p4info_cc",
+        "//p4_infra/p4_pdpi:test_p4info_cc",
         "//p4_infra/packetlib",
         "//p4_infra/packetlib:packetlib_cc_proto",
         "@com_google_absl//absl/status",
