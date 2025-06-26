@@ -79,6 +79,7 @@ absl::StatusOr<NextHeader> GetNextHeaderForEtherType(
   if (ethertype == 0x86dd) return Header::kIpv6Header;
   if (ethertype == 0x0806) return Header::kArpHeader;
   if (ethertype == 0x8100) return Header::kVlanHeader;
+  if (ethertype == 0x88f7) return Header::kPtpHeader;
   if (ethertype == 0x9900) return Header::kCsigHeader;
   return UnsupportedNextHeader{
       .reason = absl::StrFormat("%s.ethertype %s: unsupported", header_name,
@@ -138,6 +139,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
     return Header::kIpfixHeader;
   if (dest_port == 319)
     return Header::kPtpHeader;
+  if (dest_port == 320) return Header::kPtpHeader;
   if (dest_port == 1000) return Header::kPspHeader;
   return Header::HEADER_NOT_SET;
 }
@@ -1728,24 +1730,44 @@ absl::StatusOr<std::string> GetEthernetTrailer(const Packet& packet) {
               "Ethernet/VLAN/CSIG headers, but none were found: "
            << gutil::PrintTextProto(packet);
   }
+  ASSIGN_OR_RETURN(std::string raw_packet, RawSerializePacket(packet));
   const Header& header = packet.headers(header_index);
   switch (header.header_case()) {
     case Header::kIpv4Header: {
       ASSIGN_OR_RETURN(
-          const int inner_length,
+	  const int packet_size_starting_from_ipv4_according_to_ip_header,
           pdpi::HexStringToInt(header.ipv4_header().total_length()));
-      static constexpr int kByteSize = 8;
-      return packet.payload().substr(inner_length -
-                                     kStandardIpv4HeaderBitwidth / kByteSize);
+      ASSIGN_OR_RETURN(int actual_packet_size_starting_from_ipv4,
+                       PacketSizeInBytes(packet, header_index));
+      int trailer_size = actual_packet_size_starting_from_ipv4 -
+                         packet_size_starting_from_ipv4_according_to_ip_header;
+      if (trailer_size < 0) return "";
+      if (trailer_size > raw_packet.size()) {
+        return absl::InternalError(
+            absl::StrCat("Impossible: ", gutil::PrintTextProto(packet)));
+      }
+      int trailer_offset_in_packet = raw_packet.size() - trailer_size;
+      return raw_packet.substr(trailer_offset_in_packet);
     }
     case Header::kIpv6Header: {
       ASSIGN_OR_RETURN(
-          const int payload_length,
+	  const int packet_size_starting_after_ipv6_according_to_ip_header,
           pdpi::HexStringToInt(header.ipv6_header().payload_length()));
-      return packet.payload().substr(payload_length);
+      ASSIGN_OR_RETURN(int actual_packet_size_starting_after_ipv6,
+                       PacketSizeInBytes(packet, header_index + 1));
+      int trailer_size = actual_packet_size_starting_after_ipv6 -
+                         packet_size_starting_after_ipv6_according_to_ip_header;
+
+      if (trailer_size < 0) return "";
+      if (trailer_size > raw_packet.size()) {
+        return absl::InternalError(
+            absl::StrCat("Impossible: ", gutil::PrintTextProto(packet)));
+      }
+      int trailer_offset_in_packet = raw_packet.size() - trailer_size;
+      return raw_packet.substr(trailer_offset_in_packet);
     }
     case Header::kArpHeader: {
-      return packet.payload();
+      return raw_packet;
     }
     default: {
       return gutil::InvalidArgumentErrorBuilder()
