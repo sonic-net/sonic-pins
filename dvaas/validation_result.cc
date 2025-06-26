@@ -19,6 +19,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
@@ -48,6 +49,13 @@ ValidationResult::ValidationResult(
   packet_synthesis_result_ = packet_synthesis_result;
 }
 
+std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {
+  return absl::StrFormat(
+      "Sending the same input packet reproduces this error %f%% of the "
+      "time\n%s",
+      failure.reproducibility_rate(), failure.description());
+}
+
 absl::Status ValidationResult::HasSuccessRateOfAtLeast(
     double expected_success_rate) const {
   double success_rate = GetSuccessRate();
@@ -61,7 +69,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
            << ExplainTestVectorStats(test_vector_stats_)
            << "\nShowing the first failure only. Refer to the test artifacts "
               "for the full list of errors.\n"
-           << it->test_result().failure().description();
+           << ExplainFailure(it->test_result().failure());
   }
   return absl::OkStatus();
 }
@@ -88,7 +96,7 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
                    test_vector_stats_.num_vectors_passed);
   for (const auto& outcome : test_outcomes_.outcomes()) {
     if (outcome.test_result().has_failure()) {
-      failures.push_back(outcome.test_result().failure().description());
+      failures.push_back(ExplainFailure(outcome.test_result().failure()));
     }
   }
   return failures;
