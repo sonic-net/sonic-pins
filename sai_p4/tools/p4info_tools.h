@@ -23,6 +23,20 @@ namespace sai {
 // Returns true if any hash seed was set.
 bool SetSaiHashSeed(p4::config::v1::P4Info &p4info, uint32_t seed);
 
-} // namespace sai
+// Modifies all action profiles to use the sum_of_members semantics and sets
+// their various sizes accordingly using the minimum guaranteed size library.
+// Returns true if any field was changed.
+bool ApplySumOfMembersSemanticsForActionProfiles(
+    p4::config::v1::P4Info& p4info);
+
+// Modifies all action profiles to use the sum_of_weights semantics and sets
+// their various sizes accordingly using the minimum guaranteed size library.
+// Since our ToRs generally have smaller guarantees, the `is_tor` boolean
+// accounts for that when getting the correct value from the library.
+// Returns true if any field was changed.
+bool ApplySumOfWeightsSemanticsForActionProfiles(
+    bool is_tor, p4::config::v1::P4Info& p4info);
+
+}  // namespace sai
 
 #endif // PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_

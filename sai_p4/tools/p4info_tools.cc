@@ -21,6 +21,7 @@
 #include "absl/strings/str_cat.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "sai_p4/instantiations/google/minimum_guaranteed_sizes.h"
 
 namespace sai {
 
@@ -37,6 +38,58 @@ bool SetSaiHashSeed(p4::config::v1::P4Info& p4info, uint32_t seed) {
     }
   }
   return set_any_hash;
+}
+
+bool ApplySumOfMembersSemanticsForActionProfiles(
+    p4::config::v1::P4Info& p4info) {
+  int size = WCMP_GROUP_SUM_OF_MEMBERS_SIZE;
+  int max_group_size = WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE;
+  int max_member_weight = WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT;
+  bool modified_any_field = false;
+  for (auto& action_profile : *p4info.mutable_action_profiles()) {
+    // If nothing needs to change, then skip the action profile.
+    if (action_profile.size() == size &&
+        action_profile.max_group_size() == max_group_size &&
+        action_profile.has_sum_of_members() &&
+        action_profile.sum_of_members().max_member_weight() ==
+            max_member_weight) {
+      continue;
+    }
+    action_profile.set_size(size);
+    action_profile.set_max_group_size(max_group_size);
+    action_profile.mutable_sum_of_members()->set_max_member_weight(
+        max_member_weight);
+
+    modified_any_field = true;
+  }
+  return modified_any_field;
+}
+
+bool ApplySumOfWeightsSemanticsForActionProfiles(
+    bool is_tor, p4::config::v1::P4Info& p4info) {
+  int size, max_group_size;
+  if (is_tor) {
+    size = WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR;
+    max_group_size = WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR;
+  } else {
+    size = WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR;
+    max_group_size = WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR;
+  }
+  bool modified_any_field = false;
+  for (auto& action_profile : *p4info.mutable_action_profiles()) {
+    // If nothing needs to change, then skip the action profile.
+    if (action_profile.size() == size &&
+        action_profile.max_group_size() == max_group_size &&
+        action_profile.has_sum_of_weights()) {
+      continue;
+    }
+    action_profile.set_size(size);
+    action_profile.set_max_group_size(max_group_size);
+    action_profile.mutable_sum_of_weights();
+
+    modified_any_field = true;
+  }
+  return modified_any_field;
 }
 
 }  // namespace sai
