@@ -555,6 +555,15 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
                                  absl::string_view interface_name,
                                  gnmi::gNMI::StubInterface &gnmi_stub);
 
+// Set PFC Rx for a port.
+absl::Status SetPortPfcRxEnable(absl::string_view interface_name,
+                                std::string port_pfc_rx_enable,
+                                gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Get PFC Rx enable for a port.
+absl::StatusOr<std::string> GetPortPfcRxEnable(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface &gnmi_stub);
