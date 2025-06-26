@@ -144,6 +144,83 @@ static void RunPiMulticastTest(const pdpi::IrP4Info& info) {
                     }
                   )pb"),
                   /*validity=*/INPUT_IS_VALID);
+  RunPiEntityTest(
+      info, "valid multicast group entry with backup replicas",
+      gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+              backup_replicas { port: "third_port" instance: 1 }
+            }
+            replicas {
+              port: "some_other_port"
+              instance: 1
+              backup_replicas { port: "some_port" instance: 2 }
+              backup_replicas { port: "third_port" instance: 2 }
+            }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_VALID);
+  RunPiEntityTest(
+      info,
+      "multicast group entry with a backup replica that has the same port as "
+      "the primary replica",
+      gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_port" instance: 2 }
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+          }
+        }
+      )pb"));
+   RunPiEntityTest(
+      info,
+      "multicast group entry with a backup replica that has the same port "
+      "instance pair as another primary replica",
+      gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+            replicas { port: "some_other_port" instance: 2 }
+          }
+        }
+      )pb"));
+   RunPiEntityTest(
+      info,
+      "multicast group entry with a backup replica that has the same port "
+      "instance pair as another backup replica",
+      gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+            replicas {
+              port: "third_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+          }
+        }
+      )pb"));
 }
 
 static void RunPiCloneSessionTest(const pdpi::IrP4Info& info) {
@@ -995,6 +1072,98 @@ static void RunIrMulticastTest(const pdpi::IrP4Info& info) {
                   IrTestConfig{
                       .validity = INPUT_IS_VALID,
                   });
+  RunIrEntityTest(
+      info, "valid multicast group entry with backup replicas",
+      gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+              backup_replicas { port: "third_port" instance: 1 }
+            }
+            replicas {
+              port: "some_other_port"
+              instance: 1
+              backup_replicas { port: "some_port" instance: 2 }
+              backup_replicas { port: "third_port" instance: 2 }
+            }
+          }
+        }
+      )pb"),
+      IrTestConfig{
+          .validity = INPUT_IS_VALID,
+          .test_ir_to_pd = false,
+      });
+  RunIrEntityTest(
+      info,
+      "multicast group entry with a backup replica that has the same port as "
+      "the primary replica",
+      gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_port" instance: 2 }
+              backup_replicas { port: "some_other_port" instance: 1 }
+            }
+          }
+        }
+      )pb"),
+      IrTestConfig{
+          .validity = INPUT_IS_INVALID,
+          .test_ir_to_pd = false,
+      });
+  RunIrEntityTest(
+      info,
+      "multicast group entry with a backup replica that has the same port "
+      "instance pair as another primary replica",
+      gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+            replicas { port: "some_other_port" instance: 2 }
+          }
+        }
+      )pb"),
+      IrTestConfig{
+          .validity = INPUT_IS_INVALID,
+          .test_ir_to_pd = false,
+      });
+  RunIrEntityTest(
+      info,
+      "multicast group entry with a backup replica that has the same port "
+      "instance pair as another backup replica",
+      gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas {
+              port: "some_port"
+              instance: 1
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+            replicas {
+              port: "third_port"
+              instance: 3
+              backup_replicas { port: "some_other_port" instance: 2 }
+            }
+          }
+        }
+      )pb"),
+      IrTestConfig{
+          .validity = INPUT_IS_INVALID,
+          .test_ir_to_pd = false,
+      });
 }
 
 static void RunIrCloneSessionTest(const pdpi::IrP4Info& info) {

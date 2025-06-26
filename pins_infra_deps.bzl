@@ -142,9 +142,10 @@ def pins_infra_deps():
         # rather than a release.
         http_archive(
             name = "com_github_p4lang_p4runtime",
-            # Newest commit on main as of 2024-09-19.
-            urls = ["https://github.com/p4lang/p4runtime/archive/dda9d669cfa846c46116b5e7543479ffe96098b6.zip"],
-            strip_prefix = "p4runtime-dda9d669cfa846c46116b5e7543479ffe96098b6/proto",
+	    # Newest commit on main as of 2025-05-09.
+            urls = ["https://github.com/p4lang/p4runtime/archive/81527931abed0e488d1305f7d2061539aad7021b.zip"],
+            strip_prefix = "p4runtime-81527931abed0e488d1305f7d2061539aad7021b/proto",
+            sha256 = "5826d9385bce7deafd41c081be7ecd2c875904c45d07d8e234570e7fffbc7852",
         )
     if not native.existing_rule("com_github_p4lang_p4_constraints"):
         http_archive(
