@@ -107,8 +107,11 @@ class SflowMirrorTestFixture
 
   void TearDown() override;
 
-  absl::Status NsfRebootAndWaitForGnmiConvergence(
-      thinkit::MirrorTestbed& testbed, absl::string_view gnmi_config);
+  // Issue an NSF reboot request on `test` and wait for gnmi convergence on
+  // `gnmi_config`. It would also verify P4 snapshot is the same before and
+  // after the reboot.
+  absl::Status NsfRebootAndWaitForConvergence(thinkit::MirrorTestbed& testbed,
+                                              absl::string_view gnmi_config);
 
   p4::config::v1::P4Info GetSutP4Info() { return sut_p4_info_; }
   p4::config::v1::P4Info GetControlP4Info() { return control_p4_info_; }
