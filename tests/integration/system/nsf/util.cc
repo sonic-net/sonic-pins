@@ -108,6 +108,30 @@ void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
   differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
 }
 
+absl::Status PushConfigView(const PinsConfigView& config_view, Testbed& testbed,
+                            thinkit::SSHClient& ssh_client) {
+  if (!config_view.gnmi_config.has_value()) {
+    return absl::InvalidArgumentError("gNMI config is empty");
+  }
+
+  thinkit::Switch& sut = GetSut(testbed);
+  LOG(INFO) << "Pushing config on " << sut.ChassisName();
+
+  // In case no P4 Info is provided, we assume that a P4 Info is already present
+  // on the switch. This is a valid scenario when we want to configure switch
+  // after NSF Upgrade/Reboot. So in such a case, we do not use the
+  // `ConfigureSwitch` method (which does some workarounds causing b/329087752),
+  // but we directly use the `PushGnmiConfig` method.
+  if (config_view.p4info.has_value()) {
+    RETURN_IF_ERROR(ConfigureSwitch(sut, config_view));
+  } else {
+    RETURN_IF_ERROR(PushGnmiConfig(sut, *config_view.gnmi_config));
+  }
+
+  return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
+                            ssh_client, GetConnectedInterfacesForSut(testbed));
+}
+
 }  // namespace
 
 std::vector<std::string> GetConnectedInterfacesForSut(Testbed& testbed) {
@@ -181,7 +205,7 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
   // were down that caused it to fail. If so, check that ports are up,
   // including healthz debug data.
   if (state == SwitchState::kReady) {
-    absl::Status ports_up = pins_test::PortsUp(thinkit_switch, interfaces);
+    absl::Status ports_up = PortsUp(thinkit_switch, interfaces);
     LOG_IF(WARNING, !ports_up.ok()) << ports_up;
   }
   return absl::DeadlineExceededError(absl::Substitute(
@@ -200,6 +224,12 @@ absl::Status Reboot(RebootMethod method, Testbed& testbed) {
       absl::StrCat("Performing ", RebootMethod_Name(method), " Reboot"));
   RebootResponse response;
   ClientContext context;
+
+  RETURN_IF_ERROR(StoreSutDebugArtifacts(
+      absl::StrCat(
+          "before_", RebootMethod_Name(method), "_reboot_",
+          absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
+      testbed));
 
   return gutil::GrpcStatusToAbslStatus(
       sut_gnoi_system_stub->Reboot(&context, request, &response));
@@ -355,11 +385,6 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 
 absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
                               bool check_interfaces_up) {
-  // TODO: b/327514412 - Remove WaitForReboot once the RebootStatus API related
-  // issue is fixed.
-  LOG(WARNING) << "Using SSH instead of RebootStatus to validate NSF shutdown "
-                  "and bootup.";
-  return WaitForReboot(testbed, ssh_client, check_interfaces_up);
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
@@ -382,6 +407,11 @@ absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
     }
     LOG(INFO) << "NSF Reboot succeeded: " << resp.DebugString()
               << "\nProceeding with Switch State Validation.";
+    RETURN_IF_ERROR(StoreSutDebugArtifacts(
+        absl::StrCat(
+            "after_nsf_reboot_",
+            absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
+        testbed));
     return RunReadyValidations(sut, ssh_client,
                                GetConnectedInterfacesForSut(testbed),
                                /*check_interfaces_state=*/check_interfaces_up,
@@ -392,17 +422,18 @@ absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
          << absl::FormatDuration(kNsfRebootWaitTime) << " .";
 }
 
+absl::Status PushConfig(absl::string_view gnmi_config, Testbed& testbed,
+                        thinkit::SSHClient& ssh_client) {
+  return PushConfigView(PinsConfigView{.gnmi_config = std::string(gnmi_config)},
+                        testbed, ssh_client);
+}
+
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         Testbed& testbed, thinkit::SSHClient& ssh_client) {
-  // Push Config.
-  thinkit::Switch& sut = GetSut(testbed);
-  LOG(INFO) << "Pushing config on " << sut.ChassisName();
-  RETURN_IF_ERROR(pins_test::ConfigureSwitch(
-      sut, PinsConfigView{.gnmi_config = image_config_param.gnmi_config,
-                          .p4info = image_config_param.p4_info}));
-
-  return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
-                            ssh_client, GetConnectedInterfacesForSut(testbed));
+  return PushConfigView(
+      PinsConfigView{.gnmi_config = image_config_param.gnmi_config,
+                     .p4info = image_config_param.p4_info},
+      testbed, ssh_client);
 }
 
 absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
