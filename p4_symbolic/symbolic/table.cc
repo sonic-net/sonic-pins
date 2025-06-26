@@ -413,8 +413,10 @@ absl::Status EvaluateTableEntryAction(const ir::Table &table,
             bool is_last_action = i == action_set.size() - 1;
             z3::expr selected = is_last_action ? unselected : (selector == i);
             unselected = unselected && !selected;
-            RETURN_IF_ERROR(EvaluateSingeConcreteAction(action, state, headers,
-                                                        guard && selected))
+	    // The incoming guard 'guard' is always true and hence the action is
+            // evaluated only based on the selected bit.
+            RETURN_IF_ERROR(
+                EvaluateSingeConcreteAction(action, state, headers, selected))
                     .SetPrepend()
                 << "In table entry '" << ir_entry.ShortDebugString() << "':";
           }
@@ -560,17 +562,13 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   // regardless of priority. I.e., if the effects of entry[1] refer to the value
   // of field y, that value must be guarded properly so that if entry[0] or
   // entry[2] assign a value to it, that value is unused by this reference.
-  //
-  // The simplest way to do this is first evaluate all the match conditions
-  // symbolically, then construct complete guard for every entry.
-  // Example, For entry i, all assignments/effects made by that entry's action
-  // are guarded by:
-  // guard && condition[i] && !condition[0] && ... && !condition[i-1]
-  //
-  // This way, when we evaluate entry i-1 in the next step, and we retrieve the
-  // value, we will use it in the context of the then body guarded by
-  // guard && condition[i-1], which entails that the assignment guard for
-  // effects of entry i (and all following entries) is false.
+  // 
+  // We do this by introducing a local map of headers for each entry.
+  // The local map is a copy of the incoming headers, but the action of each
+  // entry can modify the local map without affecting the incoming headers.
+  // Then, when we merge the results of each entry, using the entry's match
+  // expressions according to their priority order
+  // (see go/p4-symbolic-guard-factorization).
 
   // Find all entries match conditions.
   std::vector<z3::expr> entries_matches;
@@ -578,37 +576,6 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     ASSIGN_OR_RETURN(z3::expr entry_match,
                      EvaluateTableEntryCondition(table, entry, state, headers));
     entries_matches.push_back(entry_match);
-  }
-
-  // Build each entry's assignment/effect guard by negating
-  // higher priority entries.
-  // The accumulator guard and the current guard are simplified at every step
-  // for better performance (go/p4-symbolic-simplify).
-  z3::expr default_entry_assignment_guard = guard;
-  std::vector<z3::expr> assignment_guards;
-  if (!entries_matches.empty()) {
-    ASSIGN_OR_RETURN(z3::expr current_guard,
-                     operators::And(guard, entries_matches.at(0)));
-    current_guard = current_guard.simplify();
-    ASSIGN_OR_RETURN(z3::expr accumulator_guard,
-                     operators::Not(entries_matches.at(0)));
-    accumulator_guard = accumulator_guard.simplify();
-    assignment_guards.push_back(current_guard);
-    for (size_t i = 1; i < entries_matches.size(); i++) {
-      ASSIGN_OR_RETURN(z3::expr tmp, operators::And(guard, accumulator_guard));
-      ASSIGN_OR_RETURN(current_guard,
-                       operators::And(tmp, entries_matches.at(i)));
-      current_guard = current_guard.simplify();
-      ASSIGN_OR_RETURN(tmp, operators::Not(entries_matches.at(i)));
-      ASSIGN_OR_RETURN(accumulator_guard,
-                       operators::And(accumulator_guard, tmp));
-      accumulator_guard = accumulator_guard.simplify();
-      assignment_guards.push_back(current_guard);
-    }
-    ASSIGN_OR_RETURN(
-        default_entry_assignment_guard,
-        operators::And(default_entry_assignment_guard, accumulator_guard));
-    default_entry_assignment_guard = default_entry_assignment_guard.simplify();
   }
 
   // Build a TableEntry object for the default entry.
@@ -625,13 +592,21 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
                      values::ParseIrValue(parameter_value));
   }
 
+  // Create a SymbolicPerPacketState (local map) for each table entry.
+  // Duplicate existing headers (incoming) to individual local headers
+  // for each entry.
+  std::vector<SymbolicPerPacketState> local_header_per_table_entry(
+      sorted_entries.size() + 1, headers);
+
   // Start with the default entry
   z3::expr match_index =
       state.context.z3_context->int_val(kDefaultActionEntryIndex);
-  RETURN_IF_ERROR(EvaluateTableEntryAction(table, default_entry, state, headers,
-                                           default_entry_assignment_guard));
+  RETURN_IF_ERROR(EvaluateTableEntryAction(
+      table, default_entry, state,
+      local_header_per_table_entry[sorted_entries.size()],
+      state.context.z3_context->bool_val(true)));
 
-  // Continue evaluating each table entry in reverse priority
+  // Continue evaluating each table entry.
   for (int row = sorted_entries.size() - 1; row >= 0; row--) {
     const ir::TableEntry &entry = sorted_entries.at(row);
     z3::expr row_symbol =
@@ -643,10 +618,44 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     ASSIGN_OR_RETURN(match_index,
                      operators::Ite(entry_match, row_symbol, match_index));
 
-    // Evaluate the entry's action guarded by its complete assignment guard.
-    z3::expr entry_assignment_guard = assignment_guards.at(row);
-    RETURN_IF_ERROR(EvaluateTableEntryAction(table, entry, state, headers,
-                                             entry_assignment_guard));
+    // Evaluate the entry's action and update the local headers map.
+    // We pass `true` as the guard expression here (effectively no guard).
+    // The proper guard is applied during the merge process (see below).
+    RETURN_IF_ERROR(EvaluateTableEntryAction(
+        table, entry, state, local_header_per_table_entry[row],
+        state.context.z3_context->bool_val(true)));
+  }
+
+  // Merge process:
+  // Iterate through each field and merge the results of each entry.
+  // The iteration is done in reverse order to ensure that the result of the
+  // higher priority entry takes precedence over the lower priority entry.
+  // The merge is done using the following formula
+  // (for every field in the header):
+  // resulting_header_field_value =
+  //   if entries_matches[0]
+  //     then local_header_per_table_entry[0].Get(field)
+  //     else if entries_matches[1]
+  //       then local_header_per_table_entry[1].Get(field)
+  //       else ...
+  //         ...
+  //         else local_header_per_table_entry[n].Get(field)
+  // At the end, the resulting_header_field_value is assigned to the
+  // field in the resulting header
+  for (const auto &[field, _] : headers) {
+    ASSIGN_OR_RETURN(
+        z3::expr resulting_header_field_value,
+        local_header_per_table_entry[sorted_entries.size()].Get(field));
+
+    for (int row = sorted_entries.size() - 1; row >= 0; row--) {
+      ASSIGN_OR_RETURN(z3::expr local_header_field_value,
+                       local_header_per_table_entry[row].Get(field));
+      ASSIGN_OR_RETURN(
+          resulting_header_field_value,
+          operators::Ite(entries_matches.at(row), local_header_field_value,
+                         resulting_header_field_value));
+    }
+    RETURN_IF_ERROR(headers.Set(field, resulting_header_field_value, guard));
   }
 
   const std::string &merge_point = table.table_implementation()

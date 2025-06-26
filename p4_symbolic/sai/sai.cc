@@ -26,8 +26,10 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
@@ -490,6 +492,88 @@ absl::Status AddConstraintsForAclIngressTable(symbolic::SolverState &state) {
     constraints.push_back(is_ipv6.mask == 0 || is_ipv6.value == 1);
 
     state.solver->add(constraints);
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status AddConstraintsPreventingIngressPortBeingInLoopbackMode(
+    symbolic::SolverState &state) {
+  constexpr absl::string_view kEgressPortLoopbackTableName =
+      "egress.egress_port_loopback.egress_port_loopback_table";
+  ASSIGN_OR_RETURN(const ir::Table *loopback_table,
+                   gutil::FindPtrOrStatus(state.program.tables(),
+                                          kEgressPortLoopbackTableName));
+
+  // Get field definitions.
+  constexpr absl::string_view kOutPortMatchFieldName = "out_port";
+  ASSIGN_OR_RETURN(
+      const pdpi::IrMatchFieldDefinition *out_port_match_field_def,
+      gutil::FindPtrOrStatus(
+          loopback_table->table_definition().match_fields_by_name(),
+          kOutPortMatchFieldName));
+  ASSIGN_OR_RETURN(
+      const p4_symbolic::ir::FieldValue
+          *standard_metadata_egress_port_header_field,
+      gutil::FindPtrOrStatus(
+          loopback_table->table_implementation().match_name_to_field(),
+          kOutPortMatchFieldName));
+  const std::string standard_metadata_egress_port_header_field_name =
+      absl::StrFormat("%s.%s",
+                      standard_metadata_egress_port_header_field->header_name(),
+                      standard_metadata_egress_port_header_field->field_name());
+  // Sanity check.
+  if (standard_metadata_egress_port_header_field_name !=
+      "standard_metadata.egress_port") {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "Expected '" << kOutPortMatchFieldName << "' in '"
+           << kEgressPortLoopbackTableName << "' match on header name "
+           << "'standard_metadata.egress_port' but got '"
+           << standard_metadata_egress_port_header_field_name << "'";
+  }
+
+  const std::vector<ir::TableEntry> *table_entries = gutil::FindOrNull(
+      state.context.table_entries, kEgressPortLoopbackTableName);
+  if (table_entries == nullptr) {
+    // This is ok because the table may be empty.
+    return absl::OkStatus();
+  }
+  // For each match on out_port `p`, add a constraint: ingress_port != `p`.
+  for (const ir::TableEntry &entry : *table_entries) {
+    if (!entry.has_concrete_entry()) {
+      return absl::UnimplementedError(
+          "Adding constraints preventing ingress port being in loopback mode "
+          "is not supported for non-concrete entries in loopback table.");
+    } else {
+      // Sanity check: ensure the entry contains only (exact) match on
+      // egress port.
+      const auto &matches =
+          entry.concrete_entry().pdpi_ir_entity().table_entry().matches();
+      if (matches.size() != 1 ||
+          matches.at(0).name() != kOutPortMatchFieldName ||
+          !matches.at(0).has_exact()) {
+        return gutil::FailedPreconditionErrorBuilder()
+               << "expected one exact match on egress_port in "
+                  "egress_port_loopback_table_entry, got "
+               << entry.concrete_entry().DebugString();
+      }
+
+      // Get the port.
+      ASSIGN_OR_RETURN(
+          z3::expr loopback_port,
+          symbolic::values::FormatP4RTValue(
+              matches.at(0).exact(),
+              standard_metadata_egress_port_header_field_name,
+              out_port_match_field_def->match_field().type_name().name(),
+              out_port_match_field_def->match_field().bitwidth(),
+              *state.context.z3_context, state.translator));
+
+      // Add Z3 constraint.
+      ASSIGN_OR_RETURN(
+          z3::expr constraint,
+          symbolic::operators::Neq(state.context.ingress_port, loopback_port));
+      state.solver->add(constraint);
+    }
   }
 
   return absl::OkStatus();
