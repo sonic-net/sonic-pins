@@ -106,7 +106,10 @@ message PacketTestValidationResult {
     // A detailed explanation of how the switch did not behave as expected.
     string description = 1;
     // The ratio of times sending the same packet reproduces the failure.
-    double reproducibility_rate = 2;
+    MinimizationAnalysis minimization_analysis = 3;
+    message MinimizationAnalysis {
+      double reproducibility_rate = 2;
+    }
   }
   // If present, indicates that the switch did not behave as expected.
   Failure failure = 1;
