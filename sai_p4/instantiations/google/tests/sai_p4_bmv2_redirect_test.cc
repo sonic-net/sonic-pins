@@ -17,6 +17,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -329,10 +330,67 @@ TEST(RedirectTest, RedirectToPort) {
         PacketsByPort output_by_port,
         bmv2.SendPacket(kRedirectIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded to kRedirectEgressPort.
-    // TODO: Add tests that check the ethernet and ip headers of
-    // the egress packet after we correctly model the redirect_to_port behavior
-    // in P4.
     ASSERT_THAT(output_by_port, ElementsAre(Key(kRedirectEgressPort)));
+  }
+}
+
+TEST(RedirectTest, AclMirrorAndRedirectToPort) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  constexpr int kIngressPort = 42;
+  constexpr int kEgressPort = 1;
+  constexpr absl::string_view kEgressPortProto = "\001";
+
+  constexpr int kRedirectIngressPort = 2;
+  constexpr absl::string_view kRedirectIngressPortProto = "\002";
+  constexpr int kRedirectEgressPort = 3;
+  constexpr absl::string_view kRedirectEgressPortProto = "\003";
+  constexpr int kMirrorPort = 4;
+  constexpr absl::string_view kMirrorPortProto = "\004";
+  constexpr absl::string_view kMirrorSessionId = "mirror-session-id";
+
+  // Install entries to forward all packets to kEgressPort and redirect
+  // the ones with in_port kRedirectIngressPort to kRedirectEgressPort.
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntriesForwardingIpPacketsToGivenPort(kEgressPortProto)
+                .AddIngressAclEntryMirroringAndRedirectingToPort(
+                    /*port=*/kRedirectEgressPortProto,
+                    /*mirror_session_id=*/kMirrorSessionId,
+                    {.in_port = kRedirectIngressPortProto})
+                .AddMirrorSessionTableEntry({
+                    .mirror_session_id = absl::StrCat(kMirrorSessionId),
+                    .monitor_port = absl::StrCat(kMirrorPortProto),
+                    // Note: The following fields are not relevant in the test.
+                    .mirror_encap_src_mac = "00:00:00:00:00:00",
+                    .mirror_encap_dst_mac = "00:00:00:00:00:00",
+                    .mirror_encap_vlan_id = "0x000",
+                    .mirror_encap_src_ip = "::",
+                    .mirror_encap_dst_ip = "::",
+                    .mirror_encap_udp_src_port = "0x0000",
+                    .mirror_encap_udp_dst_port = "0x0000",
+                })
+                .LogPdEntries()
+                .InstallDedupedEntities(kIrP4Info, bmv2.P4RuntimeSession(),
+                                        /*allow_unsupported=*/true));
+
+  {
+    // Inject a test packet to kIngressPort.
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded to kEgressPort
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
+  }
+  {
+    // Inject a test packet to kRedirectIngressPort.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kRedirectIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded to kRedirectEgressPort and mirrored to
+    // kMirrorPort.
+    ASSERT_THAT(output_by_port, UnorderedElementsAre(Key(kRedirectEgressPort),
+                                                     Key(kMirrorPort)));
   }
 }
 
