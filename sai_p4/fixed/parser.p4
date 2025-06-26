@@ -23,8 +23,10 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.enable_src_mac_rewrite = false;
     local_metadata.enable_dst_mac_rewrite = false;
     local_metadata.enable_vlan_rewrite = false;
+    local_metadata.enable_dscp_rewrite = false;
     local_metadata.packet_rewrites.src_mac = 0;
     local_metadata.packet_rewrites.dst_mac = 0;
+    local_metadata.packet_rewrites.dscp = 0;
     local_metadata.l4_src_port = 0;
     local_metadata.l4_dst_port = 0;
     local_metadata.wcmp_selector_input = 0;
@@ -47,6 +49,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.ipmc_table_hit = false;
     local_metadata.acl_drop = false;
     local_metadata.tunnel_termination_table_hit = false;
+    local_metadata.acl_ingress_ipmc_redirect = false;
 
   transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
