@@ -328,9 +328,12 @@ struct local_metadata_t {
   bool nexthop_id_valid;
   // Nexthop id, only valid if `nexthop_id_valid` is true.
   nexthop_id_t nexthop_id_value;
-  // After execution of the `routing_lookup` stage, Indicates if an entry in
+  // After execution of the `routing_lookup` stage, indicates if an entry in
   // the `ipv4_multicast` or `ipv6_multicast` table was hit.
   bool ipmc_table_hit;
+  // After execution of the `tunnel_termination` stage, indicates if an entry in
+  // the `tunnel_termination` table was hit.Add commentMore actions
+  bool tunnel_termination_table_hit;
 
   // Determines if packet was dropped in ACL ingress/egress stage. If true, the
   // actual call to mark_to_drop (that affects standard_metadata) takes place at
