@@ -14,15 +14,17 @@
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
 #include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "absl/types/span.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins {
 namespace {
@@ -79,6 +81,28 @@ MATCHER_P(HasActionParam, value, "") {
   return false;
 }
 
+MATCHER_P2(HasReplica, port, instance, "") {
+  for (const auto &replica : arg.entity()
+                                 .packet_replication_engine_entry()
+                                 .multicast_group_entry()
+                                 .replicas()) {
+    if (replica.port() == port && replica.instance() == instance) {
+      return true;
+    }
+  }
+  return false;
+}
+
+MATCHER_P(HasGroupId, id, "") {
+  if (arg.entity()
+          .packet_replication_engine_entry()
+          .multicast_group_entry()
+          .multicast_group_id() == id) {
+    return true;
+  }
+  return false;
+}
+
 // The L3 route programming tests verify that a given P4Info can translate all
 // the flows needed to do L3 routing.
 using L3RouteProgrammingTest = testing::TestWithParam<sai::Instantiation>;
@@ -104,6 +128,42 @@ TEST_P(L3RouteProgrammingTest, RouterInterfaceIdFailsWithInvalidMacAddress) {
                                          /*src_mac=*/"invalid_format"),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Invalid MAC address")));
+}
+
+TEST_P(L3RouteProgrammingTest, MulticastRouterInterfaceEntry) {
+  MulticastReplica replica = MulticastReplica("1", 0x120, "00:01:02:03:04:05");
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
+                                          p4::v1::Update::INSERT, replica));
+
+  EXPECT_THAT(pi_update, HasExactMatch("1"));
+  EXPECT_THAT(pi_update, HasExactMatch("\x01\x20"));
+  EXPECT_THAT(pi_update, HasActionParam("\001\002\003\004\005"));
+}
+
+TEST_P(L3RouteProgrammingTest,
+       MulticastRouterInterfaceEntryFailsWithInvalidMacAddress) {
+  MulticastReplica replica = MulticastReplica("1", 0x120, "invalid_format");
+  EXPECT_THAT(MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
+                                                  p4::v1::Update::INSERT,
+                                                  replica),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid MAC address")));
+}
+
+TEST_P(L3RouteProgrammingTest, MulticastGroupEntry) {
+  std::vector<MulticastReplica> replicas;
+  replicas.push_back(MulticastReplica("1", 4, "00:01:02:03:04:05"));
+  replicas.push_back(MulticastReplica("2", 3, "00:01:02:03:04:05"));
+  absl::Span<MulticastReplica> replicas_span{replicas};
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       MulticastGroupUpdate(sai::GetIrP4Info(GetParam()),
+                                            p4::v1::Update::INSERT,
+                                            /*group_id=*/1, replicas_span));
+  EXPECT_THAT(pi_update, HasGroupId(1));
+  EXPECT_THAT(pi_update, HasReplica("1", 4));
+  EXPECT_THAT(pi_update, HasReplica("2", 3));
 }
 
 TEST_P(L3RouteProgrammingTest, NeighborId) {
@@ -195,6 +255,22 @@ TEST_P(L3RouteProgrammingTest, IpTableWithSetNexthopAction) {
   EXPECT_THAT(pi_update, HasExactMatch("vrf-0"));
   EXPECT_THAT(pi_update, HasLpmMatch("\n\001\001\001", 32));
   EXPECT_THAT(pi_update, HasActionParam("nexthop-0"));
+}
+
+TEST_P(L3RouteProgrammingTest, IpTableWithSetWcmpGroupIdAction) {
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      Ipv4TableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                      IpTableOptions{
+                          .vrf_id = "vrf-0",
+                          .dst_addr_lpm = std::make_pair("10.1.1.1", 32),
+                          .action = IpTableOptions::Action::kSetWcmpGroupId,
+                          .wcmp_group_id = "group-0",
+                      }));
+
+  EXPECT_THAT(pi_update, HasExactMatch("vrf-0"));
+  EXPECT_THAT(pi_update, HasLpmMatch("\n\001\001\001", 32));
+  EXPECT_THAT(pi_update, HasActionParam("group-0"));
 }
 
 TEST_P(L3RouteProgrammingTest, IpTableEntryFailsWihInvalidParameters) {
