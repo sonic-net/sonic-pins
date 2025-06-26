@@ -129,7 +129,9 @@ cc_test(
     deps = [
         ":validator_lib",
         "//gutil:status_matchers",
+        "//thinkit:switch",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",

@@ -312,7 +312,8 @@ struct TrafficParameters {
 // Takes in the tref returned by IxiaSession / SetUpTrafficItem.
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
-                                  thinkit::GenericTestbed &testbed);
+                                  thinkit::GenericTestbed &testbed,
+                                  bool is_update = false);
 
 // Sets the priority enable vector field in the PFC header.
 absl::Status SetPfcPriorityEnableVector(

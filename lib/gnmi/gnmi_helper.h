@@ -48,6 +48,10 @@ namespace pins_test {
 inline constexpr char kOpenconfigStr[] = "openconfig";
 inline constexpr char kTarget[] = "target";
 
+// Not used by the gNMI server, but required by LegoHerc to match the
+// name of the switch for requests.
+inline constexpr char kTestChassisNameForGnmi[] = "chassis";
+
 // Breakout mode is represented as vector of breakout speed.
 enum class BreakoutSpeed {
   k100GB,
@@ -80,6 +84,10 @@ enum class GnmiFieldType {
 };
 
 enum class DelayType : std::uint8_t { kIngressDelay, kEgressDelay };
+
+// This suggests whether the HST is running in dry-run mode or live-run mode. In
+// live run mode, HST is fully operational with ASIC access.
+enum class HstRunMode : std::uint8_t { kDryRunMode, kLiveRunMode };
 
 // Describes a single interface in a gNMI config.
 struct OpenConfigInterfaceDescription {
@@ -138,6 +146,12 @@ struct Counters {
   uint64_t out_ipv6_discarded_pkts = 0;
   std::optional<uint64_t> carrier_transitions;
   uint64_t timestamp_ns = 0;
+};
+
+// HST counters exposed by gNMI.
+struct HstCounters {
+  std::vector<float> abwc_digests;
+  std::vector<float> abwc_digests_cumulative;
 };
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
@@ -554,6 +568,15 @@ absl::Status SetPortMtu(int port_mtu, const std::string &interface_name,
 absl::Status SetPortLoopbackMode(bool port_loopback,
                                  absl::string_view interface_name,
                                  gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Set PFC Rx for a port.
+absl::Status SetPortPfcRxEnable(absl::string_view interface_name,
+                                std::string port_pfc_rx_enable,
+                                gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Get PFC Rx enable for a port.
+absl::StatusOr<std::string> GetPortPfcRxEnable(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
