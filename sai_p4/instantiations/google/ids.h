@@ -61,12 +61,13 @@
 #define ACL_INGRESS_SET_FORWARDING_QUEUES_ACTION_ID 0x01000115   // 16777493
 #define ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID 0x01000116        // 16777494
 #define ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID \
-  0x01000117                                       // 16777495
-#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D    // 16777485
-#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107  // 16777479
-#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108  // 16777480
-#define ACL_DROP_ACTION_ID 0x01000109              // 16777481
-// Next available action id: 0x01000118 (16777496)
+  0x01000117                                                        // 16777495
+#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D                     // 16777485
+#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107                   // 16777479
+#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108                   // 16777480
+#define ACL_DROP_ACTION_ID 0x01000109                               // 16777481
+#define ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP 0x01000119  // 16777497
+// Next available action id: 0x0100011A (16777498)
 
 // NOLINTEND
 // --- Meters ------------------------------------------------------------------

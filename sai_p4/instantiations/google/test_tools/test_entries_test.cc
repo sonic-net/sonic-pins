@@ -757,6 +757,32 @@ TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
       )pb"))));
 }
 
+TEST(EntryBuilder, AddDisableIngressVlanChecksEntryAddsCorrectEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddDisableIngressVlanChecksEntry()
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "disable_ingress_vlan_checks_table" }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddDisableEgressVlanChecksEntryAddsCorrectEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddDisableEgressVlanChecksEntry()
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "disable_egress_vlan_checks_table" }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddVlanEntryAddsCorrectEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   ASSERT_OK_AND_ASSIGN(

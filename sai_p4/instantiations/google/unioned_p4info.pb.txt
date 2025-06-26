@@ -715,6 +715,10 @@ tables {
     annotations: "@proto_id(7)"
   }
   action_refs {
+    id: 16777497
+    annotations: "@proto_id(8)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -879,6 +883,10 @@ tables {
   action_refs {
     id: 16777493
     annotations: "@proto_id(7)"
+  }
+  action_refs {
+    id: 16777497
+    annotations: "@proto_id(8)"
   }
   action_refs {
     id: 21257015
@@ -2273,6 +2281,27 @@ actions {
     type_name {
       name: "nexthop_id_t"
     }
+  }
+}
+actions {
+  preamble {
+    id: 16777497
+    name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
+    alias: "append_ingress_and_egress_timestamp"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "append_ingress_timestamp"
+    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)"
+    bitwidth: 1
+  }
+  params {
+    id: 2
+    name: "append_egress_timestamp"
+    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)"
+    bitwidth: 1
   }
 }
 actions {
