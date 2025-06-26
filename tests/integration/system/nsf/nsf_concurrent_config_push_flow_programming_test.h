@@ -11,11 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
-#define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
+#ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_NSF_CONCURRENT_CONFIG_PUSH_FLOW_PROGRAMMING_TEST_H_
+#define PINS_TESTS_INTEGRATION_SYSTEM_NSF_NSF_CONCURRENT_CONFIG_PUSH_FLOW_PROGRAMMING_TEST_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -29,19 +29,11 @@
 
 namespace pins_test {
 
-class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
+class NsfConcurrentConfigPushFlowProgrammingTestFixture
+    : public testing::TestWithParam<NsfTestParams> {
  protected:
   void SetUp() override;
   void TearDown() override;
-
-  // Assumption: Valid config (gNMI and P4Info) has been pushed (to avoid
-  // duplicate config push).
-  //
-  // Note: In case the flow programmer returns a gNMI config, then that will
-  // override the `next_image_config.gnmi_config` and will used for subsequent
-  // validations.
-  absl::Status NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
-                                  ImageConfigParams &next_image_config);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;
@@ -53,4 +45,4 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
 
 }  // namespace pins_test
 
-#endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
+#endif // PINS_TESTS_INTEGRATION_SYSTEM_NSF_NSF_CONCURRENT_CONFIG_PUSH_FLOW_PROGRAMMING_TEST_H_

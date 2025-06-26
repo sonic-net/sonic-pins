@@ -67,6 +67,8 @@ struct ParamsForPfcTestsWithIxia {
   absl::Duration deadlock_restoration_time;
 };
 
+constexpr int kNumQueues = 8;
+
 class PfcTestWithIxia
     : public testing::TestWithParam<ParamsForPfcTestsWithIxia> {
  protected:
@@ -81,6 +83,7 @@ class PfcTestWithIxia
   ixia::TrafficParameters main_traffic_parameters_;
   TrafficItem pfc_traffic_;
   ixia::TrafficParameters pfc_traffic_parameters_;
+  std::string kInitialPfcRxEnable;
 
   void SetUp() override;
 

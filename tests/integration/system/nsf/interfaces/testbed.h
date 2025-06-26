@@ -1,6 +1,7 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_TESTBED_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_TESTBED_H_
 
+#include <cstddef>
 #include <memory>
 #include <variant>
 
@@ -10,6 +11,9 @@
 #include "thinkit/mirror_testbed_fixture.h"
 
 namespace pins_test {
+
+constexpr size_t kGenericTestbedIndex = 0;
+constexpr size_t kMirrorTestbedIndex = 1;
 
 using Testbed = std::variant<std::unique_ptr<thinkit::GenericTestbed>,
                              thinkit::MirrorTestbed*>;

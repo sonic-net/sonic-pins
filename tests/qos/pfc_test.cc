@@ -15,8 +15,10 @@
 #include "tests/qos/pfc_test.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -26,6 +28,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
@@ -50,6 +53,22 @@
 #include "thinkit/switch.h"
 
 namespace pins_test {
+
+// Structure represents the information needed to log the test results.
+struct PfcLogInfo {
+  int dscp;
+  std::string queue;
+  int priority;
+  int pause_quanta;
+};
+
+// Overloading the ostream operator for printing PfcLogInfo
+std::ostream &operator<<(std::ostream &os, const PfcLogInfo &info) {
+  os << "====== DSCP: " << info.dscp << ", Queue: " << info.queue
+     << ", PFC Priority: " << info.priority
+     << ", Pause Quantas: " << info.pause_quanta << " =====";
+  return os;
+}
 
 constexpr int kDefaultFrameSize = 1500;
 
@@ -142,7 +161,12 @@ void PfcTestWithIxia::SetUp() {
       "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
       ixia_interface, sut_interface, sut_egress_interface, ixia_rx_interface);
 
-  // TODO: Configure PFC enable on egress port
+  // Save initial PFC Rx enable state.
+  ASSERT_OK_AND_ASSIGN(kInitialPfcRxEnable,
+                       GetPortPfcRxEnable(sut_egress_interface, *gnmi_stub_));
+  // Enable PFC Rx on egress port
+  ASSERT_OK(SetPortPfcRxEnable(sut_egress_interface,
+                               /*port_pfc_rx_enable=*/"true", *gnmi_stub_));
 
   // We will perform the following steps with Ixia:
   // Setup main Ixia forwarded traffic.
@@ -230,6 +254,10 @@ void PfcTestWithIxia::TearDown() {
       ixia::DeleteTrafficItem(main_traffic_.traffic_item, *generic_testbed_));
   ASSERT_OK(
       ixia::DeleteTrafficItem(pfc_traffic_.traffic_item, *generic_testbed_));
+  // Restore PFC Rx enable state.
+  ASSERT_OK(SetPortPfcRxEnable(ixia_links_.egress_link.sut_interface,
+                               /*port_pfc_rx_enable=*/kInitialPfcRxEnable,
+                               *gnmi_stub_));
   GetParam().testbed_interface->TearDown();
 }
 
@@ -252,6 +280,135 @@ absl::StatusOr<QueueCounters> GetQueueCountersChange(
   return queue_counters_post - queue_counters_pre;
 }
 
+// The purpose of this test is to verify that PFC Rx is working correctly.
+// We test this by sending line rate forwarded traffic from SUT Port A -> SUT
+// Port B and PFC traffic from SUT Port B -> SUT Port A. We expect the SUT to
+// pause the queue corresponding to the PFC traffic for the duration of the
+// pause time configured in the PFC traffic parameters.
+TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
+  // Pause duration in units of time for 512 bits.
+  for (const auto pause_quanta : {0x3ff, 0x1fff, 0xffff}) {
+    for (const auto [priority, queue] : *GetParam().queue_by_pfc_priority) {
+      PfcLogInfo log_info = {
+          .dscp = GetParam().dscp_by_queue->at(queue),
+          .queue = queue,
+          .priority = priority,
+          .pause_quanta = pause_quanta,
+      };
+      SCOPED_TRACE(log_info);
+      LOG(INFO) << "\n\n " << log_info;
+
+      // Setup main traffic DSCP.
+      ixia::Ipv4TrafficParameters &ip_params =
+          std::get<ixia::Ipv4TrafficParameters>(
+              main_traffic_parameters_.ip_parameters.value());
+      ip_params.priority->dscp = GetParam().dscp_by_queue->at(queue);
+      ASSERT_OK(ixia::SetTrafficParameters(
+          main_traffic_.traffic_item, main_traffic_parameters_,
+          *generic_testbed_, /*is_update=*/true));
+
+      // Setup PFC traffic priority and pause duration for the target queue.
+      pfc_traffic_parameters_.pfc_parameters->priority_enable_vector =
+          1 << priority;
+      for (int i = 0; i < kNumQueues; ++i) {
+        if (i == priority) {
+          pfc_traffic_parameters_.pfc_parameters->pause_quanta_per_queue[i] =
+              pause_quanta;
+        } else {
+          pfc_traffic_parameters_.pfc_parameters->pause_quanta_per_queue[i] = 0;
+        }
+      }
+
+      LOG(INFO) << "SUT interface bits per second: "
+                << ixia_links_.egress_link.sut_interface_bits_per_second;
+
+      pfc_traffic_parameters_.frame_count = 1;
+
+      ASSERT_OK(ixia::SetTrafficParameters(
+          pfc_traffic_.traffic_item, pfc_traffic_parameters_, *generic_testbed_,
+          /*is_update=*/true));
+
+      // Wait for queue to be empty. Try up to 3 times waiting for the queue
+      // counters to stabilize.
+      pins_test::QueueCounters queue_counters_before_test;
+      EXPECT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(30), [&] {
+        // Read counters of the target queue.
+        ASSIGN_OR_RETURN(
+            queue_counters_before_test,
+            GetGnmiQueueCounters(/*port=*/ixia_links_.egress_link.sut_interface,
+                                 /*queue=*/queue, *gnmi_stub_));
+        if (queue_counters_before_test.max_periodic_queue_len <=
+            kDefaultFrameSize) {
+          return absl::OkStatus();
+        }
+        return absl::InternalError(absl::Substitute(
+            "Max periodic queue len is not 0, $0",
+            queue_counters_before_test.max_periodic_queue_len));
+      }));
+
+      // Occasionally the Ixia API cannot keep up and starting traffic
+      // fails, so we try up to 3 times.
+      ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+        return ixia::StartTraffic(
+            {main_traffic_.traffic_item, pfc_traffic_.traffic_item},
+            ixia_connection_reference_, *generic_testbed_);
+      }));
+
+      // Send forwarding and PFC traffic for 30 seconds and then stop.
+      absl::SleepFor(absl::Seconds(30));
+      ASSERT_OK(
+          ixia::StopTraffic(pfc_traffic_.traffic_item, *generic_testbed_));
+
+      QueueCounters queue_counters_after_test, delta_counters;
+
+      // Queue statistics are updated every 30 seconds, hence try up to 3 times.
+      EXPECT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(30), [&] {
+        // Read counters of the target queue.
+        ASSIGN_OR_RETURN(
+            queue_counters_after_test,
+            GetGnmiQueueCounters(/*port=*/ixia_links_.egress_link.sut_interface,
+                                 /*queue=*/queue, *gnmi_stub_));
+
+        constexpr int kPauseQuantaBits = 512;
+        uint64_t pause_duration_ns, expected_watermark;
+        pause_duration_ns =
+            (kPauseQuantaBits * pause_quanta) /
+            (ixia_links_.egress_link.sut_interface_bits_per_second /
+             1'000'000'000);
+        expected_watermark =
+            (pause_duration_ns * port_speed_bytes_per_second_) / 1'000'000'000;
+        LOG(INFO) << "queue_counters_after_test.max_periodic_queue_len: "
+                  << queue_counters_after_test.max_periodic_queue_len
+                  << " expected watermark: " << expected_watermark;
+        const int absolute_error =
+            queue_counters_after_test.max_periodic_queue_len -
+            expected_watermark;
+        const double relative_error_percent =
+            100. * absolute_error / expected_watermark;
+        constexpr double tolerance_percent = 15;  // +-15% tolerance.
+        if (std::abs(relative_error_percent) <= tolerance_percent) {
+          LOG(INFO) << "observed watermark matches expected watermark "
+                       "(error: "
+                    << relative_error_percent << "%)";
+          return absl::OkStatus();
+        }
+        return absl::InternalError(absl::Substitute(
+            "observed watermark of $0 is not within $1% of the queue $2 PIR of "
+            "$3 (error = $4%)",
+            queue_counters_after_test.max_periodic_queue_len, tolerance_percent,
+            queue, expected_watermark, relative_error_percent));
+      }));
+      delta_counters = queue_counters_after_test - queue_counters_before_test;
+      EXPECT_EQ(delta_counters.num_packets_dropped, 0);
+
+      // Wait for queue counters to stabilize and then stop main traffic.
+      ASSERT_OK(
+          ixia::StopTraffic(main_traffic_.traffic_item, *generic_testbed_));
+      LOG(INFO) << "-- stopped " << main_traffic_.traffic_name;
+    }
+  }
+}
+
 TEST_P(PfcTestWithIxia, PfcWatchdog) {
   for (auto [prio, queue] : *GetParam().queue_by_pfc_priority) {
     LOG(INFO) << "\n\n====== DSCP: " << GetParam().dscp_by_queue->at(queue)
@@ -262,9 +419,9 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
         std::get<ixia::Ipv4TrafficParameters>(
             main_traffic_parameters_.ip_parameters.value());
     ip_params.priority->dscp = GetParam().dscp_by_queue->at(queue);
-    ASSERT_OK(ixia::SetTrafficParameters(main_traffic_.traffic_item,
-                                         main_traffic_parameters_,
-                                         *generic_testbed_));
+    ASSERT_OK(ixia::SetTrafficParameters(
+        main_traffic_.traffic_item, main_traffic_parameters_, *generic_testbed_,
+        /*is_update=*/true));
 
     // Setup PFC traffic priority.
     // TODO : Remove masking failure when issue is fixed.
@@ -296,9 +453,9 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
         pfc_traffic_parameters_.traffic_speed =
             ixia::FramesPerSecond{rate_of_pfc_frames - 100};
       }
-      ASSERT_OK(ixia::SetTrafficParameters(pfc_traffic_.traffic_item,
-                                           pfc_traffic_parameters_,
-                                           *generic_testbed_));
+      ASSERT_OK(ixia::SetTrafficParameters(
+          pfc_traffic_.traffic_item, pfc_traffic_parameters_, *generic_testbed_,
+          /*is_update=*/true));
 
       // Read counters of the target queue.
       pins_test::QueueCounters queue_counters_before_test;

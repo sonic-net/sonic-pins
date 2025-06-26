@@ -15,7 +15,11 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_FLOW_PROGRAMMER_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_FLOW_PROGRAMMER_H_
 
+#include <optional>
+#include <string>
+
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/ssh_client.h"
@@ -31,10 +35,11 @@ class FlowProgrammer {
  public:
   virtual ~FlowProgrammer() = default;
 
-  // Programs predefined flows on the SUT.
-  virtual absl::Status ProgramFlows(const p4::config::v1::P4Info &p4_info,
-                                    Testbed &testbed,
-                                    thinkit::SSHClient &ssh_client) = 0;
+  // Programs predefined flows on the SUT. Optionally returns an updated gNMI
+  // config.
+  virtual absl::StatusOr<std::optional<std::string>>
+  ProgramFlows(const p4::config::v1::P4Info &p4_info, Testbed &testbed,
+               thinkit::SSHClient &ssh_client) = 0;
 
   // Clears all flows on the SUT.
   virtual absl::Status ClearFlows(Testbed& testbed) = 0;
