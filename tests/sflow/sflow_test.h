@@ -19,11 +19,14 @@
 #include <string>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
@@ -39,6 +42,8 @@ struct SflowTestParams {
   int sample_size;
   // For sampling rate tests.
   int sample_rate;
+  // For NSF tests.
+  bool nsf_enabled;
 };
 
 // Structure represents a link between SUT and Ixia.
@@ -101,6 +106,9 @@ class SflowMirrorTestFixture
   void SetUp() override;
 
   void TearDown() override;
+
+  absl::Status NsfRebootAndWaitForGnmiConvergence(
+      thinkit::MirrorTestbed& testbed, absl::string_view gnmi_config);
 
   p4::config::v1::P4Info GetSutP4Info() { return sut_p4_info_; }
   p4::config::v1::P4Info GetControlP4Info() { return control_p4_info_; }
