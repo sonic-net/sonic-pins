@@ -47,16 +47,6 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
       z3::expr condition,
       action::EvaluateRValue(conditional.condition(), headers, fake_context,
                              *state.context.z3_context));
-  ASSIGN_OR_RETURN(z3::expr negated_condition, operators::Not(condition));
-
-  // Build new guards for each branch.
-  ASSIGN_OR_RETURN(z3::expr if_guard, operators::And(guard, condition));
-  ASSIGN_OR_RETURN(z3::expr else_guard,
-                   operators::And(guard, negated_condition));
-
-  // Simplify the guards for better performance (go/p4-symbolic-simplify).
-  if_guard = if_guard.simplify();
-  else_guard = else_guard.simplify();
 
   auto get_next_control_for_branch = [&](const std::string &branch) {
     return branch ==
@@ -65,15 +55,33 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
                : branch;
   };
 
-  // Evaluate both branches.
-  ASSIGN_OR_RETURN(SymbolicTableMatches if_matches,
-                   control::EvaluateControl(
-                       get_next_control_for_branch(conditional.if_branch()),
-                       state, headers, if_guard));
-  ASSIGN_OR_RETURN(SymbolicTableMatches else_matches,
-                   control::EvaluateControl(
-                       get_next_control_for_branch(conditional.else_branch()),
-                       state, headers, else_guard));
+    SymbolicPerPacketState if_headers = headers;
+  SymbolicPerPacketState else_headers = headers;
+
+  // Evaluate both branches with its own copy of the headers.
+  // We use `true` as the guard when evaluating the branches and the actual
+  // guard is applied when merging the results of the two branches (see below).
+  ASSIGN_OR_RETURN(
+      SymbolicTableMatches if_matches,
+      control::EvaluateControl(
+          get_next_control_for_branch(conditional.if_branch()), state,
+          if_headers, state.context.z3_context->bool_val(true)));
+  ASSIGN_OR_RETURN(
+      SymbolicTableMatches else_matches,
+      control::EvaluateControl(
+          get_next_control_for_branch(conditional.else_branch()), state,
+          else_headers, state.context.z3_context->bool_val(true)));
+
+  // Merge the information from the two branches for every field in the headers.
+  // Merge is done based on the condition of the conditional.
+  // The resulting headers map is then constructed with the merged values.
+  for (const auto &[field, _] : headers) {
+    ASSIGN_OR_RETURN(z3::expr if_value, if_headers.Get(field));
+    ASSIGN_OR_RETURN(z3::expr else_value, else_headers.Get(field));
+    ASSIGN_OR_RETURN(z3::expr new_value,
+                     operators::Ite(condition, if_value, else_value));
+    RETURN_IF_ERROR(headers.Set(field, new_value, guard));
+  }
 
   // Now we have two traces that need merging.
   ASSIGN_OR_RETURN(

@@ -66,6 +66,9 @@ absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
         "Cannot assign to key \"", key, "\" in SymbolicGuardedMap!"));
   }
 
+  // Simple simplification in case the guard is true.
+  if (guard.is_true()) return UnguardedSet(key, value);
+
   z3::expr &old_value = this->map_.at(key);
 
   // Ite will pad bitvectors to the same size, but this is not the right
@@ -76,8 +79,6 @@ absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
   // This will return an absl error if the sorts are incompatible, and will pad
   // shorter bit vectors.
   ASSIGN_OR_RETURN(old_value, operators::Ite(guard, value, old_value));
-  // Simplifying the guard every time the map is updated.
-  old_value = old_value.simplify();
   return absl::OkStatus();
 }
 
