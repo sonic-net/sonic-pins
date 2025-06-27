@@ -49,6 +49,7 @@ namespace {
 
 using gutil::IsOk;
 using testing::Not;
+using ::testing::SizeIs;
 
 using FuzzValidConstrainedTableEntryWithPartialConstraintTest =
     testing::TestWithParam<std::string>;
@@ -358,6 +359,71 @@ TEST(FuzzValidConstrainedTableEntryTest, FailsWithUnsatisfiableConstraint) {
   EXPECT_THAT(FuzzValidConstrainedTableEntry(
                   config, SwitchState(config.GetIrP4Info()), table1, gen),
               Not(IsOk()));
+}
+
+TEST(DisabledConstraintTest, FuzzerDoesNotFuzzDisabledFields) {
+  p4::config::v1::P4Info p4info = gutil::ParseProtoOrDie<
+      p4::config::v1::P4Info>(
+      R"pb(tables {
+             preamble {
+               id: 1
+               name: "table1"
+               alias: "table1"
+               annotations: "@entry_restriction(\"optional_match_field::mask!=0;lpm_match_field::prefix_length!=0\")"
+             }
+             match_fields {
+               id: 1
+               name: "exact_match_field"
+               match_type: EXACT
+               bitwidth: 16
+             }
+             match_fields {
+               id: 2
+               name: "optional_match_field"
+               match_type: OPTIONAL
+               bitwidth: 16
+             }
+             match_fields {
+               id: 3
+               name: "lpm_match_field"
+               match_type: LPM
+               bitwidth: 16
+             }
+             action_refs { id: 1 annotations: "@proto_id(1)" }
+           }
+           actions { preamble { id: 1 name: "action1" } }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
+
+  // Disable fuzzing on `lpm_match_field` and `optional_match_field`. This
+  // makes the fuzzer not generate those match fields.
+  ASSERT_OK_AND_ASSIGN(std::string fully_qualified_name_lpm_match_field,
+                       GetFullyQualifiedMatchFieldName(
+                           config.GetIrP4Info(), "table1", "lpm_match_field"));
+  ASSERT_OK_AND_ASSIGN(
+      std::string fully_qualified_name_optional_match_field,
+      GetFullyQualifiedMatchFieldName(config.GetIrP4Info(), "table1",
+                                      "optional_match_field"));
+
+  config.SetDisabledFullyQualifiedNames({
+      fully_qualified_name_lpm_match_field,
+      fully_qualified_name_optional_match_field,
+  });
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrTableDefinition table1,
+      gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(), 1));
+  absl::BitGen gen;
+
+  for (int i = 0; i < 100; ++i) {
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::TableEntry entry,
+        FuzzValidConstrainedTableEntry(
+            config, SwitchState(config.GetIrP4Info()), table1, gen));
+    // The fuzzer should generate only `exact_match_field`.
+    ASSERT_THAT(entry.match(), SizeIs(1));
+    EXPECT_EQ(entry.match(0).field_id(), /*ID of exact_match_field*/ 1);
+  }
 }
 
 TEST(FuzzValidConstrainedTableEntryTest,

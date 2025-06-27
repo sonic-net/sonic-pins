@@ -37,6 +37,7 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
@@ -227,6 +228,8 @@ SwitchState::SwitchState(IrP4Info ir_p4info)
   }
   current_entries_ = 0;
   peak_entries_seen_ = 0;
+  current_multicast_resource_statistics_ = ResourceStatistics();
+  peak_multicast_resource_statistics_ = PeakResourceStatistics();
 }
 
 void SwitchState::ClearTableEntries() {
@@ -238,9 +241,10 @@ void SwitchState::ClearTableEntries() {
   ordered_multicast_entries_ = {};
   unordered_multicast_entries_ = {};
   current_entries_ = 0;
+  current_multicast_resource_statistics_ = ResourceStatistics();
 }
 
-bool SwitchState::AllTablesEmpty() const {
+bool SwitchState::AllP4TablesEmpty() const {
   for (auto table_id : AllTableIds()) {
     if (!IsTableEmpty(table_id)) {
       return false;
@@ -408,6 +412,8 @@ absl::StatusOr<PeakResourceStatistics> SwitchState::GetPeakResourceStatistics(
 absl::Status SwitchState::UpdateResourceStatistics(const TableEntry& entry,
                                                    p4::v1::Update::Type type) {
   int table_id = entry.table_id();
+  const pdpi::IrTableDefinition& table_definition =
+      FindOrDie(ir_p4info_.tables_by_id(), table_id);
 
   ResourceStatistics& current_resource_statistics =
       FindOrDie(current_resource_statistics_, table_id);
@@ -415,7 +421,7 @@ absl::Status SwitchState::UpdateResourceStatistics(const TableEntry& entry,
       FindOrDie(peak_resource_statistics_, table_id);
 
   std::optional<ActionProfileResources> group_resources = std::nullopt;
-  if (entry.action().has_action_profile_action_set()) {
+  if (table_definition.uses_oneshot()) {
     group_resources = GetAllActionProfileResourceForTableEntry(entry);
   }
 
@@ -431,6 +437,20 @@ absl::Status SwitchState::UpdateResourceStatistics(const TableEntry& entry,
       break;
     }
     case Update::DELETE: {
+      // If entry uses action profiles, retrieve profile statistics from stored
+      // entry.
+      if (table_definition.uses_oneshot()) {
+        auto& unordered_table = FindOrDie(unordered_tables_, table_id);
+        auto it = unordered_table.find(pdpi::TableEntryKey(entry));
+        if (it == unordered_table.end()) {
+          return gutil::InvalidArgumentErrorBuilder()
+                 << " Cannot update resource statistics for DELETE of "
+                    "non-existent table entry. "
+                 << entry.DebugString();
+        }
+        group_resources = GetAllActionProfileResourceForTableEntry(it->second);
+      }
+
       current_entries_ -= 1;
       current_resource_statistics.entries -= 1;
       if (group_resources.has_value()) {
@@ -483,6 +503,67 @@ absl::Status SwitchState::UpdateResourceStatistics(const TableEntry& entry,
   return absl::OkStatus();
 }
 
+absl::Status SwitchState::UpdateMulticastResourceStatistics(
+    const MulticastGroupEntry& entry, p4::v1::Update::Type type) {
+  switch (type) {
+    case Update::INSERT: {
+      current_entries_ += 1;
+      current_multicast_resource_statistics_.entries += 1;
+      current_multicast_resource_statistics_.total_members +=
+          entry.replicas().size();
+      break;
+    }
+    case Update::DELETE: {
+      auto it = unordered_multicast_entries_.find(entry.multicast_group_id());
+      if (it == unordered_multicast_entries_.end()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << " Cannot update resource statistics for DELETE of "
+                  "non-existent multicast group table entry. "
+               << entry.DebugString();
+      }
+      current_entries_ -= 1;
+      current_multicast_resource_statistics_.entries -= 1;
+      current_multicast_resource_statistics_.total_members -=
+          it->second.replicas().size();
+      break;
+    }
+    case Update::MODIFY: {
+      // Retrieve replica count from stored entry.
+      auto it = unordered_multicast_entries_.find(entry.multicast_group_id());
+      if (it == unordered_multicast_entries_.end()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << " Cannot update resource statistics for MODIFY of "
+                  "non-existent multicast group table entry. "
+               << entry.DebugString();
+      }
+      RETURN_IF_ERROR(
+          UpdateMulticastResourceStatistics(it->second, Update::DELETE));
+      return UpdateMulticastResourceStatistics(entry, Update::INSERT);
+    }
+    default: {
+      return gutil::InternalErrorBuilder()
+             << "Update type must be specified when updating resource "
+                "statistics."
+             << Update_Type_Name(type);
+    }
+  }
+
+  peak_entries_seen_ = std::max(peak_entries_seen_, current_entries_);
+  peak_multicast_resource_statistics_.entries =
+      std::max(peak_multicast_resource_statistics_.entries,
+               current_multicast_resource_statistics_.entries);
+
+  // Update member semantics resources.
+  peak_multicast_resource_statistics_.total_members =
+      std::max(peak_multicast_resource_statistics_.total_members,
+               current_multicast_resource_statistics_.total_members);
+  peak_multicast_resource_statistics_.max_members_per_group =
+      std::max(peak_multicast_resource_statistics_.max_members_per_group,
+               entry.replicas().size());
+
+  return absl::OkStatus();
+}
+
 absl::Status SwitchState::ApplyMulticastUpdate(const Update& update) {
   ASSIGN_OR_RETURN(
       Entity canonical_entity,
@@ -492,6 +573,9 @@ absl::Status SwitchState::ApplyMulticastUpdate(const Update& update) {
       canonical_entity.packet_replication_engine_entry()
           .multicast_group_entry();
   int multicast_group_id = multicast_group_entry.multicast_group_id();
+
+  RETURN_IF_ERROR(
+      UpdateMulticastResourceStatistics(multicast_group_entry, update.type()));
   switch (update.type()) {
     case Update::INSERT: {
       auto [ordered_iter, ordered_not_present] =
@@ -799,9 +883,48 @@ std::string SwitchState::SwitchStateSummary() const {
     }
   }
 
-  absl::StrAppendFormat(&res, "\n % 12d% 16s% 18s    %s",
-                        ordered_multicast_entries_.size(), "N/A", "N/A",
-                        "builtin::multicast_group_table");
+  // Multicast Group Table Summary.
+  absl::StrAppendFormat(
+      &res, "\n % 12d% 16d% 18d    %s",
+      current_multicast_resource_statistics_.entries,
+      peak_multicast_resource_statistics_.entries,
+      ir_p4info_.pkg_info().platform_properties().multicast_group_table_size(),
+      pdpi::GetMulticastGroupTableName());
+  // Mark statistic if we have exceeded resource limits.
+  if (peak_multicast_resource_statistics_.entries >=
+      ir_p4info_.pkg_info()
+          .platform_properties()
+          .multicast_group_table_size()) {
+    absl::StrAppend(&res, "*");
+  }
+  absl::StrAppendFormat(&res, "\n % 12d% 16d% 18d    %s.total_replicas",
+                        current_multicast_resource_statistics_.total_members,
+                        peak_multicast_resource_statistics_.total_members,
+                        ir_p4info_.pkg_info()
+                            .platform_properties()
+                            .multicast_group_table_total_replicas(),
+                        pdpi::GetMulticastGroupTableName());
+  // Mark statistic if we have exceeded resource limits.
+  if (peak_multicast_resource_statistics_.total_members >=
+      ir_p4info_.pkg_info()
+          .platform_properties()
+          .multicast_group_table_total_replicas()) {
+    absl::StrAppend(&res, "*");
+  }
+  absl::StrAppendFormat(
+      &res, "\n % 12s% 16d% 18d    %s.max_replicas_per_group", "N/A",
+      peak_multicast_resource_statistics_.max_members_per_group,
+      ir_p4info_.pkg_info()
+          .platform_properties()
+          .multicast_group_table_max_replicas_per_entry(),
+      pdpi::GetMulticastGroupTableName());
+  // Mark statistic if we have exceeded resource limits.
+  if (peak_multicast_resource_statistics_.max_members_per_group >=
+      ir_p4info_.pkg_info()
+          .platform_properties()
+          .multicast_group_table_max_replicas_per_entry()) {
+    absl::StrAppend(&res, "*");
+  }
 
   return absl::StrFormat(
       "State(\n % 12s% 16s% 18s    table_name\n % 12d% 16d% 18s    total "
@@ -907,7 +1030,9 @@ absl::Status SwitchState::AssertEntriesAreEqualToState(
   // Condition that requires a search for unique entries in switchstate.
   bool entry_unique_to_switch = false;
 
-  if (switch_entries.size() != GetNumTableEntries()) {
+  // use entities throughout API.
+  if (switch_entries.size() !=
+      GetNumTableEntries() - current_multicast_resource_statistics_.entries) {
     absl::StrAppendFormat(&status_message,
                           "Number of entries on switch does not match number "
                           "of entries in Fuzzer\n"

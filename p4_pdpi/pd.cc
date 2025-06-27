@@ -1474,6 +1474,15 @@ absl::Status IrReplicaToPd(const IrP4Info &info, const IrReplica &ir,
   RETURN_IF_ERROR(
       SetStringField(pd_replica, "instance",
                      BitsetToHexString(std::bitset<16>(ir.instance()))));
+  /*for (const auto &backup_replica : ir.backup_replicas()) {
+    ASSIGN_OR_RETURN(google::protobuf::Message * pd_backup_replica,
+                     AddRepeatedMutableMessage(pd_replica, "backup_replicas"));
+    RETURN_IF_ERROR(
+        SetStringField(pd_backup_replica, "port", backup_replica.port()));
+    RETURN_IF_ERROR(SetStringField(
+        pd_backup_replica, "instance",
+        BitsetToHexString(std::bitset<16>(backup_replica.instance()))));
+  }*/
   return absl::OkStatus();
 }
 
@@ -1550,8 +1559,32 @@ absl::Status IrMulticastGroupEntryToPd(
       invalid_reasons.push_back(absl::StrCat(
           kNewBullet,
           "Each replica must have a unique (port, instance)-pair, but found "
-          "multiple replicas with pair ('",
+	  "multiple primary/backup replicas with pair ('",
           replica.port(), "', ", replica.instance(), ")."));
+    }
+        // A replica cannot have the same port as any other backup replica.
+    absl::flat_hash_set<std::string> all_replica_ports = {replica.port()};
+    for (const auto &backup_replica : replica.backup_replicas()) {
+      if (!all_replica_ports.insert(backup_replica.port()).second) {
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet,
+            "A primary replica and its backup replicas must have unique ports. "
+            "Replica and its backups contained duplicates of port '",
+            backup_replica.port(), "'."));
+      }
+    }
+
+    // Check that {port, instance} pair is unique for backup replicas.
+    for (const auto &backup_replica : replica.backup_replicas()) {
+      if (!instances_by_port[backup_replica.port()]
+               .insert(backup_replica.instance())
+               .second) {
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet,
+            "Each backup replica must have a unique (port, instance)-pair, but "
+            "found multiple primary/backup replicas with pair ('",
+            backup_replica.port(), "', ", backup_replica.instance(), ")."));
+      }
     }
   }
   if (!invalid_reasons.empty()) {
@@ -2395,6 +2428,19 @@ absl::StatusOr<IrReplica> PdReplicaToIr(const IrP4Info &info,
   ASSIGN_OR_RETURN(std::string instance_string, GetStringField(pd, "instance"));
   ASSIGN_OR_RETURN(uint32_t instance, HexStringToUint32(instance_string));
   ir.set_instance(instance);
+  /*ASSIGN_OR_RETURN(
+      std::vector<const google::protobuf::Message *> backup_replicas,
+      GetRepeatedFieldMessages(pd, "backup_replicas"));
+  for (const auto &backup_replica : backup_replicas) {
+    IrBackupReplica *ir_backup_replica = ir.add_backup_replicas();
+    ASSIGN_OR_RETURN(*ir_backup_replica->mutable_port(),
+                     GetStringField(*backup_replica, "port"));
+    ASSIGN_OR_RETURN(std::string backup_instance_string,
+                     GetStringField(*backup_replica, "instance"));
+    ASSIGN_OR_RETURN(uint32_t backup_instance,
+                     HexStringToUint32(backup_instance_string));
+    ir_backup_replica->set_instance(backup_instance);
+  }*/
   return ir;
 }
 
@@ -2475,10 +2521,36 @@ absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
       invalid_reasons.push_back(absl::StrCat(
           kNewBullet,
           "Each replica must have a unique (port, instance)-pair, but found "
-          "multiple replicas with pair ('",
+	  "multiple primary/backup replicas with pair ('",
           ir_replica->port(), "', ", ir_replica->instance(), ")."));
     }
     *ir.add_replicas() = std::move(*ir_replica);
+
+    // A replica cannot have the same port as any other backup replica.
+    absl::flat_hash_set<std::string> all_replica_ports = {ir_replica->port()};
+    for (const auto &backup_replica : ir_replica->backup_replicas()) {
+      if (!all_replica_ports.insert(backup_replica.port()).second) {
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet,
+            "A primary replica and its backup replicas must have unique ports. "
+            "Replica and its backups contained duplicates of port '",
+            backup_replica.port(), "'."));
+      }
+    }
+
+    // Check that {port, instance} pair is unique for backup replicas.
+    for (const auto &ir_backup_replica : ir_replica->backup_replicas()) {
+      if (!instances_by_port[ir_backup_replica.port()]
+               .insert(ir_backup_replica.instance())
+               .second) {
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet,
+            "Each backup replica must have a unique (port, instance)-pair, but "
+            "found multiple primary/backup replicas with pair ('",
+            ir_backup_replica.port(), "', ", ir_backup_replica.instance(),
+            ")."));
+      }
+    }
   }
 
   if (!invalid_reasons.empty()) {
