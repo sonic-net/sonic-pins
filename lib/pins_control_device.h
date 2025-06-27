@@ -58,6 +58,9 @@ public:
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
   CollectPackets() override;
 
+  absl::StatusOr<std::string> RunCommand(absl::string_view command,
+                                         absl::Duration timeout) override;
+
   absl::Status SendPacket(absl::string_view interface, absl::string_view packet,
                           std::optional<absl::Duration> packet_delay) override;
 

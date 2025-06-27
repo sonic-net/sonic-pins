@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -281,7 +282,7 @@ FindInterfacesNameFromInterfaceJsonArray(int port_number,
 absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
     gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
     std::optional<absl::Duration> timeout) {
-  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  VLOG(1) << "Sending GET request: " << request.ShortDebugString();
   gnmi::GetResponse response;
   grpc::ClientContext context;
   if (timeout.has_value()) {
@@ -292,7 +293,7 @@ absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
           .LogError()
           .SetPrepend()
       << "GET request failed with error: ";
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  VLOG(1) << "Received GET response: " << response.ShortDebugString();
   return response;
 }
 
@@ -415,6 +416,86 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
       counters.out_ipv6_discarded_pkts,
       ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv6", "state",
                                           "counters", "out-discarded-pkts"}));
+  // Copy the blackhole port counters when available.
+  absl::StatusOr<uint64_t> counter_val = ParseJsonValueAsUint(
+      interface_json, {"state", "blackhole", "in-discard-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.in_discard_events = *counter_val;
+  }
+  counter_val = ParseJsonValueAsUint(
+      interface_json, {"state", "blackhole", "out-discard-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.out_discard_events = *counter_val;
+  }
+  counter_val = ParseJsonValueAsUint(interface_json,
+                                     {"state", "blackhole", "in-error-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.in_error_events = *counter_val;
+  }
+  counter_val = ParseJsonValueAsUint(
+      interface_json, {"state", "blackhole", "fec-not-correctable-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.fec_not_correctable_events = *counter_val;
+  }
+  return counters;
+}
+
+constexpr absl::string_view kBlackholeSwitchCountersParseKey =
+    "google-pins-platform:blackhole";
+
+absl::StatusOr<BlackholeSwitchCounters> ParseBlackholeSwitchCounters(
+    const json& switch_state_json) {
+  BlackholeSwitchCounters counters;
+
+  ASSIGN_OR_RETURN(
+      counters.in_discard_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "in-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.out_discard_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "out-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.in_error_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "in-error-events"}));
+  ASSIGN_OR_RETURN(
+      counters.lpm_miss_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "lpm-miss-events"}));
+  ASSIGN_OR_RETURN(
+      counters.fec_not_correctable_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "fec-not-correctable-events"}));
+  ASSIGN_OR_RETURN(
+      counters.memory_error_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "memory-error-events"}));
+  ASSIGN_OR_RETURN(
+      counters.blackhole_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "blackhole-events"}));
+
+  return counters;
+}
+
+absl::StatusOr<BlackholePortCounters> ParseBlackholePortCounters(
+    const json& port_counters_json) {
+  BlackholePortCounters counters;
+
+  ASSIGN_OR_RETURN(
+      counters.in_discard_events,
+      ParseJsonValueAsUint(port_counters_json, {"in-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.out_discard_events,
+      ParseJsonValueAsUint(port_counters_json, {"out-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.in_error_events,
+      ParseJsonValueAsUint(port_counters_json, {"in-error-events"}));
+  ASSIGN_OR_RETURN(
+      counters.fec_not_correctable_events,
+      ParseJsonValueAsUint(port_counters_json, {"fec-not-correctable-events"}));
+
   return counters;
 }
 
@@ -553,6 +634,7 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetRequest(
     absl::string_view json_val) {
   gnmi::SetRequest req;
   req.mutable_prefix()->set_origin(kOpenconfigStr);
+  req.mutable_prefix()->set_target(kTestChassisNameForGnmi);
   gnmi::Path* path;
 
   switch (set_type) {
@@ -586,6 +668,8 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
   gnmi::GetRequest req;
   req.set_type(req_type);
   req.mutable_prefix()->set_origin(kOpenconfigStr);
+  req.mutable_prefix()->set_target(kTestChassisNameForGnmi);
+  req.set_encoding(gnmi::JSON_IETF);
   if (oc_path.empty()) {
     return req;
   }
@@ -1065,6 +1149,9 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
   if (absl::StrContains(oper_status, "TESTING")) {
     return OperStatus::kTesting;
   }
+  if (absl::StrContains(oper_status, "NOT_PRESENT")) {
+    return OperStatus::kNotPresent;
+  }
   return OperStatus::kUnknown;
 }
 
@@ -1252,6 +1339,25 @@ GetAllInterfaceNameToPortId(
   return GetAllInterfaceNameToPortId(
       response.notification(0).update(0).val().json_ietf_val(), field_type,
       std::move(filter));
+}
+
+absl::StatusOr<std::vector<std::string>> GetNEthernetInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces) {
+  ASSIGN_OR_RETURN(auto ids_by_name, GetAllInterfaceNameToPortId(stub));
+  std::vector<std::string> result;
+  result.reserve(num_interfaces);
+  for (const auto& [name, id] : ids_by_name) {
+    if (!absl::StartsWith(name, "Ethernet")) {
+      continue;
+    }
+    LOG(INFO) << "Selecting interface " << name << " with ID " << id << ".";
+    result.push_back(id);
+    if (result.size() == num_interfaces) {
+      return result;
+    }
+  }
+  return absl::FailedPreconditionError(absl::StrCat(
+      "Could not find ", num_interfaces, " interfaces with a port ID."));
 }
 
 absl::Status MapP4rtIdsToMatchingInterfaces(
@@ -2003,11 +2109,11 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
       "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
   std::string config_json;
   if (port_loopback) {
-    config_json = "{\"openconfig-interfaces:loopback-mode\":\"FACILITY\"}";
+    config_json =
+        "{\"openconfig-interfaces:loopback-mode\":\"ASIC_MAC_LOCAL\"}";
   } else {
     config_json = "{\"openconfig-interfaces:loopback-mode\":\"NONE\"}";
   }
-
   return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
                                       GnmiSetType::kUpdate, config_json);
 }
@@ -2063,6 +2169,114 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
     port_counters.timestamp_ns = timestamp;
   }
   return counters;
+}
+
+absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/state/google-pins-interfaces:blackhole");
+  const std::string ops_parse_str = "google-pins-interfaces:blackhole";
+  ASSIGN_OR_RETURN(
+      std::string port_counters_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
+
+  ASSIGN_OR_RETURN(json port_counters_json,
+                   json_yang::ParseJson(port_counters_info));
+  ASSIGN_OR_RETURN(BlackholePortCounters port_counters,
+                   ParseBlackholePortCounters(port_counters_json));
+  return port_counters;
+}
+
+absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path =
+      "components/component[name=integrated_circuit0]/integrated-circuit/state";
+  const std::string ops_parse_str = "openconfig-platform:state";
+  ASSIGN_OR_RETURN(
+      std::string switch_state_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
+
+  ASSIGN_OR_RETURN(json switch_state_json,
+                   json_yang::ParseJson(switch_state_info));
+  ASSIGN_OR_RETURN(BlackholeSwitchCounters switch_counters,
+                   ParseBlackholeSwitchCounters(switch_state_json));
+  return switch_counters;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string,
+                                   absl::flat_hash_map<std::string, uint64_t>>>
+GetCongestionQueueCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("qos/interfaces/interface", gnmi::GetRequest::STATE));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt));
+  ASSIGN_OR_RETURN(std::string interface_info,
+                   ParseGnmiGetResponse(response, "openconfig-qos:interface"));
+  ASSIGN_OR_RETURN(json interfaces, json_yang::ParseJson(interface_info));
+  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, uint64_t>>
+      counters;
+  for (const json& interface : interfaces) {
+    ASSIGN_OR_RETURN(json pname, GetField(interface, "interface-id"));
+    if (!absl::StrContains(pname.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(json queues,
+                     AccessJsonValue(interface, {"output", "queues", "queue"}));
+    for (const json& queue : queues) {
+      ASSIGN_OR_RETURN(json qname, GetField(queue, "name"));
+      ASSIGN_OR_RETURN(
+          auto queue_dropped_packet_events,
+          ParseJsonValueAsUint(queue, {"state", "google-pins-qos:diag",
+                                       "dropped-packet-events"}));
+      counters[pname.get<std::string>()][qname.get<std::string>()] =
+          queue_dropped_packet_events;
+    }
+  }
+  return counters;
+}
+
+absl::StatusOr<uint64_t> GetCongestionQueueCounter(
+    absl::string_view interface_name, absl::string_view queue_name,
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path = absl::StrFormat(
+      "qos/interfaces/interface[interface-id=%s]/output/queues/queue[name=%s]/"
+      "state",
+      interface_name, queue_name);
+  const std::string kOpsParseStr = "openconfig-qos:state";
+  ASSIGN_OR_RETURN(
+      std::string queue_state_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, kOpsParseStr));
+
+  ASSIGN_OR_RETURN(json queue_state_json,
+                   json_yang::ParseJson(queue_state_info));
+  ASSIGN_OR_RETURN(
+      uint64_t dropped_packet_events,
+      ParseJsonValueAsUint(queue_state_json,
+                           {"google-pins-qos:diag", "dropped-packet-events"}));
+  return dropped_packet_events;
+}
+
+absl::StatusOr<uint64_t>
+GetCongestionSwitchCounter(gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string kOpsStatePath =
+      "components/component[name=integrated_circuit0]/integrated-circuit/state";
+  const std::string kOpsParseStr = "openconfig-platform:state";
+  const std::string kCongestionSwitchCounterParseKey =
+      "google-pins-platform:congestion";
+  ASSIGN_OR_RETURN(
+      std::string switch_state_info,
+      GetGnmiStatePathInfo(&gnmi_stub, kOpsStatePath, kOpsParseStr));
+
+  ASSIGN_OR_RETURN(json switch_state_json,
+                   json_yang::ParseJson(switch_state_info));
+  ASSIGN_OR_RETURN(
+      uint64_t congestion_events,
+      ParseJsonValueAsUint(switch_state_json, {kCongestionSwitchCounterParseKey,
+                                               "congestion-events"}));
+  return congestion_events;
 }
 
 absl::StatusOr<std::string> ParseJsonValue(absl::string_view json) {
@@ -2123,5 +2337,4 @@ GetInterfaceCounter(absl::string_view stat_name, absl::string_view interface,
   }
   return stat;
 }
-
 }  // namespace pins_test
