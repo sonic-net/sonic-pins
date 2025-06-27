@@ -1330,3 +1330,43 @@ qos {
     }
   }
 }
+
+-- INPUT -----------------------------------------------------------------------
+{
+    "openconfig-interfaces:interfaces": {
+        "interface": [
+            {
+                "config": {
+                    "name": "Ethernet1/1/3",
+                    "type": "iana-if-type:ethernetCsmacd"
+                },
+                "name": "Ethernet1/1/3",
+                "openconfig-if-ethernet:ethernet": {
+                    "config": {
+                        "fec-mode": "openconfig-if-ethernet:FEC_RS544",
+                        "google-pins-interfaces:insert-ingress-timestamp": true,
+                        "port-speed": "openconfig-if-ethernet:SPEED_100GB"
+                    }
+                },
+            },
+            {
+                "config": {
+                    "name": "Ethernet2/1/3",
+                    "openconfig-p4rt:id": 513,
+                    "type": "iana-if-type:ethernetCsmacd"
+                },
+                "name": "Ethernet2/1/3",
+                "openconfig-if-ethernet:ethernet": {
+                    "config": {
+                        "fec-mode": "openconfig-if-ethernet:FEC_RS544",
+                        "google-pins-interfaces:insert-ingress-timestamp": false,
+                        "port-speed": "openconfig-if-ethernet:SPEED_100GB"
+                    }
+                },
+            }
+        ]
+    }
+}
+-- OUTPUT: ParseIsIngressTimestampEnabledByInterfaceName(config) --
+Ethernet1/1/3: 1
+Ethernet2/1/3: 0
