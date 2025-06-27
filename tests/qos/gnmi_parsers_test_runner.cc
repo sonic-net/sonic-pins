@@ -1,15 +1,21 @@
 #include <iostream>
 #include <ostream>
+#include <string>
+#include <variant>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "tests/qos/gnmi_parsers.h"
 
-// -- Pretty priners for golden testing ----------------------------------------
+// -- Pretty printers for golden testing ---------------------------------------
 
 namespace std {
 
@@ -107,6 +113,43 @@ static constexpr absl::string_view kTestGnmiInterfaceConfig =
    }
 }
     )json";
+
+static constexpr absl::string_view kTestGnmiTimestampConfig =
+    R"json({
+    "openconfig-interfaces:interfaces": {
+        "interface": [
+            {
+                "config": {
+                    "name": "Ethernet1/1/3",
+                    "type": "iana-if-type:ethernetCsmacd"
+                },
+                "name": "Ethernet1/1/3",
+                "openconfig-if-ethernet:ethernet": {
+                    "config": {
+                        "fec-mode": "openconfig-if-ethernet:FEC_RS544",
+                        "google-pins-interfaces:insert-ingress-timestamp": true,
+                        "port-speed": "openconfig-if-ethernet:SPEED_100GB"
+                    }
+                },
+            },
+            {
+                "config": {
+                    "name": "Ethernet2/1/3",
+                    "openconfig-p4rt:id": 513,
+                    "type": "iana-if-type:ethernetCsmacd"
+                },
+                "name": "Ethernet2/1/3",
+                "openconfig-if-ethernet:ethernet": {
+                    "config": {
+                        "fec-mode": "openconfig-if-ethernet:FEC_RS544",
+                        "google-pins-interfaces:insert-ingress-timestamp": false,
+                        "port-speed": "openconfig-if-ethernet:SPEED_100GB"
+                    }
+                },
+            }
+        ]
+    }
+})json";
 
 static constexpr absl::string_view kTestGnmiQosConfig =
     R"json({
@@ -847,6 +890,22 @@ void RunAllParsersAndPrintTheirOutput() {
                        kTestGnmiQosConfig3,
                        /*ignore_unknown_fields=*/true))
             << "\n";
+
+  // Test ParseIsIngressTimestampEnabledByInterfaceName.
+  std::cout << kInputBanner
+            << absl::StripAsciiWhitespace(kTestGnmiTimestampConfig) << "\n";
+  std::cout << "-- OUTPUT: "
+               "ParseIsIngressTimestampEnabledByInterfaceName(config) --\n";
+  absl::StatusOr<absl::flat_hash_map<std::string, bool>>
+      is_timestamp_enabled_by_interface_name =
+          ParseIsIngressTimestampEnabledByInterfaceName(
+              kTestGnmiTimestampConfig);
+  if (is_timestamp_enabled_by_interface_name.ok()) {
+    for (const auto& [interface_name, is_timestamp_enabled] :
+         Ordered(*is_timestamp_enabled_by_interface_name)) {
+      std::cout << interface_name << ": " << is_timestamp_enabled << "\n";
+    }
+  }
 }
 
 }  // namespace

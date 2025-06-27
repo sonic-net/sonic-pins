@@ -69,6 +69,7 @@ enum class OperStatus {
   kUp,
   kDown,
   kTesting,
+  kNotPresent,
 };
 
 enum class AdminStatus {
