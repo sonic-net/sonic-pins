@@ -323,6 +323,8 @@ public:
   EntryBuilder& AddEgressAclDroppingIpPackets(
       IpVersion ip_version = IpVersion::kIpv4And6);
   EntryBuilder& AddDisableVlanChecksEntry();
+  EntryBuilder& AddDisableIngressVlanChecksEntry();
+  EntryBuilder& AddDisableEgressVlanChecksEntry();
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
   EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf,
