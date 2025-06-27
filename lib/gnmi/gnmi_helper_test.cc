@@ -1510,6 +1510,47 @@ TEST(GetInterfaceOperStatusOverGnmi, OperStatusDown) {
               IsOkAndHolds(OperStatus::kDown));
 }
 
+TEST(GetInterfaceOperStatusOverGnmi, OperStatusNotPresent) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "oper-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "interfaces" }
+                         elem {
+                           name: "interface"
+                           key { key: "name" value: "Ethernet0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "oper-status" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:oper-status\":{\"oper-status\":\"NOT_PRESENT\"}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetInterfaceOperStatusOverGnmi(stub, "Ethernet0"),
+              IsOkAndHolds(OperStatus::kNotPresent));
+}
+
 TEST(GetInterfaceOperStatusOverGnmi, OperStatusTesting) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub,
