@@ -79,7 +79,7 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
   }
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
 
-  LOG(INFO) << "Links flap before NSF Reboot.";
+  LOG(INFO) << "Flap links before NSF Reboot.";
   // Capturing the current time to compare the overall time needed for link
   // flap.
   const absl::Time pre_nsf_link_flap_start_time = absl::Now();
@@ -100,9 +100,8 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
   // raw pointer for GenericTestbed.
   testbed.emplace<std::unique_ptr<thinkit::GenericTestbed>>(
       std::move(generic_testbed));
-  ASSERT_OK(pins_test::NsfReboot(testbed));
-  ASSERT_OK(WaitForNsfReboot(testbed, *GetParam().ssh_client));
-  LOG(INFO) << "Links flap after NSF Reboot.";
+  ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed, *GetParam().ssh_client));
+  LOG(INFO) << "Flap links after NSF Reboot.";
   const absl::Time post_nsf_link_flap_start_time = absl::Now();
   for (const auto& [sut_interface, host_interface_info] :
        host_interface_infos) {
