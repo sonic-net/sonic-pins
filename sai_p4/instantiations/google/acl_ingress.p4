@@ -589,9 +589,11 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID)
   @unsupported
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
   action acl_mirror_and_redirect_to_port(
     @id(1)
       @refers_to(mirror_session_table, mirror_session_id)
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)
       mirror_session_id_t mirror_session_id,
     @id(2)
       @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
