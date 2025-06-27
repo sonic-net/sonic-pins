@@ -11,32 +11,6 @@
 control mirror_session_lookup(inout headers_t headers,
                               inout local_metadata_t local_metadata,
                               inout standard_metadata_t standard_metadata) {
-  // Sets
-  // SAI_MIRROR_SESSION_ATTR_TYPE to ENHANCED_REMOTE,
-  // SAI_MIRROR_SESSION_ATTR_ERSPAN_ENCAPSULATION_TYPE to L3_GRE_TUNNEL,
-  // SAI_MIRROR_SESSION_ATTR_IPHDR_VERSION to 4,
-  // SAI_MIRROR_SESSION_ATTR_GRE_PROTOCOL_TYPE to 0x88BE,
-  // SAI_MIRROR_SESSION_ATTR_MONITOR_PORT,
-  // SAI_MIRROR_SESSION_ATTR_SRC_IP_ADDRESS,
-  // SAI_MIRROR_SESSION_ATTR_DST_IP_ADDRESS,
-  // SAI_MIRROR_SESSION_ATTR_SRC_MAC_ADDRESS
-  // SAI_MIRROR_SESSION_ATTR_DST_MAC_ADDRESS
-  // SAI_MIRROR_SESSION_ATTR_TTL
-  // SAI_MIRROR_SESSION_ATTR_TOS
-  // TODO: Remove mirror_as_ipv4_erspan once the the switch
-  // supports mirror_with_ipfix_encapsulation. This action is currently needed
-  // for mirror_session_table since it is the only action by the switch in this
-  // table.
-  @id(MIRRORING_MIRROR_AS_IPV4_ERSPAN_ACTION_ID)
-  action mirror_as_ipv4_erspan(
-      @id(1) port_id_t port,
-      @id(2) @format(IPV4_ADDRESS) ipv4_addr_t src_ip,
-      @id(3) @format(IPV4_ADDRESS) ipv4_addr_t dst_ip,
-      @id(4) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
-      @id(5) @format(MAC_ADDRESS) ethernet_addr_t dst_mac,
-      @id(6) bit<8> ttl,
-      @id(7) bit<8> tos) {
-  }
 
   // Sets
   // * SAI_MIRROR_SESSION_ATTR_TYPE to SAI_MIRROR_SESSION_TYPE_IPFIX
@@ -89,8 +63,7 @@ control mirror_session_lookup(inout headers_t headers,
         @id(1) @name("mirror_session_id");
     }
     actions = {
-      @proto_id(1) mirror_as_ipv4_erspan;
-      @proto_id(2) mirror_with_vlan_tag_and_ipfix_encapsulation;
+      @proto_id(1) mirror_with_vlan_tag_and_ipfix_encapsulation;
       @defaultonly NoAction;
     }
 
