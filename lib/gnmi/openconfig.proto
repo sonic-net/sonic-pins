@@ -69,6 +69,8 @@ message Ethernet {
   message Config {
     optional string aggregate_id = 1
         [json_name = "openconfig-if-aggregate:aggregate-id"];
+    optional bool insert_ingress_timestamp = 2
+        [json_name = "google-pins-interfaces:insert-ingress-timestamp"];
   }
 
   Config config = 1;
