@@ -868,6 +868,20 @@ message AclEgressL2TableEntry {
   bytes controller_metadata = 8;
 }
 
+
+message AclPreIngressCsigTableEntry {
+  message Match {
+    Optional is_ip = 1;  // optional match / Format::HEX_STRING / 1 bits
+  }
+  Match match = 1;
+  message Action {
+    SetOuterVlanIdAction set_outer_vlan_id = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 // Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
 // of the v1model architecture and is not explicitly present in the P4 program.
 message MulticastGroupTableEntry {
@@ -1178,6 +1192,7 @@ message TableEntry {
     AclIngressMirrorAndRedirectTableEntry
         acl_ingress_mirror_and_redirect_table_entry = 267;
     AclEgressL2TableEntry acl_egress_l2_table_entry = 268;
+    AclPreIngressCsigTableEntry acl_pre_ingress_csig_table_entry = 269;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }
