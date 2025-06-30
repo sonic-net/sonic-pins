@@ -334,7 +334,6 @@ message VlanMembershipTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::prefix_length == 0;
@@ -350,7 +349,6 @@ message DisableIngressVlanChecksTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::prefix_length == 0;
@@ -1163,10 +1161,8 @@ message TableEntry {
     VlanTableEntry vlan_table_entry = 83;
     // CAUTION: This table is not (yet) supported.
     VlanMembershipTableEntry vlan_membership_table_entry = 84;
-    // CAUTION: This table is not (yet) supported.
     DisableIngressVlanChecksTableEntry disable_ingress_vlan_checks_table_entry =
         86;
-    // CAUTION: This table is not (yet) supported.
     DisableEgressVlanChecksTableEntry disable_egress_vlan_checks_table_entry =
         87;
     AclIngressTableEntry acl_ingress_table_entry = 256;

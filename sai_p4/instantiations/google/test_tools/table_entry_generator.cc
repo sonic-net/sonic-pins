@@ -315,6 +315,60 @@ TableEntryGenerator Ipv6TunnelTerminationGenerator(
   return generator;
 }
 
+TableEntryGenerator Ipv6MulticastTableGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  TableEntryGenerator generator;
+  auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
+      absl::Substitute(R"pb(
+                         table_name: "ipv6_multicast_table"
+                         matches {
+                           name: "vrf_id"
+                           exact { str: "$0" }
+                         }
+                         action {
+                           name: "set_multicast_group_id"
+                           params {
+                             name: "multicast_group_id"
+                             value { hex_str: "0x0123" }
+                           }
+                         }
+                       )pb",
+                       kVrf80));
+  if (!base_entry.ok()) {
+    LOG(FATAL) << base_entry.status();
+  }  // Crash OK
+  generator.generator =
+      IrMatchFieldGenerator(table_definition, *base_entry, "ipv6_dst");
+  return generator;
+}
+
+TableEntryGenerator Ipv4MulticastTableGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  TableEntryGenerator generator;
+  auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
+      absl::Substitute(R"pb(
+                         table_name: "ipv4_multicast_table"
+                         matches {
+                           name: "vrf_id"
+                           exact { str: "$0" }
+                         }
+                         action {
+                           name: "set_multicast_group_id"
+                           params {
+                             name: "multicast_group_id"
+                             value { hex_str: "0x0042" }
+                           }
+                         }
+                       )pb",
+                       kVrf80));
+  if (!base_entry.ok()) {
+    LOG(FATAL) << base_entry.status();
+  }  // Crash OK
+  generator.generator =
+      IrMatchFieldGenerator(table_definition, *base_entry, "ipv4_dst");
+  return generator;
+}
+
 const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
   static const auto* const kUnsupportedTables =
       new absl::flat_hash_set<std::string>({
@@ -335,10 +389,6 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
-          // TODO: Add support for these tables once the switch
-          // supports it.
-          "ipv4_multicast_table",
-          "ipv6_multicast_table",
           // TODO: Add support for this table once the switch
           // supports it.
           "disable_vlan_checks_table",
@@ -377,6 +427,8 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv4_table", Ipv4TableGenerator},
       {"ipv6_table", Ipv6TableGenerator},
       {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
+      {"ipv4_multicast_table", Ipv4MulticastTableGenerator},
+      {"ipv6_multicast_table", Ipv6MulticastTableGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
       // TODO: Re-enable when once modeling is fixed.
       // {"multicast_router_interface_table",

@@ -201,7 +201,6 @@ tables {
     alias: "disable_ingress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1159,7 +1158,6 @@ tables {
     alias: "disable_egress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
