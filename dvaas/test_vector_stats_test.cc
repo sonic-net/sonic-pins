@@ -23,7 +23,7 @@
 namespace dvaas {
 namespace {
 
-PacketTestOutcomes GetPacketTestOutcomees() {
+PacketTestOutcomes GetPacketTestOutcomes() {
   return gutil::ParseProtoOrDie<PacketTestOutcomes>(R"pb(
     # Correct drop.
     outcomes {
@@ -62,7 +62,12 @@ PacketTestOutcomes GetPacketTestOutcomees() {
         }
       }
       # Failed.
-      test_result { failure {} }
+      test_result {
+        failure {
+          # Failure is always deterministic.
+          reproducibility_rate: 1.0
+        }
+      }
     }
 
     # Correct forward.
@@ -126,6 +131,31 @@ PacketTestOutcomes GetPacketTestOutcomees() {
         }
       }
       # Failed.
+      test_result {
+        failure {
+          # Failure is non-deterministic.
+          reproducibility_rate: 0.0
+        }
+      }
+    }
+
+    # Incorrect punt with no reproducibility rate.
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          # Deterministic trap.
+          acceptable_outputs {
+            packets: []
+            packet_ins {}
+          }
+        }
+        actual_output {
+          packets: []
+          packet_ins: {}
+        }
+      }
+      # Failed.
       test_result { failure {} }
     }
 
@@ -146,14 +176,16 @@ PacketTestOutcomes GetPacketTestOutcomees() {
         }
       }
       # Passed.
-      test_result {}
+      test_result {
+          # No reproducibility rate is given.
+      }
     }
   )pb");
 }
 
 TEST(TestVectorStatsGoldenTest,
      ComputeTestVectorStatsAndExplainTestVectorStats) {
-  PacketTestOutcomes outcomes = GetPacketTestOutcomees();
+  PacketTestOutcomes outcomes = GetPacketTestOutcomes();
   TestVectorStats stats = ComputeTestVectorStats(outcomes);
   std::cout << ExplainTestVectorStats(stats);
 }
