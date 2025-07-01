@@ -15,6 +15,7 @@
 #ifndef PINS_DVAAS_TEST_VECTOR_STATS_H_
 #define PINS_DVAAS_TEST_VECTOR_STATS_H_
 
+#include <optional>
 #include <string>
 
 #include "dvaas/test_vector.pb.h"
@@ -34,6 +35,7 @@ struct TestVectorStats {
   int num_packets_forwarded = 0;
   int num_packets_punted = 0;
   int num_deterministic_failures = 0;
+  int num_vectors_with_reproducibility_rate = 0;
 };
 
 TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes &test_outcomes);

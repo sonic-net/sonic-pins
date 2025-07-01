@@ -3,4 +3,16 @@
 4 test vectors forwarded, producing 6 forwarded output packets
 3 test vectors punted, producing 3 punted output packets
 1 test vectors produced no output packets
+None of 2 test vectors attempted had deterministically reproducible failures
+57.14% of 7 test vectors passed
+100.00% of 7 test vectors produced the correct number and type of output packets
+4 test vectors forwarded, producing 6 forwarded output packets
+3 test vectors punted, producing 3 punted output packets
+1 test vectors produced no output packets
+All of 2 test vectors attempted had deterministically reproducible failures
+57.14% of 7 test vectors passed
+100.00% of 7 test vectors produced the correct number and type of output packets
+4 test vectors forwarded, producing 6 forwarded output packets
+3 test vectors punted, producing 3 punted output packets
+1 test vectors produced no output packets
 1 of 3 test vectors with failures were deterministically reproducible

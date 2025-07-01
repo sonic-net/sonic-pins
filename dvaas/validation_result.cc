@@ -50,10 +50,15 @@ ValidationResult::ValidationResult(
 }
 
 std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {
-  return absl::StrFormat(
-      "Sending the same input packet reproduces this error %f%% of the "
-      "time\n%s",
-      failure.reproducibility_rate(), failure.description());
+  if (failure.has_minimization_analysis()) {
+    return absl::StrFormat(
+        "Sending the same input packet reproduces this error %f%% of the "
+        "time\n%s",
+        failure.minimization_analysis().reproducibility_rate(),
+        failure.description());
+  } else {
+    return failure.description();
+  }
 }
 
 absl::Status ValidationResult::HasSuccessRateOfAtLeast(

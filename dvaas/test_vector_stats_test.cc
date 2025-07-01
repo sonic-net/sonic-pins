@@ -63,10 +63,7 @@ PacketTestOutcomes GetPacketTestOutcomes() {
       }
       # Failed.
       test_result {
-        failure {
-          # Failure is always deterministic.
-          reproducibility_rate: 1.0
-        }
+        failure { minimization_analysis { reproducibility_rate: 0.0 } }
       }
     }
 
@@ -132,10 +129,7 @@ PacketTestOutcomes GetPacketTestOutcomes() {
       }
       # Failed.
       test_result {
-        failure {
-          # Failure is non-deterministic.
-          reproducibility_rate: 0.0
-        }
+        failure { minimization_analysis { reproducibility_rate: 0.0 } }
       }
     }
 
@@ -189,5 +183,30 @@ TEST(TestVectorStatsGoldenTest,
   TestVectorStats stats = ComputeTestVectorStats(outcomes);
   std::cout << ExplainTestVectorStats(stats);
 }
+
+TEST(TestVectorStatsGoldenTest, ReproducibilityRateScenarios) {
+  PacketTestOutcomes outcomes = GetPacketTestOutcomes();
+  outcomes.mutable_outcomes(1)
+      ->mutable_test_result()
+      ->mutable_failure()
+      ->mutable_minimization_analysis()
+      ->set_reproducibility_rate(1.0);
+  outcomes.mutable_outcomes(4)
+      ->mutable_test_result()
+      ->mutable_failure()
+      ->mutable_minimization_analysis()
+      ->set_reproducibility_rate(1.0);
+  TestVectorStats stats = ComputeTestVectorStats(outcomes);
+  std::cout << ExplainTestVectorStats(stats);
+
+  outcomes.mutable_outcomes(4)
+      ->mutable_test_result()
+      ->mutable_failure()
+      ->mutable_minimization_analysis()
+      ->set_reproducibility_rate(0.0);
+  stats = ComputeTestVectorStats(outcomes);
+  std::cout << ExplainTestVectorStats(stats);
+}
+
 }  // namespace
 }  // namespace dvaas

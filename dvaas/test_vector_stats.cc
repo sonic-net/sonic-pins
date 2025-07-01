@@ -29,8 +29,14 @@ void AddTestVectorStats(const PacketTestOutcome& outcome,
   stats.num_vectors += 1;
 
   if (outcome.test_result().has_failure()) {
-    if (outcome.test_result().failure().reproducibility_rate() == 1.0) {
-      stats.num_deterministic_failures += 1;
+    if (outcome.test_result().failure().has_minimization_analysis()) {
+      stats.num_vectors_with_reproducibility_rate += 1;
+      if (outcome.test_result()
+              .failure()
+              .minimization_analysis()
+              .reproducibility_rate() == 1.0) {
+        stats.num_deterministic_failures += 1;
+      }
     }
   } else {
     stats.num_vectors_passed += 1;
@@ -85,6 +91,29 @@ std::string ExplainFraction(int numerator, int denominator) {
 
 }  // namespace
 
+// 1. Don't print reproducibility message if no packets were replicated.
+// 2. Don't print reproducibility message unless all test vector
+//    failures were reproducible or all test vector failures were
+//    irreproducible.
+void ExplainReproducibilityRate(const TestVectorStats& stats,
+                                std::string& result) {
+  if (stats.num_vectors_with_reproducibility_rate <= 0) return;
+  if (stats.num_deterministic_failures ==
+      stats.num_vectors_with_reproducibility_rate) {
+    absl::StrAppendFormat(
+        &result,
+        "All of %d test vectors attempted had deterministically "
+        "reproducible failures\n",
+        stats.num_vectors_with_reproducibility_rate);
+  } else if (stats.num_deterministic_failures == 0) {
+    absl::StrAppendFormat(
+        &result,
+        "None of %d test vectors attempted had deterministically "
+        "reproducible failures\n",
+        stats.num_vectors_with_reproducibility_rate);
+  }
+}
+
 std::string ExplainTestVectorStats(const TestVectorStats& stats) {
   std::string result;
 
@@ -106,11 +135,7 @@ std::string ExplainTestVectorStats(const TestVectorStats& stats) {
       stats.num_vectors_punting, stats.num_packets_punted);
   absl::StrAppendFormat(&result, "%d test vectors produced no output packets\n",
                         stats.num_vectors_dropping);
-  absl::StrAppendFormat(&result,
-                        "%d of %d test vectors with failures were "
-                        "deterministically reproducible\n",
-                        stats.num_deterministic_failures,
-                        stats.num_vectors - stats.num_vectors_passed);
+  ExplainReproducibilityRate(stats, result);
   return result;
 }
 
