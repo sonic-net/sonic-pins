@@ -79,6 +79,7 @@ absl::StatusOr<NextHeader> GetNextHeaderForEtherType(
   if (ethertype == 0x86dd) return Header::kIpv6Header;
   if (ethertype == 0x0806) return Header::kArpHeader;
   if (ethertype == 0x8100) return Header::kVlanHeader;
+  if (ethertype == 0x88f7) return Header::kPtpHeader;
   if (ethertype == 0x9900) return Header::kCsigHeader;
   return UnsupportedNextHeader{
       .reason = absl::StrFormat("%s.ethertype %s: unsupported", header_name,
