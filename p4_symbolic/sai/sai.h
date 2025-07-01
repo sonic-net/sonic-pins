@@ -76,6 +76,13 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState& state);
 // P4-Constraints is integrated with P4-Symbolic.
 absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState& state);
 
+// For any entry in "egress_port_loopback_table" matching on port `p`, add a
+// constraint avoiding `p` as ingress port.
+// TODO: Remove when these constraints are provided as part of
+// synthesis request.
+absl::Status AddConstraintsPreventingIngressPortBeingInLoopbackMode(
+    symbolic::SolverState& state);
+
 // Adds solver constraints for "acl_ingress_table" (for middleblock).
 // Reference:
 // third_party/pins_infra/sai_p4/instantiations/google/acl_ingress.p4.

@@ -22,6 +22,7 @@ cc_library(
     srcs = ["sai.cc"],
     hdrs = ["sai.h"],
     deps = [
+	"//gutil:collections",
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/internal:ordered_map",
@@ -36,6 +37,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+	"@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -94,6 +96,7 @@ cc_test(
         "//sai_p4/instantiations/google:sai_nonstandard_platforms_cc",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+	"@com_github_google_glog//:glog",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",

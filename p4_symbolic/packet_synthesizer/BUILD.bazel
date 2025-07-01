@@ -28,6 +28,7 @@ cc_library(
         "//p4_pdpi/string_encodings:decimal_string",
         "//p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
+	"//p4_symbolic/sai",
         "//p4_symbolic/symbolic",
         "//p4_symbolic/symbolic:operators",
         "//p4_symbolic/symbolic:solver_state",
