@@ -1,8 +1,16 @@
+# proto-file: p4/config/v1/p4info.proto
+# proto-message: p4.config.v1.P4Info
+
 pkg_info {
   name: "middleblock.p4"
   version: "2.4.0"
   arch: "v1model"
   organization: "Google"
+  platform_properties {
+    multicast_group_table_size: 512
+    multicast_group_table_total_replicas: 3968
+    multicast_group_table_max_replicas_per_entry: 128
+  }
 }
 tables {
   preamble {
@@ -1933,13 +1941,13 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
-    annotations: "@selector_size_semantics(\"sum_of_weights\")"
-    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
   size: 49152
   max_group_size: 512
+  sum_of_weights {
+  }
 }
 direct_counters {
   preamble {
@@ -2118,6 +2126,7 @@ type_info {
         sdn_string {
         }
       }
+      annotations: "@p4runtime_translation_mappings({ { \"\" , 0 } , })"
     }
   }
   new_types {

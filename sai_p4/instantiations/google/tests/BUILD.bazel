@@ -35,6 +35,7 @@ cc_test(
 
 cc_test(
     name = "p4_fuzzer_integration_test",
+    size = "large",
     srcs = ["p4_fuzzer_integration_test.cc"],
     deps = [
         "//gutil:collections",
