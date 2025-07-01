@@ -80,8 +80,13 @@ absl::Status InstallIrEntities(P4RuntimeSession& p4rt,
                                      "to pull P4Info from switch: ");
 
   // Convert entries to PI representation.
+  // TODO: Remove this option once we have a better way to handle
+  // unsupported fields.
+  // `allow_unsupported` is a workaround that allows BMv2 on DVaaS to install
+  // entities from the switch./
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
-                   IrEntitiesToPi(info, ir_entities));
+                   IrEntitiesToPi(info, ir_entities,
+                                  /*options=*/{.allow_unsupported = true}));
 
   // Install entries.
   return InstallPiEntities(&p4rt, info, pi_entities);
@@ -198,7 +203,12 @@ absl::StatusOr<IrEntities> ReadIrEntitiesSorted(P4RuntimeSession& p4rt) {
 
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
                    ReadPiEntitiesSorted(p4rt));
-  return PiEntitiesToIr(info, entities);
+  // TODO: Remove this option once we have a better way to handle
+  // unsupported fields.
+  // `allow_unsupported` is a workaround that allows BMv2 on DVaaS to read
+  // entities from the switch.
+  return PiEntitiesToIr(info, entities,
+                        /*options=*/{.allow_unsupported = true});
 }
 
 absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(

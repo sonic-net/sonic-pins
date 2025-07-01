@@ -75,6 +75,7 @@ cc_library(
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -241,7 +242,6 @@ cc_library(
     deps = [
         ":test_vector_cc_proto",
         "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
     ],
 )
