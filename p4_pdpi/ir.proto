@@ -485,9 +485,15 @@ message IrPacketReplicationEngineEntry {
   }
 }
 
+message IrBackupReplica {
+  string port = 1;
+  uint32 instance = 2;
+}
+
 message IrReplica {
   string port = 1;
   uint32 instance = 2;
+  repeated IrBackupReplica backup_replicas = 3;
 }
 
 message IrMulticastGroupEntry {
