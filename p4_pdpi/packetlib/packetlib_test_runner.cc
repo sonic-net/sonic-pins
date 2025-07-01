@@ -2429,6 +2429,7 @@ void RunProtoPacketTests() {
                               }
                               payload: "ABCDABCDABCDABCDABCD"  # 20 octets
                          )pb"));
+
   RunProtoPacketTest("PTP in L2 packet (valid)",
                      gutil::ParseProtoOrDie<Packet>(
                          R"pb(headers {
@@ -2523,6 +2524,7 @@ void RunProtoPacketTests() {
                               }
                               payload: "123456789012"  # 12 octets
                          )pb"));
+
   RunProtoPacketTest("PTP packet does not set message_length (valid)",
                      gutil::ParseProtoOrDie<Packet>(
                          R"pb(headers {
