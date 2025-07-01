@@ -255,10 +255,10 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   @unsupported
   action append_ingress_and_egress_timestamp(
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)
-    bit<1> append_ingress_timestamp,
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)
-    bit<1> append_egress_timestamp) {
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
+    bit<8> append_ingress_timestamp,
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)
+    bit<8> append_egress_timestamp) {
     // Treated as a noop in P4 since we can't predict the specific timestamp
     // values.
   }  
