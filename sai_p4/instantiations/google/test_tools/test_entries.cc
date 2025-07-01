@@ -501,6 +501,24 @@ EntryBuilder& EntryBuilder::AddDisableVlanChecksEntry() {
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddDisableIngressVlanChecksEntry() {
+  *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+    disable_ingress_vlan_checks_table_entry {
+      action { disable_ingress_vlan_checks {} }
+    }
+  )pb");
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddDisableEgressVlanChecksEntry() {
+  *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+    disable_egress_vlan_checks_table_entry {
+      action { disable_egress_vlan_checks {} }
+    }
+  )pb");
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
     absl::string_view vlan_id_hexstr, absl::string_view vrf) {
   sai::AclPreIngressTableEntry& entry =
