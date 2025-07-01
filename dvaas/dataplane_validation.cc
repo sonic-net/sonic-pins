@@ -26,6 +26,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
@@ -91,8 +93,46 @@ absl::Status DetermineReproducibilityRate(
 
   test_outcome.mutable_test_result()
       ->mutable_failure()
+      ->mutable_minimization_analysis()
       ->set_reproducibility_rate(1 - validation_result.GetSuccessRate());
 
+  return absl::OkStatus();
+}
+
+// Attaches the packet trace from `packet_traces` with a matching packet tag as
+// the packet in `test_outcome` to the input parameter `test_outcome`. Also
+// appends the packet trace to the test artifact writer.
+absl::Status AttachPacketTrace(
+    dvaas::PacketTestOutcome& test_outcome,
+    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
+  ASSIGN_OR_RETURN(
+      int test_id,
+      dvaas::ExtractTestPacketTag(
+          test_outcome.test_run().test_vector().input().packet().parsed()));
+  const std::string& packet_hex =
+      test_outcome.test_run().test_vector().input().packet().hex();
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "packet_" + std::to_string(test_id) + ".trace.txt",
+      packet_traces[packet_hex][0].bmv2_textual_log()));
+
+  auto it = packet_traces.find(packet_hex);
+  if (it == packet_traces.end() || it->second.empty()) {
+    return absl::InternalError(
+        absl::StrCat("Packet trace not found for packet ", packet_hex));
+  }
+
+  std::string summarized_packet_trace;
+  for (const auto& table_apply : it->second[0].table_apply()) {
+    absl::StrAppend(&summarized_packet_trace,
+                    table_apply.hit_or_miss_textual_log(), "\n\n");
+  }
+  test_outcome.mutable_test_result()->mutable_failure()->set_description(
+      absl::StrCat(test_outcome.test_result().failure().description(),
+                   "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
+                   "=========================\n",
+                   summarized_packet_trace));
   return absl::OkStatus();
 }
 
@@ -268,15 +308,25 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   return generate_test_vectors_result;
 }
 
-absl::Status HandleFailure(const DataplaneValidationParams& params,
-                           const PacketInjectionParams& parameters,
-                           int failure_count, pdpi::P4RuntimeSession& sut,
-                           pdpi::P4RuntimeSession& control_switch,
-                           dvaas::PacketTestOutcome& test_outcome) {
+absl::Status PostProcessTestVectorFailure(
+    const DataplaneValidationParams& params,
+    const PacketInjectionParams& parameters, int failure_count,
+    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    dvaas::PacketTestOutcome& test_outcome,
+    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
+  // Duplicate packet that caused test failure.
   if (failure_count <
       params.failure_enhancement_options.max_failures_to_attempt_to_replicate) {
     RETURN_IF_ERROR(DetermineReproducibilityRate(params, parameters, sut,
                                                  control_switch, test_outcome));
+  }
+
+  // Print packet traces.
+  if (params.failure_enhancement_options.print_packet_trace) {
+    RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
+                                      dvaas_test_artifact_writer));
   }
   return absl::OkStatus();
 }
@@ -285,8 +335,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
     SwitchApi& sut, SwitchApi& control_switch,
     const DataplaneValidationParams& params) {
   // Set up custom writer that prefixes artifact names and adds headers.
-  std::unique_ptr<gutil::TestArtifactWriter> writer =
-      std::make_unique<DvaasTestArtifactWriter>(artifact_writer_, params);
+  DvaasTestArtifactWriter dvaas_test_artifact_writer(artifact_writer_, params);
 
   // Configure control switch.
   {
@@ -305,8 +354,11 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   // Read and store table entries on SUT as an artifact.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
                    pdpi::ReadIrEntitiesSorted(*sut.p4rt));
-  RETURN_IF_ERROR(writer->AppendToTestArtifact(
-      "sut_ir_entities.txtpb", gutil::PrintTextProto(entities)));
+  // TODO: Clear counters first, so the post-injection counters are
+  // more meaningful.
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "sut_ir_entities.pre_packet_injection.txtpb",
+      gutil::PrintTextProto(entities)));
 
   // Store port mapping as an artifact (identity if not given a value).
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map =
@@ -314,7 +366,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
           ? *params.mirror_testbed_port_map_override
           : MirrorTestbedP4rtPortIdMap::CreateIdentityMap();
   RETURN_IF_ERROR(CheckAndStoreMappedAndUnmappedPortIds(
-      mirror_testbed_port_map, *sut.gnmi, *control_switch.gnmi, *writer));
+      mirror_testbed_port_map, *sut.gnmi, *control_switch.gnmi,
+      dvaas_test_artifact_writer));
 
   // Generate test vectors.
   GenerateTestVectorsResult generate_test_vectors_result;
@@ -323,7 +376,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   if (params.packet_test_vector_override.empty()) {
     LOG(INFO) << "Auto-generating test vectors";
     ASSIGN_OR_RETURN(generate_test_vectors_result,
-                     GenerateTestVectors(params, sut, *backend_, *writer));
+                     GenerateTestVectors(params, sut, *backend_,
+                                         dvaas_test_artifact_writer));
   } else {
     LOG(INFO) << "Checking user-provided test vectors for well-formedness";
     ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info, pdpi::GetIrP4Info(*sut.p4rt));
@@ -331,8 +385,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                      LegitimizeUserProvidedTestVectors(
                          params.packet_test_vector_override, ir_info));
   }
-  RETURN_IF_ERROR(
-      writer->AppendToTestArtifact("test_vectors.txt", ToString(test_vectors)));
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "test_vectors.txt", ToString(test_vectors)));
 
   PacketInjectionParams packet_injection_params = {
       .max_packets_to_send_per_second = params.max_packets_to_send_per_second,
@@ -347,7 +401,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                        *sut.p4rt.get(), *control_switch.p4rt.get(),
                        test_vectors, packet_injection_params,
                        packet_statistics_));
-  RETURN_IF_ERROR(writer->AppendToTestArtifact(
+  const absl::Time kTimeLastPacketInjected = absl::Now();
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
@@ -365,8 +420,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                    InferP4Specification(params, *backend_, sut));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
   std::vector<SwitchInput> failed_switch_inputs;
-  for (dvaas::PacketTestOutcome& test_outcome :
-       *test_outcomes.mutable_outcomes()) {
+  for (const dvaas::PacketTestOutcome& test_outcome :
+       test_outcomes.outcomes()) {
     if (test_outcome.test_result().has_failure()) {
       failed_switch_inputs.push_back(
           test_outcome.test_run().test_vector().input());
@@ -399,47 +454,17 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
     for (dvaas::PacketTestOutcome& test_outcome :
          *test_outcomes.mutable_outcomes()) {
       if (test_outcome.test_result().has_failure()) {
-        // Handle failures.
-        RETURN_IF_ERROR(HandleFailure(
-            params, packet_injection_params, ++current_failures_count,
-            *sut.p4rt.get(), *control_switch.p4rt.get(), test_outcome));
-        double reproducibility_rate =
-            test_outcome.test_result().failure().reproducibility_rate();
-        LOG(INFO) << (reproducibility_rate == 1.0
-                          ? "Deterministic failure"
-                          : absl::StrCat(
-                                "Non-deterministic failure. Success rate is ",
-                                reproducibility_rate));
-
-        ASSIGN_OR_RETURN(int test_id,
-                         dvaas::ExtractTestPacketTag(test_outcome.test_run()
-                                                         .test_vector()
-                                                         .input()
-                                                         .packet()
-                                                         .parsed()));
-        const std::string packet_hex =
-            test_outcome.test_run().test_vector().input().packet().hex();
-
-        if (!packet_traces.contains(packet_hex) ||
-            packet_traces[packet_hex].empty()) {
-          return absl::InternalError(
-              absl::StrCat("Packet trace not found for packet ", packet_hex));
+        // Tolerate failures.
+        // Remove once packet trace, replication, and
+        // minimization code is stably integrated.
+        absl::Status status = PostProcessTestVectorFailure(
+            params, packet_injection_params, current_failures_count++,
+            *sut.p4rt, *control_switch.p4rt, test_outcome, packet_traces,
+            dvaas_test_artifact_writer);
+        if (!status.ok()) {
+          LOG(WARNING) << "Failed to extract packet trace and/or replicate: "
+                       << status;
         }
-        std::string summarized_packet_trace;
-        for (auto &table_apply : packet_traces[packet_hex][0].table_apply()) {
-          absl::StrAppend(&summarized_packet_trace,
-                          table_apply.hit_or_miss_textual_log(), "\n\n");
-        }
-        test_outcome.mutable_test_result()->mutable_failure()->set_description(
-            absl::StrCat(
-                test_outcome.test_result().failure().description(),
-                "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY "
-                "=========================\n",
-                summarized_packet_trace));
-
-        RETURN_IF_ERROR(writer->AppendToTestArtifact(
-            "packet_" + std::to_string(test_id) + ".trace.txt",
-            packet_traces[packet_hex][0].bmv2_textual_log()));
       }
     }
   }
@@ -447,9 +472,32 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   ValidationResult validation_result(
       std::move(test_outcomes),
       generate_test_vectors_result.packet_synthesis_result);
-  RETURN_IF_ERROR(writer->AppendToTestArtifact(
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_vector_failures.txt",
       absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
+
+  // We read and store all table entries at the very end of the test. This is
+  // useful, e.g., for checking per-entry ACL counters when debugging.
+  {
+    // The hardware-level counters are only queried every <= 20 seconds on the
+    // switch for performance reasons, so we need to wait to ensure we get the
+    // latest values.
+    const absl::Time kTimeCountersConverged =
+        kTimeLastPacketInjected + absl::Seconds(20);
+    const absl::Duration kTimeUntilCountersConverged =
+        kTimeCountersConverged - absl::Now();
+    if (kTimeUntilCountersConverged > absl::ZeroDuration()) {
+      LOG(INFO) << "sleeping " << kTimeUntilCountersConverged
+                << " to allow per-entry counters to converge";
+      absl::SleepFor(kTimeUntilCountersConverged);
+    }
+
+    ASSIGN_OR_RETURN(pdpi::IrEntities entities,
+                     pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "sut_ir_entities.post_packet_injection.txtpb",
+        gutil::PrintTextProto(entities)));
+  }
 
   return validation_result;
 }
