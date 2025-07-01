@@ -2429,7 +2429,7 @@ void RunProtoPacketTests() {
                               }
                               payload: "ABCDABCDABCDABCDABCD"  # 20 octets
                          )pb"));
-  
+
   RunProtoPacketTest("PTP in L2 packet (valid)",
                      gutil::ParseProtoOrDie<Packet>(
                          R"pb(headers {
