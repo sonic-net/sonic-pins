@@ -3,6 +3,11 @@ pkg_info {
   version: "Versions 2.4.0, 2.4.0, 2.4.0, 2.4.0"
   arch: "v1model"
   organization: "Google"
+  platform_properties {
+    multicast_group_table_size: 512
+    multicast_group_table_total_replicas: 3968
+    multicast_group_table_max_replicas_per_entry: 128
+  }
 }
 tables {
   preamble {
@@ -1427,34 +1432,6 @@ tables {
 }
 tables {
   preamble {
-    id: 33554701
-    name: "ingress.acl_pre_ingress.acl_pre_ingress_csig_table"
-    alias: "acl_pre_ingress_csig_table"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@sai_acl(PRE_INGRESS)"
-    annotations: "@sai_acl_priority(13)"
-  }
-  match_fields {
-    id: 1
-    name: "is_ip"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  action_refs {
-    id: 16777482
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  size: 125
-}
-tables {
-  preamble {
     id: 33554699
     name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
     alias: "acl_ingress_mirror_and_redirect_table"
@@ -2679,20 +2656,6 @@ actions {
 }
 actions {
   preamble {
-    id: 16777482
-    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
-    alias: "set_outer_vlan_id"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "vlan_id"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
-    bitwidth: 12
-  }
-}
-actions {
-  preamble {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
@@ -2759,6 +2722,20 @@ actions {
 }
 actions {
   preamble {
+    id: 16777482
+    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
+    alias: "set_outer_vlan_id"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "vlan_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
     id: 16777496
     name: "ingress.acl_pre_ingress.set_outer_vlan_id_and_acl_metadata"
     alias: "set_outer_vlan_id_and_acl_metadata"
@@ -2806,13 +2783,13 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
-    annotations: "@selector_size_semantics(\"sum_of_weights\")"
-    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
   size: 49152
   max_group_size: 512
+  sum_of_weights {
+  }
 }
 direct_counters {
   preamble {
@@ -3098,6 +3075,7 @@ type_info {
         sdn_string {
         }
       }
+      annotations: "@p4runtime_translation_mappings({ { \"\" , 0 } , })"
     }
   }
   new_types {

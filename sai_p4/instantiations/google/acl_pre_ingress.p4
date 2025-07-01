@@ -81,36 +81,6 @@ control acl_pre_ingress(in headers_t headers,
     acl_pre_ingress_vlan_counter.count();
   }
 
-  // Table to manage the Congestion Signaling (CSIG) table, part of the Legato
-  // project, which measures the maximum congestion encountered by a packet
-  // during its journey across the network.
-  // For more details see go/legato-packet-header, go/legato-for-gpins:csig-hld.
-  //
-  // Note: Today, this table is currently only used as a placeholder to reserve
-  // pre-ingress ACL space for SB400. (Note that FBR400 uses entries in
-  // acl_pre_ingress_table for this purpose.)
-  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
-  @id(ACL_PRE_INGRESS_CSIG_TABLE_ID)
-  @sai_acl(PRE_INGRESS)
-  @sai_acl_priority(13)
-  table acl_pre_ingress_csig_table {
-    key = {
-      // CSIG is only supported for IPv6 packets.
-      headers.ipv6.isValid() : optional
-          @id(1) @name("is_ip")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
-      // TODO Add TPID, VLAN_ID, and VLAN_PRIO fields,
-      // all related to CSIG.
-    }
-    actions = {
-      @proto_id(1) set_outer_vlan_id;
-      @defaultonly NoAction;
-    }
-    const default_action = NoAction;
-    // No counters yet.
-    size = ACL_PRE_INGRESS_CSIG_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_PRE_INGRESS_TABLE_ID)
   @sai_acl(PRE_INGRESS)
@@ -150,7 +120,6 @@ control acl_pre_ingress(in headers_t headers,
       headers.ethernet.dst_addr : ternary
           @id(9) @name("dst_mac")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
-      // TODO Add TPID, which is used to identify CSIG packets.
 #endif
       headers.ipv4.dst_addr : ternary
           @id(5) @name("dst_ip")
@@ -173,9 +142,6 @@ control acl_pre_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_vrf;
-      // TODO For CSIG on FBR, we want an outer VLAN of 4095.
-      // That might be set automatically (check with Ali K. on that).
-      // If not, we'll need to add an explicit set_outer_vlan_id action here.
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -319,7 +285,6 @@ control acl_pre_ingress(in headers_t headers,
 
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_pre_ingress_table.apply();
-    acl_pre_ingress_csig_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_pre_ingress_metadata_table.apply();
     acl_pre_ingress_table.apply();
