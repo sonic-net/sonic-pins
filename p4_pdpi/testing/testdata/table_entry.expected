@@ -1310,7 +1310,7 @@ packet_replication_engine_entry {
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_port', 1).
 
 =========================================================================
 valid multicast group entry
@@ -1385,6 +1385,155 @@ packet_replication_engine_entry {
   }
 }
 
+
+=========================================================================
+valid multicast group entry with backup replicas
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with a backup replica that has the same port as the primary replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: A primary replica and its backup replicas must have unique ports. Replica and its backups contained duplicates of port 'some_port'.
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another primary replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      instance: 2
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another backup replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      instance: 1
+      port: "third_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each backup replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
 
 =========================================================================
 valid clone session group entry
@@ -3482,7 +3631,7 @@ packet_replication_engine_entry {
 }
 
 --- IR (converting to PI) is invalid/unsupported:
-INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_port', 1).
 
 =========================================================================
 multicast group entry with duplicate replica (IR -> PD)
@@ -3663,6 +3812,155 @@ multicast_group_table_entry {
   }
 }
 
+
+=========================================================================
+valid multicast group entry with backup replicas (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with a backup replica that has the same port as the primary replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "some_other_port"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: A primary replica and its backup replicas must have unique ports. Replica and its backups contained duplicates of port 'some_port'.
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another primary replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 2
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another backup replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      port: "third_port"
+      instance: 3
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each backup replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
 
 =========================================================================
 clone session entry with duplicate replica (IR -> PI)

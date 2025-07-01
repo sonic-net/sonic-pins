@@ -1072,6 +1072,120 @@ UpdateAllComputedFields(packet) = false
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - headers[1]: header missing - expected CsigHeader
 ================================================================================
+Parsing test: PTP in L2 packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ethertype: 0x88F7
+                       # PTP Header
+                       transport_specific: 0x0
+                       message_type: 0x0
+                       reserved0: 0x0
+                       version_ptp: 0x0
+                       message_length: 0x0034
+                       domain_number: 0x00
+                       reserved1: 0x00
+                       flags: 0x0000
+                       correction_field: 0x0000000000000000
+                       reserved2: 0x00000000
+                       source_port_identity: 0x00000000000000000000
+                       sequence_id: 0x0000
+                       control_field: 0x00
+                       log_message_interval: 0x00
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x88f7"
+  }
+}
+headers {
+  ptp_header {
+    transport_specific: "0x0"
+    message_type: "0x0"
+    reserved0: "0x0"
+    version_ptp: "0x0"
+    message_length: "0x0034"
+    domain_number: "0x00"
+    reserved1: "0x00"
+    flags: "0x0000"
+    correction_field: "0x0000000000000000"
+    reserved2: "0x00000000"
+    source_port_identity: "0x00000000000000000000"
+    sequence_id: "0x0000"
+    control_field: "0x00"
+    log_message_interval: "0x00"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+
+================================================================================
+Parsing test: PTP in L2 packet (short)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ethertype: 0x88F7
+                       # PTP Header
+                       transport_specific: 0x0
+                       message_type: 0x0
+                       reserved0: 0x0
+                       version_ptp: 0x0
+                       message_length: 0x0034
+                       domain_number: 0x00
+                       reserved1: 0x00
+                       flags: 0x0000
+                       correction_field: 0x0000000000000000
+                       reserved2: 0x00000000
+                       source_port_identity: 0x00000000000000000000
+                       sequence_id: 0x0000
+                       control_field: 0x00
+                       log_message_interval: 0x00
+                       # Payload - 10 octets (short) - correct is 18
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x88f7"
+  }
+}
+headers {
+  ptp_header {
+    transport_specific: "0x0"
+    message_type: "0x0"
+    reserved0: "0x0"
+    version_ptp: "0x0"
+    message_length: "0x0034"
+    domain_number: "0x00"
+    reserved1: "0x00"
+    flags: "0x0000"
+    correction_field: "0x0000000000000000"
+    reserved2: "0x00000000"
+    source_port_identity: "0x00000000000000000000"
+    sequence_id: "0x0000"
+    control_field: "0x00"
+    log_message_interval: "0x00"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\""
+reasons_invalid: "in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 44"
+reasons_invalid: "in PtpHeader headers[1]: message_length: Must be 0x002c, but was 0x0034 instead."
+
+PadPacketToMinimumSize(packet) = true
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = OK
+================================================================================
 Parsing test: Packet too short to parse a GRE header (Invalid)
 ================================================================================
 -- INPUT -----------------------------------------------------------------------
@@ -2050,7 +2164,7 @@ PadPacketToMinimumSize(packet) = false
 UpdateAllComputedFields(packet) = true
 ValidatePacket(packet) = OK
 ================================================================================
-Parsing test: PTP packet (valid)
+Parsing test: PTP event packet (valid)
 ================================================================================
 -- INPUT -----------------------------------------------------------------------
 # Ethernet header.
@@ -2116,6 +2230,97 @@ headers {
   udp_header {
     source_port: "0x08ae"
     destination_port: "0x013f"
+    length: "0x003c"
+    checksum: "0x0000"
+  }
+}
+headers {
+  ptp_header {
+    transport_specific: "0x0"
+    message_type: "0x0"
+    reserved0: "0x0"
+    version_ptp: "0x0"
+    message_length: "0x0034"
+    domain_number: "0x00"
+    reserved1: "0x00"
+    flags: "0x0000"
+    correction_field: "0x0000000000000000"
+    reserved2: "0x00000000"
+    source_port_identity: "0x00000000000000000000"
+    sequence_id: "0x0000"
+    control_field: "0x00"
+    log_message_interval: "0x00"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+
+================================================================================
+Parsing test: PTP general packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x003c
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP Header
+                       source_port: 0x08ae       # 2222
+                       destination_port: 0x0140  # 320
+                       length: 0x003c
+                       checksum: 0x0000
+                       # PTP Header
+                       transport_specific: 0x0
+                       message_type: 0x0
+                       reserved0: 0x0
+                       version_ptp: 0x0
+                       message_length: 0x0034
+                       domain_number: 0x00
+                       reserved1: 0x00
+                       flags: 0x0000
+                       correction_field: 0x0000000000000000
+                       reserved2: 0x00000000
+                       source_port_identity: 0x00000000000000000000
+                       sequence_id: 0x0000
+                       control_field: 0x00
+                       log_message_interval: 0x00
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x003c"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x0140"
     length: "0x003c"
     checksum: "0x0000"
   }
@@ -4526,6 +4731,209 @@ payload: "ABCDABCDABCDABCDABCD"
 ValidatePacket(packet) = OK
 
 Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: PTP packet with UDP port 320 (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "00:ee:dd:cc:bb:aa"
+    ethernet_source: "00:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x003e"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "2607:f8b0:11::"
+    ipv6_destination: "2607:f8b0:12::"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x0140"
+    length: "0x003e"
+    checksum: "0x0000"
+  }
+}
+headers {
+  ptp_header {
+    transport_specific: "0x0"
+    message_type: "0x0"
+    reserved0: "0x0"
+    version_ptp: "0x0"
+    message_length: "0x0036"
+    domain_number: "0x00"
+    reserved1: "0x00"
+    flags: "0x0000"
+    correction_field: "0x0000000000000000"
+    reserved2: "0x00000000"
+    source_port_identity: "0x00000000000000000000"
+    sequence_id: "0x0000"
+    control_field: "0x00"
+    log_message_interval: "0x00"
+  }
+}
+payload: "ABCDABCDABCDABCDABCD"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = OK
+
+Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: PTP in L2 packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "00:ee:dd:cc:bb:aa"
+    ethernet_source: "00:44:33:22:11:00"
+    ethertype: "0x88f7"
+  }
+}
+headers {
+  ptp_header {
+    transport_specific: "0x0"
+    message_type: "0x0"
+    reserved0: "0x0"
+    version_ptp: "0x0"
+    message_length: "0x0036"
+    domain_number: "0x00"
+    reserved1: "0x00"
+    flags: "0x0000"
+    correction_field: "0x0000000000000000"
+    reserved2: "0x00000000"
+    source_port_identity: "0x00000000000000000000"
+    sequence_id: "0x0000"
+    control_field: "0x00"
+    log_message_interval: "0x00"
+  }
+}
+payload: "ABCDABCDABCDABCDABCD"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = OK
+
+Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: PTP in L2 packet without payload (invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "00:ee:dd:cc:bb:aa"
+    ethernet_source: "00:44:33:22:11:00"
+    ethertype: "0x88f7"
+  }
+}
+payload: "12345678901234567890123456789012345678901234"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 44
+- headers[1]: header missing - expected PtpHeader
+
+PadPacketToMinimumSize(packet) = true
+new payload: "12345678901234567890123456789012345678901234\000\000"
+
+UpdateMissingComputedFields(packet) = false
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- headers[1]: header missing - expected PtpHeader
+
+================================================================================
+Proto packet test: PTP in L2 packet incorrect L3 header (invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "00:ee:dd:cc:bb:aa"
+    ethernet_source: "00:44:33:22:11:00"
+    ethertype: "0x88f7"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "00:11:22:33:44:55"
+    sender_protocol_address: "10.0.0.1"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "10.0.0.2"
+  }
+}
+payload: "12345678901234567890123456789012345678"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in ArpHeader headers[1]: expected PtpHeader (because the previous header demands it), got ArpHeader
+
+PadPacketToMinimumSize(packet) = false
+
+UpdateMissingComputedFields(packet) = false
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in ArpHeader headers[1]: expected PtpHeader (because the previous header demands it), got ArpHeader
+
+================================================================================
+Proto packet test: PTP in L2 packet message_length incorrect (invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "00:ee:dd:cc:bb:aa"
+    ethernet_source: "00:44:33:22:11:00"
+    ethertype: "0x88f7"
+  }
+}
+headers {
+  ptp_header {
+    transport_specific: "0x0"
+    message_type: "0x0"
+    reserved0: "0x0"
+    version_ptp: "0x0"
+    message_length: "0x0036"
+    domain_number: "0x00"
+    reserved1: "0x00"
+    flags: "0x0000"
+    correction_field: "0x0000000000000000"
+    reserved2: "0x00000000"
+    source_port_identity: "0x00000000000000000000"
+    sequence_id: "0x0000"
+    control_field: "0x00"
+    log_message_interval: "0x00"
+  }
+}
+payload: "123456789012"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in PtpHeader headers[1]: message_length: Must be 0x002e, but was 0x0036 instead.
+
+PadPacketToMinimumSize(packet) = false
+
+UpdateMissingComputedFields(packet) = false
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in PtpHeader headers[1]: message_length: Must be 0x002e, but was 0x0036 instead.
 
 ================================================================================
 Proto packet test: PTP packet does not set message_length (valid)
