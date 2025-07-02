@@ -571,14 +571,14 @@ control acl_ingress(in headers_t headers,
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
     port_id_t redirect_port) {
+    // The actual redirect to port happens after routing resolution. Here we
+    // just store the redirect port in a metadata.
+    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_to_port_enabled = true;
 
-    standard_metadata.egress_spec = (bit<9>)redirect_port;
-
-    // Cancel other forwarding decisions (if any).
-    // TODO: Properly model the behavior once we understand the
-    // correct behavior of how the switch works as this is likely not reflected
-    // in the P4 model.
-    local_metadata.nexthop_id_valid = false;
+    // Cancel other forwarding decisions except for nexthop. If the packet is
+    // assigned a nexthop, the packet rewrites are determined by the nexthop but
+    // the egress port is determined by `redirect_port`.
     local_metadata.wcmp_group_id_valid = false;
     standard_metadata.mcast_grp = 0;
   }
@@ -598,13 +598,12 @@ control acl_ingress(in headers_t headers,
     acl_ingress_counter.count();
     local_metadata.marked_to_mirror = true;
     local_metadata.mirror_session_id = mirror_session_id;
-    standard_metadata.egress_spec = (bit<9>)redirect_port;
+    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_to_port_enabled = true;
 
-    // Cancel other forwarding decisions (if any).
-    // TODO: Properly model the behavior once we understand the
-    // correct behavior of how the switch works as this is likely not reflected
-    // in the P4 model.
-    local_metadata.nexthop_id_valid = false;
+    // Cancel other forwarding decisions except for nexthop. If the packet is
+    // assigned a nexthop, the packet rewrites are determined by the nexthop but
+    // the egress port is determined by `redirect_port`.
     local_metadata.wcmp_group_id_valid = false;
     standard_metadata.mcast_grp = 0;
   }
