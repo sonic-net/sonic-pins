@@ -703,10 +703,6 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777476
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777481
     annotations: "@proto_id(5)"
   }
@@ -2086,23 +2082,6 @@ actions {
 }
 actions {
   preamble {
-    id: 16777476
-    name: "ingress.acl_ingress.acl_mirror"
-    alias: "acl_mirror"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "mirror_session_id"
-    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
-    type_name {
-      name: "mirror_session_id_t"
-    }
-  }
-}
-actions {
-  preamble {
     id: 16777484
     name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -2652,6 +2631,23 @@ actions {
     id: 16777253
     name: "egress.egress_vlan_checks.make_untagged_member"
     alias: "make_untagged_member"
+  }
+}
+actions {
+  preamble {
+    id: 16777476
+    name: "ingress.acl_ingress.acl_mirror"
+    alias: "acl_mirror"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
   }
 }
 actions {

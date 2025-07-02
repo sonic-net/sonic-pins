@@ -384,7 +384,6 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
-      @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
       @proto_id(7) redirect_to_nexthop();
