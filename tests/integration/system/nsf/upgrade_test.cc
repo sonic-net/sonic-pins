@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/flags/flag.h"
@@ -27,10 +28,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
@@ -41,6 +40,9 @@
 #include "tests/integration/system/nsf/milestone.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
           "The NSF milestone to test.");
@@ -52,7 +54,6 @@ using ::p4::v1::ReadResponse;
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
 constexpr int kErrorPercentage = 1;
-constexpr absl::Duration kTrafficRunDuration = absl::Minutes(15);
 
 // TODO: Compare and look into possibility of using a better
 // approach than using std::variant (eg. type-erasure or typed tests).
@@ -75,12 +76,9 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
 
   RETURN_IF_ERROR(
       ValidateTestbedState(testbed_, *ssh_client_, &curr_image_config));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnInit,
-                                     component_validators_,
-                                     curr_image_config.image_label, testbed_));
-  RETURN_IF_ERROR(StoreSutDebugArtifacts(
-      absl::StrCat(curr_image_config.image_label, "_before_nsf_reboot"),
-      testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnInit, component_validators_,
+      curr_image_config.image_label, testbed_, *ssh_client_));
 
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
@@ -98,15 +96,15 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
   if (updated_gnmi_config.has_value()) {
     next_image_config.gnmi_config = *std::move(updated_gnmi_config);
   }
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowProgram,
-                                     component_validators_,
-                                     curr_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnFlowProgram, component_validators_,
+      curr_image_config.image_label, testbed_, *ssh_client_));
 
   LOG(INFO) << "Starting the traffic";
   RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed_));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStartTraffic,
-                                     component_validators_,
-                                     curr_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnStartTraffic, component_validators_,
+      curr_image_config.image_label, testbed_, *ssh_client_));
 
   // P4 snapshot before Upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
@@ -120,24 +118,18 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
   ASSIGN_OR_RETURN(
       std::string image_version,
       ImageCopy(next_image_config.image_label, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnImageCopy,
-                                     component_validators_,
-                                     next_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnImageCopy, component_validators_,
+      next_image_config.image_label, testbed_, *ssh_client_));
   // TODO: Validate uptime and boot-type once they are supported.
 
-  // Perform NSF Reboot.
-  RETURN_IF_ERROR(NsfReboot(testbed_));
-  RETURN_IF_ERROR(WaitForNsfReboot(testbed_, *ssh_client_));
+  // Perform NSF Reboot and validate switch state after reboot is completed.
+  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(testbed_, *ssh_client_,
+                                                   &next_image_config));
 
-  // Perform validations after reboot is completed.
-  RETURN_IF_ERROR(
-      ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnNsfReboot,
-                                     component_validators_,
-                                     next_image_config.image_label, testbed_));
-  RETURN_IF_ERROR(StoreSutDebugArtifacts(
-      absl::StrCat(curr_image_config.image_label, "_after_nsf_reboot"),
-      testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnNsfReboot, component_validators_,
+      next_image_config.image_label, testbed_, *ssh_client_));
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
@@ -150,13 +142,9 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
   RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_));
   RETURN_IF_ERROR(
       ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnConfigPush,
-                                     component_validators_,
-                                     next_image_config.image_label, testbed_));
-
-  // Wait for transmission duration.
-  LOG(INFO) << "Wait for " << kTrafficRunDuration << " for transmit completion";
-  absl::SleepFor(kTrafficRunDuration);
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnConfigPush, component_validators_,
+      next_image_config.image_label, testbed_, *ssh_client_));
 
   // Stop and validate traffic
   LOG(INFO) << "Stopping the traffic";
@@ -172,18 +160,18 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
   // once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
   RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnStopTraffic,
-                                     component_validators_,
-                                     next_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnStopTraffic, component_validators_,
+      next_image_config.image_label, testbed_, *ssh_client_));
 
   // TODO: Look into resetting the testbed state, including the
   // flows on the SUT, in the same state as that before the test.
   LOG(INFO) << "Clearing the flows from SUT";
   RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed_));
 
-  RETURN_IF_ERROR(ValidateComponents(&ComponentValidator::OnFlowCleanup,
-                                     component_validators_,
-                                     next_image_config.image_label, testbed_));
+  RETURN_IF_ERROR(ValidateComponents(
+      &ComponentValidator::OnFlowCleanup, component_validators_,
+      next_image_config.image_label, testbed_, *ssh_client_));
 
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
@@ -205,6 +193,7 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   std::vector<ImageConfigParams> image_config_params =
       GetParam().image_config_params;
+  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
 
   // The test needs at least 1 image_config_param to run.
   if (image_config_params.empty()) {
@@ -216,7 +205,7 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   // SUT before going ahead with NSF Upgrade/Reboot for the following
   // `image_config_params` (if present) in order.
   ASSERT_OK(
-      InstallRebootPushConfig(image_config_params[0], testbed_, *ssh_client_));
+      InstallRebootPushConfig(testbed_, *ssh_client_, image_config_params[0]));
   // If only a single config param is provided, we do an N to N upgrade.
   if (image_config_params.size() == 1) {
     ASSERT_OK(

@@ -18,7 +18,6 @@
 #include <optional>
 #include <sstream>
 #include <string>
-#include <thread>  // NOLINT
 #include <utility>
 #include <vector>
 
@@ -26,7 +25,6 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
@@ -39,14 +37,10 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "absl/utility/utility.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status_matchers.h" // IWYU pragma: keep
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -56,6 +50,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
@@ -64,12 +59,15 @@
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/common_ir_table_entries.h"
+#include "tests/lib/packet_generator.h"
 #include "tests/lib/switch_test_setup_helpers.h"
-#include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -161,129 +159,45 @@ void LogPackets(thinkit::TestEnvironment &environment,
                                           packet_log));
 }
 
-// Returns the P4Info from the switch. If the forwarding pipeline is not
-// configured, returns an empty P4Info.
-absl::StatusOr<p4::config::v1::P4Info> GetP4Info(thinkit::Switch &device) {
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                   pdpi::P4RuntimeSession::Create(device, {}));
-  ASSIGN_OR_RETURN(
-      p4::v1::GetForwardingPipelineConfigResponse forwarding_pipeline_config,
-      pdpi::GetForwardingPipelineConfig(p4_session.get()));
-  return forwarding_pipeline_config.config().p4info();
-}
-
-// Return the P4Info on the switch or push the default P4Info to the switch.
-// Returns the default P4Info if it was pushed.
-absl::StatusOr<p4::config::v1::P4Info>
-GetOrSetP4Info(thinkit::Switch &device,
-               const p4::config::v1::P4Info &default_p4info) {
-  ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info, GetP4Info(device));
-  if (p4info.tables().empty()) {
-    LOG(INFO) << "Pushing default P4Info on switch: " << device.ChassisName();
-    ASSIGN_OR_RETURN(auto p4_session,
-                     ConfigureSwitchAndReturnP4RuntimeSession(
-                         device,
-                         /*gnmi_config=*/std::nullopt, default_p4info));
-    p4info = default_p4info;
-  }
-  return p4info;
-}
-
-// Initialize the testbed for the test.
-//   Push gNMI config.
-//   Add the trap rule to the control switch.
-void InitializeTestbed(thinkit::MirrorTestbed &testbed,
+// Sets the P4Info on the switch to the desired P4Info. If the switch requires a
+// reboot, updates the p4 session to a new session after the reboot.
+absl::Status SetP4Info(std::unique_ptr<pdpi::P4RuntimeSession> &p4_session,
+                       thinkit::Switch &device,
                        const p4::config::v1::P4Info &default_p4info) {
-  // Wait for ports to come up before the test. We don't need all the ports to
-  // be up, but it helps with reproducibility. We're using a short timeout (1
-  // minute) so the impact is small if the testbed doesn't bring up every port.
-  if (auto all_interfaces_up_status = WaitForCondition(
-          AllPortsUp, absl::Seconds(10), testbed.Sut(), /*with_healthz=*/false);
-      !all_interfaces_up_status.ok()) {
-    LOG(WARNING) << "Some ports are down at the start of the test. "
-                 << "Continuing with only the UP ports.";
-    // Collect port debug data but don't fail the test.
-    absl::Status tmp_status = AllPortsUp(testbed.Sut(), /*with_healthz=*/true);
-    LOG_IF(WARNING, !tmp_status.ok()) << "SUT Ports Up Check: " << tmp_status;
-    tmp_status = AllPortsUp(testbed.ControlSwitch(), /*with_healthz=*/true);
-    LOG_IF(WARNING, !tmp_status.ok())
-        << "Control Ports Up Check: " << tmp_status;
+  absl::Status reconcile = pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4_session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      default_p4info);
+  if (!reconcile.ok()) {
+    LOG(WARNING) << "Failed to reconcile P4Info. Attempting P4Info push with "
+                    "reboot. Reconcile result: "
+                 << reconcile;
+    ASSIGN_OR_RETURN(p4_session, ConfigureSwitchAndReturnP4RuntimeSession(
+                                     device, std::nullopt, default_p4info));
   }
-
-  LOG(INFO) << "Initializing forwarding pipeline for SUT.";
-  {
-    // Use this function to push P4Info if needed. Then clear the forwarding
-    // state.
-    ASSERT_OK(GetOrSetP4Info(testbed.Sut(), default_p4info).status());
-    ASSERT_OK_AND_ASSIGN(auto sut_p4_session,
-                         pdpi::P4RuntimeSession::Create(testbed.Sut()));
-    ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()))
-        << "failed to clear SUT flows before test.";
-  }
-
-  // Setup control switch P4 state.
-  LOG(INFO) << "Initializing forwarding pipeline for control switch.";
-  ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info control_switch_p4info,
-                       GetOrSetP4Info(testbed.ControlSwitch(), default_p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
-      pdpi::P4RuntimeSession::Create(testbed.ControlSwitch(), {}));
-  ASSERT_OK(pdpi::ClearTableEntries(control_p4_session.get()))
-      << "failed to clear Control flows before test.";
-
-  // Trap all packets on control switch.
-  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info control_switch_ir_p4info,
-                       pdpi::CreateIrP4Info(control_switch_p4info));
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::TableEntry punt_all_pi_entry,
-      pdpi::PartialPdTableEntryToPiTableEntry(
-          control_switch_ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
-                                        R"pb(
-                acl_ingress_table_entry {
-                  match {}                                  # Wildcard match.
-                  action { acl_trap { qos_queue: "0x7" } }  # Action: punt.
-                  priority: 1                               # Highest priority.
-                  meter_config {
-                    bytes_per_second: 987654321  # ~ 1 GB
-                    burst_bytes: 987654321       # ~ 1 GB
-                  }
-                }
-              )pb")));
-  ASSERT_OK(
-      pdpi::InstallPiTableEntry(control_p4_session.get(), punt_all_pi_entry));
+  return absl::OkStatus();
 }
 
-// Receive and record a single packet.
-void ReceivePacket(thinkit::MirrorTestbed *testbed,
-                   const pdpi::IrP4Info *ir_p4info,
-                   p4::v1::StreamMessageResponse pi_response,
+bool ReceivePacket(const pdpi::IrP4Info &ir_p4info,
+                   const p4::v1::StreamMessageResponse &pi_response,
                    HashTest::TestData *test_data) {
   sai::StreamMessageResponse pd_response;
-  ASSERT_OK(
-      pdpi::PiStreamMessageResponseToPd(*ir_p4info, pi_response, &pd_response))
-      << " PacketIn PI to PD failed: ";
+  if (auto status = pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
+                                                      &pd_response);
+      !status.ok()) {
+    ADD_FAILURE() << " PacketIn PI to PD failed: " << status;
+    return false;
+  }
   if (!pd_response.has_packet()) {
     LOG(WARNING) << "Ignoring unexpected stream message for packet in: "
                  << pd_response.DebugString();
+    return false;
   }
 
   absl::string_view raw_packet = pd_response.packet().payload();
   packetlib::Packet packet = packetlib::ParsePacket(raw_packet);
-  test_data->AddPacket(pd_response.packet().metadata().target_egress_port(),
-                       std::move(packet));
-}
-
-// Thread function to receive and record test packets.
-void ReceivePacketsUntilStreamIsClosed(
-    thinkit::MirrorTestbed *testbed, const pdpi::IrP4Info *ir_p4info,
-    pdpi::P4RuntimeSession *control_p4_session, HashTest::TestData *test_data) {
-  p4::v1::StreamMessageResponse pi_response;
-  // The only way to break out of this loop is for the stream channel to
-  // be closed. gRPC does not support selecting on both stream Read and
-  // fiber Cancel.
-  while (control_p4_session->StreamChannelRead(pi_response)) {
-    ReceivePacket(testbed, ir_p4info, pi_response, test_data);
-  }
+  return test_data->AddPacket(
+      pd_response.packet().metadata().target_egress_port(), std::move(packet));
 }
 
 absl::Status SendPacket(const pdpi::IrP4Info &ir_p4info,
@@ -308,8 +222,9 @@ void GetTestablePorts(
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, target.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(const auto interface_id_map,
                        GetAllInterfaceNameToPortId(*sut_gnmi_stub));
-  ASSERT_OK_AND_ASSIGN(const auto up_interfaces,
-                       GetUpInterfacesOverGnmi(*sut_gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(
+      const auto up_interfaces,
+      GetUpInterfacesOverGnmi(*sut_gnmi_stub, InterfaceType::kSingleton));
 
   for (const auto &interface_name : up_interfaces) {
     ASSERT_THAT(interface_id_map,
@@ -402,6 +317,36 @@ const TestConfigurationMap &HashingTestConfigs() {
   return *kTestConfigMap;
 }
 
+const packetgen::Options& Ipv4HashingOptions() {
+  static const auto* const kOptions = new packetgen::Options({
+      .ip_type = packetgen::IpType::kIpv4,
+      .variables =
+          {
+              packetgen::Field::kIpSrc,
+              packetgen::Field::kIpDst,
+              packetgen::Field::kL4SrcPort,
+              packetgen::Field::kL4DstPort,
+          },
+  });
+  return *kOptions;
+}
+
+const packetgen::Options& Ipv6HashingOptions() {
+  static const auto* const kOptions = new packetgen::Options({
+      .ip_type = packetgen::IpType::kIpv6,
+      .variables =
+          {
+              packetgen::Field::kIpSrc,
+              packetgen::Field::kIpDst,
+              packetgen::Field::kL4SrcPort,
+              packetgen::Field::kL4DstPort,
+              packetgen::Field::kFlowLabelLower16,
+              packetgen::Field::kFlowLabelUpper4,
+          },
+  });
+  return *kOptions;
+}
+
 // Return the list of all TestConfig() names.
 const std::vector<std::string> &HashingTestConfigNames() {
   static const auto *const kConfigNames = []() {
@@ -455,18 +400,20 @@ const std::vector<std::string> &NonHashingTestConfigNames() {
   return *kConfigNames;
 }
 
-void HashTest::TestData::AddPacket(absl::string_view egress_port,
+bool HashTest::TestData::AddPacket(absl::string_view egress_port,
                                    packetlib::Packet packet) {
   absl::StatusOr<int> status_or_index = GetPacketIndex(packet);
-  if (status_or_index.ok()) {
-    absl::MutexLock lock(&mutex_);
-    packets_by_port_[egress_port].insert(*status_or_index);
-    received_packets_.push_back({std::string(egress_port), absl::move(packet)});
-  } else {
+  if (!status_or_index.ok()) {
     // Ignore packets that don't match.
     VLOG(1) << "Received unexpected packet: " << packet.ShortDebugString()
             << ". " << status_or_index.status();
+    return false;
   }
+
+  absl::MutexLock lock(&mutex_);
+  packets_by_port_[egress_port].insert(*status_or_index);
+  received_packets_.push_back({std::string(egress_port), std::move(packet)});
+  return true;
 }
 
 absl::Status HashTest::TestData::Log(thinkit::TestEnvironment &environment,
@@ -481,8 +428,72 @@ absl::Status HashTest::TestData::Log(thinkit::TestEnvironment &environment,
                                        packet_log);
 }
 
+std::vector<packetlib::Packet> HashTest::TestData::GetReceivedPacketsOnPort(
+    const P4rtPortId& port_id) const ABSL_LOCKS_EXCLUDED(mutex_) {
+  std::vector<packetlib::Packet> port_packets;
+  const std::string& match_port = port_id.GetP4rtEncoding();
+  absl::MutexLock lock(&mutex_);
+  for (const auto& [inport, packet] : received_packets_) {
+    if (inport == match_port) {
+      port_packets.push_back(packet);
+    }
+  }
+  return port_packets;
+}
+
+// Initialize the testbed for the test.
+//   Set up P4 sessions.
+//   Push gNMI config.
+//   Add the trap rule to the control switch.
+void HashTest::InitializeTestbed() {
+  thinkit::Switch &sut = GetMirrorTestbed().Sut();
+  thinkit::Switch &control_switch = GetMirrorTestbed().ControlSwitch();
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_, pdpi::P4RuntimeSession::Create(sut));
+  ASSERT_OK_AND_ASSIGN(control_p4_session_,
+                       pdpi::P4RuntimeSession::Create(control_switch));
+
+  // Wait for ports to come up before the test. We don't need all the ports to
+  // be up, but it helps with reproducibility. We're using a short timeout (10
+  // seconds) so the impact is small if the testbed doesn't bring up every port.
+  if (auto all_interfaces_up_status = WaitForCondition(
+          AllPortsUp, absl::Seconds(10), sut, /*with_healthz=*/false);
+      !all_interfaces_up_status.ok()) {
+    LOG(WARNING) << "Some ports are down at the start of the test. "
+                 << "Continuing with only the UP ports.";
+    // Collect port debug data but don't fail the test.
+    absl::Status tmp_status = AllPortsUp(sut, /*with_healthz=*/true);
+    LOG_IF(WARNING, !tmp_status.ok()) << "SUT Ports Up Check: " << tmp_status;
+    tmp_status = AllPortsUp(control_switch, /*with_healthz=*/true);
+    LOG_IF(WARNING, !tmp_status.ok())
+        << "Control Ports Up Check: " << tmp_status;
+  }
+
+  LOG(INFO) << "Initializing forwarding pipeline for SUT.";
+  // Use this function to push P4Info if needed. Then clear the forwarding
+  // state.
+  ASSERT_OK(SetP4Info(sut_p4_session_, sut, test_p4_info()));
+  ASSERT_OK(pdpi::ClearEntities(sut_p4_session()))
+      << "failed to clear SUT flows before test.";
+
+  // Setup control switch P4 state.
+  LOG(INFO) << "Initializing forwarding pipeline for control switch.";
+  ASSERT_OK_AND_ASSIGN(
+      control_switch_p4info_,
+      GetOrSetP4Info(control_switch_p4_session(), test_p4_info()));
+  ASSERT_OK(pdpi::ClearEntities(control_switch_p4_session()))
+      << "failed to clear Control flows before test.";
+
+  // Trap all packets on control switch.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info control_switch_ir_p4info,
+                       pdpi::CreateIrP4Info(control_switch_p4_info()));
+  ASSERT_OK(pdpi::InstallIrTableEntry(
+      control_switch_p4_session(),
+      pins::PuntAllPacketsToControllerIrTableEntry("0x7")));
+}
+
 void HashTest::SetUp() {
-  MirrorTestbedFixture::SetUp();
+  mirror_testbed_->SetUp();
+  ASSERT_NO_FATAL_FAILURE(InitializeTestbed());
 
   ASSERT_NO_FATAL_FAILURE(
       GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
@@ -502,7 +513,7 @@ void HashTest::TearDown() {
   auto control_p4_session =
       pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch());
   if (control_p4_session.ok()) {
-    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session->get()))
+    EXPECT_OK(pdpi::ClearEntities(**control_p4_session))
         << "failed to clean up control switch P4 entries.";
   } else {
     ADD_FAILURE() << "failed to connect to control switch: "
@@ -511,13 +522,22 @@ void HashTest::TearDown() {
   auto sut_p4_session =
       pdpi::P4RuntimeSession::Create(GetMirrorTestbed().Sut());
   if (sut_p4_session.ok()) {
-    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session->get()))
+    EXPECT_OK(pdpi::ClearEntities(**sut_p4_session))
         << "failed to clean up sut switch P4 entries.";
   } else {
     ADD_FAILURE() << "failed to connect to sut switch: "
                   << sut_p4_session.status();
   }
-  MirrorTestbedFixture::TearDown();
+
+  switch (mirror_testbed_teardown_condition_) {
+  case TearDownCondition::kAlways:
+    mirror_testbed_->TearDown();
+    break;
+  case TearDownCondition::kOnFailure:
+    if (HasFailure())
+      mirror_testbed_->TearDown();
+    break;
+  }
 }
 
 absl::Status HashTest::RecordP4Info(absl::string_view test_stage,
@@ -526,39 +546,9 @@ absl::Status HashTest::RecordP4Info(absl::string_view test_stage,
       absl::StrCat(test_stage, "_p4info.pb.txt"), p4info.DebugString());
 }
 
-void HashTest::RebootSut() {
-  constexpr absl::Duration kRebootTimeout = absl::Minutes(7);
-  absl::Time reboot_deadline = absl::Now() + kRebootTimeout;
-
-  // Reboot the switch.
-  thinkit::Switch &sut = GetMirrorTestbed().Sut();
-  ASSERT_NO_FATAL_FAILURE(TestGnoiSystemColdReboot(sut));
-
-  absl::Status ports_up_status =
-      WaitForCondition(PortsUp,
-                       /*timeout=*/reboot_deadline - absl::Now(),
-                       GetMirrorTestbed().Sut(), interfaces_,
-                       /*with_healthz=*/false);
-  if (!ports_up_status.ok()) {
-    // Collect port debug data.
-    EXPECT_OK(PortsUp(GetMirrorTestbed().Sut(), interfaces_,
-                      /*with_healthz=*/true));
-    EXPECT_OK(PortsUp(GetMirrorTestbed().ControlSwitch(), interfaces_,
-                      /*with_healthz=*/true));
-  }
-  ASSERT_OK(ports_up_status);
-
-  // Wait for P4Runtime to be reachable.
-  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> status_or_p4_session;
-  do {
-    status_or_p4_session = pdpi::P4RuntimeSession::Create(sut);
-  } while (!status_or_p4_session.ok() && absl::Now() < reboot_deadline);
-  ASSERT_OK(status_or_p4_session)
-      << "Switch failed to reboot and come up after " << kRebootTimeout;
-}
-
 absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
-    const pins::TestConfiguration &test_config, int num_packets) {
+    const pins::TestConfiguration& test_config, int num_packets,
+    HashTest::PacketGeneratorStyle style) {
   // Try to generate one packet first to see if the config is valid.
   ASSIGN_OR_RETURN(packetlib::Packet packet,
                    pins::GenerateIthPacket(test_config, 0));
@@ -570,9 +560,11 @@ absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
   // values distributed from the full range. Otherwise, choose sequential
   // values.
   int range = pins::Range(test_config);
-  bool use_random_index = range > 4 * num_packets;
-  LOG(INFO) << "Generating " << (use_random_index ? "random" : "sequential")
-            << " packets for config: " << pins::DescribeTestConfig(test_config);
+  bool use_random_index = style == PacketGeneratorStyle::kUniform;
+  LOG(INFO) << "Generating " << num_packets << " "
+            << (use_random_index ? "random" : "sequential")
+            << " packets for config: " << pins::DescribeTestConfig(test_config)
+            << " allowing for up to " << range << " unique values";
 
   std::vector<packetlib::Packet> packets;
   for (int packet_index = 0; packet_index < num_packets; ++packet_index) {
@@ -590,11 +582,23 @@ absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
 }
 
 absl::StatusOr<TestPacketMap> HashTest::GeneratePackets(
-    const TestConfigurationMap &test_configs, int num_packets) {
+    const TestConfigurationMap& test_configs, int num_packets,
+    HashTest::PacketGeneratorStyle style) {
   TestPacketMap packets;
   for (const auto &[field, config] : test_configs) {
-    ASSIGN_OR_RETURN(packets[field], GeneratePackets(config, num_packets),
+    ASSIGN_OR_RETURN(packets[field],
+                     GeneratePackets(config, num_packets, style),
                      _ << "Invalid test config for " << field);
+  }
+  return packets;
+}
+
+absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
+    const packetgen::Options& options, int num_packets) {
+  ASSIGN_OR_RETURN(auto generator, packetgen::PacketGenerator::Create(options));
+  std::vector<packetlib::Packet> packets = generator.Packets(num_packets);
+  for (int i = 0; i < num_packets; ++i) {
+    SetPayload(packets[i], i, std::nullopt);
   }
   return packets;
 }
@@ -609,10 +613,6 @@ absl::Status HashTest::SendAndReceivePackets(
       std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
       pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch()));
 
-  std::thread receive_packet_thread(
-      absl::bind_front(ReceivePacketsUntilStreamIsClosed, &GetMirrorTestbed(),
-                       &ir_p4info, control_p4_session.get(), &test_data));
-
   for (const auto &packet : packets) {
     RETURN_IF_ERROR(
         SendPacket(ir_p4info, packet, *control_p4_session, ingress_port_id));
@@ -621,11 +621,14 @@ absl::Status HashTest::SendAndReceivePackets(
              absl::StrCat(record_prefix, "_injected_packets"));
 
   // Wait for all the packets to arrive.
-  if (test_data.PacketCount() > 0) {
-    absl::Time deadline = absl::Now() + absl::Seconds(30);
-    while (test_data.PacketCount() < packets.size() && absl::Now() < deadline) {
-      absl::SleepFor(absl::Seconds(1));
-    }
+  if (absl::Status packet_status =
+          control_p4_session->HandleNextNStreamMessages(
+              [&](const p4::v1::StreamMessageResponse &message) {
+                return ReceivePacket(ir_p4info, message, &test_data);
+              },
+              packets.size(), absl::Minutes(2));
+      !packet_status.ok()) {
+    LOG(WARNING) << packet_status;
   }
   if (auto result =
           test_data.Log(GetMirrorTestbed().Environment(),
@@ -633,7 +636,7 @@ absl::Status HashTest::SendAndReceivePackets(
       !result.ok()) {
     LOG(ERROR) << result;
   }
-  std::set<int> missing_packets;
+  absl::btree_set<int> missing_packets;
   if (test_data.PacketCount() != packets.size()) {
     for (int i = 0; i < packets.size(); ++i) {
       missing_packets.insert(i);
@@ -644,30 +647,38 @@ absl::Status HashTest::SendAndReceivePackets(
       }
     }
   }
-  std::vector<std::string> errors;
-  if (test_data.PacketCount() != packets.size()) {
-    errors.push_back(absl::Substitute(
-        "Unexpected number of packets received. Expected $0. Got $1.$2",
-        packets.size(), test_data.PacketCount(),
-        missing_packets.empty()
-            ? ""
-            : absl::Substitute(" Missing packets [$0]",
-                               absl::StrJoin(missing_packets, ", "))));
-  }
-  // Clean up.
-  if (absl::Status finished = control_p4_session->Finish(); !finished.ok()) {
-    errors.push_back(absl::StrCat("Failed control_p4_session->Finish(): ",
-                                  finished.message()));
-  }
-  receive_packet_thread.join();
+  std::vector<packetlib::Packet> missing_packet_list;
   if (!missing_packets.empty()) {
-    std::vector<packetlib::Packet> missing_packet_list;
     missing_packet_list.reserve(missing_packets.size());
     for (int index : missing_packets) {
       missing_packet_list.push_back(packets[index]);
     }
     LogPackets(GetMirrorTestbed().Environment(), missing_packet_list,
                absl::StrCat(record_prefix, "_missing_packets"));
+  }
+  std::vector<std::string> errors;
+  if (test_data.PacketCount() != packets.size()) {
+    std::string error = absl::Substitute(
+        "Unexpected number of packets received. Expected $0. Got $1.$2",
+        packets.size(), test_data.PacketCount(),
+        missing_packets.empty()
+            ? ""
+            : absl::Substitute(" Missing packets [$0]",
+                               absl::StrJoin(missing_packets, ", ")));
+    if (missing_packets.size() < 10) { // Don't make this too noisy.
+      absl::StrAppend(
+          &error, ":\n",
+          absl::StrJoin(missing_packet_list, "\n",
+                        [](std::string *out, const packetlib::Packet &packet) {
+                          absl::StrAppend(out, packet.ShortDebugString());
+                        }));
+    }
+    errors.push_back(std::move(error));
+  }
+  // Clean up.
+  if (absl::Status finished = control_p4_session->Finish(); !finished.ok()) {
+    errors.push_back(absl::StrCat("Failed control_p4_session->Finish(): ",
+                                  finished.message()));
   }
   if (errors.empty()) return absl::OkStatus();
   return absl::InternalError(absl::StrJoin(errors, "\n"));
@@ -686,64 +697,50 @@ void HashTest::ForwardAllPacketsToMembers(
     std::vector<pins::GroupMember> &members) {
   auto &testbed = GetMirrorTestbed();
   ASSERT_OK_AND_ASSIGN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
-  ASSERT_OK_AND_ASSIGN(
-      auto session, ConfigureSwitchAndReturnP4RuntimeSession(
-                        testbed.Sut(), /*gnmi_config=*/std::nullopt, p4info));
-  ASSERT_OK(pins::ProgramNextHops(testbed.Environment(), *session, ir_p4info,
-                                  members));
+  ASSERT_OK(pins::ProgramNextHops(testbed.Environment(), sut_p4_session(),
+                                  ir_p4info, members));
 
-  ASSERT_OK(pins::ProgramGroupWithMembers(testbed.Environment(), *session,
-                                          ir_p4info, "group-1", members,
-                                          p4::v1::Update::INSERT))
+  ASSERT_OK(pins::ProgramGroupWithMembers(
+      testbed.Environment(), sut_p4_session(), ir_p4info, "group-1", members,
+      p4::v1::Update::INSERT))
       << "Failed to program WCMP group.";
 
-  std::vector<p4::v1::TableEntry> pi_entries;
+  std::vector<p4::v1::Entity> pi_entities;
   // Create default VRF.
-  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
+  ASSERT_OK_AND_ASSIGN(p4::v1::Entity pi_entity,
+                       pdpi::PdTableEntryToPiEntity(
                            ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
                                           kAddVrfTableEntry)));
-  pi_entries.push_back(pi_entry);
+  pi_entities.push_back(pi_entity);
 
   // Set default VRF for all packets.
-  ASSERT_OK_AND_ASSIGN(pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
+  ASSERT_OK_AND_ASSIGN(pi_entity,
+                       pdpi::PdTableEntryToPiEntity(
                            ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
                                           kSetVrfTableEntry)));
-  pi_entries.push_back(pi_entry);
+  pi_entities.push_back(pi_entity);
 
   // Add flows to allow all unicast destination mac addresses.
-  ASSERT_OK_AND_ASSIGN(pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
+  ASSERT_OK_AND_ASSIGN(pi_entity,
+                       pdpi::PdTableEntryToPiEntity(
                            ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
                                           kL3AdmitUnicastTableEntry)));
-  pi_entries.push_back(pi_entry);
+  pi_entities.push_back(pi_entity);
 
   // Add minimal set of flows to allow forwarding.
-  ASSERT_OK_AND_ASSIGN(pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
+  ASSERT_OK_AND_ASSIGN(pi_entity,
+                       pdpi::PdTableEntryToPiEntity(
                            ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
                                           kIpv4DefaultRouteEntry)));
-  pi_entries.push_back(pi_entry);
+  pi_entities.push_back(pi_entity);
 
-  ASSERT_OK_AND_ASSIGN(pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
+  ASSERT_OK_AND_ASSIGN(pi_entity,
+                       pdpi::PdTableEntryToPiEntity(
                            ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(
                                           kIpv6DefaultRouteEntry)));
-  pi_entries.push_back(pi_entry);
+  pi_entities.push_back(pi_entity);
 
-  ASSERT_OK(pdpi::InstallPiTableEntries(session.get(), ir_p4info, pi_entries));
-}
-
-absl::Status HashTest::SendPacketsAndRecordResultsPerTestConfig(
-    const TestConfigurationMap &test_configs,
-    const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
-    const P4rtPortId &ingress_port_id, int num_packets,
-    absl::node_hash_map<std::string, TestData> &output_record) {
-  ASSIGN_OR_RETURN(TestPacketMap test_packets,
-                   GeneratePackets(test_configs, num_packets));
-  return SendPacketsAndRecordResultsPerTest(test_packets, p4info, test_stage,
-                                            ingress_port_id, output_record);
+  ASSERT_OK(pdpi::InstallPiEntities(&sut_p4_session(), ir_p4info, pi_entities));
 }
 
 absl::Status HashTest::SendPacketsAndRecordResultsPerTest(
@@ -772,11 +769,14 @@ HashTest::GnmiInterfaceName(const P4rtPortId &port_id) const {
 }
 
 absl::StatusOr<p4::config::v1::P4Info> HashTest::GetSutP4Info() {
-  return GetP4Info(GetMirrorTestbed().Sut());
+  return GetP4Info(sut_p4_session());
 }
 
-absl::StatusOr<p4::config::v1::P4Info> HashTest::GetControlSwitchP4Info() {
-  return GetP4Info(GetMirrorTestbed().ControlSwitch());
+absl::Status HashTest::UpdateSutP4Info(const p4::config::v1::P4Info &p4_info) {
+  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      &sut_p4_session(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      p4_info);
 }
 
 } // namespace pins_test
