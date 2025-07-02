@@ -75,7 +75,9 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
                                   port_info.curr_breakout_mode));
 
   LOG(INFO) << "Using port " << port_info.port_name
-            << " with current breakout mode " << port_info.curr_breakout_mode;
+            << " with current breakout mode " << port_info.curr_breakout_mode
+            << " and port in use " << port_in_use;
+
   // Verify that all ports for the selected port are operationally up.
   for (const auto& p : orig_breakout_info) {
     ASSERT_OK_AND_ASSIGN(
