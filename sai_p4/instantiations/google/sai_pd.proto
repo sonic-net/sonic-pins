@@ -420,7 +420,6 @@ message AclIngressTableEntry {
       AclCopyAction acl_copy = 1;
       AclTrapAction acl_trap = 2;
       AclForwardAction acl_forward = 3;
-      AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
       RedirectToNexthopAction redirect_to_nexthop = 7;
       // CAUTION: This action is not (yet) supported.

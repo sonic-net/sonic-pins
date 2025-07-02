@@ -39,6 +39,7 @@ control l3_admit(in headers_t headers,
     // Failed ingress VLAN check should prevent packet from being admitted to
     // L3 routing.
     if (local_metadata.enable_vlan_checks &&
+        local_metadata.enable_ingress_vlan_checks &&
         !local_metadata.ingress_port_is_member_of_vlan &&
         !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
       // Explicitly reject VLAN packets from L3 routing to cancel override
