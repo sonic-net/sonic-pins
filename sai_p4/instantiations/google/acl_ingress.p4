@@ -141,6 +141,13 @@ control acl_ingress(in headers_t headers,
     //  * This action should model behaviors.
   }
 
+  @id(ACL_INGRESS_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
+  action set_cpu_queue_and_cancel_copy(
+      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+    cancel_copy = true;
+  }
+
   // Forwards green packets normally and sets their DSCP to the given value.
   // Otherwise, drops packets and ensures that they are not copied to the CPU.
   // Also sets CPU queue, Multicast queue, and Unicast queue, with different
@@ -253,7 +260,7 @@ control acl_ingress(in headers_t headers,
     standard_metadata.mcast_grp = 0;
   }
 
-  @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP)
+  @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
@@ -555,16 +562,32 @@ control acl_ingress(in headers_t headers,
     multicast_group_id != 0;
   ")
   action redirect_to_ipmc_group(
-    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
-    @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
-    @refers_to(builtin::multicast_group_table, multicast_group_id)
-    multicast_group_id_t multicast_group_id) {
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+      @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
+      @refers_to(builtin::multicast_group_table, multicast_group_id)
+      multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
     local_metadata.acl_ingress_ipmc_redirect = true;
 
     // Cancel other forwarding decisions (if any).
     local_metadata.nexthop_id_valid = false;
     local_metadata.wcmp_group_id_valid = false;
+  }
+
+  @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_AND_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
+  @action_restriction("
+    // Disallow 0 since it encodes 'no multicast' in V1Model.
+    multicast_group_id != 0;
+  ")
+  action redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy(
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+      @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
+      @refers_to(builtin::multicast_group_table, multicast_group_id)
+      multicast_group_id_t multicast_group_id,
+      @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+    redirect_to_ipmc_group(multicast_group_id);
+    set_cpu_queue_and_cancel_copy(cpu_queue);
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID)

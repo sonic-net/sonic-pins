@@ -43,6 +43,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
     local_metadata.route_metadata = 0;
     local_metadata.bypass_ingress = false;
+    local_metadata.bypass_egress = false; 
     local_metadata.wcmp_group_id_valid = false;
     local_metadata.wcmp_group_id_value = 0;
     local_metadata.nexthop_id_valid = false;
