@@ -695,10 +695,6 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777476
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777481
     annotations: "@proto_id(5)"
   }
