@@ -30,10 +30,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status.h"
-#include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
@@ -41,6 +39,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
@@ -48,6 +47,8 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_p4info_fetcher.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 //TODO(PINS): Add Component State Helper
 //#include "swss/component_state_helper_interface.h"
 
@@ -243,12 +244,39 @@ TEST_F(VerifyTest, FailsWhenNoConfigIsSet) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST_F(VerifyTest, FailsWhenVerifyFails) {
+TEST_F(VerifyTest, FailsWhenConfigIsInvalid) {
   auto request = GetBasicForwardingRequest();
   request.set_action(SetForwardingPipelineConfigRequest::VERIFY);
   *request.mutable_config()->mutable_p4info() =
       sai::GetP4Info(sai::Instantiation::kMiddleblock);
   request.mutable_config()->mutable_p4info()->clear_actions();
+
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(VerifyTest, FailsWhenContraintsAreInvalid) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::VERIFY);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Set the faulty annotation. Modify an annotation if present. otherwise, add
+  // a faulty annotation.
+  auto &table = *request.mutable_config()->mutable_p4info()->mutable_tables(0);
+  if (pdpi::GetAnnotationBody("entry_restriction",
+                              table.preamble().annotations())
+          .ok()) {
+    for (auto &annotation : *table.mutable_preamble()->mutable_annotations()) {
+      if (auto parsed = pdpi::ParseAnnotation(annotation);
+          parsed.ok() && parsed->label == "entry_restriction") {
+        annotation = "@entry_restriction(some garbage)";
+      }
+    }
+  } else {
+    table.mutable_preamble()->add_annotations(
+        "@entry_restriction(some garbage)");
+  }
 
   EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
               StatusIs(absl::StatusCode::kInvalidArgument));
