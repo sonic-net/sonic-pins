@@ -60,6 +60,7 @@ cc_library(
     hdrs = ["component_validator.h"],
     deps = [
         ":testbed",
+        "//thinkit:ssh_client",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",

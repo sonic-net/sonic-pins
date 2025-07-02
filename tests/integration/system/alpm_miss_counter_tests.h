@@ -21,8 +21,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "glog/logging.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -30,8 +29,17 @@
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
+
+struct AlpmMissCountersTestParams {
+  thinkit::GenericTestbedInterface *testbed_interface;
+  std::string gnmi_config;
+  p4::config::v1::P4Info p4_info;
+  bool not_supported;
+};
 
 struct AlpmRouteParams {
   std::string neighbor_id;
@@ -41,9 +49,23 @@ struct AlpmRouteParams {
   std::string p4_port_id;
 };
 
-class AlpmMissCountersTest : public thinkit::GenericTestbedFixture<> {
- public:
+class AlpmMissCountersTest
+    : public ::testing::TestWithParam<AlpmMissCountersTestParams> {
+public:
   AlpmMissCountersTest() : generic_testbed_(nullptr), sut_gnmi_stub_(nullptr) {}
+
+  void SetUp() override {
+    GetParam().testbed_interface->SetUp();
+    LOG(INFO) << "SetUp complete";
+  }
+
+  void TearDown() override {
+    if (GetParam().testbed_interface != nullptr) {
+      GetParam().testbed_interface->TearDown();
+      delete GetParam().testbed_interface;
+    }
+    LOG(INFO) << "Tear down complete";
+  }
 
   void InitializeTestEnvironment(absl::string_view test_id) {
     thinkit::TestRequirements requirements =
@@ -53,8 +75,9 @@ class AlpmMissCountersTest : public thinkit::GenericTestbedFixture<> {
                    interface_mode: CONTROL_INTERFACE
                  })pb");
 
-    ASSERT_OK_AND_ASSIGN(generic_testbed_,
-                         GetTestbedWithRequirements(requirements));
+    ASSERT_OK_AND_ASSIGN(
+        generic_testbed_,
+        GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
     generic_testbed_->Environment().SetTestCaseID(test_id);
 
     absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
