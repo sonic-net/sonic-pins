@@ -206,15 +206,9 @@ struct local_metadata_t {
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bool enable_vlan_checks;
   
-  // When `enable_ingress_vlan_checks` is true, if the ingress port is not a
-  // member of the VLAN in ingress pipeline, the packet gets dropped
-  // except for reserved VIDs (0, 4095).
-  bool enable_ingress_vlan_checks;
-
-  // If false when VLAN checks are enabled, the packet does not get admitted to
-  // L3 routing.
-  bool ingress_port_is_member_of_vlan;
-
+  // If true, the packet does no go through L3 or IPMC lookup.
+  bool marked_to_drop_by_ingress_vlan_checks;
+ 
   // If true, the egress packet goes out WITHOUT a VLAN tag, otherwise if the
   // packet does not get dropped (e.g. by egress VLAN filtering, egress ACLs,
   // etc) it goes out tagged with the VID in the egress pipeline (except for
@@ -305,6 +299,14 @@ struct local_metadata_t {
   // packet_in_header on punted packets.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<PORT_BITWIDTH> packet_in_target_egress_port;
+ 
+  // When `redirect_to_port_enabled` is true, the packet will be redirected to
+  // the port specified in `redirect_port`. Note that redirect to port cancels
+  // all forwarding decisions, except for nexthop. If the packet is assigned a
+  // nexthop, the packet rewrites are determined by the the nexthop but the
+  // egress port is determined by `redirect_port`.
+  bool redirect_to_port_enabled;
+  bit<PORT_BITWIDTH> redirect_port;
 
   MeterColor_t color;
   // We consistently use local_metadata.ingress_port instead of
