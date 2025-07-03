@@ -41,20 +41,22 @@ namespace p4_fuzzer {
 struct ResourceStatistics {
   // Statistic used by all tables.
   int entries = 0;
-  // Statistics only used by tables with action profiles.
-  int total_weight = 0;
+  // Statistic used by tables with action profiles and multicast group entries.
   int total_members = 0;
+  // Statistic only used by tables with action profiles.
+  int total_weight = 0;
 };
 
 // Statistics to track peak resource usage for each table.
 struct PeakResourceStatistics {
   // Statistic used by all tables.
   int entries = 0;
+  // Statistics used by tables with action profiles and multicast group entries.
+  int total_members = 0;
+  int max_members_per_group = 0;
   // Statistics only used by tables with action profiles.
   int total_weight = 0;
-  int total_members = 0;
   int max_group_weight = 0;
-  int max_members_per_group = 0;
 };
 
 // Only a subset of the fields of TableEntry are used for equality in P4Runtime
@@ -107,8 +109,8 @@ public:
   absl::Status
   ResourceExhaustedIsAllowed(const p4::v1::TableEntry &pi_table_entry) const;
 
-  // Checks whether the given set of table entries is empty.
-  bool AllTablesEmpty() const;
+  // Checks whether all P4 tables are empty.
+  bool AllP4TablesEmpty() const;
 
   // Returns true if the table is empty.
   bool IsTableEmpty(const uint32_t table_id) const;
@@ -169,6 +171,11 @@ public:
   absl::StatusOr<PeakResourceStatistics>
   GetPeakResourceStatistics(int table_id) const;
 
+  // Returns the peak multicast group table resource statistics.
+  PeakResourceStatistics GetPeakMulticastResourceStatistics() const {
+    return peak_multicast_resource_statistics_;
+  }
+
   // Returns max number of entries seen on the switch.
   int GetMaxEntriesSeen() const { return peak_entries_seen_; }
 
@@ -223,6 +230,14 @@ private:
   absl::flat_hash_map<int, PeakResourceStatistics> peak_resource_statistics_;
   // Tracks peak resource usage of entire switch.
   int peak_entries_seen_ = 0;
+
+  absl::Status UpdateMulticastResourceStatistics(
+      const p4::v1::MulticastGroupEntry& entry, p4::v1::Update::Type type);
+
+  // Tracks current multicast resource usage.
+  ResourceStatistics current_multicast_resource_statistics_;
+  // Tracks peak multicast resource usage.
+  PeakResourceStatistics peak_multicast_resource_statistics_;
 
   // Internal overload used to apply multicast updates.
   absl::Status ApplyMulticastUpdate(const p4::v1::Update &update);
