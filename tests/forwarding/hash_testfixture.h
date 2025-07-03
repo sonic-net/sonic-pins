@@ -35,6 +35,7 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
+#include "tests/lib/packet_generator.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/test_environment.h"
 
@@ -44,6 +45,8 @@ using TestConfigurationMap =
     absl::btree_map<std::string /*test_name*/, pins::TestConfiguration>;
 using TestPacketMap =
     absl::btree_map<std::string /*test_name*/, std::vector<packetlib::Packet>>;
+using TestPacketGenOptionsMap =
+    absl::btree_map<std::string /*test_name*/, packetgen::Options>;
 
 // This class stores and reports data on received packets. Particularly, it
 // keeps track of packets based on the egress port for the SUT / ingress port of
@@ -64,8 +67,9 @@ public:
       return packets_by_port_;
     }
 
-    // Add a received packet to this test data holder.
-    void AddPacket(absl::string_view egress_port, packetlib::Packet packet)
+    // Add a received packet to this test data holder. Return false if the
+    // packet isn't part of the hashing test.
+    bool AddPacket(absl::string_view egress_port, packetlib::Packet packet)
         ABSL_LOCKS_EXCLUDED(mutex_);
 
     // Return the number of packets that have been received.
@@ -80,7 +84,13 @@ public:
                      absl::string_view artifact_name)
         ABSL_LOCKS_EXCLUDED(mutex_);
 
-  protected:
+    // Return all packets received on a particular port.
+    // Note that repeated calls will return the same set of packets unless there
+    // are new packets received from the last time it was called.
+    std::vector<packetlib::Packet> GetReceivedPacketsOnPort(
+        const P4rtPortId& port) const ABSL_LOCKS_EXCLUDED(mutex_);
+
+   protected:
     // Mutex to guard the data values. Values are written by the receiver thread
     // and read by the main thread.
     mutable absl::Mutex mutex_;
@@ -92,6 +102,13 @@ public:
     // Useful for logging.
     std::vector<std::pair<std::string, packetlib::Packet>>
         received_packets_ ABSL_GUARDED_BY(mutex_);
+  };
+
+  // This enum represents the style of packet generation to use in
+  // GeneratePackets().
+  enum class PacketGeneratorStyle {
+    kSequential,  // Values are sequentially generated with a wrap-around.
+    kUniform,     // Values are randomly distributed uniformly across the range.
   };
 
   void SetUp() override;
@@ -112,9 +129,13 @@ public:
   // values. Otherwise, packets are generated with random values across the
   // available value range. Returns an error if the config is invalid.
   static absl::StatusOr<std::vector<packetlib::Packet>> GeneratePackets(
-      const pins::TestConfiguration &test_config, int num_packets);
+      const pins::TestConfiguration& test_config, int num_packets,
+      PacketGeneratorStyle style);
   static absl::StatusOr<TestPacketMap> GeneratePackets(
-      const TestConfigurationMap &test_configs, int num_packets);
+      const TestConfigurationMap& test_configs, int num_packets,
+      PacketGeneratorStyle style);
+  static absl::StatusOr<std::vector<packetlib::Packet>> GeneratePackets(
+      const packetgen::Options& options, int num_packets);
 
   // Send and receive packets for all test configs. Save the resulting test
   // data as a map of TestConfiguration name to TestData.
@@ -129,24 +150,6 @@ public:
       absl::node_hash_map<std::string, TestData> &output_record) {
     return SendPacketsAndRecordResultsPerTest(
         test_packets, p4info, test_stage, DefaultIngressPort(), output_record);
-  }
-
-  // Send and receive packets for all test configs. Save the resulting test
-  // data as a map of TestConfiguration name to TestData.
-  absl::Status SendPacketsAndRecordResultsPerTestConfig(
-      const TestConfigurationMap &test_configs,
-      const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
-      const P4rtPortId &ingress_port_id, int num_packets,
-      absl::node_hash_map<std::string, TestData> &output_record);
-
-  absl::Status SendPacketsToDefaultPortAndRecordResultsPerTestConfig(
-      const TestConfigurationMap &test_configs,
-      const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
-      int num_packets,
-      absl::node_hash_map<std::string, TestData> &output_record) {
-    return SendPacketsAndRecordResultsPerTestConfig(
-        test_configs, p4info, test_stage, DefaultIngressPort(), num_packets,
-        output_record);
   }
 
   // Initializes the forwarding pipeline to forward all packets to the provided
@@ -208,6 +211,9 @@ const TestConfigurationMap &HashingTestConfigs();
 
 // Returns the list of all HashingTestConfigs() test names.
 const std::vector<std::string> &HashingTestConfigNames();
+
+const packetgen::Options& Ipv4HashingOptions();
+const packetgen::Options& Ipv6HashingOptions();
 
 // Return the list of all possible packet TestConfigurations that do not result
 // in a hash difference.

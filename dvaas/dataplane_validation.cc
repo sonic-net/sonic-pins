@@ -51,9 +51,11 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/pd.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/tools/auxiliary_entries_for_v1model_targets.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -103,7 +105,7 @@ absl::Status DetermineReproducibilityRate(
 // the packet in `test_outcome` to the input parameter `test_outcome`. Also
 // appends the packet trace to the test artifact writer.
 absl::Status AttachPacketTrace(
-    dvaas::PacketTestOutcome& test_outcome,
+    const pdpi::IrP4Info& ir_p4info, dvaas::PacketTestOutcome& test_outcome,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
@@ -125,8 +127,23 @@ absl::Status AttachPacketTrace(
 
   std::string summarized_packet_trace;
   for (const auto& table_apply : it->second[0].table_apply()) {
-    absl::StrAppend(&summarized_packet_trace,
-                    table_apply.hit_or_miss_textual_log(), "\n\n");
+    absl::Status status = absl::UnimplementedError("Unset error status");
+    sai::TableEntry pd_table_entry;
+    if (table_apply.has_hit() && table_apply.hit().has_table_entry()) {
+      status = pdpi::IrTableEntryToPd(
+          ir_p4info, table_apply.hit().table_entry(), &pd_table_entry);
+      if (!status.ok()) {
+        LOG(ERROR) << "Failed to convert table entry to PD: " << status;
+      }
+    }
+    if (status.ok()) {
+      absl::StrAppend(&summarized_packet_trace, "Table '",
+                      table_apply.table_name(), "': hit\n",
+                      gutil::PrintTextProto(pd_table_entry), "\n");
+    } else {
+      absl::StrAppend(&summarized_packet_trace,
+                      table_apply.hit_or_miss_textual_log(), "\n\n");
+    }
   }
   test_outcome.mutable_test_result()->mutable_failure()->set_description(
       absl::StrCat(test_outcome.test_result().failure().description(),
@@ -258,15 +275,23 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
 
-  // Retrieve loopback info from gNMI configuration and create table entries.
+  // Retrieve auxiliary entries for v1model targets.
   ASSIGN_OR_RETURN(
-      pdpi::IrEntities loopback_table_entries,
+      pdpi::IrEntities v1model_auxiliary_table_entries,
       backend.CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+
+  RETURN_IF_ERROR(writer.AppendToTestArtifact(
+      "v1model_auxiliary_table_entries.txt",
+      gutil::PrintTextProto(v1model_auxiliary_table_entries)));
 
   // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
                    pdpi::ReadIrEntitiesSorted(*sut.p4rt));
-  entities.MergeFrom(loopback_table_entries);
+  entities.MergeFrom(v1model_auxiliary_table_entries);
+
+  RETURN_IF_ERROR(
+      writer.AppendToTestArtifact("ir_entities_used_in_packet_synthesis.txt",
+                                  gutil::PrintTextProto(entities)));
 
   // Get enabled Ethernet ports from SUT's GNMI config.
   ASSIGN_OR_RETURN(std::vector<pins_test::P4rtPortId> ports,
@@ -305,13 +330,18 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
                            .synthesized_packets,
                        default_ingress_port));
 
+  RETURN_IF_ERROR(writer.AppendToTestArtifact(
+      "generated_test_vectors.txt",
+      ToString(generate_test_vectors_result.packet_test_vector_by_id)));
+
   return generate_test_vectors_result;
 }
 
 absl::Status PostProcessTestVectorFailure(
     const DataplaneValidationParams& params,
-    const PacketInjectionParams& parameters, int failure_count,
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    const PacketInjectionParams& parameters, const pdpi::IrP4Info& ir_p4info,
+    int failure_count, pdpi::P4RuntimeSession& sut,
+    pdpi::P4RuntimeSession& control_switch,
     dvaas::PacketTestOutcome& test_outcome,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
         packet_traces,
@@ -325,7 +355,7 @@ absl::Status PostProcessTestVectorFailure(
 
   // Print packet traces.
   if (params.failure_enhancement_options.print_packet_trace) {
-    RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
+    RETURN_IF_ERROR(AttachPacketTrace(ir_p4info, test_outcome, packet_traces,
                                       dvaas_test_artifact_writer));
   }
   return absl::OkStatus();
@@ -435,13 +465,12 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
     // determinism.
     ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
                      pdpi::ReadIrEntitiesSorted(*sut.p4rt));
-    // Retrieve loopback info from gNMI configuration and create table
-    // entries.
-    ASSIGN_OR_RETURN(
-        pdpi::IrEntities loopback_table_entries,
-        backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
 
-    v1model_augmented_entities.MergeFrom(loopback_table_entries);
+    // Retrieve auxiliary entries for v1model targets.
+    ASSIGN_OR_RETURN(
+        pdpi::IrEntities v1model_auxiliary_table_entries,
+        backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+    v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
     ASSIGN_OR_RETURN(auto packet_traces,
                      backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
@@ -458,9 +487,9 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
         // Remove once packet trace, replication, and
         // minimization code is stably integrated.
         absl::Status status = PostProcessTestVectorFailure(
-            params, packet_injection_params, current_failures_count++,
-            *sut.p4rt, *control_switch.p4rt, test_outcome, packet_traces,
-            dvaas_test_artifact_writer);
+            params, packet_injection_params, ir_p4info,
+            current_failures_count++, *sut.p4rt, *control_switch.p4rt,
+            test_outcome, packet_traces, dvaas_test_artifact_writer);
         if (!status.ok()) {
           LOG(WARNING) << "Failed to extract packet trace and/or replicate: "
                        << status;

@@ -320,6 +320,78 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
     });
   }
 
+  // Multicast table summaries.
+  {
+    const int kMulticastGroupTableSize = 256;
+    const int kMulticastGroupTableTotalReplicas = 2048;
+    const int kMulticastGroupTableMaxReplicasPerEntry = 8;
+
+    IrP4Info ir_info_multicast = pdpi::GetTestIrP4Info();
+    ::p4::config::v1::PlatformProperties& platform_properties =
+        *ir_info_multicast.mutable_pkg_info()->mutable_platform_properties();
+    platform_properties.set_multicast_group_table_size(
+        kMulticastGroupTableSize);
+    platform_properties.set_multicast_group_table_total_replicas(
+        kMulticastGroupTableTotalReplicas);
+    platform_properties.set_multicast_group_table_max_replicas_per_entry(
+        kMulticastGroupTableMaxReplicasPerEntry);
+
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description = "Summary With No Multicast Resource Guarantees Hit",
+        .info = "A single multicast entry added.",
+        .ir_info = ir_info_multicast,
+        .entities = {gutil::ParseProtoOrDie<IrEntity>(
+            R"pb(
+              packet_replication_engine_entry {
+                multicast_group_entry {
+                  multicast_group_id: 7
+                  replicas { port: "earth" }
+                  replicas { port: "water" }
+                  replicas { port: "fire" }
+                  replicas { port: "air" }
+                }
+              }
+            )pb")},
+        .delete_entries = false,
+    });
+
+    std::vector<IrEntity> excessive_entries;
+    excessive_entries.reserve(kMulticastGroupTableSize + 1);
+    // Construct sufficiently many unique multicast group table entries.
+    for (int i = 0; i < kMulticastGroupTableSize + 1; ++i) {
+      IrEntity multicast_entity;
+      multicast_entity.mutable_packet_replication_engine_entry()
+          ->mutable_multicast_group_entry()
+          ->set_multicast_group_id(i);
+      for (int j = 0; j < kMulticastGroupTableMaxReplicasPerEntry + 1; ++j) {
+        multicast_entity.mutable_packet_replication_engine_entry()
+            ->mutable_multicast_group_entry()
+            ->add_replicas()
+            ->set_port(absl::StrCat("port: ", j));
+      }
+      excessive_entries.push_back(multicast_entity);
+    }
+
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description = "Summary With Multicast Resource Guarantees Hit",
+        .info =
+            "Excessive entries and replicas added to mulitcast group table.",
+        .ir_info = ir_info_multicast,
+        .entities = excessive_entries,
+        .delete_entries = false,
+    });
+
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description = "Summary With Multicast Resource Limits Hit and all "
+                       "entries cleared.",
+        .info =
+            "Excessive entries and replicas added to mulitcast group table.",
+        .ir_info = ir_info_multicast,
+        .entities = excessive_entries,
+        .delete_entries = true,
+    });
+  }
+
   return test_cases;
 }
 

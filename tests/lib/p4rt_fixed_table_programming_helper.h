@@ -13,7 +13,10 @@
 // limitations under the License.
 #ifndef PINS_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
 #define PINS_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
+
+#include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -61,7 +64,7 @@ absl::StatusOr<p4::v1::Update> VrfTableUpdate(const pdpi::IrP4Info &ir_p4_info,
 //   * if action=kDrop then nexthop_id should not be set
 //   * if action=kSetNextHopId then nexthop_id should be set.
 struct IpTableOptions {
-  enum class Action { kDrop, kSetNextHopId };
+  enum class Action { kDrop, kSetNextHopId, kSetWcmpGroupId };
 
   // Match fields not marked optional must be set.
   std::string vrf_id;
@@ -70,6 +73,7 @@ struct IpTableOptions {
   // Action and Action Parameters.
   Action action = Action::kDrop;
   std::optional<std::string> nexthop_id;
+  std::optional<std::string> wcmp_group_id;
 };
 
 struct MulticastReplica {
@@ -101,6 +105,16 @@ absl::StatusOr<p4::v1::Update> MulticastGroupUpdate(
 absl::StatusOr<p4::v1::Update> MulticastRouterInterfaceTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
     const MulticastReplica& replica);
+
+absl::StatusOr<p4::v1::Update>
+MulticastRouterInterfaceTableUpdate(const pdpi::IrP4Info &ir_p4_info,
+                                    p4::v1::Update::Type type,
+                                    const MulticastReplica &replica);
+
+absl::StatusOr<p4::v1::Update>
+MulticastGroupUpdate(const pdpi::IrP4Info &ir_p4_info,
+                     p4::v1::Update::Type type, uint32_t group_id,
+                     absl::Span<MulticastReplica> replicas);
 
 // The L3 admit table can optionally admit packets based on the ingress port.
 struct L3AdmitOptions {
