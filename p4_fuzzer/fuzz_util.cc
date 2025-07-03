@@ -616,7 +616,7 @@ Update::Type FuzzUpdateType(absl::BitGen* gen, const FuzzerConfig& config,
     // nice number because it causes the switch to fill up quickly, but there is
     // still a good chance to get a couple of deletes in a row. If all tables
     // are empty, then we must use INSERT.
-    if (absl::Bernoulli(*gen, 0.7) || state.AllTablesEmpty()) {
+    if (absl::Bernoulli(*gen, 0.7) || state.AllP4TablesEmpty()) {
       return Update::INSERT;
     }
 
@@ -1087,7 +1087,7 @@ int FuzzTableId(absl::BitGen* gen, const FuzzerConfig& config) {
 
 int FuzzNonEmptyTableId(absl::BitGen* gen, const FuzzerConfig& config,
                         const SwitchState& switch_state) {
-  CHECK(!switch_state.AllTablesEmpty())  // Crash OK
+  CHECK(!switch_state.AllP4TablesEmpty())  // Crash OK
       << "state: " << switch_state.SwitchStateSummary();
   return DiscreteFromSpan(
       gen, GenerateNonEmptyWeightedTableIds(config, switch_state));
