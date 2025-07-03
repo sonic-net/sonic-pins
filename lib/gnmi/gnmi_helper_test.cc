@@ -14,6 +14,7 @@
 
 #include "lib/gnmi/gnmi_helper.h"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -3510,6 +3511,98 @@ TEST(GetBlackholeSwitchCounters, FailWithMissingField) {
   EXPECT_THAT(GetBlackholeSwitchCounters(stub),
               StatusIs(absl::StatusCode::kNotFound,
                        HasSubstr("out-discard-events not found in")));
+}
+
+TEST(GetCongestionQueueCounter, Success) {
+  static constexpr absl::string_view kQueueStateJson = R"json(
+{
+  "openconfig-qos:state": {
+    "dropped-pkts": "208223",
+    "google-pins-qos:diag": {
+      "dropped-packet-events": "1"
+    },
+    "google-pins-qos:max-periodic-queue-len": "0",
+    "max-queue-len": "27552650",
+    "name": "NC1",
+    "openconfig-qos-ext:dropped-octets": "315249622",
+    "openconfig-qos-ext:traffic-type": "UC",
+    "openconfig-qos-ext:watermark": "27552650",
+    "queue-management-profile": "staggered_queue",
+    "transmit-octets": "4339189102",
+    "transmit-pkts": "2866043"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                         path {
+                           elem { name: "qos" }
+                           elem { name: "interfaces" }
+                           elem {
+                             name: "interface"
+                             key { key: "interface-id" value: "Ethernet1/4/1" }
+                           }
+                           elem { name: "output" }
+                           elem { name: "queues" }
+                           elem {
+                             name: "queue"
+                             key { key: "name" value: "NC1" }
+                           }
+                           elem { name: "state" }
+                         }
+                         type: STATE)pb")),
+                        _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"openconfig-qos:state",
+                          /*gnmi_config=*/kQueueStateJson)),
+                      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(uint64_t queue_dropped_packet_events,
+                       GetCongestionQueueCounter("Ethernet1/4/1", "NC1", stub));
+  EXPECT_EQ(queue_dropped_packet_events, 1);
+}
+
+TEST(GetCongestionSwitchCounter, Success) {
+  static constexpr absl::string_view kCountersJson = R"json(
+{
+  "openconfig-platform:state": {
+    "google-pins-platform:blackhole": {
+      "blackhole-events": "1",
+      "fec-not-correctable-events": "2",
+      "in-discard-events": "3",
+      "in-error-events": "4",
+      "lpm-miss-events": "5",
+      "memory-error-events": "6",
+      "out-discard-events": "7"
+    },
+    "google-pins-platform:congestion": {
+      "congestion-events": "8"
+    },
+    "openconfig-p4rt:node-id": "2795043031"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                           path {
+                             elem { name: "components" }
+                             elem {
+                               name: "component"
+                               key { key: "name" value: "integrated_circuit0" }
+                             }
+                             elem { name: "integrated-circuit" }
+                             elem { name: "state" }
+                           }
+                           type: STATE)pb")),
+                        _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"openconfig-platform:state",
+                          /*gnmi_config=*/kCountersJson)),
+                      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(uint64_t congestion_switch_counter,
+                       GetCongestionSwitchCounter(stub));
+  EXPECT_EQ(congestion_switch_counter, 8);
 }
 
 TEST(GetGnmiStateLeafValue, ReturnsStateValue) {

@@ -628,6 +628,16 @@ absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
 absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
     gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Gets the congestion counter for a queue.
+absl::StatusOr<uint64_t>
+GetCongestionQueueCounter(absl::string_view interface_name,
+                          absl::string_view queue_name,
+                          gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Gets the congestion counter for the switch.
+absl::StatusOr<uint64_t>
+GetCongestionSwitchCounter(gnmi::gNMI::StubInterface &gnmi_stub);
+
 // Removes specified characters from Json object string.
 void StripSymbolFromString(std::string &str, char symbol);
 

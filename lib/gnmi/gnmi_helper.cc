@@ -2160,6 +2160,48 @@ absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
   return switch_counters;
 }
 
+absl::StatusOr<uint64_t>
+GetCongestionQueueCounter(absl::string_view interface_name,
+                          absl::string_view queue_name,
+                          gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string ops_state_path = absl::StrFormat(
+      "qos/interfaces/interface[interface-id=%s]/output/queues/queue[name=%s]/"
+      "state",
+      interface_name, queue_name);
+  const std::string kOpsParseStr = "openconfig-qos:state";
+  ASSIGN_OR_RETURN(
+      std::string queue_state_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, kOpsParseStr));
+
+  ASSIGN_OR_RETURN(json queue_state_json,
+                   json_yang::ParseJson(queue_state_info));
+  ASSIGN_OR_RETURN(
+      uint64_t dropped_packet_events,
+      ParseJsonValueAsUint(queue_state_json,
+                           {"google-pins-qos:diag", "dropped-packet-events"}));
+  return dropped_packet_events;
+}
+
+absl::StatusOr<uint64_t>
+GetCongestionSwitchCounter(gnmi::gNMI::StubInterface &gnmi_stub) {
+  const std::string kOpsStatePath =
+      "components/component[name=integrated_circuit0]/integrated-circuit/state";
+  const std::string kOpsParseStr = "openconfig-platform:state";
+  const std::string kCongestionSwitchCounterParseKey =
+      "google-pins-platform:congestion";
+  ASSIGN_OR_RETURN(
+      std::string switch_state_info,
+      GetGnmiStatePathInfo(&gnmi_stub, kOpsStatePath, kOpsParseStr));
+
+  ASSIGN_OR_RETURN(json switch_state_json,
+                   json_yang::ParseJson(switch_state_info));
+  ASSIGN_OR_RETURN(
+      uint64_t congestion_events,
+      ParseJsonValueAsUint(switch_state_json, {kCongestionSwitchCounterParseKey,
+                                               "congestion-events"}));
+  return congestion_events;
+}
+
 absl::StatusOr<std::string> ParseJsonValue(absl::string_view json) {
   nlohmann::json parsed_json = nlohmann::json::parse(json, nullptr, false);
   if (parsed_json.is_discarded()) {
