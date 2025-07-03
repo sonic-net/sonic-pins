@@ -50,6 +50,8 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -64,6 +66,7 @@ cc_test(
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -76,6 +79,20 @@ cc_library(
     deps = [
         "//p4_pdpi:ir_cc_proto",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "common_ir_table_entries_test",
+    srcs = ["common_ir_table_entries_test.cc"],
+    deps = [
+        ":common_ir_table_entries",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
