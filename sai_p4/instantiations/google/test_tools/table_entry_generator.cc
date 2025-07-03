@@ -381,6 +381,34 @@ TableEntryGenerator MirrorSessionGenerator(
   return MirrorSessionGeneratorImpl();
 }
 
+// Generator for acl_ingress_mirror_and_redirect_table.
+TableEntryGenerator AclIngressMirrorAndRedirectGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  TableEntryGenerator generator;
+  pdpi::IrTableEntry base_entry = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(
+      R"pb(
+        table_name: "acl_ingress_mirror_and_redirect_table"
+        matches {
+          name: "is_ipv6"
+          optional { value { hex_str: "0x1" } }
+        }
+        action {
+          name: "redirect_to_port"
+          params {
+            name: "redirect_port"
+            # Port 1 is almost always present in a testbed.
+            value { str: "1" }
+          }
+        }
+      )pb");
+  // Generate entries with various dst_ip values.
+  // the reason for using dst_ip is because, unlike in_port which is present
+  // only in some instantiations, dst_ip is present in all instantiations.
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, base_entry, "dst_ipv6");
+  return generator;
+}
+
 const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
   static const auto* const kUnsupportedTables =
       new absl::flat_hash_set<std::string>({
@@ -392,9 +420,12 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "wcmp_group_table",
           // Logical table that is not supported by the switch.
           "ingress_clone_table",
-          // TODO: Add support for this table once the switch
-          // supports it.
-          "acl_ingress_mirror_and_redirect_table",
+	  // No generator is needed for these tables as there can only be one
+          // entry (lpm prefix_length == 0) in these tables.
+          "disable_egress_vlan_checks_table",
+          "disable_ingress_vlan_checks_table",
+          // These tables will be deprecated in the future.
+          "disable_vlan_checks_table",
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
@@ -402,11 +433,6 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // supports it.
           "ipv4_multicast_table",
           "ipv6_multicast_table",
-          // TODO: Add support for this table once the switch
-          // supports it.
-          "disable_vlan_checks_table",
-          "disable_egress_vlan_checks_table",
-          "disable_ingress_vlan_checks_table",
           // TODO: Remove and re-enable in `GetGenerator` once
           // resource modeling is fixed.
           "multicast_router_interface_table",
@@ -442,6 +468,8 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv6_table", Ipv6TableGenerator},
       {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
+      {"acl_ingress_mirror_and_redirect_table",
+       AclIngressMirrorAndRedirectGenerator},
       // TODO: Re-enable when once modeling is fixed.
       // {"multicast_router_interface_table",
       //  MulticastRouterInterfaceTableGenerator},
