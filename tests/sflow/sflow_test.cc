@@ -1025,6 +1025,16 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "ipv6_neigh_show.txt"), result));
 
+  // APPL_DB
+  ASSERT_OK_AND_ASSIGN(
+      result, ssh_client->RunCommand(device_name,
+                                     /*command=*/
+                                     "ctr tasks exec --exec-id tmp db-con "
+                                     "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
+                                     absl::Seconds(20)));
+  EXPECT_OK(environment.StoreTestArtifact(
+      absl::StrCat(prefix, "sut_appl_db.txt"), result));
+
   // ASIC_DB
   ASSERT_OK_AND_ASSIGN(
       result, ssh_client->RunCommand(device_name,
@@ -1063,7 +1073,7 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
                                      "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
                                      absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
-      absl::StrCat(prefix, "sut_app_state_db.txt"), result));
+      absl::StrCat(prefix, "sut_appl_state_db.txt"), result));
 }
 
 // Returns OK if `sflowtool_output` has samples with `sample_rate`. Returns an
@@ -2528,11 +2538,15 @@ void SflowMirrorTestFixture::TearDown() {
   GetParam().testbed_interface->TearDown();
 }
 
-absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForGnmiConvergence(
+absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
     thinkit::MirrorTestbed& testbed, absl::string_view gnmi_config) {
+  CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
+                     /*prefix=*/"pre_nsf_", testbed.Environment());
   LOG(INFO) << "Start NSF reboot on switch";
   pins_test::Testbed testbed_variant;
   testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
+  ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_before_nsf,
+                   pins_test::TakeP4FlowSnapshot(testbed_variant));
   RETURN_IF_ERROR(pins_test::NsfReboot(testbed_variant));
   RETURN_IF_ERROR(
       pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
@@ -2541,7 +2555,13 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForGnmiConvergence(
   };
   RETURN_IF_ERROR(pins_test::ValidateTestbedState(
       testbed_variant, *GetParam().ssh_client, &image_config_params));
-  LOG(INFO) << "NSF reboot finished and gNMI config is converged.";
+  CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
+                     /*prefix=*/"post_nsf_", testbed.Environment());
+  ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_after_nsf,
+                   pins_test::TakeP4FlowSnapshot(testbed_variant));
+  RETURN_IF_ERROR(pins_test::CompareP4FlowSnapshots(p4flow_snapshot_before_nsf,
+                                                    p4flow_snapshot_after_nsf));
+  LOG(INFO) << "NSF reboot finished and switch is converged.";
   return absl::OkStatus();
 }
 
@@ -2572,8 +2592,15 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
   collector_address_and_port.push_back({collector_ipv6, collector_port_});
   ASSERT_OK_AND_ASSIGN(Port traffic_port,
                        GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
-  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces{
-      {traffic_port.interface_name, true}};
+
+  ASSERT_OK_AND_ASSIGN(
+      auto port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*sut_gnmi_stub_));
+
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
+  for (const auto& [interface_name, unused] : port_id_per_port_name) {
+    sflow_enabled_interfaces[interface_name] = true;
+  }
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
@@ -2611,12 +2638,23 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
                                  collector_ipv6, next_hop_id));
 
   ASSERT_OK(
-      NsfRebootAndWaitForGnmiConvergence(testbed, sut_gnmi_config_with_sflow));
+      NsfRebootAndWaitForConvergence(testbed, sut_gnmi_config_with_sflow));
   // Wait until all sFlow gNMI states are converged.
   ASSERT_OK(pins_test::WaitForCondition(
       VerifySflowStatesConverged, absl::Seconds(60), sut_gnmi_stub_.get(),
       agent_address_, kInbandSamplingRate, kSampleHeaderSize,
       collector_address_and_port, sflow_enabled_interfaces));
+  std::vector<std::string> interface_names;
+  for (const auto& [interface_name, _] : sflow_enabled_interfaces) {
+    interface_names.push_back(interface_name);
+  }
+  ASSERT_OK(pins_test::WaitForCondition(
+      CheckStateDbPortIndexTableExists, absl::Minutes(2),
+      *GetParam().ssh_client, testbed.Sut().ChassisName(), interface_names));
+  ASSERT_OK(pins_test::WaitForCondition(pins_test::PortsUp, absl::Minutes(3),
+                                        testbed.Sut(), interface_names,
+                                        /*with_healthz=*/false));
+  LOG(INFO) << "Sflow states are converged after NSF reboot.";
 
   // Sends traffic.
   ASSERT_OK_AND_ASSIGN(
@@ -2629,10 +2667,12 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
   absl::Notification notification;
   std::thread traffic_thread = std::thread(
       [this, control_switch_port_id, traffic_port, &notification, &testbed] {
+        LOG(INFO) << "Start sending packets from control switch after NSF.";
         ASSERT_OK(SendPacketsFromSwitchUntilNotificationReceived(
             notification, kInbandTrafficPps, control_switch_port_id,
             traffic_port.interface_name, sut_gnmi_stub_.get(),
             GetControlIrP4Info(), *control_p4_session_, testbed.Environment()));
+        LOG(INFO) << "Finished sending packets from control switch after NSF.";
       });
 
   // Push config with both control switch loopback0 IP and local loopback IP
@@ -3316,8 +3356,8 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
     sut_p4_session_ = nullptr;
   }
   if (GetParam().nsf_enabled) {
-    ASSERT_OK(NsfRebootAndWaitForGnmiConvergence(testbed,
-                                                 sut_gnmi_config_with_sflow));
+    ASSERT_OK(
+        NsfRebootAndWaitForConvergence(testbed, sut_gnmi_config_with_sflow));
   } else {
     pins_test::TestGnoiSystemColdReboot(testbed.Sut());
   }
@@ -3338,6 +3378,7 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
   ASSERT_OK(pins_test::WaitForCondition(
       CheckStateDbPortIndexTableExists, absl::Minutes(2),
       *GetParam().ssh_client, testbed.Sut().ChassisName(), interface_names));
+  LOG(INFO) << "Sflow states are converged after reboot.";
 
   for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
     ASSERT_OK_AND_ASSIGN(packets_sampled_per_interface[interface_name],

@@ -64,8 +64,9 @@ public:
       return packets_by_port_;
     }
 
-    // Add a received packet to this test data holder.
-    void AddPacket(absl::string_view egress_port, packetlib::Packet packet)
+    // Add a received packet to this test data holder. Return false if the
+    // packet isn't part of the hashing test.
+    bool AddPacket(absl::string_view egress_port, packetlib::Packet packet)
         ABSL_LOCKS_EXCLUDED(mutex_);
 
     // Return the number of packets that have been received.

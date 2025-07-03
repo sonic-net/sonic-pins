@@ -266,7 +266,6 @@ absl::StatusOr<uint64_t> GetAlpmMissStat(gnmi::gNMI::StubInterface& gnmi_stub) {
   return GetGnmiStats(gnmi_stub, state_path, resp_parse_str);
 }
 
-
 absl::StatusOr<bool> DoesPlatformSupportAlpm(
     gnmi::gNMI::StubInterface& gnmi_stub) {
   std::string state_path =
@@ -404,10 +403,8 @@ TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteHit) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("d9716769-9ca5-477b-b53b-1b96fce60e13"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
-                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
-  if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_ALPM SUT.";
+  if (GetParam().not_supported) {
+    GTEST_SKIP() << "Test is not supported.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -447,10 +444,8 @@ TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteMiss) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("07dda215-ad21-4c25-b89e-1128b3806c27"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
-                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
-  if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_Alpm SUT.";
+  if (GetParam().not_supported) {
+    GTEST_SKIP() << "Test is not supported.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -490,10 +485,8 @@ TEST_P(AlpmMissCountersTest, Ipv6AlpmRouteHit) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("552ebd5d-fa98-4298-b4ef-efab286bcc89"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
-                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
-  if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_Alpm SUT.";
+  if (GetParam().not_supported) {
+    GTEST_SKIP() << "Test is not supported.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -533,10 +526,8 @@ TEST_P(AlpmMissCountersTest, Ipv6AlpmRouteMiss) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("b8c1ba7f-a8ca-429b-bb8b-9fc479fc7e71"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
-                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
-  if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_Alpm SUT.";
+  if (GetParam().not_supported) {
+    GTEST_SKIP() << "Test is not supported.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -577,10 +568,8 @@ TEST_P(AlpmMissCountersTest, Ipv4AndIpv6AlpmRoutesHit) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("0fa17c84-fd92-4d79-a617-7b51e7b8c9ab"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
-                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
-  if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_Alpm SUT.";
+  if (GetParam().not_supported) {
+    GTEST_SKIP() << "Test is not supported.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -625,10 +614,8 @@ TEST_P(AlpmMissCountersTest, Ipv4AndIpv6AlpmRoutesMiss) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("f2b48a38-bbb3-4ec0-9f91-e596a5d3dac3"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
-                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
-  if (!is_sut_alpm) {
-    GTEST_SKIP() << "Test is not supported on non_Alpm SUT.";
+  if (GetParam().not_supported) {
+    GTEST_SKIP() << "Test is not supported.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
