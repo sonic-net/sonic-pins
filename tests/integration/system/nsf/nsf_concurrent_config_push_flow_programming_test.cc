@@ -121,6 +121,15 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
 
 TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
        NsfConcurrentConfigPushFlowProgrammingTest) {
+  thinkit::TestEnvironment& environment = std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> thinkit::TestEnvironment& { return testbed->Environment(); },
+          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
+            return testbed->Environment();
+          }},
+      testbed_);
+
   // The test needs at least 1 image_config_param to run.
   if (GetParam().image_config_params.empty()) {
     GTEST_SKIP() << "No image config params provided";
@@ -152,15 +161,6 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // Modifying existing config.
   // Creating a copy.
   ImageConfigParams modified_image_config_param = image_config_param;
-  thinkit::TestEnvironment& environment = std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> thinkit::TestEnvironment& { return testbed->Environment(); },
-          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
-            return testbed->Environment();
-          }},
-      testbed_);
-
   ASSERT_OK(environment.StoreTestArtifact("original_gnmi_config.json",
                                           image_config_param.gnmi_config));
   ASSERT_OK(environment.StoreTestArtifact(

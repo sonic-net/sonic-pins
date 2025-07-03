@@ -19,6 +19,7 @@
 // against SAI P4 programs.
 #include "absl/strings/string_view.h"
 #include "p4_pdpi/ir.pb.h"
+
 namespace pins {
 
 // Returns an IrTableEntry to the L3 Admit table to allow all traffic.
@@ -26,6 +27,14 @@ pdpi::IrTableEntry L3AdmitAllIrTableEntry();
 
 // Returns an IrTableEntry to the VRF table with the provided vrf_id.
 pdpi::IrTableEntry VrfIrTableEntry(absl::string_view vrf_id);
+
+// Returns an ACL_INGRESS flow that will match any packet and punt it to a CPU
+// queue.
+pdpi::IrTableEntry
+PuntAllPacketsToControllerIrTableEntry(absl::string_view queue_id);
+
+// Returns an ACL_PRE_INGERSS flow that will set the VRF for all traffic.
+pdpi::IrTableEntry SetVrfIdForAllPacketsIrTableEntry(absl::string_view vrf_id);
 
 } // namespace pins
 

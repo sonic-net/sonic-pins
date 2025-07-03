@@ -25,6 +25,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed_fixture.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -45,6 +46,10 @@ namespace pins_test {
 
 struct QosTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
+  std::shared_ptr<thinkit::SSHClient> ssh_client_for_nsf;
+  // If enabled, ensure there is no disruption in forwarding during NSF reboot
+  // and verify QoS features post the reboot.
+  bool nsf_reboot;
   p4::config::v1::P4Info p4info;
   std::string ingress_ports[2];
   std::string egress_port_under_test;
@@ -67,6 +72,8 @@ enum BufferConfigToBeTested {
   kSharedStaticLimit,
   kDedicatedBuffer,
 };
+
+enum TestOperations { TrafficTest, NsfRebootAndTrafficTest };
 
 // Parameters used by the tests.
 struct BufferTestParams {
