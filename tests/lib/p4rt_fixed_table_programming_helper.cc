@@ -13,9 +13,15 @@
 // limitations under the License.
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
+#include <cstdint>
+#include <string>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/types/span.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -77,20 +83,29 @@ absl::StatusOr<p4::v1::Update> IpTableUpdate(const pdpi::IrP4Info& ir_p4_info,
 
   std::string action_name;
   switch (ip_options.action) {
+    case IpTableOptions::Action::kDrop:
+      action_name = "drop";
+      break;
     case IpTableOptions::Action::kSetNextHopId:
       action_name = "set_nexthop_id";
       break;
-    case IpTableOptions::Action::kDrop:
-      action_name = "drop";
+    case pins::IpTableOptions::Action::kSetWcmpGroupId:
+      action_name = "set_wcmp_group_id";
+      break;
   }
   auto* action = ir_table_entry->mutable_action();
   action->set_name(action_name);
 
-  // optionally set the nexthop ID parameter
+  // optionally set any action parameters.
   if (ip_options.nexthop_id.has_value()) {
     auto* param = action->add_params();
     param->set_name("nexthop_id");
     param->mutable_value()->set_str(*ip_options.nexthop_id);
+  }
+  if (ip_options.wcmp_group_id.has_value()) {
+    auto* param = action->add_params();
+    param->set_name("wcmp_group_id");
+    param->mutable_value()->set_str(*ip_options.wcmp_group_id);
   }
 
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);

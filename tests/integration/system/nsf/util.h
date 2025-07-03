@@ -102,6 +102,8 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
                               bool check_interfaces_up = true);
 
+absl::Status PushConfig(absl::string_view gnmi_config, Testbed& testbed,
+                        thinkit::SSHClient& ssh_client);
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         Testbed& testbed, thinkit::SSHClient& ssh_client);
 
