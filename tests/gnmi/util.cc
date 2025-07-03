@@ -164,6 +164,13 @@ absl::Status FlapLink(gnmi::gNMI::StubInterface &gnmi_stub,
       generic_testbed, host_interface_info.peer_interface_name,
       /*is_link_up=*/true, host_interface_info.peer_device_index));
 
+  // flapping child interfaces on the host side.
+  if (absl::StartsWith(host_interface_info.peer_interface_name, "eth")) {
+    LOG(WARNING) << "Skipping link flap for control device with interface name "
+                 << host_interface_info.peer_interface_name
+                 << " since SetAdminLinkState() is not implemented.";
+    return absl::OkStatus();
+  }
   // Flaps control device port and checks that SUT’s gNMI reflects that.
   LOG(INFO) << "Set Peer interface: " << host_interface_info.peer_interface_name
             << " admin link state down.";
