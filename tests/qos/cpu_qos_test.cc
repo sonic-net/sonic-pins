@@ -14,16 +14,18 @@
 
 #include "tests/qos/cpu_qos_test.h"
 
-#include <algorithm>
+#include <bitset>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <ostream>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -47,19 +49,15 @@
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
 #include "gutil/collections.h"
-#include "gutil/overload.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "gutil/version.h"
-#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/ixia_helper.h"
-#include "lib/p4rt/packet_listener.h"
-#include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
@@ -72,7 +70,7 @@
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
-#include "p4_pdpi/string_encodings/decimal_string.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -86,7 +84,6 @@
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "tests/sflow/sflow_util.h"
-#include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/mirror_testbed.h"
@@ -118,12 +115,6 @@ const sai::NexthopRewriteOptions kNextHopRewriteOptions = {
 // Size of the "frame check sequence" (FCS) that is part of Layer 2 Ethernet
 // frames.
 constexpr int kFrameCheckSequenceSize = 4;
-
-// After pushing gNMI config to a switch, the tests sleep for this duration
-// assuming that the gNMI config will have been fully applied afterwards.
-// TODO: Instead of hard-coding this time, tests should dynamically
-// poll the state of the switch to ensure config has been applied.
-constexpr absl::Duration kTimeToWaitForGnmiConfigToApply = absl::Seconds(30);
 
 absl::Status NsfRebootHelper(Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
@@ -393,70 +384,6 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
   }
 }
 
-absl::StatusOr<packetlib::Packet> MakeIpv4PacketWithDscp(
-    const netaddr::MacAddress &dst_mac, const netaddr::Ipv4Address &dst_ip,
-    int dscp) {
-  auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(absl::Substitute(
-      R"pb(
-        headers {
-          ethernet_header {
-            ethernet_destination: "$0"
-            ethernet_source: "00:01:02:03:04:05"
-            ethertype: "0x0800"
-          }
-        }
-        headers {
-          ipv4_header {
-            dscp: "$1"
-            ecn: "0x0"
-            identification: "0xa3cd"
-            flags: "0x0"
-            fragment_offset: "0x0000"
-            ttl: "0x10"
-            protocol: "0x05"
-            ipv4_source: "10.0.0.2"
-            ipv4_destination: "$2"
-          }
-        }
-        payload: "Test packet to validate DSCP-to-queue mapping."
-      )pb",
-      dst_mac.ToString(), packetlib::IpDscp(dscp), dst_ip.ToString()));
-  RETURN_IF_ERROR(packetlib::PadPacketToMinimumSize(packet).status());
-  RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
-  return packet;
-}
-
-absl::StatusOr<packetlib::Packet> MakeIpv6PacketWithDscp(
-    const netaddr::MacAddress &dst_mac, const netaddr::Ipv6Address &dst_ip,
-    int dscp) {
-  auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(absl::Substitute(
-      R"pb(
-        headers {
-          ethernet_header {
-            ethernet_destination: "$0"
-            ethernet_source: "00:01:02:03:04:05"
-            ethertype: "0x86dd"
-          }
-        }
-        headers {
-          ipv6_header {
-            dscp: "$1"
-            ecn: "0x0"
-            flow_label: "0x00000"
-            next_header: "0xfd"  # Reserved for experimentation.
-            hop_limit: "0x40"
-            ipv6_source: "2001:db8:0:12::1"
-            ipv6_destination: "$2"
-          }
-        }
-        payload: "Test packet to validate DSCP-to-queue mapping."
-      )pb",
-      dst_mac.ToString(), packetlib::IpDscp(dscp), dst_ip.ToString()));
-  RETURN_IF_ERROR(packetlib::PadPacketToMinimumSize(packet).status());
-  RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
-  return packet;
-}
-
 // Represents a link connecting the switch under test (SUT) to a control device.
 struct SutToControlLink {
   std::string sut_port_gnmi_name;
@@ -483,22 +410,6 @@ absl::StatusOr<SutToControlLink> PickSutToControlDeviceLinkThatsUp(
       .control_device_port_gnmi_name = "Ethernet1/1/1",
       .control_device_port_p4rt_name = "1",
   };
-}
-
-absl::StatusOr<p4::v1::TableEntry> MakeRouterInterface(
-    absl::string_view router_interface_id, absl::string_view p4rt_port_name,
-    const netaddr::MacAddress &mac, const pdpi::IrP4Info &ir_p4info) {
-  ASSIGN_OR_RETURN(
-      auto pd_entry,
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            router_interface_table_entry {
-              match { router_interface_id: "$0" }
-              action { set_port_and_src_mac { port: "$1" src_mac: "$2" } }
-            }
-          )pb",
-          router_interface_id, p4rt_port_name, mac.ToString())));
-  return pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry);
 }
 
 // Returns vector of packets for which we will test that the packet does not
@@ -1618,8 +1529,15 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   constexpr absl::string_view kPuntTtl0Test = "ttl0_punt_test";
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed = std::move(generic_testbed);
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    Testbed testbed_variant = std::move(generic_testbed);
+    absl::Cleanup restore_testbed([&] {
+      // NSF `Testbed` should use raw pointer of
+      // GenericTestbed
+      generic_testbed = std::move(std::get<0>(testbed_variant));
+    });
+    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
+    // however take control of the testbed object.
+    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1935,8 +1853,15 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       ir_p4info.tables_by_name().contains(kAclIngressQosTable);
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed = std::move(generic_testbed);
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    Testbed testbed_variant = std::move(generic_testbed);
+    absl::Cleanup restore_testbed([&] {
+      // NSF `Testbed` should use raw pointer of
+      // GenericTestbed
+      generic_testbed = std::move(std::get<0>(testbed_variant));
+    });
+    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
+    // however take control of the testbed object.
+    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -2346,8 +2271,15 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
   });
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed = std::move(generic_testbed);
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    Testbed testbed_variant = std::move(generic_testbed);
+    absl::Cleanup restore_testbed([&] {
+      // NSF `Testbed` should use raw pointer of
+      // GenericTestbed
+      generic_testbed = std::move(std::get<0>(testbed_variant));
+    });
+    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
+    // however take control of the testbed object.
+    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
