@@ -52,9 +52,9 @@ ValidationResult::ValidationResult(
 std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {
   if (failure.has_minimization_analysis()) {
     return absl::StrFormat(
-        "Sending the same input packet reproduces this error %f%% of the "
+        "Sending the same input packet reproduces this error %.2f%% of the "
         "time\n%s",
-        failure.minimization_analysis().reproducibility_rate(),
+        failure.minimization_analysis().reproducibility_rate() * 100,
         failure.description());
   } else {
     return failure.description();

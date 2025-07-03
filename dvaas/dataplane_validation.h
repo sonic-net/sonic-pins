@@ -72,8 +72,8 @@ struct P4Specification {
 // `num_of_replication_attempts_per_failure` number of reruns for the first
 // `max_failures_to_attempt_to_replicate` failures.
 struct FailureEnhancementOptions {
-  int num_of_replication_attempts_per_failure = 1000;
-  int max_failures_to_attempt_to_replicate = 10;
+  int num_of_replication_attempts_per_failure = 100;
+  int max_failures_to_attempt_to_replicate = 1;
   // If true, print the packet's trace.
   bool print_packet_trace = true;
 };
