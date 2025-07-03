@@ -424,7 +424,6 @@ message AclIngressTableEntry {
       RedirectToNexthopAction redirect_to_nexthop = 7;
       // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -690,7 +689,6 @@ message AclIngressQosTableEntry {
           set_dscp_and_queues_and_deny_above_rate_limit = 6;
       // CAUTION: This action is not (yet) supported.
       SetForwardingQueuesAction set_forwarding_queues = 7;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -1113,7 +1111,6 @@ message SetOuterVlanIdAndAclMetadataAction {
   string acl_metadata = 2;  // Format::HEX_STRING / 8 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message AppendIngressAndEgressTimestampAction {
   string append_ingress_timestamp = 1;  // Format::HEX_STRING / 8 bits
   string append_egress_timestamp = 2;   // Format::HEX_STRING / 8 bits
