@@ -162,6 +162,8 @@ control acl_ingress(in headers_t headers,
       @id(6) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
         unicast_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
+    local_metadata.enable_dscp_rewrite = true;
+    local_metadata.packet_rewrites.dscp = dscp;
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
   }
@@ -558,6 +560,7 @@ control acl_ingress(in headers_t headers,
     @refers_to(builtin::multicast_group_table, multicast_group_id)
     multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
+    local_metadata.acl_ingress_ipmc_redirect = true;
 
     // Cancel other forwarding decisions (if any).
     local_metadata.nexthop_id_valid = false;
