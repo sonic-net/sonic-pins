@@ -117,10 +117,10 @@ std::vector<TestCase> GetPositiveTestCases() {
                         ethernet_header {
                           ethernet_destination: "ff:ee:dd:cc:bb:aa"
                           ethernet_source: "55:44:33:22:11:00"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -158,7 +158,7 @@ std::vector<TestCase> GetPositiveTestCases() {
                           ipv6_destination: "2001::4"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -185,7 +185,7 @@ std::vector<TestCase> GetPositiveTestCases() {
                           ipv6_destination: "2001::4"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -207,10 +207,10 @@ std::vector<TestCase> GetPositiveTestCases() {
                         ethernet_header {
                           ethernet_destination: "42:42:42:42:42:42"
                           ethernet_source: "42:42:42:42:42:42"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -226,10 +226,10 @@ std::vector<TestCase> GetPositiveTestCases() {
                         ethernet_header {
                           ethernet_destination: "5:5:5:5:5:5"
                           ethernet_source: "5:5:5:5:5:5"
-                          ethertype: "0x000e"
+                          ethertype: "0x000f"
                         }
                       }
-                      payload: "test packet #5"
+                      payload: "test packet #5:"
                     }
                   }
                 }
@@ -252,10 +252,10 @@ std::vector<TestCase> GetPositiveTestCases() {
                         ethernet_header {
                           ethernet_destination: "ff:ee:dd:cc:bb:aa"
                           ethernet_source: "55:44:33:22:11:00"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -274,10 +274,10 @@ std::vector<TestCase> GetPositiveTestCases() {
                         ethernet_header {
                           ethernet_destination: "5:5:5:5:5:5"
                           ethernet_source: "5:5:5:5:5:5"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -304,10 +304,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "ff:ee:dd:cc:bb:aa"
                           ethernet_source: "55:44:33:22:11:00"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -330,10 +330,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "42:42:42:42:42:42"
                           ethernet_source: "42:42:42:42:42:42"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -380,10 +380,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "42:42:42:42:42:42"
                           ethernet_source: "42:42:42:42:42:42"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -395,10 +395,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "5:5:5:5:5:5"
                           ethernet_source: "5:5:5:5:5:5"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #24"
+                      payload: "test packet #24:"
                     }
                   }
                 }
@@ -420,10 +420,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "42:42:42:42:42:42"
                           ethernet_source: "42:42:42:42:42:42"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -439,10 +439,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "5:5:5:5:5:5"
                           ethernet_source: "5:5:5:5:5:5"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -469,7 +469,7 @@ std::vector<TestCase> GetNegativeTestCases() {
                         }
                       }
                       # Missing IPv6 header.
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -492,10 +492,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "ff:ee:dd:cc:bb:aa"
                           ethernet_source: "55:44:33:22:11:00"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -514,10 +514,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "5:5:5:5:5:5"
                           ethernet_source: "5:5:5:5:5:5"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #24"
+                      payload: "test packet #24:"
                     }
                   }
                 }
@@ -539,10 +539,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "ff:ee:dd:cc:bb:aa"
                           ethernet_source: "55:44:33:22:11:00"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #42"
+                      payload: "test packet #42:"
                     }
                   }
                 }
@@ -565,10 +565,10 @@ std::vector<TestCase> GetNegativeTestCases() {
                         ethernet_header {
                           ethernet_destination: "5:5:5:5:5:5"
                           ethernet_source: "5:5:5:5:5:5"
-                          ethertype: "0x000f"
+                          ethertype: "0x0010"
                         }
                       }
-                      payload: "test packet #24"
+                      payload: "test packet #24:"
                     }
                   }
                 }
