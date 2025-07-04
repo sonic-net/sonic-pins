@@ -133,7 +133,7 @@ absl::Status DeleteTrafficItem(absl::string_view tref,
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed);
 
-// Same as above, except that `trefs` accept multiple traffics.By default,
+// Same as above, except that `trefs` accept multiple traffics. By default,
 // the traffics in `trefs` start in parallel; set `run_in_parallel` to false
 // to start traffics sequentially.
 absl::Status StartTraffic(absl::Span<const std::string> trefs,
