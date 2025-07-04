@@ -429,6 +429,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
+	  // TODO: Re-enable once the released version supports
+          // the action used in this table.
+          "acl_ingress_mirror_and_redirect_table",
 	  // TODO: Add support for these tables once the switch
           // supports it.
           "ipv4_multicast_table",
@@ -468,8 +471,10 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv6_table", Ipv6TableGenerator},
       {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
-      {"acl_ingress_mirror_and_redirect_table",
-       AclIngressMirrorAndRedirectGenerator},
+      // TODO: Re-enable once the released version supports
+      // the action used in this table.
+      // {"acl_ingress_mirror_and_redirect_table",
+      //  AclIngressMirrorAndRedirectGenerator},
       // TODO: Re-enable when once modeling is fixed.
       // {"multicast_router_interface_table",
       //  MulticastRouterInterfaceTableGenerator},

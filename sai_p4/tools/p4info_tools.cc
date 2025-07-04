@@ -21,6 +21,7 @@
 #include "absl/strings/str_cat.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/minimum_guaranteed_sizes.h"
 
 namespace sai {
@@ -66,14 +67,21 @@ bool ApplySumOfMembersSemanticsForActionProfiles(
 }
 
 bool ApplySumOfWeightsSemanticsForActionProfiles(
-    bool is_tor, p4::config::v1::P4Info& p4info) {
+    sai::Instantiation instantiation, p4::config::v1::P4Info& p4info) {
   int size, max_group_size;
-  if (is_tor) {
-    size = WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR;
-    max_group_size = WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR;
-  } else {
-    size = WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR;
-    max_group_size = WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR;
+  switch (instantiation) {
+    case sai::Instantiation::kTor:
+      size = WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR;
+      max_group_size = WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR;
+      break;
+    case sai::Instantiation::kFabricBorderRouter:
+    case sai::Instantiation::kMiddleblock:
+      size = WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR;
+      max_group_size =
+          WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR;
+      break;
+    case sai::Instantiation::kWbb:
+      return false;
   }
   bool modified_any_field = false;
   for (auto& action_profile : *p4info.mutable_action_profiles()) {
