@@ -55,16 +55,19 @@ const ipv4_addr_t IPV4_THIS_HOST_ON_THIS_NETWORK_VALUE = 0x00_00_00_00;
 #define IS_IPV6_MULTICAST_MAC(address) \
   (address[47:32] == 0x3333)
 
+// TODO: If it turns out that this logic does not apply to ACL 
+// redirects, call logic after `routing_lookup` but before `acl_ingress`.
 control drop_martians(in headers_t headers,
                       inout local_metadata_t local_metadata,
                       inout standard_metadata_t standard_metadata) {
   apply {
     // Drop the packet if:
+    // - Packet is not redirected by ingress ACL; or
     // - Src IPv6 address is in multicast range; or
     // - Src IPv4 address is in multicast or broadcast range; or
     // - Src/Dst IPv4/IPv6 address is a loopback address; or
     // - Dst IPv4 address is 0.X.Y.Z; or
-    // - Dst IPv4/IPv6 is the all-zero address.
+    // - Src/Dst IPv4/IPv6 is the all-zero address.
     // Rationale:
     // Src IP multicast drop: https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
     // Src/Dst IP loopback drop: https://en.wikipedia.org/wiki/Localhost#Packet_processing
@@ -74,10 +77,14 @@ control drop_martians(in headers_t headers,
     //    https://datatracker.ietf.org/doc/html/rfc6890#section-2.2.2
     // Dst IP all zeroes drop: https://en.wikipedia.org/wiki/0.0.0.0
     //    "RFC 1122 [...] prohibits this as a destination address."
-    if ((headers.ipv6.isValid() &&
+    // Src IPv4 all zeros drop: https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
+    // Src IPv6 all zeros drop: https://www.rfc-editor.org/rfc/rfc4291#section-2.5.2
+    if (!local_metadata.acl_ingress_ipmc_redirect &&
+        ((headers.ipv6.isValid() &&
             (IS_MULTICAST_IPV6(headers.ipv6.src_addr) ||
              IS_LOOPBACK_IPV6(headers.ipv6.src_addr) ||
              IS_LOOPBACK_IPV6(headers.ipv6.dst_addr) ||
+             headers.ipv6.src_addr == 0 ||
              headers.ipv6.dst_addr == 0)) ||
         (headers.ipv4.isValid() &&
             (IS_MULTICAST_IPV4(headers.ipv4.src_addr) ||
@@ -86,7 +93,8 @@ control drop_martians(in headers_t headers,
              IS_LOOPBACK_IPV4(headers.ipv4.src_addr) ||
              IS_LOOPBACK_IPV4(headers.ipv4.dst_addr) ||
              IS_THIS_HOST_ON_THIS_NETWORK_IPV4(headers.ipv4.dst_addr) ||
-             headers.ipv4.dst_addr == 0))
+             headers.ipv4.src_addr == 0 ||
+             headers.ipv4.dst_addr == 0)))
        ) {
         mark_to_drop(standard_metadata);
     }

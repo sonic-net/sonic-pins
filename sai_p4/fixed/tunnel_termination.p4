@@ -30,9 +30,7 @@ control tunnel_termination(inout headers_t headers,
 
   @id(TUNNEL_DECAP_ACTION_ID)
   action tunnel_decap() {
-    // Bmv2 does not support if statements in actions, so control metadata is
-    // set and decapping is performed post-action.
-    marked_for_ip_in_ipv6_decap = true;
+    local_metadata.tunnel_termination_table_hit = true;
   }
 
   // Models SAI_TUNNEL_TERM_TABLE.
@@ -55,7 +53,7 @@ control tunnel_termination(inout headers_t headers,
   }
 
   apply {
-    // Currently, we only model decap of IP-in-IPv6 packets
+    // Currently, we only model tunnel termination of IP-in-IPv6 packets
     // (SAI_TUNNEL_TYPE_IPINIP).
     if (headers.ipv6.isValid()) {
       // IP-in-IP encapsulation: 4in6 or 6in6.
@@ -65,7 +63,9 @@ control tunnel_termination(inout headers_t headers,
       }
     }
 
-    if (marked_for_ip_in_ipv6_decap) {
+    // Decap the packet only if BOTH tunnel termination and l3 admit tables
+    if(local_metadata.tunnel_termination_table_hit &&
+       local_metadata.admit_to_l3) {
       // Currently, this should only ever be set for IP-in-IPv6 packets.
       // TODO: Remove guard once p4-symbolic suports assertions.
 #ifndef PLATFORM_P4SYMBOLIC

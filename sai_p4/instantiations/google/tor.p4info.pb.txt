@@ -1,6 +1,6 @@
 pkg_info {
   name: "tor.p4"
-  version: "2.3.0"
+  version: "2.4.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -270,7 +270,6 @@ tables {
     alias: "disable_ingress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1163,12 +1162,8 @@ tables {
     }
   }
   action_refs {
-    id: 16777223
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
     id: 16777245
-    annotations: "@proto_id(2)"
+    annotations: "@proto_id(1)"
   }
   action_refs {
     id: 21257015
@@ -1279,7 +1274,6 @@ tables {
     alias: "disable_egress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -2030,7 +2024,6 @@ actions {
     id: 16777494
     name: "ingress.acl_ingress.redirect_to_port"
     alias: "redirect_to_port"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2047,12 +2040,13 @@ actions {
     id: 16777495
     name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
     alias: "acl_mirror_and_redirect_to_port"
-    annotations: "@unsupported"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
   params {
     id: 1
     name: "mirror_session_id"
     annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
     type_name {
       name: "mirror_session_id_t"
     }
@@ -2239,54 +2233,6 @@ actions {
 }
 actions {
   preamble {
-    id: 16777223
-    name: "ingress.mirror_session_lookup.mirror_as_ipv4_erspan"
-    alias: "mirror_as_ipv4_erspan"
-  }
-  params {
-    id: 1
-    name: "port"
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  params {
-    id: 2
-    name: "src_ip"
-    annotations: "@format(IPV4_ADDRESS)"
-    bitwidth: 32
-  }
-  params {
-    id: 3
-    name: "dst_ip"
-    annotations: "@format(IPV4_ADDRESS)"
-    bitwidth: 32
-  }
-  params {
-    id: 4
-    name: "src_mac"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-  }
-  params {
-    id: 5
-    name: "dst_mac"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-  }
-  params {
-    id: 6
-    name: "ttl"
-    bitwidth: 8
-  }
-  params {
-    id: 7
-    name: "tos"
-    bitwidth: 8
-  }
-}
-actions {
-  preamble {
     id: 16777245
     name: "ingress.mirror_session_lookup.mirror_with_vlan_tag_and_ipfix_encapsulation"
     alias: "mirror_with_vlan_tag_and_ipfix_encapsulation"
@@ -2375,7 +2321,6 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2394,7 +2339,6 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2408,7 +2352,6 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2433,7 +2376,6 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
