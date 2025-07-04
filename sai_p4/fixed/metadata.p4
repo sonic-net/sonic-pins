@@ -348,6 +348,10 @@ struct local_metadata_t {
   // on ttl=0 after rewrite.
   // actions exhibit the same behavior.
   bool acl_ingress_ipmc_redirect;
+  
+  // Indicates whether a packet was redirected from an ACL ingress entry to a
+  // Nexthop (rather than being directed through normal routing).
+  bool acl_ingress_nexthop_redirect;
 
   // Determines if packet was dropped in ACL ingress/egress stage. If true, the
   // actual call to mark_to_drop (that affects standard_metadata) takes place at
