@@ -1428,6 +1428,34 @@ tables {
 }
 tables {
   preamble {
+    id: 33554701
+    name: "ingress.acl_pre_ingress.acl_pre_ingress_csig_middleblock_table"
+    alias: "acl_pre_ingress_csig_middleblock_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@sai_acl(PRE_INGRESS)"
+    annotations: "@sai_acl_priority(13)"
+  }
+  match_fields {
+    id: 1
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  action_refs {
+    id: 16777482
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 125
+}
+tables {
+  preamble {
     id: 33554699
     name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
     alias: "acl_ingress_mirror_and_redirect_table"
@@ -2541,6 +2569,7 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -2572,6 +2601,7 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -2630,6 +2660,20 @@ actions {
     id: 16777253
     name: "egress.egress_vlan_checks.make_untagged_member"
     alias: "make_untagged_member"
+  }
+}
+actions {
+  preamble {
+    id: 16777482
+    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
+    alias: "set_outer_vlan_id"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "vlan_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
+    bitwidth: 12
   }
 }
 actions {
@@ -2713,20 +2757,6 @@ actions {
     type_name {
       name: "port_id_t"
     }
-  }
-}
-actions {
-  preamble {
-    id: 16777482
-    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
-    alias: "set_outer_vlan_id"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "vlan_id"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
-    bitwidth: 12
   }
 }
 actions {

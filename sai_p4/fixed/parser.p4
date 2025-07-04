@@ -51,7 +51,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.acl_drop = false;
     local_metadata.tunnel_termination_table_hit = false;
     local_metadata.acl_ingress_ipmc_redirect = false;
-    local_metadata.redirect_to_port_enabled = false;
+    local_metadata.redirect_port_valid = false;
     local_metadata.redirect_port = 0;
     local_metadata.acl_ingress_nexthop_redirect = false;
     // LINT.ThenChange()
