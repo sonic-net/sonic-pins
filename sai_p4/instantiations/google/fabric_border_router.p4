@@ -36,9 +36,9 @@ control ingress(inout headers_t headers,
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
       ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
-      tunnel_termination.apply(headers, local_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
+      tunnel_termination.apply(headers, local_metadata);
       routing_lookup.apply(headers, local_metadata, standard_metadata);
       acl_ingress.apply(headers, local_metadata, standard_metadata);
       routing_resolution.apply(headers, local_metadata, standard_metadata);
@@ -73,6 +73,11 @@ control egress(inout headers_t headers,
   name = PKG_INFO_NAME,
   organization = "Google",
   version = SAI_P4_PKGINFO_VERSION_LATEST
+)
+@platform_property(
+  multicast_group_table_size = MULTICAST_GROUP_TABLE_SIZE,
+  multicast_group_table_total_replicas = MULTICAST_GROUP_TABLE_TOTAL_REPLICAS,
+  multicast_group_table_max_replicas_per_entry = MULTICAST_GROUP_TABLE_MAX_REPLICAS_PER_ENTRY
 )
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;
