@@ -335,7 +335,7 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
-          // TODO: Add support for these tables once the switch
+	  // TODO: Add support for these tables once the switch
           // supports it.
           "ipv4_multicast_table",
           "ipv6_multicast_table",
