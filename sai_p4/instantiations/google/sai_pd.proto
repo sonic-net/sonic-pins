@@ -157,11 +157,8 @@ message MirrorSessionTableEntry {
   }
   Match match = 1;
   message Action {
-    oneof action {
-      MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
-      MirrorWithVlanTagAndIpfixEncapsulationAction
-          mirror_with_vlan_tag_and_ipfix_encapsulation = 2;
-    }
+  MirrorWithVlanTagAndIpfixEncapsulationAction
+      mirror_with_vlan_tag_and_ipfix_encapsulation = 1;
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -916,16 +913,6 @@ message SetNexthopIdAction {
 }
 
 message DropAction {}
-
-message MirrorAsIpv4ErspanAction {
-  string port = 1;     // Format::STRING
-  string src_ip = 2;   // Format::IPV4
-  string dst_ip = 3;   // Format::IPV4
-  string src_mac = 4;  // Format::MAC
-  string dst_mac = 5;  // Format::MAC
-  string ttl = 6;      // Format::HEX_STRING / 8 bits
-  string tos = 7;      // Format::HEX_STRING / 8 bits
-}
 
 message AdmitToL3Action {}
 
