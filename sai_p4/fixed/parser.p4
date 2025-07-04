@@ -10,6 +10,7 @@
 parser packet_parser(packet_in packet, out headers_t headers,
                      inout local_metadata_t local_metadata,
                      inout standard_metadata_t standard_metadata) {
+  // LINT.IfChange(metadata_initialization)
   state start {
     // Initialize local metadata fields.
     local_metadata.enable_vlan_checks = false;
@@ -53,7 +54,8 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.redirect_to_port_enabled = false;
     local_metadata.redirect_port = 0;
     local_metadata.acl_ingress_nexthop_redirect = false;
-
+    // LINT.ThenChange()
+    
   transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
       _              : parse_ethernet;

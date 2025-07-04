@@ -196,6 +196,7 @@ struct packet_rewrites_t {
   bit<6> dscp;
 }
 
+// LINT.IfChange
 // Local metadata for each packet being processed.
 struct local_metadata_t {
   // When `enable_vlan_checks` is true, if the ingress/egress port is not a
@@ -362,5 +363,6 @@ struct local_metadata_t {
   // ACL ingress) for punted packets.
   bool acl_drop;
 }
+// LINT.ThenChange(parser.p4:metadata_initialization)
 
 #endif  // SAI_METADATA_P4_
