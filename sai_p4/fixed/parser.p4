@@ -46,6 +46,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.nexthop_id_value = 0;
     local_metadata.ipmc_table_hit = false;
     local_metadata.acl_drop = false;
+    local_metadata.tunnel_termination_table_hit = false;
 
   transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
