@@ -61,6 +61,10 @@ control drop_martians(in headers_t headers,
                       inout local_metadata_t local_metadata,
                       inout standard_metadata_t standard_metadata) {
   apply {
+    bool acl_l3_redirect =
+          (local_metadata.acl_ingress_ipmc_redirect ||
+          local_metadata.acl_ingress_nexthop_redirect);
+
     // Drop the packet if:
     // - Packet is not redirected by ingress ACL; or
     // - Src IPv6 address is in multicast range; or
@@ -79,7 +83,9 @@ control drop_martians(in headers_t headers,
     //    "RFC 1122 [...] prohibits this as a destination address."
     // Src IPv4 all zeros drop: https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
     // Src IPv6 all zeros drop: https://www.rfc-editor.org/rfc/rfc4291#section-2.5.2
-    if (!local_metadata.acl_ingress_ipmc_redirect &&
+    // Remove `acl_l3_redirect` check when switch correctly
+    // handles martians during ACL redirection.
+    if (!acl_l3_redirect &&
         ((headers.ipv6.isValid() &&
             (IS_MULTICAST_IPV6(headers.ipv6.src_addr) ||
              IS_LOOPBACK_IPV6(headers.ipv6.src_addr) ||
