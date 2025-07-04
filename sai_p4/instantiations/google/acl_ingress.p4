@@ -162,6 +162,8 @@ control acl_ingress(in headers_t headers,
       @id(6) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
         unicast_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
+    local_metadata.enable_dscp_rewrite = true;
+    local_metadata.packet_rewrites.dscp = dscp;
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
   }
@@ -251,12 +253,11 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
-  @unsupported
   action append_ingress_and_egress_timestamp(
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)
-    bit<1> append_ingress_timestamp,
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)
-    bit<1> append_egress_timestamp) {
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
+    bit<8> append_ingress_timestamp,
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)
+    bit<8> append_egress_timestamp) {
     // Treated as a noop in P4 since we can't predict the specific timestamp
     // values.
   }  
@@ -382,7 +383,6 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
-      @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
       @proto_id(7) redirect_to_nexthop();
@@ -558,6 +558,7 @@ control acl_ingress(in headers_t headers,
     @refers_to(builtin::multicast_group_table, multicast_group_id)
     multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
+    local_metadata.acl_ingress_ipmc_redirect = true;
 
     // Cancel other forwarding decisions (if any).
     local_metadata.nexthop_id_valid = false;
@@ -565,30 +566,28 @@ control acl_ingress(in headers_t headers,
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID)
-  // TODO: Remove the unsupported annotation once we properly model
-  // the behavior of redirect to port.
-  @unsupported
   action redirect_to_port(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
     port_id_t redirect_port) {
+    // The actual redirect to port happens after routing resolution. Here we
+    // just store the redirect port in a metadata.
+    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_to_port_enabled = true;
 
-    standard_metadata.egress_spec = (bit<9>)redirect_port;
-
-    // Cancel other forwarding decisions (if any).
-    // TODO: Properly model the behavior once we understand the
-    // correct behavior of how the switch works as this is likely not reflected
-    // in the P4 model.
-    local_metadata.nexthop_id_valid = false;
+    // Cancel other forwarding decisions except for nexthop. If the packet is
+    // assigned a nexthop, the packet rewrites are determined by the nexthop but
+    // the egress port is determined by `redirect_port`.
     local_metadata.wcmp_group_id_valid = false;
     standard_metadata.mcast_grp = 0;
   }
 
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID)
-  @unsupported
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
   action acl_mirror_and_redirect_to_port(
     @id(1)
       @refers_to(mirror_session_table, mirror_session_id)
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)
       mirror_session_id_t mirror_session_id,
     @id(2)
       @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
@@ -598,13 +597,12 @@ control acl_ingress(in headers_t headers,
     acl_ingress_counter.count();
     local_metadata.marked_to_mirror = true;
     local_metadata.mirror_session_id = mirror_session_id;
-    standard_metadata.egress_spec = (bit<9>)redirect_port;
+    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_to_port_enabled = true;
 
-    // Cancel other forwarding decisions (if any).
-    // TODO: Properly model the behavior once we understand the
-    // correct behavior of how the switch works as this is likely not reflected
-    // in the P4 model.
-    local_metadata.nexthop_id_valid = false;
+    // Cancel other forwarding decisions except for nexthop. If the packet is
+    // assigned a nexthop, the packet rewrites are determined by the nexthop but
+    // the egress port is determined by `redirect_port`.
     local_metadata.wcmp_group_id_valid = false;
     standard_metadata.mcast_grp = 0;
   }
