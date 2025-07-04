@@ -136,6 +136,77 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 }  // control multicast_rewrites
 
+control ttl_logic(inout headers_t headers,
+                   in local_metadata_t local_metadata,
+                   inout standard_metadata_t standard_metadata) {
+  apply {
+    bool acl_l3_redirect =
+          (local_metadata.acl_ingress_ipmc_redirect ||
+          local_metadata.acl_ingress_nexthop_redirect);
+
+    // IPv4 TTL check.
+    if (headers.ipv4.isValid()) {
+      // Remove when switch correctly accepts TTL=1 packets.
+      if (headers.ipv4.ttl == 1 && !acl_l3_redirect) {
+          mark_to_drop(standard_metadata);
+      }
+
+      // Remove this clause and only decrement on TTL>0
+      // below when redirect to nexthop behavior correctly drops packets
+      // ingressing with TTL == 0.
+      if (headers.ipv4.ttl == 0 && !local_metadata.acl_ingress_nexthop_redirect) {
+          mark_to_drop(standard_metadata);
+      }
+
+      if (local_metadata.enable_decrement_ttl) {
+        // Note that this TTL can purposefully overflow when
+        // TTL == 0. The guard should be updated to preclude that when it is no
+        // longer the case.
+        headers.ipv4.ttl = headers.ipv4.ttl - 1;
+      }
+
+      // Remove ACL redirect check when redirection
+      // correctly drops TTL=0 packets.
+      // Note: This line is currently redundant, but will be needed when the
+      // bugs above are fixed and their related lines removed.
+      if (headers.ipv4.ttl == 0 && !acl_l3_redirect) {
+          mark_to_drop(standard_metadata);
+      }
+    }
+
+    // IPv6 TTL (aka hop limit) check.
+    if (headers.ipv6.isValid()) {
+      // Remove when switch correctly accepts TTL=1 packets.
+      if (headers.ipv6.hop_limit == 1 && !acl_l3_redirect) {
+          mark_to_drop(standard_metadata);
+      }
+
+      // Remove this clause and only decrement on TTL>0
+      // below when redirect to nexthop behavior correctly drops packets
+      // ingressing with TTL == 0.
+      if (headers.ipv6.hop_limit == 0 &&
+          !local_metadata.acl_ingress_nexthop_redirect) {
+          mark_to_drop(standard_metadata);
+      }
+
+      if (local_metadata.enable_decrement_ttl) {
+        // Note that this TTL can purposefully overflow when
+        // TTL == 0. The guard should be updated to preclude that when it is no
+        // longer the case.
+        headers.ipv6.hop_limit = headers.ipv6.hop_limit - 1;
+      }
+
+      // Remove ACL redirect check when redirection
+      // correctly drops TTL=0 packets.
+      // Note: This line is currently redundant, but will be needed when the
+      // bugs above are fixed and their related lines removed.
+      if (headers.ipv6.hop_limit == 0 && !acl_l3_redirect) {
+          mark_to_drop(standard_metadata);
+      }
+    }
+  }
+} // control ttl_logic
+
 // This control block applies the rewrites computed during the ingress
 // stage to the actual packet.
 control packet_rewrites(inout headers_t headers,
@@ -158,36 +229,16 @@ control packet_rewrites(inout headers_t headers,
       // packet might potentially get VLAN tagged with that VLAN id.
       local_metadata.vlan_id = local_metadata.packet_rewrites.vlan_id;
     }
-    if (headers.ipv4.isValid()) {
-      // TODO:Confirm this logic is correct. If not, remove.
-      bool acl_ipmc_redirect_on_ttl_1 = headers.ipv4.ttl == 1 &&
-           local_metadata.acl_ingress_ipmc_redirect;
-      if (headers.ipv4.ttl > 0 && local_metadata.enable_decrement_ttl) {
-        headers.ipv4.ttl = headers.ipv4.ttl - 1;
-      }
-      // TODO: Verify this is accurate when TTL rewrite is
-      // disabled and update this code if not.
-      if (headers.ipv4.ttl == 0 && !acl_ipmc_redirect_on_ttl_1)
-          mark_to_drop(standard_metadata);
-      if (local_metadata.enable_dscp_rewrite) {
+    if (local_metadata.enable_dscp_rewrite) {
+      if (headers.ipv4.isValid()) {
         headers.ipv4.dscp = local_metadata.packet_rewrites.dscp;
       }
-    }
-    if (headers.ipv6.isValid()) {
-      // TODO: Confirm this logic is correct. If not, remove.
-      bool acl_ipmc_redirect_on_hop_limit_1 = headers.ipv6.hop_limit == 1 &&
-           local_metadata.acl_ingress_ipmc_redirect;
-      if (headers.ipv6.hop_limit > 0 && local_metadata.enable_decrement_ttl) {
-        headers.ipv6.hop_limit = headers.ipv6.hop_limit - 1;
-      }
-      // TODO: Verify this is accurate when TTL rewrite is
-      // disabled and update this code if not.
-      if (headers.ipv6.hop_limit == 0 && !acl_ipmc_redirect_on_hop_limit_1)
-          mark_to_drop(standard_metadata);
-      if (local_metadata.enable_dscp_rewrite) {
+      if (headers.ipv6.isValid()) {
         headers.ipv6.dscp = local_metadata.packet_rewrites.dscp;
       }
     }
+    // Perform TTL logic after all other packet rewrites have been applied.
+    ttl_logic.apply(headers, local_metadata, standard_metadata);
   }
 }  // control packet_rewrites
 

@@ -568,9 +568,10 @@ control routing_resolution(in headers_t headers,
   }
 
   apply {
-    // TODO: Properly model the effect of admit_to_l3 on redirect
-    // in acl_ingress according to SAI.
-    if (local_metadata.admit_to_l3) {
+    // TODO: This guard is redundant because IP tables are already
+    // guarded by l3_admit (so the if any of these metadata are valid, it
+    // implies the if-guard).
+    if (local_metadata.admit_to_l3 || local_metadata.acl_ingress_nexthop_redirect) {
 
       // The lpm tables may not set a valid `wcmp_group_id`, e.g. they may drop.
       if (local_metadata.wcmp_group_id_valid) {

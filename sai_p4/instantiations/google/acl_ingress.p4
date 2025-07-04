@@ -241,6 +241,8 @@ control acl_ingress(in headers_t headers,
     @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
     @refers_to(nexthop_table, nexthop_id)
     nexthop_id_t nexthop_id) {
+    // Mark that we are using ACLs to redirect the packet to a nexthop.
+    local_metadata.acl_ingress_nexthop_redirect = true;
 
     // Set nexthop id.
     local_metadata.nexthop_id_valid = true;
@@ -771,9 +773,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(11) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
-      local_metadata.route_metadata : ternary
-          @id(12) @name("route_metadata")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
+      local_metadata.vlan_id : ternary
+          @id(12) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
