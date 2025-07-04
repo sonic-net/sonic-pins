@@ -81,6 +81,15 @@
 // semantics.
 #define WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT 4095
 
+// -- Built-in Fixed Table sizes -----------------------------------------------
+// E.g. Multicast and Clone session tables.
+
+#define MULTICAST_GROUP_TABLE_SIZE 512
+// Some replicas are reserved for defragmentation.
+#define MULTICAST_GROUP_TABLE_TOTAL_REPLICAS 3968
+#define MULTICAST_GROUP_TABLE_MAX_REPLICAS_PER_ENTRY 128
+
+
 // -- ACL Table sizes ----------------------------------------------------------
 
 #define ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 256
