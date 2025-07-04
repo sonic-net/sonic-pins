@@ -420,6 +420,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "wcmp_group_table",
           // Logical table that is not supported by the switch.
           "ingress_clone_table",
+	  // TODO: Add support, once the CSIG table is fully
+          // active. (Right now, it's just a placeholder.)
+          "acl_pre_ingress_csig_middleblock_table",
 	  // No generator is needed for these tables as there can only be one
           // entry (lpm prefix_length == 0) in these tables.
           "disable_egress_vlan_checks_table",

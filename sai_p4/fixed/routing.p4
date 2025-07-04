@@ -590,7 +590,7 @@ control routing_resolution(in headers_t headers,
       }
     }
    
-    if (local_metadata.redirect_to_port_enabled) {
+    if (local_metadata.redirect_port_valid) {
       standard_metadata.egress_spec = local_metadata.redirect_port;
     }
 

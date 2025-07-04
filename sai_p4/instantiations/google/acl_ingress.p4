@@ -575,7 +575,7 @@ control acl_ingress(in headers_t headers,
     // The actual redirect to port happens after routing resolution. Here we
     // just store the redirect port in a metadata.
     local_metadata.redirect_port = (bit<9>)redirect_port;
-    local_metadata.redirect_to_port_enabled = true;
+    local_metadata.redirect_port_valid = true;
 
     // Cancel other forwarding decisions except for nexthop. If the packet is
     // assigned a nexthop, the packet rewrites are determined by the nexthop but
@@ -600,7 +600,7 @@ control acl_ingress(in headers_t headers,
     local_metadata.marked_to_mirror = true;
     local_metadata.mirror_session_id = mirror_session_id;
     local_metadata.redirect_port = (bit<9>)redirect_port;
-    local_metadata.redirect_to_port_enabled = true;
+    local_metadata.redirect_port_valid = true;
 
     // Cancel other forwarding decisions except for nexthop. If the packet is
     // assigned a nexthop, the packet rewrites are determined by the nexthop but
