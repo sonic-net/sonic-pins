@@ -37,7 +37,7 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
 
-  EXPECT_OK(dvaas::ValidateAgaistArribaTestVector(
+  EXPECT_OK(dvaas::ValidateAgainstArribaTestVector(
       *configured_testbed.SutApi().p4rt,
       *configured_testbed.ControlSwitchApi().p4rt,
       GetParam().arriba_test_vector));

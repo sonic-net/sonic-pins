@@ -21,6 +21,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/test_vector.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -34,7 +35,12 @@ using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 // * Uniform across all packets within a packet test vector, incl. input &
 //   output packets.
 // * Unique across different packet test vectors.
-std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id);
+// Any Ethernet packet containing a payload returned by this function will be
+// at least the minimum size required by the Ethernet protocol. See
+// https://en.wikipedia.org/wiki/Ethernet_frame#Payload.
+std::string
+MakeTestPacketPayloadFromUniqueId(int unique_test_packet_id,
+                                  absl::string_view description = "");
 
 // Given a tagged packet (according to `MakeTestPacketTag`), extracts the ID
 // from the tag in its payload. Returns an error if the payload has an
