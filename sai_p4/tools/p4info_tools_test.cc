@@ -25,6 +25,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/minimum_guaranteed_sizes.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace sai {
 namespace {
@@ -262,6 +263,27 @@ TEST(SetSemanticsTest, RestOfP4InfoIsUnchanged) {
   // Check that pre-existing fields are unmodified.
   EXPECT_THAT(p4info, Partially(EqualsProto(original_p4info)));
 }
+
+using TemporarySetSemanticsTest = ::testing::TestWithParam<sai::Instantiation>;
+
+// TODO: Delete when moving to SumOfMembers semantics in head after
+// rollout.
+TEST_P(TemporarySetSemanticsTest,
+       ConfirmThatCurrentP4InfosModifiedBySetSumOfWeightsAreUnchanged) {
+  p4::config::v1::P4Info p4info = sai::GetP4Info(GetParam());
+  p4::config::v1::P4Info original_p4info = p4info;
+
+  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(GetParam(), p4info));
+  EXPECT_THAT(p4info, EqualsProto(original_p4info));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TemporarySetSemanticsTest, TemporarySetSemanticsTest,
+    testing::ValuesIn(sai::AllSaiInstantiations()),
+    [](const testing::TestParamInfo<sai::Instantiation>& info) {
+      return gutil::SnakeCaseToCamelCase(
+          sai::InstantiationToString(info.param));
+    });
 
 }  // namespace
 }  // namespace sai
