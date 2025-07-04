@@ -120,6 +120,21 @@ enum class InterfaceType {
   kLoopback,
 };
 
+struct BlackholePortCounters {
+  uint64_t in_discard_events = 0;
+  uint64_t out_discard_events = 0;
+  uint64_t in_error_events = 0;
+  uint64_t fec_not_correctable_events = 0;
+
+  BlackholePortCounters operator-(const BlackholePortCounters& other) const {
+    return BlackholePortCounters{
+        in_discard_events - other.in_discard_events,
+        out_discard_events - other.out_discard_events,
+        in_error_events - other.in_error_events,
+        fec_not_correctable_events - other.fec_not_correctable_events};
+  }
+};
+
 // Interface counters exposed by gNMI.
 struct Counters {
   uint64_t in_pkts = 0;
@@ -147,6 +162,7 @@ struct Counters {
   uint64_t out_ipv6_discarded_pkts = 0;
   std::optional<uint64_t> carrier_transitions;
   uint64_t timestamp_ns = 0;
+  BlackholePortCounters blackhole_counters;
 };
 
 struct BlackholeSwitchCounters {
@@ -168,21 +184,6 @@ struct BlackholeSwitchCounters {
         fec_not_correctable_events - other.fec_not_correctable_events,
         memory_error_events - other.memory_error_events,
         blackhole_events - other.blackhole_events};
-  }
-};
-
-struct BlackholePortCounters {
-  uint64_t in_discard_events = 0;
-  uint64_t out_discard_events = 0;
-  uint64_t in_error_events = 0;
-  uint64_t fec_not_correctable_events = 0;
-
-  BlackholePortCounters operator-(const BlackholePortCounters& other) const {
-    return BlackholePortCounters{
-        in_discard_events - other.in_discard_events,
-        out_discard_events - other.out_discard_events,
-        in_error_events - other.in_error_events,
-        fec_not_correctable_events - other.fec_not_correctable_events};
   }
 };
 
@@ -461,6 +462,12 @@ absl::StatusOr<std::vector<std::string>>
 GetNUpInterfacePortIds(gnmi::gNMI::StubInterface &stub, int num_interfaces,
                        absl::Duration timeout = absl::Seconds(60));
 
+// Checks the switch's gNMI state for N Ethernet ports with Port ID. If the
+// switch does not have enough ports meeting this condition then an error is
+// returned.
+absl::StatusOr<std::vector<std::string>> GetNEthernetInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces);
+
 // Deterministically modifies the config of `gnmi_stub` to map all
 // `desired_p4rt_ids` to interfaces on the switch that match the given
 // `predicate`. If too few interfaces match the `predicate` to map all
@@ -627,6 +634,14 @@ absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
 // Gets blackhole counters for the switch.
 absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
     gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Fetches the congestion counters for all queues for all ports. Returns a
+// hash_map from port name to another hash_map. The latter hash map maps queue
+// name to the value of corresponding congestion counter
+// (dropped-packet-events).
+absl::StatusOr<absl::flat_hash_map<std::string,
+                                   absl::flat_hash_map<std::string, uint64_t>>>
+GetCongestionQueueCounters(gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets the congestion counter for a queue.
 absl::StatusOr<uint64_t>
