@@ -272,11 +272,14 @@ control routing_lookup(in headers_t headers,
     if (headers.ipv4.isValid()) {
       if (IS_MULTICAST_IPV4(headers.ipv4.dst_addr)) {
         if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
-          ipv4_multicast_table.apply();
-          local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-          // TODO: Use commented out code instead, once p4-symbolic
-          // supports it.
-          // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+          // Packets failing ingress VLAN checks do not go through IPMC lookup
+          if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+            ipv4_multicast_table.apply();
+            local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+            // TODO: Use commented out code instead, once
+            // p4-symbolic supports it.
+            // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+          }
         }
       } else { // IPv4 unicast.
         if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
@@ -287,11 +290,14 @@ control routing_lookup(in headers_t headers,
     } else if (headers.ipv6.isValid()) {
       if (IS_MULTICAST_IPV6(headers.ipv6.dst_addr)) {
         if (IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
-          ipv6_multicast_table.apply();
-          local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-          // TODO: Use commented out code instead, once p4-symbolic
-          // supports it.
-          // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+          // Packets failing ingress VLAN checks do not go through IPMC lookup
+          if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+            ipv6_multicast_table.apply();
+            local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+            // TODO: Use commented out code instead, once
+            // p4-symbolic supports it.
+            // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+          }
         }
       } else { // IPv6 unicast.
         if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
@@ -562,9 +568,10 @@ control routing_resolution(in headers_t headers,
   }
 
   apply {
-    // TODO: Properly model the effect of admit_to_l3 on redirect
-    // in acl_ingress according to SAI.
-    if (local_metadata.admit_to_l3) {
+    // TODO: This guard is redundant because IP tables are already
+    // guarded by l3_admit (so the if any of these metadata are valid, it
+    // implies the if-guard).
+    if (local_metadata.admit_to_l3 || local_metadata.acl_ingress_nexthop_redirect) {
 
       // The lpm tables may not set a valid `wcmp_group_id`, e.g. they may drop.
       if (local_metadata.wcmp_group_id_valid) {
@@ -588,6 +595,11 @@ control routing_resolution(in headers_t headers,
         }
       }
     }
+   
+    if (local_metadata.redirect_to_port_enabled) {
+      standard_metadata.egress_spec = local_metadata.redirect_port;
+    }
+
     // Add metadata that is relevant for punted packets.
     local_metadata.packet_in_target_egress_port = standard_metadata.egress_spec;
     local_metadata.packet_in_ingress_port = standard_metadata.ingress_port;
