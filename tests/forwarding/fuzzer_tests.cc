@@ -54,8 +54,6 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/sequencing.h"
 #include "proto/gnmi/gnmi.pb.h"
-// TODO: A temporary dependence on SAI to mask a bug. Ideally, safe
-// to remove in April 2024.
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/thinkit_sanity_tests.h"
@@ -346,21 +344,14 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
       EXPECT_NE(status.code(), google::rpc::Code::INTERNAL)
           << "Fuzzing should never cause an INTERNAL error, but got: "
           << status.DebugString();
-      // Check resource exhaustion.
-      // Check for invalid multicast resource exhaustion
-      // once multicast resource are modeled.
-      if (status.code() == google::rpc::Code::RESOURCE_EXHAUSTED &&
-          update.entity().has_table_entry()) {
-        int table_id = update.entity().table_entry().table_id();
+      if (status.code() == google::rpc::Code::RESOURCE_EXHAUSTED) {
         ASSERT_OK_AND_ASSIGN(
-            const pdpi::IrTableDefinition& table,
-            gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(), table_id));
+            std::string table_name,
+            pdpi::EntityToTableName(config.GetIrP4Info(), update.entity()));
 
-        // If this isn't a specifically masked resource, then check if resource
-        // exhaustion is allowed.
-        if (!config.GetIgnoreResourceExhaustionForTable()(
-                table.preamble().alias())) {
-          // Check that table is allowed to have exhausted resources.
+        // If this isn't a specifically masked resource, then check if
+        // resource exhaustion is allowed.
+        if (!config.GetIgnoreResourceExhaustionForTable()(table_name)) {
           ASSERT_OK(switch_state_->ResourceExhaustedIsAllowed(update))
               << "\nUpdate = " << update.DebugString()
               << "\nState = " << switch_state_->SwitchStateSummary();
