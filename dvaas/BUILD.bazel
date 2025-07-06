@@ -65,9 +65,11 @@ cc_library(
 cc_test(
     name = "dataplane_validation_test",
     srcs = ["dataplane_validation_test.cc"],
+    linkstatic = True,
     deps = [
         ":dataplane_validation",
         ":packet_trace_cc_proto",
+        "//gutil:proto",
         "//gutil:status_matchers",
         "//gutil:test_artifact_writer",
         "//gutil:testing",
@@ -76,6 +78,18 @@ cc_test(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
     ],
+)
+
+cmd_diff_test(
+    name = "dataplane_validation_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :dataplane_validation_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "dataplane_validation_test.expected",
+    tools = [":dataplane_validation_test"],
 )
 
 cc_library(
@@ -244,6 +258,7 @@ cc_library(
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:bit_widths",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_pdpi/string_encodings:hex_string",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -391,6 +406,7 @@ cc_test(
         "//gutil:proto",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_pdpi/testing:test_p4info_cc",
         "@com_google_absl//absl/status",
