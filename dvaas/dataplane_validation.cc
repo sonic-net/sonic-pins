@@ -25,6 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -202,6 +203,52 @@ absl::StatusOr<P4Specification> InferP4Specification(
   return p4_spec;
 }
 
+absl::StatusOr<std::string> GetPacketTraceSummary(
+    dvaas::PacketTrace& packet_trace) {
+  std::string summarized_packet_trace;
+
+  auto indent = [](std::string_view text) {
+    return absl::StrReplaceAll(text, {{"\n", "\n  "}});
+  };
+
+  for (const dvaas::Event& event : packet_trace.events()) {
+    switch (event.event_case()) {
+      case Event::kTableApply: {
+        if (event.table_apply().hit().has_table_entry()) {
+          absl::StrAppend(&summarized_packet_trace, "Table '",
+                          event.table_apply().table_name(), "': hit\n  ",
+                          indent(gutil::PrintTextProto(
+                              event.table_apply().hit().table_entry())),
+                          "\n");
+        } else {
+          absl::StrAppend(&summarized_packet_trace,
+                          indent(event.table_apply().hit_or_miss_textual_log()),
+                          "\n\n");
+        }
+        break;
+      }
+      case Event::kMarkToDrop: {
+        absl::StrAppend(&summarized_packet_trace, "Primitive: 'mark_to_drop' (",
+                        event.mark_to_drop().source_location(), ")\n\n");
+        break;
+      }
+      case Event::kPacketReplication: {
+        absl::StrAppend(
+            &summarized_packet_trace, "Packet replication: ",
+            event.packet_replication().number_of_packets_replicated(),
+            " replicas\n\n");
+        break;
+      }
+      default: {
+        LOG(WARNING) << "Event " << event.ShortDebugString()
+                     << " not supported.";
+        break;
+      }
+    }
+  }
+  return summarized_packet_trace;
+}
+
 // Generates and returns test vectors using the backend functions
 // `SynthesizePackets` and `GeneratePacketTestVectors`. Reads the table entries,
 // P4Info, and relevant P4RT port IDs from the switch.
@@ -286,14 +333,10 @@ absl::Status AttachPacketTrace(
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
   // Store the full BMv2 textual log as test artifact.
-  ASSIGN_OR_RETURN(int test_id,
-                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
-                                                   .test_vector()
-                                                   .input()
-                                                   .packet()
-                                                   .parsed()));
   const std::string& packet_hex =
       failed_packet_test.test_run().test_vector().input().packet().hex();
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
   const std::string filename =
       "packet_" + std::to_string(test_id) + ".trace.txt";
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
@@ -306,42 +349,8 @@ absl::Status AttachPacketTrace(
   }
 
   // Augment failure description with packet trace summary.
-  std::string summarized_packet_trace;
-  for (const auto& event : it->second[0].events()) {
-    switch (event.event_case()) {
-      case Event::kTableApply: {
-        if (event.table_apply().hit().has_table_entry()) {
-          absl::StrAppend(
-              &summarized_packet_trace, "Table '",
-              event.table_apply().table_name(), "': hit\n",
-              gutil::PrintTextProto(event.table_apply().hit().table_entry()),
-              "\n");
-        } else {
-          absl::StrAppend(&summarized_packet_trace,
-                          event.table_apply().hit_or_miss_textual_log(),
-                          "\n\n");
-        }
-        break;
-      }
-      case Event::kMarkToDrop: {
-        absl::StrAppend(&summarized_packet_trace, "Primitive: 'mark_to_drop' (",
-                        event.mark_to_drop().source_location(), ")\n\n");
-        break;
-      }
-      case Event::kPacketReplication: {
-        absl::StrAppend(
-            &summarized_packet_trace, "Packet replication: ",
-            event.packet_replication().number_of_packets_replicated(),
-            "replicas\n\n");
-        break;
-      }
-      default: {
-        LOG(WARNING) << "Event " << event.ShortDebugString()
-                     << " not supported.";
-        break;
-      }
-    }
-  }
+  ASSIGN_OR_RETURN(std::string summarized_packet_trace,
+                   GetPacketTraceSummary(it->second[0]));
   failed_packet_test.mutable_test_result()->mutable_failure()->set_description(
       absl::StrCat(
           failed_packet_test.test_result().failure().description(),

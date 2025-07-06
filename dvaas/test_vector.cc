@@ -28,6 +28,7 @@
 #include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 #include "re2/re2.h"
 
 namespace dvaas {
@@ -67,17 +68,23 @@ std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
   return payload;
 }
 
-absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet) {
+absl::StatusOr<int> ExtractIdFromTaggedPacket(absl::string_view raw_packet) {
   int tag;
-  if (!RE2::PartialMatch(packet.payload(), *kTestPacketIdRegexp, &tag)) {
+  if (!RE2::PartialMatch(raw_packet, *kTestPacketIdRegexp, &tag)) {
     return gutil::InvalidArgumentErrorBuilder()
            << "test packets must contain a tag of the form '"
            << kTestPacketIdRegexp->pattern()
-           << "' in their payload, but the given packet with payload '"
-           << packet.payload() << "' does not:\n"
-           << gutil::PrintTextProto(packet);
+           << "', but the given packet does not:\n"
+           << gutil::PrintTextProto(packetlib::ParsePacket(raw_packet));
   }
   return tag;
+}
+
+absl::StatusOr<int> ExtractIdFromTaggedPacketInHex(
+    absl::string_view packet_hex) {
+  ASSIGN_OR_RETURN(std::string raw_packet,
+                   pdpi::HexStringToByteString(absl::StrCat("0x", packet_hex)));
+  return dvaas::ExtractIdFromTaggedPacket(raw_packet);
 }
 
 std::ostream& operator<<(std::ostream& os, const SwitchOutput& output) {

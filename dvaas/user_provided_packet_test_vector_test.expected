@@ -331,7 +331,7 @@ input {
 }
 
 -- Output --------------------------------------------------
-ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: test packets must contain a tag of the form 'test packet #([0-9]+):' in their payload, but the given packet with payload 'Hi' does not:
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: test packets must contain a tag of the form 'test packet #([0-9]+):', but the given packet does not:
 headers {
   ethernet_header {
     ethernet_destination: "42:42:42:42:42:42"
@@ -398,7 +398,7 @@ acceptable_outputs {
 }
 
 -- Output --------------------------------------------------
-ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: mismatch of input packet tag vs output packet tag for output packet #1: 42 vs 24
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: mismatch of input packet id vs output packet id for output packet #1: 42 vs 24
 Dumping offending test vector:
 input {
   type: DATAPLANE
@@ -638,7 +638,7 @@ acceptable_outputs {
 }
 
 -- Output --------------------------------------------------
-ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: mismatch of input packet in tag vs output packet in tag for output packet in #1: 42 vs 24
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: mismatch of input packet in id vs output packet in id for output packet in #1: 42 vs 24
 Dumping offending test vector:
 input {
   type: DATAPLANE
