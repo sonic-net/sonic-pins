@@ -23,9 +23,9 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -179,6 +179,26 @@ enum class VlanTaggingMode {
   kTagged,
   kUntagged,
 };
+
+struct Forward {};
+
+struct RedirectToIpmcGroup {
+  int multicast_group_id = 0;
+};
+
+struct RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy {
+  int multicast_group_id = 0;
+  std::string cpu_queue;
+};
+
+struct SetCpuQueueAndCancelCopy {
+  std::string cpu_queue;
+};
+
+using MirrorAndRedirectAction =
+    std::variant<Forward, RedirectToIpmcGroup,
+                 RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy,
+                 SetCpuQueueAndCancelCopy>;
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
@@ -356,7 +376,8 @@ class EntryBuilder {
   EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
       const MirrorAndRedirectMatchFields& match_fields = {});
-  EntryBuilder& AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
+  EntryBuilder& AddIngressAclMirrorAndRedirectEntry(
+      const MirrorAndRedirectAction& action,
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIngressAclEntryRedirectingToPort(
       absl::string_view port,
