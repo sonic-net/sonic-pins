@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -26,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "gutil/overload.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
@@ -696,54 +698,20 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToMulticastGroup(
     int multicast_group_id, const MirrorAndRedirectMatchFields& match_fields) {
-  sai::AclIngressMirrorAndRedirectTableEntry& entry =
-      *entries_.add_entries()
-           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
-  if (match_fields.in_port.has_value()) {
-    entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
-  }
-  if (match_fields.ipmc_table_hit.has_value()) {
-    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
-        BoolToHexString(*match_fields.ipmc_table_hit));
-  }
-  if (match_fields.vlan_id.has_value()) {
-    entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
-    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
-  }
-  if (match_fields.is_ipv4.has_value()) {
-    entry.mutable_match()->mutable_is_ipv4()->set_value(
-        BoolToHexString(*match_fields.is_ipv4));
-  }
-  if (match_fields.is_ipv6.has_value()) {
-    entry.mutable_match()->mutable_is_ipv6()->set_value(
-        BoolToHexString(*match_fields.is_ipv6));
-  }
-  if (match_fields.dst_ip.has_value()) {
-    entry.mutable_match()->mutable_dst_ip()->set_value(
-        match_fields.dst_ip->value.ToString());
-    entry.mutable_match()->mutable_dst_ip()->set_mask(
-        match_fields.dst_ip->mask.ToString());
-  }
-  if (match_fields.dst_ipv6.has_value()) {
-    entry.mutable_match()->mutable_dst_ipv6()->set_value(
-        match_fields.dst_ipv6->value.ToString());
-    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
-        match_fields.dst_ipv6->mask.ToString());
-  }
-  entry.mutable_action()
-      ->mutable_redirect_to_ipmc_group()
-      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
-  entry.set_priority(1);
-
-  return *this;
+  return AddIngressAclMirrorAndRedirectEntry(
+      RedirectToIpmcGroup{
+          .multicast_group_id = multicast_group_id,
+      },
+      match_fields);
 }
 
-EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
+EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
+    const MirrorAndRedirectAction& action,
     const MirrorAndRedirectMatchFields& match_fields, int priority) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+
   if (match_fields.in_port.has_value()) {
     entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
   }
@@ -778,7 +746,36 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
   }
-  entry.mutable_action()->mutable_acl_forward();
+  
+  std::visit(
+      gutil::Overload{
+          [&](const Forward& action) {
+            entry.mutable_action()->mutable_acl_forward();
+          },
+          [&](const RedirectToIpmcGroup& action) {
+            entry.mutable_action()
+                ->mutable_redirect_to_ipmc_group()
+                ->set_multicast_group_id(
+                    pdpi::BitsetToHexString<16>(action.multicast_group_id));
+          },
+          [&](const RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy& action) {
+            auto& proto =
+                *entry
+                     .mutable_action()
+                     // NOLINTNEXTLINE
+                     ->mutable_redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy();
+            proto.set_multicast_group_id(
+                pdpi::BitsetToHexString<16>(action.multicast_group_id));
+            proto.set_cpu_queue(action.cpu_queue);
+          },
+          [&](const SetCpuQueueAndCancelCopy& action) {
+            entry.mutable_action()
+                ->mutable_set_cpu_queue_and_cancel_copy()
+                ->set_cpu_queue(action.cpu_queue);
+          },
+      },
+      action);
+
   entry.set_priority(priority);
   return *this;
 }
