@@ -120,10 +120,7 @@ absl::Status NsfRebootHelper(Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
   // TODO: Add punt flow before reboot,
   // send traffic and measure downtine based on traffic drop.
-  RETURN_IF_ERROR(NsfReboot(testbed));
-  RETURN_IF_ERROR(WaitForNsfReboot(testbed, *ssh_client));
-
-  return absl::OkStatus();
+  return DoNsfRebootAndWaitForSwitchReady(testbed, *ssh_client);
 }
 
 // Set up the switch to punt packets to CPU.
@@ -2105,9 +2102,11 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
                     expected_red_bytes * (1 - kMeterCounterTolerance / 100));
           // For trap action we do not expect any forwarding.
           if (acl_table_punt_action.rate_limit_action == kAclTrap) {
-            ASSERT_FALSE(ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName,
-                                                   *generic_testbed)
-                             .ok());
+            ASSERT_OK_AND_ASSIGN(
+                const ixia::TrafficItemStats kIxiaTrafficStats,
+                ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName,
+                                          *generic_testbed));
+            ASSERT_EQ(kIxiaTrafficStats.num_rx_frames(), 0);
             continue;
           }
           // Check observed traffic rate.

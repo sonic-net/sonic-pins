@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -139,6 +140,20 @@ TEST_P(L3RouteProgrammingTest, MulticastRouterInterfaceEntry) {
 
   EXPECT_THAT(pi_update, HasExactMatch("1"));
   EXPECT_THAT(pi_update, HasExactMatch("\x01\x20"));
+  EXPECT_THAT(pi_update, HasActionParam("\001\002\003\004\005"));
+}
+
+TEST_P(L3RouteProgrammingTest,
+       MulticastRouterInterfaceEntryCreatedSuccessfullyWhenInstanceIsZero) {
+  MulticastReplica replica =
+      MulticastReplica("1", /*instance=*/0, "00:01:02:03:04:05");
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
+                                          p4::v1::Update::INSERT, replica));
+
+  EXPECT_THAT(pi_update, HasExactMatch("1"));
+  EXPECT_THAT(pi_update, HasExactMatch(std::string("\0", 1)));
   EXPECT_THAT(pi_update, HasActionParam("\001\002\003\004\005"));
 }
 

@@ -30,6 +30,7 @@ cc_library(
     deps = [
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:testbed",
+        "//thinkit:ssh_client",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -43,6 +44,7 @@ cc_library(
     deps = [
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:testbed",
+        "//thinkit:ssh_client",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -56,6 +58,7 @@ cc_library(
     deps = [
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:testbed",
+        "//thinkit:ssh_client",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",

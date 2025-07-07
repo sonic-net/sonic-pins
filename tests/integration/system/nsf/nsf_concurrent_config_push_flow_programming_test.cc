@@ -14,8 +14,7 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
-#include <thread>  // NOLINT
-#include <variant>
+#include <thread> // NOLINT
 #include <vector>
 
 #include "absl/status/status.h"
@@ -24,11 +23,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "gutil/overload.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/ir.h"
@@ -42,6 +38,8 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 using ::p4::v1::Entity;
@@ -50,8 +48,7 @@ using ::p4::v1::ReadResponse;
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
 constexpr int kErrorPercentage = 1;
-constexpr absl::Duration kPollingInterval = absl::Milliseconds(500);
-constexpr absl::Duration kPollingTimeout = absl::Minutes(1);
+constexpr absl::Duration kNsfThreadDelay = absl::Seconds(1);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 
 void NsfConcurrentConfigPushFlowProgrammingTestFixture::SetUp() {
@@ -121,14 +118,7 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
 
 TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
        NsfConcurrentConfigPushFlowProgrammingTest) {
-  thinkit::TestEnvironment& environment = std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> thinkit::TestEnvironment& { return testbed->Environment(); },
-          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
-            return testbed->Environment();
-          }},
-      testbed_);
+  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
 
   // The test needs at least 1 image_config_param to run.
   if (GetParam().image_config_params.empty()) {
@@ -138,19 +128,19 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   ImageConfigParams image_config_param = GetParam().image_config_params[0];
   thinkit::Switch& sut = GetSut(testbed_);
 
+  LOG(INFO) << "Clearing the flows before the start of the test";
+  ASSERT_OK(flow_programmer_->ClearFlows(testbed_));
+
   ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_, &image_config_param));
-  ASSERT_OK(StoreSutDebugArtifacts(
-      absl::StrCat(image_config_param.image_label, "_before_nsf_reboot"),
-      testbed_));
 
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
   ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot1,
                        TakeP4FlowSnapshot(testbed_));
-  ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot1,
-      absl::StrCat(sut.ChassisName(), "_p4flow_snapshot1.txt")));
+  ASSERT_OK(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot1,
+                         "p4flow_snapshot1_before_programming_flows.txt"));
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
@@ -195,8 +185,7 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
     LOG(INFO) << "Capturing P4 snapshot before NSF reboot";
     ASSIGN_OR_RETURN(p4flow_snapshot2, TakeP4FlowSnapshot(testbed_));
     flow_programming_status = SaveP4FlowSnapshot(
-        testbed_, p4flow_snapshot2,
-        absl::StrCat(sut.ChassisName(), "_p4flow_snapshot2.txt"));
+        testbed_, p4flow_snapshot2, "p4flow_snapshot2_before_nsf.txt");
     if (flow_programming_status.ok()) {
       LOG(INFO) << "Completed programming ACL flows";
     } else {
@@ -209,19 +198,7 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   absl::Status nsf_reboot_status = absl::UnknownError("Yet to do nsf reboot");
   std::thread nsf_reboot_thread([&flow_programming_status, &config_push_status,
                                  &nsf_reboot_status, this]() -> absl::Status {
-    // Polling for 2 minutes.
-    const absl::Time polling_end_time = absl::Now() + kPollingTimeout;
-    do {
-      if (flow_programming_status.ok() && config_push_status.ok()) {
-        nsf_reboot_status = absl::OkStatus();
-        break;
-      }
-      LOG(INFO) << "Waiting for config push and flow programming to "
-                   "complete before proceeding with NSF reboot";
-      absl::SleepFor(kPollingInterval);
-    } while (absl::Now() < polling_end_time);
-    RETURN_IF_ERROR(nsf_reboot_status)
-        << "Concurrent Config Push and Flow programming failed";
+    LOG(INFO) << "Initiating NSF reboot";
     nsf_reboot_status = pins_test::NsfReboot(testbed_);
     if (nsf_reboot_status.ok()) {
       LOG(INFO) << "Successfully initiated NSF reboot";
@@ -231,22 +208,22 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // Joining all threads.
   config_push_thread.join();
   flow_programming_thread.join();
+  // Sleeping for a second before joining NSF thread. This is to make sure
+  // config push and flow programming are initiated before NSF.
+  absl::SleepFor(kNsfThreadDelay);
   nsf_reboot_thread.join();
+  ASSERT_OK(config_push_status) << "Failed to push config";
+  ASSERT_OK(flow_programming_status) << "Failed to program flows";
   ASSERT_OK(nsf_reboot_status) << "Failed to initiate NSF reboot";
-  ASSERT_OK(WaitForNsfReboot(testbed_, *ssh_client_));
-  ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_,
-                                 &modified_image_config_param));
-  ASSERT_OK(StoreSutDebugArtifacts(
-      absl::StrCat(image_config_param.image_label, "_after_nsf_reboot"),
-      testbed_));
+  ASSERT_OK(
+      WaitForNsfReboot(testbed_, *ssh_client_, &modified_image_config_param));
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after NSF reboot";
   ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot3,
                        TakeP4FlowSnapshot(testbed_));
-  ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot3,
-      absl::StrCat(sut.ChassisName(), "_p4flow_snapshot3.txt")));
+  ASSERT_OK(SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
+                               "p4flow_snapshot3_after_nsf.txt"));
 
   // Stop and validate traffic
   LOG(INFO) << "Stopping the traffic";
@@ -266,16 +243,14 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   LOG(INFO) << "Capturing P4 snapshot after clearing flows";
   ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot4,
                        TakeP4FlowSnapshot(testbed_));
-  ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot4,
-      absl::StrCat(sut.ChassisName(), "_p4flow_snapshot4.txt")));
+  ASSERT_OK(SaveP4FlowSnapshot(testbed_, p4flow_snapshot4,
+                               "p4flow_snapshot4_after_clearing_flows.txt"));
 
   LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
                "Clearing Flows";
   EXPECT_OK(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
 
-  LOG(INFO) << "Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs. After "
-               "Upgrade + NSF Reboot";
+  LOG(INFO) << "Comparing P4 snapshots - Before Vs. After NSF Reboot";
   ASSERT_OK(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
 }
 }  // namespace pins_test
