@@ -837,12 +837,15 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      AclForwardAction acl_forward = 4;
+      AclForwardAction acl_forward = 2;
       AclMirrorAction acl_mirror = 1;
-      RedirectToNexthopAction redirect_to_nexthop = 2;
-      RedirectToIpmcGroupAction redirect_to_ipmc_group = 3;
-      RedirectToPortAction redirect_to_port = 5;
-      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 6;
+      RedirectToNexthopAction redirect_to_nexthop = 4;
+      RedirectToIpmcGroupAction redirect_to_ipmc_group = 5;
+      RedirectToPortAction redirect_to_port = 6;
+      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 3;
+      RedirectToIpmcGroupAndSetCpuQueueAndCancelCopyAction
+          redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy = 7;
+      SetCpuQueueAndCancelCopyAction set_cpu_queue_and_cancel_copy = 8;
     }
   }
   Action action = 2;
@@ -1115,6 +1118,15 @@ message SetOuterVlanIdAndAclMetadataAction {
 message AppendIngressAndEgressTimestampAction {
   string append_ingress_timestamp = 1;  // Format::HEX_STRING / 8 bits
   string append_egress_timestamp = 2;   // Format::HEX_STRING / 8 bits
+}
+
+message RedirectToIpmcGroupAndSetCpuQueueAndCancelCopyAction {
+  string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
+  string cpu_queue = 2;           // Format::STRING
+}
+
+message SetCpuQueueAndCancelCopyAction {
+  string cpu_queue = 1;  // Format::STRING
 }
 
 message NoAction {}

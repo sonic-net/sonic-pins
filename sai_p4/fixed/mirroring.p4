@@ -79,9 +79,9 @@ control mirror_session_lookup(inout headers_t headers,
   }
 }  // control mirror_session_lookup
 
-control mirroring_encap(inout headers_t headers,
-                        inout local_metadata_t local_metadata,
-                        inout standard_metadata_t standard_metadata) {
+control mirror_encap(inout headers_t headers,
+                     inout local_metadata_t local_metadata,
+                     inout standard_metadata_t standard_metadata) {
   apply {
     // All mirrored packets are encapped with
     // ==================================================================
@@ -90,6 +90,9 @@ control mirroring_encap(inout headers_t headers,
     // headers. Fields for headers mostly come from mirror-related
     // local_metadata.
     if (IS_MIRROR_COPY(standard_metadata)) {
+      // Mirrored packets do not traverse the usual egress pipeline.
+      local_metadata.bypass_egress = true;
+
       headers.mirror_encap_ethernet.setValid();
       headers.mirror_encap_ethernet.src_addr =
        local_metadata.mirror_encap_src_mac;
@@ -139,6 +142,6 @@ control mirroring_encap(inout headers_t headers,
       headers.mirror_encap_psamp_extended.setValid();
     }
   }
-}  // control mirroring_encap
+}  // control mirror_encap
 
 #endif  // SAI_MIRRORING_P4_
