@@ -56,9 +56,9 @@ control egress(inout headers_t headers,
     packet_in_encap.apply(headers, local_metadata, standard_metadata);
     // TODO: Remove if statement once exit is supported in
     // p4-symbolic.
-    if (!IS_PACKET_IN_COPY(standard_metadata)) {
+    if (!local_metadata.bypass_egress) {
       packet_rewrites.apply(headers, local_metadata, standard_metadata);
-      mirroring_encap.apply(headers, local_metadata, standard_metadata);
+      mirror_encap.apply(headers, local_metadata, standard_metadata);
       egress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       vlan_tag.apply(headers, local_metadata, standard_metadata);
       acl_egress.apply(headers, local_metadata, standard_metadata);
