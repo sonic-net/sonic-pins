@@ -20,6 +20,8 @@
 #include <memory>
 #include <string>
 #include <thread> // NOLINT
+#include <utility>
+#include <vector>
 
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
@@ -230,14 +232,6 @@ private:
 
   absl::Status HandlePacketOutRequest(const p4::v1::PacketOut &packet_out)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
-
-  // Verify that the target can realize the given config. Will not modify the
-  // forwarding state in the target.
-  //
-  // Returns an error if the config is not provided of if the provided config
-  // cannot be realized.
-  grpc::Status VerifyPipelineConfig(
-      const p4::v1::SetForwardingPipelineConfigRequest &request) const;
 
   // Verify, save and realize the given config. Today we DO NOT support clearing
   // any forwarding state, and we will return a failure if a config has already

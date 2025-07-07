@@ -33,6 +33,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
@@ -60,6 +61,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/translation_options.h"
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/entity_update.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/p4runtime_read.h"
@@ -96,6 +98,12 @@ grpc::Status EnterCriticalState(const std::string& message) {
   LOG(FATAL) << "Entering critical state: " << message;
   return grpc::Status::OK;
 }
+
+// Information processed from the forwarding pipeline configuration.
+struct ConfigInfo {
+  pdpi::IrP4Info ir_p4info;
+  p4_constraints::ConstraintInfo constraints;
+};
 
 std::string GetKeyErrorMessage(pdpi::IrEntity entity,
                                const std::string& extra) {
@@ -143,24 +151,6 @@ absl::Status AllowRoleAccessToTable(const std::string& role_name,
   return absl::OkStatus();
 }
 
-sonic::AppDbTableType GetAppDbTableType(const pdpi::IrEntity& ir_entity) {
-  switch (ir_entity.entity_case()) {
-    case pdpi::IrEntity::kTableEntry:
-      if (ir_entity.table_entry().table_name() == "vrf_table") {
-        return sonic::AppDbTableType::VRF_TABLE;
-      }
-      // By default we assume and AppDb P4RT entry.
-      return sonic::AppDbTableType::P4RT;
-      break;
-    case pdpi::IrEntity::kPacketReplicationEngineEntry:
-      return sonic::AppDbTableType::P4RT;
-      break;
-    default:
-      break;
-  }
-  return sonic::AppDbTableType::UNKNOWN;
-}
-
 // Generates a StreamMessageResponse error based on an absl::Status.
 p4::v1::StreamMessageResponse GenerateErrorResponse(absl::Status status) {
   grpc::Status grpc_status = gutil::AbslStatusToGrpcStatus(status);
@@ -197,8 +187,8 @@ bool P4InfoEquals(const p4::config::v1::P4Info& left,
 }
 
 absl::Status VerifyEntityCacheForExistence(
-    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& cache,
-    const sonic::AppDbEntry& entry) {
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> &cache,
+    const EntityUpdate &entry) {
   bool exists = false;
   auto iter = cache.find(entry.entity_key);
   if (iter != cache.end()) exists = true;
@@ -266,13 +256,13 @@ absl::Status ValidateTableEntryConstraints(
   return absl::OkStatus();
 }
 
-absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
-    const pdpi::IrP4Info& p4_info, const p4::v1::Update& pi_update,
-    const std::string& role_name,
-    const p4_constraints::ConstraintInfo& constraint_info,
+absl::StatusOr<EntityUpdate> PiUpdateToEntityUpdate(
+    const pdpi::IrP4Info &p4_info, const p4::v1::Update &pi_update,
+    const std::string &role_name,
+    const p4_constraints::ConstraintInfo &constraint_info,
     bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator) {
+    const boost::bimap<std::string, std::string> &port_translation_map,
+    const CpuQueueTranslator &cpu_queue_translator) {
   const auto pdpi_options = pdpi::TranslationOptions{
       // When deleting we only consider the key. Actions don't matter so we
       // don't waste time trying to translate that part even if the controller
@@ -332,27 +322,32 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
 
   ASSIGN_OR_RETURN(auto entity_key,
                    pdpi::EntityKey::MakeEntityKey(*normalized_pi_entry));
-  return sonic::AppDbEntry{
+
+  ASSIGN_OR_RETURN(
+      auto app_db_update,
+      sonic::CreateAppDbUpdate(pi_update.type(), *ir_entity, p4_info));
+
+  return EntityUpdate{
       .entry = *ir_entity,
       .update_type = pi_update.type(),
       .pi_entity = *normalized_pi_entry,
       .entity_key = entity_key,
-      .appdb_table = GetAppDbTableType(*ir_entity),
+      .app_db_update = app_db_update,
   };
 }
 
-sonic::AppDbUpdates PiEntityUpdatesToIr(
-    const p4::v1::WriteRequest& request, const pdpi::IrP4Info& p4_info,
-    const EntityMap& entity_cache,
-    const ActionProfileCapacityMap& capacity_by_action_profile_name,
-    const p4_constraints::ConstraintInfo& constraint_info,
+std::vector<EntityUpdate> PiEntityUpdatesToIr(
+    const p4::v1::WriteRequest &request, const pdpi::IrP4Info &p4_info,
+    const EntityMap &entity_cache,
+    const ActionProfileCapacityMap &capacity_by_action_profile_name,
+    const p4_constraints::ConstraintInfo &constraint_info,
     bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator,
-    pdpi::IrWriteResponse* response) {
+    const boost::bimap<std::string, std::string> &port_translation_map,
+    const CpuQueueTranslator &cpu_queue_translator,
+    pdpi::IrWriteResponse *response) {
   absl::flat_hash_set<pdpi::EntityKey> keys_in_request;
   bool has_duplicates = false;
-  sonic::AppDbUpdates ir_updates;
+  std::vector<EntityUpdate> updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
 
   // Fail on first error.
@@ -361,33 +356,33 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
 
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
-    absl::StatusOr<sonic::AppDbEntry> app_db_entry = PiUpdateToAppDbEntry(
+    absl::StatusOr<EntityUpdate> update = PiUpdateToEntityUpdate(
         p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
         port_translation_map, cpu_queue_translator);
-    if (!app_db_entry.ok()) {
-      entry_status = GetIrUpdateStatus(app_db_entry.status());
+    if (!update.ok()) {
+      entry_status = GetIrUpdateStatus(update.status());
       break;
     }
-    if (keys_in_request.contains(app_db_entry->entity_key)) {
+    if (keys_in_request.contains(update->entity_key)) {
       // We will rewrite all responses below; no need to set entry_status here.
       has_duplicates = true;
       break;
     }
-    keys_in_request.insert(app_db_entry->entity_key);
+    keys_in_request.insert(update->entity_key);
 
     // Verify the entry exists (for MODIFY/DELETE) or not exists (for DELETE)
     // against the cache.
     if (absl::Status cache_verification =
-            VerifyEntityCacheForExistence(entity_cache, *app_db_entry);
+            VerifyEntityCacheForExistence(entity_cache, *update);
         !cache_verification.ok()) {
       entry_status = GetIrUpdateStatus(cache_verification);
       break;
     }
 
-    absl::StatusOr<sonic::TableResources> resource_change =
-        VerifyCapacityAndGetTableResourceChange(
-            p4_info, *app_db_entry, entity_cache,
-            capacity_by_action_profile_name, resources_in_batch);
+    absl::StatusOr<TableResources> resource_change =
+        VerifyCapacityAndGetTableResourceChange(p4_info, *update, entity_cache,
+                                                capacity_by_action_profile_name,
+                                                resources_in_batch);
     if (!resource_change.ok()) {
       entry_status = GetIrUpdateStatus(resource_change.status());
       break;
@@ -401,10 +396,9 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
       resources_in_batch[resource_change->action_profile->name] +=
           resource_change->action_profile->total_weight;
     }
-    app_db_entry->resource_utilization_change = *resource_change;
-    app_db_entry->rpc_index = response->statuses_size() - 1;
-    ir_updates.entries.push_back(*app_db_entry);
-    ++ir_updates.total_rpc_updates;
+    update->resource_utilization_change = *resource_change;
+    update->status = &*response->mutable_statuses()->rbegin();
+    updates.push_back(*update);
   }
 
   // Abandon the whole write request if any duplicate was found in the batch.
@@ -413,8 +407,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     *response->add_statuses() = GetIrUpdateStatus(
         absl::StatusCode::kInvalidArgument,
         "[P4RT App] Found duplicated key in the same batch request.");
-    ir_updates.entries.clear();
-    ir_updates.total_rpc_updates = 0;
+    updates.clear();
   }
 
   // Mark any remaining unprocessed updates as aborted.
@@ -424,19 +417,18 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     *response->add_statuses() = kAborted;
   }
 
-  return ir_updates;
+  return updates;
 }
 
 absl::Status UpdateCacheAndUtilizationState(
-    EntityMap& entity_cache,
-    ActionProfileCapacityMap& capacity_by_action_profile_name,
-    const sonic::AppDbUpdates& app_db_updates,
-    const pdpi::IrWriteResponse& results) {
-  for (const sonic::AppDbEntry& app_db_entry : app_db_updates.entries) {
+    EntityMap &entity_cache,
+    ActionProfileCapacityMap &capacity_by_action_profile_name,
+    const std::vector<EntityUpdate> &entity_updates,
+    const pdpi::IrWriteResponse &results) {
+  for (const EntityUpdate &app_db_entry : entity_updates) {
     // Lower layers should rervert any state on failure so a failing request
     // should not affect our internal state.
-    if (results.statuses(app_db_entry.rpc_index).code() !=
-        google::rpc::Code::OK) {
+    if (app_db_entry.status->code() != google::rpc::Code::OK) {
       continue;
     }
 
@@ -574,7 +566,7 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
       failure_count++;
       continue;
     }
-    if (GetAppDbTableType(*ir_entity) != sonic::AppDbTableType::P4RT) {
+    if (sonic::GetAppDbTableType(*ir_entity) != sonic::AppDbTableType::P4RT) {
       continue;
     }
     ir_entries.push_back(*std::move(ir_entity));
@@ -585,6 +577,51 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
                                     " from the entity cache."));
   }
   return ir_entries;
+}
+
+// Verify the config and generate objects required for runtime processing.
+// Returns an error if the config is empty or is otherwise invalid.
+absl::StatusOr<ConfigInfo>
+PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
+  if (!request.has_config()) {
+    LOG(WARNING) << "ForwardingPipelineConfig is missing the config field.";
+    return gutil::InvalidArgumentErrorBuilder()
+           << "ForwardingPipelineConfig is missing the config field.";
+  }
+
+  absl::Status validate_p4info = ValidateP4Info(request.config().p4info());
+  if (!validate_p4info.ok()) {
+    // Any failure to validate indicates an invalid P4Info.
+    std::string library_prefix = LibraryPrefix(validate_p4info);
+    LOG(WARNING) << library_prefix << "Failed to validate P4Info. "
+                 << validate_p4info;
+    return gutil::InvalidArgumentErrorBuilder()
+           << library_prefix << "Failed to validate P4Info. Details: "
+           << validate_p4info.message();
+  }
+
+  auto constraint_info =
+      p4_constraints::P4ToConstraintInfo(request.config().p4info());
+  if (!constraint_info.ok()) {
+    LOG(WARNING) << "Could not get constraint info from P4Info: "
+                 << constraint_info.status();
+    return gutil::StatusBuilder(constraint_info.status().code())
+           << "[P4 Constraint] " << constraint_info.status().message();
+  }
+
+  auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
+  if (!ir_p4info.ok()) {
+    LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
+                 << ir_p4info.status();
+    return gutil::StatusBuilder(ir_p4info.status().code())
+           << "[P4RT/PDPI] " << ir_p4info.status().message();
+  }
+  // Remove `@unsupported` entities so their use in requests will be rejected.
+  pdpi::RemoveUnsupportedEntities(*ir_p4info);
+  TranslateIrP4InfoForOrchAgent(*ir_p4info);
+
+  return ConfigInfo{.ir_p4info = std::move(*ir_p4info),
+                    .constraints = std::move(*constraint_info)};
 }
 
 }  // namespace
@@ -655,15 +692,21 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     pdpi::IrWriteRpcStatus rpc_status;
     pdpi::IrWriteResponse* rpc_response = rpc_status.mutable_rpc_response();
-    sonic::AppDbUpdates app_db_updates = PiEntityUpdatesToIr(
+    std::vector<EntityUpdate> app_db_updates = PiEntityUpdatesToIr(
         *request, *ir_p4info_, entity_cache_, capacity_by_action_profile_name_,
         *p4_constraint_info_, translate_port_ids_, port_translation_map_,
         *cpu_queue_translator_, rpc_response);
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
-    auto app_db_write_status = sonic::UpdateAppDb(
-        p4rt_table_, vrf_table_, app_db_updates, *ir_p4info_, rpc_response);
+    std::vector<std::pair<sonic::AppDbUpdate, pdpi::IrUpdateStatus *>>
+        updates_and_results;
+    updates_and_results.reserve(app_db_updates.size());
+    for (const auto &update : app_db_updates) {
+      updates_and_results.push_back({update.app_db_update, update.status});
+    }
+    auto app_db_write_status = sonic::PerformAppDbUpdates(
+        p4rt_table_, vrf_table_, updates_and_results);
     if (!app_db_write_status.ok()) {
       return EnterCriticalState(
           absl::StrCat("Unexpected error calling UpdateAppDb: ",
@@ -718,7 +761,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     absl::Duration write_execution_time = absl::Now() - write_start_time;
     write_batch_requests_ += 1;
-    write_total_requests_ += app_db_updates.total_rpc_updates;
+    write_total_requests_ += app_db_updates.size();
     write_execution_time_ += write_execution_time;
 
     // Log a warning for any batch requests that are taking "too long" so we can
@@ -726,14 +769,14 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     if (write_execution_time > absl::Milliseconds(500)) {
       LOG(WARNING) << absl::StreamFormat(
           "Batch request (%d entries) took >500ms: %lldms ",
-          app_db_updates.total_rpc_updates,
+          app_db_updates.size(),
           absl::ToInt64Milliseconds(write_execution_time));
-      LOG_IF(WARNING, !app_db_updates.entries.empty())
-          << "First entry: "
-          << app_db_updates.entries[0].entry.ShortDebugString();
+      LOG_IF(WARNING, !app_db_updates.empty())
+          << "First entry: " << app_db_updates.at(0).entry.ShortDebugString();
       if (VLOG_IS_ON(1)) {
-        for (const auto& entry : app_db_updates.entries) {
-          LOG(WARNING) << "entry " << entry.rpc_index << ": "
+        int index = 0;
+        for (const auto &entry : app_db_updates) {
+          LOG(WARNING) << "entry " << index++ << ": "
                        << entry.entry.ShortDebugString();
         }
       }
@@ -944,7 +987,8 @@ grpc::Status P4RuntimeImpl::SetForwardingPipelineConfig(
     VLOG(1) << "Request action: " << request->Action_Name(request->action());
     switch (request->action()) {
       case p4::v1::SetForwardingPipelineConfigRequest::VERIFY:
-        action_status = VerifyPipelineConfig(*request);
+        action_status =
+            gutil::AbslStatusToGrpcStatus(PreprocessConfig(*request).status());
         break;
       case p4::v1::SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT:
         action_status = VerifyAndCommitPipelineConfig(*request);
@@ -1290,31 +1334,6 @@ absl::Status P4RuntimeImpl::HandlePacketOutRequest(
                        packetio_impl_.get(), packet_out);
 }
 
-grpc::Status P4RuntimeImpl::VerifyPipelineConfig(
-    const p4::v1::SetForwardingPipelineConfigRequest& request) const {
-  // In all cases where we need to verify a config the spec requires a config to
-  // be set.
-  if (!request.has_config()) {
-    LOG(WARNING) << "ForwardingPipelineConfig is missing the config field.";
-    return grpc::Status(
-        grpc::StatusCode::INVALID_ARGUMENT,
-        "ForwardingPipelineConfig is missing the config field.");
-  }
-
-  absl::Status validate_p4info = ValidateP4Info(request.config().p4info());
-  if (!validate_p4info.ok()) {
-    // Any failure to validate indicates an invalid P4Info.
-    std::string library_prefix = LibraryPrefix(validate_p4info);
-    LOG(WARNING) << library_prefix << "Failed to validate P4Info. "
-                 << validate_p4info;
-    return gutil::AbslStatusToGrpcStatus(
-        gutil::StatusBuilder(absl::StatusCode::kInvalidArgument)
-        << library_prefix
-        << "Failed to validate P4Info. Details: " << validate_p4info.message());
-  }
-  return grpc::Status::OK;
-}
-
 grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request) {
   // Today we do not clear any forwarding state so if we detect any we return an
@@ -1377,8 +1396,10 @@ grpc::Status P4RuntimeImpl::CommitPipelineConfig(
 
 grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request) {
-  grpc::Status verified = VerifyPipelineConfig(request);
-  if (!verified.ok()) return verified;
+  auto config_info = PreprocessConfig(request);
+  if (!config_info.ok()) {
+    return gutil::AbslStatusToGrpcStatus(config_info.status());
+  }
 
   // We cannot reconcile any config today so if we see that the new forwarding
   // config is different from the current one we just return an error.
@@ -1396,69 +1417,44 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
             diff_report));
   }
 
-  // If the IrP4Info hasn't been set then we need to configure the lower layers.
-  if (!ir_p4info_.has_value()) {
-    // Collect any P4RT constraints from the P4Info.
-    auto constraint_info =
-        p4_constraints::P4ToConstraintInfo(request.config().p4info());
-    if (!constraint_info.ok()) {
-      LOG(WARNING) << "Could not get constraint info from P4Info: "
-                   << constraint_info.status();
-      return gutil::AbslStatusToGrpcStatus(
-          absl::Status(constraint_info.status().code(),
-                       absl::StrCat("[P4 Constraint] ",
-                                    constraint_info.status().message())));
-    }
-
-    // Convert the P4Info into an IrP4Info.
-    auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
-    if (!ir_p4info.ok()) {
-      LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
-                   << ir_p4info.status();
-      return gutil::AbslStatusToGrpcStatus(absl::Status(
-          ir_p4info.status().code(),
-          absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
-    }
-    // Remove `@unsupported` entities so their use in requests will be rejected.
-    pdpi::RemoveUnsupportedEntities(*ir_p4info);
-    TranslateIrP4InfoForOrchAgent(*ir_p4info);
-
-    // Apply a config if we don't currently have one.
-    absl::Status config_result = ConfigureAppDbTables(*ir_p4info);
-    if (!config_result.ok()) {
-      LOG(ERROR) << "Failed to apply ForwardingPipelineConfig: "
-                 << config_result;
-      // TODO: cleanup P4RT table definitions instead of going
-      // critical.
-      return grpc::Status(grpc::StatusCode::INTERNAL, config_result.ToString());
-    }
-
-    // Store resource utilization limits for any ActionProfiles.
-    for (const auto& [action_profile_name, action_profile_def] :
-         ir_p4info->action_profiles_by_name()) {
-      capacity_by_action_profile_name_[action_profile_name] =
-          GetActionProfileResourceCapacity(action_profile_def);
-      LOG(INFO) << "Adding action profile limits for '" << action_profile_name
-                << "': max_weights_for_all_groups="
-                << action_profile_def.action_profile().size();
-    }
-
-    // Update P4RuntimeImpl's state only if we succeed.
-    p4_constraint_info_ = *std::move(constraint_info);
-    ir_p4info_ = *std::move(ir_p4info);
-  }
-
   // The ForwardingPipelineConfig is still updated in case the cookie value has
   // been changed.
-  forwarding_pipeline_config_ = request.config();
-
-  grpc::Status saved = SavePipelineConfig(*forwarding_pipeline_config_);
-  if (!saved.ok()) {
-    LOG(ERROR) << "Successfully applied, but could not save the "
-               << "ForwardingPipelineConfig: " << saved.error_message();
-    return saved;
+  if (ir_p4info_.has_value()) {
+    forwarding_pipeline_config_ = request.config();
+    LOG(INFO)
+        << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
+    return SavePipelineConfig(*forwarding_pipeline_config_);
   }
 
+  // Configure the lower layers.
+  // Apply ir_p4info to DB if we are committing to DB.
+  // Apply a config if we don't currently have one.
+  absl::Status config_result = ConfigureAppDbTables(config_info->ir_p4info);
+  if (!config_result.ok()) {
+    return EnterCriticalState(
+        absl::StrCat("Failed to apply ForwardingPipelineConfig: ",
+                     config_result.ToString()));
+  }
+
+    // Store resource utilization limits for any ActionProfiles.
+  for (const auto &[action_profile_name, action_profile_def] :
+       config_info->ir_p4info.action_profiles_by_name()) {
+    capacity_by_action_profile_name_[action_profile_name] =
+        GetActionProfileResourceCapacity(action_profile_def);
+    LOG(INFO) << "Adding action profile limits for '" << action_profile_name
+              << "': max_weights_for_all_groups="
+              << action_profile_def.action_profile().size();
+  }
+
+    // Update P4RuntimeImpl's state only if we succeed.
+  p4_constraint_info_ = std::move(config_info->constraints);
+  ir_p4info_ = std::move(config_info->ir_p4info);
+  forwarding_pipeline_config_ = request.config();
+
+  // Save the ForwardingPipelineConfig if we are committing.
+  LOG(INFO)
+      << "ForwardingPipelineConfig was successfully applied. Saving to disk.";
+  return SavePipelineConfig(*forwarding_pipeline_config_);
   return grpc::Status::OK;
 }
 
@@ -1471,7 +1467,11 @@ grpc::Status P4RuntimeImpl::SavePipelineConfig(
     return grpc::Status::OK;
   }
   return gutil::AbslStatusToGrpcStatus(
-      gutil::SaveProtoToFile(*forwarding_config_full_path_, config));
+      gutil::StatusBuilder(
+          gutil::SaveProtoToFile(*forwarding_config_full_path_, config))
+          .SetPrepend()
+          .LogError()
+      << "Failed to save the ForwardingPipelineConfig to disk. ");
 }
 
 absl::Status P4RuntimeImpl::ConfigureAppDbTables(
@@ -1497,7 +1497,7 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       ASSIGN_OR_RETURN(
           pdpi::IrUpdateStatus status,
           sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-              *p4rt_table_.notification_consumer, acl_key));
+              *p4rt_table_.producer, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
@@ -1514,9 +1514,9 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
             _ << "Could not publish Table Definition Set to APPDB");
 
       ASSIGN_OR_RETURN(
-            pdpi::IrUpdateStatus status,
-            sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-                 *p4rt_table_.notification_consumer, acl_key));
+          pdpi::IrUpdateStatus status,
+          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
+              *p4rt_table_.producer, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
