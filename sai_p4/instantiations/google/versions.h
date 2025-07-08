@@ -61,6 +61,9 @@
 // Indicates the switch supports new multicast actions.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_NEW_MULTICAST_ACTIONS "2.4.0"
 
+// Indicates the switch disables sub_port RIF VLAN configuration.
+#define SAI_P4_PKGINFO_VERSION_DISABLE_SUB_PORT_RIF_VLAN_CONFIG "2.6.0"
+
 // Indicates that the program supports ternary rather than optional route
 // metadata in the acl_ingress_table.
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
@@ -71,6 +74,6 @@
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_SUPPORTS_NEW_MULTICAST_ACTIONS
+  SAI_P4_PKGINFO_VERSION_DISABLE_SUB_PORT_RIF_VLAN_CONFIG
 
 #endif // PINS_SAI_VERSIONS_H_
