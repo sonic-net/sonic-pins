@@ -66,7 +66,7 @@ type bit<MIRROR_SESSION_ID_BITWIDTH> mirror_session_id_t;
 @p4runtime_translation("", string)
 #endif
 // TODO: Change this type to be called `cpu_queue_t`.
-type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
+type bit<QOS_QUEUE_BITWIDTH> cpu_queue_t;
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)

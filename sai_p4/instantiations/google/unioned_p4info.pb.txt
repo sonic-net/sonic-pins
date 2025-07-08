@@ -2040,7 +2040,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2058,7 +2058,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2093,7 +2093,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2117,7 +2117,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
   params {
@@ -2166,7 +2166,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2182,7 +2182,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2994,6 +2994,15 @@ controller_packet_metadata {
 }
 type_info {
   new_types {
+    key: "cpu_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "mirror_session_id_t"
     value {
       translated_type {
@@ -3022,15 +3031,6 @@ type_info {
   }
   new_types {
     key: "port_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "qos_queue_t"
     value {
       translated_type {
         sdn_string {
