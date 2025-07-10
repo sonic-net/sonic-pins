@@ -564,20 +564,8 @@ message AclEgressTableEntry {
   bytes controller_metadata = 8;
 }
 
-// Table entry restrictions:
-// ## Forbid using ether_type for IP packets (by convention, use is_ip*
-// instead).
-//   ether_type != 0x0800 && ether_type != 0x86dd;
-// ## Forbid illegal combinations of IP_TYPE fields.
-//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
-//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
-//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
-// ## Forbid unsupported combinations of IP_TYPE fields.
-//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
-//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 // ## Disallow match on reserved VLAN IDs to rule out vendor specific behavior.
 //   vlan_id::mask != 0 -> (vlan_id != 4095);
-// ## TODO: Disallow setting to reserved VLAN IDs when supported.
 message AclPreIngressVlanTableEntry {
   message Match {
     Optional is_ip = 1;      // optional match / Format::HEX_STRING / 1 bits
