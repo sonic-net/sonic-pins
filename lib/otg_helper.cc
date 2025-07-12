@@ -96,6 +96,13 @@ otg::FlowIpv6& AddIPv6Header(otg::Flow& flow, absl::string_view src_ipv6,
   return *ipv6_header;
 }
 
+void SetIPv6Priority(otg::FlowIpv6& ip_packet, int dscp, int ecn) {
+  int traffic_class_value = (dscp << 2) | ecn;
+  ip_packet.mutable_traffic_class()->set_choice(
+      otg::PatternFlowIpv6TrafficClass::Choice::value);
+  ip_packet.mutable_traffic_class()->set_value(traffic_class_value);
+}
+
 absl::Status SetTrafficTransmissionState(
     otg::Openapi::StubInterface& otg_stub,
     otg::StateTrafficFlowTransmit::State::Enum transmission_state) {
