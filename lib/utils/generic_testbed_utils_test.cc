@@ -154,7 +154,7 @@ TEST(GenericTestbedUtils, FromTestbed) {
 constexpr absl::string_view kInterfaceUpResponse =
     R"pb(notification {
            timestamp: 1620348032128305716
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path {
                elem { name: "interfaces" }
@@ -174,7 +174,7 @@ constexpr absl::string_view kInterfaceUpResponse =
 constexpr absl::string_view kInterfaceDownResponse =
     R"pb(notification {
            timestamp: 1620348032128305716
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path {
                elem { name: "interfaces" }
@@ -194,7 +194,7 @@ constexpr absl::string_view kInterfaceDownResponse =
 constexpr absl::string_view kInterfaceResponse =
     R"pb(notification {
            timestamp: 1620348032128305716
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path {
                elem { name: "interfaces" }
@@ -226,22 +226,24 @@ TEST(GenericTestbedUtils, GetUpInterfaces) {
                         kInterfaceUpResponse)),
                     Return(grpc::Status::OK)));
             // Have Ethernet32 be down.
-            ON_CALL(*gnmi_stub,
-                    Get(_,
-                        EqualsProto(
-                            R"pb(type: STATE
-                                 prefix { origin: "openconfig" }
-                                 path {
-                                   elem { name: "interfaces" }
-                                   elem {
-                                     name: "interface"
-                                     key { key: "name" value: "Ethernet32" }
-                                   }
-                                   elem { name: "state" }
-                                   elem { name: "oper-status" }
-                                 }
-                            )pb"),
-                        _))
+            ON_CALL(
+                *gnmi_stub,
+                Get(_,
+                    EqualsProto(
+                        R"pb(type: STATE
+                             prefix { origin: "openconfig" target: "chassis" }
+                             path {
+                               elem { name: "interfaces" }
+                               elem {
+                                 name: "interface"
+                                 key { key: "name" value: "Ethernet32" }
+                               }
+                               elem { name: "state" }
+                               elem { name: "oper-status" }
+                             }
+                             encoding: JSON_IETF
+                        )pb"),
+                    _))
                 .WillByDefault(DoAll(
                     SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
                         kInterfaceDownResponse)),
@@ -273,22 +275,24 @@ TEST(GenericTestbedUtils, GetUpInterfaceLinks) {
                         kInterfaceUpResponse)),
                     Return(grpc::Status::OK)));
             // Have Ethernet32 be down.
-            ON_CALL(*gnmi_stub,
-                    Get(_,
-                        EqualsProto(
-                            R"pb(type: STATE
-                                 prefix { origin: "openconfig" }
-                                 path {
-                                   elem { name: "interfaces" }
-                                   elem {
-                                     name: "interface"
-                                     key { key: "name" value: "Ethernet32" }
-                                   }
-                                   elem { name: "state" }
-                                   elem { name: "oper-status" }
-                                 }
-                            )pb"),
-                        _))
+            ON_CALL(
+                *gnmi_stub,
+                Get(_,
+                    EqualsProto(
+                        R"pb(type: STATE
+                             prefix { origin: "openconfig" target: "chassis" }
+                             path {
+                               elem { name: "interfaces" }
+                               elem {
+                                 name: "interface"
+                                 key { key: "name" value: "Ethernet32" }
+                               }
+                               elem { name: "state" }
+                               elem { name: "oper-status" }
+                             }
+                             encoding: JSON_IETF
+                        )pb"),
+                    _))
                 .WillByDefault(DoAll(
                     SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
                         kInterfaceDownResponse)),
