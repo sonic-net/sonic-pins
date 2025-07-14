@@ -61,6 +61,12 @@ public:
   virtual absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
   CollectPackets() = 0;
 
+  // Runs a command on the control device. Note that this should only be used
+  // on the host device or the sandcastle switches, where gNOI is not supported.
+  // For the devices like PINs switch, we should use gNOI instead.
+  virtual absl::StatusOr<std::string> RunCommand(absl::string_view command,
+                                                 absl::Duration timeout) = 0;
+
   absl::Status SendPacket(absl::string_view interface,
                           absl::string_view packet) {
     return SendPacket(interface, packet, std::nullopt);
