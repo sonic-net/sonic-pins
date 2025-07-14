@@ -20,6 +20,7 @@
 #include "glog/logging.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -27,12 +28,13 @@ namespace pins_test {
 // Component owners need to have their own implementations and register to be
 // used by the NSF Upgrade tests.
 class SaiValidator : public ComponentValidator {
-  absl::Status OnInit(absl::string_view version, Testbed& testbed) override {
+  absl::Status OnInit(absl::string_view version, Testbed &testbed,
+                      thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Sai Init";
     return absl::OkStatus();
   }
-  absl::Status OnFlowCleanup(absl::string_view version,
-                             Testbed& testbed) override {
+  absl::Status OnFlowCleanup(absl::string_view version, Testbed &testbed,
+                             thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Sai Flow Cleanup";
     return absl::OkStatus();
   }

@@ -499,6 +499,19 @@ void HashTest::SetUp() {
   mirror_testbed_->SetUp();
   ASSERT_NO_FATAL_FAILURE(InitializeTestbed());
 
+
+  // Trap all packets on control switch.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info control_switch_ir_p4info,
+                       pdpi::CreateIrP4Info(control_switch_p4_info()));
+  ASSERT_OK(pdpi::InstallIrTableEntry(
+      control_switch_p4_session(),
+      pins::PuntAllPacketsToControllerIrTableEntry("0x7")));
+}
+
+void HashTest::SetUp() {
+  mirror_testbed_->SetUp();
+  ASSERT_NO_FATAL_FAILURE(InitializeTestbed());
+
   // Select available ports for the test.
   if (PortIds().empty()) {
     WaitForPortsToStabilize(GetMirrorTestbed());
