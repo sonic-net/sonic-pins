@@ -28,11 +28,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "gutil/overload.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
@@ -42,10 +39,10 @@
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "tests/integration/system/nsf/milestone.h"
 #include "tests/integration/system/nsf/util.h"
-#include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
           "The NSF milestone to test.");
@@ -196,14 +193,7 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   std::vector<ImageConfigParams> image_config_params =
       GetParam().image_config_params;
-  thinkit::TestEnvironment& environment = std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> thinkit::TestEnvironment& { return testbed->Environment(); },
-          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
-            return testbed->Environment();
-          }},
-      testbed_);
+  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
 
   // The test needs at least 1 image_config_param to run.
   if (image_config_params.empty()) {
