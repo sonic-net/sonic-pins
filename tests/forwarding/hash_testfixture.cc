@@ -71,6 +71,10 @@
 
 namespace pins_test {
 
+absl::btree_set<P4rtPortId> HashTest::port_ids_ = {};
+absl::flat_hash_map<P4rtPortId, std::string> HashTest::port_ids_to_interfaces_ =
+    {};
+
 namespace {
 
 using ::pins::PacketField;
@@ -495,14 +499,31 @@ void HashTest::SetUp() {
   mirror_testbed_->SetUp();
   ASSERT_NO_FATAL_FAILURE(InitializeTestbed());
 
-  ASSERT_NO_FATAL_FAILURE(
-      GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
-  for (const auto &[port, interface] : port_ids_to_interfaces_) {
-    port_ids_.insert(port);
-    interfaces_.push_back(interface);
+
+  // Trap all packets on control switch.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info control_switch_ir_p4info,
+                       pdpi::CreateIrP4Info(control_switch_p4_info()));
+  ASSERT_OK(pdpi::InstallIrTableEntry(
+      control_switch_p4_session(),
+      pins::PuntAllPacketsToControllerIrTableEntry("0x7")));
+}
+
+void HashTest::SetUp() {
+  mirror_testbed_->SetUp();
+  ASSERT_NO_FATAL_FAILURE(InitializeTestbed());
+
+  // Select available ports for the test.
+  if (PortIds().empty()) {
+    WaitForPortsToStabilize(GetMirrorTestbed());
+    ASSERT_NO_FATAL_FAILURE(
+        GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
+    for (const auto &[port, interface] : port_ids_to_interfaces_) {
+      port_ids_.insert(port);
+      interfaces_.push_back(interface);
+    }
+    LOG(INFO) << "Available ports: ["
+              << absl::StrJoin(port_ids_, ", ", absl::StreamFormatter()) << "]";
   }
-  LOG(INFO) << "Using ports: ["
-            << absl::StrJoin(port_ids_, ", ", absl::StreamFormatter()) << "]";
   ASSERT_GE(port_ids_.size(), kMinimumMembersForTest);
 }
 

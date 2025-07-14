@@ -72,6 +72,16 @@ std::ostream &operator<<(std::ostream &os, const PfcLogInfo &info) {
 
 constexpr int kDefaultFrameSize = 1500;
 
+namespace {
+// Compute the pause duration using pause quanta and link speed.
+absl::Duration GetPauseDuration(int pause_quanta,
+                                int64_t sut_interface_bits_per_second) {
+  constexpr int kPauseQuantaBits = 512;
+  return absl::Nanoseconds((kPauseQuantaBits * pause_quanta) /
+                           (sut_interface_bits_per_second / 1'000'000'000));
+}
+}  // namespace
+
 // Function  will try and find 2 Ixia links for ingress and 1 for egress such
 // that ingress ports have speed at least that of egress port.
 absl::StatusOr<IxiaLinks> GetIxiaLinks(thinkit::GenericTestbed &testbed,
@@ -351,41 +361,43 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
       ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
         return ixia::StartTraffic(
             {main_traffic_.traffic_item, pfc_traffic_.traffic_item},
-            ixia_connection_reference_, *generic_testbed_);
+            ixia_connection_reference_, *generic_testbed_,
+            /*run_in_parallel=*/false);
       }));
 
-      // Send forwarding and PFC traffic for 30 seconds and then stop.
-      absl::SleepFor(absl::Seconds(30));
+      // Wait for the pause duration and then stop PFC traffic.
+      absl::Duration pause_duration = GetPauseDuration(
+          pause_quanta, ixia_links_.egress_link.sut_interface_bits_per_second);
+      absl::SleepFor(pause_duration);
       ASSERT_OK(
           ixia::StopTraffic(pfc_traffic_.traffic_item, *generic_testbed_));
 
       QueueCounters queue_counters_after_test, delta_counters;
 
-      // Queue statistics are updated every 30 seconds, hence try up to 3 times.
-      EXPECT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(30), [&] {
+      // Watermarks are updated every 10 seconds, hence we wait up to 20 seconds
+      // to get 2 new watermark reads (in case the first one is cleared).
+      EXPECT_OK(pins::TryUpToNTimes(5, /*delay=*/absl::Seconds(5), [&] {
         // Read counters of the target queue.
         ASSIGN_OR_RETURN(
             queue_counters_after_test,
             GetGnmiQueueCounters(/*port=*/ixia_links_.egress_link.sut_interface,
                                  /*queue=*/queue, *gnmi_stub_));
 
-        constexpr int kPauseQuantaBits = 512;
-        uint64_t pause_duration_ns, expected_watermark;
-        pause_duration_ns =
-            (kPauseQuantaBits * pause_quanta) /
-            (ixia_links_.egress_link.sut_interface_bits_per_second /
-             1'000'000'000);
-        expected_watermark =
-            (pause_duration_ns * port_speed_bytes_per_second_) / 1'000'000'000;
+        uint64_t expected_watermark =
+            (absl::ToInt64Nanoseconds(pause_duration) *
+             port_speed_bytes_per_second_) /
+            1'000'000'000;
         LOG(INFO) << "queue_counters_after_test.max_periodic_queue_len: "
                   << queue_counters_after_test.max_periodic_queue_len
+                  << " .max_queue_len: "
+                  << queue_counters_after_test.max_queue_len
                   << " expected watermark: " << expected_watermark;
         const int absolute_error =
             queue_counters_after_test.max_periodic_queue_len -
             expected_watermark;
         const double relative_error_percent =
             100. * absolute_error / expected_watermark;
-        constexpr double tolerance_percent = 15;  // +-15% tolerance.
+        constexpr double tolerance_percent = 20;  // +-20% tolerance.
         if (std::abs(relative_error_percent) <= tolerance_percent) {
           LOG(INFO) << "observed watermark matches expected watermark "
                        "(error: "

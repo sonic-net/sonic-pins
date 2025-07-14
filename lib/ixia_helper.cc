@@ -503,12 +503,8 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
 
   // POST to
   // /ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking
-  // with  {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
-  // "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
   std::string start_path =
       "/ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking";
-  std::string start_json =
-      absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << start_path;
 
   for (const std::string &start_json : GetTrefConfigs(trefs, run_in_parallel)) {
