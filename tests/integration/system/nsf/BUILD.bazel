@@ -107,6 +107,7 @@ cc_library(
         "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
+        "//sai_p4/instantiations/google:instantiations",
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//tests/integration/system/nsf/interfaces:image_config_params",
