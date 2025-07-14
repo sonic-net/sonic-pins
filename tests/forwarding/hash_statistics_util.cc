@@ -95,6 +95,17 @@ int ChiSquaredTestPacketCount(int members, double target_confidence,
   return chi_squared_limit / average_error / average_error + /*rounding*/ 0.5;
 }
 
+int PercentErrorTestPacketCount(int total_weight) {
+  int packet_count = 100 * total_weight;
+  // Choose the first multiple of packet_count > 1,000
+  if (packet_count < 1000)
+    return 1000 - 1000 % total_weight + total_weight;
+  // Choose the last multiple of packet_count < 10,000
+  if (packet_count > 10000)
+    return 10000 - 10000 % total_weight;
+  return packet_count;
+}
+
 ChiSquaredResult CalculateChiSquaredResult(
     const Distribution& expected_distribution,
     const Distribution& actual_distribution) {
@@ -130,9 +141,10 @@ double CalculateAveragePercentError(const Distribution& expected_distribution,
   return total_percent_error / expected_distribution.size();
 }
 
-absl::Status TestDistribution(const std::vector<pins::GroupMember>& members,
-                              const Distribution& results, double confidence,
-                              int expected_packets, Statistic statistic) {
+absl::Status TestDistribution(const std::vector<pins::GroupMember> &members,
+                              const Distribution &results,
+                              double target_confidence, int expected_packets,
+                              Statistic statistic, double &actual_confidence) {
   int total_weight = 0;
   for (const auto& member : members) {
     total_weight += member.weight;
@@ -162,12 +174,13 @@ absl::Status TestDistribution(const std::vector<pins::GroupMember>& members,
     case Statistic::kChiSquared: {
       auto [p_value, chi_squared] =
           CalculateChiSquaredResult(expected_distribution, results);
+      actual_confidence = p_value;
       LOG(INFO) << absl::StrCat("p-value: ", p_value,
                                 " | chi^2: ", chi_squared);
-      if (p_value <= confidence) {
+      if (p_value <= target_confidence) {
         return gutil::InternalErrorBuilder()
                << "We have less than "
-               << absl::StreamFormat("%3f%%", confidence * 100)
+               << absl::StreamFormat("%3f%%", target_confidence * 100)
                << " confidence that the actual distribution matches the "
                   "expected "
                << "distribution. "
@@ -178,9 +191,10 @@ absl::Status TestDistribution(const std::vector<pins::GroupMember>& members,
     case Statistic::kPercentError: {
       double percent_error =
           CalculateAveragePercentError(expected_distribution, results);
+      actual_confidence = 1 - percent_error;
       LOG(INFO) << absl::StreamFormat("Average percent error: %3.4f%%",
                                       percent_error * 100);
-      double error_threshold = 1 - confidence;
+      double error_threshold = 1 - target_confidence;
       if (percent_error > error_threshold) {
         return gutil::InternalErrorBuilder()
                << absl::StreamFormat(

@@ -15,8 +15,6 @@
 #ifndef PINS_TESTS_FORWARDING_HASH_STATISTICS_UTIL_H_
 #define PINS_TESTS_FORWARDING_HASH_STATISTICS_UTIL_H_
 
-#include <algorithm>
-
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "tests/forwarding/group_programming_util.h"
@@ -51,10 +49,8 @@ int ChiSquaredTestPacketCount(int members, double target_confidence,
 
 // Return enough packets to generally hit all the weights multiple times.
 // Bound the packets between 1k-10k to make sure we have enough differences and
-// we don't take too much time.
-inline int PercentErrorTestPacketCount(int total_weight) {
-  return std::min(std::max(1000, 100 * total_weight), 10000);
-}
+// we don't take too much time. Always returns a multiple of total_weight.
+int PercentErrorTestPacketCount(int total_weight);
 
 // Calculate the chi_squared statistics for goodness of fit between the expected
 // and actual distributions.
@@ -67,13 +63,26 @@ double CalculateAveragePercentError(const Distribution& expected_distribution,
                                     const Distribution& actual_distribution);
 
 // Runs the specified statistical test to verify that the received packets match
-// the expected member weights.
+// the expected member weights. Populates the calculated confidence and returns
+// an error if the statistical test failed.
+//
 // Confidence is the threshold for declaring success / failure.
 // * For ChiSquared tests, success is measured by confidence < p_value
 // * For PercentError tests, success is when 1 - confidence > percent error
-absl::Status TestDistribution(const std::vector<pins::GroupMember>& members,
-                              const Distribution& results, double confidence,
-                              int expected_packets, Statistic statistic);
+absl::Status TestDistribution(const std::vector<pins::GroupMember> &members,
+                              const Distribution &results,
+                              double target_confidence, int expected_packets,
+                              Statistic statistic, double &actual_confidence);
+
+// Same as above but does not return the calculated confidence.
+inline absl::Status
+TestDistribution(const std::vector<pins::GroupMember> &members,
+                 const Distribution &results, double target_confidence,
+                 int expected_packets, Statistic statistic) {
+  double actual_confidence;
+  return TestDistribution(members, results, target_confidence, expected_packets,
+                          statistic, actual_confidence);
+}
 
 }  // namespace pins_test
 

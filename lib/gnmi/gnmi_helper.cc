@@ -612,6 +612,7 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetRequest(
     absl::string_view json_val) {
   gnmi::SetRequest req;
   req.mutable_prefix()->set_origin(kOpenconfigStr);
+  req.mutable_prefix()->set_target("chassis");
   gnmi::Path* path;
 
   switch (set_type) {
@@ -645,6 +646,8 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
   gnmi::GetRequest req;
   req.set_type(req_type);
   req.mutable_prefix()->set_origin(kOpenconfigStr);
+  req.mutable_prefix()->set_target("chassis");
+  req.set_encoding(gnmi::JSON_IETF);
   if (oc_path.empty()) {
     return req;
   }

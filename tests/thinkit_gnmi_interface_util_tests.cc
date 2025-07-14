@@ -54,7 +54,7 @@ using ::testing::ReturnRefOfCopy;
 using ::testing::SetArgPointee;
 
 constexpr char get_xcvrd_req_str[] =
-    R"pb(prefix { origin: "openconfig" }
+    R"pb(prefix { origin: "openconfig" target: "chassis" }
          path {
            elem { name: "interfaces" }
            elem {
@@ -64,12 +64,13 @@ constexpr char get_xcvrd_req_str[] =
            elem { name: "state" }
            elem { name: "transceiver" }
          }
-         type: STATE)pb";
+         type: STATE
+         encoding: JSON_IETF)pb";
 
 constexpr char get_xcvrd_resp_str[] =
     R"pb(notification {
            timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path {
                elem { name: "interfaces" }
@@ -88,7 +89,7 @@ constexpr char get_xcvrd_resp_str[] =
     )pb";
 
 constexpr char ethernet_pmd_req_str[] =
-    R"pb(prefix { origin: "openconfig" }
+    R"pb(prefix { origin: "openconfig" target: "chassis" }
          path {
            elem { name: "components" }
            elem {
@@ -99,12 +100,13 @@ constexpr char ethernet_pmd_req_str[] =
            elem { name: "state" }
            elem { name: "ethernet-pmd" }
          }
-         type: STATE)pb";
+         type: STATE
+         encoding: JSON_IETF)pb";
 
 constexpr char ethernet_pmd_resp_copper_str[] =
     R"pb(notification {
            timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path {
                elem { name: "components" }
@@ -126,7 +128,7 @@ constexpr char ethernet_pmd_resp_copper_str[] =
 constexpr char ethernet_pmd_resp_optic_str[] =
     R"pb(notification {
            timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path {
                elem { name: "components" }
@@ -146,14 +148,15 @@ constexpr char ethernet_pmd_resp_optic_str[] =
     )pb";
 
 constexpr char all_interfaces_req[] =
-    R"pb(prefix { origin: "openconfig" }
+    R"pb(prefix { origin: "openconfig" target: "chassis" }
          path { elem { name: "interfaces" } }
-         type: STATE)pb";
+         type: STATE
+         encoding: JSON_IETF)pb";
 
 constexpr char all_interfaces_resp[] =
     R"pb(notification {
            timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path { elem { name: "interfaces" } }
              val {
@@ -163,15 +166,29 @@ constexpr char all_interfaces_resp[] =
          }
     )pb";
 
+constexpr char invalid_interfaces_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" target: "chassis" }
+           update {
+             path { elem { name: "interfaces" } }
+             val {
+               json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":1,\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}},{\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":2,\"openconfig-platform-transceiver:transceiver\":\"EthernetABC\"}}]}}"
+             }
+           }
+         }
+    )pb";
+
 constexpr char all_components_req[] =
-    R"pb(prefix { origin: "openconfig" }
+    R"pb(prefix { origin: "openconfig" target: "chassis" }
          path { elem { name: "components" } }
-         type: STATE)pb";
+         type: STATE
+         encoding: JSON_IETF)pb";
 
 constexpr char all_components_resp[] =
     R"pb(notification {
            timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path { elem { name: "components" } }
              val {
@@ -181,10 +198,36 @@ constexpr char all_components_resp[] =
          }
     )pb";
 
+constexpr char multi_form_factor_components_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" target: "chassis" }
+           update {
+             path { elem { name: "components" } }
+             val {
+               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CDGR4_PLUS\",\"form-factor\":\"OSFP\"}}},{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\",\"form-factor\":\"SFP_PLUS\"}}}]}}"
+             }
+           }
+         }
+    )pb";
+
+constexpr char invalid_components_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" target: "chassis" }
+           update {
+             path { elem { name: "components" } }
+             val {
+               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CDGR4_PLUS\",\"form-factor\":\"OSFP\"}}},{\"name\":\"EthernetABC\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_DR4\",\"form-factor\":\"OSFP\"}}}]}}"
+             }
+           }
+         }
+    )pb";
+
 constexpr char all_sfpp_components_resp[] =
     R"pb(notification {
            timestamp: 1631864194292383538
-           prefix { origin: "openconfig" }
+           prefix { origin: "openconfig" target: "chassis" }
            update {
              path { elem { name: "components" } }
              val {
@@ -205,7 +248,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
     gnmi::GetRequest req;
     if (!google::protobuf::TextFormat::ParseFromString(
             absl::Substitute(
-                R"pb(prefix { origin: "openconfig" }
+                R"pb(prefix { origin: "openconfig" target: "chassis" }
                      path {
                        elem { name: "components" }
                        elem {
@@ -216,7 +259,8 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
                        elem { name: "breakout-mode" }
                        elem { name: "groups" }
                      }
-                     type: STATE)pb",
+                     type: STATE
+                     encoding: JSON_IETF)pb",
                 port),
             &req)) {
       return gutil::InternalErrorBuilder().LogError()
@@ -232,7 +276,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
             absl::Substitute(
                 R"pb(notification {
                        timestamp: 1631864194292383538
-                       prefix { origin: "openconfig" }
+                       prefix { origin: "openconfig" target: "chassis" }
                        update {
                          path {
                            elem { name: "openconfig-platform:components" }
@@ -264,7 +308,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
             absl::Substitute(
                 R"pb(notification {
                        timestamp: 1631864194292383538
-                       prefix { origin: "openconfig" }
+                       prefix { origin: "openconfig" target: "chassis" }
                        update {
                          path {
                            elem { name: "openconfig-platform:components" }
@@ -296,7 +340,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
             absl::Substitute(
                 R"pb(notification {
                        timestamp: 1631864194292383538
-                       prefix { origin: "openconfig" }
+                       prefix { origin: "openconfig" target: "chassis" }
                        update {
                          path {
                            elem { name: "openconfig-platform:components" }
@@ -325,7 +369,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
     gnmi::GetRequest req;
     if (!google::protobuf::TextFormat::ParseFromString(
             absl::Substitute(
-                R"pb(prefix { origin: "openconfig" }
+                R"pb(prefix { origin: "openconfig" target: "chassis" }
                      path {
                        elem { name: "interfaces" }
                        elem {
@@ -335,7 +379,9 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
                        elem { name: "state" }
                        elem { name: "hardware-port" }
                      }
-                     type: STATE)pb",
+                     type: STATE
+                     encoding: JSON_IETF
+                )pb",
                 port),
             &req)) {
       return gutil::InternalErrorBuilder().LogError()
@@ -351,7 +397,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
             absl::Substitute(
                 R"pb(notification {
                        timestamp: 1631864194292383538
-                       prefix { origin: "openconfig" }
+                       prefix { origin: "openconfig" target: "chassis" }
                        update {
                          path {
                            elem { name: "openconfig-interfaces:interfaces" }
@@ -379,7 +425,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
     gnmi::GetRequest req;
     if (!google::protobuf::TextFormat::ParseFromString(
             absl::Substitute(
-                R"pb(prefix { origin: "openconfig" }
+                R"pb(prefix { origin: "openconfig" target: "chassis" }
                      path {
                        elem { name: "interfaces" }
                        elem {
@@ -389,7 +435,8 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
                        elem { name: "state" }
                        elem { name: "id" }
                      }
-                     type: STATE)pb",
+                     type: STATE
+                     encoding: JSON_IETF)pb",
                 port),
             &req)) {
       return gutil::InternalErrorBuilder().LogError()
@@ -405,7 +452,7 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
             absl::Substitute(
                 R"pb(notification {
                        timestamp: 1631864194292383538
-                       prefix { origin: "openconfig" }
+                       prefix { origin: "openconfig" target: "chassis" }
                        update {
                          path {
                            elem { name: "openconfig-interfaces:interfaces" }
@@ -776,9 +823,10 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   gnmi::GetRequest req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path { elem { name: "interfaces" } }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &req));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
       .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
@@ -799,7 +847,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -837,7 +885,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -911,7 +959,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -963,7 +1011,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1015,7 +1063,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1066,7 +1114,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1118,7 +1166,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1160,7 +1208,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1205,7 +1253,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1262,7 +1310,7 @@ TEST_F(
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1537,6 +1585,183 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
                    "No random interface with supported breakout modes found")));
 }
 
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetPortSetWithOsfpOpticsFailedInGettingComponents) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetPortSetWithOsfpOpticsInvalidXcvrName) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      invalid_components_resp, &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to parse transceiver number in")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest, TestGetPortSetWithOsfpOpticsSuccess) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      multi_form_factor_components_resp, &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(
+      auto port_set, pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr));
+  absl::flat_hash_set<int> expected_port_set_set = {1};
+  ASSERT_EQ(port_set, expected_port_set_set);
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeInterfacesGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeComponentsGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeXcvrNotFoundFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" target: "chassis" }
+             update {
+               path { elem { name: "components" } }
+               val {
+                 json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\"}}}]}}"
+               }
+             }
+           }
+      )pb",
+      &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto xcvr_to_interfaces_map,
+                       pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                           *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"));
+  EXPECT_TRUE(xcvr_to_interfaces_map.empty());
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeInvalidXcvrName) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      invalid_interfaces_resp, &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      invalid_components_resp, &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to parse transceiver number in")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeSuccess) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
+                                                            &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto xcvr_to_interfaces_map,
+                       pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                           *mock_gnmi_stub_ptr, "ETH_2X400GBASE_CR4"));
+  absl::flat_hash_map<int, std::vector<std::string>>
+      expected_xcvr_to_interfaces_map = {{1, {"Ethernet1/1/1"}},
+                                         {2, {"Ethernet1/2/1"}}};
+  ASSERT_EQ(xcvr_to_interfaces_map, expected_xcvr_to_interfaces_map);
+}
+
 TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsSfpPlusPortTrueSuccess) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   gnmi::GetRequest interfaces_req;
@@ -1626,7 +1851,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsSfpPlusPortIntfNotFoundFailure) {
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path { elem { name: "interfaces" } }
                val {
@@ -1839,7 +2064,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "1x400G";
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -1849,13 +2074,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "physical-channel" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &physical_channels_req));
   gnmi::GetResponse physical_channels_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697805380043
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -1874,7 +2100,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       &physical_channels_resp));
   gnmi::GetRequest oper_status_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -1884,13 +2110,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "oper-status" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &oper_status_req));
   gnmi::GetResponse oper_status_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697699213032
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -1940,7 +2167,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "1x400G";
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -1950,11 +2177,12 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "physical-channel" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &physical_channels_req));
   gnmi::GetRequest oper_status_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -1964,13 +2192,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "oper-status" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &oper_status_req));
   gnmi::GetResponse oper_status_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697699213032
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -2007,7 +2236,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "1x400G";
   gnmi::GetRequest oper_status_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -2017,7 +2246,8 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "oper-status" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &oper_status_req));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
       .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
@@ -2036,7 +2266,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str =
       R"pb(
-    prefix { origin: "openconfig" }
+    prefix { origin: "openconfig" target: "chassis" }
     replace {
       path {}
       val {
@@ -2080,7 +2310,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "2x200G";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str = R"pb(
-    prefix { origin: "openconfig" }
+    prefix { origin: "openconfig" target: "chassis" }
     replace {
       path {}
       val {
@@ -2129,7 +2359,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "2x200G";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str = R"pb(
-    prefix { origin: "openconfig" }
+    prefix { origin: "openconfig" target: "chassis" }
     replace {
       path {}
       val {
@@ -2176,7 +2406,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "1x200G(4)+2x100G(4)";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str = R"pb(
-    prefix { origin: "openconfig" }
+    prefix { origin: "openconfig" target: "chassis" }
     replace {
       path {}
       val {
@@ -2229,7 +2459,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string breakout_mode = "1x200G(4)+2x100G(4)";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str = R"pb(
-    prefix { origin: "openconfig" }
+    prefix { origin: "openconfig" target: "chassis" }
     replace {
       path {}
       val {
@@ -2316,7 +2546,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   gnmi::GetRequest get_xcvrd_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -2326,7 +2556,8 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "transceiver" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &get_xcvrd_req));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
       .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
@@ -2456,7 +2687,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
           SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
               R"pb(notification {
                      timestamp: 1620348032128305716
-                     prefix { origin: "openconfig" }
+                     prefix { origin: "openconfig" target: "chassis" }
                      update {
                        path { elem { name: "interfaces" } }
                        val {
@@ -2482,7 +2713,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   std::vector<std::string> non_existing_port_list;
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -2492,13 +2723,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "physical-channel" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &physical_channels_req));
   gnmi::GetResponse physical_channels_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697805380043
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -2520,7 +2752,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
           SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
               R"pb(notification {
                      timestamp: 1620348032128305716
-                     prefix { origin: "openconfig" }
+                     prefix { origin: "openconfig" target: "chassis" }
                      update {
                        path { elem { name: "interfaces" } }
                        val {
@@ -2553,7 +2785,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   std::vector<std::string> non_existing_port_list{"Ethernet1/1/1"};
   gnmi::GetRequest oper_status_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -2563,13 +2795,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "oper-status" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &oper_status_req));
   gnmi::GetResponse oper_status_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697699213032
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -2588,7 +2821,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       &oper_status_resp));
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -2598,13 +2831,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              elem { name: "state" }
              elem { name: "physical-channel" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &physical_channels_req));
   gnmi::GetResponse physical_channels_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697805380043
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -2626,7 +2860,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
           SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
               R"pb(notification {
                      timestamp: 1620348032128305716
-                     prefix { origin: "openconfig" }
+                     prefix { origin: "openconfig" target: "chassis" }
                      update {
                        path { elem { name: "interfaces" } }
                        val {
@@ -2659,7 +2893,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest, TestValidateBreakoutStateSuccess) {
   std::vector<std::string> non_existing_port_list{};
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" }
+      R"pb(prefix { origin: "openconfig" target: "chassis" }
            path {
              elem { name: "interfaces" }
              elem {
@@ -2669,13 +2903,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest, TestValidateBreakoutStateSuccess) {
              elem { name: "state" }
              elem { name: "physical-channel" }
            }
-           type: STATE)pb",
+           type: STATE
+           encoding: JSON_IETF)pb",
       &physical_channels_req));
   gnmi::GetResponse physical_channels_resp;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(notification {
              timestamp: 1632102697805380043
-             prefix { origin: "openconfig" }
+             prefix { origin: "openconfig" target: "chassis" }
              update {
                path {
                  elem { name: "interfaces" }
@@ -2697,7 +2932,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest, TestValidateBreakoutStateSuccess) {
           SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
               R"pb(notification {
                      timestamp: 1620348032128305716
-                     prefix { origin: "openconfig" }
+                     prefix { origin: "openconfig" target: "chassis" }
                      update {
                        path { elem { name: "interfaces" } }
                        val {
@@ -3005,7 +3240,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       R"pb(
         notification {
           timestamp: 1631864194292383538
-          prefix { origin: "openconfig" }
+          prefix { origin: "openconfig" target: "chassis" }
           update {
             path {
               elem { name: "openconfig-platform:components" }
@@ -3051,7 +3286,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       R"pb(
         notification {
           timestamp: 1631864194292383538
-          prefix { origin: "openconfig" }
+          prefix { origin: "openconfig" target: "chassis" }
           update {
             path {
               elem { name: "openconfig-platform:components" }
@@ -3099,7 +3334,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       R"pb(
         notification {
           timestamp: 1631864194292383538
-          prefix { origin: "openconfig" }
+          prefix { origin: "openconfig" target: "chassis" }
           update {
             path {
               elem { name: "openconfig-platform:components" }
@@ -3148,7 +3383,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       R"pb(
         notification {
           timestamp: 1631864194292383538
-          prefix { origin: "openconfig" }
+          prefix { origin: "openconfig" target: "chassis" }
           update {
             path {
               elem { name: "openconfig-platform:components" }
@@ -3196,7 +3431,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       R"pb(
         notification {
           timestamp: 1631864194292383538
-          prefix { origin: "openconfig" }
+          prefix { origin: "openconfig" target: "chassis" }
           update {
             path {
               elem { name: "openconfig-platform:components" }
@@ -3244,7 +3479,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       R"pb(
         notification {
           timestamp: 1631864194292383538
-          prefix { origin: "openconfig" }
+          prefix { origin: "openconfig" target: "chassis" }
           update {
             path {
               elem { name: "openconfig-platform:components" }
