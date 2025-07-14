@@ -29,6 +29,8 @@ namespace pins_test {
 namespace {
 
 using ::testing::DoubleNear;
+using ::testing::Ge;
+using ::testing::Le;
 
 Distribution ExpectedDistribution(const std::vector<pins::GroupMember> members,
                                   int packet_count) {
@@ -69,6 +71,34 @@ int PacketCount(const Distribution& distribution) {
 
 TEST(PercentErrorTestPacketCount, IncreasesWithTotalWeight) {
   EXPECT_GT(PercentErrorTestPacketCount(100), PercentErrorTestPacketCount(10));
+}
+
+TEST(PercentErrorTestPacketCount, IsWithinRange) {
+  // The general formula is 100 * total_weight:
+  // Minimum packets (1,000) @ 10 packets.
+  // Maximum packets (10,000) @ 100 packets.
+  for (int total_weight : {1, 5, 9, 10, 11, 55, 99, 100, 101, 555}) {
+    EXPECT_THAT(PercentErrorTestPacketCount(total_weight), Ge(1000))
+        << " for total weight: " << total_weight;
+    EXPECT_THAT(PercentErrorTestPacketCount(total_weight), Le(10000))
+        << " for total weight: " << total_weight;
+  }
+}
+
+MATCHER_P(IsAMultipleOf, divisor, "") {
+  *result_listener << "where the remainder is " << (arg % divisor);
+  return (arg % divisor) == 0;
+}
+
+TEST(PercentErrorTestPacketCount, IsAMultipleOfTotalWeight) {
+  // The general formula is 100 * total_weight:
+  // Minimum packets (1,000) @ 10 packets.
+  // Maximum packets (10,000) @ 100 packets.
+  for (int total_weight : {1, 5, 9, 10, 11, 55, 99, 100, 101, 555}) {
+    EXPECT_THAT(PercentErrorTestPacketCount(total_weight),
+                IsAMultipleOf(total_weight))
+        << " for total weight: " << total_weight;
+  }
 }
 
 TEST(ChiSquaredTestPacketCount, IncreasesWithMembers) {
