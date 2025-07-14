@@ -35,9 +35,9 @@ control ingress(inout headers_t headers,
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
       ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
-      tunnel_termination.apply(headers, local_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
+      tunnel_termination.apply(headers, local_metadata);
       routing_lookup.apply(headers, local_metadata, standard_metadata);
       acl_ingress.apply(headers, local_metadata, standard_metadata);
       routing_resolution.apply(headers, local_metadata, standard_metadata);
