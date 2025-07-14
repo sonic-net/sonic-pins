@@ -193,6 +193,7 @@ struct packet_rewrites_t {
   ethernet_addr_t src_mac;
   ethernet_addr_t dst_mac;
   vlan_id_t vlan_id;
+  bit<6> dscp;
 }
 
 // Local metadata for each packet being processed.
@@ -238,6 +239,7 @@ struct local_metadata_t {
   bool enable_src_mac_rewrite;
   bool enable_dst_mac_rewrite;
   bool enable_vlan_rewrite;
+  bool enable_dscp_rewrite;
   packet_rewrites_t packet_rewrites;
 
   bit<16> l4_src_port;
@@ -328,9 +330,17 @@ struct local_metadata_t {
   bool nexthop_id_valid;
   // Nexthop id, only valid if `nexthop_id_valid` is true.
   nexthop_id_t nexthop_id_value;
-  // After execution of the `routing_lookup` stage, Indicates if an entry in
+  // After execution of the `routing_lookup` stage, indicates if an entry in
   // the `ipv4_multicast` or `ipv6_multicast` table was hit.
   bool ipmc_table_hit;
+  // After execution of the `tunnel_termination` stage, indicates if an entry in
+  // the `tunnel_termination` table was hit.
+  bool tunnel_termination_table_hit;
+  // After execution of the `acl_ingress_mirror_and_redirect_table` stage,
+  // indicates if the packet was redirected to IPMC group. Needed to avoid drop
+  // on ttl=0 after rewrite.
+  // actions exhibit the same behavior.
+  bool acl_ingress_ipmc_redirect;
 
   // Determines if packet was dropped in ACL ingress/egress stage. If true, the
   // actual call to mark_to_drop (that affects standard_metadata) takes place at
