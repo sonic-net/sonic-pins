@@ -689,6 +689,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
   }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
+  }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
   entry.set_priority(priority);
@@ -745,6 +748,9 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
   if (match_fields.is_ipv6.has_value()) {
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
   
   std::visit(
@@ -819,6 +825,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   if (match_fields.is_ipv6.has_value()) {
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
   entry.mutable_action()->mutable_redirect_to_port()->set_redirect_port(port);
   entry.set_priority(priority);
