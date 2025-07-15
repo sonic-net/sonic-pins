@@ -157,6 +157,7 @@ struct MirrorAndRedirectMatchFields {
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
   std::optional<bool> is_ipv6;
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
+  std::optional<absl::string_view> vrf;
 };
 
 // Queue settings for ACL table entry action.
