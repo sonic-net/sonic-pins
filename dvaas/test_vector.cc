@@ -21,9 +21,11 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/test_vector.pb.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "re2/re2.h"
@@ -36,8 +38,18 @@ namespace dvaas {
 // * Unique across different packet test vectors.
 inline constexpr LazyRE2 kTestPacketIdRegexp{R"(test packet #([0-9]+))"};
 
-std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id) {
-  return absl::StrCat("test packet #", unique_test_packet_id);
+std::string MakeTestPacketPayloadFromUniqueId(int unique_test_packet_id,
+                                              absl::string_view description) {
+  std::string payload =
+      absl::StrCat("test packet #", unique_test_packet_id, ": ", description);
+
+  // Adds padding to the packet payload to prevent undersized packets .Any
+  // Ethernet packet containing a payload returned by this function will be at
+  // least the minimum size required by the Ethernet protocol.
+  if (payload.size() < packetlib::kMinNumBytesInEthernetPayload) {
+    payload.resize(packetlib::kMinNumBytesInEthernetPayload, ' ');
+  }
+  return payload;
 }
 
 absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet) {
@@ -61,7 +73,7 @@ absl::Status UpdateTestTag(packetlib::Packet& packet, int new_tag) {
   // Make a new input packet with updated payload.
   std::string new_payload = packet.payload();
   if (!RE2::Replace(&new_payload, *kTestPacketIdRegexp,
-                    MakeTestPacketTagFromUniqueId(new_tag))) {
+                    MakeTestPacketPayloadFromUniqueId(new_tag))) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Test packets must contain a tag of the form '"
            << kTestPacketIdRegexp->pattern()
