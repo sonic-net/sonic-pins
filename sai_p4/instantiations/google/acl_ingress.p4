@@ -45,22 +45,11 @@ control acl_ingress(in headers_t headers,
 
   // Copy the packet to the CPU, and forward the original packet.
   @id(ACL_INGRESS_COPY_ACTION_ID)
-#if defined(SAI_INSTANTIATION_TOR) 
-  // In ToRs, the acl_ingress_table copy action will not apply a rate limit.
-  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
-  @sai_action(SAI_PACKET_ACTION_COPY)
-  //TODO: Rename parameter to `cpu_queue`.
-  //TODO: Rename type to `cpu_queue_t`.
-  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
-    acl_ingress_counter.count();
-    local_metadata.marked_to_copy = true;
-  }
-#else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
   //TODO: Rename parameter to `cpu_queue`.
   //TODO: Rename type to `cpu_queue_t`.
-  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
+  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) cpu_queue_t qos_queue) {
     acl_ingress_counter.count();
     acl_ingress_meter.read(local_metadata.color);
 
@@ -68,21 +57,13 @@ control acl_ingress(in headers_t headers,
     // TODO: Branch on color and model behavior for all colors.
     local_metadata.marked_to_copy = true;
   }
-#endif
 
   // Copy the packet to the CPU. The original packet is dropped.
   @id(ACL_INGRESS_TRAP_ACTION_ID)
-#if defined(SAI_INSTANTIATION_TOR) 
-  // In ToRs, the acl_ingress_table trap action will not apply a rate limit.
-  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
-  @sai_action(SAI_PACKET_ACTION_TRAP)
-#else
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
-#endif
   //TODO: Rename parameter to `cpu_queue`.
-  //TODO: Rename type to `cpu_queue_t`.
-  action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
+  action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) cpu_queue_t qos_queue) {
     acl_copy(qos_queue);
     // TODO: Use `acl_drop(local_metadata)` instead when supported
     // in P4-Symbolic.
@@ -93,12 +74,6 @@ control acl_ingress(in headers_t headers,
   // the default action, and to specify a meter but not otherwise perform any
   // action.
   @id(ACL_INGRESS_FORWARD_ACTION_ID)
-#if defined(SAI_INSTANTIATION_TOR) 
-  // ToRs rely on QoS queues to limit forwarded flows.
-  @sai_action(SAI_PACKET_ACTION_FORWARD)
-  action acl_forward() {
-  }
-#else
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
   action acl_forward() {
@@ -106,7 +81,6 @@ control acl_ingress(in headers_t headers,
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
   }
-#endif
 
   // Forward the packet normally (i.e., perform no action).
   @id(ACL_INGRESS_COUNT_ACTION_ID)
@@ -132,13 +106,20 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL, SAI_PACKET_COLOR_RED)
   // TODO: Rename qos queue to cpu queue, as per action below.
   action set_qos_queue_and_cancel_copy_above_rate_limit(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t qos_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t qos_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // TODO: Implement rate-limit flows for ToR use-case. Changes
     // needed:
     //  * acl_ingress.p4 shouldn't set rate limits.
     //  * acl_ingress_qos.p4 should have a meter.
     //  * This action should model behaviors.
+  }
+
+  @id(ACL_INGRESS_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
+  action set_cpu_queue_and_cancel_copy(
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
+    cancel_copy = true;
   }
 
   // Forwards green packets normally and sets their DSCP to the given value.
@@ -152,7 +133,7 @@ control acl_ingress(in headers_t headers,
   @unsupported
   action set_dscp_and_queues_and_deny_above_rate_limit(
       @id(1) @sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP) bit<6> dscp,
-      @id(2) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
+      @id(2) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue,
       @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         multicast_queue_t green_multicast_queue,
       @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
@@ -174,7 +155,7 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
   action set_cpu_queue_and_deny_above_rate_limit(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -184,7 +165,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_SET_CPU_QUEUE_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action set_cpu_queue(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
   }
 
   // Forwards packets normally. Sets Multicast and unicast queues depending on
@@ -241,6 +222,8 @@ control acl_ingress(in headers_t headers,
     @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
     @refers_to(nexthop_table, nexthop_id)
     nexthop_id_t nexthop_id) {
+    // Mark that we are using ACLs to redirect the packet to a nexthop.
+    local_metadata.acl_ingress_nexthop_redirect = true;
 
     // Set nexthop id.
     local_metadata.nexthop_id_valid = true;
@@ -251,14 +234,13 @@ control acl_ingress(in headers_t headers,
     standard_metadata.mcast_grp = 0;
   }
 
-  @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP)
+  @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
-  @unsupported
   action append_ingress_and_egress_timestamp(
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)
-    bit<1> append_ingress_timestamp,
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)
-    bit<1> append_egress_timestamp) {
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
+    bit<8> append_ingress_timestamp,
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)
+    bit<8> append_egress_timestamp) {
     // Treated as a noop in P4 since we can't predict the specific timestamp
     // values.
   }  
@@ -384,7 +366,6 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
-      @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
       @proto_id(7) redirect_to_nexthop();
@@ -392,12 +373,8 @@ control acl_ingress(in headers_t headers,
       @defaultonly NoAction;
     }
     const default_action = NoAction;
-#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     meters = acl_ingress_meter;
     counters = acl_ingress_counter;
-#else
-    counters = acl_ingress_counter;
-#endif
     size = ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
@@ -555,10 +532,10 @@ control acl_ingress(in headers_t headers,
     multicast_group_id != 0;
   ")
   action redirect_to_ipmc_group(
-    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
-    @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
-    @refers_to(builtin::multicast_group_table, multicast_group_id)
-    multicast_group_id_t multicast_group_id) {
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+      @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
+      @refers_to(builtin::multicast_group_table, multicast_group_id)
+      multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
     local_metadata.acl_ingress_ipmc_redirect = true;
 
@@ -567,28 +544,40 @@ control acl_ingress(in headers_t headers,
     local_metadata.wcmp_group_id_valid = false;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_AND_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
+  @action_restriction("
+    // Disallow 0 since it encodes 'no multicast' in V1Model.
+    multicast_group_id != 0;
+  ")
+  action redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy(
+      @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+      @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
+      @refers_to(builtin::multicast_group_table, multicast_group_id)
+      multicast_group_id_t multicast_group_id,
+      @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
+    redirect_to_ipmc_group(multicast_group_id);
+    set_cpu_queue_and_cancel_copy(cpu_queue);
+  }
+
   @id(ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID)
-  // TODO: Remove the unsupported annotation once we properly model
-  // the behavior of redirect to port.
-  @unsupported
   action redirect_to_port(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
     port_id_t redirect_port) {
+    // The actual redirect to port happens after routing resolution. Here we
+    // just store the redirect port in a metadata.
+    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_port_valid = true;
 
-    standard_metadata.egress_spec = (bit<9>)redirect_port;
-
-    // Cancel other forwarding decisions (if any).
-    // TODO: Properly model the behavior once we understand the
-    // correct behavior of how the switch works as this is likely not reflected
-    // in the P4 model.
-    local_metadata.nexthop_id_valid = false;
+    // Cancel other forwarding decisions except for nexthop. If the packet is
+    // assigned a nexthop, the packet rewrites are determined by the nexthop but
+    // the egress port is determined by `redirect_port`.
     local_metadata.wcmp_group_id_valid = false;
     standard_metadata.mcast_grp = 0;
   }
 
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID)
-  @unsupported
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action acl_mirror_and_redirect_to_port(
     @id(1)
@@ -603,13 +592,12 @@ control acl_ingress(in headers_t headers,
     acl_ingress_counter.count();
     local_metadata.marked_to_mirror = true;
     local_metadata.mirror_session_id = mirror_session_id;
-    standard_metadata.egress_spec = (bit<9>)redirect_port;
+    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_port_valid = true;
 
-    // Cancel other forwarding decisions (if any).
-    // TODO: Properly model the behavior once we understand the
-    // correct behavior of how the switch works as this is likely not reflected
-    // in the P4 model.
-    local_metadata.nexthop_id_valid = false;
+    // Cancel other forwarding decisions except for nexthop. If the packet is
+    // assigned a nexthop, the packet rewrites are determined by the nexthop but
+    // the egress port is determined by `redirect_port`.
     local_metadata.wcmp_group_id_valid = false;
     standard_metadata.mcast_grp = 0;
   }
@@ -778,9 +766,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(11) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
-      local_metadata.route_metadata : ternary
-          @id(12) @name("route_metadata")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
+      local_metadata.vlan_id : ternary
+          @id(12) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
