@@ -255,10 +255,10 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   @unsupported
   action append_ingress_and_egress_timestamp(
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)
-    bit<1> append_ingress_timestamp,
-    @sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)
-    bit<1> append_egress_timestamp) {
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
+    bit<8> append_ingress_timestamp,
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)
+    bit<8> append_egress_timestamp) {
     // Treated as a noop in P4 since we can't predict the specific timestamp
     // values.
   }  
@@ -384,7 +384,6 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
-      @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
       @proto_id(7) redirect_to_nexthop();
@@ -568,9 +567,6 @@ control acl_ingress(in headers_t headers,
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID)
-  // TODO: Remove the unsupported annotation once we properly model
-  // the behavior of redirect to port.
-  @unsupported
   action redirect_to_port(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
@@ -588,7 +584,6 @@ control acl_ingress(in headers_t headers,
   }
 
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID)
-  @unsupported
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action acl_mirror_and_redirect_to_port(
     @id(1)

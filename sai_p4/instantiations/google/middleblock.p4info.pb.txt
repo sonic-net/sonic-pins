@@ -1,8 +1,16 @@
+# proto-file: p4/config/v1/p4info.proto
+# proto-message: p4.config.v1.P4Info
+
 pkg_info {
   name: "middleblock.p4"
-  version: "2.3.0"
+  version: "2.4.0"
   arch: "v1model"
   organization: "Google"
+  platform_properties {
+    multicast_group_table_size: 512
+    multicast_group_table_total_replicas: 3968
+    multicast_group_table_max_replicas_per_entry: 128
+  }
 }
 tables {
   preamble {
@@ -127,7 +135,6 @@ tables {
     alias: "disable_ingress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -552,10 +559,6 @@ tables {
   action_refs {
     id: 16777475
     annotations: "@proto_id(3)"
-  }
-  action_refs {
-    id: 16777476
-    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777481
@@ -1047,7 +1050,6 @@ tables {
     alias: "disable_egress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1511,14 +1513,14 @@ actions {
   params {
     id: 1
     name: "append_ingress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
   params {
     id: 2
     name: "append_egress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
 }
 actions {
@@ -1542,7 +1544,6 @@ actions {
     id: 16777494
     name: "ingress.acl_ingress.redirect_to_port"
     alias: "redirect_to_port"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1559,7 +1560,6 @@ actions {
     id: 16777495
     name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
     alias: "acl_mirror_and_redirect_to_port"
-    annotations: "@unsupported"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
   params {
@@ -1841,7 +1841,6 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1860,7 +1859,6 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1874,7 +1872,6 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1899,7 +1896,6 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1941,13 +1937,13 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
-    annotations: "@selector_size_semantics(\"sum_of_weights\")"
-    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
   size: 49152
   max_group_size: 512
+  sum_of_weights {
+  }
 }
 direct_counters {
   preamble {
@@ -2126,6 +2122,7 @@ type_info {
         sdn_string {
         }
       }
+      annotations: "@p4runtime_translation_mappings({ { \"\" , 0 } , })"
     }
   }
   new_types {
