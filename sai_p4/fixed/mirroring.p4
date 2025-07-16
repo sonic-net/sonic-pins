@@ -106,8 +106,8 @@ control mirroring_encap(inout headers_t headers,
       // Mirrored packets' traffic class is 0.
       headers.mirror_encap_ipv6.dscp = 0;
       headers.mirror_encap_ipv6.ecn = 0;
-      // Mirrored packets' hop_limit is 16.
-      headers.mirror_encap_ipv6.hop_limit = 16;
+      // Mirrored packets' hop_limit is harded-coded to 0 in OrchAgnet.
+      headers.mirror_encap_ipv6.hop_limit = 0;
       headers.mirror_encap_ipv6.flow_label = 0;
       // payload_lentgh for ipv6 packets is the byte length of headers after
       // ipv6 + payload. in our case, that's the UDP, IPFIX and PSAMP headers.
