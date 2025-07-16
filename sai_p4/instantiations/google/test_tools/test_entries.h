@@ -23,9 +23,9 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -40,6 +40,15 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
+
+// TODO: Clean up these predefined bit widths once further
+// refactors are completed.
+constexpr int kVlanIdBitwidth = 12;
+// NOTE: The actual bit-width of a multicast group ID is 16 bits, but we
+// reserve the uppermost bit for a possible solution to handling L2/L3 multicast
+// dependencies. 2^15 groups is more than sufficient for foreseeable use cases.
+constexpr int kPdMulticastGroupIdBitwidth = 15;
+constexpr int kReplicaInstanceBitwidth = 16;
 
 // Different ways of punting packets to the controller.
 enum class PuntAction {
@@ -95,17 +104,17 @@ struct IpForwardingParams {
 };
 
 template <typename Sink>
-void AbslStringify(Sink &sink, const IpVersion &ip_version) {
+void AbslStringify(Sink& sink, const IpVersion& ip_version) {
   switch (ip_version) {
-  case IpVersion::kIpv4:
-    absl::Format(&sink, "IPv4");
-    break;
-  case IpVersion::kIpv6:
-    absl::Format(&sink, "IPv6");
-    break;
-  case IpVersion::kIpv4And6:
-    absl::Format(&sink, "IPv4And6");
-    break;
+    case IpVersion::kIpv4:
+      absl::Format(&sink, "IPv4");
+      break;
+    case IpVersion::kIpv6:
+      absl::Format(&sink, "IPv6");
+      break;
+    case IpVersion::kIpv4And6:
+      absl::Format(&sink, "IPv4And6");
+      break;
   }
 }
 
@@ -120,6 +129,7 @@ struct P4RuntimeTernary {
 struct MirrorSessionParams {
   std::string mirror_session_id;
   std::string monitor_port;
+  std::string monitor_backup_port;
   std::string mirror_encap_src_mac;
   std::string mirror_encap_dst_mac;
   std::string mirror_encap_vlan_id;
@@ -157,6 +167,29 @@ struct MirrorAndRedirectMatchFields {
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
   std::optional<bool> is_ipv6;
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
+  std::optional<absl::string_view> vrf;
+};
+
+// Queue settings for ACL table entry action.
+struct AclQueueAssignments {
+  absl::string_view cpu_queue = "0x0";
+  absl::string_view unicast_green_queue = "0x1";
+  absl::string_view unicast_red_queue = "0x0";
+  absl::string_view multicast_green_queue = "0xb";
+  absl::string_view multicast_red_queue = "0xa";
+};
+
+// Meter settings for ACL table entry action.
+struct AclMeterConfiguration {
+  int bytes_per_second = 1000;
+  int burst_bytes = 1000;
+};
+
+// Parameters for generating a WCMPGroupTable action.
+struct WcmpGroupAction {
+  std::string nexthop_id;
+  int weight = 1;
+  std::optional<std::string> watch_port;
 };
 
 // Tagging mode for VLAN membership entries.
@@ -164,6 +197,26 @@ enum class VlanTaggingMode {
   kTagged,
   kUntagged,
 };
+
+struct Forward {};
+
+struct RedirectToIpmcGroup {
+  int multicast_group_id = 0;
+};
+
+struct RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy {
+  int multicast_group_id = 0;
+  std::string cpu_queue;
+};
+
+struct SetCpuQueueAndCancelCopy {
+  std::string cpu_queue;
+};
+
+using MirrorAndRedirectAction =
+    std::variant<Forward, RedirectToIpmcGroup,
+                 RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy,
+                 SetCpuQueueAndCancelCopy>;
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
@@ -177,14 +230,17 @@ enum class VlanTaggingMode {
 //       .GetDedupedIrEntities());
 // ```
 class EntryBuilder {
-public:
+ public:
   EntryBuilder() = default;
   explicit EntryBuilder(sai::TableEntries entries)
       : entries_(std::move(entries)) {}
 
   // Logs the current PD entries in the EntryBuilder to LOG(INFO).
-  const EntryBuilder &LogPdEntries() const;
-  EntryBuilder &LogPdEntries();
+  const EntryBuilder& LogPdEntries() const;
+  EntryBuilder& LogPdEntries();
+
+  // Returns the current PD entries in the EntryBuilder in debug format.
+  std::string GetPdEntriesDebugString() const;
 
   // Deduplicates then installs the entities encoded by the EntryBuilder using
   // `session`.
@@ -215,16 +271,16 @@ public:
 
   // Adds an entry that matches all packets and punts them according to
   // `action`.
-  EntryBuilder &AddEntryPuntingAllPackets(PuntAction action);
+  EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
 
   // Constructs all entries required to forward all `ip_version` packets to
   // `egress_port` and modify them using `rewrite_options`.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way.
-  EntryBuilder &AddEntriesForwardingIpPacketsToGivenPort(
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port,
       IpVersion ip_version = IpVersion::kIpv4And6,
-      const NexthopRewriteOptions &rewrite_options = {});
+      const NexthopRewriteOptions& rewrite_options = {});
 
   // Constructs all entries required to forward IP packets to `egress_port`
   // based on `ip_forwarding_params` and modify them using `rewrite_options`.
@@ -242,9 +298,9 @@ public:
   // minimum an L3 admit entry and entries that assign the given `vrf`.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way unless they specify a different `vrf`.
-  EntryBuilder &AddDefaultRouteForwardingAllPacketsToGivenPort(
+  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
-      absl::string_view vrf, const NexthopRewriteOptions &rewrite_options = {});
+      absl::string_view vrf, const NexthopRewriteOptions& rewrite_options = {});
 
   // Constructs an IP route matching packets with `vrf` and
   // `ip_forwarding_params` and sending them to `egress_port`. Matching packets
@@ -273,31 +329,33 @@ public:
   // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
   // entry and RIF entry all characterized by `nexthop_rewrite_options`. The RIF
   // will output packets on `egress_port`.
-  EntryBuilder &AddNexthopRifNeighborEntries(
+  EntryBuilder& AddNexthopRifNeighborEntries(
       absl::string_view nexthop_id, absl::string_view egress_port,
-      const NexthopRewriteOptions &rewrite_options = {});
+      const NexthopRewriteOptions& rewrite_options = {});
 
   // Warning: If you try to install the result of multiple calls to this
   // function (with different `multicast_group_id`s), you will get a runtime
   // error.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way.
-  EntryBuilder &
-  AddEntriesForwardingIpPacketsToGivenMulticastGroup(int multicast_group_id);
-  EntryBuilder &AddVrfEntry(absl::string_view vrf);
-  EntryBuilder &AddEntryAdmittingAllPacketsToL3();
-  EntryBuilder &AddMulticastRoute(absl::string_view vrf,
-                                  const netaddr::Ipv4Address &dst_ip,
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenMulticastGroup(
+      int multicast_group_id);
+  EntryBuilder& AddVrfEntry(absl::string_view vrf);
+  EntryBuilder& AddEntryAdmittingAllPacketsToL3();
+  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv4Address& dst_ip,
                                   int multicast_group_id);
-  EntryBuilder &AddMulticastRoute(absl::string_view vrf,
-                                  const netaddr::Ipv6Address &dst_ip,
+  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv6Address& dst_ip,
                                   int multicast_group_id);
-  EntryBuilder &
-  AddPreIngressAclEntryAssigningVrfForGivenIpType(absl::string_view vrf,
-                                                  IpVersion ip_version);
-  EntryBuilder &AddEntryDecappingAllIpInIpv6Packets();
-  EntryBuilder &AddEntryPuntingPacketsWithTtlZeroAndOne();
-  EntryBuilder &AddMulticastGroupEntry(int multicast_group_id,
+  EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
+      absl::string_view vrf, IpVersion ip_version);
+  EntryBuilder& AddEntryTunnelTerminatingAllIpInIpv6Packets();
+  EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
+  EntryBuilder& AddEntryPuntingPacketsWithDstMac(
+      absl::string_view dst_mac, PuntAction action = PuntAction::kTrap,
+      absl::string_view qos_queue = "0x0");
+  EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
                                        absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
       int multicast_group_id, absl::Span<const std::string> egress_ports);
@@ -339,7 +397,8 @@ public:
   EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
       const MirrorAndRedirectMatchFields& match_fields = {});
-  EntryBuilder& AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
+  EntryBuilder& AddIngressAclMirrorAndRedirectEntry(
+      const MirrorAndRedirectAction& action,
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIngressAclEntryRedirectingToPort(
       absl::string_view port,
@@ -351,12 +410,18 @@ public:
       const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
+  EntryBuilder& AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
+      AclQueueAssignments queue_assignments,
+      AclMeterConfiguration meter_configuration);
   EntryBuilder& AddVlanEntry(absl::string_view vlan_id_hexstr);
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
                                        VlanTaggingMode tagging_mode);
+  EntryBuilder& AddWcmpGroupTableEntry(
+      absl::string_view wcmp_group_id,
+      absl::Span<const WcmpGroupAction> wcmp_group_actions);
 
-private:
+ private:
   sai::TableEntries entries_;
 };
 
