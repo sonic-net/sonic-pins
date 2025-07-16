@@ -196,6 +196,7 @@ struct packet_rewrites_t {
   bit<6> dscp;
 }
 
+// LINT.IfChange
 // Local metadata for each packet being processed.
 struct local_metadata_t {
   // When `enable_vlan_checks` is true, if the ingress/egress port is not a
@@ -205,11 +206,10 @@ struct local_metadata_t {
   // applied regardless of instance type of a packet.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bool enable_vlan_checks;
-
-  // If false when VLAN checks are enabled, the packet does not get admitted to
-  // L3 routing.
-  bool ingress_port_is_member_of_vlan;
-
+  
+  // If true, the packet does no go through L3 or IPMC lookup.
+  bool marked_to_drop_by_ingress_vlan_checks;
+ 
   // If true, the egress packet goes out WITHOUT a VLAN tag, otherwise if the
   // packet does not get dropped (e.g. by egress VLAN filtering, egress ACLs,
   // etc) it goes out tagged with the VID in the egress pipeline (except for
@@ -300,6 +300,14 @@ struct local_metadata_t {
   // packet_in_header on punted packets.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<PORT_BITWIDTH> packet_in_target_egress_port;
+ 
+  // When `redirect_port_valid` is true, the packet will be redirected to
+  // the port specified in `redirect_port`. Note that redirect to port cancels
+  // all forwarding decisions, except for nexthop. If the packet is assigned a
+  // nexthop, the packet rewrites are determined by the the nexthop but the
+  // egress port is determined by `redirect_port`.
+  bool redirect_port_valid;
+  bit<PORT_BITWIDTH> redirect_port;
 
   MeterColor_t color;
   // We consistently use local_metadata.ingress_port instead of
@@ -313,14 +321,15 @@ struct local_metadata_t {
   // ACL metadata can be set with SAI_ACL_ACTION_TYPE_SET_ACL_META_DATA, and
   // read from SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META.
   acl_metadata_t acl_metadata;
-  // When controller sends a packet-out packet, the packet will be submitted to
-  // the ingress pipleine by default. But sometimes we want to skip the ingress
-  // pipeline for packet-out, and we cannot skip using the 'exit' statement as
-  // it is not supported in p4-symbolic yet: b/184062335. So we use this field
-  // as a workaround.
+
+  // Some special packets (packet-in, packet-out, mirroring) need to bypass the
+  // regular ingress/egress pipeline. This could be achieved using the `exit`
+  // command, but since p4-symbolic does not support it we use this metadata and
+  // explicit control flow instead.
   // TODO: Clean up this workaround after 'exit' is supported in
   // p4-symbolic.
   bool bypass_ingress;
+  bool bypass_egress;
 
   // Metadata shared between routing, acl_ingress, and routing_resolution
   // control blocks.
@@ -341,6 +350,10 @@ struct local_metadata_t {
   // on ttl=0 after rewrite.
   // actions exhibit the same behavior.
   bool acl_ingress_ipmc_redirect;
+  
+  // Indicates whether a packet was redirected from an ACL ingress entry to a
+  // Nexthop (rather than being directed through normal routing).
+  bool acl_ingress_nexthop_redirect;
 
   // Determines if packet was dropped in ACL ingress/egress stage. If true, the
   // actual call to mark_to_drop (that affects standard_metadata) takes place at
@@ -351,5 +364,6 @@ struct local_metadata_t {
   // ACL ingress) for punted packets.
   bool acl_drop;
 }
+// LINT.ThenChange(parser.p4:metadata_initialization)
 
 #endif  // SAI_METADATA_P4_
