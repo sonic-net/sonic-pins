@@ -23,7 +23,9 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/minimum_guaranteed_sizes.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace sai {
 namespace {
@@ -142,12 +144,12 @@ TEST(SetSemanticsTest, SumOfMembersSemanticsCorrectlySetAndIsIdempotent) {
 }
 
 TEST(SetSemanticsTest, SumOfWeightsSemanticsForTorCorrectlySetAndIsIdempotent) {
-  bool kIsTor = true;
   p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
 
   // Check that the p4info is modified the first time and that the new fields
   // are set correctly.
-  EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(kIsTor, p4info));
+  EXPECT_TRUE(
+      ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kTor, p4info));
   EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
   EXPECT_EQ(p4info.action_profiles(0).size(),
             WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR);
@@ -160,19 +162,19 @@ TEST(SetSemanticsTest, SumOfWeightsSemanticsForTorCorrectlySetAndIsIdempotent) {
   // Check that the p4info is unmodified the second time and that this is
   // reflected in the return value.
   p4::config::v1::P4Info p4info_copy = p4info;
-  EXPECT_FALSE(
-      ApplySumOfWeightsSemanticsForActionProfiles(kIsTor, p4info_copy));
+  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kTor,
+                                                           p4info_copy));
   EXPECT_THAT(p4info, EqualsProto(p4info_copy));
 }
 
 TEST(SetSemanticsTest,
      SumOfWeightsSemanticsForNonTorCorrectlySetAndIsIdempotent) {
-  bool kIsTor = false;
   p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
 
   // Check that the p4info is modified the first time and that the new fields
   // are set correctly.
-  EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(kIsTor, p4info));
+  EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(
+      Instantiation::kFabricBorderRouter, p4info));
   EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
   EXPECT_EQ(p4info.action_profiles(0).size(),
             WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR);
@@ -182,8 +184,8 @@ TEST(SetSemanticsTest,
   // Check that the p4info is unmodified the second time and that this is
   // reflected in the return value.
   p4::config::v1::P4Info p4info_copy = p4info;
-  EXPECT_FALSE(
-      ApplySumOfWeightsSemanticsForActionProfiles(kIsTor, p4info_copy));
+  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(
+      Instantiation::kFabricBorderRouter, p4info_copy));
   EXPECT_THAT(p4info, EqualsProto(p4info_copy));
 }
 
@@ -192,8 +194,8 @@ TEST(SetSemanticsTest, SemanticsChangeWorksAndIsReflectedInReturn) {
 
   // Check that the p4info is modified the first time and that the new fields
   // are set correctly.
-  EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(
-      /*is_tor=*/true, p4info));
+  EXPECT_TRUE(
+      ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kTor, p4info));
   EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
   EXPECT_EQ(p4info.action_profiles(0).size(),
             WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR);
@@ -211,7 +213,7 @@ TEST(SetSemanticsTest, SemanticsChangeWorksAndIsReflectedInReturn) {
 
   // Check that the p4info can be modified back, but to their non-tor versions.
   EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(
-      /*is_tor=*/false, p4info));
+      Instantiation::kFabricBorderRouter, p4info));
   EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
   EXPECT_EQ(p4info.action_profiles(0).size(),
             WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR);
@@ -224,14 +226,23 @@ TEST(SetSemanticsTest, ProfileLessP4InfosAreUnchanged) {
   p4::config::v1::P4Info original_p4info = p4info;
 
   EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(
-      /*is_tor=*/true, p4info));
+      Instantiation::kTor, p4info));
   EXPECT_THAT(original_p4info, EqualsProto(p4info));
 
   EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(
-      /*is_tor=*/false, p4info));
+      Instantiation::kMiddleblock, p4info));
   EXPECT_THAT(original_p4info, EqualsProto(p4info));
 
   EXPECT_FALSE(ApplySumOfMembersSemanticsForActionProfiles(p4info));
+  EXPECT_THAT(original_p4info, EqualsProto(p4info));
+}
+
+TEST(SetSemanticsTest, WbbP4InfosAreUnchanged) {
+  p4::config::v1::P4Info p4info = P4InfoWithHashSeed(/*hash_seed=*/1);
+  p4::config::v1::P4Info original_p4info = p4info;
+
+  EXPECT_FALSE(
+      ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kWbb, p4info));
   EXPECT_THAT(original_p4info, EqualsProto(p4info));
 }
 
@@ -252,6 +263,27 @@ TEST(SetSemanticsTest, RestOfP4InfoIsUnchanged) {
   // Check that pre-existing fields are unmodified.
   EXPECT_THAT(p4info, Partially(EqualsProto(original_p4info)));
 }
+
+using TemporarySetSemanticsTest = ::testing::TestWithParam<sai::Instantiation>;
+
+// TODO: Delete when moving to SumOfMembers semantics in head after
+// rollout.
+TEST_P(TemporarySetSemanticsTest,
+       ConfirmThatCurrentP4InfosModifiedBySetSumOfWeightsAreUnchanged) {
+  p4::config::v1::P4Info p4info = sai::GetP4Info(GetParam());
+  p4::config::v1::P4Info original_p4info = p4info;
+
+  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(GetParam(), p4info));
+  EXPECT_THAT(p4info, EqualsProto(original_p4info));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TemporarySetSemanticsTest, TemporarySetSemanticsTest,
+    testing::ValuesIn(sai::AllSaiInstantiations()),
+    [](const testing::TestParamInfo<sai::Instantiation>& info) {
+      return gutil::SnakeCaseToCamelCase(
+          sai::InstantiationToString(info.param));
+    });
 
 }  // namespace
 }  // namespace sai
