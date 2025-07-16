@@ -96,9 +96,6 @@ control ingress_vlan_checks(inout headers_t headers,
     // Force the dummy_match to be wildcard.
     dummy_match::prefix_length == 0;
   ")
-  // Remove @unsupported once the table is supported in the
-  // switch.
-  @unsupported
   table disable_ingress_vlan_checks_table {
     key = {
       // Note: In the P4_16 specification, a table with no match keys cannot
@@ -154,9 +151,6 @@ control egress_vlan_checks(inout headers_t headers,
     // Force the dummy_match to be wildcard.
     dummy_match::prefix_length == 0;
   ")
-  // Remove @unsupported once the table is supported in the
-  // switch.
-  @unsupported
   table disable_egress_vlan_checks_table {
     key = {
       // Note: In the P4_16 specification, a table with no match keys cannot
