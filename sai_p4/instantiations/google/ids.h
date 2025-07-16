@@ -24,11 +24,12 @@
 #define ACL_PRE_INGRESS_TABLE_ID 0x02000101                  // 33554689
 #define ACL_PRE_INGRESS_VLAN_TABLE_ID 0x02000105             // 33554693
 #define ACL_PRE_INGRESS_METADATA_TABLE_ID 0x02000106         // 33554694
+#define ACL_PRE_INGRESS_CSIG_TABLE_ID 0x0200010D             // 33554701
 #define ACL_WBB_INGRESS_TABLE_ID 0x02000103                  // 33554691
 #define ACL_EGRESS_TABLE_ID 0x02000104                       // 33554692
 #define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108          // 33554696
 #define ACL_EGRESS_L2_TABLE_ID 0x0200010C                    // 33554700
-// Next available table id: 0x0200010D (33554701)
+// Next available table id: 0x0200010E (33554702)
 
 // --- Actions -----------------------------------------------------------------
 // NOLINTBEGIN (to disable macro names of size > 80 cols)

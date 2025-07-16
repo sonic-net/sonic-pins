@@ -185,7 +185,6 @@ TEST(EntryBuilder,
                          }
                        })pb"))));
 }
-
 void EraseNexthop(pdpi::IrEntities& entities) {
   entities.mutable_entities()->erase(std::remove_if(
       entities.mutable_entities()->begin(), entities.mutable_entities()->end(),
@@ -210,8 +209,9 @@ TEST(EntryBuilder,
 
 // TODO: Re-enable this test once prefix IPMC routes are supported
 // by SAI P4.
-TEST(EntryBuilder,
-     DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
+TEST(
+    EntryBuilder,
+    DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
@@ -397,15 +397,76 @@ TEST(EntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
   EXPECT_THAT(entities.entities(), SizeIs(3));
 }
 
-TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAddsEntry) {
+TEST(EntryBuilder, AddEntryTunnelTerminatingAllIpInIpv6PacketsAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6Packets()
+          .AddEntryTunnelTerminatingAllIpInIpv6Packets()
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), SizeIs(1));
+}
+TEST(EntryBuilder, AddEntryPuntingPacketsWithTtlZeroAndOneHasOneEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntryPuntingPacketsWithTtlZeroAndOne()
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+}
+TEST(EntryBuilder, AddEntryPuntingPacketsWithDstMacHasOneEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntryPuntingPacketsWithDstMac(
+                               netaddr::MacAddress(1, 2, 3, 4, 5, 6).ToString())
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_table"
+                  matches {
+                    name: "dst_mac"
+                    ternary {
+                      value { mac: "01:02:03:04:05:06" }
+                      mask { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddEntryPuntingPacketsWithDstMacWithPuntAction) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntryPuntingPacketsWithDstMac(
+                               netaddr::MacAddress(1, 2, 3, 4, 5, 6).ToString(),
+                               PuntAction::kCopy, "0x8")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_table"
+                  matches {
+                    name: "dst_mac"
+                    ternary {
+                      value { mac: "01:02:03:04:05:06" }
+                      mask { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                  priority: 1
+                  action {
+                    name: "acl_copy"
+                    params {
+                      name: "qos_queue"
+                      value { str: "0x8" }
+                    }
+                  }
+                }
+              )pb"))));
 }
 
 TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
@@ -423,6 +484,7 @@ TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
   EXPECT_THAT(replica_overload_entities.entities(),
               ElementsAre(HasOneofCase<pdpi::IrEntity>(
                   "entity", pdpi::IrEntity::kPacketReplicationEngineEntry)));
+
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities port_overload_entities,
                        EntryBuilder()
                            .AddMulticastGroupEntry(123, {"1", "2"})
@@ -456,13 +518,13 @@ TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-                      .AddMulticastRouterInterfaceEntry({
-                      .multicast_replica_port = "\1",
-                      .multicast_replica_instance = 15,
-                      .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
-                  })
-                  .LogPdEntries()
-                  .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+          .AddMulticastRouterInterfaceEntry({
+              .multicast_replica_port = "\1",
+              .multicast_replica_instance = 15,
+              .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+          })
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
                 table_entry {
                   table_name: "multicast_router_interface_table"
