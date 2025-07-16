@@ -222,14 +222,10 @@ message MulticastRouterInterfaceTableEntry {
     oneof action {
       SetMulticastSrcMacAction set_multicast_src_mac = 1;
       L2MulticastPassthroughAction l2_multicast_passthrough = 2;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAction multicast_set_src_mac = 3;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAndVlanIdAction multicast_set_src_mac_and_vlan_id = 4;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAndDstMacAndVlanIdAction
           multicast_set_src_mac_and_dst_mac_and_vlan_id = 5;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAndPreserveIngressVlanIdAction
           multicast_set_src_mac_and_preserve_ingress_vlan_id = 6;
     }
@@ -304,10 +300,9 @@ message TunnelTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Disallow creating reserved VLANs to rule out vendor specific behavior.
-//   vlan_id != 0 && vlan_id != 4095;
+//   vlan_id != 0 && vlan_id != 1 && vlan_id != 4095;
 message VlanTableEntry {
   message Match {
     string vlan_id = 1;  // exact match / Format::HEX_STRING / 12 bits
@@ -320,7 +315,6 @@ message VlanTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message VlanMembershipTableEntry {
   message Match {
     // Refers to 'vlan_table.vlan_id'.
@@ -338,7 +332,6 @@ message VlanMembershipTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::prefix_length == 0;
@@ -354,7 +347,6 @@ message DisableIngressVlanChecksTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::prefix_length == 0;
@@ -428,12 +420,10 @@ message AclIngressTableEntry {
       AclCopyAction acl_copy = 1;
       AclTrapAction acl_trap = 2;
       AclForwardAction acl_forward = 3;
-      AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
       RedirectToNexthopAction redirect_to_nexthop = 7;
       // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -699,7 +689,6 @@ message AclIngressQosTableEntry {
           set_dscp_and_queues_and_deny_above_rate_limit = 6;
       // CAUTION: This action is not (yet) supported.
       SetForwardingQueuesAction set_forwarding_queues = 7;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -790,19 +779,20 @@ message AclIngressCountingTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressSecurityTableEntry {
   message Match {
-    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
-    Ternary ether_type = 4;    // ternary match / Format::HEX_STRING / 16 bits
-    Ternary src_ip = 5;        // ternary match / Format::IPV4
-    Ternary dst_ip = 6;        // ternary match / Format::IPV4
-    Ternary src_ipv6 = 7;      // ternary match / Format::IPV6 / upper 64 bits
-    Ternary dscp = 8;          // ternary match / Format::HEX_STRING / 6 bits
-    Ternary ip_protocol = 9;   // ternary match / Format::HEX_STRING / 8 bits
-    Ternary l4_src_port = 10;  // ternary match / Format::HEX_STRING / 16 bits
-    Ternary l4_dst_port = 11;  // ternary match / Format::HEX_STRING / 16 bits
-    Ternary route_metadata = 12;  // ternary match / Format::HEX_STRING / 6 bits
-    Ternary acl_metadata = 13;    // ternary match / Format::HEX_STRING / 8 bits
+    Optional is_ip = 1;         // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;       // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;       // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;     // ternary match / Format::HEX_STRING / 16 bits
+    Ternary src_ip = 5;         // ternary match / Format::IPV4
+    Ternary dst_ip = 6;         // ternary match / Format::IPV4
+    Ternary src_ipv6 = 7;       // ternary match / Format::IPV6 / upper 64 bits
+    Ternary dscp = 8;           // ternary match / Format::HEX_STRING / 6 bits
+    Ternary ip_protocol = 9;    // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_src_port = 10;   // ternary match / Format::HEX_STRING / 16 bits
+    Ternary l4_dst_port = 11;   // ternary match / Format::HEX_STRING / 16 bits
+    Ternary vlan_id = 12;       // ternary match / Format::HEX_STRING / 12 bits
+    Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary dst_ipv6 = 14;      // ternary match / Format::IPV6 / upper 64 bits
   }
   Match match = 1;
   message Action {
@@ -851,9 +841,7 @@ message AclIngressMirrorAndRedirectTableEntry {
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 2;
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 3;
-      // CAUTION: This action is not (yet) supported.
       RedirectToPortAction redirect_to_port = 5;
-      // CAUTION: This action is not (yet) supported.
       AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 6;
     }
   }
@@ -998,25 +986,21 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
 
 message L2MulticastPassthroughAction {}
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAction {
   string src_mac = 1;  // Format::MAC
 }
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAndVlanIdAction {
   string src_mac = 1;  // Format::MAC
   string vlan_id = 2;  // Format::HEX_STRING / 12 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAndDstMacAndVlanIdAction {
   string src_mac = 1;  // Format::MAC
   string dst_mac = 2;  // Format::MAC
   string vlan_id = 3;  // Format::HEX_STRING / 12 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAndPreserveIngressVlanIdAction {
   string src_mac = 1;  // Format::MAC
 }
@@ -1113,12 +1097,10 @@ message SetForwardingQueuesAction {
   string red_unicast_queue = 4;      // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToPortAction {
   string redirect_port = 1;  // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message AclMirrorAndRedirectToPortAction {
   // Refers to 'mirror_session_table.mirror_session_id'.
   string mirror_session_id = 1;  // Format::STRING
@@ -1130,10 +1112,9 @@ message SetOuterVlanIdAndAclMetadataAction {
   string acl_metadata = 2;  // Format::HEX_STRING / 8 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message AppendIngressAndEgressTimestampAction {
-  string append_ingress_timestamp = 1;  // Format::HEX_STRING / 1 bits
-  string append_egress_timestamp = 2;   // Format::HEX_STRING / 1 bits
+  string append_ingress_timestamp = 1;  // Format::HEX_STRING / 8 bits
+  string append_egress_timestamp = 2;   // Format::HEX_STRING / 8 bits
 }
 
 message NoAction {}
@@ -1171,14 +1152,10 @@ message TableEntry {
     Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
     Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
-    // CAUTION: This table is not (yet) supported.
     VlanTableEntry vlan_table_entry = 83;
-    // CAUTION: This table is not (yet) supported.
     VlanMembershipTableEntry vlan_membership_table_entry = 84;
-    // CAUTION: This table is not (yet) supported.
     DisableIngressVlanChecksTableEntry disable_ingress_vlan_checks_table_entry =
         86;
-    // CAUTION: This table is not (yet) supported.
     DisableEgressVlanChecksTableEntry disable_egress_vlan_checks_table_entry =
         87;
     AclIngressTableEntry acl_ingress_table_entry = 256;
