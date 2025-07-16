@@ -13,7 +13,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
   state start {
     // Initialize local metadata fields.
     local_metadata.enable_vlan_checks = false;
-    local_metadata.ingress_port_is_member_of_vlan = false;
+    local_metadata.marked_to_drop_by_ingress_vlan_checks = false;
     local_metadata.vlan_id = 0;
     local_metadata.input_packet_is_vlan_tagged = false;
     local_metadata.omit_vlan_tag_on_egress_packet = false;
@@ -50,6 +50,8 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.acl_drop = false;
     local_metadata.tunnel_termination_table_hit = false;
     local_metadata.acl_ingress_ipmc_redirect = false;
+    local_metadata.redirect_to_port_enabled = false;
+    local_metadata.redirect_port = 0;
 
   transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
