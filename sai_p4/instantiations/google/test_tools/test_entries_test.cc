@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
@@ -959,6 +960,51 @@ TEST(EntryBuilder, AddVlanMembershipEntryAddsCorrectEntry) {
                                        action { name: "make_untagged_member" }
                                      }
                                    )pb")));
+}
+
+TEST(EntryBuilder, AddWcmpGroupTableEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  std::vector<WcmpGroupAction> wcmp_group_actions = {
+      {.nexthop_id = "nexthop-1", .weight = 1},
+      {.nexthop_id = "nexthop-2", .weight = 2, .watch_port = "watchport-1"}};
+
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddWcmpGroupTableEntry("group-1", absl::MakeSpan(wcmp_group_actions))
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "wcmp_group_table"
+                  matches {
+                    name: "wcmp_group_id"
+                    exact { str: "group-1" }
+                  }
+                  action_set {
+                    actions {
+                      action {
+                        name: "set_nexthop_id"
+                        params {
+                          name: "nexthop_id"
+                          value { str: "nexthop-1" }
+                        }
+                      }
+                      weight: 1
+                    }
+                    actions {
+                      action {
+                        name: "set_nexthop_id"
+                        params {
+                          name: "nexthop_id"
+                          value { str: "nexthop-2" }
+                        }
+                      }
+                      weight: 2
+                      watch_port: "watchport-1"
+                    }
+                  }
+                })pb"))));
 }
 
 }  // namespace

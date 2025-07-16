@@ -966,4 +966,23 @@ EntryBuilder& EntryBuilder::AddVlanMembershipEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddWcmpGroupTableEntry(
+    absl::string_view wcmp_group_id,
+    absl::Span<const WcmpGroupAction> wcmp_group_actions) {
+  sai::WcmpGroupTableEntry& wcmp_group_entry =
+      *entries_.add_entries()->mutable_wcmp_group_table_entry();
+  wcmp_group_entry.mutable_match()->set_wcmp_group_id(wcmp_group_id);
+  for (const WcmpGroupAction& wcmp_group_action : wcmp_group_actions) {
+    sai::WcmpGroupTableEntry_WcmpAction& wcmp_action =
+        *wcmp_group_entry.mutable_wcmp_actions()->Add();
+    wcmp_action.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+        wcmp_group_action.nexthop_id);
+    wcmp_action.set_weight(wcmp_group_action.weight);
+    if (wcmp_group_action.watch_port.has_value()) {
+      wcmp_action.set_watch_port(wcmp_group_action.watch_port.value());
+    }
+  }
+  return *this;
+}
+
 }  // namespace sai
