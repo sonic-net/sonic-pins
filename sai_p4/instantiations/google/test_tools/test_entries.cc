@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -26,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "gutil/overload.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
@@ -267,8 +269,25 @@ EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
   return *this;
 }
 
-EntryBuilder&
-EntryBuilder::AddEntriesForwardingIpPacketsToGivenMulticastGroup(
+EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithDstMac(
+    absl::string_view dst_mac, PuntAction action, absl::string_view qos_queue) {
+  sai::AclIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_ingress_table_entry();
+  entry.mutable_match()->mutable_dst_mac()->set_value(dst_mac);
+  entry.mutable_match()->mutable_dst_mac()->set_mask(
+      netaddr::MacAddress::AllOnes().ToString());
+  entry.set_priority(1);
+  switch (action) {
+    case PuntAction::kTrap:
+      entry.mutable_action()->mutable_acl_trap()->set_qos_queue(qos_queue);
+      return *this;
+    case PuntAction::kCopy:
+      entry.mutable_action()->mutable_acl_copy()->set_qos_queue(qos_queue);
+  }
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenMulticastGroup(
     int multicast_group_id) {
   LOG(FATAL)  // Crash ok
       << "TODO: implement once SAI P4 supports it";
@@ -313,7 +332,7 @@ EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
       << "invalid ip version: " << static_cast<int>(ip_version);
 }
 
-EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6Packets() {
+EntryBuilder& EntryBuilder::AddEntryTunnelTerminatingAllIpInIpv6Packets() {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
     ipv6_tunnel_termination_table_entry {
@@ -462,7 +481,7 @@ EntryBuilder& EntryBuilder::AddIngressAclDroppingAllPackets() {
     acl_ingress_table_entry {
       match {}  # Wildcard match.
       action { acl_drop {} }
-      priority: 1  # Maximum priority.
+      priority: 1
     }
   )pb");
   return *this;
@@ -563,8 +582,7 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
       *entries_.add_entries()->mutable_router_interface_table_entry();
   // If no SMAC is provided, SMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's SMAC rewrite, we choose
-  // 22:22:22:22:22:22 arbitrarily. Note that value 0 won't be accepted by the
-  // switch 
+  // 22:22:22:22:22:22 arbitrarily. Note that value 0 won't be accepted by the switch
   const netaddr::MacAddress src_mac = rewrite_options.src_mac_rewrite.value_or(
       netaddr::MacAddress(0x22, 0x22, 0x22, 0x22, 0x22, 0x22));
   const std::string kRifId =
@@ -680,54 +698,20 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToMulticastGroup(
     int multicast_group_id, const MirrorAndRedirectMatchFields& match_fields) {
-  sai::AclIngressMirrorAndRedirectTableEntry& entry =
-      *entries_.add_entries()
-           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
-  if (match_fields.in_port.has_value()) {
-    entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
-  }
-  if (match_fields.ipmc_table_hit.has_value()) {
-    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
-        BoolToHexString(*match_fields.ipmc_table_hit));
-  }
-  if (match_fields.vlan_id.has_value()) {
-    entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
-    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
-  }
-  if (match_fields.is_ipv4.has_value()) {
-    entry.mutable_match()->mutable_is_ipv4()->set_value(
-        BoolToHexString(*match_fields.is_ipv4));
-  }
-  if (match_fields.is_ipv6.has_value()) {
-    entry.mutable_match()->mutable_is_ipv6()->set_value(
-        BoolToHexString(*match_fields.is_ipv6));
-  }
-  if (match_fields.dst_ip.has_value()) {
-    entry.mutable_match()->mutable_dst_ip()->set_value(
-        match_fields.dst_ip->value.ToString());
-    entry.mutable_match()->mutable_dst_ip()->set_mask(
-        match_fields.dst_ip->mask.ToString());
-  }
-  if (match_fields.dst_ipv6.has_value()) {
-    entry.mutable_match()->mutable_dst_ipv6()->set_value(
-        match_fields.dst_ipv6->value.ToString());
-    entry.mutable_match()->mutable_dst_ipv6()->set_mask(
-        match_fields.dst_ipv6->mask.ToString());
-  }
-  entry.mutable_action()
-      ->mutable_redirect_to_ipmc_group()
-      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
-  entry.set_priority(1);
-
-  return *this;
+  return AddIngressAclMirrorAndRedirectEntry(
+      RedirectToIpmcGroup{
+          .multicast_group_id = multicast_group_id,
+      },
+      match_fields);
 }
 
-EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
+EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
+    const MirrorAndRedirectAction& action,
     const MirrorAndRedirectMatchFields& match_fields, int priority) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+
   if (match_fields.in_port.has_value()) {
     entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
   }
@@ -762,7 +746,36 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntryWithNoOpAction(
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
   }
-  entry.mutable_action()->mutable_acl_forward();
+  
+  std::visit(
+      gutil::Overload{
+          [&](const Forward& action) {
+            entry.mutable_action()->mutable_acl_forward();
+          },
+          [&](const RedirectToIpmcGroup& action) {
+            entry.mutable_action()
+                ->mutable_redirect_to_ipmc_group()
+                ->set_multicast_group_id(
+                    pdpi::BitsetToHexString<16>(action.multicast_group_id));
+          },
+          [&](const RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy& action) {
+            auto& proto =
+                *entry
+                     .mutable_action()
+                     // NOLINTNEXTLINE
+                     ->mutable_redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy();
+            proto.set_multicast_group_id(
+                pdpi::BitsetToHexString<16>(action.multicast_group_id));
+            proto.set_cpu_queue(action.cpu_queue);
+          },
+          [&](const SetCpuQueueAndCancelCopy& action) {
+            entry.mutable_action()
+                ->mutable_set_cpu_queue_and_cancel_copy()
+                ->set_cpu_queue(action.cpu_queue);
+          },
+      },
+      action);
+
   entry.set_priority(priority);
   return *this;
 }
@@ -886,6 +899,32 @@ EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
       params.mirror_session_id);
   acl_entry.set_priority(1);
   *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
+    AclQueueAssignments queue_assignments,
+    AclMeterConfiguration meter_configuration) {
+  sai::TableEntry& entry = *entries_.add_entries();
+  entry.mutable_acl_ingress_qos_table_entry()->set_priority(1);
+  auto& meter =
+      *entry.mutable_acl_ingress_qos_table_entry()->mutable_meter_config();
+  meter.set_bytes_per_second(meter_configuration.bytes_per_second);
+  meter.set_burst_bytes(meter_configuration.burst_bytes);
+  auto& queue_and_rate_limit_action =
+      *entry.mutable_acl_ingress_qos_table_entry()
+           ->mutable_action()
+           ->mutable_set_dscp_and_queues_and_deny_above_rate_limit();
+  queue_and_rate_limit_action.set_dscp("0x05");
+  queue_and_rate_limit_action.set_cpu_queue(queue_assignments.cpu_queue);
+  queue_and_rate_limit_action.set_green_multicast_queue(
+      queue_assignments.multicast_green_queue);
+  queue_and_rate_limit_action.set_red_multicast_queue(
+      queue_assignments.multicast_red_queue);
+  queue_and_rate_limit_action.set_green_unicast_queue(
+      queue_assignments.unicast_green_queue);
+  queue_and_rate_limit_action.set_red_unicast_queue(
+      queue_assignments.unicast_red_queue);
   return *this;
 }
 

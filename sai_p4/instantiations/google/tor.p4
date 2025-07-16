@@ -76,9 +76,9 @@ control egress(inout headers_t headers,
     packet_in_encap.apply(headers, local_metadata, standard_metadata);
     // TODO: Remove if statement once exit is supported in
     // p4 symbolic.
-    if (!IS_PACKET_IN_COPY(standard_metadata)) {
+    if (!local_metadata.bypass_egress) {    
       packet_rewrites.apply(headers, local_metadata, standard_metadata);
-      mirroring_encap.apply(headers, local_metadata, standard_metadata);
+      mirror_encap.apply(headers, local_metadata, standard_metadata);
       egress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       vlan_tag.apply(headers, local_metadata, standard_metadata);
       acl_egress.apply(headers, local_metadata, standard_metadata);
@@ -93,6 +93,11 @@ control egress(inout headers_t headers,
   name = PKG_INFO_NAME,
   organization = "Google",
   version = SAI_P4_PKGINFO_VERSION_LATEST
+)
+@platform_property(
+  multicast_group_table_size = MULTICAST_GROUP_TABLE_SIZE,
+  multicast_group_table_total_replicas = MULTICAST_GROUP_TABLE_TOTAL_REPLICAS,
+  multicast_group_table_max_replicas_per_entry = MULTICAST_GROUP_TABLE_MAX_REPLICAS_PER_ENTRY
 )
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;
