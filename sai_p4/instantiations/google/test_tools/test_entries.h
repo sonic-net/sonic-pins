@@ -175,6 +175,13 @@ struct AclMeterConfiguration {
   int burst_bytes = 1000;
 };
 
+// Parameters for generating a WCMPGroupTable action.
+struct WcmpGroupAction {
+  std::string nexthop_id;
+  int weight = 1;
+  std::optional<std::string> watch_port;
+};
+
 // Tagging mode for VLAN membership entries.
 enum class VlanTaggingMode {
   kTagged,
@@ -397,6 +404,9 @@ class EntryBuilder {
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
                                        VlanTaggingMode tagging_mode);
+  EntryBuilder& AddWcmpGroupTableEntry(
+      absl::string_view wcmp_group_id,
+      absl::Span<const WcmpGroupAction> wcmp_group_actions);
 
  private:
   sai::TableEntries entries_;
