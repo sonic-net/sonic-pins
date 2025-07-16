@@ -79,6 +79,7 @@ control ingress_vlan_checks(inout headers_t headers,
                             inout standard_metadata_t standard_metadata) {
   // Ingress VLAN checks are enabled by default.
   bool enable_ingress_vlan_checks = true;
+  bool ingress_port_is_member_of_vlan = false;
 
   @id(DISABLE_INGRESS_VLAN_CHECKS_ACTION_ID)
   action disable_ingress_vlan_checks() {
@@ -96,9 +97,6 @@ control ingress_vlan_checks(inout headers_t headers,
     // Force the dummy_match to be wildcard.
     dummy_match::prefix_length == 0;
   ")
-  // Remove @unsupported once the table is supported in the
-  // switch.
-  @unsupported
   table disable_ingress_vlan_checks_table {
     key = {
       // Note: In the P4_16 specification, a table with no match keys cannot
@@ -118,10 +116,16 @@ control ingress_vlan_checks(inout headers_t headers,
   apply {
     // Ingress VLAN checks.
     disable_ingress_vlan_checks_table.apply();
-
+    // TODO: Properly model the behavior for VIDs 0x001 and 0xFFF
+    // when Packet-IO is properly modeled.
+    // Failed ingress VLAN check should prevent packet from being admitted to
+    // L3 and IPMC lookup.Add commentMore actions
     if (local_metadata.enable_vlan_checks &&
         enable_ingress_vlan_checks &&
+        !ingress_port_is_member_of_vlan &&
         !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
+      // Mark the packet as dropped by ingress VLAN checks.
+      local_metadata.marked_to_drop_by_ingress_vlan_checks = true;
       mark_to_drop(standard_metadata);
     }
   }
@@ -154,9 +158,6 @@ control egress_vlan_checks(inout headers_t headers,
     // Force the dummy_match to be wildcard.
     dummy_match::prefix_length == 0;
   ")
-  // Remove @unsupported once the table is supported in the
-  // switch.
-  @unsupported
   table disable_egress_vlan_checks_table {
     key = {
       // Note: In the P4_16 specification, a table with no match keys cannot
