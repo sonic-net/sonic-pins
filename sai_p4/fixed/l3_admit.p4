@@ -33,16 +33,9 @@ control l3_admit(in headers_t headers,
   }
 
   apply {
-
-    // TODO: Properly model the behavior for VIDs 0x001 and 0xFFF
-    // when Packet-IO is properly modeled.
-    // Failed ingress VLAN check should prevent packet from being admitted to
-    // L3 routing.
-    if (local_metadata.enable_vlan_checks &&
-        !local_metadata.ingress_port_is_member_of_vlan &&
-        !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
-      // Explicitly reject VLAN packets from L3 routing to cancel override
-      // in other parts of the code (e.g. admit_google_system_mac).
+    if (local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+      // Explicitly reject VLAN tagged packets that fail ingress VLAN checks
+      // from L3 routing to cancel override in other parts of the code
       local_metadata.admit_to_l3 = false;
     } else {
       l3_admit_table.apply();
