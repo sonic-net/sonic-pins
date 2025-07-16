@@ -1,6 +1,6 @@
 pkg_info {
   name: "middleblock.p4"
-  version: "2.3.0"
+  version: "2.4.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -127,7 +127,6 @@ tables {
     alias: "disable_ingress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1047,7 +1046,6 @@ tables {
     alias: "disable_egress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1542,7 +1540,6 @@ actions {
     id: 16777494
     name: "ingress.acl_ingress.redirect_to_port"
     alias: "redirect_to_port"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1559,7 +1556,6 @@ actions {
     id: 16777495
     name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
     alias: "acl_mirror_and_redirect_to_port"
-    annotations: "@unsupported"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
   params {
@@ -1841,7 +1837,6 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1860,7 +1855,6 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1874,7 +1868,6 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1899,7 +1892,6 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
