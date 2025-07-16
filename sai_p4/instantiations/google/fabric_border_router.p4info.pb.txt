@@ -1,6 +1,6 @@
 pkg_info {
   name: "fabric_border_router.p4"
-  version: "2.3.0"
+  version: "2.4.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -2038,7 +2038,6 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2057,7 +2056,6 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2071,7 +2069,6 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2096,7 +2093,6 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
