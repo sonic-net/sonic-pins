@@ -14,6 +14,8 @@
 
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
+#include <bitset>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <utility>
@@ -42,12 +44,26 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
+#include "p4_pdpi/ternary.h"
 #include "p4_pdpi/translation_options.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
 namespace {
+
+// TODO: Clean up this duplicated Ternary translation once further
+// refactors are completed.
+// -- TERNARY TRANSLATION ------------------------------------------------------
+
+template <std::size_t bitwidth>
+sai::Ternary BitSetTernaryToSai(
+    const pdpi::Ternary<std::bitset<bitwidth>>& bitset_ternary) {
+  sai::Ternary sai_ternary;
+  sai_ternary.set_value(pdpi::BitsetToHexString(bitset_ternary.value));
+  sai_ternary.set_mask(pdpi::BitsetToHexString(bitset_ternary.mask));
+  return sai_ternary;
+}
 
 bool AllRewritesEnabled(const NexthopRewriteOptions& rewrite_options) {
   return !rewrite_options.disable_decrement_ttl &&
@@ -241,11 +257,22 @@ EntryBuilder& EntryBuilder::AddIpv6EntrySettingNexthopId(
 EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port, IpVersion ip_version,
     const NexthopRewriteOptions& rewrite_options) {
+  AclPreIngressMatchFields match_fields;
+  switch (ip_version) {
+    case IpVersion::kIpv4:
+      match_fields.is_ipv4 = true;
+      break;
+    case IpVersion::kIpv6:
+      match_fields.is_ipv6 = true;
+      break;
+    case IpVersion::kIpv4And6:
+      match_fields.is_ip = true;
+      break;
+  }
   const std::string vrf_id = "vrf";
-
   return AddEntryAdmittingAllPacketsToL3()
       .AddVrfEntry(vrf_id)
-      .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id, ip_version)
+      .AddPreIngressAclTableEntry(vrf_id, match_fields)
       .AddDefaultRouteForwardingAllPacketsToGivenPort(egress_port, ip_version,
                                                       vrf_id, rewrite_options);
 }
@@ -255,11 +282,10 @@ EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
     const IpForwardingParams& ip_forwarding_params,
     const NexthopRewriteOptions& rewrite_options) {
   const std::string vrf_id = "vrf";
-
   return AddEntryAdmittingAllPacketsToL3()
       .AddVrfEntry(vrf_id)
-      .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id,
-                                                       IpVersion::kIpv4And6)
+      .AddPreIngressAclTableEntry(vrf_id,
+                                  AclPreIngressMatchFields{.is_ip = true})
       .AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
           egress_port, vrf_id, ip_forwarding_params, rewrite_options);
 }
@@ -304,41 +330,36 @@ EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenMulticastGroup(
   const std::string kVrf =
       absl::StrFormat("vrf-for-multicast-group-%d", multicast_group_id);
   AddVrfEntry(kVrf);
-  AddPreIngressAclEntryAssigningVrfForGivenIpType(kVrf, IpVersion::kIpv4And6);
+  AddPreIngressAclTableEntry(kVrf, AclPreIngressMatchFields{.is_ip = true});
   // AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
   //     multicast_group_id, IpVersion::kIpv4And6, kVrf);
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
-    absl::string_view vrf, IpVersion ip_version) {
-  sai::TableEntry& entry = *entries_.add_entries();
-  entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
-    acl_pre_ingress_table_entry {
-      match {}
-      action { set_vrf { vrf_id: "TBD" } }
-      priority: 1
-    }
-  )pb");
-  entry.mutable_acl_pre_ingress_table_entry()
-      ->mutable_action()
-      ->mutable_set_vrf()
-      // TODO: Pass string_view directly once proto supports it.
-      ->set_vrf_id(std::string(vrf));
-  auto& match = *entry.mutable_acl_pre_ingress_table_entry()->mutable_match();
-  switch (ip_version) {
-    case IpVersion::kIpv4:
-      match.mutable_is_ipv4()->set_value("0x1");
-      return *this;
-    case IpVersion::kIpv6:
-      match.mutable_is_ipv6()->set_value("0x1");
-      return *this;
-    case IpVersion::kIpv4And6:
-      match.mutable_is_ip()->set_value("0x1");
-      return *this;
+EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
+    absl::string_view vrf, const AclPreIngressMatchFields& match_fields,
+    int priority) {
+  sai::AclPreIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
+  entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
+  entry.set_priority(priority);
+  auto& match = *entry.mutable_match();
+  if (match_fields.is_ip.has_value()) {
+    match.mutable_is_ip()->set_value(BoolToHexString(*match_fields.is_ip));
   }
-  LOG(FATAL)  // Crash ok: test-only library.
-      << "invalid ip version: " << static_cast<int>(ip_version);
+  if (match_fields.is_ipv4.has_value()) {
+    match.mutable_is_ipv4()->set_value(BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    match.mutable_is_ipv6()->set_value(BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.in_port.has_value()) {
+    match.mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (!match_fields.vlan_id.IsWildcard()) {
+    *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
+  }
+  return *this;
 }
 
 EntryBuilder& EntryBuilder::AddEntryTunnelTerminatingAllIpInIpv6Packets() {
@@ -553,26 +574,6 @@ EntryBuilder& EntryBuilder::AddDisableEgressVlanChecksEntry() {
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
-    absl::string_view vlan_id_hexstr, absl::string_view vrf) {
-  sai::AclPreIngressTableEntry& entry =
-      *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
-  entry.mutable_match()->mutable_vlan_id()->set_value(vlan_id_hexstr);
-  entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
-  entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
-  entry.set_priority(1);
-  return *this;
-}
-
-EntryBuilder& EntryBuilder::AddEntrySettingVrfForAllPackets(
-    absl::string_view vrf, int priority) {
-  sai::AclPreIngressTableEntry& entry =
-      *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
-  entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
-  entry.set_priority(priority);
-  return *this;
-}
-
 EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
     absl::string_view set_vlan_id_hexstr,
     std::optional<absl::string_view> match_vlan_id_hexstr, int priority) {
@@ -611,14 +612,12 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
     auto& rif_action =
         *rif_entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
     rif_action.set_vlan_id(*rewrite_options.egress_rif_vlan);
-    // TODO: Pass string_view directly once proto supports it.
-    rif_action.set_port(std::string(egress_port));
+    rif_action.set_port(egress_port);
     rif_action.set_src_mac(src_mac.ToString());
   } else {
     auto& rif_action =
         *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
-    // TODO: Pass string_view directly once proto supports it.
-    rif_action.set_port(std::string(egress_port));
+    rif_action.set_port(egress_port);
     rif_action.set_src_mac(src_mac.ToString());
   }
 
@@ -662,7 +661,6 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
     action.set_disable_vlan_rewrite(
         BoolToHexString(rewrite_options.disable_vlan_rewrite));
   }
-
   return *this;
 }
 

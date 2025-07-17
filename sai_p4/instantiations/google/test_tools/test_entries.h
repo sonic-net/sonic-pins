@@ -20,6 +20,7 @@
 #ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
+#include <bitset>
 #include <optional>
 #include <string>
 #include <utility>
@@ -37,6 +38,7 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/ternary.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -192,6 +194,14 @@ struct WcmpGroupAction {
   std::optional<std::string> watch_port;
 };
 
+struct AclPreIngressMatchFields {
+  std::optional<bool> is_ip;
+  std::optional<bool> is_ipv4;
+  std::optional<bool> is_ipv6;
+  std::optional<std::string> in_port;
+  pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
+};
+
 // Tagging mode for VLAN membership entries.
 enum class VlanTaggingMode {
   kTagged,
@@ -327,8 +337,8 @@ class EntryBuilder {
                                              const Ipv6Lpm& ipv6_lpm = {});
 
   // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
-  // entry and RIF entry all characterized by `nexthop_rewrite_options`. The RIF
-  // will output packets on `egress_port`.
+  // entry and RIF entry all characterized by `nexthop_rewrite_options`. The
+  // RIF will output packets on `egress_port`.
   EntryBuilder& AddNexthopRifNeighborEntries(
       absl::string_view nexthop_id, absl::string_view egress_port,
       const NexthopRewriteOptions& rewrite_options = {});
@@ -348,8 +358,11 @@ class EntryBuilder {
   EntryBuilder& AddMulticastRoute(absl::string_view vrf,
                                   const netaddr::Ipv6Address& dst_ip,
                                   int multicast_group_id);
-  EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
-      absl::string_view vrf, IpVersion ip_version);
+  // Adds a pre-ingress ACL table entry that matches packets with the given
+  // `match_fields` and forwards them to the given `vrf`.
+  EntryBuilder& AddPreIngressAclTableEntry(
+      absl::string_view vrf, const AclPreIngressMatchFields& match_fields = {},
+      int priority = 1);
   EntryBuilder& AddEntryTunnelTerminatingAllIpInIpv6Packets();
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
   EntryBuilder& AddEntryPuntingPacketsWithDstMac(
@@ -383,10 +396,6 @@ class EntryBuilder {
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddDisableIngressVlanChecksEntry();
   EntryBuilder& AddDisableEgressVlanChecksEntry();
-  EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
-      absl::string_view vlan_id_hexstr, absl::string_view vrf);
-  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf,
-                                                int priority = 1);
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt,
