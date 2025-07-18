@@ -35,7 +35,7 @@
 
 namespace dvaas {
 
-absl::Status ValidateAgaistArribaTestVector(
+absl::Status ValidateAgainstArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
