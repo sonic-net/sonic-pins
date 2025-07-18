@@ -43,7 +43,7 @@ namespace dvaas {
 // * Each input and output packet must:
 //   * Be valid according to `packetlib::ValidatePacket` after computed fields
 //     have been filled in.
-//   * Contain a test packet ID/tag according to `ExtractTestPacketTag`.
+//   * Contain a test packet ID/tag according to `ExtractIdFromTaggedPacket`.
 //     This ID must be:
 //     * Shared among all packets within the test vector.
 //     * Unique among all test vectors.

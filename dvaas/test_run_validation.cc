@@ -31,15 +31,15 @@
 #include "dvaas/output_writer.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace dvaas {
 
@@ -104,6 +104,16 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     const Packet& actual_packet = actual_output.packets(i);
     const Packet& expected_packet = expected_output.packets(i);
     MessageDifferencer differ;
+    // Ignore logical field `reasons_invalid` since it is redundant (computed
+    // from other fields) and misleading (not part of the actual packet).
+    const google::protobuf::FieldDescriptor* reasons_invalid_descriptor =
+        packetlib::Packet::descriptor()->FindFieldByName("reasons_invalid");
+    if (reasons_invalid_descriptor == nullptr) {
+      LOG(FATAL) << "Could not find field "  // Crash ok: testonly code
+                    "'reasons_invalid' in packetlib::Packet";
+    }
+    differ.IgnoreField(reasons_invalid_descriptor);
+
     for (auto* field : params.ignored_packetlib_fields)
       differ.IgnoreField(field);
     std::string diff;
@@ -343,7 +353,7 @@ PacketTestValidationResult ValidateTestRun(
         absl::StrJoin(diff_params.ignored_packetlib_fields, ",",
                       [](std::string* out,
                          const google::protobuf::FieldDescriptor* field) {
-                        absl::StrAppend(out, "'", field->name(), "'");
+                        absl::StrAppend(out, "'", field->full_name(), "'");
                       }),
         ")");
   }
@@ -383,30 +393,19 @@ PacketTestValidationResult ValidateTestRun(
   return result;
 }
 
-absl::Status ValidateTestRuns(const PacketTestRuns& test_runs,
-                              const SwitchOutputDiffParams& diff_params,
-                              const OutputWriterFunctionType& write_failures) {
-  LOG(INFO) << "Validating test runs";
+PacketTestOutcomes ValidateTestRuns(const PacketTestRuns& test_runs,
+                                    const SwitchOutputDiffParams& diff_params) {
+  PacketTestOutcomes test_outcomes;
+  test_outcomes.mutable_outcomes()->Reserve(test_runs.test_runs_size());
 
-  std::vector<std::string> failures;
-  for (const PacketTestRun& test_run : test_runs.test_runs()) {
-    PacketTestValidationResult result = ValidateTestRun(test_run, diff_params);
-    if (result.has_failure()) {
-      failures.push_back(result.failure().description());
-    }
+  for (const auto& test_run : test_runs.test_runs()) {
+    PacketTestOutcome& test_outcome = *test_outcomes.add_outcomes();
+    *test_outcome.mutable_test_run() = test_run;
+    *test_outcome.mutable_test_result() =
+        ValidateTestRun(test_run, diff_params);
   }
 
-  RETURN_IF_ERROR(write_failures(absl::StrJoin(failures, "\n\n")));
-
-  if (!failures.empty()) {
-    return gutil::FailedPreconditionErrorBuilder()
-           << failures.size()
-           << " failures among test results. Showing only the first failure.\n"
-           << failures[0]
-           << "\nRefer to the test artifacts for the full list of failures.";
-  }
-
-  return absl::OkStatus();
+  return test_outcomes;
 }
 
 }  // namespace dvaas

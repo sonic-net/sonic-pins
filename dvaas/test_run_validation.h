@@ -23,6 +23,7 @@
 #include "dvaas/output_writer.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 
@@ -58,11 +59,9 @@ PacketTestValidationResult
 ValidateTestRun(const PacketTestRun &test_run,
                 const SwitchOutputDiffParams &diff_params = {});
 
-// Like `ValidateTestRun`, but for a collection of `test_runs`. Also
-// writes the results to a test artifact using `write_failures`.
-absl::Status ValidateTestRuns(const PacketTestRuns &test_runs,
-                              const SwitchOutputDiffParams &diff_params,
-                              const OutputWriterFunctionType &write_failures);
+// Like `ValidateTestRun`, but for a collection of `test_runs`.
+PacketTestOutcomes ValidateTestRuns(const PacketTestRuns& test_runs,
+                                    const SwitchOutputDiffParams& diff_params);
 
 } // namespace dvaas
 
