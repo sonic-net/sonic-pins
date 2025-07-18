@@ -30,7 +30,6 @@
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/packet_injection.h"
-#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "thinkit/mirror_testbed.h"
@@ -234,6 +233,14 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
  private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
   std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
+
+  // The P4Specification, P4Info, and entities from SUT are stored to maintain
+  // consistency between when test vector expectations are generated and when
+  // packet traces are created.
+  P4Specification sut_p4_spec_;
+  pdpi::IrP4Info sut_ir_p4info_;
+  pdpi::IrEntities sut_augmented_entities_;
+
   // Test vectors created as a result of (latest) call to `Init`. Calls to
   // `StartTraffic` use these test vectors.
   GenerateTestVectorsResult generate_test_vectors_result_;
@@ -273,6 +280,9 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
   // The same test vectors are reused multiple times so we use a counter to
   // produce unique tag ids and retag test vectors per each use.
   int packet_tag_id_ = 1;
+
+  // The number of packet traces collected during `GetValidationResult`.
+  int packet_trace_count_ = 0;
 
   PacketStatistics statistics_;
 
@@ -322,10 +332,11 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
   absl::Status CollectOutputTraffic()
       ABSL_LOCKS_EXCLUDED(collected_traffic_mutex_);
 
-  // Result of packet injection and collection (i.e. test vector + switch
-  // output), produced and used by `GetValidationStats` by processing
-  // `injected_traffic_` and `collected_traffic_by_id_` (and residues).
-  PacketTestRuns test_runs_;
+  // Result of packet injection, collection, and validation (i.e. test vector +
+  // switch output + validation result), produced and used by
+  // `GetValidationStats` by processing `injected_traffic_` and
+  // `collected_traffic_by_id_` (and residues).
+  PacketTestOutcomes test_outcomes_;
 
   // Parameters received in the (latest) call to `Init`.
   TrafficGenerator::Params params_;

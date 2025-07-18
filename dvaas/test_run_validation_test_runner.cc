@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <iostream>
+#include <string>
+#include <vector>
+
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "dvaas/test_run_validation.h"
@@ -19,6 +23,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 namespace {
@@ -33,6 +38,7 @@ struct TestCase {
   // used by this test case.
   PacketTestVector test_vector;
   SwitchOutput actual_output;
+  SwitchOutputDiffParams diff_params;
 };
 
 // Defines and returns test cases (i.e., inputs) for the
@@ -330,6 +336,90 @@ std::vector<TestCase> TestCases() {
         ->mutable_ipv4_header()
         ->set_checksum("0x0000");
   }
+  {
+    TestCase& test = tests.emplace_back();
+    test = TestCase{
+        .description =
+            "Packet gets forwarded with an unexpected\nmodification of two "
+            "header fields. This is the same test case as above,\nbut many "
+            "fields are ignored by test_run_validation."
+            "\nOne of the modified field is ignored by test_run_validation.",
+        .test_vector = ParseProtoOrDie<PacketTestVector>(R"pb(
+          input {
+            type: DATAPLANE
+            packet {
+              port: "1"
+              parsed {
+                headers {
+                  ethernet_header {
+                    ethernet_destination: "02:03:04:05:06:07"
+                    ethernet_source: "00:01:02:03:04:05"
+                    ethertype: "0x0800"
+                  }
+                }
+                headers {
+                  ipv4_header {
+                    version: "0x4"
+                    ihl: "0x5"
+                    dscp: "0x1c"
+                    ecn: "0x0"
+                    total_length: "0x012e"
+                    identification: "0x0000"
+                    flags: "0x0"
+                    fragment_offset: "0x0000"
+                    ttl: "0x20"
+                    protocol: "0x11"
+                    checksum: "0x1b62"
+                    ipv4_source: "10.0.0.0"
+                    ipv4_destination: "10.206.105.32"
+                  }
+                }
+                headers {
+                  udp_header {
+                    source_port: "0x0000"
+                    destination_port: "0x0000"
+                    length: "0x011a"
+                    checksum: "0xad82"
+                  }
+                }
+                payload: "test packet"
+              }
+            }
+          }
+          # Acceptable outputs and actual output filled in below.
+        )pb"),
+        // Overridden below.
+        .actual_output = SwitchOutput(),
+        .diff_params =
+            {.ignored_packetlib_fields =
+                 {
+                     packetlib::Ipv4Header::descriptor()->FindFieldByName(
+                         "dscp"),
+                     packetlib::PsampHeader::descriptor()->FindFieldByName(
+                         "length"),
+                     packetlib::UdpHeader::descriptor()->FindFieldByName(
+                         "source_port"),
+                 }},
+    };
+
+    // We expect the packet to be forwarded out of port 12 unmodified.
+    auto& acceptable_output =
+        *test.test_vector.add_acceptable_outputs()->add_packets();
+    acceptable_output = test.test_vector.input().packet();
+    acceptable_output.set_port("12");
+
+    // The packet instead gets forwarded with two header field modifications.
+    auto& actual_output = *test.actual_output.add_packets();
+    actual_output = acceptable_output;
+    actual_output.mutable_parsed()
+        ->mutable_headers(1)
+        ->mutable_ipv4_header()
+        ->set_dscp("0x00");
+    actual_output.mutable_parsed()
+        ->mutable_headers(1)
+        ->mutable_ipv4_header()
+        ->set_checksum("0x0000");
+  }
 
   {
     TestCase& test = tests.emplace_back();
@@ -430,7 +520,8 @@ void main() {
     PacketTestRun test_run;
     *test_run.mutable_test_vector() = test.test_vector;
     *test_run.mutable_actual_output() = test.actual_output;
-    PacketTestValidationResult result = ValidateTestRun(test_run);
+    PacketTestValidationResult result =
+        ValidateTestRun(test_run, test.diff_params);
     CHECK(result.has_failure())  // Crash OK: this is test code.
         << "for test case with description '" << test.description << "'";
     std::cout << std::string(80, '=')
