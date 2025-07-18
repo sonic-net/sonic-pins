@@ -35,8 +35,6 @@ void SetIPv4Priority(otg::FlowIpv4& ip_packet, int dscp, int ecn);
 otg::FlowIpv6& AddIPv6Header(otg::Flow& flow, absl::string_view src_ipv6,
                              absl::string_view dst_ipv6);
 
-void SetIPv6Priority(otg::FlowIpv6& ip_packet, int dscp, int ecn);
-
 absl::Status SetTrafficTransmissionState(
     otg::Openapi::StubInterface& otg_stub,
     otg::StateTrafficFlowTransmit::State::Enum transmission_state);
