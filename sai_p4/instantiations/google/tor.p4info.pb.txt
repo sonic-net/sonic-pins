@@ -1,8 +1,16 @@
+# proto-file: p4/config/v1/p4info.proto
+# proto-message: p4.config.v1.P4Info
+
 pkg_info {
   name: "tor.p4"
-  version: "2.3.0"
+  version: "3.0.1"
   arch: "v1model"
   organization: "Google"
+  platform_properties {
+    multicast_group_table_size: 512
+    multicast_group_table_total_replicas: 3968
+    multicast_group_table_max_replicas_per_entry: 128
+  }
 }
 tables {
   preamble {
@@ -270,7 +278,6 @@ tables {
     alias: "disable_ingress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -714,6 +721,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767362
+  direct_resource_ids: 352321792
   size: 255
 }
 tables {
@@ -1275,7 +1283,6 @@ tables {
     alias: "disable_egress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1356,7 +1363,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 1024
+  size: 655360
 }
 tables {
   preamble {
@@ -1751,14 +1758,15 @@ actions {
     id: 16777473
     name: "ingress.acl_ingress.acl_copy"
     alias: "acl_copy"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
   }
   params {
     id: 1
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1767,14 +1775,15 @@ actions {
     id: 16777474
     name: "ingress.acl_ingress.acl_trap"
     alias: "acl_trap"
-    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
   params {
     id: 1
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1783,7 +1792,8 @@ actions {
     id: 16777475
     name: "ingress.acl_ingress.acl_forward"
     alias: "acl_forward"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
 }
 actions {
@@ -1816,7 +1826,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1840,7 +1850,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
   params {
@@ -1889,7 +1899,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1905,7 +1915,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1990,19 +2000,18 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
     name: "append_ingress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
   params {
     id: 2
     name: "append_egress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
 }
 actions {
@@ -2026,7 +2035,6 @@ actions {
     id: 16777494
     name: "ingress.acl_ingress.redirect_to_port"
     alias: "redirect_to_port"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2043,7 +2051,6 @@ actions {
     id: 16777495
     name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
     alias: "acl_mirror_and_redirect_to_port"
-    annotations: "@unsupported"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
   params {
@@ -2325,7 +2332,7 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -2344,7 +2351,6 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2358,7 +2364,7 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -2383,7 +2389,6 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2433,13 +2438,13 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
-    annotations: "@selector_size_semantics(\"sum_of_weights\")"
-    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
   size: 31296
   max_group_size: 256
+  sum_of_weights {
+  }
 }
 direct_counters {
   preamble {
@@ -2531,6 +2536,18 @@ direct_counters {
 }
 direct_meters {
   preamble {
+    id: 352321792
+    name: "ingress.acl_ingress.acl_ingress_meter"
+    alias: "acl_ingress_meter"
+    annotations: "@mode(single_rate_two_color)"
+  }
+  spec {
+    unit: BYTES
+  }
+  direct_table_id: 33554688
+}
+direct_meters {
+  preamble {
     id: 352321794
     name: "ingress.acl_ingress.acl_ingress_qos_meter"
     alias: "acl_ingress_qos_meter"
@@ -2591,6 +2608,15 @@ controller_packet_metadata {
 }
 type_info {
   new_types {
+    key: "cpu_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "mirror_session_id_t"
     value {
       translated_type {
@@ -2619,15 +2645,6 @@ type_info {
   }
   new_types {
     key: "port_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "qos_queue_t"
     value {
       translated_type {
         sdn_string {
@@ -2669,6 +2686,7 @@ type_info {
         sdn_string {
         }
       }
+      annotations: "@p4runtime_translation_mappings({ { \"\" , 0 } , })"
     }
   }
   new_types {

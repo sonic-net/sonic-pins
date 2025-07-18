@@ -1,8 +1,16 @@
+# proto-file: p4/config/v1/p4info.proto
+# proto-message: p4.config.v1.P4Info
+
 pkg_info {
   name: "middleblock.p4"
-  version: "2.3.0"
+  version: "3.0.1"
   arch: "v1model"
   organization: "Google"
+  platform_properties {
+    multicast_group_table_size: 512
+    multicast_group_table_total_replicas: 3968
+    multicast_group_table_max_replicas_per_entry: 128
+  }
 }
 tables {
   preamble {
@@ -28,6 +36,34 @@ tables {
     scope: DEFAULT_ONLY
   }
   size: 1
+}
+tables {
+  preamble {
+    id: 33554701
+    name: "ingress.acl_pre_ingress.acl_pre_ingress_csig_middleblock_table"
+    alias: "acl_pre_ingress_csig_middleblock_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@sai_acl(PRE_INGRESS)"
+    annotations: "@sai_acl_priority(13)"
+  }
+  match_fields {
+    id: 1
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  action_refs {
+    id: 16777482
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 125
 }
 tables {
   preamble {
@@ -127,7 +163,6 @@ tables {
     alias: "disable_ingress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -594,6 +629,29 @@ tables {
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
+    id: 1
+    name: "in_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
+    match_type: OPTIONAL
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  match_fields {
+    id: 6
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
+  }
+  match_fields {
     id: 2
     name: "is_ip"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
@@ -1047,7 +1105,6 @@ tables {
     alias: "disable_egress_vlan_checks_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::prefix_length == 0;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1128,7 +1185,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 1024
+  size: 655360
 }
 tables {
   preamble {
@@ -1291,6 +1348,20 @@ actions {
 }
 actions {
   preamble {
+    id: 16777482
+    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
+    alias: "set_outer_vlan_id"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "vlan_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
     id: 16777256
     name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks"
     alias: "disable_ingress_vlan_checks"
@@ -1411,7 +1482,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1428,7 +1499,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1506,19 +1577,18 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
     name: "append_ingress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
   params {
     id: 2
     name: "append_egress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
 }
 actions {
@@ -1542,7 +1612,6 @@ actions {
     id: 16777494
     name: "ingress.acl_ingress.redirect_to_port"
     alias: "redirect_to_port"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1559,7 +1628,6 @@ actions {
     id: 16777495
     name: "ingress.acl_ingress.acl_mirror_and_redirect_to_port"
     alias: "acl_mirror_and_redirect_to_port"
-    annotations: "@unsupported"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
   params {
@@ -1841,7 +1909,7 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -1860,7 +1928,6 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1874,7 +1941,7 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -1899,7 +1966,6 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1941,13 +2007,13 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
-    annotations: "@selector_size_semantics(\"sum_of_weights\")"
-    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
   size: 49152
   max_group_size: 512
+  sum_of_weights {
+  }
 }
 direct_counters {
   preamble {
@@ -2066,6 +2132,15 @@ controller_packet_metadata {
 }
 type_info {
   new_types {
+    key: "cpu_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "mirror_session_id_t"
     value {
       translated_type {
@@ -2085,15 +2160,6 @@ type_info {
   }
   new_types {
     key: "port_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "qos_queue_t"
     value {
       translated_type {
         sdn_string {
@@ -2126,6 +2192,7 @@ type_info {
         sdn_string {
         }
       }
+      annotations: "@p4runtime_translation_mappings({ { \"\" , 0 } , })"
     }
   }
   new_types {

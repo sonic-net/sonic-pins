@@ -16,6 +16,7 @@
 #define PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_
 
 #include "p4/config/v1/p4info.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 
 namespace sai {
 
@@ -35,7 +36,7 @@ bool ApplySumOfMembersSemanticsForActionProfiles(
 // accounts for that when getting the correct value from the library.
 // Returns true if any field was changed.
 bool ApplySumOfWeightsSemanticsForActionProfiles(
-    bool is_tor, p4::config::v1::P4Info& p4info);
+    sai::Instantiation instantiation, p4::config::v1::P4Info& p4info);
 
 }  // namespace sai
 

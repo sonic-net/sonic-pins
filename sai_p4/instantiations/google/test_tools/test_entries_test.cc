@@ -15,10 +15,11 @@
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
 #include <algorithm>
+#include <bitset>
 #include <optional>
-#include <string>
 #include <vector>
 
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
@@ -31,6 +32,8 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/pd.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
+#include "p4_pdpi/ternary.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -41,10 +44,12 @@ namespace {
 using ::gutil::EqualsProto;
 using ::gutil::HasOneofCase;
 using ::gutil::IsOkAndHolds;
+using ::testing::AllOf;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::Pointwise;
 using ::testing::SizeIs;
+using ::testing::UnorderedElementsAre;
 
 // -- EntryBuilder tests --------------------------------------------------
 
@@ -139,6 +144,135 @@ TEST(EntryBuilder, AddEntryPuntingAllPacketsDoesNotAddEntry) {
   EXPECT_THAT(entities.entities(), SizeIs(2));
 }
 
+TEST(EntryBuilder, AddEntriesForwardingIpPacketsToGivenPortIpv4AndIpv6) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities ipv4_and_ipv6_entities,
+                       EntryBuilder()
+                           .AddEntriesForwardingIpPacketsToGivenPort(
+                               "egress port", IpVersion::kIpv4And6)
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(ipv4_and_ipv6_entities.entities(),
+              AllOf(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ip"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb"))),
+                    Not(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ipv4"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb")))),
+                    Not(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ipv6"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb"))))));
+};
+
+TEST(EntryBuilder, AddEntriesForwardingIpPacketsToGivenPortIpv4) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities ipv4_entities,
+                       EntryBuilder()
+                           .AddEntriesForwardingIpPacketsToGivenPort(
+                               "egress port", IpVersion::kIpv4)
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(ipv4_entities.entities(),
+              AllOf(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ipv4"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb"))),
+                    Not(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ip"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb")))),
+                    Not(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ipv6"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb"))))));
+}
+
+TEST(EntryBuilder, AddEntriesForwardingIpPacketsToGivenPortIpv6) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities ipv6_entities,
+                       EntryBuilder()
+                           .AddEntriesForwardingIpPacketsToGivenPort(
+                               "egress port", IpVersion::kIpv6)
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(ipv6_entities.entities(),
+              AllOf(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ipv6"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb"))),
+                    Not(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ip"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb")))),
+                    Not(Contains(Partially(EqualsProto(
+                        R"pb(table_entry {
+                               table_name: "acl_pre_ingress_table"
+                               matches {
+                                 name: "is_ipv4"
+                                 optional { value { hex_str: "0x1" } }
+                               }
+                             }
+                        )pb"))))));
+}
+
+TEST(EntryBuilder,
+     AddEntriesForwardingIpPacketsToGivenPortWithIpForwardingParams) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  Ipv4Lpm ipv4_lpm = {
+      .dst_ip = netaddr::Ipv4Address(1, 2, 3, 4),
+  };
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntriesForwardingIpPacketsToGivenPort(
+                               "egress port", {.ipv4_lpm = ipv4_lpm})
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(8));
+}
+
 TEST(EntryBuilder, AddEntriesForwardingIpPacketsToGivenPortAddsEntries) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
@@ -185,7 +319,6 @@ TEST(EntryBuilder,
                          }
                        })pb"))));
 }
-
 void EraseNexthop(pdpi::IrEntities& entities) {
   entities.mutable_entities()->erase(std::remove_if(
       entities.mutable_entities()->begin(), entities.mutable_entities()->end(),
@@ -194,8 +327,8 @@ void EraseNexthop(pdpi::IrEntities& entities) {
       }));
 }
 
-// TODO: Re-enable this test once prefix IPMC routes are supported
-// by SAI P4.
+// TODO: Re-enable this test once prefix IPMC routes are
+// supported by SAI P4.
 TEST(EntryBuilder,
      DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupAddsEntries) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
@@ -208,10 +341,11 @@ TEST(EntryBuilder,
   EXPECT_THAT(entities.entities(), SizeIs(5));
 }
 
-// TODO: Re-enable this test once prefix IPMC routes are supported
-// by SAI P4.
-TEST(EntryBuilder,
-     DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
+// TODO: Re-enable this test once prefix IPMC routes are
+// supported by SAI P4.
+TEST(
+    EntryBuilder,
+    DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
@@ -382,30 +516,200 @@ TEST(EntryBuilder, AddIpv6EntryAddsLpmEntry) {
               )pb"))));
 }
 
-TEST(EntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
-                       EntryBuilder()
-                           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
-                               "vrf-1", IpVersion::kIpv4)
-                           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
-                               "vrf-1", IpVersion::kIpv6)
-                           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
-                               "vrf-1", IpVersion::kIpv4And6)
-                           .LogPdEntries()
-                           .GetDedupedIrEntities(kIrP4Info));
-  EXPECT_THAT(entities.entities(), SizeIs(3));
-}
-
-TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAddsEntry) {
+TEST(EntryBuilder, AddPreIngressAclTableEntryForGivenIpTypeAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6Packets()
+          .AddPreIngressAclTableEntry("vrf-1",
+                                      AclPreIngressMatchFields{.is_ip = true})
+          .AddPreIngressAclTableEntry("vrf-2",
+                                      AclPreIngressMatchFields{.is_ipv4 = true})
+          .AddPreIngressAclTableEntry("vrf-3",
+                                      AclPreIngressMatchFields{.is_ipv6 = true})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(),
+              UnorderedElementsAre(
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "acl_pre_ingress_table"
+                             matches {
+                               name: "is_ip"
+                               optional { value { hex_str: "0x1" } }
+                             }
+                             action { params { value { str: "vrf-1" } } }
+                           })pb")),
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "acl_pre_ingress_table"
+                             matches {
+                               name: "is_ipv4"
+                               optional { value { hex_str: "0x1" } }
+                             }
+                             action { params { value { str: "vrf-2" } } }
+                           })pb")),
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "acl_pre_ingress_table"
+                             matches {
+                               name: "is_ipv6"
+                               optional { value { hex_str: "0x1" } }
+                             }
+                             action { params { value { str: "vrf-3" } } }
+                           })pb"))));
+}
+
+TEST(EntryBuilder, AddPreIngressAclTableEntryForAllIpMatchFields) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddPreIngressAclTableEntry(
+              "vrf-1",
+              AclPreIngressMatchFields{
+                  .is_ip = true, .is_ipv4 = true, .is_ipv6 = true})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(),
+              ElementsAre(Partially(EqualsProto(
+                  R"pb(table_entry {
+                         table_name: "acl_pre_ingress_table"
+                         matches {
+                           name: "is_ip"
+                           optional { value { hex_str: "0x1" } }
+                         }
+                         matches {
+                           name: "is_ipv4"
+                           optional { value { hex_str: "0x1" } }
+                         }
+                         matches {
+                           name: "is_ipv6"
+                           optional { value { hex_str: "0x1" } }
+                         }
+                       })pb"))));
+}
+
+TEST(EntryBuilder,
+     AddPreIngressAclTableEntryWithVlanMaskOfZeroCreatesWildcard) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddPreIngressAclTableEntry(
+              "vrf-1",
+              AclPreIngressMatchFields{
+                  .vlan_id = pdpi::Ternary<std::bitset<kVlanIdBitwidth>>(
+                      0x00a, 0x000)})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_pre_ingress_table"
+                  action {
+                    name: "set_vrf"
+                    params {
+                      name: "vrf_id"
+                      value { str: "vrf-1" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddPreIngressAclTableEntryCreatesTableWithWildcardAndDefaultPriority) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+		           .AddPreIngressAclTableEntry("vrf-1")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_pre_ingress_table"
+                  priority: 1
+                  action {
+                    name: "set_vrf"
+                    params {
+                      name: "vrf_id"
+                      value { str: "vrf-1" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddEntryTunnelTerminatingAllIpInIpv6PacketsAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddEntryTunnelTerminatingAllIpInIpv6Packets()
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), SizeIs(1));
+}
+TEST(EntryBuilder, AddEntryPuntingPacketsWithTtlZeroAndOneHasOneEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntryPuntingPacketsWithTtlZeroAndOne()
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+}
+TEST(EntryBuilder, AddEntryPuntingPacketsWithDstMacHasOneEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntryPuntingPacketsWithDstMac(
+                               netaddr::MacAddress(1, 2, 3, 4, 5, 6).ToString())
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_table"
+                  matches {
+                    name: "dst_mac"
+                    ternary {
+                      value { mac: "01:02:03:04:05:06" }
+                      mask { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddEntryPuntingPacketsWithDstMacWithPuntAction) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddEntryPuntingPacketsWithDstMac(
+                               netaddr::MacAddress(1, 2, 3, 4, 5, 6).ToString(),
+                               PuntAction::kCopy, "0x8")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_table"
+                  matches {
+                    name: "dst_mac"
+                    ternary {
+                      value { mac: "01:02:03:04:05:06" }
+                      mask { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                  priority: 1
+                  action {
+                    name: "acl_copy"
+                    params {
+                      name: "qos_queue"
+                      value { str: "0x8" }
+                    }
+                  }
+                }
+              )pb"))));
 }
 
 TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
@@ -423,6 +727,7 @@ TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
   EXPECT_THAT(replica_overload_entities.entities(),
               ElementsAre(HasOneofCase<pdpi::IrEntity>(
                   "entity", pdpi::IrEntity::kPacketReplicationEngineEntry)));
+
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities port_overload_entities,
                        EntryBuilder()
                            .AddMulticastGroupEntry(123, {"1", "2"})
@@ -456,13 +761,13 @@ TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-                      .AddMulticastRouterInterfaceEntry({
-                      .multicast_replica_port = "\1",
-                      .multicast_replica_instance = 15,
-                      .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
-                  })
-                  .LogPdEntries()
-                  .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+          .AddMulticastRouterInterfaceEntry({
+              .multicast_replica_port = "\1",
+              .multicast_replica_instance = 15,
+              .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+          })
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
                 table_entry {
                   table_name: "multicast_router_interface_table"
@@ -715,6 +1020,9 @@ TEST(EntryBuilder,
      AddIngressAclEntryRedirectingToNexthopWithMatchFieldOptionsAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   MirrorAndRedirectMatchFields match_fields = {
+      .in_port = "1",
+      .ipmc_table_hit = true,
+      .vlan_id = 1,
       .is_ipv4 = true,
       .dst_ip =
           sai::P4RuntimeTernary<netaddr::Ipv4Address>{
@@ -728,6 +1036,7 @@ TEST(EntryBuilder,
               .mask = netaddr::Ipv6Address(0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                                            0xff, 0xff),
           },
+      .vrf = "vrf-1",
   };
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
@@ -735,10 +1044,18 @@ TEST(EntryBuilder,
           .AddIngressAclEntryRedirectingToNexthop("nexthop", match_fields)
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info));
-  EXPECT_THAT(
-      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
-        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
-      )pb"))));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_mirror_and_redirect_table"
+                  matches { name: "vlan_id" }
+                  matches { name: "in_port" }
+                  matches { name: "ipmc_table_hit" }
+                  matches { name: "is_ipv4" }
+                  matches { name: "dst_ip" }
+                  matches { name: "is_ipv6" }
+                  matches { name: "dst_ipv6" }
+                  matches { name: "vrf_id" }
+                })pb"))));
 }
 
 TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
@@ -748,13 +1065,57 @@ TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
       EntryBuilder()
           .AddIngressAclEntryRedirectingToMulticastGroup(123)
           .LogPdEntries()
-          // TODO: Remove `allow_unsupported` flag once the switch
-          // supports multicast-related entries.
+	  // TODO: Remove `allow_unsupported` flag once the
+          // switch supports multicast-related entries.
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(
       entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
         table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
       )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddIngressAclEntryRedirectingToMulticastGroupWithMatchFieldOptionsAdds) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  MirrorAndRedirectMatchFields match_fields = {
+      .in_port = "1",
+      .ipmc_table_hit = true,
+      .vlan_id = 1,
+      .is_ipv4 = true,
+      .dst_ip =
+          sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+              .value = netaddr::Ipv4Address(0x10, 0, 0, 0x1),
+              .mask = netaddr::Ipv4Address(0xff, 0xff, 0xff, 0xff),
+          },
+      .is_ipv6 = true,
+      .dst_ipv6 =
+          sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+              .value = netaddr::Ipv6Address(0x10, 0, 0, 0, 0, 0, 0, 0x1),
+              .mask = netaddr::Ipv6Address(0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                           0xff, 0xff),
+          },
+      .vrf = "vrf-1",
+  };
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToMulticastGroup(123, match_fields)
+          .LogPdEntries()
+          // TODO: Remove `allow_unsupported` flag once the switch
+          // supports multicast-related entries.
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_mirror_and_redirect_table"
+                  matches { name: "vlan_id" }
+                  matches { name: "in_port" }
+                  matches { name: "ipmc_table_hit" }
+                  matches { name: "is_ipv4" }
+                  matches { name: "dst_ip" }
+                  matches { name: "is_ipv6" }
+                  matches { name: "dst_ipv6" }
+                  matches { name: "vrf_id" }
+                })pb"))));
 }
 
 TEST(EntryBuilder, AddDisableIngressVlanChecksEntryAddsCorrectEntry) {
@@ -841,6 +1202,78 @@ TEST(EntryBuilder, AddVlanMembershipEntryAddsCorrectEntry) {
                                        action { name: "make_untagged_member" }
                                      }
                                    )pb")));
+}
+
+TEST(EntryBuilder, AddPreIngressAclEntryMatchingInPortForVrfWithPriority) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddPreIngressAclTableEntry("vrf-1", {.in_port = "ingress-port-1"})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_pre_ingress_table"
+                  matches {
+                    name: "in_port"
+                    optional { value { str: "ingress-port-1" } }
+                  }
+                  priority: 1
+                  action {
+                    name: "set_vrf"
+                    params {
+                      name: "vrf_id"
+                      value { str: "vrf-1" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddWcmpGroupTableEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  std::vector<WcmpGroupAction> wcmp_group_actions = {
+      {.nexthop_id = "nexthop-1", .weight = 1},
+      {.nexthop_id = "nexthop-2", .weight = 2, .watch_port = "watchport-1"}};
+
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddWcmpGroupTableEntry("group-1", absl::MakeSpan(wcmp_group_actions))
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "wcmp_group_table"
+                  matches {
+                    name: "wcmp_group_id"
+                    exact { str: "group-1" }
+                  }
+                  action_set {
+                    actions {
+                      action {
+                        name: "set_nexthop_id"
+                        params {
+                          name: "nexthop_id"
+                          value { str: "nexthop-1" }
+                        }
+                      }
+                      weight: 1
+                    }
+                    actions {
+                      action {
+                        name: "set_nexthop_id"
+                        params {
+                          name: "nexthop_id"
+                          value { str: "nexthop-2" }
+                        }
+                      }
+                      weight: 2
+                      watch_port: "watchport-1"
+                    }
+                  }
+                })pb"))));
 }
 
 }  // namespace
