@@ -19,10 +19,14 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
@@ -35,6 +39,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/utils/ir.h"
 #include "tests/forwarding/util.h"
 
 namespace dvaas {
@@ -73,9 +78,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
     } else {
       const packetlib::Packet parsed_inner_packet =
           packetlib::ParsePacket(response.packet().payload());
-
       absl::StatusOr<int> test_packet_id =
-          ExtractTestPacketTag(parsed_inner_packet);
+          ExtractIdFromTaggedPacket(response.packet().payload());
       if (test_packet_id.ok()) {
         tagged_packet_ins.push_back({
             .tag = *test_packet_id,
@@ -84,9 +88,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
         });
       } else {
         if (is_expected_unsolicited_packet(parsed_inner_packet)) {
-          // TODO: Append to artifact instead of logging.
-          LOG(INFO) << "Ignoring expected unsolicited packet "
-                    << parsed_inner_packet.ShortDebugString();
+          VLOG(1) << "Ignoring expected unsolicited packet "
+                  << parsed_inner_packet.ShortDebugString();
         } else {
           // TODO: Decide if we should continue or fail and stop.
           return gutil::FailedPreconditionErrorBuilder()
@@ -140,6 +143,7 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   }
 
   // Send packets.
+  absl::flat_hash_map<int, absl::Time> packet_injection_time_by_id;
   ASSIGN_OR_RETURN(const pdpi::IrP4Info control_ir_p4info,
                    GetIrP4Info(control_switch));
   for (const auto& [test_id, packet_test_vector] : packet_test_vector_by_id) {
@@ -159,6 +163,7 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
           control_switch_port.GetP4rtEncoding(),
           absl::HexStringToBytes(packet.hex()), control_ir_p4info,
           &control_switch, injection_delay));
+      packet_injection_time_by_id[test_id] = absl::Now();
     } else {
       return absl::UnimplementedError(
           absl::StrCat("Test vector input type not supported\n",
@@ -240,6 +245,9 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     PacketTestRun& run = *result.add_test_runs();
     *run.mutable_test_vector() = packet_test_vector;
     *run.mutable_actual_output() = switch_output_by_id[id];
+    *run.mutable_input_packet_injection_time() =
+        absl::FormatTime(absl::RFC3339_full, packet_injection_time_by_id[id],
+                         absl::UTCTimeZone());
   }
 
   // TODO: Detect problematic packets and log or store them.

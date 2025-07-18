@@ -30,7 +30,6 @@
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/packet_injection.h"
-#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "thinkit/mirror_testbed.h"
@@ -136,76 +135,6 @@ public:
   virtual ~TrafficGenerator() = default;
 };
 
-// A simple implementation of `TrafficGenerator` interface that can be used as a
-// proof of concept. This implementation does NOT provide a consistent traffic
-// injection rate guarantee (see `InjectTraffic` function comments for more
-// details).
-class SimpleTrafficGenerator : public TrafficGenerator {
-public:
-  SimpleTrafficGenerator() = delete;
-  explicit SimpleTrafficGenerator(
-      std::unique_ptr<DataplaneValidationBackend> backend)
-      : backend_(std::move(backend)) {}
-
-  absl::StatusOr<PacketSynthesisStats> Init(thinkit::MirrorTestbed* testbed,
-                                            const Params& params) override;
-  absl::Status StartTraffic() override;
-  absl::Status StopTraffic() override;
-  absl::StatusOr<ValidationResult> GetValidationResult() override;
-  absl::StatusOr<ValidationResult> GetAndClearValidationResult() override;
-
-  ~SimpleTrafficGenerator();
-
- private:
-  std::unique_ptr<DataplaneValidationBackend> backend_;
-  std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
-  // Test vectors created as a result of (latest) call to `Init`. Calls to
-  // `StartTraffic` use these test vectors.
-  GenerateTestVectorsResult generate_test_vectors_result_;
-
-  enum State {
-    // The object has been created but `Init` has not been called.
-    kUninitialized,
-    // `Init` has been called, but no traffic is flowing (either `StartTraffic`
-    // has not been called or `StopTraffic` has been called after that).
-    kInitialized,
-    // Traffic is flowing (`StartTraffic` has been called and `StopTraffic` has
-    // NOT been called after that).
-    kTrafficFlowing,
-  };
-  // The state of the SimpleTrafficGenerator object.
-  State state_ ABSL_GUARDED_BY(state_mutex_) = kUninitialized;
-  // Mutex to synchronize access to state_;
-  absl::Mutex state_mutex_;
-
-  // Thread safe getter for state_.
-  State GetState() ABSL_LOCKS_EXCLUDED(state_mutex_);
-  // Thread safe setter for state_.
-  void SetState(State state) ABSL_LOCKS_EXCLUDED(state_mutex_);
-
-  // The thread that is spawned during the call to `StartTraffic` and runs
-  // `InjectTraffic` function. The thread continues until `StopTraffic` is
-  // called.
-  std::thread traffic_injection_thread_;
-  // Runs in a separate thread, as a loop that injects and collects packets
-  // until traffic is stopped.
-  // In each iteration of the loop, injects packets in
-  // `generate_test_vectors_result_.packet_test_vector_by_id` at the rate
-  // specified by `params_`. At the end of each iteration, WAITS UP TO 3 SECONDS
-  // to collect any in-flight packets, before moving on to next iteration.
-  void InjectTraffic() ABSL_LOCKS_EXCLUDED(test_runs_mutex_);
-
-  // Result of packet injection and collection (i.e. test vector + switch
-  // output). Populated by `InjectTraffic`. Used during the call to
-  // `Get*ValidationStats`.
-  PacketTestRuns test_runs_ ABSL_GUARDED_BY(test_runs_mutex_);
-  // Mutex to synchronize access to test_runs_;
-  absl::Mutex test_runs_mutex_;
-
-  // Parameters received in the (latest) call to `Init`.
-  TrafficGenerator::Params params_;
-};
-
 // The duration needed to wait to ensure packets are no longer in-flight during
 // packet injection.
 const absl::Duration kMaxPacketInFlightDuration = absl::Seconds(3);
@@ -234,6 +163,14 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
  private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
   std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
+
+  // The P4Specification, P4Info, and entities from SUT are stored to maintain
+  // consistency between when test vector expectations are generated and when
+  // packet traces are created.
+  P4Specification sut_p4_spec_;
+  pdpi::IrP4Info sut_ir_p4info_;
+  pdpi::IrEntities sut_augmented_entities_;
+
   // Test vectors created as a result of (latest) call to `Init`. Calls to
   // `StartTraffic` use these test vectors.
   GenerateTestVectorsResult generate_test_vectors_result_;
@@ -259,6 +196,10 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
     // collected to account for in-flight packets (transient state during call
     // to `StopTraffic` for kMaxPacketInFlightDuration).
     kTrafficCollection,
+    // The unrecoverable error state that happens when either
+    // `InjectInputTraffic` or `CollectOutputTraffic` thread returns an error
+    // status. 
+    kError,
   };
   // The state of the TrafficGeneratorWithGuaranteedRate object.
   State state_ ABSL_GUARDED_BY(state_mutex_) = kUninitialized;
@@ -273,6 +214,9 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
   // The same test vectors are reused multiple times so we use a counter to
   // produce unique tag ids and retag test vectors per each use.
   int packet_tag_id_ = 1;
+
+  // The number of packet traces collected during `GetValidationResult`.
+  int packet_trace_count_ = 0;
 
   PacketStatistics statistics_;
 
@@ -322,10 +266,11 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
   absl::Status CollectOutputTraffic()
       ABSL_LOCKS_EXCLUDED(collected_traffic_mutex_);
 
-  // Result of packet injection and collection (i.e. test vector + switch
-  // output), produced and used by `GetValidationStats` by processing
-  // `injected_traffic_` and `collected_traffic_by_id_` (and residues).
-  PacketTestRuns test_runs_;
+  // Result of packet injection, collection, and validation (i.e. test vector +
+  // switch output + validation result), produced and used by
+  // `GetValidationStats` by processing `injected_traffic_` and
+  // `collected_traffic_by_id_` (and residues).
+  PacketTestOutcomes test_outcomes_;
 
   // Parameters received in the (latest) call to `Init`.
   TrafficGenerator::Params params_;

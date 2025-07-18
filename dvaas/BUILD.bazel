@@ -35,26 +35,32 @@ cc_library(
         ":test_vector_cc_proto",
         ":user_provided_packet_test_vector",
         ":validation_result",
+        "//dvaas/thinkit_tests:dvaas_regression_cc_proto",
+        "//gutil:proto",
+        "//gutil:proto_ordering",
         "//gutil:status",
         "//gutil:test_artifact_writer",
         "//gutil:version",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnmi:openconfig_cc_proto",
         "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:p4_runtime_session_extras",
-        "//p4_pdpi:pd",
+        "//p4_pdpi:sequencing",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_symbolic/packet_synthesizer:coverage_goal_cc_proto",
         "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
-        "//sai_p4/tools:auxiliary_entries_for_v1model_targets",
-        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//sai_p4/instantiations/google:p4_versions",
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:mirror_testbed",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -62,6 +68,36 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
     ],
+)
+
+cc_test(
+    name = "dataplane_validation_test",
+    srcs = ["dataplane_validation_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":dataplane_validation",
+        ":packet_trace_cc_proto",
+        "//gutil:proto",
+        "//gutil:status_matchers",
+        "//gutil:test_artifact_writer",
+        "//gutil:testing",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "dataplane_validation_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :dataplane_validation_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "dataplane_validation_test.expected",
+    tools = [":dataplane_validation_test"],
 )
 
 cc_library(
@@ -77,6 +113,7 @@ cc_library(
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
     ],
 )
@@ -105,10 +142,13 @@ cc_library(
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_pdpi/utils:ir",
         "//tests/forwarding:util",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -120,16 +160,18 @@ cc_library(
     srcs = ["test_run_validation.cc"],
     hdrs = ["test_run_validation.h"],
     deps = [
-        ":output_writer",
+        ":switch_api",
         ":test_vector_cc_proto",
         "//gutil:proto",
         "//gutil:proto_ordering",
-        "//gutil:status",
+        "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
@@ -149,19 +191,20 @@ cc_library(
         ":test_run_validation",
         ":test_vector",
         ":test_vector_cc_proto",
+        ":validation_result",
+        "//gutil:proto",
         "//gutil:test_artifact_writer",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:p4_runtime_session_extras",
         "//sai_p4/instantiations/google/test_tools:test_entries",
-        "//thinkit:mirror_testbed",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
     ],
 )
 
@@ -228,12 +271,31 @@ cc_library(
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:bit_widths",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_pdpi/string_encodings:hex_string",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_googlesource_code_re2//:re2",
+    ],
+)
+
+cc_test(
+    name = "test_vector_test",
+    srcs = ["test_vector_test.cc"],
+    deps = [
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:bit_widths",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -290,21 +352,6 @@ cc_test(
 )
 
 
-cc_test(
-    name = "test_vector_test",
-    srcs = ["test_vector_test.cc"],
-    deps = [
-        ":test_vector",
-        ":test_vector_cc_proto",
-        "//gutil:status_matchers",
-        "//gutil:testing",
-        "//p4_pdpi/packetlib",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
 cc_library(
     name = "user_provided_packet_test_vector",
     testonly = True,
@@ -335,9 +382,11 @@ cc_library(
         ":packet_injection",
         ":port_id_map",
         ":switch_api",
+        ":test_run_validation",
         ":test_vector",
         ":test_vector_cc_proto",
         ":validation_result",
+        "//gutil:proto",
         "//gutil:test_artifact_writer",
         "//lib/p4rt:p4rt_port",
         "//p4_pdpi:ir",
@@ -372,6 +421,7 @@ cc_test(
         "//gutil:proto",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_pdpi/testing:test_p4info_cc",
         "@com_google_absl//absl/status",
@@ -419,20 +469,6 @@ cmd_diff_test(
     tools = [":test_vector_stats_test"],
 )
 
-cc_test(
-    name = "test_run_validation_test",
-    srcs = ["test_run_validation_test.cc"],
-    deps = [
-        ":test_run_validation",
-        ":test_vector_cc_proto",
-        "//gutil:proto_matchers",
-        "//gutil:testing",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
-    ],
-)
-
 # go/golden-test-with-coverage
 cc_test(
     name = "test_run_validation_test_runner",
@@ -440,12 +476,12 @@ cc_test(
     linkstatic = True,
     deps = [
         ":test_run_validation",
-        ":test_vector",
         ":test_vector_cc_proto",
         "//gutil:testing",
-        "//p4_pdpi/packetlib",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:optional",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -454,4 +490,21 @@ cmd_diff_test(
     actual_cmd = "$(execpath :test_run_validation_test_runner)",
     expected = ":test_run_validation_test.expected.output",
     tools = [":test_run_validation_test_runner"],
+)
+
+cc_test(
+    name = "test_run_validation_test",
+    srcs = ["test_run_validation_test.cc"],
+    deps = [
+        ":switch_api",
+        ":test_run_validation",
+        ":test_vector_cc_proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
 )
