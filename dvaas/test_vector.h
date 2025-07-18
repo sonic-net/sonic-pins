@@ -21,6 +21,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/test_vector.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -29,12 +30,15 @@ namespace dvaas {
 // A map of packet tags to corresponding test vectors.
 using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 
-// Returns a string that must be included in the payload of test packets.
+// Returns a string that should be included in the payload of test packets.
 // This "tag" encodes the given test packet ID, which must be:
 // * Uniform across all packets within a packet test vector, incl. input &
 //   output packets.
 // * Unique across different packet test vectors.
-std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id);
+// Any Ethernet packet containing a tag returned by this function will
+// be at least the minimum size required by the Ethernet protocol. 
+std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
+                                          absl::string_view description);
 
 // Given a tagged packet (according to `MakeTestPacketTag`), extracts the ID
 // from the tag in its payload. Returns an error if the payload has an
@@ -47,7 +51,7 @@ absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet &packet);
 std::ostream &operator<<(std::ostream &os, const SwitchOutput &output);
 
 // Updates the test tag (to `new_tag`) and all computed fields of all packets
-// (input, acceptable outputs) in the given `packet_test_vectr`. Returns an
+// (input, acceptable outputs) in the given `packet_test_vector`. Returns an
 // error if the packets are not already tagged.
 absl::Status UpdateTestTag(PacketTestVector &packet_test_vector, int new_tag);
 
