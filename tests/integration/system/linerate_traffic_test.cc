@@ -198,7 +198,8 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
   const std::string kSutEgressPort = up_links[1].sut_interface;
   const std::string kIxiaSrcLoc = up_links[0].peer_traffic_location;
   const std::string kIxiaDstLoc = up_links[1].peer_traffic_location;
-  Openapi::StubInterface *traffic_client = testbed->GetTrafficClient();
+  ASSERT_OK_AND_ASSIGN(Openapi::StubInterface * traffic_client,
+                       testbed->GetTrafficClient());
   LOG(INFO) << absl::StrFormat(
       "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
       kIxiaSrcPort, kSutIngressPort, kSutEgressPort, kIxiaDstPort);

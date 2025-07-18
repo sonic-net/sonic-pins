@@ -14,6 +14,8 @@
 
 # This package contains the interfaces, structs, and enums to be used in PINs NSF tests.
 
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],

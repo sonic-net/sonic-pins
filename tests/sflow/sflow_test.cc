@@ -510,7 +510,8 @@ absl::StatusOr<Openapi::StubInterface*> SetUpIxiaTraffic(
   // Set the config.
   SetConfigResponse set_config_response;
   ClientContext set_config_context;
-  Openapi::StubInterface* traffic_client = testbed.GetTrafficClient();
+  ASSIGN_OR_RETURN(Openapi::StubInterface * traffic_client,
+                   testbed.GetTrafficClient());
   LOG(INFO) << "Set Config Request: " << set_config_request;
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(traffic_client->SetConfig(
       &set_config_context, set_config_request, &set_config_response)));
