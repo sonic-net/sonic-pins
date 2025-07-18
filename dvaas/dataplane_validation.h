@@ -27,6 +27,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -45,6 +46,7 @@ limitations under the License.
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
@@ -72,10 +74,10 @@ struct P4Specification {
 // `num_of_replication_attempts_per_failure` number of reruns for the first
 // `max_failures_to_attempt_to_replicate` failures.
 struct FailureEnhancementOptions {
-  int num_of_replication_attempts_per_failure = 100;
   int max_failures_to_attempt_to_replicate = 1;
-  // If true, print the packet's trace.
-  bool print_packet_trace = true;
+  int num_of_replication_attempts_per_failure = 100;
+  // If true, collect and print the packet's trace.
+  bool collect_packet_trace = true;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
@@ -92,8 +94,8 @@ struct DataplaneValidationParams {
   // append to each artifact before writing to it.
   std::optional<std::function<std::string()>> get_artifact_header;
 
-  // If set, causes DVaaS to use the given P4Specification instead of inferring
-  // one from the SUT.
+  // If set, causes DVaaS to use the given `P4Specification` instead of
+  // inferring one from the SUT.
   std::optional<P4Specification> specification_override;
 
   // Max number of packets to send per second. If no rate is given, DVaaS will
@@ -146,7 +148,7 @@ public:
       : backend_(std::move(backend)) {}
 
   // Validates that the `testbed.Sut()` processes packets according to the
-  // P4Specification of the switch as follows:
+  // `P4Specification` of the switch as follows:
   //
   // 1. Opens P4RT and gNMI connections to SUT and control switch.
   //
@@ -159,7 +161,7 @@ public:
   //    hit every table entry installed on the switch at least once.
   //
   // 4. Sends those test packets to the switch and a P4 simulator, where the
-  //    simulator is initialized using the switch's P4Specification.
+  //    simulator is initialized using the switch's `P4Specification`.
   //
   // 5. Validates that the switch forwards/punts/drops packets as the P4
   //    simulator predicts.
@@ -174,6 +176,7 @@ public:
   // 2. Any preexisting P4RT connections to SUT and control switch will be
   //    non-primary.
   // 3. The gNMI configs will be unchanged.
+  // 4. Switch counters may change arbitrarily.
   //
   // Returns an Ok status if dataplane validation succeeds, or an error status
   // detailing invalid dataplane behaviors otherwise.
@@ -192,9 +195,9 @@ public:
   // Post-conditions:
   // 1. Pre-existing connections are left as they are.
   // 2. gNMI configs will be unchanged.
-  absl::StatusOr<ValidationResult>
-  ValidateDataplane(SwitchApi &sut, SwitchApi &control_switch,
-                    const DataplaneValidationParams &params = {});
+  absl::StatusOr<ValidationResult> ValidateDataplaneUsingExistingSwitchApis(
+      SwitchApi& sut, SwitchApi& control_switch,
+      const DataplaneValidationParams& params = {});
 
   // Returns statistics about all packets sent during the lifetime of the
   // DataplaneValidator. If dataplane validation has failed, the returned
@@ -287,7 +290,7 @@ public:
   virtual absl::StatusOr<pdpi::IrEntities>
   GetEntitiesToPuntAllPackets(const pdpi::IrP4Info &switch_p4info) const = 0;
 
-  // Returns the P4Specification that models the given `sut`. Used only if the
+  // Returns the `P4Specification` that models the given `sut`. Used only if the
   // `specification_override` parameter is unset.
   // May query the SUT, but should not change it.
   virtual absl::StatusOr<P4Specification>
@@ -304,10 +307,12 @@ public:
       const pdpi::IrP4Info &ir_p4info, const pdpi::IrEntities &ir_entities,
       const std::vector<SwitchInput> &switch_inputs) const = 0;
 
-  // Creates entries for v1Model auxiliary tables that model the effects of the
-  // given gNMI configuration in on packet forwarding (e.g. port loopback mode).
-  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryTableEntries(
-      gnmi::gNMI::StubInterface& gnmi_stub, pdpi::IrP4Info ir_p4info) const = 0;
+  // Creates entities for v1Model auxiliary tables that model the effects of the
+  // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
+  // loopback mode).
+  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
+      const pdpi::IrEntities &ir_entities, const pdpi::IrP4Info &ir_p4info,
+      gnmi::gNMI::StubInterface &gnmi_stub) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };
@@ -326,6 +331,26 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
     const DataplaneValidationParams& params, SwitchApi& sut,
     DataplaneValidationBackend& backend, gutil::TestArtifactWriter& writer);
 
-} // namespace dvaas
+// Determines the P4 specification DVaaS should use, and performs some sanity
+// checks to ensure the specification is compatible with the switch.
+absl::StatusOr<P4Specification> InferP4Specification(
+    const DataplaneValidationParams& params,
+    const DataplaneValidationBackend& backend, SwitchApi& sut);
+
+// Returns a string of the packet trace summary for the given packet trace.
+absl::StatusOr<std::string> GetPacketTraceSummary(
+    dvaas::PacketTrace& packet_trace);
+
+// Appends the P4 simulation packet trace summary for the input packet in
+// `failed_packet_test` to the failure description of the test. Uses
+// `packet_traces` to find the corresponding packet trace for the input packet,
+// and also stores the full textual trace as test artifact.
+absl::Status AttachPacketTrace(
+    dvaas::PacketTestOutcome& failed_packet_test,
+    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer);
+
+}  // namespace dvaas
 
 #endif // PINS_DVAAS_DATAPLANE_VALIDATION_H_
