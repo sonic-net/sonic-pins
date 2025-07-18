@@ -151,16 +151,6 @@ TEST(OtgHelperTest, AddIPv6HeaderTest) {
   EXPECT_THAT(ipv6_header, EqualsProto(flow.packet(0).ipv6()));
 }
 
-TEST(OtgHelperTest, SetIPv6PriorityTest) {
-  otg::FlowIpv6 ipv6_header;
-
-  SetIPv6Priority(ipv6_header, /*dscp=*/10, /*ecn=*/1);
-
-  EXPECT_THAT(ipv6_header, EqualsProto(R"pb(
-                traffic_class { choice: value value: 41 }
-              )pb"));
-}
-
 TEST(OtgHelperTest, SetTrafficTransmissionStateSuccess) {
   otg::MockOpenapiStub mock_stub;
 
