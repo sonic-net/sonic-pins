@@ -16,18 +16,19 @@
 // IDs of ACL tables (8 most significant bits = 0x02).
 // Since these IDs are user defined, they need to be separate from the fixed SAI
 // table ID space. We achieve this by starting the IDs at 0x100.
-#define ACL_INGRESS_TABLE_ID 0x02000100                      // 33554688
-#define ACL_INGRESS_QOS_TABLE_ID 0x02000107                  // 33554695
-#define ACL_INGRESS_COUNTING_TABLE_ID 0x02000109             // 33554697
-#define ACL_INGRESS_SECURITY_TABLE_ID 0x0200010A             // 33554698
-#define ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID 0x0200010B  // 33554699
-#define ACL_PRE_INGRESS_TABLE_ID 0x02000101                  // 33554689
-#define ACL_PRE_INGRESS_VLAN_TABLE_ID 0x02000105             // 33554693
-#define ACL_PRE_INGRESS_METADATA_TABLE_ID 0x02000106         // 33554694
-#define ACL_WBB_INGRESS_TABLE_ID 0x02000103                  // 33554691
-#define ACL_EGRESS_TABLE_ID 0x02000104                       // 33554692
-#define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108          // 33554696
-#define ACL_EGRESS_L2_TABLE_ID 0x0200010C                    // 33554700
+#define ACL_INGRESS_TABLE_ID 0x02000100                       // 33554688
+#define ACL_INGRESS_QOS_TABLE_ID 0x02000107                   // 33554695
+#define ACL_INGRESS_COUNTING_TABLE_ID 0x02000109              // 33554697
+#define ACL_INGRESS_SECURITY_TABLE_ID 0x0200010A              // 33554698
+#define ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID 0x0200010B   // 33554699
+#define ACL_PRE_INGRESS_TABLE_ID 0x02000101                   // 33554689
+#define ACL_PRE_INGRESS_VLAN_TABLE_ID 0x02000105              // 33554693
+#define ACL_PRE_INGRESS_METADATA_TABLE_ID 0x02000106          // 33554694
+#define ACL_PRE_INGRESS_CSIG_MIDDLEBLOCK_TABLE_ID 0x0200010D  // 33554701
+#define ACL_WBB_INGRESS_TABLE_ID 0x02000103                   // 33554691
+#define ACL_EGRESS_TABLE_ID 0x02000104                        // 33554692
+#define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108           // 33554696
+#define ACL_EGRESS_L2_TABLE_ID 0x0200010C                     // 33554700
 // Next available table id: 0x0200010D (33554701)
 
 // --- Actions -----------------------------------------------------------------
@@ -61,13 +62,18 @@
 #define ACL_INGRESS_SET_FORWARDING_QUEUES_ACTION_ID 0x01000115   // 16777493
 #define ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID 0x01000116        // 16777494
 #define ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID \
-  0x01000117                                                        // 16777495
-#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D                     // 16777485
-#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107                   // 16777479
-#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108                   // 16777480
-#define ACL_DROP_ACTION_ID 0x01000109                               // 16777481
-#define ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP 0x01000119  // 16777497
-// Next available action id: 0x0100011A (16777498)
+      0x01000117                                       // 16777495
+#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D    // 16777485
+#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107  // 16777479
+#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108  // 16777480
+#define ACL_DROP_ACTION_ID 0x01000109              // 16777481
+#define ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP_ACTION_ID \
+  0x01000119  // 16777497
+#define ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_AND_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID \
+  0x0100011A  // 16777498
+#define ACL_INGRESS_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID \
+  0x0100011B  // 16777499
+// Next available action id: 0x0100011C (16777500)
 
 // NOLINTEND
 // --- Meters ------------------------------------------------------------------

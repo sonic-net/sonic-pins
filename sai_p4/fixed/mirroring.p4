@@ -79,9 +79,9 @@ control mirror_session_lookup(inout headers_t headers,
   }
 }  // control mirror_session_lookup
 
-control mirroring_encap(inout headers_t headers,
-                        inout local_metadata_t local_metadata,
-                        inout standard_metadata_t standard_metadata) {
+control mirror_encap(inout headers_t headers,
+                     inout local_metadata_t local_metadata,
+                     inout standard_metadata_t standard_metadata) {
   apply {
     // All mirrored packets are encapped with
     // ==================================================================
@@ -90,6 +90,9 @@ control mirroring_encap(inout headers_t headers,
     // headers. Fields for headers mostly come from mirror-related
     // local_metadata.
     if (IS_MIRROR_COPY(standard_metadata)) {
+      // Mirrored packets do not traverse the usual egress pipeline.
+      local_metadata.bypass_egress = true;
+
       headers.mirror_encap_ethernet.setValid();
       headers.mirror_encap_ethernet.src_addr =
        local_metadata.mirror_encap_src_mac;
@@ -106,8 +109,8 @@ control mirroring_encap(inout headers_t headers,
       // Mirrored packets' traffic class is 0.
       headers.mirror_encap_ipv6.dscp = 0;
       headers.mirror_encap_ipv6.ecn = 0;
-      // Mirrored packets' hop_limit is 16.
-      headers.mirror_encap_ipv6.hop_limit = 16;
+      // Mirrored packets' hop_limit is harded-coded to 0 in OrchAgnet.
+      headers.mirror_encap_ipv6.hop_limit = 0;
       headers.mirror_encap_ipv6.flow_label = 0;
       // payload_lentgh for ipv6 packets is the byte length of headers after
       // ipv6 + payload. in our case, that's the UDP, IPFIX and PSAMP headers.
@@ -139,6 +142,6 @@ control mirroring_encap(inout headers_t headers,
       headers.mirror_encap_psamp_extended.setValid();
     }
   }
-}  // control mirroring_encap
+}  // control mirror_encap
 
 #endif  // SAI_MIRRORING_P4_
