@@ -35,18 +35,12 @@ ValidationResult::ValidationResult(
       test_vector_stats_(ComputeTestVectorStats(test_outcomes)),
       packet_synthesis_result_(packet_synthesis_result) {}
 
-ValidationResult::ValidationResult(
+absl::StatusOr<ValidationResult> ValidationResult::Create(
     const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
     const PacketSynthesisResult& packet_synthesis_result) {
-  test_outcomes_.mutable_outcomes()->Reserve(test_runs.test_runs_size());
-  for (const auto& test_run : test_runs.test_runs()) {
-    PacketTestOutcome& outcome = *test_outcomes_.add_outcomes();
-    *outcome.mutable_test_run() = test_run;
-    *outcome.mutable_test_result() = ValidateTestRun(test_run, diff_params);
-  }
-
-  test_vector_stats_ = ComputeTestVectorStats(test_outcomes_);
-  packet_synthesis_result_ = packet_synthesis_result;
+  ASSIGN_OR_RETURN(PacketTestOutcomes test_outcomes,
+                   ValidateTestRuns(test_runs, diff_params));
+  return ValidationResult(packet_synthesis_result, test_outcomes);
 }
 
 std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {
@@ -84,6 +78,10 @@ double ValidationResult::GetSuccessRate() const {
   if (test_vector_stats_.num_vectors == 0) return 1.0;
   return static_cast<double>(test_vector_stats_.num_vectors_passed) /
          static_cast<double>(test_vector_stats_.num_vectors);
+}
+
+bool ValidationResult::HasFailure() const {
+  return test_vector_stats_.num_vectors_passed < test_vector_stats_.num_vectors;
 }
 
 const ValidationResult& ValidationResult::LogStatistics() const {
