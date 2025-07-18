@@ -294,10 +294,10 @@ TEST_P(
       }
     };
 
-    ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
-                         GetParam().validator->ValidateDataplane(
-                             sut, control_switch, dvaas_params));
-
+    ASSERT_OK_AND_ASSIGN(
+        dvaas::ValidationResult validation_result,
+        GetParam().validator->ValidateDataplaneUsingExistingSwitchApis(
+            sut, control_switch, dvaas_params));
     validation_result.LogStatistics();
 
     ASSERT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));

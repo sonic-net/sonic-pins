@@ -73,9 +73,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
     } else {
       const packetlib::Packet parsed_inner_packet =
           packetlib::ParsePacket(response.packet().payload());
-
       absl::StatusOr<int> test_packet_id =
-          ExtractTestPacketTag(parsed_inner_packet);
+          ExtractIdFromTaggedPacket(response.packet().payload());
       if (test_packet_id.ok()) {
         tagged_packet_ins.push_back({
             .tag = *test_packet_id,
@@ -84,9 +83,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
         });
       } else {
         if (is_expected_unsolicited_packet(parsed_inner_packet)) {
-          // TODO: Append to artifact instead of logging.
-          LOG(INFO) << "Ignoring expected unsolicited packet "
-                    << parsed_inner_packet.ShortDebugString();
+          VLOG(1) << "Ignoring expected unsolicited packet "
+                  << parsed_inner_packet.ShortDebugString();
         } else {
           // TODO: Decide if we should continue or fail and stop.
           return gutil::FailedPreconditionErrorBuilder()
