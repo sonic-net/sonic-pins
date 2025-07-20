@@ -568,9 +568,6 @@ control acl_ingress(in headers_t headers,
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_PORT_ACTION_ID)
-  // TODO: Remove the unsupported annotation once we properly model
-  // the behavior of redirect to port.
-  @unsupported
   action redirect_to_port(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)
@@ -588,7 +585,6 @@ control acl_ingress(in headers_t headers,
   }
 
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TO_PORT_ACTION_ID)
-  @unsupported
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action acl_mirror_and_redirect_to_port(
     @id(1)
