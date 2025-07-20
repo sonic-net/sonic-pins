@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -33,7 +34,6 @@
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -49,6 +49,7 @@
 #include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -452,6 +453,63 @@ absl::Status ConfigureSwitchPair(
   absl::Status status = future1.get();
   status.Update(future2.get());
   return status;
+}
+
+namespace {
+absl::StatusOr<absl::btree_map<std::string, P4rtPortId>>
+UpPorts(gnmi::gNMI::StubInterface &gnmi_stub) {
+  ASSIGN_OR_RETURN(const auto interface_id_map,
+                   GetAllInterfaceNameToPortId(gnmi_stub));
+  ASSIGN_OR_RETURN(
+      const auto up_interfaces,
+      GetUpInterfacesOverGnmi(gnmi_stub, InterfaceType::kSingleton));
+
+  absl::btree_map<std::string, P4rtPortId> ports;
+  for (const std::string &interface : up_interfaces) {
+    auto lookup = interface_id_map.find(interface);
+    if (lookup == interface_id_map.end()) {
+      return gutil::NotFoundErrorBuilder()
+             << "Interface '"
+             << interface << "' was reported up but has no port id mapping.";
+    }
+    ASSIGN_OR_RETURN(P4rtPortId port_id,
+                     P4rtPortId::MakeFromP4rtEncoding(lookup->second));
+    ports.insert(std::make_pair(interface, std::move(port_id)));
+  }
+  return ports;
+}
+} // namespace
+
+absl::StatusOr<std::vector<MirroredPort>>
+MirroredPorts(thinkit::MirrorTestbed &testbed) {
+  ASSIGN_OR_RETURN(auto sut_gnmi_stub, testbed.Sut().CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto control_switch_gnmi_stub,
+                   testbed.ControlSwitch().CreateGnmiStub());
+
+  return MirroredPorts(*sut_gnmi_stub, *control_switch_gnmi_stub);
+}
+
+absl::StatusOr<std::vector<MirroredPort>>
+MirroredPorts(gnmi::gNMI::StubInterface &sut_gnmi_stub,
+              gnmi::gNMI::StubInterface &control_switch_gnmi_stub) {
+  ASSIGN_OR_RETURN(auto sut_ports, UpPorts(sut_gnmi_stub),
+                   _ << "Failed to lookup operational ports from the SUT.");
+
+  ASSIGN_OR_RETURN(
+      auto control_switch_ports, UpPorts(control_switch_gnmi_stub),
+      _ << "Failed to lookup operational ports from the Control Switch.");
+  std::vector<MirroredPort> mirrored_ports;
+  for (const auto &[interface, port] : control_switch_ports) {
+    auto lookup = sut_ports.find(interface);
+    if (lookup == sut_ports.end())
+      continue;
+    mirrored_ports.push_back({
+        .interface = interface,
+        .sut = lookup->second,
+        .control_switch = port,
+    });
+  }
+  return mirrored_ports;
 }
 
 }  // namespace pins_test
