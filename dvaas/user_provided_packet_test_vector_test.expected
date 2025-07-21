@@ -19,10 +19,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -33,7 +33,7 @@ acceptable_outputs {
 -- Internalized Packet Test Vector #1 --
 test packet ID extracted from payload: 42
 diff of internalized vector vs input vector:
-added: input.packet.hex: "ffeeddccbbaa554433221100000f74657374207061636b657420233432"
+added: input.packet.hex: "ffeeddccbbaa554433221100001074657374207061636b6574202334323a"
 
 
 ================================================================================
@@ -65,7 +65,7 @@ input {
           ipv6_destination: "2001::4"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -92,7 +92,7 @@ acceptable_outputs {
           ipv6_destination: "2001::4"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -101,10 +101,10 @@ acceptable_outputs {
 -- Internalized Packet Test Vector #1 --
 test packet ID extracted from payload: 42
 diff of internalized vector vs input vector:
-added: input.packet.parsed.headers[1].ipv6_header.payload_length: "0x000f"
-added: input.packet.hex: "ffeeddccbbaa55443322110086dd66d12345000ffdf2200100000000000000000000000000022001000000000000000000000000000474657374207061636b657420233432"
-added: acceptable_outputs[0].packets[0].parsed.headers[1].ipv6_header.payload_length: "0x000f"
-added: acceptable_outputs[0].packets[0].hex: "01020304050606050403020186dd66d12345000ffdf1200100000000000000000000000000022001000000000000000000000000000474657374207061636b657420233432"
+added: input.packet.parsed.headers[1].ipv6_header.payload_length: "0x0010"
+added: input.packet.hex: "ffeeddccbbaa55443322110086dd66d123450010fdf2200100000000000000000000000000022001000000000000000000000000000474657374207061636b6574202334323a"
+added: acceptable_outputs[0].packets[0].parsed.headers[1].ipv6_header.payload_length: "0x0010"
+added: acceptable_outputs[0].packets[0].hex: "01020304050606050403020186dd66d123450010fdf1200100000000000000000000000000022001000000000000000000000000000474657374207061636b6574202334323a"
 
 
 ================================================================================
@@ -121,10 +121,10 @@ input {
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -140,10 +140,10 @@ input {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000e"
+          ethertype: "0x000f"
         }
       }
-      payload: "test packet #5"
+      payload: "test packet #5:"
     }
   }
 }
@@ -154,12 +154,12 @@ acceptable_outputs {
 -- Internalized Packet Test Vector #1 --
 test packet ID extracted from payload: 42
 diff of internalized vector vs input vector:
-added: input.packet.hex: "424242424242424242424242000f74657374207061636b657420233432"
+added: input.packet.hex: "424242424242424242424242001074657374207061636b6574202334323a"
 
 -- Internalized Packet Test Vector #2 --
 test packet ID extracted from payload: 5
 diff of internalized vector vs input vector:
-added: input.packet.hex: "050505050505050505050505000e74657374207061636b6574202335"
+added: input.packet.hex: "050505050505050505050505000f74657374207061636b65742023353a"
 
 
 ================================================================================
@@ -176,10 +176,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -202,10 +202,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -214,8 +214,8 @@ acceptable_outputs {
 -- Internalized Packet Test Vector #1 --
 test packet ID extracted from payload: 42
 diff of internalized vector vs input vector:
-added: input.packet.hex: "ffeeddccbbaa554433221100000f74657374207061636b657420233432"
-added: acceptable_outputs[0].packet_ins[0].hex: "050505050505050505050505000f74657374207061636b657420233432"
+added: input.packet.hex: "ffeeddccbbaa554433221100001074657374207061636b6574202334323a"
+added: acceptable_outputs[0].packet_ins[0].hex: "050505050505050505050505001074657374207061636b6574202334323a"
 
 
 ================================================================================
@@ -232,10 +232,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -254,10 +254,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -279,10 +279,10 @@ input {
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -299,10 +299,10 @@ input {
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -331,7 +331,7 @@ input {
 }
 
 -- Output --------------------------------------------------
-ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: test packets must contain a tag of the form 'test packet #([0-9]+)' in their payload, but the given packet with payload 'Hi' does not:
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: test packets must contain a tag of the form 'test packet #([0-9]+):' in their payload, but the given packet with payload 'Hi' does not:
 headers {
   ethernet_header {
     ethernet_destination: "42:42:42:42:42:42"
@@ -374,10 +374,10 @@ input {
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -389,10 +389,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #24"
+      payload: "test packet #24:"
     }
   }
 }
@@ -409,10 +409,10 @@ input {
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -424,10 +424,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #24"
+      payload: "test packet #24:"
     }
   }
 }
@@ -447,10 +447,10 @@ input {
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -466,10 +466,10 @@ input {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -487,12 +487,12 @@ ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: user-provi
         ethernet_header {
           ethernet_destination: "42:42:42:42:42:42"
           ethernet_source: "42:42:42:42:42:42"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
-    hex: "424242424242424242424242000f74657374207061636b657420233432"
+    hex: "424242424242424242424242001074657374207061636b6574202334323a"
   }
 }
 acceptable_outputs {
@@ -507,12 +507,12 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
-    hex: "050505050505050505050505000f74657374207061636b657420233432"
+    hex: "050505050505050505050505001074657374207061636b6574202334323a"
   }
 }
 acceptable_outputs {
@@ -529,10 +529,10 @@ input {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -557,7 +557,7 @@ input {
           ethertype: "0x86dd"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -566,7 +566,7 @@ acceptable_outputs {
 
 -- Output --------------------------------------------------
 ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: Packet invalid for the following reasons:
-- in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 15
+- in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 16
 - headers[1]: header missing - expected Ipv6Header
 Dumping offending test vector:
 input {
@@ -581,7 +581,7 @@ input {
           ethertype: "0x86dd"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -603,10 +603,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -629,10 +629,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #24"
+      payload: "test packet #24:"
     }
   }
 }
@@ -649,10 +649,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -675,10 +675,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #24"
+      payload: "test packet #24:"
     }
   }
 }
@@ -698,10 +698,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -730,10 +730,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #24"
+      payload: "test packet #24:"
     }
   }
 }
@@ -750,10 +750,10 @@ input {
         ethernet_header {
           ethernet_destination: "ff:ee:dd:cc:bb:aa"
           ethernet_source: "55:44:33:22:11:00"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #42"
+      payload: "test packet #42:"
     }
   }
 }
@@ -782,10 +782,10 @@ acceptable_outputs {
         ethernet_header {
           ethernet_destination: "5:5:5:5:5:5"
           ethernet_source: "5:5:5:5:5:5"
-          ethertype: "0x000f"
+          ethertype: "0x0010"
         }
       }
-      payload: "test packet #24"
+      payload: "test packet #24:"
     }
   }
 }
