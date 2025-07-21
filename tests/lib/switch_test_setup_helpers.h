@@ -153,6 +153,25 @@ absl::Status MirrorSutP4rtPortIdConfigToControlSwitch(
     thinkit::MirrorTestbed& testbed,
     absl::Duration config_convergence_timeout_per_switch = absl::Minutes(5));
 
+// Represents a mirrored connection between a SUT and control switch port of the
+// same interface name, assuming that the interface name is linked to the
+// physical location of the port.
+struct MirroredPort {
+  std::string interface;
+  P4rtPortId sut;
+  P4rtPortId control_switch;
+};
+
+// Returns the set of operational UP ports that are mirrored between the SUT and
+// control switch.
+absl::StatusOr<std::vector<MirroredPort>>
+MirroredPorts(thinkit::MirrorTestbed &testbed);
+
+// Same as above but takes in the gRPC stubs directly.
+absl::StatusOr<std::vector<MirroredPort>>
+MirroredPorts(gnmi::gNMI::StubInterface &sut_gnmi_stub,
+              gnmi::gNMI::StubInterface &control_switch_gnmi_stub);
+
 }  // namespace pins_test
 
 #endif  // PINS_TESTS_LIB_SWITCH_TEST_SETUP_HELPERS_H_
