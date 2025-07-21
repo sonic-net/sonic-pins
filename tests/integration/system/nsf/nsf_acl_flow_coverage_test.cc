@@ -116,6 +116,9 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   ImageConfigParams image_config_param = GetParam().image_config_params[0];
   thinkit::Switch& sut = GetSut(testbed_);
 
+  LOG(INFO) << "Clearing the flows before the start of the test";
+  ASSERT_OK(flow_programmer_->ClearFlows(testbed_));
+
   ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_, &image_config_param));
 
   // P4 snapshot before programming flows and starting the traffic.
