@@ -349,6 +349,7 @@ absl::Status AttachPacketTrace(
           "Moreover, this is a summary of the full trace and does not contain "
           "all details. The full trace can be found in '",
           filename, "'.\n\n", summarized_packet_trace));
+
   return absl::OkStatus();
 }
 

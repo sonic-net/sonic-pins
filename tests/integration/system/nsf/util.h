@@ -45,6 +45,8 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
 
 thinkit::Switch& GetSut(Testbed& testbed);
 
+void ExpectLinkFlaps(TestbedInterface &testbed_interface);
+
 thinkit::TestEnvironment &GetTestEnvironment(Testbed &testbed);
 
 // Returns the list of connected interfaces for the SUT.
@@ -115,9 +117,10 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
     absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
     bool check_interfaces_up = true);
 
-absl::Status PushConfig(const ImageConfigParams& image_config_param,
-                        Testbed& testbed, thinkit::SSHClient& ssh_client,
-                        bool is_fresh_install = false);
+absl::Status PushConfig(const ImageConfigParams &image_config_param,
+                        Testbed &testbed, thinkit::SSHClient &ssh_client,
+                        bool is_fresh_install = false,
+                        bool check_interfaces_up = true);
 
 absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
 
