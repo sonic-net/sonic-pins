@@ -16,6 +16,7 @@
 #define PINS_THINKIT_MOCK_CONTROL_DEVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,8 +25,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
@@ -43,6 +44,8 @@ public:
                std::optional<absl::Duration> packet_delay),
               (override));
   MOCK_METHOD(bool, SupportsSendPacket, (), (const, override));
+  MOCK_METHOD(absl::StatusOr<std::string>, RunCommand,
+              (absl::string_view command, absl::Duration timeout), (override));
   MOCK_METHOD(absl::Status, SendPackets,
               (absl::string_view interface,
                absl::Span<const std::string> packets),

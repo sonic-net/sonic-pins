@@ -38,7 +38,6 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_VLAN_ID_ACTION_ID)
-  @unsupported
   action multicast_set_src_mac_and_vlan_id(
       @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
       @id(2) vlan_id_t vlan_id) {
@@ -50,14 +49,12 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_ACTION_ID)
-  @unsupported
   action multicast_set_src_mac(@id(1) @format(MAC_ADDRESS)
                                ethernet_addr_t src_mac) {
     multicast_set_src_mac_and_vlan_id(src_mac, INTERNAL_VLAN_ID);
   }
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_DST_MAC_AND_VLAN_ID_ACTION_ID)
-  @unsupported
   action multicast_set_src_mac_and_dst_mac_and_vlan_id(
       @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
       @id(2) @format(MAC_ADDRESS) ethernet_addr_t dst_mac,
@@ -73,7 +70,6 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_PRESERVE_INGRESS_VLAN_ID_ACTION_ID)
-  @unsupported
   action multicast_set_src_mac_and_preserve_ingress_vlan_id(
       @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac) {
     local_metadata.enable_src_mac_rewrite = true;
@@ -163,20 +159,34 @@ control packet_rewrites(inout headers_t headers,
       local_metadata.vlan_id = local_metadata.packet_rewrites.vlan_id;
     }
     if (headers.ipv4.isValid()) {
+      // TODO:Confirm this logic is correct. If not, remove.
+      bool acl_ipmc_redirect_on_ttl_1 = headers.ipv4.ttl == 1 &&
+           local_metadata.acl_ingress_ipmc_redirect;
       if (headers.ipv4.ttl > 0 && local_metadata.enable_decrement_ttl) {
         headers.ipv4.ttl = headers.ipv4.ttl - 1;
       }
       // TODO: Verify this is accurate when TTL rewrite is
       // disabled and update this code if not.
-      if (headers.ipv4.ttl == 0) mark_to_drop(standard_metadata);
+      if (headers.ipv4.ttl == 0 && !acl_ipmc_redirect_on_ttl_1)
+          mark_to_drop(standard_metadata);
+      if (local_metadata.enable_dscp_rewrite) {
+        headers.ipv4.dscp = local_metadata.packet_rewrites.dscp;
+      }
     }
     if (headers.ipv6.isValid()) {
+      // TODO: Confirm this logic is correct. If not, remove.
+      bool acl_ipmc_redirect_on_hop_limit_1 = headers.ipv6.hop_limit == 1 &&
+           local_metadata.acl_ingress_ipmc_redirect;
       if (headers.ipv6.hop_limit > 0 && local_metadata.enable_decrement_ttl) {
         headers.ipv6.hop_limit = headers.ipv6.hop_limit - 1;
       }
       // TODO: Verify this is accurate when TTL rewrite is
       // disabled and update this code if not.
-      if (headers.ipv6.hop_limit == 0) mark_to_drop(standard_metadata);
+      if (headers.ipv6.hop_limit == 0 && !acl_ipmc_redirect_on_hop_limit_1)
+          mark_to_drop(standard_metadata);
+      if (local_metadata.enable_dscp_rewrite) {
+        headers.ipv6.dscp = local_metadata.packet_rewrites.dscp;
+      }
     }
   }
 }  // control packet_rewrites

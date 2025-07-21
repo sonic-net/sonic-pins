@@ -154,6 +154,12 @@ PinsControlDevice::CollectPackets() {
       sai::Instantiation::kMiddleblock, &interface_port_id_to_name_);
 }
 
+absl::StatusOr<std::string> PinsControlDevice::RunCommand(
+    absl::string_view command, absl::Duration timeout) {
+  return absl::UnimplementedError(
+      "RunCommand is not supported by PinsControlDevice.");
+}
+
 absl::Status PinsControlDevice::SendPacket(
     absl::string_view interface, absl::string_view packet,
     std::optional<absl::Duration> packet_delay) {

@@ -100,6 +100,7 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
   // raw pointer for GenericTestbed.
   testbed.emplace<std::unique_ptr<thinkit::GenericTestbed>>(
       std::move(generic_testbed));
+
   LOG(INFO) << "Flap links after NSF Reboot.";
   const absl::Time post_nsf_link_flap_start_time = absl::Now();
   for (const auto& [sut_interface, host_interface_info] :
