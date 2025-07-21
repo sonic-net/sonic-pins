@@ -98,55 +98,6 @@ absl::Status DetermineReproducibilityRate(
   return absl::OkStatus();
 }
 
-// Appends the P4 simulation packet trace summary for the input packet in
-// `failed_packet_test` to the failure description of the test. Uses
-// `packet_traces` to find the corresponding packet trace for the input packet,
-// and also stores the full textual trace as test artifact.
-absl::Status AttachPacketTrace(
-    dvaas::PacketTestOutcome& failed_packet_test,
-    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
-        packet_traces,
-    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
-  // Store the full BMv2 textual log as test artifact.
-  ASSIGN_OR_RETURN(int test_id,
-                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
-                                                   .test_vector()
-                                                   .input()
-                                                   .packet()
-                                                   .parsed()));
-  const std::string& packet_hex =
-      failed_packet_test.test_run().test_vector().input().packet().hex();
-  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-      "packet_" + std::to_string(test_id) + ".trace.txt",
-      packet_traces[packet_hex][0].bmv2_textual_log()));
-
-  auto it = packet_traces.find(packet_hex);
-  if (it == packet_traces.end() || it->second.empty()) {
-    return absl::InternalError(
-        absl::StrCat("Packet trace not found for packet ", packet_hex));
-  }
-
-  // Augment failure description with packet trace summary.
-  std::string summarized_packet_trace;
-  for (const auto& table_apply : it->second[0].table_apply()) {
-    if (table_apply.hit().has_table_entry()) {
-      absl::StrAppend(&summarized_packet_trace, "Table '",
-                      table_apply.table_name(), "': hit\n",
-                      gutil::PrintTextProto(table_apply.hit().table_entry()),
-                      "\n");
-    } else {
-      absl::StrAppend(&summarized_packet_trace,
-                      table_apply.hit_or_miss_textual_log(), "\n\n");
-    }
-  }
-  failed_packet_test.mutable_test_result()->mutable_failure()->set_description(
-      absl::StrCat(failed_packet_test.test_result().failure().description(),
-                   "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
-                   "=========================\n",
-                   summarized_packet_trace));
-  return absl::OkStatus();
-}
-
 std::string ToString(
     const std::vector<SynthesizedPacket>& synthesized_packets) {
   return absl::StrJoin(synthesized_packets, "\n\n\n",
@@ -198,8 +149,8 @@ class DvaasTestArtifactWriter : public gutil::TestArtifactWriter {
   }
 };
 
-// Determines the P4 specification DVaaS should use, and performs some sanity
-// checks to ensure the specification is compatible with the SUT.
+}  // namespace
+
 absl::StatusOr<P4Specification> InferP4Specification(
     const DataplaneValidationParams& params,
     const DataplaneValidationBackend& backend, SwitchApi& sut) {
@@ -250,8 +201,6 @@ absl::StatusOr<P4Specification> InferP4Specification(
   }
   return p4_spec;
 }
-
-}  // namespace
 
 // Generates and returns test vectors using the backend functions
 // `SynthesizePackets` and `GeneratePacketTestVectors`. Reads the table entries,
@@ -329,6 +278,51 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
       ToString(generate_test_vectors_result.packet_test_vector_by_id)));
 
   return generate_test_vectors_result;
+}
+
+absl::Status AttachPacketTrace(
+    dvaas::PacketTestOutcome& failed_packet_test,
+    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
+  // Store the full BMv2 textual log as test artifact.
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
+                                                   .test_vector()
+                                                   .input()
+                                                   .packet()
+                                                   .parsed()));
+  const std::string& packet_hex =
+      failed_packet_test.test_run().test_vector().input().packet().hex();
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "packet_" + std::to_string(test_id) + ".trace.txt",
+      packet_traces[packet_hex][0].bmv2_textual_log()));
+
+  auto it = packet_traces.find(packet_hex);
+  if (it == packet_traces.end() || it->second.empty()) {
+    return absl::InternalError(
+        absl::StrCat("Packet trace not found for packet ", packet_hex));
+  }
+
+  // Augment failure description with packet trace summary.
+  std::string summarized_packet_trace;
+  for (const auto& table_apply : it->second[0].table_apply()) {
+    if (table_apply.hit().has_table_entry()) {
+      absl::StrAppend(&summarized_packet_trace, "Table '",
+                      table_apply.table_name(), "': hit\n",
+                      gutil::PrintTextProto(table_apply.hit().table_entry()),
+                      "\n");
+    } else {
+      absl::StrAppend(&summarized_packet_trace,
+                      table_apply.hit_or_miss_textual_log(), "\n\n");
+    }
+  }
+  failed_packet_test.mutable_test_result()->mutable_failure()->set_description(
+      absl::StrCat(failed_packet_test.test_result().failure().description(),
+                   "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
+                   "=========================\n",
+                   summarized_packet_trace));
+  return absl::OkStatus();
 }
 
 absl::Status PostProcessTestVectorFailure(

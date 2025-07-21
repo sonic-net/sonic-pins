@@ -27,6 +27,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -45,6 +46,7 @@ limitations under the License.
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
@@ -327,6 +329,22 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
     const DataplaneValidationParams& params, SwitchApi& sut,
     DataplaneValidationBackend& backend, gutil::TestArtifactWriter& writer);
 
-} // namespace dvaas
+// Determines the P4 specification DVaaS should use, and performs some sanity
+// checks to ensure the specification is compatible with the switch.
+absl::StatusOr<P4Specification> InferP4Specification(
+    const DataplaneValidationParams& params,
+    const DataplaneValidationBackend& backend, SwitchApi& sut);
+
+// Appends the P4 simulation packet trace summary for the input packet in
+// `failed_packet_test` to the failure description of the test. Uses
+// `packet_traces` to find the corresponding packet trace for the input packet,
+// and also stores the full textual trace as test artifact.
+absl::Status AttachPacketTrace(
+    dvaas::PacketTestOutcome& failed_packet_test,
+    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer);
+
+}  // namespace dvaas
 
 #endif // PINS_DVAAS_DATAPLANE_VALIDATION_H_
