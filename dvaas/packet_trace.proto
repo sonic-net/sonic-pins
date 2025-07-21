@@ -8,7 +8,24 @@ import "p4_pdpi/ir.proto";
 // processor.
 message PacketTrace {
   string bmv2_textual_log = 1;
-  repeated TableApply table_apply = 2;
+  repeated Event events = 2;
+}
+
+message Event {
+  oneof event {
+    TableApply table_apply = 1;
+    PrimitiveAction primitive_action = 2;
+  }
+}
+
+message PrimitiveAction {
+  oneof primitive_action {
+    MarkToDrop mark_to_drop = 1;
+  }
+}
+
+message MarkToDrop {
+  string source_location = 1;
 }
 
 message TableApply {
