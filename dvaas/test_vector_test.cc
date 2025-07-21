@@ -18,6 +18,9 @@
 
 #include "absl/status/status.h"
 #include "dvaas/test_vector.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/bit_widths.h"
@@ -29,6 +32,7 @@
 namespace dvaas {
 namespace {
 
+using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::testing::Eq;
 using ::testing::Ge;
@@ -36,28 +40,33 @@ using ::testing::HasSubstr;
 
 constexpr int kMinNumBytesInPayload = packetlib::kMinNumBytesInEthernetPayload;
 
+TEST(MakeTestPacketTag, WorksWithEmptyDescription) {
+  EXPECT_THAT(MakeTestPacketTagFromUniqueId(1, "").length(),
+              Ge(kMinNumBytesInPayload));
+}
+
 TEST(MakeTestPacketTag, YieldsPaddedTestPacketTag) {
-  EXPECT_THAT(MakeTestPacketPayloadFromUniqueId(1).length(),
+  EXPECT_THAT(MakeTestPacketTagFromUniqueId(1, "some description").length(),
               Ge(kMinNumBytesInPayload));
 }
 
 TEST(MakeTestPacketTag, YieldsPaddedTestPacketTagWithDescription) {
   const std::string kDescription = "dummy description.";
-  std::string payload = MakeTestPacketPayloadFromUniqueId(5, kDescription);
+  std::string payload = MakeTestPacketTagFromUniqueId(5, kDescription);
   EXPECT_THAT(payload.length(), Ge(kMinNumBytesInPayload));
   EXPECT_THAT(payload, HasSubstr(kDescription));
 }
 
 TEST(MakeTestPacketTag, YieldsNonPaddedTestPacketTagWithDescription) {
   const std::string kDescription = "exact dummy description size";
-  std::string payload = MakeTestPacketPayloadFromUniqueId(123, kDescription);
+  std::string payload = MakeTestPacketTagFromUniqueId(123, kDescription);
   EXPECT_THAT(payload.length(), Ge(kMinNumBytesInPayload));
   EXPECT_THAT(payload, HasSubstr(kDescription));
 }
 
 TEST(MakeTestPacketTag, YieldsTestPacketTagWithLongDescription) {
   const std::string kDescription = "the test packet can have a description.";
-  std::string payload = MakeTestPacketPayloadFromUniqueId(7, kDescription);
+  std::string payload = MakeTestPacketTagFromUniqueId(7, kDescription);
   EXPECT_THAT(payload.length(), Ge(kMinNumBytesInPayload));
   EXPECT_THAT(payload, HasSubstr(kDescription));
 }
@@ -65,7 +74,8 @@ TEST(MakeTestPacketTag, YieldsTestPacketTagWithLongDescription) {
 TEST(MakeTestPacketTag, RoundTripsWithExtractTestPacketTag) {
   for (int test_packet_id : {0, 1, 2, 42, 1234}) {
     packetlib::Packet packet;
-    packet.set_payload(MakeTestPacketPayloadFromUniqueId(test_packet_id));
+    packet.set_payload(
+        MakeTestPacketTagFromUniqueId(test_packet_id, "some description"));
     EXPECT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(test_packet_id)));
   }
 }
@@ -75,10 +85,22 @@ TEST(MakeTestPacketTag,
   constexpr int kPacketTag = 10;
   for (int description_size : {0, 1, 2, 42, 1234}) {
     packetlib::Packet packet;
-    packet.set_payload(MakeTestPacketPayloadFromUniqueId(
-        kPacketTag, std::string(description_size, '1')));
+    packet.set_payload(MakeTestPacketTagFromUniqueId(
+        kPacketTag, std::string(description_size, '!')));
     EXPECT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(kPacketTag)));
   }
+}
+
+TEST(UpdateTestPacketTag, UpdateTestTagIsNoOpForExistingId) {
+  constexpr int kId = 42;
+  packetlib::Packet packet;
+  packet.set_payload(MakeTestPacketTagFromUniqueId(kId, "my test packet"));
+  PacketTestVector packet_test_vector;
+  *packet_test_vector.mutable_input()->mutable_packet()->mutable_parsed() =
+      packet;
+  ASSERT_OK(UpdateTestTag(packet_test_vector, kId));
+  EXPECT_THAT(packet_test_vector.input().packet().parsed(),
+              EqualsProto(packet));
 }
 
 TEST(UpdateTestPacketTag, YieldsValidPacketTestVectorWithUpdatedTag) {

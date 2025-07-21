@@ -84,9 +84,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
         });
       } else {
         if (is_expected_unsolicited_packet(parsed_inner_packet)) {
-          // TODO: Append to artifact instead of logging.
-          LOG(INFO) << "Ignoring expected unsolicited packet "
-                    << parsed_inner_packet.ShortDebugString();
+          VLOG(1) << "Ignoring expected unsolicited packet "
+                  << parsed_inner_packet.ShortDebugString();
         } else {
           // TODO: Decide if we should continue or fail and stop.
           return gutil::FailedPreconditionErrorBuilder()

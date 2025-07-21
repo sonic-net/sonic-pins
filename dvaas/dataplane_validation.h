@@ -72,10 +72,10 @@ struct P4Specification {
 // `num_of_replication_attempts_per_failure` number of reruns for the first
 // `max_failures_to_attempt_to_replicate` failures.
 struct FailureEnhancementOptions {
-  int num_of_replication_attempts_per_failure = 100;
   int max_failures_to_attempt_to_replicate = 1;
-  // If true, print the packet's trace.
-  bool print_packet_trace = true;
+  int num_of_replication_attempts_per_failure = 100;
+  // If true, collect and print the packet's trace.
+  bool collect_packet_trace = true;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
