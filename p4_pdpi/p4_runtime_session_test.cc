@@ -22,8 +22,10 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
+#include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -33,11 +35,14 @@
 namespace pdpi {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
+using ::gutil::Partially;
 using ::gutil::StatusIs;
 using ::testing::_;
 using ::testing::ByMove;
-using ::testing::EqualsProto;
+using ::testing::Eq;
 using ::testing::InSequence;
 using ::testing::Return;
 
@@ -259,6 +264,147 @@ TEST(SetForwardingPipelineConfigTest, BothVersionsProduceSameRequest) {
   *config.mutable_p4_device_config() = p4_device_config;
   ASSERT_OK(SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session.get(), kForwardingPipelineAction, config));
+}
+
+TEST(ClearTableEntryCountersTest, SendsNoWriteRequestWhenNoCountersAreNonZero) {
+  const P4RuntimeSessionOptionalArgs metadata;
+
+  // Get mock.
+  ASSERT_OK_AND_ASSIGN((auto [p4rt_session, mock_p4rt_stub]),
+                       MakeP4SessionWithMockStub(metadata));
+
+  // Mock table entry with no non-zero counters in read response.
+  p4::v1::TableEntry entry = ConstructTableEntry();
+  entry.clear_counter_data();
+  entry.clear_meter_counter_data();
+  SetDefaultReadResponse(mock_p4rt_stub, {entry});
+
+  // Expect no write request.
+  EXPECT_CALL(mock_p4rt_stub, Write).Times(0);
+  EXPECT_THAT(ClearTableEntryCounters(*p4rt_session), IsOk());
+}
+
+TEST(ClearTableEntryCountersTest,
+     SendsModifyRequestsWhenUncoloredOrColoredCountersAreNonZero) {
+  const P4RuntimeSessionOptionalArgs metadata;
+
+  // Get mock.
+  ASSERT_OK_AND_ASSIGN((auto [p4rt_session, mock_p4rt_stub]),
+                       MakeP4SessionWithMockStub(metadata));
+
+  // Mock 5 table entries with different non-zero counters.
+  p4::v1::TableEntry entry1 = ConstructTableEntry();
+  p4::v1::TableEntry entry2 = ConstructTableEntry();
+  p4::v1::TableEntry entry3 = ConstructTableEntry();
+  p4::v1::TableEntry entry4 = ConstructTableEntry();
+  p4::v1::TableEntry entry5 = ConstructTableEntry();
+  p4::v1::TableEntry entry6 = ConstructTableEntry();
+  // Entry 1: uncolored byte count non-zero.
+  entry1.mutable_counter_data()->set_byte_count(42);
+  entry1.clear_meter_counter_data();
+  // Entry 2: uncolored packet count non-zero.
+  entry2.mutable_counter_data()->set_packet_count(42);
+  entry2.clear_meter_counter_data();
+  // Entry 3: green byte count non-zero.
+  entry3.clear_counter_data();
+  entry3.mutable_meter_counter_data()->mutable_green()->set_byte_count(42);
+  // Entry 4: yellow packet count non-zero.
+  entry4.clear_counter_data();
+  entry4.mutable_meter_counter_data()->mutable_yellow()->set_packet_count(42);
+  // Entry 5: red byte count non-zero.
+  entry5.clear_counter_data();
+  entry5.mutable_meter_counter_data()->mutable_red()->set_packet_count(42);
+  // Entry 6: uncolored + colored counters non-zero.
+  entry6.clear_counter_data();
+  entry6.mutable_counter_data()->set_byte_count(42);
+  entry6.mutable_meter_counter_data()->mutable_red()->set_packet_count(24);
+  SetNextReadResponse(mock_p4rt_stub,
+                      {entry1, entry2, entry3, entry4, entry5, entry6});
+
+  // Expect MODIFY clearing `counter_data` fields.
+  EXPECT_CALL(
+      mock_p4rt_stub,
+      Write(
+          _, Partially(EqualsProto(R"pb(
+            updates {
+              type: MODIFY
+              entity {
+                table_entry { counter_data { byte_count: 0 packet_count: 0 } }
+              }
+            }
+            updates {
+              type: MODIFY
+              entity {
+                table_entry { counter_data { byte_count: 0 packet_count: 0 } }
+              }
+            }
+            updates {
+              type: MODIFY
+              entity {
+                table_entry {
+                  meter_counter_data { green { byte_count: 0 packet_count: 0 } }
+                }
+              }
+            }
+            updates {
+              type: MODIFY
+              entity {
+                table_entry {
+                  meter_counter_data {
+                    yellow { byte_count: 0 packet_count: 0 }
+                  }
+                }
+              }
+            }
+            updates {
+              type: MODIFY
+              entity {
+                table_entry {
+                  meter_counter_data { red { byte_count: 0 packet_count: 0 } }
+                }
+              }
+            }
+            updates {
+              type: MODIFY
+              entity {
+                table_entry {
+                  counter_data { byte_count: 0 packet_count: 0 }
+                  meter_counter_data { red { byte_count: 0 packet_count: 0 } }
+                }
+              }
+            }
+          )pb")),
+          _))
+      .Times(1)
+      .WillOnce([&](const auto*, const p4::v1::WriteRequest& request,
+                    const auto*) {
+        EXPECT_THAT(request.updates_size(), Eq(6));
+        EXPECT_THAT(
+            gutil::ProtoDiff(entry1, request.updates(0).entity().table_entry()),
+            IsOkAndHolds(Eq("deleted: counter_data.byte_count: 42\n")));
+        EXPECT_THAT(
+            gutil::ProtoDiff(entry2, request.updates(1).entity().table_entry()),
+            IsOkAndHolds(Eq("deleted: counter_data.packet_count: 42\n")));
+        EXPECT_THAT(
+            gutil::ProtoDiff(entry3, request.updates(2).entity().table_entry()),
+            IsOkAndHolds(
+                Eq("deleted: meter_counter_data.green.byte_count: 42\n")));
+        EXPECT_THAT(
+            gutil::ProtoDiff(entry4, request.updates(3).entity().table_entry()),
+            IsOkAndHolds(
+                Eq("deleted: meter_counter_data.yellow.packet_count: 42\n")));
+        EXPECT_THAT(
+            gutil::ProtoDiff(entry5, request.updates(4).entity().table_entry()),
+            IsOkAndHolds(
+                Eq("deleted: meter_counter_data.red.packet_count: 42\n")));
+        EXPECT_THAT(
+            gutil::ProtoDiff(entry6, request.updates(5).entity().table_entry()),
+            IsOkAndHolds(
+                Eq("deleted: counter_data.byte_count: 42\n"
+                   "deleted: meter_counter_data.red.packet_count: 24\n")));
+        return grpc::Status::OK;
+      });
+  EXPECT_THAT(ClearTableEntryCounters(*p4rt_session), IsOk());
 }
 
 }  // namespace
