@@ -41,7 +41,8 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
   absl::Status NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
-                                  ImageConfigParams &next_image_config);
+                                  ImageConfigParams &next_image_config,
+                                  bool enable_interface_validation_during_nsf);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;

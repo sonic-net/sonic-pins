@@ -18,15 +18,11 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/clock.h"
-#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
@@ -63,19 +59,24 @@ void NsfUpgradeTest::SetUp() {
   testbed_interface_ = GetParam().create_testbed_interface();
   component_validators_ = GetParam().create_component_validators();
   ssh_client_ = GetParam().create_ssh_client();
+  // TODO: Look into the possibility of initializing the link flap
+  // counter after `InstallRebootPushConfig`.
+  ExpectLinkFlaps(testbed_interface_);
   SetupTestbed(testbed_interface_);
   ASSERT_OK_AND_ASSIGN(testbed_, GetTestbed(testbed_interface_));
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
-absl::Status
-NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
-                                   ImageConfigParams &next_image_config) {
+absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
+    const ImageConfigParams &curr_image_config,
+    ImageConfigParams &next_image_config,
+    bool enable_interface_validation_during_nsf) {
   LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label;
 
-  RETURN_IF_ERROR(
-      ValidateTestbedState(testbed_, *ssh_client_, &curr_image_config));
+  RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
+                                       &curr_image_config,
+                                       enable_interface_validation_during_nsf));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnInit, component_validators_,
       curr_image_config.image_label, testbed_, *ssh_client_));
@@ -124,8 +125,9 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
   // TODO: Validate uptime and boot-type once they are supported.
 
   // Perform NSF Reboot and validate switch state after reboot is completed.
-  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(testbed_, *ssh_client_,
-                                                   &next_image_config));
+  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(
+      testbed_, *ssh_client_, &next_image_config,
+      enable_interface_validation_during_nsf));
 
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnNsfReboot, component_validators_,
@@ -139,9 +141,12 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
                          "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
   // Push the new config and validate.
-  RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(
-      ValidateTestbedState(testbed_, *ssh_client_, &next_image_config));
+  RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_,
+                             /*is_fresh_install=*/false,
+                             enable_interface_validation_during_nsf));
+  RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
+                                       &next_image_config,
+                                       enable_interface_validation_during_nsf));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnConfigPush, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
@@ -191,6 +196,7 @@ NsfUpgradeTest::NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
 }
 
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
+  GetTestEnvironment(testbed_).SetTestCaseID(GetParam().test_case_id);
   std::vector<ImageConfigParams> image_config_params =
       GetParam().image_config_params;
   thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
@@ -209,7 +215,8 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   // If only a single config param is provided, we do an N to N upgrade.
   if (image_config_params.size() == 1) {
     ASSERT_OK(
-        NsfUpgradeOrReboot(image_config_params[0], image_config_params[0]));
+        NsfUpgradeOrReboot(image_config_params[0], image_config_params[0],
+                           GetParam().enable_interface_validation_during_nsf));
     return;
   }
   // If multiple config params are provided, we do N - 1 to N upgrades.
@@ -217,7 +224,8 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
        image_config_param + 1 != image_config_params.end();
        ++image_config_param) {
     ASSERT_OK(
-        NsfUpgradeOrReboot(*image_config_param, *(image_config_param + 1)));
+        NsfUpgradeOrReboot(*image_config_param, *(image_config_param + 1),
+                           GetParam().enable_interface_validation_during_nsf));
   }
 }
 

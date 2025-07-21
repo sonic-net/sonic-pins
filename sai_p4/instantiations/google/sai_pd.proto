@@ -222,14 +222,10 @@ message MulticastRouterInterfaceTableEntry {
     oneof action {
       SetMulticastSrcMacAction set_multicast_src_mac = 1;
       L2MulticastPassthroughAction l2_multicast_passthrough = 2;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAction multicast_set_src_mac = 3;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAndVlanIdAction multicast_set_src_mac_and_vlan_id = 4;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAndDstMacAndVlanIdAction
           multicast_set_src_mac_and_dst_mac_and_vlan_id = 5;
-      // CAUTION: This action is not (yet) supported.
       MulticastSetSrcMacAndPreserveIngressVlanIdAction
           multicast_set_src_mac_and_preserve_ingress_vlan_id = 6;
     }
@@ -338,7 +334,6 @@ message VlanMembershipTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::prefix_length == 0;
@@ -354,7 +349,6 @@ message DisableIngressVlanChecksTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::prefix_length == 0;
@@ -851,9 +845,7 @@ message AclIngressMirrorAndRedirectTableEntry {
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 2;
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 3;
-      // CAUTION: This action is not (yet) supported.
       RedirectToPortAction redirect_to_port = 5;
-      // CAUTION: This action is not (yet) supported.
       AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 6;
     }
   }
@@ -998,25 +990,21 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
 
 message L2MulticastPassthroughAction {}
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAction {
   string src_mac = 1;  // Format::MAC
 }
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAndVlanIdAction {
   string src_mac = 1;  // Format::MAC
   string vlan_id = 2;  // Format::HEX_STRING / 12 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAndDstMacAndVlanIdAction {
   string src_mac = 1;  // Format::MAC
   string dst_mac = 2;  // Format::MAC
   string vlan_id = 3;  // Format::HEX_STRING / 12 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message MulticastSetSrcMacAndPreserveIngressVlanIdAction {
   string src_mac = 1;  // Format::MAC
 }
@@ -1113,12 +1101,10 @@ message SetForwardingQueuesAction {
   string red_unicast_queue = 4;      // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToPortAction {
   string redirect_port = 1;  // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message AclMirrorAndRedirectToPortAction {
   // Refers to 'mirror_session_table.mirror_session_id'.
   string mirror_session_id = 1;  // Format::STRING
@@ -1175,10 +1161,8 @@ message TableEntry {
     VlanTableEntry vlan_table_entry = 83;
     // CAUTION: This table is not (yet) supported.
     VlanMembershipTableEntry vlan_membership_table_entry = 84;
-    // CAUTION: This table is not (yet) supported.
     DisableIngressVlanChecksTableEntry disable_ingress_vlan_checks_table_entry =
         86;
-    // CAUTION: This table is not (yet) supported.
     DisableEgressVlanChecksTableEntry disable_egress_vlan_checks_table_entry =
         87;
     AclIngressTableEntry acl_ingress_table_entry = 256;
