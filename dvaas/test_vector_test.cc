@@ -14,26 +14,70 @@
 
 #include "dvaas/test_vector.h"
 
+#include <string>
+
 #include "absl/status/status.h"
 #include "dvaas/test_vector.pb.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace dvaas {
 namespace {
 
 using ::gutil::IsOkAndHolds;
 using ::testing::Eq;
+using ::testing::Ge;
+using ::testing::HasSubstr;
+
+constexpr int kMinNumBytesInPayload = packetlib::kMinNumBytesInEthernetPayload;
+
+TEST(MakeTestPacketTag, YieldsPaddedTestPacketTag) {
+  EXPECT_THAT(MakeTestPacketPayloadFromUniqueId(1).length(),
+              Ge(kMinNumBytesInPayload));
+}
+
+TEST(MakeTestPacketTag, YieldsPaddedTestPacketTagWithDescription) {
+  const std::string kDescription = "dummy description.";
+  std::string payload = MakeTestPacketPayloadFromUniqueId(5, kDescription);
+  EXPECT_THAT(payload.length(), Ge(kMinNumBytesInPayload));
+  EXPECT_THAT(payload, HasSubstr(kDescription));
+}
+
+TEST(MakeTestPacketTag, YieldsNonPaddedTestPacketTagWithDescription) {
+  const std::string kDescription = "exact dummy description size";
+  std::string payload = MakeTestPacketPayloadFromUniqueId(123, kDescription);
+  EXPECT_THAT(payload.length(), Ge(kMinNumBytesInPayload));
+  EXPECT_THAT(payload, HasSubstr(kDescription));
+}
+
+TEST(MakeTestPacketTag, YieldsTestPacketTagWithLongDescription) {
+  const std::string kDescription = "the test packet can have a description.";
+  std::string payload = MakeTestPacketPayloadFromUniqueId(7, kDescription);
+  EXPECT_THAT(payload.length(), Ge(kMinNumBytesInPayload));
+  EXPECT_THAT(payload, HasSubstr(kDescription));
+}
 
 TEST(MakeTestPacketTag, RoundTripsWithExtractTestPacketTag) {
   for (int test_packet_id : {0, 1, 2, 42, 1234}) {
     packetlib::Packet packet;
-    packet.set_payload(MakeTestPacketTagFromUniqueId(test_packet_id));
-    ASSERT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(test_packet_id)));
+    packet.set_payload(MakeTestPacketPayloadFromUniqueId(test_packet_id));
+    EXPECT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(test_packet_id)));
+  }
+}
+
+TEST(MakeTestPacketTag,
+     RoundTripsWithExtractTestPacketTagWithDifferentSizedDescriptions) {
+  constexpr int kPacketTag = 10;
+  for (int description_size : {0, 1, 2, 42, 1234}) {
+    packetlib::Packet packet;
+    packet.set_payload(MakeTestPacketPayloadFromUniqueId(
+        kPacketTag, std::string(description_size, '1')));
+    EXPECT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(kPacketTag)));
   }
 }
 
@@ -272,7 +316,7 @@ TEST(UpdateTestPacketTag, FailsForPacketWithNoTag) {
       packet { parsed { payload: "test packet" } }
     }
   )pb");
-  ASSERT_THAT(UpdateTestTag(test_vector, /*new_tag=*/0),
+  EXPECT_THAT(UpdateTestTag(test_vector, /*new_tag=*/0),
               gutil::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
