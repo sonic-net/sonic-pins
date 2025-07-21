@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
-#define PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
+#ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
+#define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
 
 #include <cstdint>
 #include <string>
@@ -33,4 +33,4 @@ absl::StatusOr<TableEntryGenerator>
 GetGenerator(const pdpi::IrTableDefinition &table);
 
 } // namespace sai
-#endif // PINS_INFRA_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TABLE_ENTRY_GENERATOR_H_
