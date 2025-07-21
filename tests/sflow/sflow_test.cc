@@ -962,38 +962,18 @@ void VerifySflowResult(absl::string_view sflowtool_output,
       << sflowtool_output;
 }
 
+void CollectDriverDebugs(thinkit::SSHClient* ssh_client,
+                         absl::string_view device_name,
+                         absl::string_view prefix,
+                         thinkit::TestEnvironment& environment) {}
+
 // Save output for:
-// /proc/bcm/knet-cb/psample/map
-// /proc/bcm/knet-cb/psample/stats
-// /proc/bcm/knet-cb/psample/rate
 // sflow container /etc/hsflowd.auto
-// state db json
-// app state db json
+// db contents
 void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
                         absl::string_view device_name, absl::string_view prefix,
                         thinkit::TestEnvironment& environment) {
-  ASSERT_OK_AND_ASSIGN(
-      std::string result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/"cat /proc/bcm/knet-cb/psample/map",
-                             absl::Seconds(20)));
-  EXPECT_OK(environment.StoreTestArtifact(
-      absl::StrCat(prefix, "sut_bcm_knet_psample_map.txt"), result));
-
-  ASSERT_OK_AND_ASSIGN(
-      result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/"cat /proc/bcm/knet-cb/psample/stats",
-                             absl::Seconds(20)));
-  EXPECT_OK(environment.StoreTestArtifact(
-      absl::StrCat(prefix, "sut_bcm_knet_psample_stats.txt"), result));
-
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(
-                  device_name, /*command=*/"cat /proc/bcm/knet-cb/psample/rate",
-                  absl::Seconds(20)));
-  EXPECT_OK(environment.StoreTestArtifact(
-      absl::StrCat(prefix, "sut_bcm_knet_psample_rate.txt"), result));
+  CollectDriverDebugs(ssh_client, device_name, prefix, environment);
 
   // /etc/hsflowd.auto might not exist on the switch if no collector config.
   auto result_or = ssh_client->RunCommand(
@@ -1012,10 +992,10 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
     EXPECT_OK(environment.StoreTestArtifact(
         absl::StrCat(prefix, "sflow_container_ps_ef.txt"), *result_or));
   }
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ip -6 route show", absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(auto result, ssh_client->RunCommand(device_name,
+                                                           /*command=*/
+                                                           "ip -6 route show",
+                                                           absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "ipv6_route_show.txt"), result));
   ASSERT_OK_AND_ASSIGN(
@@ -2047,6 +2027,11 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
   // Perform NSF reboot.
   {
     LOG(INFO) << "Perform NSF reboot.";
+    // Finish P4 session before NSF.
+    if (sut_p4_session_ != nullptr) {
+      EXPECT_OK(sut_p4_session_->Finish());
+      sut_p4_session_.reset(nullptr);
+    }
     pins_test::Testbed testbed_variant;
     testbed_variant.emplace<std::unique_ptr<thinkit::GenericTestbed>>(
         std::move(testbed_));
@@ -3554,9 +3539,23 @@ TEST_P(SflowRebootTestFixture, TestNoSamplesOnDisabledInterfacesAfterReboot) {
     // Sleep 10s before stopping sflowtool.
     absl::SleepFor(absl::Seconds(10));
   }
+  EXPECT_OK(testbed.Environment().StoreTestArtifact(
+      "sflow_result_before_reboot.txt", sflow_result));
 
-  ASSERT_TRUE(sflow_result.empty())
-      << "sFlow result is not empty on disabled interfaces before reboot.";
+  // Validate samples should be 0 for disabled interfaces.
+  for (const auto& interface_name : traffic_interfaces) {
+    ASSERT_OK_AND_ASSIGN(
+        auto control_switch_port_id,
+        GetPortIdFromInterfaceName(control_switch_port_id_per_port_name,
+                                   interface_name));
+    const int sample_count =
+        GetSflowSamplesOnSut(sflow_result, control_switch_port_id);
+    EXPECT_EQ(sample_count, 0)
+        << "Samples found for interface: " << interface_name
+        << " control port_id: " << control_switch_port_id
+        << ". Packets dst ip: "
+        << GetDstIpv4AddrByPortId(control_switch_port_id);
+  }
 
   // Reboot the switch and wait for interfaces to be up.
   if (sut_p4_session_ != nullptr) {
@@ -3615,8 +3614,23 @@ TEST_P(SflowRebootTestFixture, TestNoSamplesOnDisabledInterfacesAfterReboot) {
     absl::SleepFor(absl::Seconds(10));
   }
 
-  ASSERT_TRUE(sflow_result.empty())
-      << "sFlow result is not empty on disabled interfaces after reboot.";
+  EXPECT_OK(testbed.Environment().StoreTestArtifact(
+      "sflow_result_after_reboot.txt", sflow_result));
+
+  // Validate samples should be 0 for disabled interfaces.
+  for (const auto& interface_name : traffic_interfaces) {
+    ASSERT_OK_AND_ASSIGN(
+        auto control_switch_port_id,
+        GetPortIdFromInterfaceName(control_switch_port_id_per_port_name,
+                                   interface_name));
+    const int sample_count =
+        GetSflowSamplesOnSut(sflow_result, control_switch_port_id);
+    EXPECT_EQ(sample_count, 0)
+        << "Samples found for interface: " << interface_name
+        << " control port_id: " << control_switch_port_id
+        << ". Packets dst ip: "
+        << GetDstIpv4AddrByPortId(control_switch_port_id);
+  }
 }
 
 // 1. Set sFlow config on SUT for one interface.
