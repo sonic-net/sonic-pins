@@ -13,17 +13,35 @@ control packet_in_encap(inout headers_t headers,
                         inout local_metadata_t local_metadata,
                         inout standard_metadata_t standard_metadata) {
   apply {
-#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
-    if (IS_PACKET_IN_COPY(standard_metadata)){
-      headers.packet_out_header.setInvalid();
-      headers.packet_in_header = {
-        ingress_port = (port_id_t) local_metadata.packet_in_ingress_port,
-        target_egress_port =
-          (port_id_t) local_metadata.packet_in_target_egress_port,
-        unused_pad = 0
-      };
-    }
+    // Ensure that packet-ins are headed to the CPU.
+    if (IS_PACKET_IN_COPY(standard_metadata)) {
+      // TODO: Remove guard once p4-symbolic supports assertions.
+#ifndef PLATFORM_P4SYMBOLIC
+      assert(standard_metadata.egress_port == SAI_P4_CPU_PORT);
 #endif
+    }
+
+    if (standard_metadata.egress_port == SAI_P4_CPU_PORT) {
+      // CPU-bound packets do not traverse the egress pipeline.
+      local_metadata.bypass_egress = true;
+
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
+      if (IS_PACKET_IN_COPY(standard_metadata)) {
+        headers.packet_out_header.setInvalid();
+        headers.packet_in_header = {
+          ingress_port = (port_id_t) local_metadata.packet_in_ingress_port,
+          target_egress_port =
+            (port_id_t) local_metadata.packet_in_target_egress_port,
+          unused_pad = 0
+        };
+      } else {
+        // CPU-bound packets that are not packet-ins get terminated by the
+        // local switch CPU.
+        // From a modeling perspective, this is like dropping the packet.
+        mark_to_drop(standard_metadata);
+      }    
+#endif
+    }
   }
 }  // control populate_packet_in_header
 
