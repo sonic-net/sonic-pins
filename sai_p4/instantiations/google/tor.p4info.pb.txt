@@ -1993,14 +1993,14 @@ actions {
   params {
     id: 1
     name: "append_ingress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
   params {
     id: 2
     name: "append_egress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
 }
 actions {
