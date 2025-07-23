@@ -78,6 +78,9 @@ struct FailureEnhancementOptions {
   int num_of_replication_attempts_per_failure = 100;
   // If true, collect and print the packet's trace.
   bool collect_packet_trace = true;
+  // Minimize the set of test vectors that caused the first
+  // `max_number_of_failures_to_minimize` failures.
+  int max_number_of_failures_to_minimize = 0;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
@@ -310,10 +313,9 @@ public:
   // Creates entities for v1Model auxiliary tables that model the effects of the
   // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
   // loopback mode).
-  virtual absl::StatusOr<pdpi::IrEntities>
-  CreateV1ModelAuxiliaryEntities(pdpi::IrEntities ir_entities,
-                                 gnmi::gNMI::StubInterface &gnmi_stub,
-                                 pdpi::IrP4Info ir_p4info) const = 0;
+  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
+      const pdpi::IrEntities &ir_entities, const pdpi::IrP4Info &ir_p4info,
+      gnmi::gNMI::StubInterface &gnmi_stub) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };
@@ -337,6 +339,10 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 absl::StatusOr<P4Specification> InferP4Specification(
     const DataplaneValidationParams& params,
     const DataplaneValidationBackend& backend, SwitchApi& sut);
+
+// Returns a string of the packet trace summary for the given packet trace.
+absl::StatusOr<std::string> GetPacketTraceSummary(
+    dvaas::PacketTrace& packet_trace);
 
 // Appends the P4 simulation packet trace summary for the input packet in
 // `failed_packet_test` to the failure description of the test. Uses
