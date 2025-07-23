@@ -17,6 +17,7 @@
 
 #include <memory>
 
+#include "dvaas/arriba_test_vector_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
@@ -30,6 +31,7 @@ struct ArribaTestParams {
   // The test vector that is used for validation of the forwarding behavior of
   // the SUT in the given testbed.
   dvaas::ArribaTestVector arriba_test_vector;
+  dvaas::ArribaTestVectorValidationParams validation_params;
 };
 
 // An ArribaTest validates the given testbed against the given ArribaTestVector.

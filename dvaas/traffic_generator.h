@@ -233,6 +233,14 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
  private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
   std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
+
+  // The P4Specification, P4Info, and entities from SUT are stored to maintain
+  // consistency between when test vector expectations are generated and when
+  // packet traces are created.
+  P4Specification sut_p4_spec_;
+  pdpi::IrP4Info sut_ir_p4info_;
+  pdpi::IrEntities sut_augmented_entities_;
+
   // Test vectors created as a result of (latest) call to `Init`. Calls to
   // `StartTraffic` use these test vectors.
   GenerateTestVectorsResult generate_test_vectors_result_;
@@ -258,6 +266,10 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
     // collected to account for in-flight packets (transient state during call
     // to `StopTraffic` for kMaxPacketInFlightDuration).
     kTrafficCollection,
+    // The unrecoverable error state that happens when either
+    // `InjectInputTraffic` or `CollectOutputTraffic` thread returns an error
+    // status. 
+    kError,
   };
   // The state of the TrafficGeneratorWithGuaranteedRate object.
   State state_ ABSL_GUARDED_BY(state_mutex_) = kUninitialized;
