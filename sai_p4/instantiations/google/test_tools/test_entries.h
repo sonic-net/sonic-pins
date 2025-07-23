@@ -52,6 +52,40 @@ constexpr int kVlanIdBitwidth = 12;
 constexpr int kPdMulticastGroupIdBitwidth = 15;
 constexpr int kReplicaInstanceBitwidth = 16;
 
+// -- Actions ------------------------------------------------------------------
+// Tagging mode for VLAN membership entries.
+enum class VlanTaggingMode {
+  kTagged,
+  kUntagged,
+};
+
+struct Forward {};
+
+struct RedirectToIpmcGroup {
+  int multicast_group_id = 0;
+};
+
+struct RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy {
+  int multicast_group_id = 0;
+  std::string cpu_queue;
+};
+
+struct SetCpuQueueAndCancelCopy {
+  std::string cpu_queue;
+};
+
+// Parameters for generating a WCMPGroupTable action.
+struct WcmpGroupAction {
+  std::string nexthop_id;
+  int weight = 1;
+  std::optional<std::string> watch_port;
+};
+
+using MirrorAndRedirectAction =
+    std::variant<Forward, RedirectToIpmcGroup,
+                 RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy,
+                 SetCpuQueueAndCancelCopy>;
+
 // Different ways of punting packets to the controller.
 enum class PuntAction {
   // Punts copy of packet and prevents packet from being forwarded.
@@ -59,6 +93,16 @@ enum class PuntAction {
   // Punts copy of packet without preventing packet from being forwarded.
   kCopy,
 };
+
+struct SetNextHopId {
+  std::string nexthop_id;
+};
+
+struct SetWcmpGroupId {
+  std::string wcmp_group_id;
+};
+
+// -- Match Fields and Params --------------------------------------------------
 
 // Rewrite-related options for nexthop action generation.
 struct NexthopRewriteOptions {
@@ -153,6 +197,12 @@ struct MarkToMirrorParams {
   std::string mirror_session_id;
 };
 
+struct IpTableEntryParams {
+  std::string vrf;
+  using IpTableAction = std::variant<SetNextHopId, SetWcmpGroupId>;
+  IpTableAction action;
+};
+
 // Convenience struct corresponding to the protos `p4::v1::Replica` and
 // `sai::ReplicateAction::Replica`.
 struct Replica {
@@ -187,13 +237,6 @@ struct AclMeterConfiguration {
   int burst_bytes = 1000;
 };
 
-// Parameters for generating a WCMPGroupTable action.
-struct WcmpGroupAction {
-  std::string nexthop_id;
-  int weight = 1;
-  std::optional<std::string> watch_port;
-};
-
 struct AclPreIngressMatchFields {
   std::optional<bool> is_ip;
   std::optional<bool> is_ipv4;
@@ -202,31 +245,7 @@ struct AclPreIngressMatchFields {
   pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
 };
 
-// Tagging mode for VLAN membership entries.
-enum class VlanTaggingMode {
-  kTagged,
-  kUntagged,
-};
-
-struct Forward {};
-
-struct RedirectToIpmcGroup {
-  int multicast_group_id = 0;
-};
-
-struct RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy {
-  int multicast_group_id = 0;
-  std::string cpu_queue;
-};
-
-struct SetCpuQueueAndCancelCopy {
-  std::string cpu_queue;
-};
-
-using MirrorAndRedirectAction =
-    std::variant<Forward, RedirectToIpmcGroup,
-                 RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy,
-                 SetCpuQueueAndCancelCopy>;
+// -- Entry Builder ------------------------------------------------------------
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
@@ -325,16 +344,16 @@ class EntryBuilder {
       const NexthopRewriteOptions& rewrite_options = {});
 
   // Constructs an IPv4 table entry matching packets with `vrf` and 'ipv4_lpm`
-  // and setting next hop to `nexthop_id`.
-  EntryBuilder& AddIpv4EntrySettingNexthopId(absl::string_view nexthop_id,
-                                             absl::string_view vrf,
-                                             const Ipv4Lpm& ipv4_lpm = {});
+  // and setting the next table in the action to `next_table_id` based on the
+  // `entry_params.action`.
+  EntryBuilder& AddIpv4TableEntry(const IpTableEntryParams& entry_params,
+                                  const Ipv4Lpm& ipv4_lpm = {});
 
   // Constructs an IPv6 table entry matching packets with `vrf` and 'ipv6_lpm`
-  // and setting next hop to `nexthop_id`.
-  EntryBuilder& AddIpv6EntrySettingNexthopId(absl::string_view nexthop_id,
-                                             absl::string_view vrf,
-                                             const Ipv6Lpm& ipv6_lpm = {});
+  // and setting the next table in the action to `next_table_id` based on the
+  // `entry_params.action`.
+  EntryBuilder& AddIpv6TableEntry(const IpTableEntryParams& entry_params,
+                                  const Ipv6Lpm& ipv6_lpm = {});
 
   // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
   // entry and RIF entry all characterized by `nexthop_rewrite_options`. The
