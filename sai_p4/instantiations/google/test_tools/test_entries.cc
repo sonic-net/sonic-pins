@@ -202,24 +202,24 @@ EntryBuilder& EntryBuilder::AddL3LpmRouteForwardingUnicastPacketsToGivenPort(
           // Ideally we would use the whole ID, but it may be longer than BMv2
           // can support.
           .substr(0, 31);
-
   if (ip_forwarding_params.ipv4_lpm.has_value()) {
-    AddIpv4EntrySettingNexthopId(nexthop_id, vrf,
-                                 ip_forwarding_params.ipv4_lpm.value());
+    AddIpv4TableEntry(IpTableEntryParams{.vrf = std::string(vrf),
+                                         .action = SetNextHopId{nexthop_id}},
+                      ip_forwarding_params.ipv4_lpm.value());
   }
   if (ip_forwarding_params.ipv6_lpm.has_value()) {
-    AddIpv6EntrySettingNexthopId(nexthop_id, vrf,
-                                 ip_forwarding_params.ipv6_lpm.value());
+    AddIpv6TableEntry(IpTableEntryParams{.vrf = std::string(vrf),
+                                         .action = SetNextHopId{nexthop_id}},
+                      ip_forwarding_params.ipv6_lpm.value());
   }
   return AddNexthopRifNeighborEntries(nexthop_id, egress_port, rewrite_options);
 }
 
-EntryBuilder& EntryBuilder::EntryBuilder::AddIpv4EntrySettingNexthopId(
-    absl::string_view nexthop_id, absl::string_view vrf,
-    const Ipv4Lpm& ipv4_lpm) {
+EntryBuilder& EntryBuilder::EntryBuilder::AddIpv4TableEntry(
+    const IpTableEntryParams& entry_params, const Ipv4Lpm& ipv4_lpm) {
   sai::Ipv4TableEntry& ipv4_entry =
       *entries_.add_entries()->mutable_ipv4_table_entry();
-  ipv4_entry.mutable_match()->set_vrf_id(vrf);
+  ipv4_entry.mutable_match()->set_vrf_id(entry_params.vrf);
 
   if (!ipv4_lpm.dst_ip.IsAllZeros()) {
     ipv4_entry.mutable_match()->mutable_ipv4_dst()->set_value(
@@ -228,18 +228,27 @@ EntryBuilder& EntryBuilder::EntryBuilder::AddIpv4EntrySettingNexthopId(
         ipv4_lpm.prefix_len);
   }
 
-  ipv4_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
-      nexthop_id);
-
+  std::visit(gutil::Overload{
+                 [&](SetNextHopId next_hop_action) {
+                   ipv4_entry.mutable_action()
+                       ->mutable_set_nexthop_id()
+                       ->set_nexthop_id(next_hop_action.nexthop_id);
+                 },
+                 [&](SetWcmpGroupId wcmp_group_action) {
+                   ipv4_entry.mutable_action()
+                       ->mutable_set_wcmp_group_id()
+                       ->set_wcmp_group_id(wcmp_group_action.wcmp_group_id);
+                 },
+             },
+             entry_params.action);
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddIpv6EntrySettingNexthopId(
-    absl::string_view nexthop_id, absl::string_view vrf,
-    const Ipv6Lpm& ipv6_lpm) {
+EntryBuilder& EntryBuilder::AddIpv6TableEntry(
+    const IpTableEntryParams& entry_params, const Ipv6Lpm& ipv6_lpm) {
   sai::Ipv6TableEntry& ipv6_entry =
       *entries_.add_entries()->mutable_ipv6_table_entry();
-  ipv6_entry.mutable_match()->set_vrf_id(vrf);
+  ipv6_entry.mutable_match()->set_vrf_id(entry_params.vrf);
 
   if (!ipv6_lpm.dst_ip.IsAllZeros()) {
     ipv6_entry.mutable_match()->mutable_ipv6_dst()->set_value(
@@ -248,9 +257,19 @@ EntryBuilder& EntryBuilder::AddIpv6EntrySettingNexthopId(
         ipv6_lpm.prefix_len);
   }
 
-  ipv6_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
-      nexthop_id);
-
+  std::visit(gutil::Overload{
+                 [&](SetNextHopId next_hop_action) {
+                   ipv6_entry.mutable_action()
+                       ->mutable_set_nexthop_id()
+                       ->set_nexthop_id(next_hop_action.nexthop_id);
+                 },
+                 [&](SetWcmpGroupId wcmp_group_action) {
+                   ipv6_entry.mutable_action()
+                       ->mutable_set_wcmp_group_id()
+                       ->set_wcmp_group_id(wcmp_group_action.wcmp_group_id);
+                 },
+             },
+             entry_params.action);
   return *this;
 }
 
