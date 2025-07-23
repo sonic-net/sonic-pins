@@ -14,9 +14,13 @@
 
 #include "sai_p4/instantiations/google/test_tools/table_entry_generator.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -24,6 +28,7 @@
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
