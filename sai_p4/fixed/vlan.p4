@@ -113,14 +113,10 @@ control ingress_vlan_checks(inout headers_t headers,
   }
 
   apply {
+    // Ingress VLAN checks are enabled by default.
+    local_metadata.enable_ingress_vlan_checks = true;
     // Ingress VLAN checks.
     disable_ingress_vlan_checks_table.apply();
-
-    if (local_metadata.enable_vlan_checks &&
-        enable_ingress_vlan_checks &&
-        !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
-      mark_to_drop(standard_metadata);
-    }
   }
 }  // control ingress_vlan_checks
 

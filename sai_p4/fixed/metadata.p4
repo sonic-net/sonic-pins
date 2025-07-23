@@ -205,6 +205,11 @@ struct local_metadata_t {
   // applied regardless of instance type of a packet.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bool enable_vlan_checks;
+  
+  // When `enable_ingress_vlan_checks` is true, if the ingress port is not a
+  // member of the VLAN in ingress pipeline, the packet gets dropped
+  // except for reserved VIDs (0, 4095).
+  bool enable_ingress_vlan_checks;
 
   // If false when VLAN checks are enabled, the packet does not get admitted to
   // L3 routing.
