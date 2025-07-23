@@ -301,12 +301,12 @@ struct local_metadata_t {
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<PORT_BITWIDTH> packet_in_target_egress_port;
  
-  // When `redirect_to_port_enabled` is true, the packet will be redirected to
+  // When `redirect_port_valid` is true, the packet will be redirected to
   // the port specified in `redirect_port`. Note that redirect to port cancels
   // all forwarding decisions, except for nexthop. If the packet is assigned a
   // nexthop, the packet rewrites are determined by the the nexthop but the
   // egress port is determined by `redirect_port`.
-  bool redirect_to_port_enabled;
+  bool redirect_port_valid;
   bit<PORT_BITWIDTH> redirect_port;
 
   MeterColor_t color;
