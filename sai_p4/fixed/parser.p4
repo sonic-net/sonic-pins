@@ -52,6 +52,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.acl_ingress_ipmc_redirect = false;
     local_metadata.redirect_to_port_enabled = false;
     local_metadata.redirect_port = 0;
+    local_metadata.acl_ingress_nexthop_redirect = false;
 
   transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
