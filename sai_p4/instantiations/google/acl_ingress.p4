@@ -236,6 +236,7 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
+  @unsupported
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
     bit<8> append_ingress_timestamp,

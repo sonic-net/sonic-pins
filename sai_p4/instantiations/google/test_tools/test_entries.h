@@ -362,13 +362,6 @@ class EntryBuilder {
       absl::string_view nexthop_id, absl::string_view egress_port,
       const NexthopRewriteOptions& rewrite_options = {});
 
-  // Warning: If you try to install the result of multiple calls to this
-  // function (with different `multicast_group_id`s), you will get a runtime
-  // error.
-  // Note: Cannot be combined with other entries that forward *all* IP packets
-  // in a specific way.
-  EntryBuilder& AddEntriesForwardingIpPacketsToGivenMulticastGroup(
-      int multicast_group_id);
   EntryBuilder& AddVrfEntry(absl::string_view vrf);
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
   EntryBuilder& AddMulticastRoute(absl::string_view vrf,
