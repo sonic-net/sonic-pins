@@ -300,10 +300,9 @@ message TunnelTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Disallow creating reserved VLANs to rule out vendor specific behavior.
-//   vlan_id != 0 && vlan_id != 4095;
+//   vlan_id != 0 && vlan_id != 1 && vlan_id != 4095;
 message VlanTableEntry {
   message Match {
     string vlan_id = 1;  // exact match / Format::HEX_STRING / 12 bits
@@ -316,7 +315,6 @@ message VlanTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message VlanMembershipTableEntry {
   message Match {
     // Refers to 'vlan_table.vlan_id'.
@@ -422,12 +420,10 @@ message AclIngressTableEntry {
       AclCopyAction acl_copy = 1;
       AclTrapAction acl_trap = 2;
       AclForwardAction acl_forward = 3;
-      AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
       RedirectToNexthopAction redirect_to_nexthop = 7;
       // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -693,7 +689,6 @@ message AclIngressQosTableEntry {
           set_dscp_and_queues_and_deny_above_rate_limit = 6;
       // CAUTION: This action is not (yet) supported.
       SetForwardingQueuesAction set_forwarding_queues = 7;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -1116,10 +1111,9 @@ message SetOuterVlanIdAndAclMetadataAction {
   string acl_metadata = 2;  // Format::HEX_STRING / 8 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message AppendIngressAndEgressTimestampAction {
-  string append_ingress_timestamp = 1;  // Format::HEX_STRING / 1 bits
-  string append_egress_timestamp = 2;   // Format::HEX_STRING / 1 bits
+  string append_ingress_timestamp = 1;  // Format::HEX_STRING / 8 bits
+  string append_egress_timestamp = 2;   // Format::HEX_STRING / 8 bits
 }
 
 message NoAction {}
@@ -1157,9 +1151,7 @@ message TableEntry {
     Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
     Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
-    // CAUTION: This table is not (yet) supported.
     VlanTableEntry vlan_table_entry = 83;
-    // CAUTION: This table is not (yet) supported.
     VlanMembershipTableEntry vlan_membership_table_entry = 84;
     DisableIngressVlanChecksTableEntry disable_ingress_vlan_checks_table_entry =
         86;

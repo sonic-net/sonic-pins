@@ -22,6 +22,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
@@ -315,57 +316,96 @@ TableEntryGenerator Ipv6TunnelTerminationGenerator(
   return generator;
 }
 
-TableEntryGenerator Ipv6MulticastTableGenerator(
-    const pdpi::IrTableDefinition& table_definition) {
+TableEntryGenerator MirrorSessionGeneratorImpl() {
   TableEntryGenerator generator;
-  auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
-      absl::Substitute(R"pb(
-                         table_name: "ipv6_multicast_table"
-                         matches {
-                           name: "vrf_id"
-                           exact { str: "$0" }
-                         }
-                         action {
-                           name: "set_multicast_group_id"
-                           params {
-                             name: "multicast_group_id"
-                             value { hex_str: "0x0123" }
-                           }
-                         }
-                       )pb",
-                       kVrf80));
-  if (!base_entry.ok()) {
-    LOG(FATAL) << base_entry.status();
-  }  // Crash OK
-  generator.generator =
-      IrMatchFieldGenerator(table_definition, *base_entry, "ipv6_dst");
+  generator.generator = [](int index) {
+    pdpi::IrTableEntry entry = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(
+        R"pb(
+          table_name: "mirror_session_table"
+          action {
+            name: "mirror_with_vlan_tag_and_ipfix_encapsulation"
+            params {
+              name: "monitor_port"
+              # Hack: Port 1 is configured on all testbeds.
+              value { str: "1" }
+            }
+            params {
+              name: "monitor_failover_port"
+              # Hack: Port 2 is configured on all testbeds.
+              value { str: "2" }
+            }
+            params {
+              name: "mirror_encap_src_mac"
+              value { mac: "06:05:04:03:02:01" }
+            }
+            params {
+              name: "mirror_encap_dst_mac"
+              value { mac: "06:05:04:03:02:02" }
+            }
+            params {
+              name: "mirror_encap_vlan_id"
+              value { hex_str: "0x0fe" }
+            }
+            params {
+              name: "mirror_encap_src_ip"
+              value { ipv6: "2222:2222:2222:2222:2222:2222:2222:2222" }
+            }
+            params {
+              name: "mirror_encap_dst_ip"
+              value { ipv6: "4444:4444:4444:4444:4444:4444:4444:4444" }
+            }
+            params {
+              name: "mirror_encap_udp_src_port"
+              value { hex_str: "0x1234" }
+            }
+            params {
+              name: "mirror_encap_udp_dst_port"
+              value { hex_str: "0x5678" }
+            }
+          }
+        )pb");
+
+    pdpi::IrMatch& match = *entry.mutable_matches()->Add();
+    match.set_name("mirror_session_id");
+    match.mutable_exact()->set_str(absl::StrCat("mirror_session_id_", index));
+    return entry;
+  };
   return generator;
 }
 
-TableEntryGenerator Ipv4MulticastTableGenerator(
+// Returns a generator for mirror_session_table.
+// The IrTableDefinition parameter is not used but is needed to conform to the
+// TableEntryGenerator interface.
+TableEntryGenerator MirrorSessionGenerator(
+    const pdpi::IrTableDefinition& unused_table_definition) {
+  return MirrorSessionGeneratorImpl();
+}
+
+// Generator for acl_ingress_mirror_and_redirect_table.
+TableEntryGenerator AclIngressMirrorAndRedirectGenerator(
     const pdpi::IrTableDefinition& table_definition) {
   TableEntryGenerator generator;
-  auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
-      absl::Substitute(R"pb(
-                         table_name: "ipv4_multicast_table"
-                         matches {
-                           name: "vrf_id"
-                           exact { str: "$0" }
-                         }
-                         action {
-                           name: "set_multicast_group_id"
-                           params {
-                             name: "multicast_group_id"
-                             value { hex_str: "0x0042" }
-                           }
-                         }
-                       )pb",
-                       kVrf80));
-  if (!base_entry.ok()) {
-    LOG(FATAL) << base_entry.status();
-  }  // Crash OK
-  generator.generator =
-      IrMatchFieldGenerator(table_definition, *base_entry, "ipv4_dst");
+  pdpi::IrTableEntry base_entry = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(
+      R"pb(
+        table_name: "acl_ingress_mirror_and_redirect_table"
+        matches {
+          name: "is_ipv6"
+          optional { value { hex_str: "0x1" } }
+        }
+        action {
+          name: "redirect_to_port"
+          params {
+            name: "redirect_port"
+            # Port 1 is almost always present in a testbed.
+            value { str: "1" }
+          }
+        }
+      )pb");
+  // Generate entries with various dst_ip values.
+  // the reason for using dst_ip is because, unlike in_port which is present
+  // only in some instantiations, dst_ip is present in all instantiations.
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, base_entry, "dst_ipv6");
   return generator;
 }
 
@@ -380,20 +420,19 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "wcmp_group_table",
           // Logical table that is not supported by the switch.
           "ingress_clone_table",
-          // TODO: Add support for this table once the switch
-          // supports it.
-          "acl_ingress_mirror_and_redirect_table",
-          // TODO: Add support for this table once the switch
-          // supports it.
-          "mirror_session_table",
+	  // No generator is needed for these tables as there can only be one
+          // entry (lpm prefix_length == 0) in these tables.
+          "disable_egress_vlan_checks_table",
+          "disable_ingress_vlan_checks_table",
+          // These tables will be deprecated in the future.
+          "disable_vlan_checks_table",
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
-          // TODO: Add support for this table once the switch
+	  // TODO: Add support for these tables once the switch
           // supports it.
-          "disable_vlan_checks_table",
-          "disable_egress_vlan_checks_table",
-          "disable_ingress_vlan_checks_table",
+          "ipv4_multicast_table",
+          "ipv6_multicast_table",
           // TODO: Remove and re-enable in `GetGenerator` once
           // resource modeling is fixed.
           "multicast_router_interface_table",
@@ -421,15 +460,16 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"acl_ingress_qos_table", AclIngressQosTableGenerator},
       {"acl_ingress_security_table", AclIngressSecurityTableGenerator},
       {"acl_ingress_counting_table", AclIngressCountingTableGenerator},
+      {"mirror_session_table", MirrorSessionGenerator},
       {"acl_egress_table", AclEgressTableGenerator},
       {"acl_egress_l2_table", AclEgressL2TableGenerator},
       {"acl_egress_dhcp_to_host_table", AclEgressDhcpToHostTableGenerator},
       {"ipv4_table", Ipv4TableGenerator},
       {"ipv6_table", Ipv6TableGenerator},
       {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
-      {"ipv4_multicast_table", Ipv4MulticastTableGenerator},
-      {"ipv6_multicast_table", Ipv6MulticastTableGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
+      {"acl_ingress_mirror_and_redirect_table",
+       AclIngressMirrorAndRedirectGenerator},
       // TODO: Re-enable when once modeling is fixed.
       // {"multicast_router_interface_table",
       //  MulticastRouterInterfaceTableGenerator},

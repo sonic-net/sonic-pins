@@ -74,5 +74,10 @@ control egress(inout headers_t headers,
   organization = "Google",
   version = SAI_P4_PKGINFO_VERSION_LATEST
 )
+@platform_property(
+  multicast_group_table_size = MULTICAST_GROUP_TABLE_SIZE,
+  multicast_group_table_total_replicas = MULTICAST_GROUP_TABLE_TOTAL_REPLICAS,
+  multicast_group_table_max_replicas_per_entry = MULTICAST_GROUP_TABLE_MAX_REPLICAS_PER_ENTRY
+)
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;

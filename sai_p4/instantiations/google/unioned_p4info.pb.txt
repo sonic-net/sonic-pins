@@ -3,6 +3,11 @@ pkg_info {
   version: "Versions 2.4.0, 2.4.0, 2.4.0, 2.4.0"
   arch: "v1model"
   organization: "Google"
+  platform_properties {
+    multicast_group_table_size: 512
+    multicast_group_table_total_replicas: 3968
+    multicast_group_table_max_replicas_per_entry: 128
+  }
 }
 tables {
   preamble {
@@ -696,10 +701,6 @@ tables {
   action_refs {
     id: 16777475
     annotations: "@proto_id(3)"
-  }
-  action_refs {
-    id: 16777476
-    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777481
@@ -2081,23 +2082,6 @@ actions {
 }
 actions {
   preamble {
-    id: 16777476
-    name: "ingress.acl_ingress.acl_mirror"
-    alias: "acl_mirror"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "mirror_session_id"
-    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
-    type_name {
-      name: "mirror_session_id_t"
-    }
-  }
-}
-actions {
-  preamble {
     id: 16777484
     name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -2283,19 +2267,18 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
     name: "append_ingress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_INGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
   params {
     id: 2
     name: "append_egress_timestamp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_INSERT_EGRESS_TIMESTAMP)"
-    bitwidth: 1
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_EGRESS_TIMESTAMP)"
+    bitwidth: 8
   }
 }
 actions {
@@ -2651,6 +2634,23 @@ actions {
 }
 actions {
   preamble {
+    id: 16777476
+    name: "ingress.acl_ingress.acl_mirror"
+    alias: "acl_mirror"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
@@ -2778,13 +2778,13 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
-    annotations: "@selector_size_semantics(\"sum_of_weights\")"
-    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
   size: 49152
   max_group_size: 512
+  sum_of_weights {
+  }
 }
 direct_counters {
   preamble {
@@ -3070,6 +3070,7 @@ type_info {
         sdn_string {
         }
       }
+      annotations: "@p4runtime_translation_mappings({ { \"\" , 0 } , })"
     }
   }
   new_types {
