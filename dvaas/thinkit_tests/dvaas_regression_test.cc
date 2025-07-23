@@ -1,0 +1,62 @@
+#include "dvaas/thinkit_tests/dvaas_regression_test.h"
+
+#include <memory>
+
+#include "dvaas/dataplane_validation.h"
+#include "dvaas/mirror_testbed_config.h"
+#include "dvaas/switch_api.h"
+#include "dvaas/test_vector.pb.h"
+#include "dvaas/validation_result.h"
+#include "gutil/status_matchers.h" // IWYU pragma: keep
+#include "p4_pdpi/p4_runtime_session_extras.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+
+namespace dvaas {
+namespace {
+
+TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
+  ASSERT_OK_AND_ASSIGN(dvaas::MirrorTestbedConfigurator configured_testbed,
+                       dvaas::MirrorTestbedConfigurator::Create(
+                           &GetParam().mirror_testbed->GetMirrorTestbed()));
+
+  // In PINs, since the only supported non-table entry entities are
+  // `multicast_group_entry`s, and each of those has a corresponding
+  // `multicast_router_interface_table_entry` that uses the same port, we can be
+  // certain that all the ports used in the full set of entities are also used
+  // in the subset that is the table entries.
+  //
+  // TODO: Directly pass in IR entities instead of extracting IR
+  // table entries once support for IR entities has been added to
+  // `ConfigureForForwardingTest`.
+  pdpi::IrTableEntries ir_table_entries;
+  for (const pdpi::IrEntity &ir_entity :
+       GetParam().minimal_set_of_entities.entities()) {
+    if (ir_entity.has_table_entry()) {
+      *ir_table_entries.add_entries() = ir_entity.table_entry();
+    }
+  }
+  ASSERT_OK(configured_testbed.ConfigureForForwardingTest({
+      .configure_sut_port_ids_for_expected_entries = true,
+      .sut_entries_to_expect_after_configuration = ir_table_entries,
+      .mirror_sut_ports_ids_to_control_switch = true,
+  }));
+  // Install the entities on the switch.
+  ASSERT_OK(pdpi::InstallIrEntities(*configured_testbed.SutApi().p4rt,
+                                    GetParam().minimal_set_of_entities));
+  dvaas::DataplaneValidationParams params = GetParam().dvaas_params;
+  params.packet_test_vector_override = {
+      GetParam().packet_test_vector,
+  };
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().validator->ValidateDataplaneUsingExistingSwitchApis(
+          configured_testbed.SutApi(), configured_testbed.ControlSwitchApi(),
+          params));
+
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+  ASSERT_OK(configured_testbed.RestoreToOriginalConfiguration());
+}
+
+} // namespace
+} // namespace dvaas
