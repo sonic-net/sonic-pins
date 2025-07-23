@@ -49,7 +49,8 @@ absl::StatusOr<int> ExtractIdFromTaggedPacket(absl::string_view raw_packet);
 
 // Given the hex string representation of a packet containing a tag, extract
 // the ID from the tag. Returns an error if the raw packet has an unexpected
-// format, e.g. for untagged packets.
+// format, e.g. for untagged packets. The hex string must be of the form
+// "[0-9a-f]+", note that it omits the "0x" prefix.
 absl::StatusOr<int> ExtractIdFromTaggedPacketInHex(
     absl::string_view packet_hex);
 
