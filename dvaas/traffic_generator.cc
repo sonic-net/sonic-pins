@@ -57,8 +57,6 @@
 
 namespace dvaas {
 
-// ============================= SimpleTrafficGen ==============================
-
 SimpleTrafficGenerator::State SimpleTrafficGenerator::GetState() {
   absl::MutexLock lock(&state_mutex_);
   return state_;
@@ -223,8 +221,6 @@ SimpleTrafficGenerator::~SimpleTrafficGenerator() {
     }
   }
 }
-
-// ======================= TrafficGenWithGuaranteedRate ========================
 
 TrafficGeneratorWithGuaranteedRate::~TrafficGeneratorWithGuaranteedRate() {
   if (GetState() == kTrafficInjectionAndCollection) {
@@ -626,9 +622,10 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
                      pdpi::ReadIrEntitiesSorted(*control_switch.p4rt));
 
     // Retrieve auxiliary entries for v1model targets.
-    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
-                     backend_->CreateV1ModelAuxiliaryTableEntries(
-                         *control_switch.gnmi, ir_p4info));
+    ASSIGN_OR_RETURN(
+        pdpi::IrEntities v1model_auxiliary_table_entries,
+        backend_->CreateV1ModelAuxiliaryEntities(
+            v1model_augmented_entities, *control_switch.gnmi, ir_p4info));
     v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
     ASSIGN_OR_RETURN(auto packet_traces,
