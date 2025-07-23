@@ -536,6 +536,280 @@ packets {
 
 
 ================================================================================
+ValidateTestRun Test: Packet gets forwarded with an unexpected
+modification of two header fields. This is the same test case as above,
+but ethernet header is ignored and dscp field in ipv4
+is ignored by test_run_validation.
+================================================================================
+Expected: DATAPLANE packet gets forwarded (1 copies)
+          (ignoring the field(s) 'packetlib.Ipv4Header.checksum','packetlib.Header.udp_header')
+  Actual: DATAPLANE packet got forwarded (1 copies), but with unexpected modifications
+- acceptable output #1 has packet 0 with mismatched header fields:
+  modified: headers[1].ipv4_header.dscp: "0x1c" -> "0x00"
+  ignored: headers[1].ipv4_header.checksum
+  ignored: headers[2].udp_header
+
+Details dumped below.
+
+== INPUT =======================================================================
+type: DATAPLANE
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1c"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x1b62"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== ACTUAL OUTPUT ===============================================================
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x00"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x0000"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1c"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x1b62"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+
+
+================================================================================
+ValidateTestRun Test: Packet gets forwarded with an unexpected
+modification of two header fields. This is the same test case as above,
+but many fields are ignored by test_run_validation.
+One of the modified field is ignored by test_run_validation.
+================================================================================
+Expected: DATAPLANE packet gets forwarded (1 copies)
+          (ignoring the field(s) 'packetlib.Ipv4Header.dscp','packetlib.PsampHeader.length','packetlib.UdpHeader.source_port')
+  Actual: DATAPLANE packet got forwarded (1 copies), but with unexpected modifications
+- acceptable output #1 has packet 0 with mismatched header fields:
+  ignored: headers[1].ipv4_header.dscp
+  modified: headers[1].ipv4_header.checksum: "0x1b62" -> "0x0000"
+  ignored: headers[2].udp_header.source_port
+
+Details dumped below.
+
+== INPUT =======================================================================
+type: DATAPLANE
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1c"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x1b62"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== ACTUAL OUTPUT ===============================================================
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x00"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x0000"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1c"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x1b62"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+
+
+================================================================================
 ValidateTestRun Test: Packet gets forwarded with an unexpected port.
 ================================================================================
 Expected: DATAPLANE packet gets forwarded (1 copies)

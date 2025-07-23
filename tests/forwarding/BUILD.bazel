@@ -303,6 +303,7 @@ cc_library(
         "//dvaas:arriba_test_vector_validation",
         "//dvaas:mirror_testbed_config",
         "//dvaas:test_vector_cc_proto",
+        "//dvaas:validation_result",
         "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",

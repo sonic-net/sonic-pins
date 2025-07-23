@@ -16,7 +16,6 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
@@ -52,175 +51,7 @@
 #include "tests/forwarding/util.h"
 #include "thinkit/mirror_testbed.h"
 
-// Crash if `status` is not okay. Only use in tests.
-#define CHECK_OK(val) CHECK_EQ(::absl::OkStatus(), (val))  // Crash OK.
-
 namespace dvaas {
-
-SimpleTrafficGenerator::State SimpleTrafficGenerator::GetState() {
-  absl::MutexLock lock(&state_mutex_);
-  return state_;
-}
-
-void SimpleTrafficGenerator::SetState(State state) {
-  absl::MutexLock lock(&state_mutex_);
-  state_ = state;
-}
-
-absl::StatusOr<PacketSynthesisStats> SimpleTrafficGenerator::Init(
-    thinkit::MirrorTestbed* testbed, const TrafficGenerator::Params& params) {
-  if (GetState() == kTrafficFlowing) {
-    return absl::FailedPreconditionError(
-        "Cannot initialize while traffic is flowing");
-  }
-
-  params_ = params;
-
-  // Configure testbed.
-  ASSIGN_OR_RETURN(auto mirror_testbed_configurator,
-                   MirrorTestbedConfigurator::Create(testbed));
-  testbed_configurator_ = std::make_unique<MirrorTestbedConfigurator>(
-      std::move(mirror_testbed_configurator));
-  RETURN_IF_ERROR(testbed_configurator_->ConfigureForForwardingTest({
-      .mirror_sut_ports_ids_to_control_switch =
-          !params_.validation_params.mirror_testbed_port_map_override
-               .has_value(),
-  }));
-  // Install punt entries on control switch.
-  // TODO: Use testbed configurator to do this, instead.
-  pdpi::P4RuntimeSession& control_p4rt =
-      *testbed_configurator_->ControlSwitchApi().p4rt;
-  RETURN_IF_ERROR(pdpi::ClearEntities(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
-                   pdpi::GetIrP4Info(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrEntities punt_entries,
-                   backend_->GetEntitiesToPuntAllPackets(ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallIrEntities(control_p4rt, punt_entries));
-
-  // Generate test vectors.
-  gutil::BazelTestArtifactWriter writer;
-  ASSIGN_OR_RETURN(
-      generate_test_vectors_result_,
-      GenerateTestVectors(params.validation_params,
-                          testbed_configurator_->SutApi(), *backend_, writer));
-
-  SetState(kInitialized);
-
-  return PacketSynthesisStats{};
-}
-
-absl::Status SimpleTrafficGenerator::StartTraffic() {
-  State state = GetState();
-  if (state == kUninitialized) {
-    return absl::FailedPreconditionError(
-        "Cannot start traffic before initialization.");
-  }
-  if (state == kTrafficFlowing) {
-    return absl::FailedPreconditionError(
-        "Traffic injection has already started");
-  }
-
-  // Spawn traffic injection thread.
-  traffic_injection_thread_ =
-      std::thread(&SimpleTrafficGenerator::InjectTraffic, this);
-
-  // Wait for state to change before returning.
-  while (GetState() != kTrafficFlowing) {
-    absl::SleepFor(absl::Seconds(1));
-  }
-
-  return absl::OkStatus();
-}
-
-absl::Status SimpleTrafficGenerator::StopTraffic() {
-  if (GetState() != kTrafficFlowing) {
-    return absl::FailedPreconditionError(
-        "Cannot stop traffic if not already flowing.");
-  }
-
-  // Change state.
-  SetState(kInitialized);
-
-  // Wait for traffic injection thread to stop before returning.
-  traffic_injection_thread_.join();
-
-  return absl::OkStatus();
-}
-
-void SimpleTrafficGenerator::InjectTraffic() {
-  // Change state.
-  SetState(kTrafficFlowing);
-
-  LOG(INFO) << "Starting to inject traffic";
-  int iterations = 0;
-  while (GetState() == kTrafficFlowing) {
-    ++iterations;
-    LOG_EVERY_T(INFO, 10) << "Traffic injection iteration #" << iterations;
-
-    // Inject and collect.
-    PacketStatistics statistics;
-    absl::StatusOr<PacketTestRuns> test_runs = SendTestPacketsAndCollectOutputs(
-        *testbed_configurator_->SutApi().p4rt,
-        *testbed_configurator_->ControlSwitchApi().p4rt,
-        generate_test_vectors_result_.packet_test_vector_by_id,
-        {
-            .max_packets_to_send_per_second =
-                params_.validation_params.max_packets_to_send_per_second,
-            .is_expected_unsolicited_packet =
-                [&](const packetlib::Packet packet) -> bool {
-              return backend_->IsExpectedUnsolicitedPacket(packet);
-            },
-            .mirror_testbed_port_map =
-                params_.validation_params.mirror_testbed_port_map_override
-                    .value_or(MirrorTestbedP4rtPortIdMap::CreateIdentityMap()),
-            .enable_sut_packet_in_collection =
-                !params_.validation_params.switch_output_diff_params
-                     .treat_expected_and_actual_outputs_as_having_no_packet_ins,
-        },
-        statistics);
-    CHECK_OK(test_runs.status());  // Crash OK.
-
-    // Add results to test_runs_.
-    absl::MutexLock lock(&test_runs_mutex_);
-    test_runs_.mutable_test_runs()->Add(test_runs->test_runs().begin(),
-                                        test_runs->test_runs().end());
-  }
-
-  LOG(INFO) << "Stopped traffic injection";
-}
-
-absl::StatusOr<ValidationResult> SimpleTrafficGenerator::GetValidationResult() {
-  test_runs_mutex_.Lock();
-  PacketTestRuns test_runs = test_runs_;
-  test_runs_mutex_.Unlock();
-  return ValidationResult(
-      test_runs, params_.validation_params.switch_output_diff_params,
-      generate_test_vectors_result_.packet_synthesis_result);
-}
-
-absl::StatusOr<ValidationResult>
-SimpleTrafficGenerator::GetAndClearValidationResult() {
-  test_runs_mutex_.Lock();
-  PacketTestRuns test_runs = test_runs_;
-  test_runs_.clear_test_runs();
-  test_runs_mutex_.Unlock();
-
-  return ValidationResult(
-      test_runs, params_.validation_params.switch_output_diff_params,
-      generate_test_vectors_result_.packet_synthesis_result);
-}
-
-SimpleTrafficGenerator::~SimpleTrafficGenerator() {
-  if (GetState() == kTrafficFlowing) {
-    LOG(WARNING)
-        << "SimpleTrafficGenerator destructed while traffic is flowing. "
-           "Stopping traffic.";
-    absl::Status status = StopTraffic();
-    if (!status.ok()) {
-      LOG(FATAL) << "Failed to stop traffic: " << status;  // Crash OK.
-    }
-  }
-}
 
 TrafficGeneratorWithGuaranteedRate::~TrafficGeneratorWithGuaranteedRate() {
   if (GetState() == kTrafficInjectionAndCollection) {
@@ -251,6 +82,10 @@ void TrafficGeneratorWithGuaranteedRate::SetState(State state) {
 
 absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
     thinkit::MirrorTestbed* testbed, const TrafficGenerator::Params& params) {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot initialize in the error state.");
+  }
   if (GetState() == kTrafficInjectionAndCollection) {
     return absl::FailedPreconditionError(
         "Cannot initialize while traffic is being injected and collected.");
@@ -277,18 +112,36 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
   pdpi::P4RuntimeSession& control_p4rt =
       *testbed_configurator_->ControlSwitchApi().p4rt;
   RETURN_IF_ERROR(pdpi::ClearEntities(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info control_switch_ir_p4info,
                    pdpi::GetIrP4Info(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrEntities punt_entries,
-                   backend_->GetEntitiesToPuntAllPackets(ir_p4info));
+  ASSIGN_OR_RETURN(
+      const pdpi::IrEntities punt_entries,
+      backend_->GetEntitiesToPuntAllPackets(control_switch_ir_p4info));
   RETURN_IF_ERROR(pdpi::InstallIrEntities(control_p4rt, punt_entries));
+
+  // Stores P4Specification, P4Info, and entities from SUT to maintain
+  // consistency between when expectations are generated and when packet traces
+  // are created.
+  SwitchApi& sut = testbed_configurator_->SutApi();
+  ASSIGN_OR_RETURN(sut_p4_spec_, InferP4Specification(params_.validation_params,
+                                                      *backend_, sut));
+  ASSIGN_OR_RETURN(sut_ir_p4info_, pdpi::GetIrP4Info(*sut.p4rt));
+
+  // Read P4Info and entities from SUT, sorted for determinism.
+  ASSIGN_OR_RETURN(sut_augmented_entities_,
+                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+
+  // Retrieve auxiliary entries for v1model targets.
+  ASSIGN_OR_RETURN(pdpi::IrEntities sut_v1model_auxiliary_table_entries,
+                   backend_->CreateV1ModelAuxiliaryEntities(
+                       sut_augmented_entities_, sut_ir_p4info_, *sut.gnmi));
+  sut_augmented_entities_.MergeFrom(sut_v1model_auxiliary_table_entries);
 
   // Generate test vectors.
   gutil::BazelTestArtifactWriter writer;
   ASSIGN_OR_RETURN(
       generate_test_vectors_result_,
-      GenerateTestVectors(params.validation_params,
-                          testbed_configurator_->SutApi(), *backend_, writer));
+      GenerateTestVectors(params.validation_params, sut, *backend_, writer));
 
   SetState(kInitialized);
 
@@ -297,6 +150,10 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
 
 absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
   State state = GetState();
+  if (state == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot start traffic in the error state.");
+  }
   if (state == kUninitialized) {
     return absl::FailedPreconditionError(
         "Cannot start traffic before initialization.");
@@ -312,14 +169,26 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
 
   // Spawn traffic injection thread.
   traffic_injection_thread_ = std::thread([&]() {
-    CHECK_OK(  // Crash OK
-        TrafficGeneratorWithGuaranteedRate::InjectInputTraffic());
+    absl::Status status =
+        TrafficGeneratorWithGuaranteedRate::InjectInputTraffic();
+    if (!status.ok()) {
+      SetState(kError);
+      LOG(ERROR) << "Switching to error state because `InjectInputTraffic` "
+                    "returned error status: "
+                 << status;
+    }
   });
 
   // Spawn traffic collection thread.
   traffic_collection_thread_ = std::thread([&]() {
-    CHECK_OK(  // Crash OK
-        TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic());
+    absl::Status status =
+        TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic();
+    if (!status.ok()) {
+      SetState(kError);
+      LOG(ERROR) << "Switching to error state because `CollectOutputTraffic` "
+                    "returned error status: "
+                 << status;
+    }
   });
 
   // Wait for state to change before returning.
@@ -331,6 +200,10 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
 }
 
 absl::Status TrafficGeneratorWithGuaranteedRate::StopTraffic() {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot stop traffic in the error state.");
+  }
   if (GetState() != kTrafficInjectionAndCollection) {
     return absl::FailedPreconditionError(
         "Cannot stop traffic if not already flowing.");
@@ -435,9 +308,7 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
       !params_.validation_params.switch_output_diff_params
            .treat_expected_and_actual_outputs_as_having_no_packet_ins;
   auto is_expected_unsolicited_packet =
-      [&](const packetlib::Packet packet) -> bool {
-    return backend_->IsExpectedUnsolicitedPacket(packet);
-  };
+      params_.validation_params.is_expected_unsolicited_packet;
 
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map =
       params_.validation_params.mirror_testbed_port_map_override.value_or(
@@ -527,6 +398,10 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
 
 absl::StatusOr<ValidationResult>
 TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot validate results in the error state.");
+  }
   LOG(INFO) << "Getting validation result";
   // Swap `injected_traffic_vector` and `injected_traffic_` and add the
   // `residual_injected_traffic_` to `injected_traffic_`.
@@ -573,15 +448,21 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
       PacketTestRun* packet_test_run = test_outcome->mutable_test_run();
       *packet_test_run->mutable_test_vector() =
           injected_traffic.packet_test_vector;
+      *packet_test_run->mutable_input_packet_injection_time() =
+          absl::FormatTime(absl::RFC3339_full, injected_traffic.injection_time,
+                           absl::UTCTimeZone());
       if (collected_traffic_by_id.contains(injected_traffic.tag)) {
         *packet_test_run->mutable_actual_output() =
             collected_traffic_by_id[injected_traffic.tag];
         collected_traffic_by_id.erase(injected_traffic.tag);
       }
       // Validate test runs to create test outcomes.
-      *test_outcome->mutable_test_result() =
+      ASSIGN_OR_RETURN(
+          *test_outcome->mutable_test_result(),
           ValidateTestRun(*packet_test_run,
-                          params_.validation_params.switch_output_diff_params);
+                          /*diff_params=*/
+                          params_.validation_params.switch_output_diff_params,
+                          &testbed_configurator_->SutApi()));
       if (test_outcome->test_result().has_failure()) {
         failed_switch_inputs.push_back(
             test_outcome->test_run().test_vector().input());
@@ -625,13 +506,13 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
     ASSIGN_OR_RETURN(
         pdpi::IrEntities v1model_auxiliary_table_entries,
         backend_->CreateV1ModelAuxiliaryEntities(
-            v1model_augmented_entities, *control_switch.gnmi, ir_p4info));
+            v1model_augmented_entities, ir_p4info, *control_switch.gnmi));
     v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
     ASSIGN_OR_RETURN(auto packet_traces,
-                     backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
-                                               v1model_augmented_entities,
-                                               failed_switch_inputs));
+                     backend_->GetPacketTraces(
+                         sut_p4_spec_.bmv2_config, sut_ir_p4info_,
+                         sut_augmented_entities_, failed_switch_inputs));
 
     for (dvaas::PacketTestOutcome& test_outcome :
          *new_test_outcomes.mutable_outcomes()) {
