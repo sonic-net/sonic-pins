@@ -307,10 +307,13 @@ public:
       const pdpi::IrP4Info &ir_p4info, const pdpi::IrEntities &ir_entities,
       const std::vector<SwitchInput> &switch_inputs) const = 0;
 
-  // Creates entries for v1Model auxiliary tables that model the effects of the
-  // given gNMI configuration in on packet forwarding (e.g. port loopback mode).
-  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryTableEntries(
-      gnmi::gNMI::StubInterface& gnmi_stub, pdpi::IrP4Info ir_p4info) const = 0;
+  // Creates entities for v1Model auxiliary tables that model the effects of the
+  // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
+  // loopback mode).
+  virtual absl::StatusOr<pdpi::IrEntities>
+  CreateV1ModelAuxiliaryEntities(pdpi::IrEntities ir_entities,
+                                 gnmi::gNMI::StubInterface &gnmi_stub,
+                                 pdpi::IrP4Info ir_p4info) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };

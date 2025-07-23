@@ -218,18 +218,18 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
 
+  // Read P4Info and control plane entities from SUT, sorted for determinism.
+  ASSIGN_OR_RETURN(pdpi::IrEntities entities,
+                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
   // Retrieve auxiliary entries for v1model targets.
   ASSIGN_OR_RETURN(
       pdpi::IrEntities v1model_auxiliary_table_entries,
-      backend.CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+      backend.CreateV1ModelAuxiliaryEntities(entities, *sut.gnmi, ir_p4info));
 
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "v1model_auxiliary_table_entries.txt",
       gutil::PrintTextProto(v1model_auxiliary_table_entries)));
 
-  // Read P4Info and control plane entities from SUT, sorted for determinism.
-  ASSIGN_OR_RETURN(pdpi::IrEntities entities,
-                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
   entities.MergeFrom(v1model_auxiliary_table_entries);
 
   RETURN_IF_ERROR(
@@ -287,14 +287,10 @@ absl::Status AttachPacketTrace(
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
   // Store the full BMv2 textual log as test artifact.
-  ASSIGN_OR_RETURN(int test_id,
-                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
-                                                   .test_vector()
-                                                   .input()
-                                                   .packet()
-                                                   .parsed()));
   const std::string& packet_hex =
       failed_packet_test.test_run().test_vector().input().packet().hex();
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
   const std::string filename =
       "packet_" + std::to_string(test_id) + ".trace.txt";
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
@@ -309,31 +305,37 @@ absl::Status AttachPacketTrace(
   // Augment failure description with packet trace summary.
   std::string summarized_packet_trace;
   for (const auto& event : it->second[0].events()) {
-    if (event.has_table_apply()) {
-      if (event.table_apply().hit().has_table_entry()) {
-        absl::StrAppend(
-            &summarized_packet_trace, "Table '",
-            event.table_apply().table_name(), "': hit\n",
-            gutil::PrintTextProto(event.table_apply().hit().table_entry()),
-            "\n");
-      } else {
-        absl::StrAppend(&summarized_packet_trace,
-                        event.table_apply().hit_or_miss_textual_log(), "\n\n");
-      }
-    } else if (event.has_primitive_action()) {
-      switch (event.primitive_action().primitive_action_case()) {
-        case PrimitiveAction::kMarkToDrop: {
+    switch (event.event_case()) {
+      case Event::kTableApply: {
+        if (event.table_apply().hit().has_table_entry()) {
           absl::StrAppend(
-              &summarized_packet_trace, "Primitive: 'mark_to_drop' (",
-              event.primitive_action().mark_to_drop().source_location(),
-              ")\n\n");
-          break;
+              &summarized_packet_trace, "Table '",
+              event.table_apply().table_name(), "': hit\n",
+              gutil::PrintTextProto(event.table_apply().hit().table_entry()),
+              "\n");
+        } else {
+          absl::StrAppend(&summarized_packet_trace,
+                          event.table_apply().hit_or_miss_textual_log(),
+                          "\n\n");
         }
-        case PrimitiveAction::PRIMITIVE_ACTION_NOT_SET:
-          LOG(WARNING) << "Primitive action in event "
-                       << event.ShortDebugString()
-                       << " not supported in summary";
-          break;
+        break;
+      }
+      case Event::kMarkToDrop: {
+        absl::StrAppend(&summarized_packet_trace, "Primitive: 'mark_to_drop' (",
+                        event.mark_to_drop().source_location(), ")\n\n");
+        break;
+      }
+      case Event::kPacketReplication: {
+        absl::StrAppend(
+            &summarized_packet_trace, "Packet replication: ",
+            event.packet_replication().number_of_packets_replicated(),
+            "replicas\n\n");
+        break;
+      }
+      default: {
+        LOG(WARNING) << "Event " << event.ShortDebugString()
+                     << " not supported.";
+        break;
       }
     }
   }
@@ -488,9 +490,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
                        pdpi::ReadIrEntitiesSorted(*sut.p4rt));
       // Retrieve auxiliary entries for v1model targets.
-      ASSIGN_OR_RETURN(
-          pdpi::IrEntities v1model_auxiliary_table_entries,
-          backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+      ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
+                       backend_->CreateV1ModelAuxiliaryEntities(
+                           v1model_augmented_entities, *sut.gnmi, ir_p4info));
       v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
       ASSIGN_OR_RETURN(packet_traces,
