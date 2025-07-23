@@ -33,6 +33,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
@@ -96,6 +97,12 @@ grpc::Status EnterCriticalState(const std::string& message) {
   LOG(FATAL) << "Entering critical state: " << message;
   return grpc::Status::OK;
 }
+
+// Information processed from the forwarding pipeline configuration.
+struct ConfigInfo {
+  pdpi::IrP4Info ir_p4info;
+  p4_constraints::ConstraintInfo constraints;
+};
 
 std::string GetKeyErrorMessage(pdpi::IrEntity entity,
                                const std::string& extra) {
@@ -587,6 +594,51 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
   return ir_entries;
 }
 
+// Verify the config and generate objects required for runtime processing.
+// Returns an error if the config is empty or is otherwise invalid.
+absl::StatusOr<ConfigInfo>
+PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
+  if (!request.has_config()) {
+    LOG(WARNING) << "ForwardingPipelineConfig is missing the config field.";
+    return gutil::InvalidArgumentErrorBuilder()
+           << "ForwardingPipelineConfig is missing the config field.";
+  }
+
+  absl::Status validate_p4info = ValidateP4Info(request.config().p4info());
+  if (!validate_p4info.ok()) {
+    // Any failure to validate indicates an invalid P4Info.
+    std::string library_prefix = LibraryPrefix(validate_p4info);
+    LOG(WARNING) << library_prefix << "Failed to validate P4Info. "
+                 << validate_p4info;
+    return gutil::InvalidArgumentErrorBuilder()
+           << library_prefix << "Failed to validate P4Info. Details: "
+           << validate_p4info.message();
+  }
+
+  auto constraint_info =
+      p4_constraints::P4ToConstraintInfo(request.config().p4info());
+  if (!constraint_info.ok()) {
+    LOG(WARNING) << "Could not get constraint info from P4Info: "
+                 << constraint_info.status();
+    return gutil::StatusBuilder(constraint_info.status().code())
+           << "[P4 Constraint] " << constraint_info.status().message();
+  }
+
+  auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
+  if (!ir_p4info.ok()) {
+    LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
+                 << ir_p4info.status();
+    return gutil::StatusBuilder(ir_p4info.status().code())
+           << "[P4RT/PDPI] " << ir_p4info.status().message();
+  }
+  // Remove `@unsupported` entities so their use in requests will be rejected.
+  pdpi::RemoveUnsupportedEntities(*ir_p4info);
+  TranslateIrP4InfoForOrchAgent(*ir_p4info);
+
+  return ConfigInfo{.ir_p4info = std::move(*ir_p4info),
+                    .constraints = std::move(*constraint_info)};
+}
+
 }  // namespace
 
 P4RuntimeImpl::P4RuntimeImpl(
@@ -944,7 +996,8 @@ grpc::Status P4RuntimeImpl::SetForwardingPipelineConfig(
     VLOG(1) << "Request action: " << request->Action_Name(request->action());
     switch (request->action()) {
       case p4::v1::SetForwardingPipelineConfigRequest::VERIFY:
-        action_status = VerifyPipelineConfig(*request);
+        action_status =
+            gutil::AbslStatusToGrpcStatus(PreprocessConfig(*request).status());
         break;
       case p4::v1::SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT:
         action_status = VerifyAndCommitPipelineConfig(*request);
@@ -1290,31 +1343,6 @@ absl::Status P4RuntimeImpl::HandlePacketOutRequest(
                        packetio_impl_.get(), packet_out);
 }
 
-grpc::Status P4RuntimeImpl::VerifyPipelineConfig(
-    const p4::v1::SetForwardingPipelineConfigRequest& request) const {
-  // In all cases where we need to verify a config the spec requires a config to
-  // be set.
-  if (!request.has_config()) {
-    LOG(WARNING) << "ForwardingPipelineConfig is missing the config field.";
-    return grpc::Status(
-        grpc::StatusCode::INVALID_ARGUMENT,
-        "ForwardingPipelineConfig is missing the config field.");
-  }
-
-  absl::Status validate_p4info = ValidateP4Info(request.config().p4info());
-  if (!validate_p4info.ok()) {
-    // Any failure to validate indicates an invalid P4Info.
-    std::string library_prefix = LibraryPrefix(validate_p4info);
-    LOG(WARNING) << library_prefix << "Failed to validate P4Info. "
-                 << validate_p4info;
-    return gutil::AbslStatusToGrpcStatus(
-        gutil::StatusBuilder(absl::StatusCode::kInvalidArgument)
-        << library_prefix
-        << "Failed to validate P4Info. Details: " << validate_p4info.message());
-  }
-  return grpc::Status::OK;
-}
-
 grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request) {
   // Today we do not clear any forwarding state so if we detect any we return an
@@ -1377,8 +1405,10 @@ grpc::Status P4RuntimeImpl::CommitPipelineConfig(
 
 grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request) {
-  grpc::Status verified = VerifyPipelineConfig(request);
-  if (!verified.ok()) return verified;
+  auto config_info = PreprocessConfig(request);
+  if (!config_info.ok()) {
+    return gutil::AbslStatusToGrpcStatus(config_info.status());
+  }
 
   // We cannot reconcile any config today so if we see that the new forwarding
   // config is different from the current one we just return an error.
@@ -1396,69 +1426,44 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
             diff_report));
   }
 
-  // If the IrP4Info hasn't been set then we need to configure the lower layers.
-  if (!ir_p4info_.has_value()) {
-    // Collect any P4RT constraints from the P4Info.
-    auto constraint_info =
-        p4_constraints::P4ToConstraintInfo(request.config().p4info());
-    if (!constraint_info.ok()) {
-      LOG(WARNING) << "Could not get constraint info from P4Info: "
-                   << constraint_info.status();
-      return gutil::AbslStatusToGrpcStatus(
-          absl::Status(constraint_info.status().code(),
-                       absl::StrCat("[P4 Constraint] ",
-                                    constraint_info.status().message())));
-    }
-
-    // Convert the P4Info into an IrP4Info.
-    auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
-    if (!ir_p4info.ok()) {
-      LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
-                   << ir_p4info.status();
-      return gutil::AbslStatusToGrpcStatus(absl::Status(
-          ir_p4info.status().code(),
-          absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
-    }
-    // Remove `@unsupported` entities so their use in requests will be rejected.
-    pdpi::RemoveUnsupportedEntities(*ir_p4info);
-    TranslateIrP4InfoForOrchAgent(*ir_p4info);
-
-    // Apply a config if we don't currently have one.
-    absl::Status config_result = ConfigureAppDbTables(*ir_p4info);
-    if (!config_result.ok()) {
-      LOG(ERROR) << "Failed to apply ForwardingPipelineConfig: "
-                 << config_result;
-      // TODO: cleanup P4RT table definitions instead of going
-      // critical.
-      return grpc::Status(grpc::StatusCode::INTERNAL, config_result.ToString());
-    }
-
-    // Store resource utilization limits for any ActionProfiles.
-    for (const auto& [action_profile_name, action_profile_def] :
-         ir_p4info->action_profiles_by_name()) {
-      capacity_by_action_profile_name_[action_profile_name] =
-          GetActionProfileResourceCapacity(action_profile_def);
-      LOG(INFO) << "Adding action profile limits for '" << action_profile_name
-                << "': max_weights_for_all_groups="
-                << action_profile_def.action_profile().size();
-    }
-
-    // Update P4RuntimeImpl's state only if we succeed.
-    p4_constraint_info_ = *std::move(constraint_info);
-    ir_p4info_ = *std::move(ir_p4info);
-  }
-
   // The ForwardingPipelineConfig is still updated in case the cookie value has
   // been changed.
-  forwarding_pipeline_config_ = request.config();
-
-  grpc::Status saved = SavePipelineConfig(*forwarding_pipeline_config_);
-  if (!saved.ok()) {
-    LOG(ERROR) << "Successfully applied, but could not save the "
-               << "ForwardingPipelineConfig: " << saved.error_message();
-    return saved;
+  if (ir_p4info_.has_value()) {
+    forwarding_pipeline_config_ = request.config();
+    LOG(INFO)
+        << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
+    return SavePipelineConfig(*forwarding_pipeline_config_);
   }
 
+  // Configure the lower layers.
+  // Apply ir_p4info to DB if we are committing to DB.
+  // Apply a config if we don't currently have one.
+  absl::Status config_result = ConfigureAppDbTables(config_info->ir_p4info);
+  if (!config_result.ok()) {
+    return EnterCriticalState(
+        absl::StrCat("Failed to apply ForwardingPipelineConfig: ",
+                     config_result.ToString()));
+  }
+
+    // Store resource utilization limits for any ActionProfiles.
+  for (const auto &[action_profile_name, action_profile_def] :
+       config_info->ir_p4info.action_profiles_by_name()) {
+    capacity_by_action_profile_name_[action_profile_name] =
+        GetActionProfileResourceCapacity(action_profile_def);
+    LOG(INFO) << "Adding action profile limits for '" << action_profile_name
+              << "': max_weights_for_all_groups="
+              << action_profile_def.action_profile().size();
+  }
+
+    // Update P4RuntimeImpl's state only if we succeed.
+  p4_constraint_info_ = std::move(config_info->constraints);
+  ir_p4info_ = std::move(config_info->ir_p4info);
+  forwarding_pipeline_config_ = request.config();
+
+  // Save the ForwardingPipelineConfig if we are committing.
+  LOG(INFO)
+      << "ForwardingPipelineConfig was successfully applied. Saving to disk.";
+  return SavePipelineConfig(*forwarding_pipeline_config_);
   return grpc::Status::OK;
 }
 
@@ -1471,7 +1476,11 @@ grpc::Status P4RuntimeImpl::SavePipelineConfig(
     return grpc::Status::OK;
   }
   return gutil::AbslStatusToGrpcStatus(
-      gutil::SaveProtoToFile(*forwarding_config_full_path_, config));
+      gutil::StatusBuilder(
+          gutil::SaveProtoToFile(*forwarding_config_full_path_, config))
+          .SetPrepend()
+          .LogError()
+      << "Failed to save the ForwardingPipelineConfig to disk. ");
 }
 
 absl::Status P4RuntimeImpl::ConfigureAppDbTables(

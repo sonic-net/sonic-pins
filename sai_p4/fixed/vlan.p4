@@ -114,6 +114,8 @@ control ingress_vlan_checks(inout headers_t headers,
   }
 
   apply {
+    // Ingress VLAN checks are enabled by default.
+    local_metadata.enable_ingress_vlan_checks = true;
     // Ingress VLAN checks.
     disable_ingress_vlan_checks_table.apply();
     // TODO: Properly model the behavior for VIDs 0x001 and 0xFFF

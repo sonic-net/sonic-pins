@@ -14,18 +14,17 @@ message PacketTrace {
 message Event {
   oneof event {
     TableApply table_apply = 1;
-    PrimitiveAction primitive_action = 2;
-  }
-}
-
-message PrimitiveAction {
-  oneof primitive_action {
-    MarkToDrop mark_to_drop = 1;
+    MarkToDrop mark_to_drop = 2;
+    PacketReplication packet_replication = 3;
   }
 }
 
 message MarkToDrop {
   string source_location = 1;
+}
+
+message PacketReplication {
+  int32 number_of_packets_replicated = 1;
 }
 
 message TableApply {
