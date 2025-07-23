@@ -568,31 +568,25 @@ control routing_resolution(in headers_t headers,
   }
 
   apply {
-    // TODO: This guard is redundant because IP tables are already
-    // guarded by l3_admit (so the if any of these metadata are valid, it
-    // implies the if-guard).
-    if (local_metadata.admit_to_l3 || local_metadata.acl_ingress_nexthop_redirect) {
+    // The lpm tables may not set a valid `wcmp_group_id`, e.g. they may drop.
+    if (local_metadata.wcmp_group_id_valid) {
+      wcmp_group_table.apply();
+    }
 
-      // The lpm tables may not set a valid `wcmp_group_id`, e.g. they may drop.
-      if (local_metadata.wcmp_group_id_valid) {
-        wcmp_group_table.apply();
+    // The lpm tables may not set a valid `nexthop_id`, e.g. they may drop.
+    // The `wcmp_group_table` should always set a valid `nexthop_id`.
+    if (local_metadata.nexthop_id_valid) {
+      nexthop_table.apply();
+
+      if (tunnel_id_valid) {
+        tunnel_table.apply();
       }
 
-      // The lpm tables may not set a valid `nexthop_id`, e.g. they may drop.
-      // The `wcmp_group_table` should always set a valid `nexthop_id`.
-      if (local_metadata.nexthop_id_valid) {
-        nexthop_table.apply();
-
-        if (tunnel_id_valid) {
-          tunnel_table.apply();
-        }
-
-        // The `nexthop_table` should always set a valid
-        // `router_interface_id` and `neighbor_id`.
-        if (router_interface_id_valid && neighbor_id_valid) {
-          router_interface_table.apply();
-          neighbor_table.apply();
-        }
+      // The `nexthop_table` should always set a valid
+      // `router_interface_id` and `neighbor_id`.
+      if (router_interface_id_valid && neighbor_id_valid) {
+        router_interface_table.apply();
+        neighbor_table.apply();
       }
     }
    
