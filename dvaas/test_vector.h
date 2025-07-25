@@ -40,9 +40,9 @@ using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
                                           absl::string_view description);
 
-// Given a tagged packet (according to `MakeTestPacketTag`), extracts the ID
-// from the tag in its payload. Returns an error if the payload has an
-// unexpected format, e.g. for untagged packets.
+// Given a raw packet containing a tag returned by `MakeTestPacketTag`, extracts
+// the ID from the tag. Returns an error if the raw packet has an unexpected
+// format, e.g. for untagged packets.
 // TODO: Implement and use a unified (open-source) API for test
 // packet tag embedding and extraction.
 absl::StatusOr<int> ExtractIdFromTaggedPacket(absl::string_view raw_packet);
