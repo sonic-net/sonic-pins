@@ -1,9 +1,5 @@
 #include "dvaas/test_run_validation.h"
 
-#include <vector>
-
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
 #include "gutil/proto_matchers.h"
@@ -17,71 +13,7 @@ namespace dvaas {
 namespace {
 
 using ::gutil::EqualsProto;
-using ::gutil::StatusIs;
-using ::testing::Eq;
 using ::testing::HasSubstr;
-using ::testing::IsEmpty;
-using ::testing::Pointee;
-using ::testing::Property;
-using ::testing::UnorderedElementsAre;
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsEmptyListIfNoHeaders) {
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<const google::protobuf::FieldDescriptor *> fields,
-      GetAllFieldDescriptorsOfHeaders({}));
-  EXPECT_THAT(fields, IsEmpty());
-}
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsErrorIfHeaderCaseIsInvalid) {
-  // Can't get descriptors for an invalid header case.
-  ASSERT_THAT(GetAllFieldDescriptorsOfHeaders({
-                  packetlib::Header::HEADER_NOT_SET,
-              }),
-              StatusIs(absl::StatusCode::kNotFound));
-}
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsDescriptorsOfAHeader) {
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<const google::protobuf::FieldDescriptor *> fields,
-      GetAllFieldDescriptorsOfHeaders({
-          packetlib::Header::kEthernetHeader,
-      }));
-  EXPECT_THAT(fields,
-              UnorderedElementsAre(
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_source"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_destination"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethertype")))));
-}
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsDescriptorsOfAllHeader) {
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<const google::protobuf::FieldDescriptor *> fields,
-      GetAllFieldDescriptorsOfHeaders({
-          packetlib::Header::kEthernetHeader,
-          packetlib::Header::kIpfixHeader,
-      }));
-  EXPECT_THAT(fields,
-              UnorderedElementsAre(
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_source"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_destination"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethertype"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("length"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("version"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("export_time"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("sequence_number"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("observation_domain_id")))));
-}
 
 TEST(TestRunValidationTest,
      PacketFieldIsIgnoredIfAndOnlyIfIncludedInIgnoredPacketlibFields) {
@@ -117,6 +49,127 @@ TEST(TestRunValidationTest,
                       .ignored_packetlib_fields = {ethertype_field_descriptor},
                   }),
               EqualsProto(R"pb()pb"));
+}
+// When a header is ignored via ignored_packetlib_fields, none of the field
+// of the ignored header in actual_output is checked against acceptable_outputs.
+TEST(TestRunValidationTest, IgnoringEntireHeaderIgnoresAllHeaderFields) {
+  const PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets {
+          port: "1"
+          parsed {
+            headers {
+              ipfix_header {
+                version: "v1"
+                export_time: "1234"
+                sequence_number: "4321"
+              }
+            }
+          }
+        }
+      }
+    }
+    actual_output {
+      packets {
+        port: "1"
+        parsed {
+          headers {
+            ipfix_header {
+              version: "v2"
+              export_time: "1234"
+              sequence_number: "5678"
+            }
+          }
+        }
+      }
+    }
+  )pb");
+
+  // Without ignoring IPFIX header, validation must fail.
+  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
+              HasSubstr("modified:"));
+
+  const google::protobuf::FieldDescriptor* ipfix_header_descriptor =
+      packetlib::Header::descriptor()->FindFieldByName("ipfix_header");
+  ASSERT_THAT(ipfix_header_descriptor, testing::NotNull());
+
+  // Ignoring IPFIX header, validation must succeed.
+  ASSERT_THAT(
+      ValidateTestRun(test_run,
+                      {
+                          .ignored_packetlib_fields = {ipfix_header_descriptor},
+                      }),
+      EqualsProto(R"pb()pb"));
+}
+
+// When a header is ignored via ignored_packetlib_fields, the header's presence
+// is still checked and that header's absence is considered a failure.
+TEST(TestRunValidationTest, IgnoringEntireHeaderStillChecksForPresence) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets {
+          port: "1"
+          parsed {
+            headers { ethernet_header { ethertype: "0x0888" } }
+            headers { udp_header { source_port: "1234" } }
+          }
+        }
+      }
+    }
+    actual_output {
+      packets {
+        port: "1"
+        parsed { headers { ethernet_header { ethertype: "0x0888" } } }
+      }
+    }
+  )pb");
+
+  const google::protobuf::FieldDescriptor* udp_header_descriptor =
+      packetlib::Header::descriptor()->FindFieldByName("udp_header");
+  ASSERT_THAT(udp_header_descriptor, testing::NotNull());
+
+  // Even though UDP header is ignored, the fact that it is missing in
+  // actual_output is still considered a failure.
+  ASSERT_THAT(
+      ValidateTestRun(test_run,
+                      {
+                          .ignored_packetlib_fields = {udp_header_descriptor},
+                      })
+          .failure()
+          .description(),
+      HasSubstr("deleted:"));
+
+  test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets {
+          port: "1"
+          parsed { headers { ethernet_header { ethertype: "0x0888" } } }
+        }
+      }
+    }
+    actual_output {
+      packets {
+        port: "1"
+        parsed {
+          headers { ethernet_header { ethertype: "0x0888" } }
+          headers { udp_header { source_port: "1234" } }
+        }
+      }
+    }
+  )pb");
+  // Even though UDP header is ignored, the fact that it is present in
+  // actual_output is still considered a failure.
+  ASSERT_THAT(
+      ValidateTestRun(test_run,
+                      {
+                          .ignored_packetlib_fields = {udp_header_descriptor},
+                      })
+          .failure()
+          .description(),
+      HasSubstr("added:"));
 }
 
 TEST(TestRunValidationTest,

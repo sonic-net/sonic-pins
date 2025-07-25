@@ -14,16 +14,20 @@
 
 #include "dvaas/arriba_test_vector_validation.h"
 
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/validation_result.h"
 #include "glog/logging.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -35,7 +39,7 @@
 
 namespace dvaas {
 
-absl::Status ValidateAgainstArribaTestVector(
+absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
@@ -76,16 +80,27 @@ absl::Status ValidateAgainstArribaTestVector(
                        {
                            .max_packets_to_send_per_second =
                                params.max_packets_to_send_per_second,
+                           .is_expected_unsolicited_packet =
+                               params.is_expected_unsolicited_packet,
                            .mirror_testbed_port_map =
                                MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
                        },
                        packet_statistics));
 
   // Compare the switch output with expected output for each test vector.
-  return ValidateTestRuns(test_runs, params.switch_output_diff_params,
-                          /*write_failures=*/[&](absl::string_view failures) {
-                            return artifact_writer.AppendToTestArtifact(
-                                "test_failures.txt", failures);
-                          });
+  LOG(INFO) << "Validating test runs";
+  PacketTestOutcomes test_outcomes =
+      ValidateTestRuns(test_runs, params.switch_output_diff_params);
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
+
+  ValidationResult validation_result(std::move(test_outcomes),
+                                     /*packet_synthesis_result=*/{});
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "test_vector_failures.txt",
+      absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
+
+  validation_result.LogStatistics();
+  return validation_result;
 }
 }  // namespace dvaas
