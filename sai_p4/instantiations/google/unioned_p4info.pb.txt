@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 2.5.0, 2.5.0, 2.5.0, 2.5.0"
+  version: "Versions 2.6.0, 2.6.0, 2.6.0, 2.6.0"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -1321,7 +1321,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 1024
+  size: 655360
 }
 tables {
   preamble {
@@ -2033,14 +2033,13 @@ actions {
     alias: "acl_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
   }
   params {
     id: 1
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2051,14 +2050,13 @@ actions {
     alias: "acl_trap"
     annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
   }
   params {
     id: 1
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2069,7 +2067,6 @@ actions {
     alias: "acl_forward"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
 }
 actions {
@@ -2093,7 +2090,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2117,7 +2114,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
   params {
@@ -2166,7 +2163,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2182,7 +2179,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2994,6 +2991,15 @@ controller_packet_metadata {
 }
 type_info {
   new_types {
+    key: "cpu_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "mirror_session_id_t"
     value {
       translated_type {
@@ -3022,15 +3028,6 @@ type_info {
   }
   new_types {
     key: "port_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "qos_queue_t"
     value {
       translated_type {
         sdn_string {

@@ -837,12 +837,12 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      AclForwardAction acl_forward = 2;
+      AclForwardAction acl_forward = 3;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 4;
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 5;
       RedirectToPortAction redirect_to_port = 6;
-      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 3;
+      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 2;
       RedirectToIpmcGroupAndSetCpuQueueAndCancelCopyAction
           redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy = 7;
       SetCpuQueueAndCancelCopyAction set_cpu_queue_and_cancel_copy = 8;
