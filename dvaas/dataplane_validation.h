@@ -310,10 +310,9 @@ public:
   // Creates entities for v1Model auxiliary tables that model the effects of the
   // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
   // loopback mode).
-  virtual absl::StatusOr<pdpi::IrEntities>
-  CreateV1ModelAuxiliaryEntities(pdpi::IrEntities ir_entities,
-                                 gnmi::gNMI::StubInterface &gnmi_stub,
-                                 pdpi::IrP4Info ir_p4info) const = 0;
+  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
+      pdpi::IrEntities ir_entities,
+      gnmi::gNMI::StubInterface& gnmi_stub) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };
