@@ -109,6 +109,39 @@ sai::TableEntry MakeNeighborTableEntry(absl::string_view router_interface_id,
   return table_entry;
 }
 
+sai::TableEntry MakeNexthopTableEntry(
+    absl::string_view nexthop_id, absl::string_view router_interface_id,
+    const netaddr::Ipv6Address& neighbor_id,
+    const NexthopRewriteOptions& rewrite_options) {
+  sai::TableEntry table_entry;
+  sai::NexthopTableEntry& nexthop_entry =
+      *table_entry.mutable_nexthop_table_entry();
+  nexthop_entry.mutable_match()->set_nexthop_id(nexthop_id);
+
+  if (AnyRewriteOptionsDisabled(rewrite_options)) {
+    SetIpNexthopAndDisableRewritesAction& action =
+        *nexthop_entry.mutable_action()
+             ->mutable_set_ip_nexthop_and_disable_rewrites();
+    action.set_router_interface_id(router_interface_id);
+    action.set_neighbor_id(neighbor_id.ToString());
+
+    action.set_disable_decrement_ttl(
+        BoolToHexString(rewrite_options.disable_decrement_ttl));
+    action.set_disable_src_mac_rewrite(
+        BoolToHexString(!rewrite_options.src_mac_rewrite.has_value()));
+    action.set_disable_dst_mac_rewrite(
+        BoolToHexString(!rewrite_options.dst_mac_rewrite.has_value()));
+    action.set_disable_vlan_rewrite(
+        BoolToHexString(rewrite_options.disable_vlan_rewrite));
+    return table_entry;
+  }
+  SetIpNexthopAction& action =
+      *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
+  action.set_router_interface_id(router_interface_id);
+  action.set_neighbor_id(neighbor_id.ToString());
+  return table_entry;
+}
+
 }  // namespace
 
 // -- EntryBuilder --------------------------------------------------------
@@ -664,30 +697,9 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
       MakeNeighborTableEntry(kRifId, neighbor_id, dst_mac);
 
   // Create Nexthop entry based on `rewrite_options`
-  sai::NexthopTableEntry& nexthop_entry =
-      *entries_.add_entries()->mutable_nexthop_table_entry();
-  nexthop_entry.mutable_match()->set_nexthop_id(nexthop_id);
+  *entries_.add_entries() =
+      MakeNexthopTableEntry(nexthop_id, kRifId, neighbor_id, rewrite_options);
 
-  if (AnyRewriteOptionsDisabled(rewrite_options)) {
-    SetIpNexthopAndDisableRewritesAction& action =
-        *nexthop_entry.mutable_action()
-             ->mutable_set_ip_nexthop_and_disable_rewrites();
-    action.set_router_interface_id(kRifId);
-    action.set_neighbor_id(neighbor_id.ToString());
-    action.set_disable_decrement_ttl(
-        BoolToHexString(rewrite_options.disable_decrement_ttl));
-    action.set_disable_src_mac_rewrite(
-        BoolToHexString(!rewrite_options.src_mac_rewrite.has_value()));
-    action.set_disable_dst_mac_rewrite(
-        BoolToHexString(!rewrite_options.dst_mac_rewrite.has_value()));
-    action.set_disable_vlan_rewrite(
-        BoolToHexString(rewrite_options.disable_vlan_rewrite));
-  } else {
-    SetIpNexthopAction& action =
-        *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
-    action.set_router_interface_id(kRifId);
-    action.set_neighbor_id(neighbor_id.ToString());
-  }
   return *this;
 }
 
