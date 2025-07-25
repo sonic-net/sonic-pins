@@ -689,6 +689,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
   }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
+  }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
   entry.set_priority(priority);
@@ -745,6 +748,9 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
   if (match_fields.is_ipv6.has_value()) {
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
   
   std::visit(
@@ -819,6 +825,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   if (match_fields.is_ipv6.has_value()) {
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
   entry.mutable_action()->mutable_redirect_to_port()->set_redirect_port(port);
   entry.set_priority(priority);
@@ -954,6 +963,25 @@ EntryBuilder& EntryBuilder::AddVlanMembershipEntry(
       break;
   }
   *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddWcmpGroupTableEntry(
+    absl::string_view wcmp_group_id,
+    absl::Span<const WcmpGroupAction> wcmp_group_actions) {
+  sai::WcmpGroupTableEntry& wcmp_group_entry =
+      *entries_.add_entries()->mutable_wcmp_group_table_entry();
+  wcmp_group_entry.mutable_match()->set_wcmp_group_id(wcmp_group_id);
+  for (const WcmpGroupAction& wcmp_group_action : wcmp_group_actions) {
+    sai::WcmpGroupTableEntry_WcmpAction& wcmp_action =
+        *wcmp_group_entry.mutable_wcmp_actions()->Add();
+    wcmp_action.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+        wcmp_group_action.nexthop_id);
+    wcmp_action.set_weight(wcmp_group_action.weight);
+    if (wcmp_group_action.watch_port.has_value()) {
+      wcmp_action.set_watch_port(wcmp_group_action.watch_port.value());
+    }
+  }
   return *this;
 }
 

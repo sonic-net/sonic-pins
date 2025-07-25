@@ -157,6 +157,7 @@ struct MirrorAndRedirectMatchFields {
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
   std::optional<bool> is_ipv6;
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
+  std::optional<absl::string_view> vrf;
 };
 
 // Queue settings for ACL table entry action.
@@ -172,6 +173,13 @@ struct AclQueueAssignments {
 struct AclMeterConfiguration {
   int bytes_per_second = 1000;
   int burst_bytes = 1000;
+};
+
+// Parameters for generating a WCMPGroupTable action.
+struct WcmpGroupAction {
+  std::string nexthop_id;
+  int weight = 1;
+  std::optional<std::string> watch_port;
 };
 
 // Tagging mode for VLAN membership entries.
@@ -396,6 +404,9 @@ class EntryBuilder {
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
                                        VlanTaggingMode tagging_mode);
+  EntryBuilder& AddWcmpGroupTableEntry(
+      absl::string_view wcmp_group_id,
+      absl::Span<const WcmpGroupAction> wcmp_group_actions);
 
  private:
   sai::TableEntries entries_;
