@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 2.5.0, 2.5.0, 2.5.0, 2.5.0"
+  version: "Versions 2.6.0, 2.6.0, 2.6.0, 2.6.0"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -1321,7 +1321,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 1024
+  size: 655360
 }
 tables {
   preamble {
@@ -1437,6 +1437,29 @@ tables {
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
+    id: 1
+    name: "in_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
+    match_type: OPTIONAL
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  match_fields {
+    id: 6
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
+  }
+  match_fields {
     id: 2
     name: "is_ip"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
@@ -1489,29 +1512,6 @@ tables {
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
-  }
-  match_fields {
-    id: 1
-    name: "in_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  match_fields {
-    id: 6
-    name: "acl_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 7
-    name: "vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
-    match_type: TERNARY
   }
   action_refs {
     id: 16777475
@@ -2033,14 +2033,13 @@ actions {
     alias: "acl_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
   }
   params {
     id: 1
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2051,14 +2050,13 @@ actions {
     alias: "acl_trap"
     annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
   }
   params {
     id: 1
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2069,7 +2067,6 @@ actions {
     alias: "acl_forward"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
 }
 actions {
@@ -2093,7 +2090,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2117,7 +2114,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
   params {
@@ -2166,7 +2163,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2182,7 +2179,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -2994,6 +2991,15 @@ controller_packet_metadata {
 }
 type_info {
   new_types {
+    key: "cpu_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "mirror_session_id_t"
     value {
       translated_type {
@@ -3022,15 +3028,6 @@ type_info {
   }
   new_types {
     key: "port_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "qos_queue_t"
     value {
       translated_type {
         sdn_string {
