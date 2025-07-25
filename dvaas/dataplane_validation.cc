@@ -32,8 +32,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "absl/types/span.h"
-#include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
@@ -45,6 +43,7 @@
 #include "dvaas/validation_result.h"
 #include "glog/logging.h"
 #include "gutil/proto.h"
+#include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
 #include "gutil/version.h"
@@ -480,6 +479,62 @@ absl::Status AttachPacketTrace(
   return absl::OkStatus();
 }
 
+// Stores a given `packet_test_vector` as an ArribaTestVector using only the
+// entries that might be hit by the packet (according to its P4 packet trace).
+absl::Status StorePacketTestVectorAsArribaTestVector(
+    const PacketTestVector &packet_test_vector,
+    const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>
+        &packet_traces,
+    gutil::TestArtifactWriter &dvaas_test_artifact_writer) {
+  ArribaTestVector arriba_test_vector;
+  std::vector<pdpi::IrTableEntry> ir_table_entries;
+
+  std::string packet_hex = packet_test_vector.input().packet().hex();
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
+  (*arriba_test_vector.mutable_packet_test_vector_by_id())[test_id] =
+      packet_test_vector;
+
+  // Restrict the ArribaTestVector's table entries to the ones hit by the packet
+  // test vector according to the P4 simulation.
+  for (const auto &packet_trace : packet_traces.at(packet_hex)) {
+    // In case of non-deterministic output (e.g. WCMP), find the union of all
+    // entries that could be hit.
+    for (const dvaas::Event &event : packet_trace.events()) {
+      switch (event.event_case()) {
+      case Event::kTableApply: {
+        if (event.table_apply().hit().has_table_entry() &&
+            // Ignore v1model specific table entries.
+            event.table_apply().hit().table_entry().table_name() !=
+                "egress_port_loopback_table" &&
+            event.table_apply().hit().table_entry().table_name() !=
+                "v1model_auxiliary_vlan_membership_table") {
+          ir_table_entries.push_back(event.table_apply().hit().table_entry());
+        }
+        break;
+      }
+      case Event::kMarkToDrop:
+      case Event::kPacketReplication:
+      case Event::EVENT_NOT_SET:
+        break;
+      }
+    }
+  }
+
+  // Dedupe table entries.
+  gutil::InefficientProtoSortAndDedup(ir_table_entries);
+  for (const pdpi::IrTableEntry &ir_table_entry : ir_table_entries) {
+    *arriba_test_vector.mutable_ir_table_entries()->add_entries() =
+        ir_table_entry;
+  }
+
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      absl::StrCat("packet_", test_id, ".arriba_test_vector.textpb"),
+      gutil::PrintTextProto(arriba_test_vector)));
+
+  return absl::OkStatus();
+}
+
 absl::Status PostProcessTestVectorFailure(
     const DataplaneValidationParams& params,
     const PacketInjectionParams& packet_injection_params, int failure_count,
@@ -513,6 +568,11 @@ absl::Status PostProcessTestVectorFailure(
             .SetPrepend()
         << "When minimizing failure: ";
   }
+
+  // Output an Arriba test vector to test artifacts.
+  RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
+      test_outcome.test_run().test_vector(), packet_traces,
+      dvaas_test_artifact_writer));
 
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
@@ -569,6 +629,21 @@ absl::Status IncreasePerEntryRateLimitsToAvoidBogusDrops(
   return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
 }
 
+// Undoes the rate limit increase performed by
+// `IncreasePerEntryRateLimitsToAvoidBogusDrops`.
+absl::Status ResetRateLimitsToOriginal(
+    const std::vector<p4::v1::Entity>& original_entities, SwitchApi& sut) {
+  std::vector<p4::v1::Update> pi_updates;
+  for (const auto& entity : original_entities) {
+    if (entity.has_table_entry() && entity.table_entry().has_meter_config()) {
+      p4::v1::Update update = pi_updates.emplace_back();
+      update.set_type(p4::v1::Update::MODIFY);
+      *update.mutable_entity() = entity;
+    }
+  }
+  return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
+}
+
 absl::StatusOr<ValidationResult>
 DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     SwitchApi& sut, SwitchApi& control_switch,
@@ -579,6 +654,14 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
 
   RETURN_IF_ERROR(
       IncreasePerEntryRateLimitsToAvoidBogusDrops(original_entities, sut));
+
+  absl::Cleanup cleanup = [&original_entities, &sut]() {
+    if (absl::Status status = ResetRateLimitsToOriginal(original_entities, sut);
+        !status.ok()) {
+      LOG(WARNING) << "Failed to reset rate limits to their original values: "
+                   << status;
+    }
+  };
 
   // Set up custom writer that prefixes artifact names and adds headers.
   DvaasTestArtifactWriter dvaas_test_artifact_writer(artifact_writer_, params);
@@ -795,11 +878,6 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         gutil::PrintTextProto(entities)));
   }
 
-  // After the validation, reinstall the original entities with the original
-  // meter configs.
-  RETURN_IF_ERROR(pdpi::ClearEntities(*sut.p4rt));
-  RETURN_IF_ERROR(pdpi::InstallPiEntities(*sut.p4rt, original_entities));
-
   return validation_result;
 }
 
@@ -826,7 +904,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                      pins_test::GetInterfacesAsProto(*control_switch.gnmi,
                                                      gnmi::GetRequest::CONFIG));
     // Set up control switch to be a mirror of SUT.
-    RETURN_IF_ERROR(pdpi::ClearEntities(*sut.p4rt));
+    RETURN_IF_ERROR(pdpi::ClearEntities(*control_switch.p4rt));
     // Mirror testbed ports.
     RETURN_IF_ERROR(
         pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
