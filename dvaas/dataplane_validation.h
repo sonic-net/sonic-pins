@@ -310,10 +310,9 @@ public:
   // Creates entities for v1Model auxiliary tables that model the effects of the
   // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
   // loopback mode).
-  virtual absl::StatusOr<pdpi::IrEntities>
-  CreateV1ModelAuxiliaryEntities(pdpi::IrEntities ir_entities,
-                                 gnmi::gNMI::StubInterface &gnmi_stub,
-                                 pdpi::IrP4Info ir_p4info) const = 0;
+  virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
+      const pdpi::IrEntities &ir_entities, const pdpi::IrP4Info &ir_p4info,
+      gnmi::gNMI::StubInterface &gnmi_stub) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };
@@ -337,6 +336,10 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 absl::StatusOr<P4Specification> InferP4Specification(
     const DataplaneValidationParams& params,
     const DataplaneValidationBackend& backend, SwitchApi& sut);
+
+// Returns a string of the packet trace summary for the given packet trace.
+absl::StatusOr<std::string> GetPacketTraceSummary(
+    dvaas::PacketTrace& packet_trace);
 
 // Appends the P4 simulation packet trace summary for the input packet in
 // `failed_packet_test` to the failure description of the test. Uses

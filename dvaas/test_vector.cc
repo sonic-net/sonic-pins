@@ -28,7 +28,6 @@
 #include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
 #include "re2/re2.h"
 
 namespace dvaas {
@@ -68,7 +67,6 @@ std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
   return payload;
 }
 
-// Extracts the id from anywhere in the raw packet.
 absl::StatusOr<int> ExtractIdFromTaggedPacket(absl::string_view raw_packet) {
   int tag;
   if (!RE2::PartialMatch(raw_packet, *kTestPacketIdRegexp, &tag)) {
@@ -81,11 +79,10 @@ absl::StatusOr<int> ExtractIdFromTaggedPacket(absl::string_view raw_packet) {
   return tag;
 }
 
-// Extracts the id from anywhere in the hex string representation of a packet.
 absl::StatusOr<int> ExtractIdFromTaggedPacketInHex(
     absl::string_view packet_hex) {
   ASSIGN_OR_RETURN(std::string raw_packet,
-                   pdpi::HexStringToByteString(packet_hex));
+                   pdpi::HexStringToByteString(absl::StrCat("0x", packet_hex)));
   return dvaas::ExtractIdFromTaggedPacket(raw_packet);
 }
 
