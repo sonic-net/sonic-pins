@@ -30,10 +30,8 @@
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/testing/test_p4info.h"
 
@@ -48,15 +46,6 @@ struct TestCase {
   std::string description;
   std::vector<PacketTestVector> vectors;
 };
-
-absl::StatusOr<int> ExtractIdFromUserProvidedTestVector(
-    packetlib::Packet packet) {
-  RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
-  ASSIGN_OR_RETURN(std::string serialized_packet,
-                   packetlib::RawSerializePacket(packet));
-  ASSIGN_OR_RETURN(int id, ExtractIdFromTaggedPacket(serialized_packet));
-  return id;
-}
 
 void RunTestCase(const TestCase& test_case) {
   // Print header.
@@ -90,16 +79,16 @@ void RunTestCase(const TestCase& test_case) {
   // Print output vectors in order of input vectors.
   for (int i = 0; i < test_case.vectors.size(); ++i) {
     const PacketTestVector& original_vector = test_case.vectors[i];
-    ASSERT_OK_AND_ASSIGN(int id,
-                         ExtractIdFromUserProvidedTestVector(
-                             original_vector.input().packet().parsed()));
-    ASSERT_OK_AND_ASSIGN(const PacketTestVector* legitimized_vector,
-                         gutil::FindPtrOrStatus(*output, id));
+    ASSERT_OK_AND_ASSIGN(
+        int tag,
+        ExtractTestPacketTag(original_vector.input().packet().parsed()));
+    ASSERT_OK_AND_ASSIGN(const PacketTestVector* internalized_vector,
+                         gutil::FindPtrOrStatus(*output, tag));
     ASSERT_OK_AND_ASSIGN(
         std::string diff,
-        gutil::ProtoDiff(original_vector, *legitimized_vector));
+        gutil::ProtoDiff(original_vector, *internalized_vector));
     std::cout << "-- Internalized Packet Test Vector #" << (i + 1) << " --\n"
-              << "test packet ID extracted from payload: " << id << "\n"
+              << "test packet ID extracted from payload: " << tag << "\n"
               << "diff of internalized vector vs input vector:\n"
               << diff << "\n";
   }

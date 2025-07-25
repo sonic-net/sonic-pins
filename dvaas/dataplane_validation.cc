@@ -337,10 +337,14 @@ absl::Status AttachPacketTrace(
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
   // Store the full BMv2 textual log as test artifact.
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
+                                                   .test_vector()
+                                                   .input()
+                                                   .packet()
+                                                   .parsed()));
   const std::string& packet_hex =
       failed_packet_test.test_run().test_vector().input().packet().hex();
-  ASSIGN_OR_RETURN(int test_id,
-                   dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
   const std::string filename =
       "packet_" + std::to_string(test_id) + ".trace.txt";
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
@@ -563,6 +567,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
                        backend_->CreateV1ModelAuxiliaryEntities(
                            v1model_augmented_entities, ir_p4info, *sut.gnmi));
+
       v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
       ASSIGN_OR_RETURN(packet_traces,
