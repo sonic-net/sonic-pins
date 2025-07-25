@@ -336,10 +336,14 @@ absl::Status AttachPacketTrace(
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
   // Store the full BMv2 textual log as test artifact.
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
+                                                   .test_vector()
+                                                   .input()
+                                                   .packet()
+                                                   .parsed()));
   const std::string& packet_hex =
       failed_packet_test.test_run().test_vector().input().packet().hex();
-  ASSIGN_OR_RETURN(int test_id,
-                   dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
   const std::string filename =
       "packet_" + std::to_string(test_id) + ".trace.txt";
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
