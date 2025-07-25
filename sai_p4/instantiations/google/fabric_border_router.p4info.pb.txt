@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "fabric_border_router.p4"
-  version: "2.5.0"
+  version: "3.0.1"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -657,6 +657,10 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
+    id: 16777476
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
     id: 16777481
     annotations: "@proto_id(5)"
   }
@@ -1242,7 +1246,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 1024
+  size: 655360
 }
 tables {
   preamble {
@@ -1523,7 +1527,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1540,7 +1544,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1563,6 +1567,23 @@ actions {
 }
 actions {
   preamble {
+    id: 16777476
+    name: "ingress.acl_ingress.acl_mirror"
+    alias: "acl_mirror"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777484
     name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -1574,7 +1595,7 @@ actions {
     name: "qos_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1598,7 +1619,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
   params {
@@ -1647,7 +1668,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1663,7 +1684,7 @@ actions {
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
-      name: "qos_queue_t"
+      name: "cpu_queue_t"
     }
   }
 }
@@ -1748,6 +1769,7 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2257,6 +2279,15 @@ controller_packet_metadata {
 }
 type_info {
   new_types {
+    key: "cpu_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "mirror_session_id_t"
     value {
       translated_type {
@@ -2285,15 +2316,6 @@ type_info {
   }
   new_types {
     key: "port_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "qos_queue_t"
     value {
       translated_type {
         sdn_string {
