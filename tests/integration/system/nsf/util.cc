@@ -14,15 +14,18 @@
 
 #include "tests/integration/system/nsf/util.h"
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -40,7 +43,10 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/pd.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
@@ -64,6 +70,8 @@ using ::gnoi::system::RebootStatusRequest;
 using ::gnoi::system::RebootStatusResponse;
 using ::google::protobuf::util::MessageDifferencer;
 using ::grpc::ClientContext;
+using ::p4::config::v1::P4Info;
+using ::p4::v1::Entity;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 
@@ -72,6 +80,49 @@ constexpr absl::Duration kPollingInterval = absl::Seconds(10);
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
 constexpr int kEpochMarginalError = 2;
+constexpr std::array<absl::string_view, 2> kAclFlows = {
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_4" } }
+          priority: 2050
+        }
+      }
+      entries {
+        acl_ingress_qos_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action {
+            set_qos_queue_and_cancel_copy_above_rate_limit {
+              qos_queue: "INBAND_PRIORITY_4"
+            }
+          }
+          priority: 4600
+          meter_config { bytes_per_second: 28000 burst_bytes: 7000 }
+        }
+      }
+    )pb",
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_3" } }
+          priority: 2031
+        }
+      }
+      entries {
+        acl_ingress_qos_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action {
+            set_qos_queue_and_cancel_copy_above_rate_limit {
+              qos_queue: "INBAND_PRIORITY_3"
+            }
+          }
+          priority: 4600
+          meter_config { bytes_per_second: 32000 burst_bytes: 8000 }
+        }
+      }
+    )pb"};
 
 std::string GetSwitchStateString(SwitchState state) {
   switch (state) {
@@ -109,31 +160,10 @@ void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
   differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
 }
 
-// In case `is_fresh_install` is not set, we assume that a P4 Info is already
-// present on the switch. This is a valid scenario when we want to configure
-// the SUT after NSF Upgrade/Reboot. So in such a case, we do not use the
-// `ConfigureSwitchAndReturnP4RuntimeSession` method (which does some
-// additional workarounds causing b/329087752). Instead we directly use the
-// `PushGnmiConfig` and `SetMetadataAndSetForwardingPipelineConfig` methods to
-// push the gNMI config and P4Info respectively.
-absl::Status PushSwitchConfig(thinkit::Switch& thinkit_switch,
-                              const ImageConfigParams& image_config_param,
-                              bool is_fresh_install) {
-  if (is_fresh_install) {
-    return ConfigureSwitchAndReturnP4RuntimeSession(
-               thinkit_switch, image_config_param.gnmi_config,
-               image_config_param.p4_info)
-        .status();
-  }
-
-  RETURN_IF_ERROR(
-      PushGnmiConfig(thinkit_switch, image_config_param.gnmi_config));
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
-  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      image_config_param.p4_info);
+sai::TableEntries GetAclFlowEntries() {
+  absl::BitGen gen;
+  int random_index = absl::Uniform<int>(gen, 0, kAclFlows.size());
+  return gutil::ParseProtoOrDie<sai::TableEntries>(kAclFlows[random_index]);
 }
 
 }  // namespace
@@ -315,7 +345,7 @@ InstallRebootPushConfig(Testbed &testbed, thinkit::SSHClient &ssh_client,
   RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, false));
 
   RETURN_IF_ERROR(PushConfig(image_config_param, testbed, ssh_client,
-                             /*is_fresh_install=*/true));
+                             /*clear_config=*/true));
   LOG(INFO) << "Initial setup of image install, cold reboot and config push is "
                "complete.";
   return absl::OkStatus();
@@ -432,8 +462,6 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
   ASSIGN_OR_RETURN(uint64_t up_time_before_nsf,
                    pins_test::GetGnmiSystemUpTime(*sut_gnmi_stub));
   RETURN_IF_ERROR(NsfReboot(testbed));
-  // TODO: b/329553821 - Calculate the time needed for the switch to go down and
-  // and then come back up.
   RETURN_IF_ERROR(WaitForNsfReboot(testbed, ssh_client, image_config_param,
                                    check_interfaces_up));
   // Recreating the gNMI stub as the switch rebooted.
@@ -449,17 +477,62 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
   return absl::OkStatus();
 }
 
-absl::Status PushConfig(const ImageConfigParams &image_config_param,
-                        Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        bool is_fresh_install, bool check_interfaces_up) {
+// In cases where `clear_config` is not set, we do not use the
+// `ConfigureSwitchAndReturnP4RuntimeSession` method (which does some additional
+// workarounds along with clearing the config).
+//
+// Instead we directly use the `PushGnmiConfig` and
+// `SetMetadataAndSetForwardingPipelineConfig` methods to push the gNMI config
+// and P4 Info respectively.
+//
+absl::Status PushConfig(thinkit::Switch& thinkit_switch,
+                        absl::string_view gnmi_config,
+                        const p4::config::v1::P4Info& p4_info,
+                        bool clear_config) {
+  LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
+  if (clear_config) {
+    return ConfigureSwitchAndReturnP4RuntimeSession(thinkit_switch, gnmi_config,
+                                                    p4_info)
+        .status();
+  }
+
+  RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch, gnmi_config));
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      p4_info);
+}
+
+absl::Status PushConfig(const ImageConfigParams& image_config_param,
+                        Testbed& testbed, thinkit::SSHClient& ssh_client,
+                        bool clear_config, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
-  LOG(INFO) << "Pushing config on " << sut.ChassisName();
-  RETURN_IF_ERROR(PushSwitchConfig(sut, image_config_param, is_fresh_install));
+  RETURN_IF_ERROR(PushConfig(sut, image_config_param.gnmi_config,
+                             image_config_param.p4_info, clear_config));
   return WaitForSwitchState(
       sut,
       check_interfaces_up ? SwitchState::kReady
                           : SwitchState::kReadyWithoutInterfacesUp,
       kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
+}
+
+absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
+                             const P4Info& p4_info) {
+  sai::TableEntries entries = GetAclFlowEntries();
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));
+  std::vector<Entity> pi_entities;
+  pi_entities.reserve(entries.entries_size());
+  for (const sai::TableEntry& entry : entries.entries()) {
+    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
+                     pdpi::PdTableEntryToPiEntity(ir_p4info, entry));
+  }
+  LOG(INFO) << "Installing PI table entries on "
+            << thinkit_switch.ChassisName();
+  return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
 }
 
 absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
