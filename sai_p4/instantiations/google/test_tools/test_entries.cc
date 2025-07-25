@@ -23,6 +23,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -62,13 +63,21 @@ std::string BoolToHexString(bool value) { return value ? "0x1" : "0x0"; }
 // -- EntryBuilder --------------------------------------------------------
 
 const EntryBuilder& EntryBuilder::LogPdEntries() const {
-  LOG(INFO) << entries_.DebugString();
+  LOG(INFO) << GetPdEntriesDebugString();
   return *this;
 }
 
 EntryBuilder& EntryBuilder::LogPdEntries() {
-  LOG(INFO) << entries_.DebugString();
+  LOG(INFO) << GetPdEntriesDebugString();
   return *this;
+}
+
+// Note: DebugStrings should no longer be deserialized as per
+// go/nodeserialize and go/no-more-debugstring.
+// WARNING: Do not write code that attempts to parse this output as the syntax
+// of the format is random, and intentionally incompatible with TextFormat.
+std::string EntryBuilder::GetPdEntriesDebugString() const {
+  return absl::StrCat(entries_);
 }
 
 absl::StatusOr<std::vector<p4::v1::Entity>> EntryBuilder::GetDedupedPiEntities(
@@ -349,12 +358,13 @@ EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
   sai::MulticastGroupTableEntry& entry =
       *entries_.add_entries()->mutable_multicast_group_table_entry();
   entry.mutable_match()->set_multicast_group_id(
-      pdpi::BitsetToHexString<16>(multicast_group_id));
+      pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(multicast_group_id));
   for (const Replica& replica : replicas) {
     sai::ReplicateAction::Replica& pd_replica =
         *entry.mutable_action()->mutable_replicate()->add_replicas();
     pd_replica.set_port(replica.egress_port);
-    pd_replica.set_instance(pdpi::BitsetToHexString<16>(replica.instance));
+    pd_replica.set_instance(
+        pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica.instance));
   }
   return *this;
 }
@@ -393,7 +403,7 @@ EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMac(
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(egress_port);
   match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<16>(replica_instance));
+      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
   auto& action = *pd_entry.mutable_action()->mutable_multicast_set_src_mac();
   action.set_src_mac(src_mac.ToString());
   return *this;
@@ -407,11 +417,12 @@ EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacAndVlanId(
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(egress_port);
   match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<16>(replica_instance));
+      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
   auto& action =
       *pd_entry.mutable_action()->mutable_multicast_set_src_mac_and_vlan_id();
   action.set_src_mac(src_mac.ToString());
-  action.set_vlan_id(pdpi::BitsetToHexString<12>(vlan_id));
+  action.set_vlan_id(pdpi::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
+  return *this;
   return *this;
 }
 
@@ -424,12 +435,12 @@ EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacDstMacAndVlanId(
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(egress_port);
   match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<16>(replica_instance));
+      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
   auto& action = *pd_entry.mutable_action()
                       ->mutable_multicast_set_src_mac_and_dst_mac_and_vlan_id();
   action.set_src_mac(src_mac.ToString());
   action.set_dst_mac(dst_mac.ToString());
-  action.set_vlan_id(pdpi::BitsetToHexString<12>(vlan_id));
+  action.set_vlan_id(pdpi::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
   return *this;
 }
 
@@ -442,7 +453,7 @@ EntryBuilder::AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(egress_port);
   match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<16>(replica_instance));
+      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
   auto& action =
       *pd_entry.mutable_action()
            ->mutable_multicast_set_src_mac_and_preserve_ingress_vlan_id();
@@ -459,7 +470,9 @@ EntryBuilder& EntryBuilder::AddMulticastRoute(
   entry.mutable_match()->set_ipv4_dst(dst_ip.ToString());
   entry.mutable_action()
       ->mutable_set_multicast_group_id()
-      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
+      ->set_multicast_group_id(
+          pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+              multicast_group_id));
   return *this;
 }
 
@@ -472,7 +485,9 @@ EntryBuilder& EntryBuilder::AddMulticastRoute(
   entry.mutable_match()->set_ipv6_dst(dst_ip.ToString());
   entry.mutable_action()
       ->mutable_set_multicast_group_id()
-      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
+      ->set_multicast_group_id(
+          pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+              multicast_group_id));
   return *this;
 }
 
@@ -666,7 +681,7 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+        pdpi::BitsetToHexString<kVlanIdBitwidth>(*match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   if (match_fields.dst_ip.has_value()) {
@@ -688,6 +703,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   if (match_fields.is_ipv6.has_value()) {
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
   entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
       nexthop_id);
@@ -721,7 +739,7 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+        pdpi::BitsetToHexString<kVlanIdBitwidth>(*match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   if (match_fields.dst_ip.has_value()) {
@@ -746,6 +764,9 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
   }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
+  }
   
   std::visit(
       gutil::Overload{
@@ -756,7 +777,8 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
             entry.mutable_action()
                 ->mutable_redirect_to_ipmc_group()
                 ->set_multicast_group_id(
-                    pdpi::BitsetToHexString<16>(action.multicast_group_id));
+		    pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+                        action.multicast_group_id));
           },
           [&](const RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy& action) {
             auto& proto =
@@ -765,7 +787,8 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
                      // NOLINTNEXTLINE
                      ->mutable_redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy();
             proto.set_multicast_group_id(
-                pdpi::BitsetToHexString<16>(action.multicast_group_id));
+	        pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+                    action.multicast_group_id));
             proto.set_cpu_queue(action.cpu_queue);
           },
           [&](const SetCpuQueueAndCancelCopy& action) {
@@ -795,7 +818,7 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<12>(*match_fields.vlan_id));
+        pdpi::BitsetToHexString<kVlanIdBitwidth>(*match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   if (match_fields.dst_ip.has_value()) {
@@ -819,6 +842,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   if (match_fields.is_ipv6.has_value()) {
     entry.mutable_match()->mutable_is_ipv6()->set_value(
         BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.vrf.has_value()) {
+    entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
   entry.mutable_action()->mutable_redirect_to_port()->set_redirect_port(port);
   entry.set_priority(priority);
@@ -852,9 +878,7 @@ EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
       *mirror_session_entry.mutable_action()
            ->mutable_mirror_with_vlan_tag_and_ipfix_encapsulation();
   action.set_monitor_port(params.monitor_port);
-  // monitor_failover_port's effect is not modeled, so use mirror_egress_port
-  // as a dummy value to satisfy the action param requirement.
-  action.set_monitor_failover_port(params.monitor_port);
+  action.set_monitor_failover_port(params.monitor_backup_port);
   action.set_mirror_encap_src_mac(params.mirror_encap_src_mac);
   action.set_mirror_encap_dst_mac(params.mirror_encap_dst_mac);
   action.set_mirror_encap_vlan_id(params.mirror_encap_vlan_id);
@@ -954,6 +978,25 @@ EntryBuilder& EntryBuilder::AddVlanMembershipEntry(
       break;
   }
   *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddWcmpGroupTableEntry(
+    absl::string_view wcmp_group_id,
+    absl::Span<const WcmpGroupAction> wcmp_group_actions) {
+  sai::WcmpGroupTableEntry& wcmp_group_entry =
+      *entries_.add_entries()->mutable_wcmp_group_table_entry();
+  wcmp_group_entry.mutable_match()->set_wcmp_group_id(wcmp_group_id);
+  for (const WcmpGroupAction& wcmp_group_action : wcmp_group_actions) {
+    sai::WcmpGroupTableEntry_WcmpAction& wcmp_action =
+        *wcmp_group_entry.mutable_wcmp_actions()->Add();
+    wcmp_action.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+        wcmp_group_action.nexthop_id);
+    wcmp_action.set_weight(wcmp_group_action.weight);
+    if (wcmp_group_action.watch_port.has_value()) {
+      wcmp_action.set_watch_port(wcmp_group_action.watch_port.value());
+    }
+  }
   return *this;
 }
 
