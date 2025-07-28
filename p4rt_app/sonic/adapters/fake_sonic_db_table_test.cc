@@ -20,6 +20,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "gutil/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -100,14 +101,13 @@ TEST(FakeSonicDbTest, DeleteEntry) {
   EXPECT_TRUE(table.GetAllKeys().empty());
 }
 
-TEST(FakeSonicDbDeathTest, GetNotificationDiesIfNoNotificationExists) {
+TEST(FakeSonicDbDeathTest, GetNotificationFailsIfNoNotificationExists) {
   FakeSonicDbTable table;
   std::string op;
   std::string data;
   SonicDbEntryList value;
 
-  EXPECT_DEATH(table.GetNextNotification(op, data, value),
-               "Could not find a notification");
+  EXPECT_FALSE(table.GetNextNotification(op, data, value).ok());
 }
 
 TEST(FakeSonicDbTest, DefaultNotificationResponseIsSuccess) {
@@ -118,7 +118,7 @@ TEST(FakeSonicDbTest, DefaultNotificationResponseIsSuccess) {
 
   // First insert.
   EXPECT_TRUE(table.PushNotification("entry"));
-  table.GetNextNotification(op, data, values);
+  EXPECT_OK(table.GetNextNotification(op, data, values));
   EXPECT_EQ(op, "SWSS_RC_SUCCESS");
   EXPECT_EQ(data, "entry");
   EXPECT_THAT(values,
@@ -134,7 +134,7 @@ TEST(FakeSonicDbTest, SetNotificationResponseForKey) {
   table.SetResponseForKey(/*key=*/"entry", /*code=*/"SWSS_RC_UNKNOWN",
                           /*message=*/"my error message");
   EXPECT_FALSE(table.PushNotification("entry"));
-  table.GetNextNotification(op, data, values);
+  EXPECT_OK(table.GetNextNotification(op, data, values));
   EXPECT_EQ(op, "SWSS_RC_UNKNOWN");
   EXPECT_EQ(data, "entry");
   EXPECT_THAT(values,
