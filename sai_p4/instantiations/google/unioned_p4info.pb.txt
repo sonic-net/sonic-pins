@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 3.0.1, 3.0.1, 3.0.1, 3.0.1"
+  version: "Versions 3.0.2, 3.0.2, 3.0.2, 3.0.2"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -993,7 +993,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
@@ -1059,7 +1059,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {

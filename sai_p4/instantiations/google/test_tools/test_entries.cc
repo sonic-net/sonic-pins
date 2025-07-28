@@ -432,6 +432,12 @@ EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
   if (!match_fields.vlan_id.IsWildcard()) {
     *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
   }
+  if (match_fields.dst_ipv6.has_value()) {
+    match.mutable_is_ipv6()->set_value(BoolToHexString(true));
+    match.mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+    match.mutable_dst_ipv6()->set_mask(match_fields.dst_ipv6->mask.ToString());
+  }
   return *this;
 }
 
