@@ -67,8 +67,9 @@ message RouterInterfaceTableEntry {
   message Action {
     oneof action {
       SetPortAndSrcMacAction set_port_and_src_mac = 1;
-      // CAUTION: This action is not (yet) supported.
       SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+      // CAUTION: This action is not (yet) supported.
+      UnicastSetPortAndSrcMacAction unicast_set_port_and_src_mac = 3;
     }
   }
   Action action = 2;
@@ -1006,6 +1007,13 @@ message MakeUntaggedMemberAction {}
 message DisableIngressVlanChecksAction {}
 
 message DisableEgressVlanChecksAction {}
+
+// CAUTION: This action is not (yet) supported.
+message UnicastSetPortAndSrcMacAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+}
+
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
