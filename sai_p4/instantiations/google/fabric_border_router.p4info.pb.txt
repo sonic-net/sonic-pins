@@ -940,6 +940,10 @@ tables {
     annotations: "@proto_id(2)"
   }
   action_refs {
+    id: 16777264
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1828,6 +1832,27 @@ actions {
     id: 16777218
     name: "ingress.routing_resolution.set_port_and_src_mac"
     alias: "set_port_and_src_mac"
+  }
+  params {
+    id: 1
+    name: "port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777264
+    name: "ingress.routing_resolution.unicast_set_port_and_src_mac"
+    alias: "unicast_set_port_and_src_mac"
+    annotations: "@unsupported"
   }
   params {
     id: 1
