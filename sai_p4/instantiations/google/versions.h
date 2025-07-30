@@ -68,12 +68,16 @@
 // metadata in the acl_ingress_table.
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
 
+// Indicates that the program supports all valid modifications to the
+// `acl_ingress_table`.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_INGRESS_MODIFY "3.0.1"
+
 // Indicates the switch executes batched updates in order, aborting every update
 // after the first failed one.
 #define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.1.0"
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_DISABLE_SUB_PORT_RIF_VLAN_CONFIG
+  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_INGRESS_MODIFY
 
 #endif // PINS_SAI_VERSIONS_H_
