@@ -451,7 +451,7 @@ TEST(P4SymbolicIntegrationTest,
       sai::EntryBuilder()
           .AddVrfEntry(kVrf)
           .AddEntryAdmittingAllPacketsToL3()
-          .AddEntrySettingVrfForAllPackets(kVrf)
+	  .AddPreIngressAclTableEntry(kVrf)
           .AddMulticastRoute(kVrf, kIngressDstIp, kMulticastGroupId)
           .AddMulticastGroupEntry(
               kMulticastGroupId,
