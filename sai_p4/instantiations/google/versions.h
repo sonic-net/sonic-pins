@@ -79,6 +79,11 @@
 // after the first failed one.
 #define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.1.0"
 
+// Indicates the switch supports 512 duplicate WCMP members per group in native
+// mode.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_512_DUPLICATE_WCMP_MEMBERS_IN_NATIVE \
+  "3.1.1"
+
 // Indicates that the switch supports unicast_set_port_and_src_mac action, which
 // at the SAI level translates to port type RIFs that do NOT program l3_admit
 // table (i.e. MyMac at SAI) under the hood.
@@ -93,6 +98,13 @@
 // name for ACL keys with
 // `@sai_field(SAI_ACL_ENTRY_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)`.
 #define SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME "
+
+// Indicates that the switch supports unicast_set_port_and_src_mac_and_vlan_id
+// action, which at the SAI level translates to sub_port type RIFs that do NOT
+// program l3_admit table (i.e. MyMac at SAI) under the hood.
+#define SAI_P4_PKGINFO_VERSION_USES_UNICAST_SET_PORT_AND_SRC_MAC_AND_VLAN_\
+ID_ACTION \
+  "5.0.0"
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
