@@ -65,6 +65,9 @@ bool IsPort(const p4::config::v1::P4NamedType &type_name,
 bool IsUnknownQosQueue(const p4::config::v1::P4NamedType& type_name,
                        const google::protobuf::RepeatedPtrField<
                            pdpi::IrMatchFieldReference>& references = {});
+bool IsUnknownQosOrCpuQueue(const p4::config::v1::P4NamedType& type_name,
+                            const google::protobuf::RepeatedPtrField<
+                                pdpi::IrMatchFieldReference>& references = {});
 bool IsNeighbor(const p4::config::v1::P4NamedType& type_name,
                 const google::protobuf::RepeatedPtrField<
                     pdpi::IrMatchFieldReference> &references = {});
