@@ -717,6 +717,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767362
+  direct_resource_ids: 352321792
   size: 255
 }
 tables {
@@ -1753,7 +1754,8 @@ actions {
     id: 16777473
     name: "ingress.acl_ingress.acl_copy"
     alias: "acl_copy"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
   }
   params {
     id: 1
@@ -1769,7 +1771,8 @@ actions {
     id: 16777474
     name: "ingress.acl_ingress.acl_trap"
     alias: "acl_trap"
-    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
   params {
     id: 1
@@ -1785,7 +1788,8 @@ actions {
     id: 16777475
     name: "ingress.acl_ingress.acl_forward"
     alias: "acl_forward"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
 }
 actions {
@@ -2525,6 +2529,18 @@ direct_counters {
     unit: BOTH
   }
   direct_table_id: 33554700
+}
+direct_meters {
+  preamble {
+    id: 352321792
+    name: "ingress.acl_ingress.acl_ingress_meter"
+    alias: "acl_ingress_meter"
+    annotations: "@mode(single_rate_two_color)"
+  }
+  spec {
+    unit: BYTES
+  }
+  direct_table_id: 33554688
 }
 direct_meters {
   preamble {
