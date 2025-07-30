@@ -166,7 +166,7 @@ ConstructEntriesToForwardMcastTrafficToGivenPort(
       sai::EntryBuilder()
           .AddVrfEntry(kVrf)
           .AddEntryAdmittingAllPacketsToL3()
-          .AddEntrySettingVrfForAllPackets(kVrf)
+	  .AddPreIngressAclTableEntry(kVrf)
           .AddMulticastGroupEntry(
               kMulticastGroupId,
               {
