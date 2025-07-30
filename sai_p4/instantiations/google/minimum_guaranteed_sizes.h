@@ -75,7 +75,9 @@
 // The maximum sum of weights for each wcmp group.
 #define WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR 512
 #define WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR 256
-#define WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE 256
+
+// The maximum number of members for each SUM_OF_MEMBERS group.
+#define WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE 512
 
 // The max weight of an individual member when using the SUM_OF_MEMBERS size 
 // semantics.
