@@ -16,6 +16,7 @@
 
 #include "dvaas/arriba_test_vector_validation.h"
 #include "dvaas/mirror_testbed_config.h"
+#include "dvaas/validation_result.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
@@ -37,10 +38,15 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
 
-  EXPECT_OK(dvaas::ValidateAgainstArribaTestVector(
-      *configured_testbed.SutApi().p4rt,
-      *configured_testbed.ControlSwitchApi().p4rt,
-      GetParam().arriba_test_vector));
+  ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
+                       dvaas::ValidateAgainstArribaTestVector(
+                           *configured_testbed.SutApi().p4rt,
+                           *configured_testbed.ControlSwitchApi().p4rt,
+                           GetParam().arriba_test_vector,
+                           GetParam().validation_params));
+
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(
+      GetParam().validation_params.expected_minimum_success_rate));
 
   ASSERT_OK(configured_testbed.RestoreToOriginalConfiguration());
 }
