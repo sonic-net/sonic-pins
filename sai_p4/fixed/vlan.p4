@@ -226,6 +226,7 @@ control egress_vlan_checks(inout headers_t headers,
       @proto_id(2) make_untagged_member;
       @defaultonly NoAction;
     }
+    size = VLAN_MEMBERSHIP_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
   apply {
