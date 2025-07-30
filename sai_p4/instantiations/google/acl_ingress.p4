@@ -621,7 +621,6 @@ control acl_ingress(in headers_t headers,
   ")
   table acl_ingress_mirror_and_redirect_table {
     key = {
-#if defined(SAI_INSTANTIATION_TOR)
       local_metadata.ingress_port : optional
         @name("in_port")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)
@@ -636,7 +635,6 @@ control acl_ingress(in headers_t headers,
         @name("vlan_id")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
         @id(7);
-#endif
 
       headers.ipv4.isValid() || headers.ipv6.isValid() : optional
         @name("is_ip")

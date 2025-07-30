@@ -1437,6 +1437,29 @@ tables {
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
+    id: 1
+    name: "in_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
+    match_type: OPTIONAL
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  match_fields {
+    id: 6
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
+  }
+  match_fields {
     id: 2
     name: "is_ip"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
@@ -1489,29 +1512,6 @@ tables {
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
-  }
-  match_fields {
-    id: 1
-    name: "in_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  match_fields {
-    id: 6
-    name: "acl_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 7
-    name: "vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
-    match_type: TERNARY
   }
   action_refs {
     id: 16777475
