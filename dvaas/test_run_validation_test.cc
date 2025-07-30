@@ -1,9 +1,5 @@
 #include "dvaas/test_run_validation.h"
 
-#include <vector>
-
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
 #include "gutil/proto_matchers.h"
@@ -17,71 +13,7 @@ namespace dvaas {
 namespace {
 
 using ::gutil::EqualsProto;
-using ::gutil::StatusIs;
-using ::testing::Eq;
 using ::testing::HasSubstr;
-using ::testing::IsEmpty;
-using ::testing::Pointee;
-using ::testing::Property;
-using ::testing::UnorderedElementsAre;
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsEmptyListIfNoHeaders) {
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<const google::protobuf::FieldDescriptor *> fields,
-      GetAllFieldDescriptorsOfHeaders({}));
-  EXPECT_THAT(fields, IsEmpty());
-}
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsErrorIfHeaderCaseIsInvalid) {
-  // Can't get descriptors for an invalid header case.
-  ASSERT_THAT(GetAllFieldDescriptorsOfHeaders({
-                  packetlib::Header::HEADER_NOT_SET,
-              }),
-              StatusIs(absl::StatusCode::kNotFound));
-}
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsDescriptorsOfAHeader) {
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<const google::protobuf::FieldDescriptor *> fields,
-      GetAllFieldDescriptorsOfHeaders({
-          packetlib::Header::kEthernetHeader,
-      }));
-  EXPECT_THAT(fields,
-              UnorderedElementsAre(
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_source"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_destination"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethertype")))));
-}
-
-TEST(GetAllFieldDescriptorsOfHeadersTest, ReturnsDescriptorsOfAllHeader) {
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<const google::protobuf::FieldDescriptor *> fields,
-      GetAllFieldDescriptorsOfHeaders({
-          packetlib::Header::kEthernetHeader,
-          packetlib::Header::kIpfixHeader,
-      }));
-  EXPECT_THAT(fields,
-              UnorderedElementsAre(
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_source"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethernet_destination"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("ethertype"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("length"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("version"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("export_time"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("sequence_number"))),
-                  Pointee(Property(&google::protobuf::FieldDescriptor::name,
-                                   Eq("observation_domain_id")))));
-}
 
 TEST(TestRunValidationTest,
      PacketFieldIsIgnoredIfAndOnlyIfIncludedInIgnoredPacketlibFields) {
