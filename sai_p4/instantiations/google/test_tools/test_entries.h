@@ -20,6 +20,7 @@
 #ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
+#include <bitset>
 #include <optional>
 #include <string>
 #include <utility>
@@ -37,9 +38,19 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/ternary.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
+
+// TODO: Clean up these predefined bit widths once further
+// refactors are completed.
+constexpr int kVlanIdBitwidth = 12;
+// NOTE: The actual bit-width of a multicast group ID is 16 bits, but we
+// reserve the uppermost bit for a possible solution to handling L2/L3 multicast
+// dependencies. 2^15 groups is more than sufficient for foreseeable use cases.
+constexpr int kPdMulticastGroupIdBitwidth = 15;
+constexpr int kReplicaInstanceBitwidth = 16;
 
 // Different ways of punting packets to the controller.
 enum class PuntAction {
@@ -120,6 +131,7 @@ struct P4RuntimeTernary {
 struct MirrorSessionParams {
   std::string mirror_session_id;
   std::string monitor_port;
+  std::string monitor_backup_port;
   std::string mirror_encap_src_mac;
   std::string mirror_encap_dst_mac;
   std::string mirror_encap_vlan_id;
@@ -157,6 +169,7 @@ struct MirrorAndRedirectMatchFields {
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
   std::optional<bool> is_ipv6;
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
+  std::optional<absl::string_view> vrf;
 };
 
 // Queue settings for ACL table entry action.
@@ -172,6 +185,21 @@ struct AclQueueAssignments {
 struct AclMeterConfiguration {
   int bytes_per_second = 1000;
   int burst_bytes = 1000;
+};
+
+// Parameters for generating a WCMPGroupTable action.
+struct WcmpGroupAction {
+  std::string nexthop_id;
+  int weight = 1;
+  std::optional<std::string> watch_port;
+};
+
+struct AclPreIngressMatchFields {
+  std::optional<bool> is_ip;
+  std::optional<bool> is_ipv4;
+  std::optional<bool> is_ipv6;
+  std::optional<std::string> in_port;
+  pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
 };
 
 // Tagging mode for VLAN membership entries.
@@ -220,6 +248,9 @@ class EntryBuilder {
   // Logs the current PD entries in the EntryBuilder to LOG(INFO).
   const EntryBuilder& LogPdEntries() const;
   EntryBuilder& LogPdEntries();
+
+  // Returns the current PD entries in the EntryBuilder in debug format.
+  std::string GetPdEntriesDebugString() const;
 
   // Deduplicates then installs the entities encoded by the EntryBuilder using
   // `session`.
@@ -306,8 +337,8 @@ class EntryBuilder {
                                              const Ipv6Lpm& ipv6_lpm = {});
 
   // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
-  // entry and RIF entry all characterized by `nexthop_rewrite_options`. The RIF
-  // will output packets on `egress_port`.
+  // entry and RIF entry all characterized by `nexthop_rewrite_options`. The
+  // RIF will output packets on `egress_port`.
   EntryBuilder& AddNexthopRifNeighborEntries(
       absl::string_view nexthop_id, absl::string_view egress_port,
       const NexthopRewriteOptions& rewrite_options = {});
@@ -327,8 +358,11 @@ class EntryBuilder {
   EntryBuilder& AddMulticastRoute(absl::string_view vrf,
                                   const netaddr::Ipv6Address& dst_ip,
                                   int multicast_group_id);
-  EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
-      absl::string_view vrf, IpVersion ip_version);
+  // Adds a pre-ingress ACL table entry that matches packets with the given
+  // `match_fields` and forwards them to the given `vrf`.
+  EntryBuilder& AddPreIngressAclTableEntry(
+      absl::string_view vrf, const AclPreIngressMatchFields& match_fields = {},
+      int priority = 1);
   EntryBuilder& AddEntryTunnelTerminatingAllIpInIpv6Packets();
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
   EntryBuilder& AddEntryPuntingPacketsWithDstMac(
@@ -362,10 +396,6 @@ class EntryBuilder {
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddDisableIngressVlanChecksEntry();
   EntryBuilder& AddDisableEgressVlanChecksEntry();
-  EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
-      absl::string_view vlan_id_hexstr, absl::string_view vrf);
-  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf,
-                                                int priority = 1);
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt,
@@ -396,6 +426,9 @@ class EntryBuilder {
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
                                        VlanTaggingMode tagging_mode);
+  EntryBuilder& AddWcmpGroupTableEntry(
+      absl::string_view wcmp_group_id,
+      absl::Span<const WcmpGroupAction> wcmp_group_actions);
 
  private:
   sai::TableEntries entries_;
