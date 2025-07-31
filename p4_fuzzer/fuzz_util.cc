@@ -85,7 +85,10 @@ constexpr int kBitsInByte = 8;
 constexpr float kAddUpdateProbability = 0.98;
 
 constexpr char kP4PortTypeName[] = "port_id_t";
+// Remove unknown queue support when they no longer exist in
+// tested images.
 constexpr char kP4UnknownQosQueueTypeName[] = "qos_queue_t";
+constexpr char kP4CpuQosQueueTypeName[] = "cpu_queue_t";
 constexpr char kP4UnicastQosQueueTypeName[] = "unicast_queue_t";
 constexpr char kP4MulticastQosQueueTypeName[] = "multicast_queue_t";
 constexpr char kP4NeighborTypeName[] = "neighbor_id_t";
@@ -102,6 +105,15 @@ bool IsUnknownQosQueue(
     const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
         references) {
   return type_name.name() == kP4UnknownQosQueueTypeName;
+}
+
+// CPU queues are currently treated the same as unknown QoS queues.
+bool IsUnknownQosOrCpuQueue(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references) {
+  return type_name.name() == kP4UnknownQosQueueTypeName ||
+         type_name.name() == kP4CpuQosQueueTypeName;
 }
 
 bool IsNeighbor(
@@ -884,7 +896,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
 
       case Mutation::INVALID_QOS_QUEUE:
         mutation_table_ids =
-            GetTableIdsWithValuePredicate(config, IsUnknownQosQueue);
+	    GetTableIdsWithValuePredicate(config, IsUnknownQosOrCpuQueue);
         break;
 
       case Mutation::INVALID_NEIGHBOR_ID:
@@ -1185,8 +1197,8 @@ absl::StatusOr<std::string> FuzzValue(
     return FuzzPort(gen, config).GetP4rtEncoding();
   }
 
-  // A qos queue: pick any valid qos queue randomly.
-  if (IsUnknownQosQueue(type_name)) {
+  // A qos queue or CPU queue: pick any valid qos queue randomly.
+  if (IsUnknownQosOrCpuQueue(type_name)) {
     return UniformFromSpan(gen, config.GetQosQueues());
   }
 

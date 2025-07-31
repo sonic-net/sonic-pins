@@ -45,22 +45,11 @@ control acl_ingress(in headers_t headers,
 
   // Copy the packet to the CPU, and forward the original packet.
   @id(ACL_INGRESS_COPY_ACTION_ID)
-#if defined(SAI_INSTANTIATION_TOR) 
-  // In ToRs, the acl_ingress_table copy action will not apply a rate limit.
-  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
-  @sai_action(SAI_PACKET_ACTION_COPY)
-  //TODO: Rename parameter to `cpu_queue`.
-  //TODO: Rename type to `cpu_queue_t`.
-  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
-    acl_ingress_counter.count();
-    local_metadata.marked_to_copy = true;
-  }
-#else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
   //TODO: Rename parameter to `cpu_queue`.
   //TODO: Rename type to `cpu_queue_t`.
-  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
+  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) cpu_queue_t qos_queue) {
     acl_ingress_counter.count();
     acl_ingress_meter.read(local_metadata.color);
 
@@ -68,21 +57,13 @@ control acl_ingress(in headers_t headers,
     // TODO: Branch on color and model behavior for all colors.
     local_metadata.marked_to_copy = true;
   }
-#endif
 
   // Copy the packet to the CPU. The original packet is dropped.
   @id(ACL_INGRESS_TRAP_ACTION_ID)
-#if defined(SAI_INSTANTIATION_TOR) 
-  // In ToRs, the acl_ingress_table trap action will not apply a rate limit.
-  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
-  @sai_action(SAI_PACKET_ACTION_TRAP)
-#else
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
-#endif
   //TODO: Rename parameter to `cpu_queue`.
-  //TODO: Rename type to `cpu_queue_t`.
-  action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
+  action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) cpu_queue_t qos_queue) {
     acl_copy(qos_queue);
     // TODO: Use `acl_drop(local_metadata)` instead when supported
     // in P4-Symbolic.
@@ -93,12 +74,6 @@ control acl_ingress(in headers_t headers,
   // the default action, and to specify a meter but not otherwise perform any
   // action.
   @id(ACL_INGRESS_FORWARD_ACTION_ID)
-#if defined(SAI_INSTANTIATION_TOR) 
-  // ToRs rely on QoS queues to limit forwarded flows.
-  @sai_action(SAI_PACKET_ACTION_FORWARD)
-  action acl_forward() {
-  }
-#else
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
   action acl_forward() {
@@ -106,7 +81,6 @@ control acl_ingress(in headers_t headers,
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
   }
-#endif
 
   // Forward the packet normally (i.e., perform no action).
   @id(ACL_INGRESS_COUNT_ACTION_ID)
@@ -132,7 +106,7 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL, SAI_PACKET_COLOR_RED)
   // TODO: Rename qos queue to cpu queue, as per action below.
   action set_qos_queue_and_cancel_copy_above_rate_limit(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t qos_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t qos_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // TODO: Implement rate-limit flows for ToR use-case. Changes
     // needed:
@@ -144,7 +118,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
   action set_cpu_queue_and_cancel_copy(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
     cancel_copy = true;
   }
 
@@ -159,7 +133,7 @@ control acl_ingress(in headers_t headers,
   @unsupported
   action set_dscp_and_queues_and_deny_above_rate_limit(
       @id(1) @sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP) bit<6> dscp,
-      @id(2) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
+      @id(2) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue,
       @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         multicast_queue_t green_multicast_queue,
       @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
@@ -181,7 +155,7 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
   action set_cpu_queue_and_deny_above_rate_limit(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -191,7 +165,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_SET_CPU_QUEUE_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action set_cpu_queue(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+      @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
   }
 
   // Forwards packets normally. Sets Multicast and unicast queues depending on
@@ -399,12 +373,8 @@ control acl_ingress(in headers_t headers,
       @defaultonly NoAction;
     }
     const default_action = NoAction;
-#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     meters = acl_ingress_meter;
     counters = acl_ingress_counter;
-#else
-    counters = acl_ingress_counter;
-#endif
     size = ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
@@ -585,7 +555,7 @@ control acl_ingress(in headers_t headers,
       @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
       @refers_to(builtin::multicast_group_table, multicast_group_id)
       multicast_group_id_t multicast_group_id,
-      @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
+      @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
     redirect_to_ipmc_group(multicast_group_id);
     set_cpu_queue_and_cancel_copy(cpu_queue);
   }
@@ -651,7 +621,6 @@ control acl_ingress(in headers_t headers,
   ")
   table acl_ingress_mirror_and_redirect_table {
     key = {
-#if defined(SAI_INSTANTIATION_TOR)
       local_metadata.ingress_port : optional
         @name("in_port")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)
@@ -666,7 +635,6 @@ control acl_ingress(in headers_t headers,
         @name("vlan_id")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
         @id(7);
-#endif
 
       headers.ipv4.isValid() || headers.ipv6.isValid() : optional
         @name("is_ip")
