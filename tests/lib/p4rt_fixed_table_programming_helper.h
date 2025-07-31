@@ -21,7 +21,10 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -64,7 +67,11 @@ absl::StatusOr<p4::v1::Update> VrfTableUpdate(const pdpi::IrP4Info &ir_p4_info,
 //   * if action=kDrop then nexthop_id should not be set
 //   * if action=kSetNextHopId then nexthop_id should be set.
 struct IpTableOptions {
-  enum class Action { kDrop, kSetNextHopId, kSetWcmpGroupId };
+  enum class Action {
+    kDrop,
+    kSetNextHopId,
+    kSetWcmpGroupId,
+  };
 
   // Match fields not marked optional must be set.
   std::string vrf_id;
@@ -74,6 +81,15 @@ struct IpTableOptions {
   Action action = Action::kDrop;
   std::optional<std::string> nexthop_id;
   std::optional<std::string> wcmp_group_id;
+  std::optional<int> metadata;
+
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink, const IpTableOptions& o) {
+    absl::Format(&sink, "%s", o.ToString());
+  }
+
+ private:
+  std::string ToString() const;  // Implementation for AbslStringify.
 };
 
 struct MulticastReplica {

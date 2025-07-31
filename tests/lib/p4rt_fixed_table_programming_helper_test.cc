@@ -13,14 +13,26 @@
 // limitations under the License.
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
+#include <list>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -419,12 +431,315 @@ TEST_P(L3RouteProgrammingTest, WcmpGroupActionCanSetWatchPort) {
               StrEq("1"));
 }
 
+std::string GetTestName(sai::Instantiation instantiation) {
+  return gutil::SnakeCaseToCamelCase(sai::InstantiationToString(instantiation));
+}
+
 INSTANTIATE_TEST_SUITE_P(
     L3RouteProgrammingTestInstance, L3RouteProgrammingTest,
-    testing::Values(sai::Instantiation::kMiddleblock,
-                    sai::Instantiation::kFabricBorderRouter),
+    testing::ValuesIn(sai::AllSaiInstantiations()),
     [](const testing::TestParamInfo<L3RouteProgrammingTest::ParamType>& param) {
-      return sai::InstantiationToString(param.param);
+      return GetTestName(param.param);
+    });
+
+struct IpTableUpdateTestCase {
+  std::string name;
+  IpTableOptions options;
+  std::string output;  // Expected table entry in IR format.
+};
+
+using IpTableUpdateTest = testing::TestWithParam<
+    std::tuple<IpTableUpdateTestCase, sai::Instantiation>>;
+
+TEST_P(IpTableUpdateTest, IPv4OptionsSetProducesExpectedUpdate) {
+  const pdpi::IrP4Info& ir_p4info = sai::GetIrP4Info(std::get<1>(GetParam()));
+  const IpTableOptions& options = std::get<0>(GetParam()).options;
+  SCOPED_TRACE(absl::StrCat("Options:\n", options));
+
+  if (options.dst_addr_lpm.has_value() &&
+      absl::StrContains(options.dst_addr_lpm->first, ':')) {
+    EXPECT_FALSE(
+        Ipv4TableUpdate(ir_p4info, p4::v1::Update::INSERT, options).ok());
+    return;
+  }
+
+  pdpi::IrTableEntry ir_expected = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(
+      std::get<0>(GetParam()).output);
+  ir_expected.set_table_name("ipv4_table");
+  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry expected,
+                       pdpi::IrTableEntryToPi(ir_p4info, ir_expected));
+
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      Ipv4TableUpdate(ir_p4info, p4::v1::Update::INSERT, options));
+  EXPECT_THAT(pi_update.entity().table_entry(), gutil::EqualsProto(expected));
+}
+
+TEST_P(IpTableUpdateTest, IPv6OptionsSetProducesExpectedUpdate) {
+  const pdpi::IrP4Info& ir_p4info = sai::GetIrP4Info(std::get<1>(GetParam()));
+  const IpTableOptions& options = std::get<0>(GetParam()).options;
+  SCOPED_TRACE(absl::StrCat("Options:\n", options));
+
+  if (options.dst_addr_lpm.has_value() &&
+      absl::StrContains(options.dst_addr_lpm->first, '.')) {
+    EXPECT_FALSE(
+        Ipv6TableUpdate(ir_p4info, p4::v1::Update::INSERT, options).ok());
+    return;
+  }
+
+  pdpi::IrTableEntry ir_expected = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(
+      std::get<0>(GetParam()).output);
+  ir_expected.set_table_name("ipv6_table");
+  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry expected,
+                       pdpi::IrTableEntryToPi(ir_p4info, ir_expected));
+
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      Ipv6TableUpdate(ir_p4info, p4::v1::Update::INSERT, options));
+  EXPECT_THAT(pi_update.entity().table_entry(), gutil::EqualsProto(expected));
+}
+
+std::vector<IpTableUpdateTestCase> IpTableUpdateTestCases() {
+  return {
+      {
+          .name = "IPv4Drop",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .dst_addr_lpm = std::make_pair("10.11.0.0", 16),
+                  .action = IpTableOptions::Action::kDrop,
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         matches {
+                           name: "ipv4_dst"
+                           lpm {
+                             value { ipv4: "10.11.0.0" }
+                             prefix_length: 16
+                           }
+                         }
+                         action { name: "drop" })pb",
+      },
+      {
+          .name = "IPv6Drop",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .dst_addr_lpm = std::make_pair("2000::", 32),
+                  .action = IpTableOptions::Action::kDrop,
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         matches {
+                           name: "ipv6_dst"
+                           lpm {
+                             value { ipv6: "2000::" }
+                             prefix_length: 32
+                           }
+                         }
+                         action { name: "drop" })pb",
+      },
+      {
+          .name = "VrfDrop",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .action = IpTableOptions::Action::kDrop,
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         action { name: "drop" })pb",
+      },
+      {
+          .name = "VrfSetMetadataAndDrop",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .action = IpTableOptions::Action::kDrop,
+                  .metadata = 15,
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         action {
+                           name: "set_metadata_and_drop"
+                           params {
+                             name: "route_metadata"
+                             value { hex_str: "0x0f" }
+                           }
+                         })pb",
+      },
+      {
+          .name = "SetNexthop",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .action = IpTableOptions::Action::kSetNextHopId,
+                  .nexthop_id = "nexthop_1",
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         action {
+                           name: "set_nexthop_id"
+                           params {
+                             name: "nexthop_id"
+                             value { str: "nexthop_1" }
+                           }
+                         })pb",
+      },
+      {
+          .name = "SetNexthopAndMetadata",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .action = IpTableOptions::Action::kSetNextHopId,
+                  .nexthop_id = "nexthop_1",
+                  .metadata = 15,
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         action {
+                           name: "set_nexthop_id_and_metadata"
+                           params {
+                             name: "nexthop_id"
+                             value { str: "nexthop_1" }
+                           }
+                           params {
+                             name: "route_metadata"
+                             value { hex_str: "0x0f" }
+                           }
+                         })pb",
+      },
+      {
+          .name = "SetWcmpGroupId",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .action = IpTableOptions::Action::kSetWcmpGroupId,
+                  .wcmp_group_id = "wcmp_group_1",
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         action {
+                           name: "set_wcmp_group_id"
+                           params {
+                             name: "wcmp_group_id"
+                             value { str: "wcmp_group_1" }
+                           }
+                         })pb",
+      },
+      {
+          .name = "SetWcmpGroupIdAndMetadata",
+          .options =
+              {
+                  .vrf_id = "vrf-80",
+                  .action = IpTableOptions::Action::kSetWcmpGroupId,
+                  .wcmp_group_id = "wcmp_group_1",
+                  .metadata = 15,
+              },
+          .output = R"pb(matches {
+                           name: "vrf_id"
+                           exact { str: "vrf-80" }
+                         }
+                         action {
+                           name: "set_wcmp_group_id_and_metadata"
+                           params {
+                             name: "wcmp_group_id"
+                             value { str: "wcmp_group_1" }
+                           }
+                           params {
+                             name: "route_metadata"
+                             value { hex_str: "0x0f" }
+                           }
+                         })pb",
+      },
+  };
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Options, IpTableUpdateTest,
+    testing::Combine(testing::ValuesIn(IpTableUpdateTestCases()),
+                     testing::ValuesIn(sai::AllSaiInstantiations())),
+    [](const testing::TestParamInfo<IpTableUpdateTest::ParamType> info) {
+      return absl::StrCat(std::get<0>(info.param).name, "For",
+                          GetTestName(std::get<1>(info.param)));
+    });
+
+using IpTableOptionsTest = testing::TestWithParam<IpTableUpdateTestCase>;
+
+bool HasSubstringsInOrder(absl::string_view str,
+                          std::vector<std::string> substrs) {
+  int position = 0;
+  for (const auto& substr : substrs) {
+    position = str.find(substr);
+    if (position == str.npos) return false;
+    position += substr.size();
+  }
+  return true;
+}
+
+TEST_P(IpTableOptionsTest, StringifyContainsComponents) {
+  const IpTableOptions options = GetParam().options;
+  const std::string& options_str = absl::StrCat(options);
+
+  std::list<absl::string_view> params = absl::StrSplit(options_str, '\n');
+  auto find_and_erase_param = [&params](std::vector<std::string> components) {
+    for (auto param = params.begin(); param != params.end(); ++param) {
+      if (HasSubstringsInOrder(*param, components)) {
+        params.erase(param);
+        return true;
+      }
+    }
+    return false;
+  };
+  const absl::flat_hash_map<IpTableOptions::Action, std::string> action_names =
+      {
+          {IpTableOptions::Action::kDrop, "Drop"},
+          {IpTableOptions::Action::kSetNextHopId, "SetNextHopId"},
+          {IpTableOptions::Action::kSetWcmpGroupId, "SetWcmpGroupId"},
+      };
+
+  SCOPED_TRACE(absl::StrCat("Options:\n", options_str));
+  EXPECT_TRUE(find_and_erase_param({"vrf_id", options.vrf_id}));
+  EXPECT_TRUE(
+      find_and_erase_param({"action", action_names.at(options.action)}));
+  if (options.dst_addr_lpm.has_value()) {
+    EXPECT_TRUE(
+        find_and_erase_param({"dst_addr_lpm", options.dst_addr_lpm->first,
+                              absl::StrCat(options.dst_addr_lpm->second)}));
+  }
+  if (options.nexthop_id.has_value()) {
+    EXPECT_TRUE(find_and_erase_param({"nexthop_id", *options.nexthop_id}));
+  }
+  if (options.wcmp_group_id.has_value()) {
+    EXPECT_TRUE(
+        find_and_erase_param({"wcmp_group_id", *options.wcmp_group_id}));
+  }
+  if (options.metadata.has_value()) {
+    EXPECT_TRUE(
+        find_and_erase_param({"metadata", absl::StrCat(*options.metadata)}));
+  }
+
+  EXPECT_THAT(params, testing::IsEmpty()) << "Found unmatched parameters.";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Options, IpTableOptionsTest, testing::ValuesIn(IpTableUpdateTestCases()),
+    [](const testing::TestParamInfo<IpTableOptionsTest::ParamType> info) {
+      return info.param.name;
     });
 
 }  // namespace
