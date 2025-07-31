@@ -83,6 +83,20 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "alpine_switch",
+    hdrs = ["alpine_switch.h"],
+    deps = [
+        ":basic_switch",
+        "//p4_pdpi:p4_runtime_session",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_grpc_grpc//:grpc_security_base",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
 cc_test(
     name = "basic_switch_test",
     srcs = ["basic_switch_test.cc"],
