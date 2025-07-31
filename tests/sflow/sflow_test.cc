@@ -1976,6 +1976,7 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
 // 3. Send traffic at a normal rate which would not trigger sFlow backoff.
 // Verify that sample rate is still doubled on all interfaces and samples.
 TEST_P(BackoffTest, VerifyBackoffWorks) {
+  testbed_->Environment().SetTestCaseID("58653895-219a-4b9e-b6af-03f6a33b5959");
   if (GetParam().nsf_enabled) {
     GTEST_SKIP() << "NSF is enabled, skip VerifyBackoffWorks test.";
   }
@@ -2000,9 +2001,12 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
 // 5. Send traffic to switch to trigger backoff.
 // 6. Verify sFlow states.
 TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
+  testbed_->Environment().SetTestCaseID("50bb4cf4-4369-438a-9ae4-602ed682e0e0");
+
   if (!GetParam().nsf_enabled) {
     GTEST_SKIP() << "NSF is disabled, skip VerifyBackOffWorksAfterNsf test.";
   }
+
   ASSERT_GE(ready_links_.size(), 2) << "Needs two ready ixia links for testing";
   absl::flat_hash_map<std::string, bool> sflow_interfaces;
   ASSERT_OK_AND_ASSIGN(sflow_interfaces, GetSflowInterfacesFromSut(*testbed_));
@@ -2551,12 +2555,13 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
 // Start collector at localhost:portB.
 // Start traffic and verify.
 TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+  testbed.Environment().SetTestCaseID("93680333-05bf-4e81-8080-e2559b06af5d");
   if (!GetParam().nsf_enabled) {
     GTEST_SKIP()
         << "Skip TestNsfUpgradeGnpsiCollector since NSF is not enabled.";
   }
-  thinkit::MirrorTestbed& testbed =
-      GetParam().testbed_interface->GetMirrorTestbed();
 
   // Configure SUT with control switch loopback0 ip as collector.
   ASSERT_OK_AND_ASSIGN(
