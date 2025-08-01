@@ -67,8 +67,9 @@ message RouterInterfaceTableEntry {
   message Action {
     oneof action {
       SetPortAndSrcMacAction set_port_and_src_mac = 1;
-      // CAUTION: This action is not (yet) supported.
       SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+      // CAUTION: This action is not (yet) supported.
+      UnicastSetPortAndSrcMacAction unicast_set_port_and_src_mac = 3;
     }
   }
   Action action = 2;
@@ -420,9 +421,9 @@ message AclIngressTableEntry {
       AclCopyAction acl_copy = 1;
       AclTrapAction acl_trap = 2;
       AclForwardAction acl_forward = 3;
+      AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
       RedirectToNexthopAction redirect_to_nexthop = 7;
-      // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
@@ -549,7 +550,6 @@ message AclEgressTableEntry {
     Optional is_ipv6 = 7;     // optional match / Format::HEX_STRING / 1 bits
     Ternary dscp = 8;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary dst_ipv6 = 9;     // ternary match / Format::IPV6 / upper 64 bits
-    Ternary src_mac = 10;     // ternary match / Format::MAC
   }
   Match match = 1;
   message Action {
@@ -677,6 +677,7 @@ message AclIngressQosTableEntry {
           set_dscp_and_queues_and_deny_above_rate_limit = 6;
       // CAUTION: This action is not (yet) supported.
       SetForwardingQueuesAction set_forwarding_queues = 7;
+      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -825,12 +826,12 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      AclForwardAction acl_forward = 3;
+      AclForwardAction acl_forward = 2;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 4;
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 5;
       RedirectToPortAction redirect_to_port = 6;
-      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 2;
+      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 3;
       RedirectToIpmcGroupAndSetCpuQueueAndCancelCopyAction
           redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy = 7;
       SetCpuQueueAndCancelCopyAction set_cpu_queue_and_cancel_copy = 8;
@@ -1004,6 +1005,13 @@ message DisableIngressVlanChecksAction {}
 
 message DisableEgressVlanChecksAction {}
 
+// CAUTION: This action is not (yet) supported.
+message UnicastSetPortAndSrcMacAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+}
+
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -1075,7 +1083,6 @@ message RedirectToIpmcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToL2mcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
@@ -1103,6 +1110,7 @@ message SetOuterVlanIdAndAclMetadataAction {
   string acl_metadata = 2;  // Format::HEX_STRING / 8 bits
 }
 
+// CAUTION: This action is not (yet) supported.
 message AppendIngressAndEgressTimestampAction {
   string append_ingress_timestamp = 1;  // Format::HEX_STRING / 8 bits
   string append_egress_timestamp = 2;   // Format::HEX_STRING / 8 bits

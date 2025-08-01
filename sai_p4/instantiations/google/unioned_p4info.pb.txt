@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 2.6.0, 2.6.0, 2.6.0, 2.6.0"
+  version: "Versions 3.1.1, 3.1.1, 3.1.1, 3.1.1"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -703,6 +703,10 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
+    id: 16777476
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
     id: 16777481
     annotations: "@proto_id(5)"
   }
@@ -989,7 +993,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
@@ -1013,6 +1017,10 @@ tables {
   action_refs {
     id: 16777243
     annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777264
+    annotations: "@proto_id(3)"
   }
   action_refs {
     id: 21257015
@@ -1055,7 +1063,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
@@ -1391,14 +1399,6 @@ tables {
     name: "dscp"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP)"
     bitwidth: 6
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 10
-    name: "src_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
     match_type: TERNARY
   }
   match_fields {
@@ -2033,6 +2033,7 @@ actions {
     alias: "acl_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
   }
   params {
     id: 1
@@ -2050,6 +2051,7 @@ actions {
     alias: "acl_trap"
     annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
   }
   params {
     id: 1
@@ -2067,6 +2069,7 @@ actions {
     alias: "acl_forward"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
 }
 actions {
@@ -2075,6 +2078,23 @@ actions {
     name: "ingress.acl_ingress.acl_count"
     alias: "acl_count"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+}
+actions {
+  preamble {
+    id: 16777476
+    name: "ingress.acl_ingress.acl_mirror"
+    alias: "acl_mirror"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
   }
 }
 actions {
@@ -2230,7 +2250,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_l2mc_group"
     alias: "redirect_to_l2mc_group"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2264,6 +2283,7 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2323,6 +2343,27 @@ actions {
     id: 16777218
     name: "ingress.routing_resolution.set_port_and_src_mac"
     alias: "set_port_and_src_mac"
+  }
+  params {
+    id: 1
+    name: "port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777264
+    name: "ingress.routing_resolution.unicast_set_port_and_src_mac"
+    alias: "unicast_set_port_and_src_mac"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2629,23 +2670,6 @@ actions {
     id: 16777253
     name: "egress.egress_vlan_checks.make_untagged_member"
     alias: "make_untagged_member"
-  }
-}
-actions {
-  preamble {
-    id: 16777476
-    name: "ingress.acl_ingress.acl_mirror"
-    alias: "acl_mirror"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "mirror_session_id"
-    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
-    type_name {
-      name: "mirror_session_id_t"
-    }
   }
 }
 actions {
