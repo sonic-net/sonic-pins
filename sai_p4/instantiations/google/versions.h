@@ -79,10 +79,13 @@
 // after the first failed one.
 #define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.1.0"
 
+// Indicates the switch rejects duplicate sub-port RIFs.
+#define SAI_P4_PKGINFO_VERSION_REJECTS_DUPLICATE_SUB_PORT_RIFS "3.1.1"
+
 // Indicates the switch supports 512 duplicate WCMP members per group in native
 // mode.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_512_DUPLICATE_WCMP_MEMBERS_IN_NATIVE \
-  "3.1.1"
+  "3.1.5"
 
 // Indicates that the switch supports unicast_set_port_and_src_mac action, which
 // at the SAI level translates to port type RIFs that do NOT program l3_admit
@@ -107,6 +110,7 @@ ID_ACTION \
   "5.0.0"
 
 // Macro that always points to the latest SAI P4 version.
-#define SAI_P4_PKGINFO_VERSION_LATEST SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
+#define SAI_P4_PKGINFO_VERSION_LATEST \
+  SAI_P4_PKGINFO_VERSION_REJECTS_DUPLICATE_SUB_PORT_RIFS
 
 #endif // PINS_SAI_VERSIONS_H_
