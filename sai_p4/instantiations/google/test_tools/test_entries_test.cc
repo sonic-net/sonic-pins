@@ -896,6 +896,31 @@ TEST(EntryBuilder,
       )pb"))));
 }
 
+TEST(EntryBuilder, AddL2MrifEntryAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddL2MrifEntry(
+                               /*egress_port=*/"1", /*replica_instance=*/15)
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "multicast_router_interface_table"
+                  matches {
+                    name: "multicast_replica_port"
+                    exact { str: "1" }
+                  }
+                  matches {
+                    name: "multicast_replica_instance"
+                    exact { hex_str: "0x000f" }
+                  }
+                  action { name: "l2_multicast_passthrough" }
+                }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddMulticastRouteAddsIpv4Entry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(auto dst_ip,
