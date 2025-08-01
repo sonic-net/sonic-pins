@@ -178,6 +178,60 @@ inline constexpr absl::string_view kNonessentialForUpgrade =
 inline constexpr absl::string_view kReinstallDuringUpgrade =
     "reinstall_during_upgrade";
 
+// Hash-Related Annotations
+
+// @sai_hash_seed(<seed>) sets the seed value for the hash configuration.
+//
+// Applies to: hash algorithm action object within ecmp or lag hashing config
+//             control block.
+// Values: Unsigned integer hash seed
+inline constexpr absl::string_view kSaiHashSeed = "sai_hash_seed";
+
+// @sai_hash_offset(<offset>) sets the offset value for the hash configuration.
+//
+// Applies to: hash algorithm action object within ecmp or lag hashing config
+//             control block.
+// Values: Unsigned integer hash offset
+inline constexpr absl::string_view kSaiHashOffset = "sai_hash_offset";
+
+// @sai_hash_algorithm(<algorithm>) sets the algorithm the hash configuration.
+//
+// Applies to: hash algorithm action object within ecmp or lag hashing config
+//             control block.
+// Values: One of:
+//         SAI_HASH_ALGORITHM_CRC, SAI_HASH_ALGORITHM_XOR,
+//         SAI_HASH_ALGORITHM_RANDOM, SAI_HASH_ALGORITHM_CRC_32LO,
+//         SAI_HASH_ALGORITHM_CRC_32HI, SAI_HASH_ALGORITHM_CRC_CCITT,
+//         SAI_HASH_ALGORITHM_CRC_XOR
+inline constexpr absl::string_view kSaiHashAlgorithm = "sai_hash_algorithm";
+
+// @sai_native_hash_field(<field>) adds the field to the associated hash
+// computation. Multiple @sai_native_hash_field() annotations may be attached to
+// a computation action.
+//
+// Applies to: hash config compute action objects
+// Values: The subset of values in sai_native_hashfield_t:
+//         SAI_NATIVE_HASH_FIELD_SRC_IPV4, SAI_NATIVE_HASH_FIELD_DST_IPV4,
+//         SAI_NATIVE_HASH_FIELD_SRC_IPV6, SAI_NATIVE_HASH_FIELD_DST_IPV6,
+//         SAI_NATIVE_HASH_FIELD_L4_DST_PORT, SAI_NATIVE_HASH_FIELD_L4_SRC_PORT,
+//         SAI_NATIVE_HASH_FIELD_IPV6_FLOW_LABEL
+inline constexpr absl::string_view kSaiNativeHashField =
+    "sai_native_hash_field";
+
+// @sai_lag_hash(<lag_hash_type>) specifies the type of packets to which this
+// lag hash computation applies.
+//
+// Applies to: lag hash config compute action objects
+// Values: SAI_SWITCH_ATTR_LAG_HASH_IPV4, SAI_SWITCH_ATTR_LAG_HASH_IPV6
+inline constexpr absl::string_view kLagHash = "sai_lag_hash";
+
+// @sai_ecmp_hash(<ecmp_hash_type>) specifies the type of packets to which this
+// ecmp hash computation applies.
+//
+// Applies to: ecmp hash config compute action objects
+// Values: SAI_SWITCH_ATTR_ECMP_HASH_IPV4, SAI_SWITCH_ATTR_ECMP_HASH_IPV6
+inline constexpr absl::string_view kEcmpHash = "sai_ecmp_hash";
+
 }  // namespace annotation
 }  // namespace sai
 
