@@ -26,7 +26,7 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <thread>  // NOLINT
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1326,6 +1326,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
       std::unique_ptr<thinkit::GenericTestbed> testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
+  // Set test case ID.
+  testbed->Environment().SetTestCaseID("d3a613b5-e0a6-4117-9405-c4abca11361d");
 
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
