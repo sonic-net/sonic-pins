@@ -27,6 +27,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
+#include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
@@ -107,6 +108,9 @@ struct ConfigParams {
   bool no_empty_action_profile_groups = false;
   // Ignores the constraints on tables listed when fuzzing entries.
   absl::flat_hash_set<std::string> ignore_constraints_on_tables;
+  // A function for masking any updates that should not be sent to the switch.
+  std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
+      [](const AnnotatedUpdate& update) { return false; };
 };
 
 class FuzzerConfig {
@@ -177,6 +181,10 @@ public:
                                          const pdpi::IrTableEntry &)>> &
   GetTreatAsEqualDuringReadDueToKnownBug() const {
     return params_.TreatAsEqualDuringReadDueToKnownBug;
+  }
+  const std::function<bool(const AnnotatedUpdate&)>&
+  GetIsBuggyUpdateThatShouldBeSkipped() const {
+    return params_.IsBuggyUpdateThatShouldBeSkipped;
   }
   bool GetNoEmptyActionProfileGroups() const {
     return params_.no_empty_action_profile_groups;
