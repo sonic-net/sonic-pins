@@ -1423,14 +1423,6 @@ tables {
     bitwidth: 64
     match_type: TERNARY
   }
-  match_fields {
-    id: 10
-    name: "src_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
   action_refs {
     id: 16777481
     annotations: "@proto_id(1)"
@@ -1966,7 +1958,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_l2mc_group"
     alias: "redirect_to_l2mc_group"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
-    annotations: "@unsupported"
   }
   params {
     id: 1

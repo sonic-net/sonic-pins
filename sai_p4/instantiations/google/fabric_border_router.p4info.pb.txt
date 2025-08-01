@@ -1739,7 +1739,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_l2mc_group"
     alias: "redirect_to_l2mc_group"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
-    annotations: "@unsupported"
   }
   params {
     id: 1
