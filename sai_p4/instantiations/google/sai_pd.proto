@@ -424,9 +424,7 @@ message AclIngressTableEntry {
       AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
       RedirectToNexthopAction redirect_to_nexthop = 7;
-      // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -552,7 +550,6 @@ message AclEgressTableEntry {
     Optional is_ipv6 = 7;     // optional match / Format::HEX_STRING / 1 bits
     Ternary dscp = 8;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary dst_ipv6 = 9;     // ternary match / Format::IPV6 / upper 64 bits
-    Ternary src_mac = 10;     // ternary match / Format::MAC
   }
   Match match = 1;
   message Action {
@@ -1086,7 +1083,6 @@ message RedirectToIpmcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToL2mcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
