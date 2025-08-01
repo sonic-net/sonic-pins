@@ -16,17 +16,11 @@
 #include <memory>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
-#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
-#include "gutil/testing.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/pd.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/status_matchers.h"  
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
@@ -38,12 +32,7 @@
 
 namespace pins_test {
 
-using ::p4::v1::Entity;
 using ::p4::v1::ReadResponse;
-
-// Since the validation is while the traffic is in progress, error margin needs
-// to be defined.
-constexpr int kErrorPercentage = 1;
 
 void NsfAclFlowCoverageTestFixture::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
@@ -57,53 +46,6 @@ void NsfAclFlowCoverageTestFixture::SetUp() {
 void NsfAclFlowCoverageTestFixture::TearDown() {
   TearDownTestbed(testbed_interface_);
 }
-
-namespace {
-
-absl::StatusOr<sai::TableEntries> GetAclFlowEntries() {
-  return gutil::ParseProtoOrDie<sai::TableEntries>(
-      R"pb(
-        entries {
-          acl_ingress_table_entry {
-            match { ether_type { value: "0x0806" mask: "0xffff" } }
-            action { acl_trap { qos_queue: "INBAND_PRIORITY_3" } }
-            priority: 2031
-          }
-        }
-        entries {
-          acl_ingress_qos_table_entry {
-            match { ether_type { value: "0x0806" mask: "0xffff" } }
-            action {
-              set_qos_queue_and_cancel_copy_above_rate_limit {
-                qos_queue: "INBAND_PRIORITY_3"
-              }
-            }
-            priority: 4600
-            meter_config { bytes_per_second: 32000 burst_bytes: 8000 }
-            controller_metadata: "orion_type: ARP_PUNTFLOW orion_cookie: 9223372036856217610"
-          }
-        }
-      )pb");
-}
-
-absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
-                             const p4::config::v1::P4Info& p4_info) {
-  ASSIGN_OR_RETURN(sai::TableEntries kTableEntries, GetAclFlowEntries());
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));
-  std::vector<p4::v1::Entity> pi_entities;
-  pi_entities.reserve(kTableEntries.entries_size());
-  for (const sai::TableEntry& entry : kTableEntries.entries()) {
-    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
-                     pdpi::PdTableEntryToPiEntity(ir_p4info, entry));
-  }
-  LOG(INFO) << "Installing PI table entries on "
-            << thinkit_switch.ChassisName();
-  return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
-}
-
-}  // namespace
 
 TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
@@ -133,7 +75,7 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
-  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param.p4_info, testbed_,
+  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param, testbed_,
                                            *ssh_client_));
   LOG(INFO) << "Programming ACL flows";
   ASSERT_OK(ProgramAclFlows(sut, image_config_param.p4_info));
@@ -169,7 +111,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
+  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_,
+                                             kNsfTrafficLossErrorPercentage));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
   // testbeds).

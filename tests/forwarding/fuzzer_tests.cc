@@ -229,6 +229,8 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
                   GetParam().TreatAsEqualDuringReadDueToKnownBug,
               .ignore_constraints_on_tables =
                   GetParam().ignore_constraints_on_tables,
+              .IsBuggyUpdateThatShouldBeSkipped =
+                  GetParam().IsBuggyUpdateThatShouldBeSkipped,
           }));
 
   // TODO: b/316926338 - Remove once switch state transitions to entities. This

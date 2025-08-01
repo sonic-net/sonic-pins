@@ -14,15 +14,18 @@
 
 #include "tests/integration/system/nsf/util.h"
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -40,10 +43,14 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/pd.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/generic_testbed.h"
@@ -64,6 +71,8 @@ using ::gnoi::system::RebootStatusRequest;
 using ::gnoi::system::RebootStatusResponse;
 using ::google::protobuf::util::MessageDifferencer;
 using ::grpc::ClientContext;
+using ::p4::config::v1::P4Info;
+using ::p4::v1::Entity;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 
@@ -72,6 +81,49 @@ constexpr absl::Duration kPollingInterval = absl::Seconds(10);
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
 constexpr int kEpochMarginalError = 2;
+constexpr std::array<absl::string_view, 2> kAclFlows = {
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_4" } }
+          priority: 2050
+        }
+      }
+      entries {
+        acl_ingress_qos_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action {
+            set_qos_queue_and_cancel_copy_above_rate_limit {
+              qos_queue: "INBAND_PRIORITY_4"
+            }
+          }
+          priority: 4600
+          meter_config { bytes_per_second: 28000 burst_bytes: 7000 }
+        }
+      }
+    )pb",
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_3" } }
+          priority: 2031
+        }
+      }
+      entries {
+        acl_ingress_qos_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action {
+            set_qos_queue_and_cancel_copy_above_rate_limit {
+              qos_queue: "INBAND_PRIORITY_3"
+            }
+          }
+          priority: 4600
+          meter_config { bytes_per_second: 32000 burst_bytes: 8000 }
+        }
+      }
+    )pb"};
 
 std::string GetSwitchStateString(SwitchState state) {
   switch (state) {
@@ -109,34 +161,211 @@ void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
   differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
 }
 
-// In case `is_fresh_install` is not set, we assume that a P4 Info is already
-// present on the switch. This is a valid scenario when we want to configure
-// the SUT after NSF Upgrade/Reboot. So in such a case, we do not use the
-// `ConfigureSwitchAndReturnP4RuntimeSession` method (which does some
-// additional workarounds causing b/329087752). Instead we directly use the
-// `PushGnmiConfig` and `SetMetadataAndSetForwardingPipelineConfig` methods to
-// push the gNMI config and P4Info respectively.
-absl::Status PushSwitchConfig(thinkit::Switch& thinkit_switch,
-                              const ImageConfigParams& image_config_param,
-                              bool is_fresh_install) {
-  if (is_fresh_install) {
-    return ConfigureSwitchAndReturnP4RuntimeSession(
-               thinkit_switch, image_config_param.gnmi_config,
-               image_config_param.p4_info)
-        .status();
-  }
-
-  RETURN_IF_ERROR(
-      PushGnmiConfig(thinkit_switch, image_config_param.gnmi_config));
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
-  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      image_config_param.p4_info);
+sai::TableEntries GetAclFlowEntries() {
+  absl::BitGen gen;
+  int random_index = absl::Uniform<int>(gen, 0, kAclFlows.size());
+  return gutil::ParseProtoOrDie<sai::TableEntries>(kAclFlows[random_index]);
 }
 
 }  // namespace
+
+absl::StatusOr<PinsSoftwareInfo> GetPinsSoftwareInfo(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view key) {
+  PinsSoftwareInfo pins_sw_info;
+  ASSIGN_OR_RETURN(pins_sw_info.name, GetOcOsNetworkStackGnmiStatePathInfo(
+                                          *gnmi_stub, key, "name"));
+  ASSIGN_OR_RETURN(
+      pins_sw_info.oper_status,
+      GetOcOsNetworkStackGnmiStatePathInfo(*gnmi_stub, key, "oper-status"));
+  ASSIGN_OR_RETURN(pins_sw_info.parent, GetOcOsNetworkStackGnmiStatePathInfo(
+                                            *gnmi_stub, key, "parent"));
+  ASSIGN_OR_RETURN(std::string version,
+                   GetOcOsNetworkStackGnmiStatePathInfo(*gnmi_stub, key,
+                                                        "software-version"));
+  pins_sw_info.version = std::string(pins_test::StripQuotes(version));
+  ASSIGN_OR_RETURN(pins_sw_info.type, GetOcOsNetworkStackGnmiStatePathInfo(
+                                          *gnmi_stub, key, "type"));
+  return pins_sw_info;
+}
+
+absl::StatusOr<PinsSoftwareComponentInfo> GetPinsSoftwareComponentInfo(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  PinsSoftwareComponentInfo pins_sw_component_info;
+  ASSIGN_OR_RETURN(pins_sw_component_info.primary_network_stack,
+                   GetPinsSoftwareInfo(&gnmi_stub, "network_stack0"));
+  ASSIGN_OR_RETURN(pins_sw_component_info.secondary_network_stack,
+                   GetPinsSoftwareInfo(&gnmi_stub, "network_stack1"));
+  ASSIGN_OR_RETURN(pins_sw_component_info.primary_os,
+                   GetPinsSoftwareInfo(&gnmi_stub, "os0"));
+  ASSIGN_OR_RETURN(pins_sw_component_info.secondary_os,
+                   GetPinsSoftwareInfo(&gnmi_stub, "os1"));
+
+  LOG(INFO) << "Fetching Pins Software Component information.";
+  LOG(INFO) << "Primary network stack: "
+            << pins_sw_component_info.primary_network_stack;
+  LOG(INFO) << "Secondary network stack: "
+            << pins_sw_component_info.secondary_network_stack;
+  LOG(INFO) << "Primary OS: " << pins_sw_component_info.primary_os;
+  LOG(INFO) << "Secondary OS: " << pins_sw_component_info.secondary_os;
+
+  return pins_sw_component_info;
+}
+
+bool IsPinsSoftwareInfoSame(PinsSoftwareInfo& pins_sw_info_1,
+                            PinsSoftwareInfo& pins_sw_info_2) {
+  return (pins_sw_info_1.name == pins_sw_info_2.name ||
+          pins_sw_info_1.oper_status == pins_sw_info_2.oper_status ||
+          pins_sw_info_1.parent == pins_sw_info_2.parent ||
+          pins_sw_info_1.type == pins_sw_info_2.type);
+}
+
+absl::Status ValidatePinsSoftwareComponentsBeforeReboot(
+    PinsSoftwareComponentInfo& pins_component_info_after_install_before_reboot,
+    PinsSoftwareComponentInfo& pins_component_info_before_install_reboot,
+    absl::string_view expected_version) {
+  // After image upgrade and before reboot, all secondary network stack and OS
+  // attributes must match (except software version which might have changed).
+  LOG(INFO) << "Validating components after install/upgrade and before reboot";
+  LOG(INFO) << "Validating if the secondary network stack details remain same";
+  if (!IsPinsSoftwareInfoSame(
+          pins_component_info_after_install_before_reboot
+              .secondary_network_stack,
+          pins_component_info_before_install_reboot.secondary_network_stack)) {
+    return gutil::InternalErrorBuilder()
+           << "Secondary network stack attributes match failed after "
+              "install / upgrade and before reboot (name, oper-status, parent, "
+              "storage-side, type).\nSecondary network stack (after "
+              "install / upgrade): "
+           << pins_component_info_after_install_before_reboot
+                  .secondary_network_stack
+           << "\nSecondary network stack (before install / upgrade): "
+           << pins_component_info_before_install_reboot.secondary_network_stack;
+  }
+
+  LOG(INFO) << "Validating if the secondary network stack version is different";
+  if (pins_component_info_after_install_before_reboot.secondary_network_stack
+          .version != expected_version) {
+    return gutil::InternalErrorBuilder()
+           << "Secondary network stack version match failed after install / "
+              "upgrade and before reboot.\nSecondary network stack version: "
+           << pins_component_info_after_install_before_reboot
+                  .secondary_network_stack.version
+           << "\nExpected version: " << expected_version;
+  }
+
+  LOG(INFO) << "Validating if the secondary OS details remain same";
+  if (!IsPinsSoftwareInfoSame(
+          pins_component_info_after_install_before_reboot.secondary_os,
+          pins_component_info_before_install_reboot.secondary_os)) {
+    return gutil::InternalErrorBuilder()
+           << "Secondary OS attributes match failed after install / upgrade "
+              "and before reboot (name, oper-status, parent, storage-side, "
+              "type).\nSecondary OS (after install / upgrade): "
+           << pins_component_info_after_install_before_reboot.secondary_os
+           << "\nSecondary OS (before install / upgrade): "
+           << pins_component_info_before_install_reboot.secondary_os;
+  }
+
+  // Primary network stack and OS information should not change.
+  LOG(INFO) << "Validating if the primary network stack details remain same";
+  if (pins_component_info_after_install_before_reboot.primary_network_stack !=
+      pins_component_info_before_install_reboot.primary_network_stack) {
+    return gutil::InternalErrorBuilder()
+           << "Primary network stack attributes match failed after install / "
+              "upgrade and before reboot.\nPrimary network stack (after "
+              "install / upgrade): "
+           << pins_component_info_after_install_before_reboot
+                  .primary_network_stack
+           << "\nPrimary network stack (before install / upgrade): "
+           << pins_component_info_before_install_reboot.primary_network_stack;
+  }
+
+  LOG(INFO) << "Validating if the primary OS details remain same";
+  if (pins_component_info_after_install_before_reboot.primary_os !=
+      pins_component_info_before_install_reboot.primary_os) {
+    return gutil::InternalErrorBuilder()
+           << "Primary OS attributes match failed after install / upgrade and "
+              "before reboot.\nPrimary OS (after install / upgrade): "
+           << pins_component_info_after_install_before_reboot.primary_os
+           << "\nPrimary OS (before install / upgrade): "
+           << pins_component_info_before_install_reboot.primary_os;
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status ValidatePinsSoftwareComponentsAfterReboot(
+    const PinsSoftwareInfo& primary_before_install_reboot,
+    const PinsSoftwareInfo& primary_after_install_reboot,
+    const PinsSoftwareInfo& secondary_after_install_reboot,
+    absl::string_view expected_version) {
+  // Validate that switch has booted to the expected version after
+  // install / upgrade and reboot.
+  LOG(INFO) << "Validating components after install / upgrade and reboot";
+  LOG(INFO) << "Validating if the primary network stack version is different";
+  if (!expected_version.empty() &&
+      primary_after_install_reboot.version != expected_version) {
+    return gutil::InternalErrorBuilder()
+           << "Primary after reboot version match failed.\nPrimary version "
+              "after reboot: "
+           << primary_after_install_reboot.version
+           << "\nExpected version: " << expected_version;
+  }
+
+  // Primary component before and after reboot share the following attributes:
+  // name, oper-status, parent, type.
+  LOG(INFO) << "Validating if the primary network stack component details such "
+               "as name, oper-status, parent, type remain same";
+  if (primary_before_install_reboot.name != primary_after_install_reboot.name ||
+      primary_before_install_reboot.oper_status !=
+          primary_after_install_reboot.oper_status ||
+      primary_before_install_reboot.parent !=
+          primary_after_install_reboot.parent ||
+      primary_before_install_reboot.type != primary_after_install_reboot.type) {
+    return gutil::InternalErrorBuilder()
+           << "Primary before and after reboot attributes match failed which "
+              "are expected to remain same "
+              "(name, oper-status, parent, type).\nPrimary before reboot: "
+           << primary_before_install_reboot
+           << "\nPrimary after reboot: " << primary_after_install_reboot;
+  }
+
+  // Primary component before reboot should be the same as secondary component
+  // after reboot, except for name and oper-status.
+  LOG(INFO)
+      << "Validating if the secondary network stack component details such as "
+         "parent, type, software-version, storage-side after reboot remain "
+         "same as primary network stack component details before reboot";
+  if (primary_before_install_reboot.parent !=
+          secondary_after_install_reboot.parent ||
+      primary_before_install_reboot.type !=
+          secondary_after_install_reboot.type ||
+      primary_before_install_reboot.version !=
+          secondary_after_install_reboot.version) {
+    return gutil::InternalErrorBuilder()
+           << "Primary before reboot and secondary after reboot attributes "
+              "match failed which are expected to remain same (parent, type, "
+              "software-version, "
+              "storage-side).\nPrimary before reboot: "
+           << primary_before_install_reboot
+           << "\nSecondary after reboot: " << secondary_after_install_reboot;
+  }
+
+  LOG(INFO) << "Validating if the primary network stack component details such "
+               "as name, oper-status before reboot are different compared to "
+               "the secondary network stack after reboot";
+  if (primary_before_install_reboot.name ==
+          secondary_after_install_reboot.name ||
+      primary_before_install_reboot.oper_status ==
+          secondary_after_install_reboot.oper_status) {
+    return gutil::InternalErrorBuilder()
+           << "Primary before reboot and secondary after reboot "
+              "name/oper-status should be different.\nPrimary before reboot: "
+           << primary_before_install_reboot
+           << "\nSecondary after reboot: " << secondary_after_install_reboot;
+  }
+  return absl::OkStatus();
+}
 
 std::vector<std::string> GetConnectedInterfacesForSut(Testbed& testbed) {
   return std::visit(
@@ -157,9 +386,6 @@ absl::Status RunReadyValidations(thinkit::Switch& thinkit_switch,
   RETURN_IF_ERROR(SwitchReadyWithSsh(thinkit_switch, ssh_client, interfaces,
                                      check_interfaces_state, with_healthz));
 
-  // TODO: Still needs confirmation as to whether we want to have
-  // this whitebox check or if it is redundant.
-  // return CheckContainersUp(thinkit_switch.ChassisName(), ssh_client);
   return absl::OkStatus();
 }
 
@@ -298,40 +524,57 @@ absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
   return "";
 }
 
-absl::Status
-InstallRebootPushConfig(Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        const ImageConfigParams &image_config_param) {
+absl::Status InstallRebootPushConfig(
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    const ImageConfigParams& image_config_param) {
+  thinkit::Switch& sut = GetSut(testbed);
+  ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+
+  ASSIGN_OR_RETURN(
+      PinsSoftwareComponentInfo pins_component_info_before_install_reboot,
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+
   LOG(INFO) << "gNOI Install: Copying image to inactive partition";
   ASSIGN_OR_RETURN(
       std::string image_version,
       ImageCopy(image_config_param.image_label, testbed, ssh_client));
 
+  ASSIGN_OR_RETURN(
+      PinsSoftwareComponentInfo pins_component_info_after_install_before_reboot,
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+  RETURN_IF_ERROR(ValidatePinsSoftwareComponentsBeforeReboot(
+      pins_component_info_after_install_before_reboot,
+      pins_component_info_before_install_reboot, image_version));
+
   RETURN_IF_ERROR(Reboot(RebootMethod::COLD, testbed));
 
-  thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnoi_os_stub, sut.CreateGnoiOsStub());
 
   // Wait for SSH and containers to be up before pushing config.
   RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, false));
 
+  LOG(INFO) << "gNOI install is complete. Proceeding with config push.";
   RETURN_IF_ERROR(PushConfig(image_config_param, testbed, ssh_client,
-                             /*is_fresh_install=*/true));
+                             /*clear_config=*/true));
   LOG(INFO) << "Initial setup of image install, cold reboot and config push is "
                "complete.";
   return absl::OkStatus();
 }
 
 absl::Status ValidateTestbedState(
-    Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
-    bool check_interfaces_up) {
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param,
+    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
   // TODO: Add validation for SUT stack image label.
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
+  std::vector<std::string> interfaces_to_validate;
+  if (interfaces.empty()) {
+    interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
+    interfaces = interfaces_to_validate;
+  }
   absl::Status sut_status = RunReadyValidations(
-      sut, ssh_client, GetConnectedInterfacesForSut(testbed),
-      check_interfaces_up,
-      /*with_healthz=*/true);
+      sut, ssh_client, interfaces, check_interfaces_up, /*with_healthz=*/true);
 
   return std::visit(
       gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed> &testbed) {
@@ -341,8 +584,7 @@ absl::Status ValidateTestbedState(
                         absl::Status control_status;
                         if (!testbed->ControlSwitch().ChassisName().empty()) {
                           control_status = RunReadyValidations(
-                              testbed->ControlSwitch(), ssh_client,
-                              testbed->GetConnectedInterfaces(),
+                              testbed->ControlSwitch(), ssh_client, interfaces,
                               check_interfaces_up,
                               /*with_healthz=*/true);
                         }
@@ -384,10 +626,11 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
       kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
 }
 
-absl::Status
-WaitForNsfReboot(Testbed &testbed, thinkit::SSHClient &ssh_client,
-                 absl::Nullable<const ImageConfigParams *> image_config_param,
-                 bool check_interfaces_up) {
+absl::Status WaitForNsfReboot(
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param,
+    bool check_interfaces_up, absl::Span<const std::string> interfaces,
+    bool collect_debug_logs_for_nsf_success) {
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
@@ -410,13 +653,15 @@ WaitForNsfReboot(Testbed &testbed, thinkit::SSHClient &ssh_client,
     }
     LOG(INFO) << "NSF Reboot succeeded: " << resp.DebugString()
               << "\nProceeding with Switch State Validation.";
-    RETURN_IF_ERROR(StoreSutDebugArtifacts(
-        absl::StrCat(
-            "after_nsf_reboot_success_",
-            absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
-        testbed));
+    if (collect_debug_logs_for_nsf_success) {
+      RETURN_IF_ERROR(StoreSutDebugArtifacts(
+          absl::StrCat(
+              "after_nsf_reboot_success_",
+              absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
+          testbed));
+    }
     return ValidateTestbedState(testbed, ssh_client, image_config_param,
-                                check_interfaces_up);
+                                check_interfaces_up, interfaces);
   }
   return gutil::InternalErrorBuilder()
          << "NSF Reboot validation failed after polling for "
@@ -424,18 +669,16 @@ WaitForNsfReboot(Testbed &testbed, thinkit::SSHClient &ssh_client,
 }
 
 absl::Status DoNsfRebootAndWaitForSwitchReady(
-    Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
-    bool check_interfaces_up) {
-  thinkit::Switch &sut = GetSut(testbed);
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param,
+    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
+  thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(uint64_t up_time_before_nsf,
                    pins_test::GetGnmiSystemUpTime(*sut_gnmi_stub));
   RETURN_IF_ERROR(NsfReboot(testbed));
-  // TODO: b/329553821 - Calculate the time needed for the switch to go down and
-  // and then come back up.
   RETURN_IF_ERROR(WaitForNsfReboot(testbed, ssh_client, image_config_param,
-                                   check_interfaces_up));
+                                   check_interfaces_up, interfaces));
   // Recreating the gNMI stub as the switch rebooted.
   ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(uint64_t up_time_after_nsf,
@@ -449,17 +692,62 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
   return absl::OkStatus();
 }
 
-absl::Status PushConfig(const ImageConfigParams &image_config_param,
-                        Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        bool is_fresh_install, bool check_interfaces_up) {
+// In cases where `clear_config` is not set, we do not use the
+// `ConfigureSwitchAndReturnP4RuntimeSession` method (which does some additional
+// workarounds along with clearing the config).
+//
+// Instead we directly use the `PushGnmiConfig` and
+// `SetMetadataAndSetForwardingPipelineConfig` methods to push the gNMI config
+// and P4 Info respectively.
+//
+absl::Status PushConfig(thinkit::Switch& thinkit_switch,
+                        absl::string_view gnmi_config,
+                        const p4::config::v1::P4Info& p4_info,
+                        bool clear_config) {
+  LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
+  if (clear_config) {
+    return ConfigureSwitchAndReturnP4RuntimeSession(thinkit_switch, gnmi_config,
+                                                    p4_info)
+        .status();
+  }
+
+  RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch, gnmi_config));
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      p4_info);
+}
+
+absl::Status PushConfig(const ImageConfigParams& image_config_param,
+                        Testbed& testbed, thinkit::SSHClient& ssh_client,
+                        bool clear_config, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
-  LOG(INFO) << "Pushing config on " << sut.ChassisName();
-  RETURN_IF_ERROR(PushSwitchConfig(sut, image_config_param, is_fresh_install));
+  RETURN_IF_ERROR(PushConfig(sut, image_config_param.gnmi_config,
+                             image_config_param.p4_info, clear_config));
   return WaitForSwitchState(
       sut,
       check_interfaces_up ? SwitchState::kReady
                           : SwitchState::kReadyWithoutInterfacesUp,
       kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
+}
+
+absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
+                             const P4Info& p4_info) {
+  sai::TableEntries entries = GetAclFlowEntries();
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));
+  std::vector<Entity> pi_entities;
+  pi_entities.reserve(entries.entries_size());
+  for (const sai::TableEntry& entry : entries.entries()) {
+    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
+                     pdpi::PdTableEntryToPiEntity(ir_p4info, entry));
+  }
+  LOG(INFO) << "Installing PI table entries on "
+            << thinkit_switch.ChassisName();
+  return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
 }
 
 absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
