@@ -19,8 +19,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
-#include "dvaas/output_writer.h"
+#include "absl/status/statusor.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -55,13 +54,13 @@ struct SwitchOutputDiffParams {
 
 // Validates the given `test_vector` using the parameters in `params` and
 // returns the result.
-PacketTestValidationResult
-ValidateTestRun(const PacketTestRun &test_run,
-                const SwitchOutputDiffParams &diff_params = {});
+absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
+    const PacketTestRun& test_run,
+    const SwitchOutputDiffParams& diff_params = {});
 
 // Like `ValidateTestRun`, but for a collection of `test_runs`.
-PacketTestOutcomes ValidateTestRuns(const PacketTestRuns& test_runs,
-                                    const SwitchOutputDiffParams& diff_params);
+absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
+    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params);
 
 } // namespace dvaas
 
