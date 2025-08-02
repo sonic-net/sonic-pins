@@ -16,13 +16,12 @@
 #include <string>
 #include <vector>
 
-#include "absl/strings/substitute.h"
-#include "absl/types/optional.h"
+#include "absl/status/statusor.h"
 #include "dvaas/test_run_validation.h"
-#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "glog/logging.h"
 #include "gutil/testing.h"
-#include "p4_pdpi/packetlib/packetlib.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
@@ -606,14 +605,15 @@ void main() {
     PacketTestRun test_run;
     *test_run.mutable_test_vector() = test.test_vector;
     *test_run.mutable_actual_output() = test.actual_output;
-    PacketTestValidationResult result =
+    absl::StatusOr<PacketTestValidationResult> result =
         ValidateTestRun(test_run, test.diff_params);
-    CHECK(result.has_failure())  // Crash OK: this is test code.
+    CHECK_OK(result.status());    // Crash OK: this is test code.
+    CHECK(result->has_failure())  // Crash OK: this is test code.
         << "for test case with description '" << test.description << "'";
     std::cout << std::string(80, '=')
               << "\nValidateTestRun Test: " << test.description << "\n"
               << std::string(80, '=') << "\n"
-              << result.failure().description() << "\n\n";
+              << result->failure().description() << "\n\n";
   }
 }
 

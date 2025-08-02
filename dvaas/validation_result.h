@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
@@ -77,12 +78,13 @@ public:
   ValidationResult(const PacketTestOutcomes& test_outcomes,
                    const PacketSynthesisResult& packet_synthesis_result);
 
-  // Constructs a `ValidationResult` from the given `test_runs` and
-  // `packet_synthesis_result`. Uses `diff_params` while validating the test
+  // Constructs a `absl::StatusOr<ValidationResult>` from the given `test_runs`
+  // and `packet_synthesis_result`. Uses `diff_params` while validating the test
   // runs. See `test_run_validation.h` for details.
-  ValidationResult(const PacketTestRuns& test_runs,
-                   const SwitchOutputDiffParams& diff_params,
-                   const PacketSynthesisResult& packet_synthesis_result);
+  static absl::StatusOr<ValidationResult> Create(
+      const PacketTestRuns& test_runs,
+      const SwitchOutputDiffParams& diff_params,
+      const PacketSynthesisResult& packet_synthesis_result);
 
   // Returns true if and only if packet synthesis runs with a time limit and
   // does not finish within that time limit.
@@ -92,7 +94,13 @@ public:
   // functions like `HasSuccessRateOfAtLeast` and `GetAllFailures`.
   bool PacketSynthesizerTimedOut() const;
 
-private:
+ private:
+  ValidationResult(const PacketSynthesisResult& packet_synthesis_result,
+                   const PacketTestOutcomes& test_outcomes)
+      : test_outcomes_(test_outcomes),
+        test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
+        packet_synthesis_result_(packet_synthesis_result) {}
+
   PacketTestOutcomes test_outcomes_;
   TestVectorStats test_vector_stats_;
   PacketSynthesisResult packet_synthesis_result_;

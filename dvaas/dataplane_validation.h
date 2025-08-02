@@ -271,13 +271,18 @@ public:
   //     under test with its inputs.
   //  3. The packet will be padded to minimum size and the computed fields
   //     recomputed.
+  //
+  // If `check_prediction_conformity` is set to true, the method should ensure
+  // that the `synthesized_packets` predictions are in line with the expected
+  // outputs of the generated test vectors.
   virtual absl::StatusOr<PacketTestVectorById> GeneratePacketTestVectors(
       const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
       const p4::v1::ForwardingPipelineConfig& bmv2_config,
       absl::Span<const pins_test::P4rtPortId> ports,
-      std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>
-          &synthesized_packets,
-      const pins_test::P4rtPortId &default_ingress_port) const = 0;
+      std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>&
+          synthesized_packets,
+      const pins_test::P4rtPortId& default_ingress_port,
+      bool check_prediction_conformity = true) const = 0;
 
   // Checks whether an unsolicited (i.e. without a tagged payload) packet
   // received from SUT or control switch is expected. The logic that determines
