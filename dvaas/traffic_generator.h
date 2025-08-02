@@ -266,6 +266,10 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
     // collected to account for in-flight packets (transient state during call
     // to `StopTraffic` for kMaxPacketInFlightDuration).
     kTrafficCollection,
+    // The unrecoverable error state that happens when either
+    // `InjectInputTraffic` or `CollectOutputTraffic` thread returns an error
+    // status. 
+    kError,
   };
   // The state of the TrafficGeneratorWithGuaranteedRate object.
   State state_ ABSL_GUARDED_BY(state_mutex_) = kUninitialized;
