@@ -1,5 +1,8 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 
+#include <string>
+
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 
 namespace sai {

@@ -471,6 +471,8 @@ class EntryBuilder {
       absl::string_view wcmp_group_id,
       absl::Span<const WcmpGroupAction> wcmp_group_actions);
 
+  EntryBuilder& AddIngressQoSTimestampingAclEntry(std::string ingress_port);
+
  private:
   sai::TableEntries entries_;
 };
