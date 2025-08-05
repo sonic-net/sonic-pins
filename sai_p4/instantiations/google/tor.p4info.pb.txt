@@ -263,6 +263,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777482
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
