@@ -41,6 +41,15 @@
 
 namespace sai {
 
+// TODO: Clean up these predefined bit widths once further
+// refactors are completed.
+constexpr int kVlanIdBitwidth = 12;
+// NOTE: The actual bit-width of a multicast group ID is 16 bits, but we
+// reserve the uppermost bit for a possible solution to handling L2/L3 multicast
+// dependencies. 2^15 groups is more than sufficient for foreseeable use cases.
+constexpr int kPdMulticastGroupIdBitwidth = 15;
+constexpr int kReplicaInstanceBitwidth = 16;
+
 // Different ways of punting packets to the controller.
 enum class PuntAction {
   // Punts copy of packet and prevents packet from being forwarded.
@@ -120,6 +129,7 @@ struct P4RuntimeTernary {
 struct MirrorSessionParams {
   std::string mirror_session_id;
   std::string monitor_port;
+  std::string monitor_backup_port;
   std::string mirror_encap_src_mac;
   std::string mirror_encap_dst_mac;
   std::string mirror_encap_vlan_id;
@@ -228,6 +238,9 @@ class EntryBuilder {
   // Logs the current PD entries in the EntryBuilder to LOG(INFO).
   const EntryBuilder& LogPdEntries() const;
   EntryBuilder& LogPdEntries();
+
+  // Returns the current PD entries in the EntryBuilder in debug format.
+  std::string GetPdEntriesDebugString() const;
 
   // Deduplicates then installs the entities encoded by the EntryBuilder using
   // `session`.
