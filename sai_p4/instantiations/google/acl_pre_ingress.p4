@@ -251,6 +251,7 @@ control acl_pre_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_acl_metadata;
+      @proto_id(2) set_outer_vlan_id;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
