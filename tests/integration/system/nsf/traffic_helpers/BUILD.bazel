@@ -28,6 +28,7 @@ cc_library(
         "//gutil:overload",
         "//gutil:status",
         "//lib/utils:generic_testbed_utils",
+        "//lib/validator:validator_lib",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
         "//thinkit:generic_testbed",
@@ -35,7 +36,9 @@ cc_library(
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )
