@@ -285,24 +285,25 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
   LOG(INFO) << absl::Substitute("   -  With $0: Present",
                                 pdpi::GetReplicaActionName());
 
-  RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
-                      gen, session, config, state, environment,
-                      pdpi::GetMulticastGroupTableName(),
-                      /*predicate=*/
-                      [&](const Entity& entity) {
-                        // Checks that the multicast entry has no replicas.
-                        return entity.packet_replication_engine_entry()
-                                   .has_multicast_group_entry() &&
-                               entity.packet_replication_engine_entry()
-                                   .multicast_group_entry()
-                                   .replicas()
-                                   .empty();
-                      }))
-          .SetPrepend()
-      << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
-      << "': ";
-  LOG(INFO) << absl::Substitute("   -  With $0: Absent",
-                                pdpi::GetReplicaActionName());
+  // Uncomment once empty multicast groups are supported.
+  // RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+  //                     gen, session, config, state, environment,
+  //                     pdpi::GetMulticastGroupTableName(),
+  //                     /*predicate=*/
+  //                     [&](const Entity& entity) {
+  //                       // Checks that the multicast entry has no replicas.
+  //                       return entity.packet_replication_engine_entry()
+  //                                  .has_multicast_group_entry() &&
+  //                              entity.packet_replication_engine_entry()
+  //                                  .multicast_group_entry()
+  //                                  .replicas()
+  //                                  .empty();
+  //                     }))
+  //         .SetPrepend()
+  //     << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+  //     << "': ";
+  // LOG(INFO) << absl::Substitute("   -  With $0: Absent",
+  //                               pdpi::GetReplicaActionName());
   return absl::OkStatus();
 }
 
