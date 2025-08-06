@@ -45,7 +45,6 @@ struct TunnelDecapTestParams {
   // configured.
   std::optional<p4::config::v1::P4Info> sut_p4info;
   TunnelMatchType tunnel_type;
-  std::string test_name;
   dvaas::DataplaneValidationParams dvaas_params;
   std::shared_ptr<dvaas::DataplaneValidator> dvaas;
 };
