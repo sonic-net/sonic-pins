@@ -102,9 +102,8 @@ struct FuzzerTestFixtureParams {
   // parameter.
   bool do_not_enforce_fail_on_first_switch_ordering;
   // A function for masking any updates that should not be sent to the switch.
-  std::function<bool(const AnnotatedUpdate &)>
-      IsBuggyUpdateThatShouldBeSkipped =
-          [](const AnnotatedUpdate &update) { return false; };
+  std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
+      [](const AnnotatedUpdate& update) { return false; };
 };
 
 class FuzzerTestFixture

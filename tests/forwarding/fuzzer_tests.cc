@@ -229,9 +229,11 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
                   GetParam().TreatAsEqualDuringReadDueToKnownBug,
               .ignore_constraints_on_tables =
                   GetParam().ignore_constraints_on_tables,
+              .IsBuggyUpdateThatShouldBeSkipped =
+                  GetParam().IsBuggyUpdateThatShouldBeSkipped,
           }));
 
-  // TODO: b/316926338 - Remove once switch state transitions to entities. This
+  // Remove once switch state transitions to entities. This
   // would allow multicast to be included in the weighted distribution the
   // fuzzer uses.
   int total_entries_supported = GetParam().multicast_group_table_size;
@@ -355,7 +357,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
           << "Fuzzing should never cause an INTERNAL error, but got: "
           << status.DebugString();
       // Check resource exhaustion.
-      // TODO: b/286413264 - Check for invalid multicast resource exhaustion
+      // Check for invalid multicast resource exhaustion
       // once multicast resource are modeled.
       if (status.code() == google::rpc::Code::RESOURCE_EXHAUSTED &&
           update.entity().has_table_entry()) {
@@ -493,7 +495,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
           "clearing_pi_entities_read_from_switch.txt", entity));
     }
 
-    // TODO: b/317373445 - Replace sequencing and batching code with function
+    // Replace sequencing and batching code with function
     // once it is available in sequencing library.
 
     // Sort by dependency order, then reverse since we will be deleting.
