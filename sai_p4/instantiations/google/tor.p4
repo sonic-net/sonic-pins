@@ -15,6 +15,7 @@
 
 #define ACL_REDIRECT_TO_NEXTHOP_CAPABLE
 #define ACL_REDIRECT_TO_PORT_CAPABLE
+#define MIRROR_CAPABLE
 
 #include <v1model.p4>
 
