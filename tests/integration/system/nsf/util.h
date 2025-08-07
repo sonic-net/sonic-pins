@@ -117,10 +117,22 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
     absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
     bool check_interfaces_up = true);
 
-absl::Status PushConfig(const ImageConfigParams &image_config_param,
-                        Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        bool is_fresh_install = false,
+// Pushes the given `gnmi_config` and `p4_info` on the `thinkit_switch`.
+//
+// In case `clear_config` is not set, we assume that a P4 Info is already
+// present on the switch. This is a valid scenario when we want to configure
+// the SUT after NSF Upgrade.
+absl::Status PushConfig(thinkit::Switch& thinkit_switch,
+                        absl::string_view gnmi_config,
+                        const p4::config::v1::P4Info& p4_info,
+                        bool clear_config);
+absl::Status PushConfig(const ImageConfigParams& image_config_param,
+                        Testbed& testbed, thinkit::SSHClient& ssh_client,
+                        bool clear_config = false,
                         bool check_interfaces_up = true);
+
+absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
+                             const p4::config::v1::P4Info& p4_info);
 
 absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
 
