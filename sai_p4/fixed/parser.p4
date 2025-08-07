@@ -104,6 +104,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
   state parse_ipv6 {
     packet.extract(headers.ipv6);
     transition select(headers.ipv6.next_header) {
+      IP_PROTOCOL_V6_EXTENSION_HOP_BY_HOP: parse_hop_by_hop_options;
       IP_PROTOCOL_IPV4: parse_ipv4_in_ip;
       IP_PROTOCOL_IPV6: parse_ipv6_in_ip;
       IP_PROTOCOL_ICMPV6: parse_icmp;
@@ -113,9 +114,44 @@ parser packet_parser(packet_in packet, out headers_t headers,
     }
   }
 
+  state parse_hop_by_hop_options {
+    packet.extract(headers.hop_by_hop_options);
+    // All packets with a non-zero `header_extension_length` are rejected
+    // because P4-Symbolic does not support lookaheads, which are required to
+    // set the varbit's bitwidth.
+    // TODO: After the support for 'verify', 'reject', or
+    // or 'lookahead' to P4-Symbolic, update the program to reflect the comment
+    // above.
+     transition select(headers.hop_by_hop_options.next_header) {
+      IP_PROTOCOL_IPV4: parse_ipv4_in_ip;
+      IP_PROTOCOL_IPV6: parse_ipv6_in_ip;
+      IP_PROTOCOL_ICMPV6: parse_icmp;
+      IP_PROTOCOL_TCP:    parse_tcp;
+      IP_PROTOCOL_UDP:    parse_udp;
+      _:                  accept;
+    }
+  }
+
+
   state parse_ipv6_in_ip {
     packet.extract(headers.inner_ipv6);
     transition select(headers.inner_ipv6.next_header) {
+      IP_PROTOCOL_V6_EXTENSION_HOP_BY_HOP: parse_hop_by_hop_options_in_ip;
+      IP_PROTOCOL_ICMPV6: parse_icmp;
+      IP_PROTOCOL_TCP:    parse_tcp;
+      IP_PROTOCOL_UDP:    parse_udp;
+      _:                  accept;
+    }
+  }
+
+  state parse_hop_by_hop_options_in_ip {
+    packet.extract(headers.inner_hop_by_hop_options);
+    // All packets with a non-zero `header_extension_length` are rejected
+    // because P4-Symbolic does not support lookaheads, which are required to
+    // set the varbit's bitwidth.
+    // TODO: After the support for 'verify' or 'lookahead' to
+    // P4-Symbolic, update the program to reflect the comment above.
+     transition select(headers.inner_hop_by_hop_options.next_header) {
       IP_PROTOCOL_ICMPV6: parse_icmp;
       IP_PROTOCOL_TCP:    parse_tcp;
       IP_PROTOCOL_UDP:    parse_udp;
@@ -175,8 +211,10 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     packet.emit(headers.tunnel_encap_gre);
     packet.emit(headers.ipv4);
     packet.emit(headers.ipv6);
+    packet.emit(headers.hop_by_hop_options);
     packet.emit(headers.inner_ipv4);
     packet.emit(headers.inner_ipv6);
+    packet.emit(headers.inner_hop_by_hop_options);
     packet.emit(headers.arp);
     packet.emit(headers.icmp);
     packet.emit(headers.tcp);
