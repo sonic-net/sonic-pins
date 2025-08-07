@@ -80,7 +80,7 @@ struct FailureEnhancementOptions {
   bool collect_packet_trace = true;
   // Minimize the set of test vectors that caused the first
   // `max_number_of_failures_to_minimize` failures.
-  int max_number_of_failures_to_minimize = 0;
+  int max_number_of_failures_to_minimize = 1;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
