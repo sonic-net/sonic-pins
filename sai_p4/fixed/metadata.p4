@@ -172,9 +172,14 @@ struct headers_t {
   ipv4_t ipv4;
   ipv6_t ipv6;
 
+  // IPv6 extension headers.
+  hop_by_hop_options_t hop_by_hop_options;
+
   // Inner IP-in-IP headers.
   ipv4_t inner_ipv4;
   ipv6_t inner_ipv6;
+
+  hop_by_hop_options_t inner_hop_by_hop_options;
 
   icmp_t icmp;
   tcp_t tcp;
