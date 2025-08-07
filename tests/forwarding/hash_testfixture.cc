@@ -40,9 +40,9 @@
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h" // IWYU pragma: keep
+#include "gutil/status_matchers.h" 
 #include "gutil/testing.h"
-#include "lib/gnmi/gnmi_helper.h"
+#include "gutil/version.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -56,6 +56,7 @@
 #include "p4_pdpi/pd.h"
 #include "re2/re2.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/versions.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/forwarding/util.h"
@@ -161,9 +162,9 @@ void LogPackets(thinkit::TestEnvironment &environment,
 
 // Sets the P4Info on the switch to the desired P4Info. If the switch requires a
 // reboot, updates the p4 session to a new session after the reboot.
-absl::Status SetP4Info(std::unique_ptr<pdpi::P4RuntimeSession> &p4_session,
-                       thinkit::Switch &device,
-                       const p4::config::v1::P4Info &default_p4info) {
+absl::Status SetP4Info(std::unique_ptr<pdpi::P4RuntimeSession>& p4_session,
+                       thinkit::Switch& device,
+                       const p4::config::v1::P4Info& default_p4info) {
   absl::Status reconcile = pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
@@ -178,9 +179,9 @@ absl::Status SetP4Info(std::unique_ptr<pdpi::P4RuntimeSession> &p4_session,
   return absl::OkStatus();
 }
 
-bool ReceivePacket(const pdpi::IrP4Info &ir_p4info,
-                   const p4::v1::StreamMessageResponse &pi_response,
-                   HashTest::TestData *test_data) {
+bool ReceivePacket(const pdpi::IrP4Info& ir_p4info,
+                   const p4::v1::StreamMessageResponse& pi_response,
+                   HashTest::TestData* test_data) {
   sai::StreamMessageResponse pd_response;
   if (auto status = pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
                                                       &pd_response);
@@ -212,28 +213,6 @@ absl::Status SendPacket(const pdpi::IrP4Info &ir_p4info,
                                ir_p4info, &control_p4_session, kPacketInterval))
       << "Failed to inject packet: " << packet.ShortDebugString();
   return absl::OkStatus();
-}
-
-// Retrieve the current known port IDs from the switch. Must use numerical port
-// id names.
-void GetTestablePorts(
-    thinkit::Switch &target,
-    absl::flat_hash_map<P4rtPortId, std::string> &port_ids_to_interface) {
-  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, target.CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(const auto interface_id_map,
-                       GetAllInterfaceNameToPortId(*sut_gnmi_stub));
-  ASSERT_OK_AND_ASSIGN(
-      const auto up_interfaces,
-      GetUpInterfacesOverGnmi(*sut_gnmi_stub, InterfaceType::kSingleton));
-
-  for (const auto &interface_name : up_interfaces) {
-    ASSERT_THAT(interface_id_map,
-                testing::Contains(testing::Key(interface_name)));
-    ASSERT_OK_AND_ASSIGN(
-        P4rtPortId port_id,
-        P4rtPortId::MakeFromP4rtEncoding(interface_id_map.at(interface_name)));
-    port_ids_to_interface[port_id] = interface_name;
-  }
 }
 
 std::string PacketFieldName(PacketField field) {
@@ -446,8 +425,8 @@ std::vector<packetlib::Packet> HashTest::TestData::GetReceivedPacketsOnPort(
 //   Push gNMI config.
 //   Add the trap rule to the control switch.
 void HashTest::InitializeTestbed() {
-  thinkit::Switch &sut = GetMirrorTestbed().Sut();
-  thinkit::Switch &control_switch = GetMirrorTestbed().ControlSwitch();
+  thinkit::Switch& sut = GetMirrorTestbed().Sut();
+  thinkit::Switch& control_switch = GetMirrorTestbed().ControlSwitch();
   ASSERT_OK_AND_ASSIGN(sut_p4_session_, pdpi::P4RuntimeSession::Create(sut));
   ASSERT_OK_AND_ASSIGN(control_p4_session_,
                        pdpi::P4RuntimeSession::Create(control_switch));
@@ -495,11 +474,13 @@ void HashTest::SetUp() {
   mirror_testbed_->SetUp();
   ASSERT_NO_FATAL_FAILURE(InitializeTestbed());
 
-  ASSERT_NO_FATAL_FAILURE(
-      GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
-  for (const auto &[port, interface] : port_ids_to_interfaces_) {
-    port_ids_.insert(port);
-    interfaces_.push_back(interface);
+  ASSERT_OK_AND_ASSIGN(std::vector<MirroredPort> mirrored_ports,
+                       MirroredPorts(GetMirrorTestbed()));
+  for (const auto& mirrored_port : mirrored_ports) {
+    port_ids_to_interfaces_.insert_or_assign(mirrored_port.sut,
+                                             mirrored_port.interface);
+    port_ids_.insert(mirrored_port.sut);
+    interfaces_.push_back(mirrored_port.interface);
   }
   LOG(INFO) << "Using ports: ["
             << absl::StrJoin(port_ids_, ", ", absl::StreamFormatter()) << "]";
@@ -698,7 +679,7 @@ void HashTest::ForwardAllPacketsToMembers(
   auto &testbed = GetMirrorTestbed();
   ASSERT_OK_AND_ASSIGN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
   ASSERT_OK(pins::ProgramNextHops(testbed.Environment(), sut_p4_session(),
-                                  ir_p4info, members));
+                                   ir_p4info, members));
 
   ASSERT_OK(pins::ProgramGroupWithMembers(
       testbed.Environment(), sut_p4_session(), ir_p4info, "group-1", members,
@@ -772,11 +753,25 @@ absl::StatusOr<p4::config::v1::P4Info> HashTest::GetSutP4Info() {
   return GetP4Info(sut_p4_session());
 }
 
-absl::Status HashTest::UpdateSutP4Info(const p4::config::v1::P4Info &p4_info) {
-  return pdpi::SetMetadataAndSetForwardingPipelineConfig(
+absl::Status HashTest::UpdateSutP4Info(const p4::config::v1::P4Info& p4_info) {
+  auto result = pdpi::SetMetadataAndSetForwardingPipelineConfig(
       &sut_p4_session(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info);
+  if (!result.ok()) {
+    ASSIGN_OR_RETURN(gutil::Version current_version,
+                     gutil::ParseVersion(p4_info.pkg_info().version()));
+    if (current_version >=
+        gutil::ParseVersionOrDie(SAI_P4_PKGINFO_VERSION_SUPPORTS_RECONCILE)) {
+      return result;
+    }
+    LOG(WARNING) << "Rebooting after SetForwardingPipelineConfig failure: "
+                 << result;
+    ASSIGN_OR_RETURN(sut_p4_session_,
+                     ConfigureSwitchAndReturnP4RuntimeSession(
+                         GetMirrorTestbed().Sut(), std::nullopt, p4_info));
+  }
+  return absl::OkStatus();
 }
 
 } // namespace pins_test

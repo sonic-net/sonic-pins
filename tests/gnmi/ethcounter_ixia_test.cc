@@ -780,7 +780,7 @@ TEST_P(CountersTestFixture, TestIPv4Pkts) {
   LOG(INFO) << "\n\n";
 
   // Set the egress port to loopback mode
-  EXPECT_OK(SetLoopback("FACILITY", sut_out_interface, gnmi_stub.get()));
+  EXPECT_OK(SetLoopback("ASIC_MAC_LOCAL", sut_out_interface, gnmi_stub.get()));
 
   // Restore loopback configuration after test.
   const auto kRestoreLoopbackConfig = absl::Cleanup([&] {
@@ -1033,7 +1033,7 @@ TEST_P(CountersTestFixture, TestIPv6Pkts) {
   LOG(INFO) << "\n\n";
 
   // Set the egress port to loopback mode
-  EXPECT_OK(SetLoopback("FACILITY", sut_out_interface, gnmi_stub.get()));
+  EXPECT_OK(SetLoopback("ASIC_MAC_LOCAL", sut_out_interface, gnmi_stub.get()));
 
   // Restore loopback configuration after test.
   const auto kRestoreLoopbackConfig = absl::Cleanup([&] {
