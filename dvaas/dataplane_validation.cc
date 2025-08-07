@@ -16,7 +16,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -766,9 +765,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
-  ASSIGN_OR_RETURN(
-      dvaas::PacketTestOutcomes test_outcomes,
-      dvaas::ValidateTestRuns(test_runs, params.switch_output_diff_params));
+  ASSIGN_OR_RETURN(dvaas::PacketTestOutcomes test_outcomes,
+                   dvaas::ValidateTestRuns(
+                       test_runs, params.switch_output_diff_params, &sut));
 
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
