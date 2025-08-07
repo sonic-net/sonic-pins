@@ -65,14 +65,82 @@ sai::Ternary BitSetTernaryToSai(
   return sai_ternary;
 }
 
-bool AllRewritesEnabled(const NexthopRewriteOptions& rewrite_options) {
-  return !rewrite_options.disable_decrement_ttl &&
-         rewrite_options.src_mac_rewrite.has_value() &&
-         rewrite_options.dst_mac_rewrite.has_value() &&
-         !rewrite_options.disable_vlan_rewrite;
+bool AnyRewriteOptionsDisabled(const NexthopRewriteOptions& rewrite_options) {
+  return rewrite_options.disable_decrement_ttl ||
+         !rewrite_options.src_mac_rewrite.has_value() ||
+         !rewrite_options.dst_mac_rewrite.has_value() ||
+         rewrite_options.disable_vlan_rewrite;
 }
 
 std::string BoolToHexString(bool value) { return value ? "0x1" : "0x0"; }
+
+sai::TableEntry MakeRouterInterfaceTableEntry(
+    const RouterInterfaceTableParams& params = {}) {
+  sai::TableEntry table_entry;
+  sai::RouterInterfaceTableEntry& rif_entry =
+      *table_entry.mutable_router_interface_table_entry();
+  rif_entry.mutable_match()->set_router_interface_id(
+      params.router_interface_id);
+  if (params.vlan_id.has_value()) {
+    sai::SetPortAndSrcMacAndVlanIdAction& action =
+        *rif_entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
+    action.set_port(params.egress_port);
+    action.set_src_mac(params.src_mac.ToString());
+    action.set_vlan_id(params.vlan_id.value());
+  } else {
+    sai::SetPortAndSrcMacAction& action =
+        *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
+    action.set_src_mac(params.src_mac.ToString());
+    action.set_port(params.egress_port);
+  }
+  return table_entry;
+}
+
+sai::TableEntry MakeNeighborTableEntry(absl::string_view router_interface_id,
+                                       const netaddr::Ipv6Address& neighbor_id,
+                                       const netaddr::MacAddress& dst_mac) {
+  sai::TableEntry table_entry;
+  sai::NeighborTableEntry& neighbor_entry =
+      *table_entry.mutable_neighbor_table_entry();
+  neighbor_entry.mutable_match()->set_router_interface_id(router_interface_id);
+  neighbor_entry.mutable_match()->set_neighbor_id(neighbor_id.ToString());
+  neighbor_entry.mutable_action()->mutable_set_dst_mac()->set_dst_mac(
+      dst_mac.ToString());
+  return table_entry;
+}
+
+sai::TableEntry MakeNexthopTableEntry(
+    absl::string_view nexthop_id, absl::string_view router_interface_id,
+    const netaddr::Ipv6Address& neighbor_id,
+    const NexthopRewriteOptions& rewrite_options) {
+  sai::TableEntry table_entry;
+  sai::NexthopTableEntry& nexthop_entry =
+      *table_entry.mutable_nexthop_table_entry();
+  nexthop_entry.mutable_match()->set_nexthop_id(nexthop_id);
+
+  if (AnyRewriteOptionsDisabled(rewrite_options)) {
+    SetIpNexthopAndDisableRewritesAction& action =
+        *nexthop_entry.mutable_action()
+             ->mutable_set_ip_nexthop_and_disable_rewrites();
+    action.set_router_interface_id(router_interface_id);
+    action.set_neighbor_id(neighbor_id.ToString());
+
+    action.set_disable_decrement_ttl(
+        BoolToHexString(rewrite_options.disable_decrement_ttl));
+    action.set_disable_src_mac_rewrite(
+        BoolToHexString(!rewrite_options.src_mac_rewrite.has_value()));
+    action.set_disable_dst_mac_rewrite(
+        BoolToHexString(!rewrite_options.dst_mac_rewrite.has_value()));
+    action.set_disable_vlan_rewrite(
+        BoolToHexString(rewrite_options.disable_vlan_rewrite));
+    return table_entry;
+  }
+  SetIpNexthopAction& action =
+      *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
+  action.set_router_interface_id(router_interface_id);
+  action.set_neighbor_id(neighbor_id.ToString());
+  return table_entry;
+}
 
 }  // namespace
 
@@ -364,6 +432,12 @@ EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
   if (!match_fields.vlan_id.IsWildcard()) {
     *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
   }
+  if (match_fields.dst_ipv6.has_value()) {
+    match.mutable_is_ipv6()->set_value(BoolToHexString(true));
+    match.mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+    match.mutable_dst_ipv6()->set_mask(match_fields.dst_ipv6->mask.ToString());
+  }
   return *this;
 }
 
@@ -598,9 +672,6 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
 EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
     absl::string_view nexthop_id, absl::string_view egress_port,
     const NexthopRewriteOptions& rewrite_options) {
-  // Create router interface entry.
-  sai::RouterInterfaceTableEntry& rif_entry =
-      *entries_.add_entries()->mutable_router_interface_table_entry();
   // If no SMAC is provided, SMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's SMAC rewrite, we choose
   // 22:22:22:22:22:22 arbitrarily. Note that value 0 won't be accepted by the switch
@@ -612,60 +683,29 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
           // Ideally we would use the whole ID, but it may be longer than BMv2
           // can support.
           .substr(0, 32);
-  rif_entry.mutable_match()->set_router_interface_id(kRifId);
-  if (rewrite_options.egress_rif_vlan.has_value()) {
-    auto& rif_action =
-        *rif_entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
-    rif_action.set_vlan_id(*rewrite_options.egress_rif_vlan);
-    rif_action.set_port(egress_port);
-    rif_action.set_src_mac(src_mac.ToString());
-  } else {
-    auto& rif_action =
-        *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
-    rif_action.set_port(egress_port);
-    rif_action.set_src_mac(src_mac.ToString());
-  }
 
-  // Create neighbor table entry.
-  sai::NeighborTableEntry& neighbor_entry =
-      *entries_.add_entries()->mutable_neighbor_table_entry();
+  // Create router interface entry.
+  *entries_.add_entries() = MakeRouterInterfaceTableEntry(
+      RouterInterfaceTableParams{.router_interface_id = kRifId,
+                                 .egress_port = std::string(egress_port),
+                                 .src_mac = src_mac,
+                                 .vlan_id = rewrite_options.egress_rif_vlan});
+
   // If no DST is provided, DMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's DST rewrite, we choose
   // 22:22:22:22:22:22 arbitrary.
   const netaddr::MacAddress dst_mac = rewrite_options.dst_mac_rewrite.value_or(
       netaddr::MacAddress(0x22, 0x22, 0x22, 0x22, 0x22, 0x22));
-  const std::string neighbor_id = dst_mac.ToLinkLocalIpv6Address().ToString();
-  neighbor_entry.mutable_match()->set_router_interface_id(kRifId);
-  neighbor_entry.mutable_match()->set_neighbor_id(neighbor_id);
-  rif_entry.mutable_match()->set_router_interface_id(kRifId);
-  neighbor_entry.mutable_action()->mutable_set_dst_mac()->set_dst_mac(
-      dst_mac.ToString());
+  const netaddr::Ipv6Address neighbor_id = dst_mac.ToLinkLocalIpv6Address();
+
+  // Create neighbor table entry.
+  *entries_.add_entries() =
+      MakeNeighborTableEntry(kRifId, neighbor_id, dst_mac);
 
   // Create Nexthop entry based on `rewrite_options`
-  sai::NexthopTableEntry& nexthop_entry =
-      *entries_.add_entries()->mutable_nexthop_table_entry();
-  nexthop_entry.mutable_match()->set_nexthop_id(nexthop_id);
+  *entries_.add_entries() =
+      MakeNexthopTableEntry(nexthop_id, kRifId, neighbor_id, rewrite_options);
 
-  if (AllRewritesEnabled(rewrite_options)) {
-    SetIpNexthopAction& action =
-        *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
-    action.set_router_interface_id(kRifId);
-    action.set_neighbor_id(neighbor_id);
-  } else {
-    SetIpNexthopAndDisableRewritesAction& action =
-        *nexthop_entry.mutable_action()
-             ->mutable_set_ip_nexthop_and_disable_rewrites();
-    action.set_router_interface_id(kRifId);
-    action.set_neighbor_id(neighbor_id);
-    action.set_disable_decrement_ttl(
-        BoolToHexString(rewrite_options.disable_decrement_ttl));
-    action.set_disable_src_mac_rewrite(
-        BoolToHexString(!rewrite_options.src_mac_rewrite.has_value()));
-    action.set_disable_dst_mac_rewrite(
-        BoolToHexString(!rewrite_options.dst_mac_rewrite.has_value()));
-    action.set_disable_vlan_rewrite(
-        BoolToHexString(rewrite_options.disable_vlan_rewrite));
-  }
   return *this;
 }
 
