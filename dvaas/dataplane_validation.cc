@@ -16,7 +16,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -589,6 +588,8 @@ absl::Status PostProcessTestVectorFailure(
     LOG(INFO) << "Minimization took "
               << absl::ToInt64Milliseconds(absl::Now() - start)
               << " milliseconds";
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "minimal_set_of_entities_that_caused_test_failure.txt", result));
   }
 
   // Output an Arriba test vector to test artifacts.
@@ -750,8 +751,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
 
   PacketInjectionParams packet_injection_params = {
       .max_packets_to_send_per_second = params.max_packets_to_send_per_second,
-      .is_expected_unsolicited_packet = [&](const packetlib::Packet packet)
-          -> bool { return backend_->IsExpectedUnsolicitedPacket(packet); },
+      .is_expected_unsolicited_packet = params.is_expected_unsolicited_packet,
       .mirror_testbed_port_map = mirror_testbed_port_map,
   };
 
@@ -766,9 +766,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
-  ASSIGN_OR_RETURN(
-      dvaas::PacketTestOutcomes test_outcomes,
-      dvaas::ValidateTestRuns(test_runs, params.switch_output_diff_params));
+  ASSIGN_OR_RETURN(dvaas::PacketTestOutcomes test_outcomes,
+                   dvaas::ValidateTestRuns(
+                       test_runs, params.switch_output_diff_params, &sut));
 
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,

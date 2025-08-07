@@ -105,6 +105,13 @@ struct DataplaneValidationParams {
   // send packets as quickly as it can.
   std::optional<int> max_packets_to_send_per_second;
 
+  // For a packet-in from SUT or control switch without a test tag (i.e. an
+  // "unsolicited packet"), this function determines if the packet is among
+  // expected such packets or not. If this function returns false, dataplane
+  // validation fails immediately.
+  IsExpectedUnsolicitedPacketFunctionType is_expected_unsolicited_packet =
+      [](const packetlib::Packet& packet) -> bool { return false; };
+
   // Optionally, a list of custom packet test vectors. If non-empty, automated
   // test vector generation is disabled and only the given test vectors are used
   // for validation.
@@ -283,12 +290,6 @@ public:
           synthesized_packets,
       const pins_test::P4rtPortId& default_ingress_port,
       bool check_prediction_conformity = true) const = 0;
-
-  // Checks whether an unsolicited (i.e. without a tagged payload) packet
-  // received from SUT or control switch is expected. The logic that determines
-  // this is application dependent, so DVaaS takes this as an input.
-  virtual bool
-  IsExpectedUnsolicitedPacket(const packetlib::Packet &packet) const = 0;
 
   // Returns a set of entities that cause all received packets to be punted,
   // given the `switch_p4info` installed on the switch. The test *will* install

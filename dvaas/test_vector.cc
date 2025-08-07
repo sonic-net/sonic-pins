@@ -57,7 +57,7 @@ std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
                                           absl::string_view description) {
   std::string payload =
       absl::StrCat(MakeUnpaddedTestPacketTagFromUniqueId(unique_test_packet_id),
-                   ":", description);
+                   ": ", description);
 
   // Adds padding to the packet payload to prevent undersized packets. Any
   // Ethernet packet containing a tag returned by this function will be at
