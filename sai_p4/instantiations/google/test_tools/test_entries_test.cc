@@ -319,53 +319,6 @@ TEST(EntryBuilder,
                          }
                        })pb"))));
 }
-void EraseNexthop(pdpi::IrEntities& entities) {
-  entities.mutable_entities()->erase(std::remove_if(
-      entities.mutable_entities()->begin(), entities.mutable_entities()->end(),
-      [](const pdpi::IrEntity& entity) {
-        return entity.table_entry().table_name() == "nexthop_table";
-      }));
-}
-
-// TODO: Re-enable this test once prefix IPMC routes are
-// supported by SAI P4.
-TEST(EntryBuilder,
-     DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupAddsEntries) {
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(123)
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  EXPECT_THAT(entities.entities(), SizeIs(5));
-}
-
-// TODO: Re-enable this test once prefix IPMC routes are
-// supported by SAI P4.
-TEST(
-    EntryBuilder,
-    DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(123)
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
-                table_entry {
-                  table_name: "ipv4_table"
-                  action {
-                    name: "set_multicast_group_id"
-                    params {
-                      name: "multicast_group_id"
-                      value { hex_str: "0x007b" }
-                    }
-                  }
-                }
-              )pb"))));
-}
 
 TEST(EntryBuilder, AddVrfEntryAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
@@ -424,16 +377,27 @@ TEST(EntryBuilder, AddDefaultRouteForwardingAllPacketsToGivenPortAddsEntries) {
   EXPECT_THAT(entities.entities(), SizeIs(13));
 }
 
-TEST(EntryBuilder, AddIpv4EntryAddsDefaultEntry) {
+TEST(EntryBuilder, AddIpv4EntryWithNextHopAction) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
-                       EntryBuilder()
-                           .AddIpv4EntrySettingNexthopId("nexthop", "vrf")
-                           .LogPdEntries()
-                           .GetDedupedIrEntities(kIrP4Info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIpv4TableEntry(IpTableEntryParams{
+              .vrf = "vrf", .action = SetNextHopId{.nexthop_id = "nexthop"}})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
   EXPECT_THAT(entities.entities(), SizeIs(1));
   EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
-                table_entry { table_name: "ipv4_table" }
+                table_entry {
+                  table_name: "ipv4_table"
+                  action {
+                    name: "set_nexthop_id"
+                    params {
+                      name: "nexthop_id"
+                      value { str: "nexthop" }
+                    }
+                  }
+                }
               )pb"))));
   EXPECT_THAT(entities.entities(), Not(Contains(Partially(EqualsProto(R"pb(
                 table_entry {
@@ -443,13 +407,46 @@ TEST(EntryBuilder, AddIpv4EntryAddsDefaultEntry) {
               )pb")))));
 }
 
+TEST(EntryBuilder, AddIpv4EntryWithWcmpGroupIdAction) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIpv4TableEntry(IpTableEntryParams{
+              .vrf = "vrf",
+              .action = SetWcmpGroupId{.wcmp_group_id = "wcmp_group_id"}})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv4_table"
+                  action {
+                    name: "set_wcmp_group_id"
+                    params {
+                      name: "wcmp_group_id"
+                      value { str: "wcmp_group_id" }
+                    }
+                  }
+                }
+              )pb"))));
+  EXPECT_THAT(entities.entities(), Not(Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv4_table"
+                  action { name: "set_nexthop_id" }
+                }
+              )pb")))));
+}
+
 TEST(EntryBuilder, AddIpv4EntryAddsLpmEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddIpv4EntrySettingNexthopId(
-              "nexthop", "vrf",
+	  .AddIpv4TableEntry(
+              IpTableEntryParams{
+                  .vrf = "vrf",
+                  .action = SetNextHopId{.nexthop_id = "nexthop"}},
               Ipv4Lpm{.dst_ip = netaddr::Ipv4Address(10, 0, 0, 0),
                       .prefix_len = 24})
           .LogPdEntries()
@@ -469,16 +466,27 @@ TEST(EntryBuilder, AddIpv4EntryAddsLpmEntry) {
               )pb"))));
 }
 
-TEST(EntryBuilder, AddIpv6EntryAddsDefaultEntry) {
+TEST(EntryBuilder, AddIpv6EntryWithNextHopAction) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
-                       EntryBuilder()
-                           .AddIpv6EntrySettingNexthopId("nexthop", "vrf")
-                           .LogPdEntries()
-                           .GetDedupedIrEntities(kIrP4Info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIpv6TableEntry(IpTableEntryParams{
+              .vrf = "vrf", .action = SetNextHopId{.nexthop_id = "nexthop"}})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
   EXPECT_THAT(entities.entities(), SizeIs(1));
   EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
-                table_entry { table_name: "ipv6_table" }
+                table_entry {
+                  table_name: "ipv6_table"
+                  action {
+                    name: "set_nexthop_id"
+                    params {
+                      name: "nexthop_id"
+                      value { str: "nexthop" }
+                    }
+                  }
+                }
               )pb"))));
   EXPECT_THAT(entities.entities(), Not(Contains(Partially(EqualsProto(R"pb(
                 table_entry {
@@ -488,13 +496,46 @@ TEST(EntryBuilder, AddIpv6EntryAddsDefaultEntry) {
               )pb")))));
 }
 
+TEST(EntryBuilder, AddIpv6EntryWithWcmpGroupIdAction) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIpv6TableEntry(IpTableEntryParams{
+              .vrf = "vrf",
+              .action = SetWcmpGroupId{.wcmp_group_id = "wcmp_group_id"}})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv6_table"
+                  action {
+                    name: "set_wcmp_group_id"
+                    params {
+                      name: "wcmp_group_id"
+                      value { str: "wcmp_group_id" }
+                    }
+                  }
+                }
+              )pb"))));
+  EXPECT_THAT(entities.entities(), Not(Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv6_table"
+                  action { name: "set_nexthop_id" }
+                }
+              )pb")))));
+}
+
 TEST(EntryBuilder, AddIpv6EntryAddsLpmEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddIpv6EntrySettingNexthopId(
-              "nexthop", "vrf",
+	  .AddIpv6TableEntry(
+              IpTableEntryParams{
+                  .vrf = "vrf",
+                  .action = SetNextHopId{.nexthop_id = "nexthop"}},
               Ipv6Lpm{
                   .dst_ip = netaddr::Ipv6Address(0x2001, 0x102),
                   .prefix_len = 64,
