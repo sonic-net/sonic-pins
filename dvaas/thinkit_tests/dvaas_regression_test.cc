@@ -38,6 +38,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   }
   ASSERT_OK_AND_ASSIGN(MirrorTestbedConfigurator configured_testbed,
                        MirrorTestbedConfigurator::Create(&testbed));
+
   // In PINs, since the only supported non-table entry entities are
   // `multicast_group_entry`s, and each of those has a corresponding
   // `multicast_router_interface_table_entry` that uses the same port, we can be
