@@ -395,7 +395,9 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(7) redirect_to_nexthop();
+#endif
       @proto_id(8) append_ingress_and_egress_timestamp();
       @defaultonly NoAction;
     }
@@ -721,10 +723,14 @@ control acl_ingress(in headers_t headers,
 // reference analysis will fail.
       @proto_id(4) acl_forward();
       @proto_id(1) acl_mirror();
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(2) redirect_to_nexthop();
+#endif
       @proto_id(3) redirect_to_ipmc_group();
+#if defined(ACL_REDIRECT_TO_PORT_CAPABLE)
       @proto_id(5) redirect_to_port();
       @proto_id(6) acl_mirror_and_redirect_to_port();
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
