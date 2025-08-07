@@ -74,6 +74,28 @@ bool AllRewritesEnabled(const NexthopRewriteOptions& rewrite_options) {
 
 std::string BoolToHexString(bool value) { return value ? "0x1" : "0x0"; }
 
+sai::TableEntry MakeRouterInterfaceTableEntry(
+    const RouterInterfaceTableParams& params = {}) {
+  sai::TableEntry table_entry;
+  sai::RouterInterfaceTableEntry& rif_entry =
+      *table_entry.mutable_router_interface_table_entry();
+  rif_entry.mutable_match()->set_router_interface_id(
+      params.router_interface_id);
+  if (params.vlan_id.has_value()) {
+    sai::SetPortAndSrcMacAndVlanIdAction& action =
+        *rif_entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
+    action.set_port(params.egress_port);
+    action.set_src_mac(params.src_mac.ToString());
+    action.set_vlan_id(params.vlan_id.value());
+  } else {
+    sai::SetPortAndSrcMacAction& action =
+        *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
+    action.set_src_mac(params.src_mac.ToString());
+    action.set_port(params.egress_port);
+  }
+  return table_entry;
+}
+
 }  // namespace
 
 // -- EntryBuilder --------------------------------------------------------
@@ -598,9 +620,6 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
 EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
     absl::string_view nexthop_id, absl::string_view egress_port,
     const NexthopRewriteOptions& rewrite_options) {
-  // Create router interface entry.
-  sai::RouterInterfaceTableEntry& rif_entry =
-      *entries_.add_entries()->mutable_router_interface_table_entry();
   // If no SMAC is provided, SMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's SMAC rewrite, we choose
   // 22:22:22:22:22:22 arbitrarily. Note that value 0 won't be accepted by the switch
@@ -612,19 +631,13 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
           // Ideally we would use the whole ID, but it may be longer than BMv2
           // can support.
           .substr(0, 32);
-  rif_entry.mutable_match()->set_router_interface_id(kRifId);
-  if (rewrite_options.egress_rif_vlan.has_value()) {
-    auto& rif_action =
-        *rif_entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
-    rif_action.set_vlan_id(*rewrite_options.egress_rif_vlan);
-    rif_action.set_port(egress_port);
-    rif_action.set_src_mac(src_mac.ToString());
-  } else {
-    auto& rif_action =
-        *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
-    rif_action.set_port(egress_port);
-    rif_action.set_src_mac(src_mac.ToString());
-  }
+
+  // Create router interface entry.
+  *entries_.add_entries() = MakeRouterInterfaceTableEntry(
+      RouterInterfaceTableParams{.router_interface_id = kRifId,
+                                 .egress_port = std::string(egress_port),
+                                 .src_mac = src_mac,
+                                 .vlan_id = rewrite_options.egress_rif_vlan});
 
   // Create neighbor table entry.
   sai::NeighborTableEntry& neighbor_entry =
@@ -637,7 +650,6 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
   const std::string neighbor_id = dst_mac.ToLinkLocalIpv6Address().ToString();
   neighbor_entry.mutable_match()->set_router_interface_id(kRifId);
   neighbor_entry.mutable_match()->set_neighbor_id(neighbor_id);
-  rif_entry.mutable_match()->set_router_interface_id(kRifId);
   neighbor_entry.mutable_action()->mutable_set_dst_mac()->set_dst_mac(
       dst_mac.ToString());
 
