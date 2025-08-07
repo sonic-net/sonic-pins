@@ -22,6 +22,8 @@ control acl_ingress(in headers_t headers,
   bit<8> ip_protocol = 0;
   // Cancels out local_metadata.marked_to_copy when true.
   bool cancel_copy = false;
+  // Hop-by-hop options header used for ACL lookup (defaults to outer header).
+  hop_by_hop_options_t hop_by_hop_options = headers.hop_by_hop_options;
 
   @id(ACL_INGRESS_METER_ID)
   @mode(single_rate_two_color)
