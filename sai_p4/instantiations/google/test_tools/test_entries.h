@@ -102,6 +102,10 @@ struct SetWcmpGroupId {
   std::string wcmp_group_id;
 };
 
+struct SetVlanId {
+  std::string vlan_id;
+};
+
 // -- Match Fields and Params --------------------------------------------------
 
 // Rewrite-related options for nexthop action generation.
@@ -203,6 +207,13 @@ struct IpTableEntryParams {
   IpTableAction action;
 };
 
+struct RouterInterfaceTableParams {
+  std::string router_interface_id;
+  std::string egress_port;
+  netaddr::MacAddress src_mac;
+  std::optional<std::string> vlan_id;
+};
+
 // Convenience struct corresponding to the protos `p4::v1::Replica` and
 // `sai::ReplicateAction::Replica`.
 struct Replica {
@@ -243,6 +254,7 @@ struct AclPreIngressMatchFields {
   std::optional<bool> is_ipv6;
   std::optional<std::string> in_port;
   pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
+  std::optional<pdpi::Ternary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
 // -- Entry Builder ------------------------------------------------------------
