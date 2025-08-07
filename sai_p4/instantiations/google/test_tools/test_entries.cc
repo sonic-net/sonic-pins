@@ -341,20 +341,6 @@ EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithDstMac(
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenMulticastGroup(
-    int multicast_group_id) {
-  LOG(FATAL)  // Crash ok
-      << "TODO: implement once SAI P4 supports it";
-  AddEntryAdmittingAllPacketsToL3();
-  const std::string kVrf =
-      absl::StrFormat("vrf-for-multicast-group-%d", multicast_group_id);
-  AddVrfEntry(kVrf);
-  AddPreIngressAclTableEntry(kVrf, AclPreIngressMatchFields{.is_ip = true});
-  // AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
-  //     multicast_group_id, IpVersion::kIpv4And6, kVrf);
-  return *this;
-}
-
 EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
     absl::string_view vrf, const AclPreIngressMatchFields& match_fields,
     int priority) {

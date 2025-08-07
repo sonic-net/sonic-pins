@@ -319,53 +319,6 @@ TEST(EntryBuilder,
                          }
                        })pb"))));
 }
-void EraseNexthop(pdpi::IrEntities& entities) {
-  entities.mutable_entities()->erase(std::remove_if(
-      entities.mutable_entities()->begin(), entities.mutable_entities()->end(),
-      [](const pdpi::IrEntity& entity) {
-        return entity.table_entry().table_name() == "nexthop_table";
-      }));
-}
-
-// TODO: Re-enable this test once prefix IPMC routes are
-// supported by SAI P4.
-TEST(EntryBuilder,
-     DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupAddsEntries) {
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(123)
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  EXPECT_THAT(entities.entities(), SizeIs(5));
-}
-
-// TODO: Re-enable this test once prefix IPMC routes are
-// supported by SAI P4.
-TEST(
-    EntryBuilder,
-    DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(123)
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
-                table_entry {
-                  table_name: "ipv4_table"
-                  action {
-                    name: "set_multicast_group_id"
-                    params {
-                      name: "multicast_group_id"
-                      value { hex_str: "0x007b" }
-                    }
-                  }
-                }
-              )pb"))));
-}
 
 TEST(EntryBuilder, AddVrfEntryAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
