@@ -166,9 +166,7 @@ void SimpleTrafficGenerator::InjectTraffic() {
             .max_packets_to_send_per_second =
                 params_.validation_params.max_packets_to_send_per_second,
             .is_expected_unsolicited_packet =
-                [&](const packetlib::Packet packet) -> bool {
-              return backend_->IsExpectedUnsolicitedPacket(packet);
-            },
+                params_.validation_params.is_expected_unsolicited_packet,
             .mirror_testbed_port_map =
                 params_.validation_params.mirror_testbed_port_map_override
                     .value_or(MirrorTestbedP4rtPortIdMap::CreateIdentityMap()),
@@ -344,7 +342,6 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
       LOG(ERROR) << "Switching to error state because `InjectInputTraffic` "
                     "returned error status: "
                  << status;
-      traffic_collection_thread_.join();
     }
   });
 
@@ -357,7 +354,6 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
       LOG(ERROR) << "Switching to error state because `CollectOutputTraffic` "
                     "returned error status: "
                  << status;
-      traffic_injection_thread_.join();
     }
   });
 
@@ -478,9 +474,7 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
       !params_.validation_params.switch_output_diff_params
            .treat_expected_and_actual_outputs_as_having_no_packet_ins;
   auto is_expected_unsolicited_packet =
-      [&](const packetlib::Packet packet) -> bool {
-    return backend_->IsExpectedUnsolicitedPacket(packet);
-  };
+      params_.validation_params.is_expected_unsolicited_packet;
 
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map =
       params_.validation_params.mirror_testbed_port_map_override.value_or(
@@ -629,7 +623,9 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
       ASSIGN_OR_RETURN(
           *test_outcome->mutable_test_result(),
           ValidateTestRun(*packet_test_run,
-                          params_.validation_params.switch_output_diff_params));
+                          /*diff_params=*/
+                          params_.validation_params.switch_output_diff_params,
+                          &testbed_configurator_->SutApi()));
       if (test_outcome->test_result().has_failure()) {
         failed_switch_inputs.push_back(
             test_outcome->test_run().test_vector().input());

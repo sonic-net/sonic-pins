@@ -15,13 +15,18 @@
 #ifndef PINS_test_run_validation_H_
 #define PINS_test_run_validation_H_
 
+#include <functional>
 #include <string>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
@@ -50,17 +55,31 @@ struct SwitchOutputDiffParams {
   // TODO: Remove and replace with
   // `ignore_missing_packet_ins_in_actual_output`.
   bool treat_expected_and_actual_outputs_as_having_no_packet_ins = false;
+
+  // If instantiated, `ModifyExpectedOutputPreDiffing` is used to modify the
+  // expected switch output prior to diffing it against the actual output. This
+  // can be a useful workaround if the BMv2 simulation producing the expected
+  // output cannot be made 100% accurate (e.g. go/dvaas-fopic). This is only
+  // recommended as a last resort, fixing the simulation should be preferred.
+  std::function<absl::Status(
+      const SwitchInput& input, const SwitchOutput& actual_output,
+      google::protobuf::RepeatedPtrField<SwitchOutput>& acceptable_outputs,
+      SwitchApi& sut)>
+      ModifyExpectedOutputPreDiffing;
 };
 
-// Validates the given `test_vector` using the parameters in `params` and
-// returns the result.
+// Validates the given `test_run` using the parameters in `diff_params`. The
+// parameter `sut` is required if and only if
+// `diff_params.ModifyExpectedOutputPreDiffing` is set. The function returns an
+// invalid argument error if `sut` is required but null.
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
-    const PacketTestRun& test_run,
-    const SwitchOutputDiffParams& diff_params = {});
+    PacketTestRun test_run, const SwitchOutputDiffParams& diff_params = {},
+    absl::Nullable<SwitchApi*> sut = nullptr);
 
 // Like `ValidateTestRun`, but for a collection of `test_runs`.
 absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
-    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params);
+    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
+    absl::Nullable<SwitchApi*> sut = nullptr);
 
 } // namespace dvaas
 
