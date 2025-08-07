@@ -36,7 +36,7 @@ ValidationResult::ValidationResult(
       packet_synthesis_result_(packet_synthesis_result) {}
 
 absl::StatusOr<ValidationResult> ValidationResult::Create(
-    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
+    PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
     const PacketSynthesisResult& packet_synthesis_result) {
   ASSIGN_OR_RETURN(PacketTestOutcomes test_outcomes,
                    ValidateTestRuns(test_runs, diff_params));
