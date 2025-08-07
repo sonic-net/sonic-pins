@@ -236,6 +236,7 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_APPEND_INGRESS_AND_EGRESS_TIMESTAMP_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
+  @unsupported
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
     bit<8> append_ingress_timestamp,
@@ -366,6 +367,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
+      @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
       @proto_id(7) redirect_to_nexthop();
