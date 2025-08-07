@@ -429,6 +429,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Remove this table once the entire fleet's P4
           // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
+	  // TODO: Enable this table when it has been removed from
+          // unsupported roles.
+          "mirror_session_table",
 	  // TODO: Re-enable once the released version supports
           // the action used in this table.
           "acl_ingress_mirror_and_redirect_table",
@@ -463,7 +466,9 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"acl_ingress_qos_table", AclIngressQosTableGenerator},
       {"acl_ingress_security_table", AclIngressSecurityTableGenerator},
       {"acl_ingress_counting_table", AclIngressCountingTableGenerator},
-      {"mirror_session_table", MirrorSessionGenerator},
+      // TODO: Enable this table when it has been removed from
+      // unsupported roles.
+      // {"mirror_session_table", MirrorSessionGenerator},
       {"acl_egress_table", AclEgressTableGenerator},
       {"acl_egress_l2_table", AclEgressL2TableGenerator},
       {"acl_egress_dhcp_to_host_table", AclEgressDhcpToHostTableGenerator},
