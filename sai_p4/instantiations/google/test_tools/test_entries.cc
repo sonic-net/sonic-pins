@@ -165,39 +165,37 @@ std::string EntryBuilder::GetPdEntriesDebugString() const {
 }
 
 absl::StatusOr<std::vector<p4::v1::Entity>> EntryBuilder::GetDedupedPiEntities(
-    const pdpi::IrP4Info& ir_p4info, bool allow_unsupported) const {
+    const pdpi::IrP4Info& ir_p4info) const {
   ASSIGN_OR_RETURN(pdpi::IrEntities ir_entities,
-                   GetDedupedIrEntities(ir_p4info, allow_unsupported));
+                   GetDedupedIrEntities(ir_p4info));
   return pdpi::IrEntitiesToPi(
       ir_p4info, ir_entities,
-      pdpi::TranslationOptions{.allow_unsupported = allow_unsupported});
+      pdpi::TranslationOptions{.allow_unsupported = true});
 }
 
 absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
-    const pdpi::IrP4Info& ir_p4info, bool allow_unsupported) const {
-  ASSIGN_OR_RETURN(
-      pdpi::IrEntities ir_entities,
-      pdpi::PdTableEntriesToIrEntities(
-          // We always use the static P4Info when translating from PD to protect
-          // against a mismatch between the PD proto and the argument
-          // `ir_p4info`.
-          sai::GetUnionedIrP4Info(), entries_,
-          pdpi::TranslationOptions{.allow_unsupported = allow_unsupported}));
+    const pdpi::IrP4Info& ir_p4info) const {
+  ASSIGN_OR_RETURN(pdpi::IrEntities ir_entities,
+                   pdpi::PdTableEntriesToIrEntities(
+                       // We always use the static P4Info when translating from
+                       // PD to protect against a mismatch between the PD proto
+                       // and the argument `ir_p4info`.
+                       sai::GetUnionedIrP4Info(), entries_,
+                       pdpi::TranslationOptions{.allow_unsupported = true}));
   gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
   return ir_entities;
 }
 
 absl::Status EntryBuilder::InstallDedupedEntities(
-    pdpi::P4RuntimeSession& session, bool allow_unsupported) const {
+    pdpi::P4RuntimeSession& session) const {
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(session));
-  return InstallDedupedEntities(ir_p4info, session, allow_unsupported);
+  return InstallDedupedEntities(ir_p4info, session);
 }
 
 absl::Status EntryBuilder::InstallDedupedEntities(
-    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session,
-    bool allow_unsupported) const {
+    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session) const {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
-                   GetDedupedPiEntities(ir_p4info, allow_unsupported));
+                   GetDedupedPiEntities(ir_p4info));
   return pdpi::InstallPiEntities(&session, ir_p4info, pi_entities);
 }
 
