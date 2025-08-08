@@ -673,7 +673,7 @@ tables {
   match_fields {
     id: 9
     name: "ipmc_table_hit"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
   }

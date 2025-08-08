@@ -344,9 +344,10 @@ struct local_metadata_t {
   bool nexthop_id_valid;
   // Nexthop id, only valid if `nexthop_id_valid` is true.
   nexthop_id_t nexthop_id_value;
-  // After execution of the `routing_lookup` stage, indicates if an entry in
-  // the `ipv4_multicast` or `ipv6_multicast` table was hit.
-  bool ipmc_table_hit;
+  // After execution of the `routing_lookup` stage, indicates if an entry in one
+  // of the routing tables was hit
+  // (`ipv{4,6}_table` or `ipv{4,6}_multicast_table`).
+  bool route_hit;
   // After execution of the `tunnel_termination` stage, indicates if an entry in
   // the `tunnel_termination` table was hit.
   bool tunnel_termination_table_hit;
