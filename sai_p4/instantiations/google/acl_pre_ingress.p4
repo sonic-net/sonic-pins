@@ -251,6 +251,7 @@ control acl_pre_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_acl_metadata;
+      @proto_id(2) set_outer_vlan_id;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -268,7 +269,13 @@ control acl_pre_ingress(in headers_t headers,
     } else if (headers.ipv6.isValid()) {
       dscp = headers.ipv6.dscp;
       ecn = headers.ipv6.ecn;
-      ip_protocol = headers.ipv6.next_header;
+      if (headers.ipv6.next_header == 0 &&
+          headers.hop_by_hop_options.isValid()) {
+        ip_protocol = headers.hop_by_hop_options.next_header;
+      }
+      else {
+        ip_protocol = headers.ipv6.next_header;
+      }
     }
 
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
