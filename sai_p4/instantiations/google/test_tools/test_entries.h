@@ -295,21 +295,19 @@ class EntryBuilder {
 
   // Deduplicates then installs the entities encoded by the EntryBuilder using
   // `session`.
-  absl::Status InstallDedupedEntities(pdpi::P4RuntimeSession& session,
-                                      bool allow_unsupported = false) const;
+  absl::Status InstallDedupedEntities(pdpi::P4RuntimeSession& session) const;
 
   // Extracts and deduplicates the entities encoded by the EntryBuilder using
   // `ir_p4info`, then install them using `session`. This is especially useful
   // for BMv2 where you may *NOT* wish to use the P4Info on the switch for
   // translation.
   absl::Status InstallDedupedEntities(const pdpi::IrP4Info& ir_p4info,
-                                      pdpi::P4RuntimeSession& session,
-                                      bool allow_unsupported = false) const;
+                                      pdpi::P4RuntimeSession& session) const;
 
   absl::StatusOr<std::vector<p4::v1::Entity>> GetDedupedPiEntities(
-      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+      const pdpi::IrP4Info& ir_p4info) const;
   absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
-      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+      const pdpi::IrP4Info& ir_p4info) const;
 
   // Convenience struct corresponding to the proto
   // `MulticastRouterInterfaceTableEntry`
