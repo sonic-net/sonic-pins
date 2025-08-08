@@ -16,6 +16,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.enable_vlan_checks = false;
     local_metadata.marked_to_drop_by_ingress_vlan_checks = false;
     local_metadata.vlan_id = 0;
+    local_metadata.tpid = 0;
     local_metadata.input_packet_is_vlan_tagged = false;
     local_metadata.omit_vlan_tag_on_egress_packet = false;
     local_metadata.admit_to_l3 = false;
