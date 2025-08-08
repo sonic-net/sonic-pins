@@ -546,19 +546,23 @@ absl::StatusOr<RValue> ExtractRValue(
 absl::StatusOr<Statement> ExtractStatement(
     const google::protobuf::Struct &action_primitive,
     const std::vector<std::string> &parameter_map) {
+
   if (action_primitive.fields().count("op") != 1 ||
-      action_primitive.fields().count("parameters") != 1 ||
-      action_primitive.fields().count("source_info") != 1) {
+      action_primitive.fields().count("parameters") != 1) {
     return absl::InvalidArgumentError(
         absl::StrCat("Primitive statement should contain 'op', 'parameters', "
-                     "and 'source_info', found ",
+                     "and optionally 'source_info', found ",
                      action_primitive.DebugString()));
   }
 
   Statement statement;
-  ASSIGN_OR_RETURN(
-      *statement.mutable_source_info(),
-      ExtractSourceLocation(action_primitive.fields().at("source_info")));
+  {
+    auto it = action_primitive.fields().find("source_info");
+    if (it != action_primitive.fields().end()) {
+      ASSIGN_OR_RETURN(*statement.mutable_source_info(),
+                       ExtractSourceLocation(it->second));
+    }
+  }
   ASSIGN_OR_RETURN(
       bmv2::StatementOp op_case,
       StatementOpToEnum(action_primitive.fields().at("op").string_value()));
