@@ -48,6 +48,8 @@ control vlan_untag(inout headers_t headers,
   apply {
      // Determine the vlan_id metadata.
      if (headers.vlan.isValid()) {
+        // Store the VLAN TPID in metadata.
+        local_metadata.tpid = headers.ethernet.ether_type;
         // If input packet has a VLAN tag, use the VID from the tag.
         local_metadata.vlan_id = headers.vlan.vlan_id;
         // Invalidate the VLAN header. In doing so we move the ethertype placed

@@ -220,7 +220,8 @@ struct local_metadata_t {
   // etc) it goes out tagged with the VID in the egress pipeline (except for
   // reserved VIDs 0 and 4095, which are always tagged).
   bool omit_vlan_tag_on_egress_packet;
-
+  // Tag Protocol ID (TPID) of the (outermost) VLAN tag.
+  bit<16> tpid;
   // The VLAN ID used for the packet throughout the pipeline. If the input
   // packet has a VLAN tag, the VID from the outer VLAN tag is used
   // (and the VLAN header gets invalidated at the beginning of the ingress
