@@ -274,17 +274,13 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
-            ipv4_multicast_table.apply();
-            local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-            // TODO: Use commented out code instead, once
-            // p4-symbolic supports it.
-            // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+            local_metadata.route_hit = ipv4_multicast_table.apply().hit;
           }
         }
       } else { // IPv4 unicast.
         if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
             local_metadata.admit_to_l3) {
-          ipv4_table.apply();
+          local_metadata.route_hit = ipv4_table.apply().hit;
         }
       }
     } else if (headers.ipv6.isValid()) {
@@ -292,17 +288,13 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
-            ipv6_multicast_table.apply();
-            local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-            // TODO: Use commented out code instead, once
-            // p4-symbolic supports it.
-            // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+            local_metadata.route_hit = ipv6_multicast_table.apply().hit;
           }
         }
       } else { // IPv6 unicast.
         if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
             local_metadata.admit_to_l3) {
-          ipv6_table.apply();
+          local_metadata.route_hit = ipv6_table.apply().hit;
         }
       }
     }
@@ -375,8 +367,26 @@ control routing_resolution(in headers_t headers,
   // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_PORT, and
   // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
   // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS.
+  // Implicitly creates a MY_MAC entry in SAI (l3_admit_table at P4) admitting
+  // packets with the same port and source mac address, though the given
+  // entry is not visible north of SAI.
   @id(ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID)
   action set_port_and_src_mac(@id(1) port_id_t port,
+                              @id(2) @format(MAC_ADDRESS)
+                              ethernet_addr_t src_mac) {
+    set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
+  }
+
+  // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_PORT, and
+  // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
+  // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS.
+  // Sets SAI_ROUTER_INTERFACE_ATTR_MY_MAC to a SAI_OBJECT_TYPE_MY_MAC, thus
+  // preventing the implicit creation of a MY_MAC entry in SAI (l3_admit_table
+  // at P4).
+  // TODO Remove unsupported when the switch supports this action.
+  @unsupported
+  @id(UNICAST_SET_PORT_AND_SRC_MAC_ACTION_ID)
+  action unicast_set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
     set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
@@ -392,6 +402,7 @@ control routing_resolution(in headers_t headers,
     actions = {
       @proto_id(1) set_port_and_src_mac;
       @proto_id(2) set_port_and_src_mac_and_vlan_id;
+      @proto_id(3) unicast_set_port_and_src_mac;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
