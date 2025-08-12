@@ -604,7 +604,7 @@ gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
       std::string value;
       static constexpr LazyRE2 kSplitAttributeValueRE = {
           R"(\[([^=]+)=([^\]]+)\])"};
-      // Keep parsing more <attributer, value> in this string. e.g.,
+      // Keep parsing more <attribute, value> in this string. e.g.,
       // [address=127.0.0.1][port=6343] ==> {{address, 127.0.0.1}, {port, 6343}}
       while (RE2::Consume(&attr_to_value, *kSplitAttributeValueRE, &attribute,
                           &value)) {
