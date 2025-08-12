@@ -29,7 +29,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "absl/types/span.h"
 #include "absl/types/variant.h"
 #include "glog/logging.h"
@@ -118,6 +117,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const Ipv4Header& header) {
                                 header.protocol())};
 }
 absl::StatusOr<NextHeader> GetNextHeader(const Ipv6Header& header) {
+  if (header.next_header() == "0x00") return Header::kHopByHopOptionsHeader;
   if (header.next_header() == "0x04") return Header::kIpv4Header;
   if (header.next_header() == "0x06") return Header::kTcpHeader;
   if (header.next_header() == "0x11") return Header::kUdpHeader;
@@ -131,6 +131,26 @@ absl::StatusOr<NextHeader> GetNextHeader(const Ipv6Header& header) {
   return UnsupportedNextHeader{
       .reason = absl::StrFormat("ipv6_header.next_header %s: unsupported",
                                 header.next_header())};
+}
+absl::StatusOr<NextHeader> GetNextHeader(const HopByHopOptionsHeader& header) {
+  if (header.header_extension_length() != "0x00")
+    return UnsupportedNextHeader{
+        .reason = "hop_by_hop_options_header.header_extension_length is not 0.",
+    };
+  if (header.next_header() == "0x04") return Header::kIpv4Header;
+  if (header.next_header() == "0x06") return Header::kTcpHeader;
+  if (header.next_header() == "0x11") return Header::kUdpHeader;
+  if (header.next_header() == "0x3a") return Header::kIcmpHeader;
+  if (header.next_header() == "0x29") return Header::kIpv6Header;
+  if (header.next_header() == "0x2f") return Header::kGreHeader;
+  // The following IP protocol numbers are "reserved for experimentation",
+  // meaning the bits after the L3 header are arbitrary.
+  if (header.next_header() == "0xfd") return Header::HEADER_NOT_SET;
+  if (header.next_header() == "0xfe") return Header::HEADER_NOT_SET;
+  return UnsupportedNextHeader{
+      .reason = absl::StrFormat(
+          "hop_by_hop_options_header.next_header %s: unsupported",
+          header.next_header())};
 }
 absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
   ASSIGN_OR_RETURN(auto dest_port,
@@ -182,6 +202,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
       return GetNextHeader(header.ipv4_header());
     case Header::kIpv6Header:
       return GetNextHeader(header.ipv6_header());
+    case Header::kHopByHopOptionsHeader:
+      return GetNextHeader(header.hop_by_hop_options_header());
     case Header::kUdpHeader:
       return GetNextHeader(header.udp_header());
     case Header::kTcpHeader:
@@ -332,6 +354,27 @@ absl::StatusOr<Ipv6Header> ParseIpv6Header(pdpi::BitString& data) {
   header.set_hop_limit(ParseBits(data, kIpHopLimitBitwidth));
   header.set_ipv6_source(ParseIpv6Address(data));
   header.set_ipv6_destination(ParseIpv6Address(data));
+  return header;
+}
+
+// Parse and return a hop-by-hop options header, or return error if the packet
+// is too small.
+absl::StatusOr<HopByHopOptionsHeader> ParseHopByHopOptionsHeader(
+    pdpi::BitString& data) {
+  if (data.size() < kMinHopByHopOptionsHeaderBitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Packet is too short to parse a hop-by-hop options header next. "
+              "Only "
+           << data.size() << " bits left, need at least "
+           << kMinHopByHopOptionsHeaderBitwidth << ".";
+  }
+
+  HopByHopOptionsHeader header;
+  header.set_next_header(ParseBits(data, kHopByHopNextHeaderBitwidth));
+  header.set_header_extension_length(
+      ParseBits(data, kHopByHopHeaderExtensionLengthBitwidth));
+  header.set_options_and_padding(
+      ParseBits(data, kHopByHopOptionsAndPaddingBitwidth));
   return header;
 }
 
@@ -645,6 +688,11 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
       ASSIGN_OR_RETURN(*result.mutable_ipv6_header(), ParseIpv6Header(data));
       return result;
     }
+    case Header::kHopByHopOptionsHeader: {
+      ASSIGN_OR_RETURN(*result.mutable_hop_by_hop_options_header(),
+                       ParseHopByHopOptionsHeader(data));
+      return result;
+    }
     case Header::kUdpHeader: {
       ASSIGN_OR_RETURN(*result.mutable_udp_header(), ParseUdpHeader(data));
       return result;
@@ -798,6 +846,55 @@ void Ipv6AddressInvalidReasons(absl::string_view address,
         field, ": invalid format: ", parsed_address.status().message()));
   }
 }
+// As described in https://datatracker.ietf.org/doc/html/rfc2460#section-4.2.
+void HopByHopOptionsInvalidOptionsAndPadding(
+    absl::string_view options_and_padding, const std::string& error_prefix,
+    std::vector<std::string>& output) {
+  absl::StatusOr<std::string> byte_string =
+      pdpi::HexStringToByteString(options_and_padding);
+  if (!byte_string.ok()) {
+    output.push_back(absl::StrCat(
+        error_prefix, "invalid format: ", byte_string.status().message()));
+    return;
+  }
+
+  for (int i = 0; i < byte_string->size(); ++i) {
+    // Checks that the option type is single padding and it skips over the
+    // option and continues to process the next option.
+    char option_type = byte_string->at(i);
+    if (option_type == '\0') {
+      continue;
+    }
+    if (i + 1 >= byte_string->size()) {
+      output.push_back(
+          absl::StrCat(error_prefix,
+                       "expected option data length, but reached end of data"));
+      return;
+    }
+    int option_data_length = static_cast<int>(byte_string->at(++i));
+    // Option's data length exceeds the remaining bytes.
+    if (option_data_length > byte_string->size() - i) {
+      output.push_back(absl::StrCat(
+          error_prefix, "expected data length exceeds the remaining bytes: ",
+          option_data_length, " > ", byte_string->size() - i));
+      return;
+    }
+
+    for (int j = 1; j <= option_data_length; ++j) {
+      // Checks that the option type is N-padding and it discards the rest of
+      // the packet.
+      if (option_type == '\1' && byte_string->at(i + j) != '\0') {
+        output.push_back(absl::StrCat(
+            error_prefix, "expected ", option_data_length,
+            " zero bytes of padding, but the ", j, "-th byte was non-zero."));
+        return;
+      }
+    }
+    // Here, i is incremented by the option data length.
+    i += option_data_length;
+  }
+}
+
 // Returns `true` if invalid, `false` otherwise.
 template <size_t num_bits>
 bool HexStringInvalidReasons(absl::string_view hex_string,
@@ -1048,6 +1145,7 @@ void Ipv6HeaderInvalidReasons(const Ipv6Header& header,
   }
   if (!length_invalid) {
     // `+1` to skip the IPv6 header and previous headers in the calculation.
+    // Note: it includes all optional header extensions in the payload.
     if (auto size = PacketSizeInBytes(packet, header_index + 1); !size.ok()) {
       output.push_back(absl::StrCat(
           field_prefix, "total_length: Couldn't compute expected size: ",
@@ -1061,6 +1159,25 @@ void Ipv6HeaderInvalidReasons(const Ipv6Header& header,
                                       header.payload_length(), " instead."));
       }
     }
+  }
+}
+
+void HopByHopOptionsHeaderInvalidReasons(const HopByHopOptionsHeader& header,
+                                         const std::string& field_prefix,
+                                         const Packet& packet, int header_index,
+                                         std::vector<std::string>& output) {
+  HexStringInvalidReasons<kHopByHopNextHeaderBitwidth>(
+      header.next_header(), absl::StrCat(field_prefix, "next_header"), output);
+  HexStringInvalidReasons<kHopByHopHeaderExtensionLengthBitwidth>(
+      header.header_extension_length(),
+      absl::StrCat(field_prefix, "header_extension_length"), output);
+
+  if (!HexStringInvalidReasons<kHopByHopOptionsAndPaddingBitwidth>(
+          header.options_and_padding(),
+          absl::StrCat(field_prefix, "options_and_padding"), output)) {
+    HopByHopOptionsInvalidOptionsAndPadding(
+        header.options_and_padding(),
+        absl::StrCat(field_prefix, "options_and_padding: "), output);
   }
 }
 
@@ -1215,6 +1332,17 @@ void ArpHeaderInvalidReasons(const ArpHeader& header,
   }
 }
 
+// Searches for a preceding IP header by skipping any IPv6 header extension
+// options.
+int FindPrecedingIpHeader(const Packet& packet, int header_index) {
+  int ip_header_index = header_index - 1;
+  if (ip_header_index >= 0 && packet.headers(ip_header_index).header_case() ==
+                                  Header::kHopByHopOptionsHeader) {
+    ip_header_index--;
+  }
+  return ip_header_index;
+}
+
 void IcmpHeaderInvalidReasons(const IcmpHeader& header,
                               const std::string& field_prefix,
                               const Packet& packet, int header_index,
@@ -1237,14 +1365,16 @@ void IcmpHeaderInvalidReasons(const IcmpHeader& header,
                                   "defined; found no header instead"));
     return;
   }
-  Header::HeaderCase previous = packet.headers(header_index - 1).header_case();
+  // Searches for a preceding IP header.
+  int ip_header_index = FindPrecedingIpHeader(packet, header_index);
+  Header::HeaderCase previous = packet.headers(ip_header_index).header_case();
   if (previous != Header::kIpv4Header && previous != Header::kIpv6Header) {
     output.push_back(absl::StrCat(field_prefix,
                                   "checksum: ICMP header must be preceded by "
                                   "IP header for checksum to be "
                                   "defined; found ",
                                   HeaderCaseName(previous), " at headers[",
-                                  (header_index - 1), "] instead"));
+                                  (ip_header_index), "] instead"));
     return;
   }
 
@@ -1679,6 +1809,8 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
       return "Ipv4Header";
     case Header::kIpv6Header:
       return "Ipv6Header";
+    case Header::kHopByHopOptionsHeader:
+      return "HopByHopOptionsHeader";
     case Header::kUdpHeader:
       return "UdpHeader";
     case Header::kTcpHeader:
@@ -1815,6 +1947,11 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
       case Header::kIpv6Header:
         Ipv6HeaderInvalidReasons(header.ipv6_header(), error_prefix, packet,
                                  index, result);
+        break;
+      case Header::kHopByHopOptionsHeader:
+        HopByHopOptionsHeaderInvalidReasons(header.hop_by_hop_options_header(),
+                                            error_prefix, packet, index,
+                                            result);
         break;
       case Header::kUdpHeader: {
         UdpHeaderInvalidReasons(header.udp_header(), error_prefix, packet,
@@ -1996,6 +2133,17 @@ absl::Status SerializeIpv6Header(const Ipv6Header& header,
       SerializeBits<kIpHopLimitBitwidth>(header.hop_limit(), output));
   RETURN_IF_ERROR(SerializeIpv6Address(header.ipv6_source(), output));
   RETURN_IF_ERROR(SerializeIpv6Address(header.ipv6_destination(), output));
+  return absl::OkStatus();
+}
+
+absl::Status SerializeHopByHopOptionsHeader(const HopByHopOptionsHeader& header,
+                                            pdpi::BitString& output) {
+  RETURN_IF_ERROR(
+      SerializeBits<kHopByHopNextHeaderBitwidth>(header.next_header(), output));
+  RETURN_IF_ERROR(SerializeBits<kHopByHopHeaderExtensionLengthBitwidth>(
+      header.header_extension_length(), output));
+  RETURN_IF_ERROR(SerializeBits<kHopByHopOptionsAndPaddingBitwidth>(
+      header.options_and_padding(), output));
   return absl::OkStatus();
 }
 
@@ -2225,6 +2373,9 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
       return SerializeIpv4Header(header.ipv4_header(), output);
     case Header::kIpv6Header:
       return SerializeIpv6Header(header.ipv6_header(), output);
+    case Header::kHopByHopOptionsHeader:
+      return SerializeHopByHopOptionsHeader(header.hop_by_hop_options_header(),
+                                            output);
     case Header::kUdpHeader:
       return SerializeUdpHeader(header.udp_header(), output);
     case Header::kTcpHeader:
@@ -2392,6 +2543,53 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
               _.SetPrepend() << error_prefix << "payload_length: ");
           ipv6_header.set_payload_length(pdpi::BitsetToHexString(
               std::bitset<kIpTotalLengthBitwidth>(size)));
+          changes = true;
+        }
+        break;
+      }
+      case Header::kHopByHopOptionsHeader: {
+        if (header.hop_by_hop_options_header()
+                .header_extension_length()
+                .empty() ||
+            overwrite) {
+          *header.mutable_hop_by_hop_options_header()
+               ->mutable_header_extension_length() = "0x00";
+          changes = true;
+        }
+        std::string* options_and_padding =
+            header.mutable_hop_by_hop_options_header()
+                ->mutable_options_and_padding();
+        if (options_and_padding->empty()) {
+          *options_and_padding = "0x010400000000";
+          changes = true;
+          break;
+        }
+        // TODO: Cleanup the computed field logic for hop-by-hop
+        // options to overwrite the options and padding to a more strict and
+        // correct state.
+        if (overwrite) {
+          // Adds padding to fill the `options_and_padding` if needed.
+          // The maximum bit width for `options_and_padding` is divided by 4 to
+          // get the number of bytes. `options_and_padding`'s size is subtracted
+          // by 2 to exclude the "0x" characters. We divide the difference
+          // between the maximum number of bytes and the number of currently
+          // used bytes by 2, since each byte of padding consists of 2 zeroes.
+          int num_missing_padding = ((kHopByHopOptionsAndPaddingBitwidth / 4) -
+                                     (options_and_padding->size() - 2)) /
+                                    2;
+          if (num_missing_padding >= 2) {
+            // `num_missing_padding` will never exceed 4 so we do not
+            // need to worry about bit overflow when performing string
+            // concatenation.
+            *options_and_padding =
+                absl::StrCat(*options_and_padding, "010",
+                             std::to_string(num_missing_padding - 2));
+            for (int i = 2; i < num_missing_padding; ++i) {
+              *options_and_padding = absl::StrCat(*options_and_padding, "00");
+            }
+          } else if (num_missing_padding == 1) {
+            *options_and_padding = absl::StrCat(*options_and_padding, "00");
+          }
           changes = true;
         }
         break;
@@ -2593,6 +2791,7 @@ absl::StatusOr<bool> PadPacketToMinimumSizeFromHeaderIndex(Packet& packet,
     }
     case Header::kIpv4Header:
     case Header::kIpv6Header:
+    case Header::kHopByHopOptionsHeader:
     case Header::kUdpHeader:
     case Header::kTcpHeader:
     case Header::kArpHeader:
@@ -2666,6 +2865,9 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
       }
       case Header::kIpv6Header:
         size += kIpv6HeaderBitwidth;
+        break;
+      case Header::kHopByHopOptionsHeader:
+        size += kMinHopByHopOptionsHeaderBitwidth;
         break;
       case Header::kUdpHeader:
         size += kUdpHeaderBitwidth;
@@ -2775,7 +2977,8 @@ absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
                         "only has %d header(s).",
                         udp_header_index, packet.headers().size()));
   }
-  const Header& preceding_header = packet.headers(udp_header_index - 1);
+  int ip_header_index = FindPrecedingIpHeader(packet, udp_header_index);
+  const Header& preceding_header = packet.headers(ip_header_index);
   if (auto header_case = packet.headers(udp_header_index).header_case();
       header_case != Header::kUdpHeader) {
     return gutil::InvalidArgumentErrorBuilder()
@@ -2812,8 +3015,14 @@ absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
       RETURN_IF_ERROR(
           SerializeBits<kUdpLengthBitwidth>(udp_header.length(), data));
       data.AppendBits<24>(0);
-      RETURN_IF_ERROR(
-          SerializeBits<kIpNextHeaderBitwidth>(header.next_header(), data));
+      // The `next_header` field for a UDP header identifies the upper-layer
+      // protocol. It differs from the typical `next_header` field in an IPv6
+      // header when there are IPV6 extension headers. See
+      // https://datatracker.ietf.org/doc/html/rfc2460#section-8.1, which
+      // specifies that the `next_header` field for a UDP header must be 17
+      // (0x11). Note that the `next_header` field can be 6 (0x06) to denote a
+      // TCP header.
+      RETURN_IF_ERROR(SerializeBits<kIpNextHeaderBitwidth>("0x11", data));
       break;
     }
     case Header::kPspHeader: {
@@ -2849,8 +3058,9 @@ absl::StatusOr<int> IcmpHeaderChecksum(Packet packet, int icmp_header_index) {
       *packet.mutable_headers(icmp_header_index)->mutable_icmp_header();
   icmp_header.set_checksum("0x0000");
 
+  int ip_header_index = FindPrecedingIpHeader(packet, icmp_header_index);
+  const Header& preceding_header = packet.headers(ip_header_index);
   pdpi::BitString data;
-  const Header& preceding_header = packet.headers(icmp_header_index - 1);
   switch (preceding_header.header_case()) {
     case Header::kIpv6Header: {
       // Serialize "pseudo header" for checksum calculation, following

@@ -17,12 +17,14 @@
 #include <string>
 
 #include "absl/status/status.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/bit_widths.h"
@@ -32,6 +34,7 @@
 namespace packetlib {
 namespace {
 
+using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::Eq;
@@ -819,6 +822,73 @@ TEST(GetEthernetTrailerTest,
   *packet.mutable_headers(1)->mutable_ipv4_header()->mutable_total_length() =
       "0x9999";
   ASSERT_THAT(GetEthernetTrailer(packet), IsOkAndHolds(Eq("")));
+}
+
+TEST(PacketLib, RoundTrippingForHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers {
+      hop_by_hop_options_header {
+        next_header: "0xfe"
+        header_extension_length: "0x00"
+        options_and_padding: "0x000000000000"
+      }
+    }
+  )pb");
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00000000000000");
+
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+  EXPECT_THAT(parsed_packet, EqualsProto(packet));
+}
+
+TEST(PacketLib, UpdateAllComputedFieldsIsNoOpForHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers {
+      hop_by_hop_options_header {
+        next_header: "0xfe"
+        header_extension_length: "0x00"
+        options_and_padding: "0x010400000000"
+      }
+    }
+  )pb");
+  // Update is a no-op when N-padding is correct.
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet).status());
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00010400000000");
+
+  // Verify that the round-tripped packet is the same as the original packet.
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+  EXPECT_THAT(parsed_packet, EqualsProto(packet));
+  EXPECT_TRUE(parsed_packet.reasons_invalid().empty());
+}
+
+TEST(PacketLib, UpdateComputedFieldsAddsSinglePaddingForHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers {
+      hop_by_hop_options_header {
+        next_header: "0xfe"
+        header_extension_length: "0x00"
+        options_and_padding: "0x0503000000"
+      }
+    }
+  )pb");
+  // Update adds a single padding.
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet).status());
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00050300000000");
+
+  // Verify that the round-tripped packet is the same as the original packet.
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+  EXPECT_THAT(parsed_packet, EqualsProto(packet));
 }
 
 }  // namespace
