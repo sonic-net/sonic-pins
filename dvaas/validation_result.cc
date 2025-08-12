@@ -35,12 +35,12 @@ ValidationResult::ValidationResult(
       test_vector_stats_(ComputeTestVectorStats(test_outcomes)),
       packet_synthesis_result_(packet_synthesis_result) {}
 
-ValidationResult::ValidationResult(
-    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
+absl::StatusOr<ValidationResult> ValidationResult::Create(
+    PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
     const PacketSynthesisResult& packet_synthesis_result) {
-  test_outcomes_ = ValidateTestRuns(test_runs, diff_params);
-  test_vector_stats_ = ComputeTestVectorStats(test_outcomes_);
-  packet_synthesis_result_ = packet_synthesis_result;
+  ASSIGN_OR_RETURN(PacketTestOutcomes test_outcomes,
+                   ValidateTestRuns(test_runs, diff_params));
+  return ValidationResult(packet_synthesis_result, test_outcomes);
 }
 
 std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {

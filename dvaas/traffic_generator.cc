@@ -16,7 +16,6 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
@@ -167,9 +166,7 @@ void SimpleTrafficGenerator::InjectTraffic() {
             .max_packets_to_send_per_second =
                 params_.validation_params.max_packets_to_send_per_second,
             .is_expected_unsolicited_packet =
-                [&](const packetlib::Packet packet) -> bool {
-              return backend_->IsExpectedUnsolicitedPacket(packet);
-            },
+                params_.validation_params.is_expected_unsolicited_packet,
             .mirror_testbed_port_map =
                 params_.validation_params.mirror_testbed_port_map_override
                     .value_or(MirrorTestbedP4rtPortIdMap::CreateIdentityMap()),
@@ -193,7 +190,7 @@ absl::StatusOr<ValidationResult> SimpleTrafficGenerator::GetValidationResult() {
   test_runs_mutex_.Lock();
   PacketTestRuns test_runs = test_runs_;
   test_runs_mutex_.Unlock();
-  return ValidationResult(
+  return ValidationResult::Create(
       test_runs, params_.validation_params.switch_output_diff_params,
       generate_test_vectors_result_.packet_synthesis_result);
 }
@@ -205,7 +202,7 @@ SimpleTrafficGenerator::GetAndClearValidationResult() {
   test_runs_.clear_test_runs();
   test_runs_mutex_.Unlock();
 
-  return ValidationResult(
+  return ValidationResult::Create(
       test_runs, params_.validation_params.switch_output_diff_params,
       generate_test_vectors_result_.packet_synthesis_result);
 }
@@ -251,6 +248,10 @@ void TrafficGeneratorWithGuaranteedRate::SetState(State state) {
 
 absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
     thinkit::MirrorTestbed* testbed, const TrafficGenerator::Params& params) {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot initialize in the error state.");
+  }
   if (GetState() == kTrafficInjectionAndCollection) {
     return absl::FailedPreconditionError(
         "Cannot initialize while traffic is being injected and collected.");
@@ -315,6 +316,10 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
 
 absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
   State state = GetState();
+  if (state == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot start traffic in the error state.");
+  }
   if (state == kUninitialized) {
     return absl::FailedPreconditionError(
         "Cannot start traffic before initialization.");
@@ -330,14 +335,26 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
 
   // Spawn traffic injection thread.
   traffic_injection_thread_ = std::thread([&]() {
-    CHECK_OK(  // Crash OK
-        TrafficGeneratorWithGuaranteedRate::InjectInputTraffic());
+    absl::Status status =
+        TrafficGeneratorWithGuaranteedRate::InjectInputTraffic();
+    if (!status.ok()) {
+      SetState(kError);
+      LOG(ERROR) << "Switching to error state because `InjectInputTraffic` "
+                    "returned error status: "
+                 << status;
+    }
   });
 
   // Spawn traffic collection thread.
   traffic_collection_thread_ = std::thread([&]() {
-    CHECK_OK(  // Crash OK
-        TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic());
+    absl::Status status =
+        TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic();
+    if (!status.ok()) {
+      SetState(kError);
+      LOG(ERROR) << "Switching to error state because `CollectOutputTraffic` "
+                    "returned error status: "
+                 << status;
+    }
   });
 
   // Wait for state to change before returning.
@@ -349,6 +366,10 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
 }
 
 absl::Status TrafficGeneratorWithGuaranteedRate::StopTraffic() {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot stop traffic in the error state.");
+  }
   if (GetState() != kTrafficInjectionAndCollection) {
     return absl::FailedPreconditionError(
         "Cannot stop traffic if not already flowing.");
@@ -453,9 +474,7 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
       !params_.validation_params.switch_output_diff_params
            .treat_expected_and_actual_outputs_as_having_no_packet_ins;
   auto is_expected_unsolicited_packet =
-      [&](const packetlib::Packet packet) -> bool {
-    return backend_->IsExpectedUnsolicitedPacket(packet);
-  };
+      params_.validation_params.is_expected_unsolicited_packet;
 
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map =
       params_.validation_params.mirror_testbed_port_map_override.value_or(
@@ -545,6 +564,10 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
 
 absl::StatusOr<ValidationResult>
 TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot validate results in the error state.");
+  }
   LOG(INFO) << "Getting validation result";
   // Swap `injected_traffic_vector` and `injected_traffic_` and add the
   // `residual_injected_traffic_` to `injected_traffic_`.
@@ -597,9 +620,12 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
         collected_traffic_by_id.erase(injected_traffic.tag);
       }
       // Validate test runs to create test outcomes.
-      *test_outcome->mutable_test_result() =
+      ASSIGN_OR_RETURN(
+          *test_outcome->mutable_test_result(),
           ValidateTestRun(*packet_test_run,
-                          params_.validation_params.switch_output_diff_params);
+                          /*diff_params=*/
+                          params_.validation_params.switch_output_diff_params,
+                          &testbed_configurator_->SutApi()));
       if (test_outcome->test_result().has_failure()) {
         failed_switch_inputs.push_back(
             test_outcome->test_run().test_vector().input());

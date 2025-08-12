@@ -21,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -48,6 +49,13 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
                   "Test requires at least 2 SUT ports connected to a Software "
                   "(Host) or Hardware (Ixia) Traffic Generator");
             }
+
+            // We sort the peer interfaces to ensure that the traffic Tx/Rx
+            // interfaces match with those programmed on the SUT.
+            absl::c_sort(up_links,
+                         [](const InterfaceLink& a, const InterfaceLink& b) {
+                           return a.peer_interface < b.peer_interface;
+                         });
 
             // Create config.
             otg::SetConfigRequest set_config_request;
@@ -77,15 +85,19 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             src_port->set_location(otg_src_loc);
             dst_port->set_location(otg_dst_loc);
 
-            // TODO (b/299256787): Move each of the below configurations into a
             // helper function. Set layer1.
             auto* layer1 = config->add_layer1();
             layer1->set_name("ly");
             layer1->add_port_names(otg_src_port);
             layer1->add_port_names(otg_dst_port);
 
+            // linerate.
             // Set speed.
-            layer1->set_speed(otg::Layer1::Speed::speed_1_gbps);
+            if (enable_linerate_) {
+              layer1->set_speed(otg::Layer1::Speed::speed_200_gbps);
+            } else {
+              layer1->set_speed(otg::Layer1::Speed::speed_1_gbps);
+            }
 
             // Set MTU.
             layer1->set_mtu(9000);

@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 2.6.0, 2.6.0, 2.6.0, 2.6.0"
+  version: "Versions 3.0.1, 3.0.1, 3.0.1, 3.0.1"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -701,6 +701,10 @@ tables {
   action_refs {
     id: 16777475
     annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 16777476
+    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777481
@@ -2079,6 +2083,23 @@ actions {
 }
 actions {
   preamble {
+    id: 16777476
+    name: "ingress.acl_ingress.acl_mirror"
+    alias: "acl_mirror"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "mirror_session_id"
+    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
+    type_name {
+      name: "mirror_session_id_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777484
     name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -2264,6 +2285,7 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2629,23 +2651,6 @@ actions {
     id: 16777253
     name: "egress.egress_vlan_checks.make_untagged_member"
     alias: "make_untagged_member"
-  }
-}
-actions {
-  preamble {
-    id: 16777476
-    name: "ingress.acl_ingress.acl_mirror"
-    alias: "acl_mirror"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "mirror_session_id"
-    annotations: "@refers_to(mirror_session_table , mirror_session_id)"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)"
-    type_name {
-      name: "mirror_session_id_t"
-    }
   }
 }
 actions {

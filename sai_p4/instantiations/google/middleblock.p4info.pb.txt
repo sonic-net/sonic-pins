@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "middleblock.p4"
-  version: "2.6.0"
+  version: "3.0.1"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -559,6 +559,10 @@ tables {
   action_refs {
     id: 16777475
     annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 16777476
+    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777481

@@ -14,8 +14,8 @@
 
 #include "dvaas/dataplane_validation.h"
 
+#include <cstdint>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -39,6 +39,7 @@
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/user_provided_packet_test_vector.h"
 #include "dvaas/validation_result.h"
 #include "glog/logging.h"
@@ -121,9 +122,10 @@ absl::Status DetermineReproducibilityRate(
                                        test_vectors, parameters, statistics,
                                        /*log_injection_progress=*/false));
 
-  ValidationResult validation_result =
-      ValidationResult(test_runs, params.switch_output_diff_params,
-                       /*packet_synthesis_result=*/{});
+  ASSIGN_OR_RETURN(
+      ValidationResult validation_result,
+      ValidationResult::Create(test_runs, params.switch_output_diff_params,
+                               /*packet_synthesis_result=*/{}));
 
   test_outcome.mutable_test_result()
       ->mutable_failure()
@@ -176,7 +178,16 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
 
   // Iterate backwards through the entities, remove the current entity from the
   // switch, and reinstall the entity on the switch if no failure occurs.
-  for (int i = result.entities_size() - 1; i >= 0; --i) {
+  constexpr int kSecsBetweenLogs = 30;
+  int reinstall_attempts = 0;
+  int iterations = 0;
+  for (int i = result.entities_size() - 1; i >= 0; --i && ++iterations) {
+    LOG_EVERY_T(INFO, kSecsBetweenLogs)
+        << "Loop has run " << iterations << " iterations, there are "
+        << (result.entities_size() - i) << " remaining entities out of "
+        << pi_entities.size() << " original ones and we have reinstalled "
+        << reinstall_attempts << " of them.";
+
     // Store the `pi_entity` in case we need to reinstall it on the switch if no
     // failure occurs.
     pdpi::IrEntity ir_entity = result.entities().at(i);
@@ -196,6 +207,7 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
     if (!validation_result.HasFailure()) {
       // If there is no failure, reinstall the entity on the switch and add
       // the entity back to the result.
+      reinstall_attempts++;
       RETURN_IF_ERROR(pdpi::InstallIrEntity(*sut_api.p4rt, ir_entity))
           << "Failed to reinstall entity that we just deleted from switch:"
           << gutil::PrintTextProto(ir_entity);
@@ -549,12 +561,18 @@ absl::Status PostProcessTestVectorFailure(
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
+  ASSIGN_OR_RETURN(pdpi::IrEntities best_known_set_of_entities,
+                   pdpi::ReadIrEntities(*sut_api.p4rt));
   // Duplicate packet that caused test failure.
   if (failure_count <
       params.failure_enhancement_options.max_failures_to_attempt_to_replicate) {
+    absl::Time start = absl::Now();
     RETURN_IF_ERROR(DetermineReproducibilityRate(
         params, packet_injection_params, *sut_api.p4rt,
         *control_switch_api.p4rt, test_outcome));
+    LOG(INFO) << "Deflaking took "
+              << absl::ToInt64Milliseconds(absl::Now() - start)
+              << " milliseconds";
   }
 
   // Only try to minimize the set of entities when the failure is perfectly
@@ -565,12 +583,17 @@ absl::Status PostProcessTestVectorFailure(
               .reproducibility_rate() == 1.0 &&
       failure_count < params.failure_enhancement_options
                           .max_number_of_failures_to_minimize) {
-    ASSIGN_OR_RETURN(pdpi::IrEntities result,
+    absl::Time start = absl::Now();
+    ASSIGN_OR_RETURN(best_known_set_of_entities,
                      MinimizePacketTestVectors(sut_api, test_outcome,
                                                test_and_validate_callback),
                      _.SetPrepend() << "When minimizing failure: ");
+    LOG(INFO) << "Minimization took "
+              << absl::ToInt64Milliseconds(absl::Now() - start)
+              << " milliseconds";
     RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-        "minimal_set_of_entities_that_caused_test_failure.txt", result));
+        "minimal_set_of_entities_that_caused_test_failure.txt",
+        best_known_set_of_entities));
   }
 
   // Output an Arriba test vector to test artifacts.
@@ -578,10 +601,28 @@ absl::Status PostProcessTestVectorFailure(
       test_outcome.test_run().test_vector(), packet_traces,
       dvaas_test_artifact_writer));
 
+  // Output dvaas_regression_test_proto.
+  DvaasRegressionTestProto dvaas_regression_test_proto;
+  *dvaas_regression_test_proto.mutable_test_vector() =
+      test_outcome.test_run().test_vector();
+  *dvaas_regression_test_proto.mutable_minimal_set_of_entities() =
+      best_known_set_of_entities;
+  dvaas_regression_test_proto.set_currently_failing(true);
+  ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info,
+                   pdpi::GetP4Info(*sut_api.p4rt));
+  *dvaas_regression_test_proto.mutable_p4info() = p4info;
+
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "dvaas_regression_test_proto.txt", dvaas_regression_test_proto));
+
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
+    absl::Time start = absl::Now();
     RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
                                       dvaas_test_artifact_writer));
+    LOG(INFO) << "Packet traces took "
+              << absl::ToInt64Milliseconds(absl::Now() - start)
+              << " milliseconds";
   }
   return absl::OkStatus();
 }
@@ -728,8 +769,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
 
   PacketInjectionParams packet_injection_params = {
       .max_packets_to_send_per_second = params.max_packets_to_send_per_second,
-      .is_expected_unsolicited_packet = [&](const packetlib::Packet packet)
-          -> bool { return backend_->IsExpectedUnsolicitedPacket(packet); },
+      .is_expected_unsolicited_packet = params.is_expected_unsolicited_packet,
       .mirror_testbed_port_map = mirror_testbed_port_map,
   };
 
@@ -744,8 +784,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
-  dvaas::PacketTestOutcomes test_outcomes =
-      dvaas::ValidateTestRuns(test_runs, params.switch_output_diff_params);
+  ASSIGN_OR_RETURN(dvaas::PacketTestOutcomes test_outcomes,
+                   dvaas::ValidateTestRuns(
+                       test_runs, params.switch_output_diff_params, &sut));
 
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
@@ -791,6 +832,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         // Tolerate failures.
         // Remove once packet trace, replication, and
         // minimization code is stably integrated.
+        absl::Time start = absl::Now();
         absl::Status status = PostProcessTestVectorFailure(
             params, packet_injection_params, current_failures_count++, sut,
             control_switch, test_outcome, packet_traces,
@@ -825,7 +867,8 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                   PacketTestVectorById test_vectors,
                   backend_->GeneratePacketTestVectors(
                       ir_p4info, ir_entities, p4_spec.bmv2_config, ports,
-                      synthesized_packets, default_ingress_port));
+                      synthesized_packets, default_ingress_port,
+                      /*check_prediction_conformity=*/false));
 
               // Send packets to the switch and collect results.
               PacketStatistics statistics;
@@ -836,10 +879,13 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                       packet_injection_params, statistics,
                       /*log_injection_progress=*/false));
               // Validate test runs to create test outcomes.
-              return ValidationResult(test_runs,
-                                      params.switch_output_diff_params,
-                                      /*packet_synthesis_result=*/{});
+              return ValidationResult::Create(test_runs,
+                                              params.switch_output_diff_params,
+                                              /*packet_synthesis_result=*/{});
             });
+        LOG(INFO) << "Post-processing failure took "
+                  << absl::ToInt64Milliseconds(absl::Now() - start)
+                  << " milliseconds";
         if (!status.ok()) {
           LOG(WARNING) << "Got error when post-processing failure: "
                        << status.message();

@@ -17,7 +17,6 @@
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
@@ -87,10 +86,29 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                        },
                        packet_statistics));
 
+  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
+                   pdpi::ReadIrTableEntries(sut));
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "sut_installed_entries.txtpb",
+      gutil::PrintTextProto(installed_entries_sut)));
+
+  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_control,
+                   pdpi::ReadIrTableEntries(control_switch));
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "control_installed_entries.txtpb",
+      gutil::PrintTextProto(installed_entries_control)));
+
+  LOG(INFO) << "Number of packets injected: "
+            << packet_statistics.total_packets_injected;
+  LOG(INFO) << "packet forwarded: "
+            << packet_statistics.total_packets_forwarded;
+  LOG(INFO) << "packet punted: " << packet_statistics.total_packets_punted;
+
   // Compare the switch output with expected output for each test vector.
   LOG(INFO) << "Validating test runs";
-  PacketTestOutcomes test_outcomes =
-      ValidateTestRuns(test_runs, params.switch_output_diff_params);
+  ASSIGN_OR_RETURN(
+      PacketTestOutcomes test_outcomes,
+      ValidateTestRuns(test_runs, params.switch_output_diff_params));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
