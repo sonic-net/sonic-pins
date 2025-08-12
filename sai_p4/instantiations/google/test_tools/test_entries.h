@@ -102,6 +102,10 @@ struct SetWcmpGroupId {
   std::string wcmp_group_id;
 };
 
+struct SetVlanId {
+  std::string vlan_id;
+};
+
 // -- Match Fields and Params --------------------------------------------------
 
 // Rewrite-related options for nexthop action generation.
@@ -201,6 +205,13 @@ struct IpTableEntryParams {
   std::string vrf;
   using IpTableAction = std::variant<SetNextHopId, SetWcmpGroupId>;
   IpTableAction action;
+};
+
+struct RouterInterfaceTableParams {
+  std::string router_interface_id;
+  std::string egress_port;
+  netaddr::MacAddress src_mac;
+  std::optional<std::string> vlan_id;
 };
 
 // Convenience struct corresponding to the protos `p4::v1::Replica` and
