@@ -92,12 +92,6 @@ control acl_egress(in headers_t headers,
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2)
           ) @format(IPV6_ADDRESS);
 #endif
-// TODO: Remove this match as soon as it is unused.
-#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_MIDDLEBLOCK)
-      headers.ethernet.src_addr : ternary
-          @id(10) @name("src_mac")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
-#endif
     }
     actions = {
       @proto_id(1) acl_drop(local_metadata);
@@ -185,7 +179,12 @@ control acl_egress(in headers_t headers,
         ip_protocol = headers.ipv4.protocol;
       } else if (headers.ipv6.isValid()) {
         dscp = headers.ipv6.dscp;
+        if (headers.hop_by_hop_options.isValid()) {
+        ip_protocol = headers.hop_by_hop_options.next_header;
+      }
+      else {
         ip_protocol = headers.ipv6.next_header;
+      }
       } else {
         ip_protocol = 0;
       }
