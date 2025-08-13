@@ -13,6 +13,7 @@
 #define IP_PROTOCOL_ICMP   0x01
 #define IP_PROTOCOL_ICMPV6 0x3a
 #define IP_PROTOCOL_IPV6   0x29
+#define IP_PROTOCOL_V6_EXTENSION_HOP_BY_HOP 0x00
 #define IP_PROTOCOLS_GRE   0x2f
 
 typedef bit<48> ethernet_addr_t;
@@ -87,6 +88,17 @@ header ipv6_t {
   bit<8> hop_limit;
   ipv6_addr_t src_addr;
   ipv6_addr_t dst_addr;
+}
+
+header hop_by_hop_options_t {
+  bit<8> next_header;
+  bit<8> header_extension_length;
+  // options and padding = 64 bits -  next_header - header_extension_length
+  // = 64 - 8 - 8 = 48
+  bit<48> options_and_padding;
+  // Currently, we do not support `more_options_and_padding`. See b/364617104
+  // for more information. So packets with a non-zero `header_extension_length`
+  // will be rejected by the parser.
 }
 
 #define UDP_HEADER_BYTES 8

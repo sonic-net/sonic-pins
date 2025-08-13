@@ -46,6 +46,7 @@ namespace sai {
 // TODO: Clean up these predefined bit widths once further
 // refactors are completed.
 constexpr int kVlanIdBitwidth = 12;
+constexpr int kAclMetadataBitwidth = 8;
 // NOTE: The actual bit-width of a multicast group ID is 16 bits, but we
 // reserve the uppermost bit for a possible solution to handling L2/L3 multicast
 // dependencies. 2^15 groups is more than sufficient for foreseeable use cases.
@@ -231,6 +232,7 @@ struct MirrorAndRedirectMatchFields {
   std::optional<bool> is_ipv6;
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
   std::optional<absl::string_view> vrf;
+  pdpi::Ternary<std::bitset<kAclMetadataBitwidth>> acl_metadata;
 };
 
 // Queue settings for ACL table entry action.
@@ -254,6 +256,15 @@ struct AclPreIngressMatchFields {
   std::optional<bool> is_ipv6;
   std::optional<std::string> in_port;
   pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
+  std::optional<pdpi::Ternary<netaddr::Ipv6Address>> dst_ipv6;
+};
+
+struct AclPreIngressVlanTableMatchFields {
+  pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
+  std::optional<bool> is_ip;
+  std::optional<bool> is_ipv4;
+  std::optional<bool> is_ipv6;
+  std::optional<std::string> in_port;
 };
 
 // -- Entry Builder ------------------------------------------------------------
@@ -284,21 +295,19 @@ class EntryBuilder {
 
   // Deduplicates then installs the entities encoded by the EntryBuilder using
   // `session`.
-  absl::Status InstallDedupedEntities(pdpi::P4RuntimeSession& session,
-                                      bool allow_unsupported = false) const;
+  absl::Status InstallDedupedEntities(pdpi::P4RuntimeSession& session) const;
 
   // Extracts and deduplicates the entities encoded by the EntryBuilder using
   // `ir_p4info`, then install them using `session`. This is especially useful
   // for BMv2 where you may *NOT* wish to use the P4Info on the switch for
   // translation.
   absl::Status InstallDedupedEntities(const pdpi::IrP4Info& ir_p4info,
-                                      pdpi::P4RuntimeSession& session,
-                                      bool allow_unsupported = false) const;
+                                      pdpi::P4RuntimeSession& session) const;
 
   absl::StatusOr<std::vector<p4::v1::Entity>> GetDedupedPiEntities(
-      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+      const pdpi::IrP4Info& ir_p4info) const;
   absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
-      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+      const pdpi::IrP4Info& ir_p4info) const;
 
   // Convenience struct corresponding to the proto
   // `MulticastRouterInterfaceTableEntry`
@@ -413,14 +422,21 @@ class EntryBuilder {
   EntryBuilder& AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
       absl::string_view egress_port, int replica_instance,
       const netaddr::MacAddress& src_mac);
+  EntryBuilder& AddL2MrifEntry(absl::string_view egress_port,
+                               int replica_instance);
+
   EntryBuilder& AddIngressAclDroppingAllPackets();
   EntryBuilder& AddEgressAclDroppingIpPackets(
       IpVersion ip_version = IpVersion::kIpv4And6);
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddDisableIngressVlanChecksEntry();
   EntryBuilder& AddDisableEgressVlanChecksEntry();
+  EntryBuilder& AddPreIngressAclEntrySettingVlanAndAclMetadata(
+      absl::string_view vlan_id_hexstr, absl::string_view acl_metadata_hexstr,
+      const AclPreIngressVlanTableMatchFields& match_fields = {},
+      int priority = 1);
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
-      absl::string_view set_vlan_id_hexstr,
+      absl::string_view vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt,
       int priority = 1);
   EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
@@ -452,6 +468,8 @@ class EntryBuilder {
   EntryBuilder& AddWcmpGroupTableEntry(
       absl::string_view wcmp_group_id,
       absl::Span<const WcmpGroupAction> wcmp_group_actions);
+
+  EntryBuilder& AddIngressQoSTimestampingAclEntry(std::string ingress_port);
 
  private:
   sai::TableEntries entries_;
