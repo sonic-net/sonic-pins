@@ -72,12 +72,15 @@
 // `acl_ingress_table`.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_INGRESS_MODIFY "3.0.1"
 
+// Indicates that the program supports reconciliation of populated ACL tables.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_RECONCILE "3.0.2"
+
 // Indicates the switch executes batched updates in order, aborting every update
 // after the first failed one.
 #define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.1.0"
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_INGRESS_MODIFY
+  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_RECONCILE
 
 #endif // PINS_SAI_VERSIONS_H_
