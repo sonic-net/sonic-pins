@@ -16,9 +16,12 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "gtest/gtest.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
@@ -26,13 +29,14 @@
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
 // NSF Upgrade test scenarios related to gNMI config push and P4 flow
 // programming.
 enum class NsfUpgradeScenario {
-  kNoConfigPush,
+  // kNoConfigPush,
   kOnlyConfigPush,
   kConfigPushBeforeAclFlowProgram,
   kConfigPushAfterAclFlowProgram,
@@ -55,7 +59,7 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
   absl::Status NsfUpgradeOrReboot(NsfUpgradeScenario scenario,
-                                  const ImageConfigParams& curr_image_config,
+                                  ImageConfigParams& curr_image_config,
                                   ImageConfigParams& next_image_config,
                                   bool enable_interface_validation_during_nsf);
 

@@ -26,7 +26,7 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <thread>  // NOLINT
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1325,7 +1325,6 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<thinkit::GenericTestbed> testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
-
 
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets

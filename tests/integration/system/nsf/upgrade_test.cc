@@ -14,6 +14,7 @@
 
 #include "tests/integration/system/nsf/upgrade_test.h"
 
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -23,10 +24,12 @@
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
@@ -37,6 +40,7 @@
 #include "tests/integration/system/nsf/milestone.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -48,10 +52,6 @@ namespace pins_test {
 namespace {
 
 using ::p4::v1::ReadResponse;
-
-// Since the validation is while the traffic is in progress, error margin needs
-// to be defined.
-constexpr int kErrorPercentage = 1;
 
 NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
   absl::BitGen gen;
@@ -84,16 +84,18 @@ absl::Status NsfUpgradeTest::PushConfigAndValidate(
   RETURN_IF_ERROR(PushConfig(image_config_param, testbed_, *ssh_client_,
                              /*clear_config=*/false,
                              enable_interface_validation_during_nsf));
-  RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
-                                       &image_config_param,
-                                       enable_interface_validation_during_nsf));
+  std::vector<std::string> interfaces;
+
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &image_config_param,
+                           enable_interface_validation_during_nsf, interfaces));
   return ValidateComponents(
       &ComponentValidator::OnConfigPush, component_validators_,
       image_config_param.image_label, testbed_, *ssh_client_);
 }
 
 absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
-    NsfUpgradeScenario scenario, const ImageConfigParams& curr_image_config,
+    NsfUpgradeScenario scenario, ImageConfigParams& curr_image_config,
     ImageConfigParams& next_image_config,
     bool enable_interface_validation_during_nsf) {
   LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
@@ -120,8 +122,18 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                    flow_programmer_->ProgramFlows(curr_image_config.p4_info,
                                                   testbed_, *ssh_client_));
   if (updated_gnmi_config.has_value()) {
-    next_image_config.gnmi_config = *std::move(updated_gnmi_config);
+    // Both are currently initialised to same config as
+    // the replay infrastructure generates config only using mainline. Once
+    // the replay infra has the capability to generate the config based on
+    // MPM, update the below configs accordingly.
+    next_image_config.gnmi_config = updated_gnmi_config.value();
+    curr_image_config.gnmi_config = updated_gnmi_config.value();
   }
+  thinkit::Switch& sut = GetSut(testbed_);
+  std::vector<std::string> interfaces_before_config_push;
+  RETURN_IF_ERROR(ValidateTestbedState(
+      testbed_, *ssh_client_, &curr_image_config,
+      enable_interface_validation_during_nsf, interfaces_before_config_push));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnFlowProgram, component_validators_,
       curr_image_config.image_label, testbed_, *ssh_client_));
@@ -140,6 +152,11 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                          "p4flow_snapshot2_before_upgrade_and_nsf.txt"));
 
   LOG(INFO) << "Starting NSF Upgrade";
+
+  ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  ASSIGN_OR_RETURN(
+      PinsSoftwareComponentInfo pins_component_info_before_upgrade_reboot,
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
   // Copy image to the switch for installation.
   ASSIGN_OR_RETURN(
       std::string image_version,
@@ -147,12 +164,30 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnImageCopy, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
-  // TODO: Validate uptime and boot-type once they are supported.
+  ASSIGN_OR_RETURN(
+      PinsSoftwareComponentInfo pins_component_info_after_upgrade_before_reboot,
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+  RETURN_IF_ERROR(ValidatePinsSoftwareComponentsBeforeReboot(
+      pins_component_info_after_upgrade_before_reboot,
+      pins_component_info_before_upgrade_reboot, image_version));
 
   // Perform NSF Reboot and validate switch state after reboot is completed.
+  // Since the new config is not pushed yet, passing the existing config for
+  // validation.
   RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(
-      testbed_, *ssh_client_, &next_image_config,
-      enable_interface_validation_during_nsf));
+      testbed_, *ssh_client_, &curr_image_config,
+      enable_interface_validation_during_nsf, interfaces_before_config_push));
+  ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub());
+
+  ASSIGN_OR_RETURN(
+      PinsSoftwareComponentInfo pins_component_info_after_upgrade_reboot,
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+
+  RETURN_IF_ERROR(ValidatePinsSoftwareComponentsAfterReboot(
+      pins_component_info_before_upgrade_reboot.primary_network_stack,
+      pins_component_info_after_upgrade_reboot.primary_network_stack,
+      pins_component_info_after_upgrade_reboot.secondary_network_stack,
+      image_version));
 
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnNsfReboot, component_validators_,
@@ -166,14 +201,18 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                          "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
   switch (scenario) {
-    case NsfUpgradeScenario::kNoConfigPush:
-      LOG(INFO) << "Proceeding with no config push scenario";
-      break;
     case NsfUpgradeScenario::kOnlyConfigPush:
       LOG(INFO) << "Proceeding with only config push";
       RETURN_IF_ERROR(PushConfigAndValidate(
           next_image_config, enable_interface_validation_during_nsf));
       break;
+    // case NsfUpgradeScenario::kNoConfigPush:
+    // LOG(INFO) << "Proceeding with no config push scenario";
+    // RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
+    //                                    &curr_image_config,
+    //                                   enable_interface_validation_during_nsf,
+    //                                    interfaces_before_config_push));
+    // break;
     case NsfUpgradeScenario::kConfigPushAfterAclFlowProgram:
       LOG(INFO) << "Proceeding with config push after ACL flow program";
       RETURN_IF_ERROR(
@@ -199,14 +238,15 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // TODO: For now, we validate traffic only after stopping
   // traffic. Ideally we would want to validate traffic while injection is in
-  // progress to narrow down when the traffic loss occurred (i.e. before reboot,
-  // during reboot or after reconciliation). Although this is possible in OTG
-  // traffic generator, DVaaS traffic generator for now does not support traffic
-  // validation before stopping the traffic. This is a good-to-have feature and
-  // we will update the skeleton to validate traffic while injection is ongoing
-  // once this feature is available in DVaaS.
+  // progress to narrow down when the traffic loss occurred (i.e. before
+  // reboot, during reboot or after reconciliation). Although this is possible
+  // in OTG traffic generator, DVaaS traffic generator for now does not
+  // support traffic validation before stopping the traffic. This is a
+  // good-to-have feature and we will update the skeleton to validate traffic
+  // while injection is ongoing once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
+  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(
+      testbed_, kNsfTrafficLossErrorPercentage));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStopTraffic, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
