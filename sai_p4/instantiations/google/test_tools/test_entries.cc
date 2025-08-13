@@ -432,6 +432,45 @@ EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
   if (!match_fields.vlan_id.IsWildcard()) {
     *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
   }
+  if (match_fields.dst_ipv6.has_value()) {
+    match.mutable_is_ipv6()->set_value(BoolToHexString(true));
+    match.mutable_dst_ipv6()->set_value(
+        match_fields.dst_ipv6->value.ToString());
+    match.mutable_dst_ipv6()->set_mask(match_fields.dst_ipv6->mask.ToString());
+  }
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddPreIngressAclEntrySettingVlanAndAclMetadata(
+    absl::string_view vlan_id_hexstr, absl::string_view acl_metadata_hexstr,
+    const AclPreIngressVlanTableMatchFields& match_fields, int priority) {
+  sai::AclPreIngressVlanTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
+  entry.set_priority(priority);
+  auto& match = *entry.mutable_match();
+  if (match_fields.is_ip.has_value()) {
+    match.mutable_is_ip()->set_value(BoolToHexString(*match_fields.is_ip));
+  }
+  if (match_fields.is_ipv4.has_value()) {
+    match.mutable_is_ipv4()->set_value(BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    match.mutable_is_ipv6()->set_value(BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.in_port.has_value()) {
+    match.mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (!match_fields.vlan_id.IsWildcard()) {
+    *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
+  }
+
+  entry.mutable_action()
+      ->mutable_set_outer_vlan_id_and_acl_metadata()
+      ->set_acl_metadata(acl_metadata_hexstr);
+  entry.mutable_action()
+      ->mutable_set_outer_vlan_id_and_acl_metadata()
+      ->set_vlan_id(vlan_id_hexstr);
+
   return *this;
 }
 
@@ -648,7 +687,7 @@ EntryBuilder& EntryBuilder::AddDisableEgressVlanChecksEntry() {
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
-    absl::string_view set_vlan_id_hexstr,
+    absl::string_view vlan_id_hexstr,
     std::optional<absl::string_view> match_vlan_id_hexstr, int priority) {
   sai::AclPreIngressVlanTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
@@ -657,7 +696,7 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
-      set_vlan_id_hexstr);
+      vlan_id_hexstr);
   entry.set_priority(priority);
 
   return *this;
@@ -882,6 +921,10 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   }
   if (match_fields.vrf.has_value()) {
     entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
+  }
+  if (!match_fields.acl_metadata.IsWildcard()) {
+    *entry.mutable_match()->mutable_acl_metadata() =
+        BitSetTernaryToSai<kAclMetadataBitwidth>(match_fields.acl_metadata);
   }
   entry.mutable_action()->mutable_redirect_to_port()->set_redirect_port(port);
   entry.set_priority(priority);
