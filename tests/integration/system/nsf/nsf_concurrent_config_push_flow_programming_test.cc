@@ -14,7 +14,8 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
-#include <thread> 
+#include <string>
+#include <thread>  
 #include <vector>
 
 #include "absl/status/status.h"
@@ -34,12 +35,9 @@
 #include "gtest/gtest.h"
 
 namespace pins_test {
-using ::p4::v1::Entity;
 using ::p4::v1::ReadResponse;
 
-// Since the validation is while the traffic is in progress, error margin needs
-// to be defined.
-constexpr int kErrorPercentage = 1;
+constexpr int kIsolatedLacpSystemPriority = 512;
 constexpr absl::Duration kNsfThreadDelay = absl::Seconds(1);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 
@@ -179,7 +177,8 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
+  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_,
+                                             kNsfTrafficLossErrorPercentage));
 
   LOG(INFO) << "Clearing the flows";
   ASSERT_OK(flow_programmer_->ClearFlows(testbed_));

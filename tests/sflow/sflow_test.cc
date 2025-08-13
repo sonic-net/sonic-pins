@@ -2000,9 +2000,11 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
 // 5. Send traffic to switch to trigger backoff.
 // 6. Verify sFlow states.
 TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
+
   if (!GetParam().nsf_enabled) {
     GTEST_SKIP() << "NSF is disabled, skip VerifyBackOffWorksAfterNsf test.";
   }
+
   ASSERT_GE(ready_links_.size(), 2) << "Needs two ready ixia links for testing";
   absl::flat_hash_map<std::string, bool> sflow_interfaces;
   ASSERT_OK_AND_ASSIGN(sflow_interfaces, GetSflowInterfacesFromSut(*testbed_));
@@ -2551,12 +2553,12 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
 // Start collector at localhost:portB.
 // Start traffic and verify.
 TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
   if (!GetParam().nsf_enabled) {
     GTEST_SKIP()
         << "Skip TestNsfUpgradeGnpsiCollector since NSF is not enabled.";
   }
-  thinkit::MirrorTestbed& testbed =
-      GetParam().testbed_interface->GetMirrorTestbed();
 
   // Configure SUT with control switch loopback0 ip as collector.
   ASSERT_OK_AND_ASSIGN(

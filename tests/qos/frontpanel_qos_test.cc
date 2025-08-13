@@ -26,7 +26,7 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <thread>  // NOLINT
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1311,9 +1311,6 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 // where the CIRs are chosen low enough to be fully saturated by the background
 // traffic. We repeat this for CIRs = 0 and CIRs > 0.
 TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
-  if (GetParam().multicast_queue_by_dscp.has_value()) {
-    GTEST_SKIP() << "Multicast forwarding WIP";
-  }
   LOG(INFO) << "-- Test started ----------------------------------------------";
   LOG(INFO) << "obtaining testbed handle";
   // Pick a testbed with SUT connected to an Ixia on 3 ports, so we can
@@ -1325,7 +1322,6 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<thinkit::GenericTestbed> testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
-
 
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
@@ -1383,19 +1379,42 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
           testbed->Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
-                       sai::EntryBuilder()
-                           .AddEntriesForwardingIpPacketsToGivenPort(
-                               /*egress_port=*/kSutEgressPortP4rtId,
-                               /*ip_version=*/sai::IpVersion::kIpv4And6,
-                               /*rewrite_options*/ kNextHopRewriteOptions)
-                           .LogPdEntries()
-                           .GetDedupedPiEntities(ir_p4info));
-  ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
+  netaddr::Ipv6Address kIpv6McastAddresses[64];
+  netaddr::Ipv4Address kIpv4McastAddresses[64];
+  for (int dscp = 0; dscp < 64; ++dscp) {
+    kIpv6McastAddresses[dscp] =
+        netaddr::Ipv6Address(0xff00, 0, 0, 0, 0, 0, 0, dscp + 1);
+    kIpv4McastAddresses[dscp] = netaddr::Ipv4Address(224, 0, 0, dscp + 1);
+  }
 
   using DscpsByQueueName = absl::flat_hash_map<std::string, std::vector<int>>;
-  ASSERT_OK_AND_ASSIGN(const DscpsByQueueName kDscpsByQueueName,
-                       GetQueueToDscpsMapping(*GetParam().queue_by_dscp));
+  std::optional<DscpsByQueueName> kDscpsByQueueName;
+  bool testing_multicast = false;
+  if (GetParam().multicast_queue_by_dscp.has_value()) {
+    ASSERT_OK_AND_ASSIGN(
+        auto entries, ConstructEntriesToForwardMcastTrafficToGivenPort(
+                          ir_p4info, kSutEgressPortP4rtId, kIpv6McastAddresses,
+                          kIpv4McastAddresses, /*num_mcast_addresses=*/64));
+    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entries));
+    ASSERT_OK_AND_ASSIGN(
+        kDscpsByQueueName,
+        GetQueueToDscpsMapping(*GetParam().multicast_queue_by_dscp));
+    testing_multicast = true;
+  } else if (GetParam().queue_by_dscp.has_value()) {
+    ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
+                         sai::EntryBuilder()
+                             .AddEntriesForwardingIpPacketsToGivenPort(
+                                 /*egress_port=*/kSutEgressPortP4rtId,
+                                 /*ip_version=*/sai::IpVersion::kIpv4And6,
+                                 /*rewrite_options*/ kNextHopRewriteOptions)
+                             .LogPdEntries()
+                             .GetDedupedPiEntities(ir_p4info));
+    ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, entities));
+    ASSERT_OK_AND_ASSIGN(kDscpsByQueueName,
+                         GetQueueToDscpsMapping(*GetParam().queue_by_dscp));
+  } else {
+    GTEST_SKIP() << "no queue_by_dscp or multicast_queue_by_dscp configured";
+  }
 
   // Obtain queues and DSCPs for the queues.
   ASSERT_OK_AND_ASSIGN(
@@ -1405,7 +1424,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
   // Remove queues which are not present in the dscp map passed in.
   for (auto i = queues_from_highest_to_lowest_priority.begin();
        i != queues_from_highest_to_lowest_priority.end();) {
-    if (!kDscpsByQueueName.contains(i->name)) {
+    if (kDscpsByQueueName.has_value() &&
+        !kDscpsByQueueName->contains(i->name)) {
       i = queues_from_highest_to_lowest_priority.erase(i);
     } else {
       ++i;
@@ -1499,6 +1519,10 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         params.committed_information_rate =
             queue.type == QueueType::kRoundRobin ? kRoundRobinQueueCir : 0;
         params.peak_information_rate = kEgressLineRateInBytesPerSecond;
+        if (queue.type == QueueType::kRoundRobin) {
+          LOG(INFO) << "Round robin queue: " << queue.name
+                    << " CIR = " << kRoundRobinQueueCir;
+        }
       }
       ASSERT_OK(SetSchedulerPolicyParameters(kSutEgressPortSchedulerPolicy,
                                              params_by_queue_name, *gnmi_stub));
@@ -1518,10 +1542,11 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
       for (bool ipv4 : {true, false}) {
         // Configuring main traffic targetting queue under test.
         {
-          ASSERT_THAT(
-              kDscpsByQueueName,
-              Contains(Pair(Eq(queue_under_test.name), Not(IsEmpty()))));
-          const int kDscp = kDscpsByQueueName.at(queue_under_test.name).at(0);
+          ASSERT_THAT(kDscpsByQueueName,
+                      Optional(Contains(
+                          Pair(Eq(queue_under_test.name), Not(IsEmpty())))));
+          const int kDscp =
+              kDscpsByQueueName.value().at(queue_under_test.name).at(0);
           const std::string kTrafficName = absl::StrFormat(
               "main traffic: %d MB/s of IPv%d packets/second with DSCP %d "
               "targeting %s queue '%s'",
@@ -1536,14 +1561,37 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
               .traffic_speed =
                   ixia::FramesPerSecond{kEgressLineRateInFramesPerSecond / 2},
           };
-          if (ipv4) {
-            traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
-                .priority = ixia::IpPriority{.dscp = kDscp},
-            };
+          if (testing_multicast) {
+            if (ipv4) {
+              traffic_params.dst_mac =
+                  netaddr::MacAddress(1, 0, 0x5e, 0, 0, kDscp);
+              traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
+                  .src_ipv4 = netaddr::Ipv4Address(192, 168, 2, kDscp),
+                  .dst_ipv4 = kIpv4McastAddresses[kDscp],
+                  // Set ECN 0 to avoid RED drops.
+                  .priority = ixia::IpPriority{.dscp = kDscp, .ecn = 0},
+              };
+            } else {
+              traffic_params.dst_mac =
+                  netaddr::MacAddress(0x33, 0x33, 0, 0, 0, kDscp);
+              traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
+                  .src_ipv6 =
+                      netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, kDscp),
+                  .dst_ipv6 = kIpv6McastAddresses[kDscp],
+                  // Set ECN 0 to avoid RED drops.
+                  .priority = ixia::IpPriority{.dscp = kDscp, .ecn = 0},
+              };
+            }
           } else {
-            traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
-                .priority = ixia::IpPriority{.dscp = kDscp},
-            };
+            if (ipv4) {
+              traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
+                  .priority = ixia::IpPriority{.dscp = kDscp},
+              };
+            } else {
+              traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
+                  .priority = ixia::IpPriority{.dscp = kDscp},
+              };
+            }
           }
           ASSERT_OK_AND_ASSIGN(std::string traffic_item,
                                ixia::SetUpTrafficItem(
@@ -1558,9 +1606,11 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         // Configure background traffic, for all queues including the queue
         // under test.
         for (const QueueInfo &queue : queues_from_highest_to_lowest_priority) {
+          LOG(INFO) << "configuring background traffic for queue: "
+                    << queue.name;
           ASSERT_THAT(kDscpsByQueueName,
-                      Contains(Pair(Eq(queue.name), Not(IsEmpty()))));
-          const int kDscp = kDscpsByQueueName.at(queue.name).at(0);
+                      Optional(Contains(Pair(Eq(queue.name), Not(IsEmpty())))));
+          const int kDscp = kDscpsByQueueName->at(queue.name).at(0);
           const std::string kTrafficName = absl::StrFormat(
               "background traffic: %d MB/s of IPv%d packets/second with DSCP "
               "%d targeting %s queue '%s'",
@@ -1573,14 +1623,37 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
               .traffic_speed =
                   ixia::FramesPerSecond{kFramesPerSecondPerTrafficItem},
           };
-          if (ipv4) {
-            traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
-                .priority = ixia::IpPriority{.dscp = kDscp},
-            };
+          if (testing_multicast) {
+            if (ipv4) {
+              traffic_params.dst_mac =
+                  netaddr::MacAddress(1, 0, 0x5e, 0, 0, kDscp);
+              traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
+                  .src_ipv4 = netaddr::Ipv4Address(192, 168, 2, kDscp),
+                  .dst_ipv4 = kIpv4McastAddresses[kDscp],
+                  // Set ECN 0 to avoid RED drops.
+                  .priority = ixia::IpPriority{.dscp = kDscp, .ecn = 0},
+              };
+            } else {
+              traffic_params.dst_mac =
+                  netaddr::MacAddress(0x33, 0x33, 0, 0, 0, kDscp);
+              traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
+                  .src_ipv6 =
+                      netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, kDscp),
+                  .dst_ipv6 = kIpv6McastAddresses[kDscp],
+                  // Set ECN 0 to avoid RED drops.
+                  .priority = ixia::IpPriority{.dscp = kDscp, .ecn = 0},
+              };
+            }
           } else {
-            traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
-                .priority = ixia::IpPriority{.dscp = kDscp},
-            };
+            if (ipv4) {
+              traffic_params.ip_parameters = ixia::Ipv4TrafficParameters{
+                  .priority = ixia::IpPriority{.dscp = kDscp},
+              };
+            } else {
+              traffic_params.ip_parameters = ixia::Ipv6TrafficParameters{
+                  .priority = ixia::IpPriority{.dscp = kDscp},
+              };
+            }
           }
           ASSERT_OK_AND_ASSIGN(std::string traffic_item,
                                ixia::SetUpTrafficItem(
