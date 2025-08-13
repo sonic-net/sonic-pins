@@ -254,6 +254,7 @@ struct AclPreIngressMatchFields {
   std::optional<bool> is_ipv6;
   std::optional<std::string> in_port;
   pdpi::Ternary<std::bitset<kVlanIdBitwidth>> vlan_id;
+  std::optional<pdpi::Ternary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
 // -- Entry Builder ------------------------------------------------------------

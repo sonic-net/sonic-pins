@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "tor.p4"
-  version: "3.0.1"
+  version: "3.2.1"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -721,7 +721,6 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767362
-  direct_resource_ids: 352321792
   size: 255
 }
 tables {
@@ -1031,7 +1030,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
@@ -1055,6 +1054,10 @@ tables {
   action_refs {
     id: 16777243
     annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777264
+    annotations: "@proto_id(3)"
   }
   action_refs {
     id: 21257015
@@ -1097,7 +1100,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
@@ -1758,8 +1761,7 @@ actions {
     id: 16777473
     name: "ingress.acl_ingress.acl_copy"
     alias: "acl_copy"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
   }
   params {
     id: 1
@@ -1775,8 +1777,7 @@ actions {
     id: 16777474
     name: "ingress.acl_ingress.acl_trap"
     alias: "acl_trap"
-    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
   }
   params {
     id: 1
@@ -1792,8 +1793,7 @@ actions {
     id: 16777475
     name: "ingress.acl_ingress.acl_forward"
     alias: "acl_forward"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
 }
 actions {
@@ -2118,6 +2118,27 @@ actions {
     id: 16777218
     name: "ingress.routing_resolution.set_port_and_src_mac"
     alias: "set_port_and_src_mac"
+  }
+  params {
+    id: 1
+    name: "port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777264
+    name: "ingress.routing_resolution.unicast_set_port_and_src_mac"
+    alias: "unicast_set_port_and_src_mac"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2534,18 +2555,6 @@ direct_counters {
     unit: BOTH
   }
   direct_table_id: 33554700
-}
-direct_meters {
-  preamble {
-    id: 352321792
-    name: "ingress.acl_ingress.acl_ingress_meter"
-    alias: "acl_ingress_meter"
-    annotations: "@mode(single_rate_two_color)"
-  }
-  spec {
-    unit: BYTES
-  }
-  direct_table_id: 33554688
 }
 direct_meters {
   preamble {
