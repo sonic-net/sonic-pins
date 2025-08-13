@@ -28,9 +28,9 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"  // IWYU pragma: keep
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -267,12 +267,17 @@ absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
       .dst_ipv6_mask = exact_match_mask,
   };
 
-  if (tunnel_type == pins_test::TunnelMatchType::kTernaryMatchSrcIp) {
-    params.src_ipv6_value = tunnel_src_ipv6_wildcard;
-    params.src_ipv6_mask = ternary_match_mask;
-  } else if (tunnel_type == pins_test::TunnelMatchType::kTernaryMatchDstIp) {
-    params.dst_ipv6_value = tunnel_dst_ipv6_wildcard;
-    params.dst_ipv6_mask = ternary_match_mask;
+  switch (tunnel_type) {
+    case pins_test::TunnelMatchType::kTernaryMatchSrcIp:
+      params.src_ipv6_value = tunnel_src_ipv6_wildcard;
+      params.src_ipv6_mask = ternary_match_mask;
+      break;
+    case pins_test::TunnelMatchType::kTernaryMatchDstIp:
+      params.dst_ipv6_value = tunnel_dst_ipv6_wildcard;
+      params.dst_ipv6_mask = ternary_match_mask;
+      break;
+    case pins_test::TunnelMatchType::kExactMatch:
+      break;
   }
 
   sai::EntryBuilder entry_builder =
@@ -288,18 +293,19 @@ absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
 // Helper routine to install L3 route
 absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
                             pdpi::IrP4Info& ir_p4info, std::string given_port,
-                            sai::IpVersion ip_version) {
+                            sai::IpVersion ip_version, bool l3_admit) {
   std::vector<p4::v1::Entity> pi_entities;
   LOG(INFO) << "Installing L3 route";
-
   sai::EntryBuilder entry_builder =
       sai::EntryBuilder()
           .AddVrfEntry("vrf-1")
           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
               "vrf-1", sai::IpVersion::kIpv6)
           .AddDefaultRouteForwardingAllPacketsToGivenPort(given_port,
-                                                          ip_version, "vrf-1")
-          .AddEntryAdmittingAllPacketsToL3();
+                                                          ip_version, "vrf-1");
+  if (l3_admit) {
+    entry_builder.AddEntryAdmittingAllPacketsToL3();
+  }
 
   ASSIGN_OR_RETURN(
       pi_entities,
@@ -313,6 +319,16 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
 
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Set testbed environment
+  switch (GetParam().tunnel_type) {
+    case pins_test::TunnelMatchType::kTernaryMatchSrcIp:
+      break;
+    case pins_test::TunnelMatchType::kTernaryMatchDstIp:
+      break;
+    case pins_test::TunnelMatchType::kExactMatch:
+      break;
+  }
 
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
@@ -335,7 +351,7 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
 
   // Install L3 route entry on SUT
   ASSERT_OK(InstallL3Route(*sut_p4rt_session.get(), sut_ir_p4info, out_port,
-                           sai::IpVersion::kIpv4));
+                           sai::IpVersion::kIpv4, /*l3_admit=*/true));
 
   // Install tunnel term table entry on SUT
   ASSERT_OK_AND_ASSIGN(
@@ -395,6 +411,16 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv6Inv6) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
 
+  // Set testbed environment
+  switch (GetParam().tunnel_type) {
+    case pins_test::TunnelMatchType::kTernaryMatchDstIp:
+      break;
+    case pins_test::TunnelMatchType::kTernaryMatchSrcIp:
+      break;
+    case pins_test::TunnelMatchType::kExactMatch:
+      break;
+  }
+
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -416,7 +442,7 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv6Inv6) {
 
   // Install L3 route entry on SUT
   ASSERT_OK(InstallL3Route(*sut_p4rt_session.get(), sut_ir_p4info, out_port,
-                           sai::IpVersion::kIpv6));
+                           sai::IpVersion::kIpv6, /*l3_admit=*/true));
 
   // Install tunnel term table entry on SUT
   ASSERT_OK_AND_ASSIGN(
@@ -443,6 +469,78 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv6Inv6) {
   // Log statistics and check that things succeeded.
   validation_result.LogStatistics();
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
+TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
+  if (GetParam().tunnel_type ==
+          pins_test::TunnelMatchType::kTernaryMatchSrcIp ||
+      GetParam().tunnel_type ==
+          pins_test::TunnelMatchType::kTernaryMatchDstIp) {
+    GTEST_SKIP();
+  }
+
+  dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
+
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Initialize the connection, clear all entities, and (for the SUT) push
+  // P4Info.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
+
+  // Get control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_control,
+      GetParam().mirror_testbed->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string in_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+  ASSERT_OK_AND_ASSIGN(std::string out_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+
+  // Install L3 route entry on SUT
+  ASSERT_OK(InstallL3Route(*sut_p4rt_session.get(), sut_ir_p4info, out_port,
+                           sai::IpVersion::kIpv4, /*l3_admit=*/false));
+
+  // Install tunnel term table entry on SUT
+  ASSERT_OK_AND_ASSIGN(
+      const auto tunnel_entities,
+      InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info,
+                             GetParam().tunnel_type));
+
+  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ing:" << in_port
+            << " to eng:" << out_port;
+  // Send IPv4-in-IPv6 Packet and verify that packet is getting
+  // dropped as l3-admit is not configured
+  pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
+      .in_port = in_port,
+      .out_port = out_port,
+      .dst_mac = dst_mac,
+      .inner_dst_ipv4 = inner_dst_ipv4,
+      .dst_ipv6 = tunnel_dst_ipv6};
+  dvaas::PacketTestVector test_vector =
+      Ipv4InIpv6DecapTestVector(tunnel_v6_match);
+
+  for (dvaas::SwitchOutput& output :
+       *test_vector.mutable_acceptable_outputs()) {
+    output.clear_packet_ins();
+    output.clear_packets();
+  }
+
+  dvaas_params.packet_test_vector_override = {test_vector};
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result1,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+
+  // Log statistics and check that things succeeded.
+  validation_result1.LogStatistics();
+  EXPECT_OK(validation_result1.HasSuccessRateOfAtLeast(1.0));
 }
 
 }  // namespace
