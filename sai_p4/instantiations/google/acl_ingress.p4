@@ -501,9 +501,11 @@ control acl_ingress(in headers_t headers,
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#if defined(VLAN_CAPABLE)
       local_metadata.vlan_id : ternary
           @id(16) @name("vlan_id")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
 #endif
     }
     actions = {
@@ -667,12 +669,12 @@ control acl_ingress(in headers_t headers,
         @name("acl_metadata")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)
         @id(6);
-
+#if defined(VLAN_CAPABLE)
       local_metadata.vlan_id : ternary
         @name("vlan_id")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
         @id(7);
-
+#endif
       headers.ipv4.isValid() || headers.ipv6.isValid() : optional
         @name("is_ip")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP)
@@ -820,9 +822,11 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(11) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+#if defined(VLAN_CAPABLE)
       local_metadata.vlan_id : ternary
           @id(12) @name("vlan_id")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
