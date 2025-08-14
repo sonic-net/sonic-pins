@@ -3273,7 +3273,7 @@ headers {
     source_port: "0x0014"
     destination_port: "0x000a"
     length: "0x000a"
-    checksum: "0xb6d4"
+    checksum: "0xb753"
   }
 }
 payload: "Hi"
