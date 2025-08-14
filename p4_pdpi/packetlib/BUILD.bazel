@@ -85,6 +85,7 @@ cc_test(
         ":bit_widths",
         ":packetlib",
         ":packetlib_cc_proto",
+	"//gutil:proto_matchers",
         "//gutil:status_matchers",
 	"//gutil:testing",
         "@com_google_absl//absl/status",
