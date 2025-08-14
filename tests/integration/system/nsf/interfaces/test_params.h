@@ -22,19 +22,13 @@
 
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
+#include "tests/integration/system/nsf/interfaces/scenario.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {
-
-// Struct to hold image label and config parameters to be injected in PINs NSF
-// integration tests.
-struct ImageConfigParams {
-  std::string image_label;
-  std::string gnmi_config;
-  p4::config::v1::P4Info p4_info;
-};
 
 // Struct to hold test parameters to be injected in PINs NSF integration tests.
 //
@@ -42,7 +36,6 @@ struct ImageConfigParams {
 // parameterized NSF integration test.
 struct NsfTestParams {
   std::string name;
-  std::string test_case_id;
   std::vector<ImageConfigParams> image_config_params;
   std::function<std::unique_ptr<FlowProgrammer>()> create_flow_programmer;
   std::function<std::unique_ptr<TrafficHelper>()> create_traffic_helper;
@@ -50,8 +43,9 @@ struct NsfTestParams {
   std::function<std::vector<std::unique_ptr<ComponentValidator>>()>
       create_component_validators;
   std::function<std::unique_ptr<thinkit::SSHClient>()> create_ssh_client;
-  // TODO: This is a temporary workaround and
-  // needs to be removed once the testbeds are ready.
+  std::function<std::vector<std::string>(NsfUpgradeScenario)> get_test_case_ids;
+  // This is a temporary workaround for b/329070512 and
+  // needs to be removed once the Taygeta-Taygeta testbeds are ready.
   bool enable_interface_validation_during_nsf = true;
 };
 
