@@ -37,7 +37,7 @@
 namespace pins_test {
 
 TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
-
+  GetParam().mirror_testbed->ExpectLinkFlaps();
   // Get mirror testbed
   thinkit::MirrorTestbed& mirror_testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
