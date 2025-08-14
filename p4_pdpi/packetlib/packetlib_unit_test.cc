@@ -891,5 +891,56 @@ TEST(PacketLib, UpdateComputedFieldsAddsSinglePaddingForHopByHopOptions) {
   EXPECT_THAT(parsed_packet, EqualsProto(packet));
 }
 
+TEST(PacketLib,
+     UpdateComputedFieldsAddsSinglePaddingForNPaddingForHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers {
+      hop_by_hop_options_header {
+        next_header: "0xfe"
+        header_extension_length: "0x00"
+        options_and_padding: "0x00000000"
+      }
+    }
+  )pb");
+  
+  // Update adds a single padding for N-padding.
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet).status());
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00000000000100");
+
+  // Verify that the round-tripped packet is the same as the original packet.
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+  EXPECT_THAT(parsed_packet, EqualsProto(packet));
+}
+
+TEST(PacketLib,
+     UpdateComputedFieldsAddsNPaddingForOptionsAndPaddingForHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers {
+      hop_by_hop_options_header {
+        next_header: "0xfe"
+        header_extension_length: "0x00"
+        options_and_padding: "0x000000"
+      }
+    }
+  )pb");
+  
+  // Update adds a N-padding.
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet).status());
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00000000010100");
+
+  // Verify that the round-tripped packet is the same as the original packet.
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+
+  EXPECT_THAT(parsed_packet, EqualsProto(packet));
+}
+
 }  // namespace
 }  // namespace packetlib
