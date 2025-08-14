@@ -68,8 +68,10 @@ control vlan_untag(inout headers_t headers,
 
      // VLAN checks are enabled by default.
      local_metadata.enable_vlan_checks = true;
+#if defined(VLAN_CAPABLE)
      // Check if VLAN checks need to be disabled.
      disable_vlan_checks_table.apply();
+#endif
   }
 }  // control vlan_untag
 
