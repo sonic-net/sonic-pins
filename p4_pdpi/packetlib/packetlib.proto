@@ -69,6 +69,7 @@ message Header {
     PtpHeader ptp_header = 13;
     PspHeader psp_header = 14;
     CsigHeader csig_header = 15;
+    HopByHopOptionsHeader hop_by_hop_options_header = 16;
   }
 }
 
@@ -144,6 +145,14 @@ message Ipv6Header {
   string hop_limit = 7;         // 8 bits
   string ipv6_source = 8;       // Format::IPV6
   string ipv6_destination = 9;  // Format::IPV6
+}
+
+// An IPv6 hop-by-hop options extension header
+// (https://datatracker.ietf.org/doc/html/rfc2460#section-4.3).
+message HopByHopOptionsHeader {
+  string next_header = 1;              // 8 bits
+  string header_extension_length = 2;  // 8 bits
+  string options_and_padding = 3;      // 48 bits
 }
 
 // An ICMP header.

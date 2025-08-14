@@ -130,9 +130,11 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
       @proto_id(1) set_multicast_src_mac;
       @proto_id(2) l2_multicast_passthrough;
       @proto_id(3) multicast_set_src_mac;
+#if defined(VLAN_CAPABLE)
       @proto_id(4) multicast_set_src_mac_and_vlan_id;
       @proto_id(5) multicast_set_src_mac_and_dst_mac_and_vlan_id;
       @proto_id(6) multicast_set_src_mac_and_preserve_ingress_vlan_id;
+#endif
     }
     size = ROUTING_MULTICAST_SOURCE_MAC_TABLE_MINIMUM_GUARANTEED_SIZE;
   }

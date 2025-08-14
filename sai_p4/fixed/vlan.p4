@@ -48,6 +48,8 @@ control vlan_untag(inout headers_t headers,
   apply {
      // Determine the vlan_id metadata.
      if (headers.vlan.isValid()) {
+        // Store the VLAN TPID in metadata.
+        local_metadata.tpid = headers.ethernet.ether_type;
         // If input packet has a VLAN tag, use the VID from the tag.
         local_metadata.vlan_id = headers.vlan.vlan_id;
         // Invalidate the VLAN header. In doing so we move the ethertype placed
@@ -66,8 +68,10 @@ control vlan_untag(inout headers_t headers,
 
      // VLAN checks are enabled by default.
      local_metadata.enable_vlan_checks = true;
+#if defined(VLAN_CAPABLE)
      // Check if VLAN checks need to be disabled.
      disable_vlan_checks_table.apply();
+#endif
   }
 }  // control vlan_untag
 
