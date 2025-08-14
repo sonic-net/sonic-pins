@@ -25,10 +25,10 @@ cc_library(
     hdrs = ["fuzzer_replay_programmer.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:flow_programmer",
+        "//tests/integration/system/nsf/interfaces:image_config_params",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//thinkit:ssh_client",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
     ],
 )
