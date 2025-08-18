@@ -14,7 +14,8 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
-#include <thread> 
+#include <string>
+#include <thread>  
 #include <vector>
 
 #include "absl/status/status.h"
@@ -40,6 +41,7 @@ using ::p4::v1::ReadResponse;
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
 constexpr int kErrorPercentage = 1;
+constexpr int kIsolatedLacpSystemPriority = 512;
 constexpr absl::Duration kNsfThreadDelay = absl::Seconds(1);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 
