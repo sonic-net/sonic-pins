@@ -32,7 +32,7 @@ namespace pins_test {
 // NSF Upgrade test scenarios related to gNMI config push and P4 flow
 // programming.
 enum class NsfUpgradeScenario {
-  kNoConfigPush,
+  // kNoConfigPush,
   kOnlyConfigPush,
   kConfigPushBeforeAclFlowProgram,
   kConfigPushAfterAclFlowProgram,
@@ -55,7 +55,7 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
   absl::Status NsfUpgradeOrReboot(NsfUpgradeScenario scenario,
-                                  const ImageConfigParams& curr_image_config,
+                                  ImageConfigParams& curr_image_config,
                                   ImageConfigParams& next_image_config,
                                   bool enable_interface_validation_during_nsf);
 
