@@ -45,6 +45,16 @@ control acl_ingress(in headers_t headers,
 
   // Copy the packet to the CPU, and forward the original packet.
   @id(ACL_INGRESS_COPY_ACTION_ID)
+#if defined(SAI_INSTANTIATION_TOR)
+  // In ToRs, the acl_ingress_table copy action will not apply a rate limit.
+  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
+  @sai_action(SAI_PACKET_ACTION_COPY)
+  //TODO: Rename parameter to `cpu_queue`.
+  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) cpu_queue_t qos_queue) {
+    acl_ingress_counter.count();
+    local_metadata.marked_to_copy = true;
+  }
+#else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
   //TODO: Rename parameter to `cpu_queue`.
@@ -57,11 +67,17 @@ control acl_ingress(in headers_t headers,
     // TODO: Branch on color and model behavior for all colors.
     local_metadata.marked_to_copy = true;
   }
-
+#endif
   // Copy the packet to the CPU. The original packet is dropped.
   @id(ACL_INGRESS_TRAP_ACTION_ID)
+#if defined(SAI_INSTANTIATION_TOR)
+  // In ToRs, the acl_ingress_table trap action will not apply a rate limit.
+  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
+  @sai_action(SAI_PACKET_ACTION_TRAP)
+#else
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
+#endif
   //TODO: Rename parameter to `cpu_queue`.
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) cpu_queue_t qos_queue) {
     acl_copy(qos_queue);
@@ -74,6 +90,12 @@ control acl_ingress(in headers_t headers,
   // the default action, and to specify a meter but not otherwise perform any
   // action.
   @id(ACL_INGRESS_FORWARD_ACTION_ID)
+#if defined(SAI_INSTANTIATION_TOR)
+  // ToRs rely on QoS queues to limit forwarded flows.
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  action acl_forward() {
+  }
+#else
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
   action acl_forward() {
@@ -81,6 +103,7 @@ control acl_ingress(in headers_t headers,
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
   }
+#endif
 
   // Forward the packet normally (i.e., perform no action).
   @id(ACL_INGRESS_COUNT_ACTION_ID)
@@ -379,8 +402,12 @@ control acl_ingress(in headers_t headers,
       @defaultonly NoAction;
     }
     const default_action = NoAction;
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     meters = acl_ingress_meter;
     counters = acl_ingress_counter;
+#else
+    counters = acl_ingress_counter;
+#endif
     size = ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
@@ -683,9 +710,17 @@ control acl_ingress(in headers_t headers,
 // We don't usually restrict actions to instantiations because they don't
 // require resources but we make an exception here because of issues with
 // metering (go/pins-meter-consistency for details).
+// `acl_forward` in `mirror_and_redirect` is needed for `tor` and is an
 // unmetered action there. `middleblock` needs `mirror_and_redirect` but NOT
 // `acl_forward` which is a metered action there. If we include it in
 // `middleblock` we run into resource issues.
+//
+// We also restrict Mirroring actions to `tor` because they are not
+// used in other instantiations. More importantly, these actions refer to
+// mirror_session_table that only exists in `tor` so
+// if these actions are visible in instantiations that don't have
+// mirror_session_table, reference entries generation in IrP4Info and
+// reference analysis will fail.
       @proto_id(4) acl_forward();
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
