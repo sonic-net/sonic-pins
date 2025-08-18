@@ -85,6 +85,7 @@ cc_library(
         "fuzzer_config.h",
     ],
     deps = [
+        ":fuzzer_cc_proto",
         "//gutil:proto",
         "//gutil:status",
         "//lib/p4rt:p4rt_port",

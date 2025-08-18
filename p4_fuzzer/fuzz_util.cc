@@ -523,7 +523,7 @@ bool IsAccidentallyInvalidUpdate(
         candidate_update.pi().entity().table_entry().table_id(), num_inserts);
   }
 
-  return false;
+  return config.GetIsBuggyUpdateThatShouldBeSkipped()(candidate_update);
 }
 
 // Returns all valid table ids.
