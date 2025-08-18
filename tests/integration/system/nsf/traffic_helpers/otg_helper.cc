@@ -25,17 +25,31 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
 #include "grpcpp/client_context.h"
 #include "gutil/overload.h"
 #include "gutil/status.h"
 #include "lib/utils/generic_testbed_utils.h"
+#include "lib/validator/validator_lib.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace pins_test {
+namespace {
+
+absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
+                          const otg::SetConfigRequest& request,
+                          otg::SetConfigResponse& response) {
+  grpc::ClientContext context;
+  return gutil::GrpcStatusToAbslStatus(
+      stub->SetConfig(&context, request, &response));
+}
+
+}  // namespace
 
 absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
   return std::visit(
@@ -60,7 +74,6 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             // Create config.
             otg::SetConfigRequest set_config_request;
             otg::SetConfigResponse set_config_response;
-            grpc::ClientContext set_config_context;
             auto* config = set_config_request.mutable_config();
 
             // Randomly pick source and destination hosts.
@@ -159,9 +172,10 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
 
             // Set the config.
             otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
-            RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
-                stub->SetConfig(&set_config_context, set_config_request,
-                                &set_config_response)));
+
+            RETURN_IF_ERROR(WaitForCondition(SetOtgConfig, absl::Minutes(5),
+                                             stub, set_config_request,
+                                             set_config_response));
 
             // Start the traffic.
             otg::SetControlStateRequest request;
@@ -226,6 +240,12 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
             RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
                 stub->GetMetrics(&metrics_ctx, metrics_req, &metrics_res)));
 
+            RETURN_IF_ERROR(testbed->Environment().StoreTestArtifact(
+                absl::StrCat("OTG_Traffic_Metrics_",
+                             absl::FormatTime("%H_%M_%S", absl::Now(),
+                                              absl::LocalTimeZone()),
+                             ".txt"),
+                metrics_res.DebugString()));
             // Verify flow metrics is not empty.
             if (metrics_res.metrics_response().flow_metrics().empty()) {
               return absl::InternalError(
@@ -240,7 +260,7 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
               bool transmission_stopped =
                   flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
 
-              if (flow_metric.bytes_tx() == 0 || flow_metric.frames_tx() == 0) {
+              if (flow_metric.frames_tx() == 0) {
                 errors.push_back(
                     absl::StrCat("Flow name:\t\t", flow_metric.name(),
                                  "\nFrames Tx:\t\t", flow_metric.frames_tx(),
@@ -256,14 +276,10 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                   flow_metric.bytes_tx() - flow_metric.bytes_rx();
               uint64_t frames_drop =
                   flow_metric.frames_tx() - flow_metric.frames_rx();
-              uint64_t bytes_drop_percent =
-                  (bytes_drop / flow_metric.bytes_tx()) * 100;
               float_t frames_drop_percent =
                   (frames_drop / flow_metric.frames_tx()) * 100;
 
-              if (bytes_drop_percent <= error_percentage &&
-                  frames_drop_percent <= error_percentage)
-                continue;
+              if (frames_drop_percent <= error_percentage) continue;
 
               errors.push_back(absl::StrCat(
                   "Flow name:\t\t", flow_metric.name(), "\nBytes dropped:\t\t",

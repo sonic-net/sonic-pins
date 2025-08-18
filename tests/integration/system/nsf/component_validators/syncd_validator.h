@@ -43,6 +43,8 @@ class SyncdValidator : public ComponentValidator {
     LOG(INFO) << "Syncd Flow Cleanup";
     return absl::OkStatus();
   }
+  absl::Status OnNsfReboot(absl::string_view version, Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
 };
 
 }  // namespace pins_test

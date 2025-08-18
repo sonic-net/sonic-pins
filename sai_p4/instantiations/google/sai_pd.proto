@@ -67,8 +67,9 @@ message RouterInterfaceTableEntry {
   message Action {
     oneof action {
       SetPortAndSrcMacAction set_port_and_src_mac = 1;
-      // CAUTION: This action is not (yet) supported.
       SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+      // CAUTION: This action is not (yet) supported.
+      UnicastSetPortAndSrcMacAction unicast_set_port_and_src_mac = 3;
     }
   }
   Action action = 2;
@@ -828,12 +829,12 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      AclForwardAction acl_forward = 3;
+      AclForwardAction acl_forward = 2;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 4;
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 5;
       RedirectToPortAction redirect_to_port = 6;
-      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 2;
+      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 3;
       RedirectToIpmcGroupAndSetCpuQueueAndCancelCopyAction
           redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy = 7;
       SetCpuQueueAndCancelCopyAction set_cpu_queue_and_cancel_copy = 8;
@@ -1006,6 +1007,13 @@ message MakeUntaggedMemberAction {}
 message DisableIngressVlanChecksAction {}
 
 message DisableEgressVlanChecksAction {}
+
+// CAUTION: This action is not (yet) supported.
+message UnicastSetPortAndSrcMacAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+}
+
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.

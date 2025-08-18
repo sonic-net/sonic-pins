@@ -74,6 +74,7 @@ cc_library(
         "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
         "//thinkit:ssh_client",
+        "//thinkit:switch",
         "//thinkit:test_environment",
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_google_glog//:glog",
