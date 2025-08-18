@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "fabric_border_router.p4"
-  version: "3.0.1"
+  version: "3.0.2"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -914,7 +914,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
@@ -980,7 +980,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 1024
+  size: 4096
 }
 tables {
   preamble {
