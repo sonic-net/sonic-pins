@@ -34,10 +34,6 @@ namespace pins_test {
 
 using ::p4::v1::ReadResponse;
 
-// Since the validation is while the traffic is in progress, error margin needs
-// to be defined.
-constexpr int kErrorPercentage = 1;
-
 void NsfAclFlowCoverageTestFixture::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
   traffic_helper_ = GetParam().create_traffic_helper();
@@ -115,7 +111,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
+  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_,
+                                             kNsfTrafficLossErrorPercentage));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
   // testbeds).
