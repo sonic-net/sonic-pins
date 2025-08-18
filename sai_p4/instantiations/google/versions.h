@@ -72,12 +72,29 @@
 // `acl_ingress_table`.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_INGRESS_MODIFY "3.0.1"
 
+// Indicates that the program supports reconciliation of populated ACL tables.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_RECONCILE "3.0.2"
+
 // Indicates the switch executes batched updates in order, aborting every update
 // after the first failed one.
 #define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.1.0"
 
+// Indicates that the switch supports unicast_set_port_and_src_mac action, which
+// at the SAI level translates to port type RIFs that do NOT program l3_admit
+// table (i.e. MyMac at SAI) under the hood.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_UNICAST_SET_PORT_AND_SRC_MAC_ACTION \
+  "3.2.0"
+
+// Indicates the switch executes batched updates in order, aborting every update
+// after the first failed one.
+#define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "3.2.1"
+
+// Indicates that the switch uses "route_hit" instead of "ipmc_table_hit" as the
+// name for ACL keys with
+// `@sai_field(SAI_ACL_ENTRY_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)`.
+#define SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME "
+
 // Macro that always points to the latest SAI P4 version.
-#define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_INGRESS_MODIFY
+#define SAI_P4_PKGINFO_VERSION_LATEST SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
 
 #endif // PINS_SAI_VERSIONS_H_
