@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "tor.p4"
-  version: "3.2.1"
+  version: "3.1.2"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -261,6 +261,10 @@ tables {
   action_refs {
     id: 16777483
     annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777482
+    annotations: "@proto_id(2)"
   }
   action_refs {
     id: 21257015
@@ -961,7 +965,7 @@ tables {
   match_fields {
     id: 9
     name: "ipmc_table_hit"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
   }
@@ -1421,14 +1425,6 @@ tables {
     annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2 ))"
     annotations: "@format(IPV6_ADDRESS)"
     bitwidth: 64
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 10
-    name: "src_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
     match_type: TERNARY
   }
   action_refs {
@@ -1966,7 +1962,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_l2mc_group"
     alias: "redirect_to_l2mc_group"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2000,7 +1995,6 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
