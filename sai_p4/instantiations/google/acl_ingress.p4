@@ -226,7 +226,6 @@ control acl_ingress(in headers_t headers,
     // Disallow 0 since it encodes 'no multicast' in V1Model.
     multicast_group_id != 0;
   ")
-  @unsupported
   action redirect_to_l2mc_group(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)
@@ -262,7 +261,6 @@ control acl_ingress(in headers_t headers,
 #ifdef SAI_INSTANTIATION_TOR
   // TODO: Remove unsupported from ToR when we order ACL
   // insert/deletes during reconcile.
-  @unsupported
 #endif
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)

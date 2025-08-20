@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "fabric_border_router.p4"
-  version: "3.2.1"
+  version: "3.1.1"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -193,6 +193,10 @@ tables {
   action_refs {
     id: 16777483
     annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777482
+    annotations: "@proto_id(2)"
   }
   action_refs {
     id: 21257015
@@ -1397,6 +1401,20 @@ actions {
 }
 actions {
   preamble {
+    id: 16777482
+    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
+    alias: "set_outer_vlan_id"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "vlan_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
     id: 16777483
     name: "ingress.acl_pre_ingress.set_acl_metadata"
     alias: "set_acl_metadata"
@@ -1739,7 +1757,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_l2mc_group"
     alias: "redirect_to_l2mc_group"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
-    annotations: "@unsupported"
   }
   params {
     id: 1
