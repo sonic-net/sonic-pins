@@ -13,6 +13,10 @@
 // limitations under the License.
 #define SAI_INSTANTIATION_TOR
 
+#define ACL_REDIRECT_TO_NEXTHOP_CAPABLE
+#define ACL_REDIRECT_TO_PORT_CAPABLE
+#define MIRROR_CAPABLE
+
 #include <v1model.p4>
 
 // These headers have to come first, to override their fixed counterparts.
