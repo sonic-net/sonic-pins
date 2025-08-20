@@ -896,6 +896,31 @@ TEST(EntryBuilder,
       )pb"))));
 }
 
+TEST(EntryBuilder, AddL2MrifEntryAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddL2MrifEntry(
+                               /*egress_port=*/"1", /*replica_instance=*/15)
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "multicast_router_interface_table"
+                  matches {
+                    name: "multicast_replica_port"
+                    exact { str: "1" }
+                  }
+                  matches {
+                    name: "multicast_replica_instance"
+                    exact { hex_str: "0x000f" }
+                  }
+                  action { name: "l2_multicast_passthrough" }
+                }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddMulticastRouteAddsIpv4Entry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(auto dst_ip,
@@ -1539,6 +1564,81 @@ TEST(AddNexthopRifNeighborEntriesTest, RewritesPassedToDisableRewrites) {
                                               action { name: "set_ip_nexthop" }
                                             }
                                        )pb"))}));
+}
+
+TEST(EntryBuilder,
+     AddPreIngressAclTableEntryMatchingVlanIdAndSetVlanIdAndAclMetadata) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(std::bitset<kVlanIdBitwidth> vlan_id,
+                       pdpi::HexStringToBitset<kVlanIdBitwidth>("0x00a"));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddPreIngressAclEntrySettingVlanAndAclMetadata(
+              /*vlan_id_hexstr=*/"0x00a", "0x12345678",
+              AclPreIngressVlanTableMatchFields{
+                  .vlan_id =
+                      pdpi::Ternary<std::bitset<kVlanIdBitwidth>>(vlan_id)},
+              1)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_pre_ingress_vlan_table"
+                  matches {
+                    name: "vlan_id"
+                    ternary {
+                      value { hex_str: "0x00a" }
+                      mask { hex_str: "0xfff" }
+                    }
+                  }
+                  priority: 1
+                  action {
+                    name: "set_outer_vlan_id_and_acl_metadata"
+                    params {
+                      name: "vlan_id"
+                      value { hex_str: "0x00a" }
+                    }
+                    params {
+                      name: "acl_metadata"
+                      value { hex_str: "0x12345678" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddIngressAclEntryRedirectingToPortWithMatchOnAclMetadataAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  MirrorAndRedirectMatchFields match_fields = {
+      .acl_metadata = pdpi::Ternary<std::bitset<kAclMetadataBitwidth>>(
+          std::bitset<kAclMetadataBitwidth>(0x10))};
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToPort(/*port=*/"1", match_fields)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_mirror_and_redirect_table"
+                  matches {
+                    name: "acl_metadata"
+                    ternary {
+                      value { hex_str: "0x10" }
+                      mask { hex_str: "0xff" }
+                    }
+                  }
+                  priority: 1
+                  action {
+                    name: "redirect_to_port"
+                    params {
+                      name: "redirect_port"
+                      value { str: "1" }
+                    }
+                  }
+                })pb"))));
 }
 
 }  // namespace
