@@ -69,52 +69,6 @@ OutgoingConcreteTableReferencesTestCases() {
              }
            })pb");
 
-  pdpi::TableEntry p4_group_entry_with_multiple_actions =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(golden_test_friendly_wcmp_table_entry {
-                 match { key1: "key-a" key2: "key-b" }
-                 wcmp_actions {
-                   action {
-                     golden_test_friendly_action {
-                       arg1: "act1-arg1"
-                       arg2: "act1-arg2"
-                     }
-                   }
-                   weight: 1
-                 }
-                 wcmp_actions {
-                   action {
-                     golden_test_friendly_action {
-                       arg1: "act2-arg1"
-                       arg2: "act2-arg2"
-                     }
-                   }
-                   weight: 2
-                 }
-                 wcmp_actions {
-                   action {
-                     other_golden_test_friendly_action {
-                       arg1: "act3-arg1"
-                       arg2: "act3-arg2"
-                     }
-                   }
-                   weight: 3
-                 }
-               })pb");
-
-  pdpi::TableEntry built_in_entry_with_multiple_actions =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
-        multicast_group_table_entry {
-          match { multicast_group_id: "0x0037" }
-          action {
-            replicate {
-              replicas { port: "port_1" instance: "0x0031" }
-              replicas { port: "port_2" instance: "0x0032" }
-            }
-          }
-        }
-      )pb");
-
   // Error test cases.
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = p4_entry,
@@ -335,6 +289,20 @@ OutgoingConcreteTableReferencesTestCases() {
           "P4MatchField-Refers-To-BuiltInMatchField reference creates a "
           "single concrete reference.",
   });
+
+  pdpi::TableEntry built_in_entry_with_multiple_actions =
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0037" }
+          action {
+            replicate {
+              replicas { port: "port_1" instance: "0x0031" }
+              replicas { port: "port_2" instance: "0x0032" }
+            }
+          }
+        }
+      )pb");
+
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = built_in_entry_with_multiple_actions,
       .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
@@ -379,6 +347,40 @@ OutgoingConcreteTableReferencesTestCases() {
           "BuiltInMatchField-Refers-To-BuiltInMatchField reference creates "
           "a single concrete reference.",
   });
+
+   pdpi::TableEntry p4_group_entry_with_multiple_actions =
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(
+          R"pb(golden_test_friendly_wcmp_table_entry {
+                 match { key1: "key-a" key2: "key-b" }
+                 wcmp_actions {
+                   action {
+                     golden_test_friendly_action {
+                       arg1: "act1-arg1"
+                       arg2: "act1-arg2"
+                     }
+                   }
+                   weight: 1
+                 }
+                 wcmp_actions {
+                   action {
+                     golden_test_friendly_action {
+                       arg1: "act2-arg1"
+                       arg2: "act2-arg2"
+                     }
+                   }
+                   weight: 2
+                 }
+                 wcmp_actions {
+                   action {
+                     other_golden_test_friendly_action {
+                       arg1: "act3-arg1"
+                       arg2: "act3-arg2"
+                     }
+                   }
+                   weight: 3
+                 }
+               })pb");
+
   test_cases.push_back(ConcreteTableReferenceTestCase{
       .entity = p4_group_entry_with_multiple_actions,
       .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
@@ -487,6 +489,77 @@ OutgoingConcreteTableReferencesTestCases() {
       .description =
           "BuiltInActionField-Refers-To-BuiltInMatchField reference creates a "
           "concrete reference for every instance of the action.",
+  });
+
+  pdpi::TableEntry built_in_entry_with_multiple_backup_actions =
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0037" }
+          action {
+            replicate {
+              replicas {
+                port: "port_1"
+                instance: "0x0031"
+                backup_replicas { port: "port_3" instance: "0x0033" }
+                backup_replicas { port: "port_4" instance: "0x0034" }
+              }
+              replicas {
+                port: "port_2"
+                instance: "0x0032"
+                backup_replicas { port: "port_5" instance: "0x0035" }
+              }
+            }
+          }
+        }
+      )pb");
+
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = built_in_entry_with_multiple_backup_actions,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            action_field {
+              built_in_action_field {
+                action: BUILT_IN_ACTION_REPLICA
+                parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+              }
+            }
+          }
+          destination {
+            match_field { p4_match_field { field_name: "other_field" } }
+          }
+        }
+      )pb"),
+      .description =
+          "BuiltInActionField-Refers-To-P4MatchField reference creates a "
+          "concrete reference for every instance of the backup-action.",
+  });
+  test_cases.push_back(ConcreteTableReferenceTestCase{
+      .entity = built_in_entry_with_multiple_backup_actions,
+      .reference_info = gutil::ParseProtoOrDie<IrTableReference>(R"pb(
+        source_table { built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE }
+        destination_table { p4_table { table_name: "other_table" } }
+        field_references {
+          source {
+            action_field {
+              built_in_action_field {
+                action: BUILT_IN_ACTION_REPLICA
+                parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+              }
+            }
+          }
+          destination {
+            match_field {
+              built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+            }
+          }
+        }
+      )pb"),
+      .description =
+          "BuiltInActionField-Refers-To-BuiltInMatchField reference creates a "
+          "concrete reference for every instance of the backup-action.",
   });
 
   // NOTE: For all following test cases, output is similar whether destination
