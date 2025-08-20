@@ -3072,8 +3072,12 @@ absl::StatusOr<int> IcmpHeaderChecksum(Packet packet, int icmp_header_index) {
                        PacketSizeInBytes(packet, icmp_header_index));
       data.AppendBits<32>(icmpv6_size);
       data.AppendBits<24>(0);
-      RETURN_IF_ERROR(
-          SerializeBits<kIpNextHeaderBitwidth>(header.next_header(), data));
+      // The `next_header` field for a ICMP header identifies the upper-layer
+      // protocol. It differs from the typical `next_header` field in an IPv6
+      // header when there are IPV6 extension headers.
+      // The `next_header` field for a ICMP header must be 58
+      // (0x3a).
+      RETURN_IF_ERROR(SerializeBits<kIpNextHeaderBitwidth>("0x3a", data));
       break;
     }
     case Header::kIpv4Header: {
@@ -3119,6 +3123,10 @@ absl::StatusOr<int> GreHeaderChecksum(Packet packet, int gre_header_index) {
 
 std::string EtherType(uint32_t ether_type) {
   return ValidateAndConvertToHexString<kEthernetEthertypeBitwidth>(ether_type);
+}
+
+std::string VlanId(uint32_t vlan_id) {
+  return ValidateAndConvertToHexString<kVlanVlanIdentifierBitwidth>(vlan_id);
 }
 
 std::string IpVersion(uint32_t version) {
