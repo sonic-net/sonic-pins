@@ -172,9 +172,14 @@ struct headers_t {
   ipv4_t ipv4;
   ipv6_t ipv6;
 
+  // IPv6 extension headers.
+  hop_by_hop_options_t hop_by_hop_options;
+
   // Inner IP-in-IP headers.
   ipv4_t inner_ipv4;
   ipv6_t inner_ipv6;
+
+  hop_by_hop_options_t inner_hop_by_hop_options;
 
   icmp_t icmp;
   tcp_t tcp;
@@ -215,7 +220,8 @@ struct local_metadata_t {
   // etc) it goes out tagged with the VID in the egress pipeline (except for
   // reserved VIDs 0 and 4095, which are always tagged).
   bool omit_vlan_tag_on_egress_packet;
-
+  // Tag Protocol ID (TPID) of the (outermost) VLAN tag.
+  bit<16> tpid;
   // The VLAN ID used for the packet throughout the pipeline. If the input
   // packet has a VLAN tag, the VID from the outer VLAN tag is used
   // (and the VLAN header gets invalidated at the beginning of the ingress
@@ -339,9 +345,10 @@ struct local_metadata_t {
   bool nexthop_id_valid;
   // Nexthop id, only valid if `nexthop_id_valid` is true.
   nexthop_id_t nexthop_id_value;
-  // After execution of the `routing_lookup` stage, indicates if an entry in
-  // the `ipv4_multicast` or `ipv6_multicast` table was hit.
-  bool ipmc_table_hit;
+  // After execution of the `routing_lookup` stage, indicates if an entry in one
+  // of the routing tables was hit
+  // (`ipv{4,6}_table` or `ipv{4,6}_multicast_table`).
+  bool route_hit;
   // After execution of the `tunnel_termination` stage, indicates if an entry in
   // the `tunnel_termination` table was hit.
   bool tunnel_termination_table_hit;

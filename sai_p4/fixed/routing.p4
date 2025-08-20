@@ -274,17 +274,13 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
-            ipv4_multicast_table.apply();
-            local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-            // TODO: Use commented out code instead, once
-            // p4-symbolic supports it.
-            // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+            local_metadata.route_hit = ipv4_multicast_table.apply().hit;
           }
         }
       } else { // IPv4 unicast.
         if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
             local_metadata.admit_to_l3) {
-          ipv4_table.apply();
+          local_metadata.route_hit = ipv4_table.apply().hit;
         }
       }
     } else if (headers.ipv6.isValid()) {
@@ -292,17 +288,13 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
-            ipv6_multicast_table.apply();
-            local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-            // TODO: Use commented out code instead, once
-            // p4-symbolic supports it.
-            // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+            local_metadata.route_hit = ipv6_multicast_table.apply().hit;
           }
         }
       } else { // IPv6 unicast.
         if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
             local_metadata.admit_to_l3) {
-          ipv6_table.apply();
+          local_metadata.route_hit = ipv6_table.apply().hit;
         }
       }
     }
@@ -409,7 +401,9 @@ control routing_resolution(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_port_and_src_mac;
+#if defined(VLAN_CAPABLE)
       @proto_id(2) set_port_and_src_mac_and_vlan_id;
+#endif
       @proto_id(3) unicast_set_port_and_src_mac;
       @defaultonly NoAction;
     }
@@ -498,7 +492,9 @@ control routing_resolution(in headers_t headers,
     actions = {
       @proto_id(1) set_ip_nexthop;
       @proto_id(2) set_p2p_tunnel_encap_nexthop;
+#if defined (NEXTHOP_DISABLE_REWRITES_CAPABLE)
       @proto_id(3) set_ip_nexthop_and_disable_rewrites;
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
