@@ -291,7 +291,7 @@ TEST(P4SymbolicIntegrationTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // Check Ingress.
   EXPECT_EQ(ingress.at("ethernet.src_addr"), "#x222222111111");
   std::string ether_type = ingress.at("ethernet.ether_type");
-  if (ether_type == "#x8100")
+  if (ether_type == "#x8100" || ether_type == "#x9900")
     ether_type = egress.at("vlan.ether_type");  
   EXPECT_EQ(ether_type, "#x0800");
   EXPECT_EQ(ingress.at("ipv4.dst_addr"), "#x0a000a00");

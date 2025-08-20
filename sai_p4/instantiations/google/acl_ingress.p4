@@ -22,6 +22,8 @@ control acl_ingress(in headers_t headers,
   bit<8> ip_protocol = 0;
   // Cancels out local_metadata.marked_to_copy when true.
   bool cancel_copy = false;
+  // Hop-by-hop options header used for ACL lookup (defaults to outer header).
+  hop_by_hop_options_t hop_by_hop_options = headers.hop_by_hop_options;
 
   @id(ACL_INGRESS_METER_ID)
   @mode(single_rate_two_color)
@@ -226,7 +228,6 @@ control acl_ingress(in headers_t headers,
     // Disallow 0 since it encodes 'no multicast' in V1Model.
     multicast_group_id != 0;
   ")
-  @unsupported
   action redirect_to_l2mc_group(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
     @sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)
@@ -262,7 +263,6 @@ control acl_ingress(in headers_t headers,
 #ifdef SAI_INSTANTIATION_TOR
   // TODO: Remove unsupported from ToR when we order ACL
   // insert/deletes during reconcile.
-  @unsupported
 #endif
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
@@ -394,10 +394,14 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
+#if defined(MIRROR_CAPABLE)
       @proto_id(4) acl_mirror();
+#endif
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(7) redirect_to_nexthop();
+#endif
       @proto_id(8) append_ingress_and_egress_timestamp();
       @defaultonly NoAction;
     }
@@ -497,9 +501,11 @@ control acl_ingress(in headers_t headers,
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#if defined(VLAN_CAPABLE)
       local_metadata.vlan_id : ternary
           @id(16) @name("vlan_id")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
 #endif
     }
     actions = {
@@ -663,12 +669,12 @@ control acl_ingress(in headers_t headers,
         @name("acl_metadata")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)
         @id(6);
-
+#if defined(VLAN_CAPABLE)
       local_metadata.vlan_id : ternary
         @name("vlan_id")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
         @id(7);
-
+#endif
       headers.ipv4.isValid() || headers.ipv6.isValid() : optional
         @name("is_ip")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP)
@@ -702,9 +708,12 @@ control acl_ingress(in headers_t headers,
         @id(8) @name("vrf_id")
         @refers_to(vrf_table, vrf_id)
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
-      local_metadata.ipmc_table_hit : optional
+      local_metadata.route_hit : optional
+        // TODO: To accurately reflect the semantics, rename to
+        // `route_hit`, once this breaking name-change is supported on the
+        // controller side.
         @id(9) @name("ipmc_table_hit")
-        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT);
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT);
     }
     actions = {
 // We don't usually restrict actions to instantiations because they don't
@@ -722,11 +731,19 @@ control acl_ingress(in headers_t headers,
 // mirror_session_table, reference entries generation in IrP4Info and
 // reference analysis will fail.
       @proto_id(4) acl_forward();
+#if defined(MIRROR_CAPABLE)
       @proto_id(1) acl_mirror();
+#endif
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(2) redirect_to_nexthop();
+#endif
       @proto_id(3) redirect_to_ipmc_group();
+#if defined(ACL_REDIRECT_TO_PORT_CAPABLE)
       @proto_id(5) redirect_to_port();
+#endif
+#if defined(MIRROR_CAPABLE) && defined(ACL_REDIRECT_TO_PORT_CAPABLE)
       @proto_id(6) acl_mirror_and_redirect_to_port();
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -805,9 +822,11 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(11) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+#if defined(VLAN_CAPABLE)
       local_metadata.vlan_id : ternary
           @id(12) @name("vlan_id")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);

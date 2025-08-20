@@ -1,9 +1,11 @@
 #include "sai_p4/instantiations/google/clos_stage.h"
 
 #include <optional>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "sai_p4/instantiations/google/instantiations.h"

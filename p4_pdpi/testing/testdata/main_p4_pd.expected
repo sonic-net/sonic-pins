@@ -536,14 +536,20 @@ message GoldenTestFriendlyAction {
 // This action is unique to `MulticastGroupTableEntry` and is not explicitly
 // present in the P4 program.
 message ReplicateAction {
+  // All `Replica`s and `BackupReplica`s must have unique (port, instance)-pairs
+  // within the scope of the `ReplicateAction` that contains them.
+  repeated Replica replicas = 1;
   // Corresponds to `Replica` in p4runtime.proto.
   message Replica {
     string port = 1;  // Format::STRING
     string instance = 2;  // Format::HEX_STRING / 16 bits
+    repeated BackupReplica backup_replicas = 3;
   }
-  // Each `Replica` must have a unique (port, instance)-pair within the scope of
-  // the `ReplicateAction` that contains it.
-  repeated Replica replicas = 1;
+  // Corresponds to `BackupReplica` in p4runtime.proto.
+  message BackupReplica {
+    string port = 1;      // Format::STRING
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+  }
 }
 
 
