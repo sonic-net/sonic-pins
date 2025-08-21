@@ -24,6 +24,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -35,6 +36,11 @@
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
+
+inline constexpr int kEthernetStackIndex = 1;
+
+inline constexpr std::string_view kEthernetWithoutFcsName =
+    "Ethernet II without FCS";
 
 // An Ixia port is defined by IP address of chassis, card number and
 // port number.
@@ -174,6 +180,19 @@ absl::Status SetFrameCount(absl::string_view tref, int64_t frames,
 absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
                           thinkit::GenericTestbed &generic_testbed);
 
+// Sets a field value for a stack of headers given the traffic item, header
+// index, and the field index to a single fixed value.
+absl::Status SetFieldSingleValue(absl::string_view tref, int stack_index,
+                                 int field_index, absl::string_view value,
+                                 thinkit::GenericTestbed &generic_testbed);
+
+// Sets a field value for a stack of headers given the traffic item, header
+// index, and the field index to a list of values that cycle.
+absl::Status SetFieldValueList(absl::string_view tref, int stack_index,
+                               int field_index,
+                               absl::Span<const std::string> value,
+                               thinkit::GenericTestbed &generic_testbed);
+
 // SetDestMac - sets the destination MAC address for frames to be sent
 // Takes in the tref returned by IxiaSession. dmac should be a string
 // in the 'standard' hex format "xx:xx:xx:xx:xx:xx".
@@ -226,6 +245,10 @@ absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
 // Takes in the tref returned by SetUpTrafficItem.
 absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
                       thinkit::GenericTestbed &generic_testbed);
+
+// Removes the protocol at the given index.
+absl::Status RemoveProtocolAtIndex(absl::string_view tref, int index,
+                                   thinkit::GenericTestbed &generic_testbed);
 
 // AppendTcp - Append TCP template to IP header.
 // Takes in the tref returned by SetUpTrafficItem.
@@ -378,6 +401,8 @@ absl::StatusOr<IxiaLink> GetIxiaLink(thinkit::GenericTestbed &generic_testbed,
 // Connects to Ixia on the given testbed and returns a string handle identifying
 // the connection (aka "topology ref").
 absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed);
+// Converts an integer to a hex string. Does not add a leading "0x".
+inline std::string ToHex(int value) { return absl::StrCat(absl::Hex(value)); }
 } // namespace pins_test::ixia
 
 #endif // PINS_THINKIT_IXIA_INTERFACE_H_
