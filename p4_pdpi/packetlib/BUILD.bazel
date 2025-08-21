@@ -1,3 +1,4 @@
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
 
 package(
@@ -85,6 +86,7 @@ cc_test(
         ":bit_widths",
         ":packetlib",
         ":packetlib_cc_proto",
+	"//gutil:proto_matchers",
         "//gutil:status_matchers",
 	"//gutil:testing",
         "@com_google_absl//absl/status",

@@ -92,12 +92,6 @@ control acl_egress(in headers_t headers,
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2)
           ) @format(IPV6_ADDRESS);
 #endif
-// TODO: Remove this match as soon as it is unused.
-#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_MIDDLEBLOCK)
-      headers.ethernet.src_addr : ternary
-          @id(10) @name("src_mac")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
-#endif
     }
     actions = {
       @proto_id(1) acl_drop(local_metadata);
@@ -158,24 +152,6 @@ control acl_egress(in headers_t headers,
     size = ACL_EGRESS_DHCP_TO_HOST_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
-  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
-  @id(ACL_EGRESS_L2_TABLE_ID)
-  @sai_acl(EGRESS)
-  table acl_egress_l2_table {
-    key = {
-      headers.ethernet.src_addr : ternary
-          @id(1) @name("src_mac")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
-    }
-    actions = {
-      @proto_id(1) acl_drop(local_metadata);
-      @defaultonly NoAction;
-    }
-    const default_action = NoAction;
-    counters = acl_egress_l2_counter;
-    size = ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
   apply {
     // We configure the hardware to explictly ignore the ACL egress tables for
     // CPU traffic.
@@ -185,7 +161,12 @@ control acl_egress(in headers_t headers,
         ip_protocol = headers.ipv4.protocol;
       } else if (headers.ipv6.isValid()) {
         dscp = headers.ipv6.dscp;
+        if (headers.hop_by_hop_options.isValid()) {
+        ip_protocol = headers.hop_by_hop_options.next_header;
+      }
+      else {
         ip_protocol = headers.ipv6.next_header;
+      }
       } else {
         ip_protocol = 0;
       }
@@ -193,9 +174,6 @@ control acl_egress(in headers_t headers,
       acl_egress_table.apply();
 #if defined(SAI_INSTANTIATION_TOR)
       acl_egress_dhcp_to_host_table.apply();
-#endif
-#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_MIDDLEBLOCK)
-      acl_egress_l2_table.apply();
 #endif
     // Act on ACL drop metadata.
       if (local_metadata.acl_drop) {
