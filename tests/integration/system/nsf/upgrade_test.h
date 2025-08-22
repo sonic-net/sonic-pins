@@ -16,9 +16,12 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "gtest/gtest.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
@@ -26,6 +29,7 @@
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
@@ -65,6 +69,9 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   Testbed testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
+
+ private:
+  bool is_first_iter_ = true;
 };
 
 }  // namespace pins_test
