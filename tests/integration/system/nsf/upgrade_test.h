@@ -16,28 +16,23 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
-#include "gtest/gtest.h"
+#include "absl/status/statusor.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
+#include "tests/integration/system/nsf/interfaces/scenario.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
+#include "thinkit/switch.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
-
-// NSF Upgrade test scenarios related to gNMI config push and P4 flow
-// programming.
-enum class NsfUpgradeScenario {
-  // kNoConfigPush,
-  kOnlyConfigPush,
-  kConfigPushBeforeAclFlowProgram,
-  kConfigPushAfterAclFlowProgram,
-  kNumNsfUpgradeScenarios,
-};
 
 class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
  protected:
@@ -54,10 +49,13 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // Note: In case the flow programmer returns a gNMI config, then that will
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
+  // A boolean `continue_on_failure` is passed as reference to continue even in
+  // case of failures during upgrade.
   absl::Status NsfUpgradeOrReboot(NsfUpgradeScenario scenario,
-                                  ImageConfigParams& curr_image_config,
-                                  ImageConfigParams& next_image_config,
-                                  bool enable_interface_validation_during_nsf);
+                                  ImageConfigParams &curr_image_config,
+                                  ImageConfigParams &next_image_config,
+                                  bool enable_interface_validation_during_nsf,
+                                  bool &continue_on_failure);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;
@@ -65,6 +63,9 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   Testbed testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
+
+ private:
+  bool is_first_iter_ = true;
 };
 
 }  // namespace pins_test
