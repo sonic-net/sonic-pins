@@ -14,24 +14,27 @@
 
 #include "tests/integration/system/nsf/upgrade_test.h"
 
+#include <iterator>
 #include <memory>
-#include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "tests/integration/system/nsf/milestone.h"
@@ -57,7 +60,6 @@ NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
 
   return static_cast<NsfUpgradeScenario>(random_index);
 }
-
 }  // namespace
 
 // approach than using std::variant (eg. type-erasure or typed tests).
@@ -81,9 +83,11 @@ absl::Status NsfUpgradeTest::PushConfigAndValidate(
   RETURN_IF_ERROR(PushConfig(image_config_param, testbed_, *ssh_client_,
                              /*clear_config=*/false,
                              enable_interface_validation_during_nsf));
-  RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
-                                       &image_config_param,
-                                       enable_interface_validation_during_nsf));
+  std::vector<std::string> interfaces;
+
+  RETURN_IF_ERROR(
+      ValidateTestbedState(testbed_, *ssh_client_, &image_config_param,
+                           enable_interface_validation_during_nsf, interfaces));
   return ValidateComponents(
       &ComponentValidator::OnConfigPush, component_validators_,
       image_config_param.image_label, testbed_, *ssh_client_);
@@ -113,16 +117,13 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // Program all the flows.
   LOG(INFO) << "Programming flows before starting the traffic";
-  ASSIGN_OR_RETURN(std::optional<std::string> updated_gnmi_config,
-                   flow_programmer_->ProgramFlows(curr_image_config.p4_info,
-                                                  testbed_, *ssh_client_));
-  if (updated_gnmi_config.has_value()) {
-    // replay infrastructure generates config only using mainline. Once the
-    // replay infra has the capability to generate the config based on MPM,
-    // update the below configs accordingly.
-    next_image_config.gnmi_config = updated_gnmi_config.value();
-    curr_image_config.gnmi_config = updated_gnmi_config.value();
-  }
+  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(curr_image_config, testbed_,
+                                                 *ssh_client_));
+  thinkit::Switch& sut = GetSut(testbed_);
+  std::vector<std::string> interfaces_before_config_push;
+  RETURN_IF_ERROR(ValidateTestbedState(
+      testbed_, *ssh_client_, &curr_image_config,
+      enable_interface_validation_during_nsf, interfaces_before_config_push));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnFlowProgram, component_validators_,
       curr_image_config.image_label, testbed_, *ssh_client_));
@@ -141,9 +142,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                          "p4flow_snapshot2_before_upgrade_and_nsf.txt"));
 
   LOG(INFO) << "Starting NSF Upgrade";
-  thinkit::Switch& sut = GetSut(testbed_);
-  ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
 
+  ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_before_upgrade_reboot,
       GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
@@ -166,7 +166,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // validation.
   RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(
       testbed_, *ssh_client_, &curr_image_config,
-      enable_interface_validation_during_nsf));
+      enable_interface_validation_during_nsf, interfaces_before_config_push));
   ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub());
 
   ASSIGN_OR_RETURN(
@@ -191,14 +191,18 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                          "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
   switch (scenario) {
+    case NsfUpgradeScenario::kNoConfigPush:
+      LOG(INFO) << "Proceeding with no config push scenario";
+      RETURN_IF_ERROR(
+          ValidateTestbedState(testbed_, *ssh_client_, &curr_image_config,
+                               enable_interface_validation_during_nsf,
+                               interfaces_before_config_push));
+      break;
     case NsfUpgradeScenario::kOnlyConfigPush:
       LOG(INFO) << "Proceeding with only config push";
       RETURN_IF_ERROR(PushConfigAndValidate(
           next_image_config, enable_interface_validation_during_nsf));
       break;
-    // case NsfUpgradeScenario::kNoConfigPush:
-    // LOG(INFO) << "Proceeding with no config push scenario";
-    // break;
     case NsfUpgradeScenario::kConfigPushAfterAclFlowProgram:
       LOG(INFO) << "Proceeding with config push after ACL flow program";
       RETURN_IF_ERROR(
@@ -231,8 +235,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // good-to-have feature and we will update the skeleton to validate traffic
   // while injection is ongoing once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(
-      testbed_, kNsfTrafficLossErrorPercentage));
+  RETURN_IF_ERROR(
+      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStopTraffic, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
@@ -275,6 +279,28 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   }
 
   NsfUpgradeScenario scenario = GetRandomNsfUpgradeScenario();
+
+  // In case the NSF Upgrade scenario is chosen to be the one where in each
+  // iteration we skip pushing the config after NSF Upgrade, we intend to keep
+  // the gNMI config and P4 Info constant throughout all the NSF Upgrade
+  // iterations. Hence, we override the gNMI config, it's label, and P4 Info of
+  // all the `image_config_params` to be the same, so that, in case required
+  // (eg. by a specific implementation of `FlowProgrammer` in `ProgramFlows()`),
+  // we use the exact same gNMI config, label, and P4 Info.
+  if (scenario == NsfUpgradeScenario::kNoConfigPush) {
+    LOG(INFO) << "Upgrading with no config push scenario. Overriding the gNMI "
+                 "config and P4 Info of all the items in `image_config_params` "
+                 "to be the same.";
+    for (auto image_config_param = image_config_params.begin() + 1;
+         image_config_param != image_config_params.end();
+         ++image_config_param) {
+      image_config_param->gnmi_config =
+          image_config_params.begin()->gnmi_config;
+      image_config_param->config_label =
+          image_config_params.begin()->config_label;
+      image_config_param->p4_info = image_config_params.begin()->p4_info;
+    }
+  }
 
   // The first element of the given `image_config_params` is considered
   // as the "base" image that will be installed and configured on the
