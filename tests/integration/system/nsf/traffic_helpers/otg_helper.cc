@@ -14,7 +14,8 @@
 
 #include "tests/integration/system/nsf/traffic_helpers/otg_helper.h"
 
-#include <cmath>
+#include <sys/types.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -29,6 +30,7 @@
 #include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
+#include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "gutil/overload.h"
 #include "gutil/status.h"
@@ -41,12 +43,45 @@
 namespace pins_test {
 namespace {
 
+// Struct to hold the per-flow traffic metrics.
+// `traffic_outage` is the total duration of time the traffic was dropped during
+// the entire duration of traffic flow.
+struct TrafficMetrics {
+  uint64_t frames_dropped;
+  uint64_t bytes_dropped;
+  absl::Duration outage_duration;
+};
+
 absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
                           const otg::SetConfigRequest& request,
                           otg::SetConfigResponse& response) {
   grpc::ClientContext context;
   return gutil::GrpcStatusToAbslStatus(
       stub->SetConfig(&context, request, &response));
+}
+
+TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
+                                 bool enable_linerate) {
+  TrafficMetrics metrics;
+  metrics.frames_dropped = flow_metric.frames_tx() - flow_metric.frames_rx();
+  metrics.bytes_dropped = flow_metric.bytes_tx() - flow_metric.bytes_rx();
+  if (flow_metric.frames_tx() == 0) {
+    metrics.outage_duration = absl::InfiniteDuration();
+    return metrics;
+  }
+
+  const double outage_fraction = static_cast<double>(metrics.frames_dropped) /
+                                 static_cast<double>(flow_metric.frames_tx());
+  const double total_duration_ns =
+      flow_metric.timestamps().last_timestamp_ns() -
+      flow_metric.timestamps().first_timestamp_ns();
+  double outage_duration_ns = total_duration_ns * outage_fraction;
+  if (enable_linerate) {
+    outage_duration_ns *= 1e8;
+  }
+  metrics.outage_duration = absl::Nanoseconds(outage_duration_ns);
+
+  return metrics;
 }
 
 }  // namespace
@@ -225,7 +260,7 @@ absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
 }
 
 absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
-                                        int error_percentage) {
+                                        absl::Duration max_acceptable_outage) {
   return std::visit(
       gutil::Overload{
           [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
@@ -272,18 +307,22 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                 continue;
               }
 
-              uint64_t bytes_drop =
-                  flow_metric.bytes_tx() - flow_metric.bytes_rx();
-              uint64_t frames_drop =
-                  flow_metric.frames_tx() - flow_metric.frames_rx();
-              float_t frames_drop_percent =
-                  (frames_drop / flow_metric.frames_tx()) * 100;
-
-              if (frames_drop_percent <= error_percentage) continue;
+              TrafficMetrics traffic_metrics =
+                  GetTrafficMetrics(flow_metric, enable_linerate_);
+              LOG(INFO) << "Traffic outage: "
+                        << traffic_metrics.outage_duration;
+              LOG(INFO) << "Max permissible traffic outage: "
+                        << max_acceptable_outage;
+              if (traffic_metrics.outage_duration <= max_acceptable_outage)
+                continue;
 
               errors.push_back(absl::StrCat(
-                  "Flow name:\t\t", flow_metric.name(), "\nBytes dropped:\t\t",
-                  bytes_drop, "\nFrames dropped:\t\t", frames_drop,
+                  "Flow name:\t\t", flow_metric.name(), "\nTraffic outage:\t\t",
+                  traffic_metrics.outage_duration,
+                  "\nMax permissible traffic outage:\t\t",
+                  max_acceptable_outage, "\nFrames dropped:\t\t",
+                  traffic_metrics.frames_dropped, "\nBytes dropped:\t\t",
+                  traffic_metrics.bytes_dropped,
                   transmission_stopped ? ""
                                        : "\nTransmission not completed within "
                                          "the expected time."));

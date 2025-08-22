@@ -122,14 +122,19 @@ absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
   // Verify the write operations on SAI objects are in whitelist.
   absl::StripAsciiWhitespace(&sai_objects_list);
   std::string error_msg;
-  for (const auto& sai_object : absl::StrSplit(sai_objects_list, '\n')) {
-    if (!sai_object.empty() && !allowlist.contains(sai_object)) {
-      absl::StrAppend(
-          &error_msg,
-          absl::Substitute(
-              "SAI object type $0 is not in allow list that can have non-zero "
-              "create/set/remove sairedis.rec entries during warm reboot.\n",
-              sai_object));
+  if (last_apply_view_entry.empty()) {
+    error_msg = "No APPLY_VIEW entry found in sairedis.rec file.";
+  } else {
+    for (const auto& sai_object : absl::StrSplit(sai_objects_list, '\n')) {
+      if (!sai_object.empty() && !allowlist.contains(sai_object)) {
+        absl::StrAppend(
+            &error_msg,
+            absl::Substitute(
+                "SAI object type $0 is not in allow list that can have "
+                "non-zero "
+                "create/set/remove sairedis.rec entries during warm reboot.\n",
+                sai_object));
+      }
     }
   }
   if (!error_msg.empty()) {
