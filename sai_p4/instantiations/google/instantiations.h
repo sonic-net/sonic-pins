@@ -1,6 +1,8 @@
 #ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
 #define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
 
+#include <ostream>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
