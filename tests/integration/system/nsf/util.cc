@@ -50,7 +50,7 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/generic_testbed.h"
@@ -562,16 +562,19 @@ absl::Status InstallRebootPushConfig(
 }
 
 absl::Status ValidateTestbedState(
-    Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
-    bool check_interfaces_up) {
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param,
+    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
   // TODO: Add validation for SUT stack image label.
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
+  std::vector<std::string> interfaces_to_validate;
+  if (interfaces.empty()) {
+    interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
+    interfaces = interfaces_to_validate;
+  }
   absl::Status sut_status = RunReadyValidations(
-      sut, ssh_client, GetConnectedInterfacesForSut(testbed),
-      check_interfaces_up,
-      /*with_healthz=*/true);
+      sut, ssh_client, interfaces, check_interfaces_up, /*with_healthz=*/true);
 
   return std::visit(
       gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed> &testbed) {
@@ -581,8 +584,7 @@ absl::Status ValidateTestbedState(
                         absl::Status control_status;
                         if (!testbed->ControlSwitch().ChassisName().empty()) {
                           control_status = RunReadyValidations(
-                              testbed->ControlSwitch(), ssh_client,
-                              testbed->GetConnectedInterfaces(),
+                              testbed->ControlSwitch(), ssh_client, interfaces,
                               check_interfaces_up,
                               /*with_healthz=*/true);
                         }
@@ -627,15 +629,17 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 absl::Status WaitForNsfReboot(
     Testbed& testbed, thinkit::SSHClient& ssh_client,
     absl::Nullable<const ImageConfigParams*> image_config_param,
-    bool check_interfaces_up, bool collect_debug_logs_for_nsf_success) {
+    bool check_interfaces_up, absl::Span<const std::string> interfaces,
+    bool collect_debug_logs_for_nsf_success) {
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
   absl::Time start_time = absl::Now();
-  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
+  std::unique_ptr<gnoi::system::System::StubInterface> sut_gnoi_system_stub;
   // Start polling to check for NSF reboot completion.
   while (absl::Now() < (start_time + kNsfRebootWaitTime)) {
     absl::SleepFor(kPollingInterval);
+    ASSIGN_OR_RETURN(sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
     ClientContext context;
     RebootStatusRequest req;
     RebootStatusResponse resp;
@@ -658,7 +662,7 @@ absl::Status WaitForNsfReboot(
           testbed));
     }
     return ValidateTestbedState(testbed, ssh_client, image_config_param,
-                                check_interfaces_up);
+                                check_interfaces_up, interfaces);
   }
   return gutil::InternalErrorBuilder()
          << "NSF Reboot validation failed after polling for "
@@ -666,16 +670,16 @@ absl::Status WaitForNsfReboot(
 }
 
 absl::Status DoNsfRebootAndWaitForSwitchReady(
-    Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
-    bool check_interfaces_up) {
-  thinkit::Switch &sut = GetSut(testbed);
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param,
+    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
+  thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(uint64_t up_time_before_nsf,
                    pins_test::GetGnmiSystemUpTime(*sut_gnmi_stub));
   RETURN_IF_ERROR(NsfReboot(testbed));
   RETURN_IF_ERROR(WaitForNsfReboot(testbed, ssh_client, image_config_param,
-                                   check_interfaces_up));
+                                   check_interfaces_up, interfaces));
   // Recreating the gNMI stub as the switch rebooted.
   ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(uint64_t up_time_after_nsf,
@@ -700,8 +704,14 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         absl::string_view gnmi_config,
                         const p4::config::v1::P4Info& p4_info,
-                        bool clear_config) {
-  LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
+                        absl::string_view config_label, bool clear_config) {
+  // TestEnvironment.StoreTestArtifact.
+  if (config_label.empty()) {
+    LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
+  } else {
+    LOG(INFO) << "Pushing config with config label: " << config_label
+              << " on chassis: " << thinkit_switch.ChassisName();
+  }
   if (clear_config) {
     return ConfigureSwitchAndReturnP4RuntimeSession(thinkit_switch, gnmi_config,
                                                     p4_info)
@@ -722,7 +732,8 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         bool clear_config, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
   RETURN_IF_ERROR(PushConfig(sut, image_config_param.gnmi_config,
-                             image_config_param.p4_info, clear_config));
+                             image_config_param.p4_info,
+                             image_config_param.config_label, clear_config));
   return WaitForSwitchState(
       sut,
       check_interfaces_up ? SwitchState::kReady

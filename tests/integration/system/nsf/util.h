@@ -29,16 +29,13 @@
 #include "absl/types/span.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 
 namespace pins_test {
-
-// Percentage of error margin allowed for traffic loss during NSF reboot.
-constexpr int kNsfTrafficLossErrorPercentage = 0;
 
 struct PinsSoftwareInfo {
   std::string name;
@@ -154,9 +151,10 @@ InstallRebootPushConfig(Testbed &testbed, thinkit::SSHClient &ssh_client,
 // Also optionally validates the gNMI config convergence if an
 // `image_config_param` is provided.
 absl::Status ValidateTestbedState(
-    Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
-    bool check_interfaces_up = true);
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
+    bool check_interfaces_up = true,
+    absl::Span<const std::string> interfaces = {});
 
 absl::Status ValidateComponents(
     absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed &,
@@ -179,15 +177,18 @@ absl::Status WaitForNsfReboot(
     Testbed& testbed, thinkit::SSHClient& ssh_client,
     absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
     bool check_interfaces_up = true,
+    absl::Span<const std::string> interfaces = {},
     bool collect_debug_logs_for_nsf_success = true);
 
 // Performs NSF Reboot and waits for the SUT to be ready.
 absl::Status DoNsfRebootAndWaitForSwitchReady(
-    Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
-    bool check_interfaces_up = true);
+    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
+    bool check_interfaces_up = true,
+    absl::Span<const std::string> interfaces = {});
 
 // Pushes the given `gnmi_config` and `p4_info` on the `thinkit_switch`.
+// The `config_label` is required solely for debugging purposes.
 //
 // In case `clear_config` is not set, we assume that a P4 Info is already
 // present on the switch. This is a valid scenario when we want to configure
@@ -195,7 +196,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         absl::string_view gnmi_config,
                         const p4::config::v1::P4Info& p4_info,
-                        bool clear_config);
+                        absl::string_view config_label, bool clear_config);
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         Testbed& testbed, thinkit::SSHClient& ssh_client,
                         bool clear_config = false,
