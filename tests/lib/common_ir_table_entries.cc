@@ -20,25 +20,8 @@
 
 namespace pins {
 
-pdpi::IrTableEntry L3AdmitAllIrTableEntry() {
-  pdpi::IrTableEntry table_entry;
-  table_entry.set_table_name("l3_admit_table");
-  table_entry.set_priority(1);
-  table_entry.mutable_action()->set_name("admit_to_l3");
-  return table_entry;
-}
-
-pdpi::IrTableEntry VrfIrTableEntry(absl::string_view vrf_id) {
-  pdpi::IrTableEntry vrf_entry;
-  vrf_entry.set_table_name("vrf_table");
-  vrf_entry.add_matches()->set_name("vrf_id");
-  vrf_entry.mutable_matches(0)->mutable_exact()->set_str(std::string(vrf_id));
-  vrf_entry.mutable_action()->set_name("no_action");
-  return vrf_entry;
-}
-
-pdpi::IrTableEntry
-PuntAllPacketsToControllerIrTableEntry(absl::string_view queue_id) {
+pdpi::IrTableEntry PuntAllPacketsToControllerIrTableEntry(
+    absl::string_view queue_id) {
   pdpi::IrTableEntry entry;
   entry.set_table_name("acl_ingress_table");
   entry.set_priority(1);
