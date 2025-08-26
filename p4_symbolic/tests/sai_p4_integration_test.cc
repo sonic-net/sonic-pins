@@ -460,21 +460,15 @@ TEST(P4SymbolicIntegrationTest,
                   sai::Replica{.egress_port = "1", .instance = 1},
                   sai::Replica{.egress_port = "2", .instance = 20},
               })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "1",
-              .multicast_replica_instance = 0,
-              .src_mac = kEgressSrcMac,
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "1",
-              .multicast_replica_instance = 1,
-              .src_mac = kEgressSrcMac,
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "2",
-              .multicast_replica_instance = 20,
-              .src_mac = kEgressSrcMac,
-          })
+	  .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"1", /*replica_instance=*/0,
+              /*src_mac=*/kEgressSrcMac)
+          .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"1", /*replica_instance=*/1,
+              /*src_mac=*/kEgressSrcMac)
+          .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"2", /*replica_instance=*/20,
+              /*src_mac=*/kEgressSrcMac)
           .LogPdEntries()
           .GetDedupedPiEntities(ir_p4info));
 
