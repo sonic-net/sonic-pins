@@ -16,6 +16,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.enable_vlan_checks = false;
     local_metadata.marked_to_drop_by_ingress_vlan_checks = false;
     local_metadata.vlan_id = 0;
+    local_metadata.tpid = 0;
     local_metadata.input_packet_is_vlan_tagged = false;
     local_metadata.omit_vlan_tag_on_egress_packet = false;
     local_metadata.admit_to_l3 = false;
@@ -48,7 +49,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.wcmp_group_id_value = 0;
     local_metadata.nexthop_id_valid = false;
     local_metadata.nexthop_id_value = 0;
-    local_metadata.ipmc_table_hit = false;
+    local_metadata.route_hit = false;
     local_metadata.acl_drop = false;
     local_metadata.tunnel_termination_table_hit = false;
     local_metadata.acl_ingress_ipmc_redirect = false;
@@ -104,6 +105,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
   state parse_ipv6 {
     packet.extract(headers.ipv6);
     transition select(headers.ipv6.next_header) {
+      IP_PROTOCOL_V6_EXTENSION_HOP_BY_HOP: parse_hop_by_hop_options;
       IP_PROTOCOL_IPV4: parse_ipv4_in_ip;
       IP_PROTOCOL_IPV6: parse_ipv6_in_ip;
       IP_PROTOCOL_ICMPV6: parse_icmp;
@@ -113,9 +115,60 @@ parser packet_parser(packet_in packet, out headers_t headers,
     }
   }
 
+  state parse_hop_by_hop_options {
+    packet.extract(headers.hop_by_hop_options);
+    // All packets with a non-zero `header_extension_length` in the hop-by-hop
+    // options header are rejected because P4-Symbolic does not support
+    // lookaheads, which are required to set the varbit's bitwidth to determine
+    // the amount of bits needed for `more_options_and_padding`.
+    // TODO: After the support for 'verify', 'reject', or
+    // or 'lookahead' to P4-Symbolic, update the program to reflect the comment
+    // above.
+     transition select(headers.hop_by_hop_options.header_extension_length) {
+        0: next_header_for_hop_by_hop_options;
+        _: accept;
+      }
+  }
+
+  state next_header_for_hop_by_hop_options {
+    transition select(headers.hop_by_hop_options.next_header) {
+      IP_PROTOCOL_IPV4: parse_ipv4_in_ip;
+      IP_PROTOCOL_IPV6: parse_ipv6_in_ip;
+      IP_PROTOCOL_ICMPV6: parse_icmp;
+      IP_PROTOCOL_TCP:    parse_tcp;
+      IP_PROTOCOL_UDP:    parse_udp;
+      _:                  accept;
+    }
+  }
+
+
   state parse_ipv6_in_ip {
     packet.extract(headers.inner_ipv6);
     transition select(headers.inner_ipv6.next_header) {
+      IP_PROTOCOL_V6_EXTENSION_HOP_BY_HOP: parse_hop_by_hop_options_in_ip;
+      IP_PROTOCOL_ICMPV6: parse_icmp;
+      IP_PROTOCOL_TCP:    parse_tcp;
+      IP_PROTOCOL_UDP:    parse_udp;
+      _:                  accept;
+    }
+  }
+
+  state parse_hop_by_hop_options_in_ip {
+    packet.extract(headers.inner_hop_by_hop_options);
+    // All packets with a non-zero `header_extension_length` in the hop-by-hop
+    // options header are rejected because P4-Symbolic does not support
+    // lookaheads, which are required to set the varbit's bitwidth to determine
+    // the amount of bits needed for `more_options_and_padding`.
+    // TODO: Remove if support for `more_options_and_padding` is
+    // supported.
+    transition select(headers.inner_hop_by_hop_options.header_extension_length) {
+      0: next_header_for_hop_by_hop_options_in_ip;
+      _: accept;
+    }
+  }
+
+  state next_header_for_hop_by_hop_options_in_ip {
+    transition select(headers.inner_hop_by_hop_options.next_header) {
       IP_PROTOCOL_ICMPV6: parse_icmp;
       IP_PROTOCOL_TCP:    parse_tcp;
       IP_PROTOCOL_UDP:    parse_udp;
@@ -175,8 +228,10 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     packet.emit(headers.tunnel_encap_gre);
     packet.emit(headers.ipv4);
     packet.emit(headers.ipv6);
+    packet.emit(headers.hop_by_hop_options);
     packet.emit(headers.inner_ipv4);
     packet.emit(headers.inner_ipv6);
+    packet.emit(headers.inner_hop_by_hop_options);
     packet.emit(headers.arp);
     packet.emit(headers.icmp);
     packet.emit(headers.tcp);

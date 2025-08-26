@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -116,6 +117,21 @@ cc_test(
 )
 
 cc_library(
+    name = "lacp_ixia_helper",
+    testonly = True,
+    srcs = ["lacp_ixia_helper.cc"],
+    hdrs = ["lacp_ixia_helper.h"],
+    deps = [
+        ":ixia_helper",
+        "//gutil:overload",
+        "//thinkit:generic_testbed",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "ixia_helper",
     testonly = 1,
     srcs = ["ixia_helper.cc"],
@@ -156,6 +172,7 @@ cc_test(
         "//gutil:proto",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
+        "//lib/utils:json_test_utils",
         "//thinkit:generic_testbed",
         "//thinkit:mock_generic_testbed",
         "@com_google_absl//absl/status",
@@ -174,3 +191,4 @@ cc_proto_library(
     name = "ixia_helper_cc_proto",
     deps = [":ixia_helper_proto"],
 )
+

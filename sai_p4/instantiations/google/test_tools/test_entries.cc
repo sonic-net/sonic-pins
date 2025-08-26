@@ -42,6 +42,7 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/ternary.h"
@@ -165,39 +166,37 @@ std::string EntryBuilder::GetPdEntriesDebugString() const {
 }
 
 absl::StatusOr<std::vector<p4::v1::Entity>> EntryBuilder::GetDedupedPiEntities(
-    const pdpi::IrP4Info& ir_p4info, bool allow_unsupported) const {
+    const pdpi::IrP4Info& ir_p4info) const {
   ASSIGN_OR_RETURN(pdpi::IrEntities ir_entities,
-                   GetDedupedIrEntities(ir_p4info, allow_unsupported));
+                   GetDedupedIrEntities(ir_p4info));
   return pdpi::IrEntitiesToPi(
       ir_p4info, ir_entities,
-      pdpi::TranslationOptions{.allow_unsupported = allow_unsupported});
+      pdpi::TranslationOptions{.allow_unsupported = true});
 }
 
 absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
-    const pdpi::IrP4Info& ir_p4info, bool allow_unsupported) const {
-  ASSIGN_OR_RETURN(
-      pdpi::IrEntities ir_entities,
-      pdpi::PdTableEntriesToIrEntities(
-          // We always use the static P4Info when translating from PD to protect
-          // against a mismatch between the PD proto and the argument
-          // `ir_p4info`.
-          sai::GetUnionedIrP4Info(), entries_,
-          pdpi::TranslationOptions{.allow_unsupported = allow_unsupported}));
+    const pdpi::IrP4Info& ir_p4info) const {
+  ASSIGN_OR_RETURN(pdpi::IrEntities ir_entities,
+                   pdpi::PdTableEntriesToIrEntities(
+                       // We always use the static P4Info when translating from
+                       // PD to protect against a mismatch between the PD proto
+                       // and the argument `ir_p4info`.
+                       sai::GetUnionedIrP4Info(), entries_,
+                       pdpi::TranslationOptions{.allow_unsupported = true}));
   gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
   return ir_entities;
 }
 
 absl::Status EntryBuilder::InstallDedupedEntities(
-    pdpi::P4RuntimeSession& session, bool allow_unsupported) const {
+    pdpi::P4RuntimeSession& session) const {
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(session));
-  return InstallDedupedEntities(ir_p4info, session, allow_unsupported);
+  return InstallDedupedEntities(ir_p4info, session);
 }
 
 absl::Status EntryBuilder::InstallDedupedEntities(
-    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session,
-    bool allow_unsupported) const {
+    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& session) const {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
-                   GetDedupedPiEntities(ir_p4info, allow_unsupported));
+                   GetDedupedPiEntities(ir_p4info));
   return pdpi::InstallPiEntities(&session, ir_p4info, pi_entities);
 }
 
@@ -441,6 +440,39 @@ EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddPreIngressAclEntrySettingVlanAndAclMetadata(
+    absl::string_view vlan_id_hexstr, absl::string_view acl_metadata_hexstr,
+    const AclPreIngressVlanTableMatchFields& match_fields, int priority) {
+  sai::AclPreIngressVlanTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
+  entry.set_priority(priority);
+  auto& match = *entry.mutable_match();
+  if (match_fields.is_ip.has_value()) {
+    match.mutable_is_ip()->set_value(BoolToHexString(*match_fields.is_ip));
+  }
+  if (match_fields.is_ipv4.has_value()) {
+    match.mutable_is_ipv4()->set_value(BoolToHexString(*match_fields.is_ipv4));
+  }
+  if (match_fields.is_ipv6.has_value()) {
+    match.mutable_is_ipv6()->set_value(BoolToHexString(*match_fields.is_ipv6));
+  }
+  if (match_fields.in_port.has_value()) {
+    match.mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (!match_fields.vlan_id.IsWildcard()) {
+    *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
+  }
+
+  entry.mutable_action()
+      ->mutable_set_outer_vlan_id_and_acl_metadata()
+      ->set_acl_metadata(acl_metadata_hexstr);
+  entry.mutable_action()
+      ->mutable_set_outer_vlan_id_and_acl_metadata()
+      ->set_vlan_id(vlan_id_hexstr);
+
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddEntryTunnelTerminatingAllIpInIpv6Packets() {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
@@ -482,47 +514,45 @@ EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
   return AddMulticastGroupEntry(multicast_group_id, replicas);
 }
 
-EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
-    const MulticastRouterInterfaceTableEntry& entry) {
-  sai::MulticastRouterInterfaceTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
-  auto& match = *pd_entry.mutable_match();
-  match.set_multicast_replica_port(entry.multicast_replica_port);
-  match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<16>(entry.multicast_replica_instance));
-  auto& action = *pd_entry.mutable_action()->mutable_set_multicast_src_mac();
-  action.set_src_mac(entry.src_mac.ToString());
-  return *this;
-}
-
-EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMac(
-    absl::string_view egress_port, int replica_instance,
-    const netaddr::MacAddress& src_mac) {
-  sai::MulticastRouterInterfaceTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+namespace {
+// Returns a basic MulticastRouterInterfaceTableEntry without any action.
+sai::MulticastRouterInterfaceTableEntry ActionlessMrifEntry(
+    absl::string_view egress_port, int replica_instance) {
+  sai::MulticastRouterInterfaceTableEntry pd_entry;
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(egress_port);
   match.set_multicast_replica_instance(
       pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
+  return pd_entry;
+}
+}  // namespace
+
+EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMac(
+    absl::string_view egress_port, int replica_instance,
+    const netaddr::MacAddress& src_mac) {
+  sai::MulticastRouterInterfaceTableEntry pd_entry =
+      ActionlessMrifEntry(egress_port, replica_instance);
+
   auto& action = *pd_entry.mutable_action()->mutable_multicast_set_src_mac();
   action.set_src_mac(src_mac.ToString());
+
+  *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
+      pd_entry;
   return *this;
 }
 
 EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacAndVlanId(
     absl::string_view egress_port, int replica_instance,
     const netaddr::MacAddress& src_mac, int vlan_id) {
-  sai::MulticastRouterInterfaceTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
-  auto& match = *pd_entry.mutable_match();
-  match.set_multicast_replica_port(egress_port);
-  match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
+  sai::MulticastRouterInterfaceTableEntry pd_entry =
+      ActionlessMrifEntry(egress_port, replica_instance);
   auto& action =
       *pd_entry.mutable_action()->mutable_multicast_set_src_mac_and_vlan_id();
   action.set_src_mac(src_mac.ToString());
   action.set_vlan_id(pdpi::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
-  return *this;
+
+  *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
+      pd_entry;
   return *this;
 }
 
@@ -530,17 +560,17 @@ EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacDstMacAndVlanId(
     absl::string_view egress_port, int replica_instance,
     const netaddr::MacAddress& src_mac, const netaddr::MacAddress& dst_mac,
     int vlan_id) {
-  sai::MulticastRouterInterfaceTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
-  auto& match = *pd_entry.mutable_match();
-  match.set_multicast_replica_port(egress_port);
-  match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
+  sai::MulticastRouterInterfaceTableEntry pd_entry =
+      ActionlessMrifEntry(egress_port, replica_instance);
+
   auto& action = *pd_entry.mutable_action()
                       ->mutable_multicast_set_src_mac_and_dst_mac_and_vlan_id();
   action.set_src_mac(src_mac.ToString());
   action.set_dst_mac(dst_mac.ToString());
   action.set_vlan_id(pdpi::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
+
+  *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
+      pd_entry;
   return *this;
 }
 
@@ -548,16 +578,28 @@ EntryBuilder&
 EntryBuilder::AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
     absl::string_view egress_port, int replica_instance,
     const netaddr::MacAddress& src_mac) {
-  sai::MulticastRouterInterfaceTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
-  auto& match = *pd_entry.mutable_match();
-  match.set_multicast_replica_port(egress_port);
-  match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
+  sai::MulticastRouterInterfaceTableEntry pd_entry =
+      ActionlessMrifEntry(egress_port, replica_instance);
+
   auto& action =
       *pd_entry.mutable_action()
            ->mutable_multicast_set_src_mac_and_preserve_ingress_vlan_id();
   action.set_src_mac(src_mac.ToString());
+
+  *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
+      pd_entry;
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddL2MrifEntry(absl::string_view egress_port,
+                                           int replica_instance) {
+  sai::MulticastRouterInterfaceTableEntry pd_entry =
+      ActionlessMrifEntry(egress_port, replica_instance);
+
+  pd_entry.mutable_action()->mutable_l2_multicast_passthrough();
+
+  *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
+      pd_entry;
   return *this;
 }
 
@@ -654,7 +696,7 @@ EntryBuilder& EntryBuilder::AddDisableEgressVlanChecksEntry() {
 }
 
 EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
-    absl::string_view set_vlan_id_hexstr,
+    absl::string_view vlan_id_hexstr,
     std::optional<absl::string_view> match_vlan_id_hexstr, int priority) {
   sai::AclPreIngressVlanTableEntry& entry =
       *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
@@ -663,7 +705,7 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
-      set_vlan_id_hexstr);
+      vlan_id_hexstr);
   entry.set_priority(priority);
 
   return *this;
@@ -706,6 +748,33 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
   *entries_.add_entries() =
       MakeNexthopTableEntry(nexthop_id, kRifId, neighbor_id, rewrite_options);
 
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIngressAclEntry(const AclIngressEntry& params) {
+  sai::AclIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_ingress_table_entry();
+  if (params.is_ip.has_value()) {
+    entry.mutable_match()->mutable_is_ip()->set_value(
+        BoolToHexString(*params.is_ip));
+  }
+  if (!params.ip_protocol.IsWildcard()) {
+    *entry.mutable_match()->mutable_ip_protocol() =
+        BitSetTernaryToSai<packetlib::kIpProtocolBitwidth>(params.ip_protocol);
+  }
+  entry.set_priority(params.priority);
+
+  std::visit(gutil::Overload{
+                 [&](CopyAction action) {
+                   entry.mutable_action()->mutable_acl_copy()->set_qos_queue(
+                       action.cpu_queue);
+                 },
+                 [&](TrapAction action) {
+                   entry.mutable_action()->mutable_acl_trap()->set_qos_queue(
+                       action.cpu_queue);
+                 },
+             },
+             params.punt_action);
   return *this;
 }
 
@@ -889,6 +958,10 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   if (match_fields.vrf.has_value()) {
     entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
+  if (!match_fields.acl_metadata.IsWildcard()) {
+    *entry.mutable_match()->mutable_acl_metadata() =
+        BitSetTernaryToSai<kAclMetadataBitwidth>(match_fields.acl_metadata);
+  }
   entry.mutable_action()->mutable_redirect_to_port()->set_redirect_port(port);
   entry.set_priority(priority);
   return *this;
@@ -966,6 +1039,21 @@ EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
       params.mirror_session_id);
   acl_entry.set_priority(1);
   *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIngressQoSTimestampingAclEntry(
+    std::string ingress_port) {
+  sai::AclIngressQosTableEntry& acl_entry =
+      *entries_.add_entries()->mutable_acl_ingress_qos_table_entry();
+  acl_entry.mutable_match()->mutable_in_port()->set_value(ingress_port);
+  acl_entry.mutable_action()
+      ->mutable_append_ingress_and_egress_timestamp()
+      ->set_append_ingress_timestamp("0x01");
+  acl_entry.mutable_action()
+      ->mutable_append_ingress_and_egress_timestamp()
+      ->set_append_egress_timestamp("0x01");
+  acl_entry.set_priority(1);
   return *this;
 }
 
