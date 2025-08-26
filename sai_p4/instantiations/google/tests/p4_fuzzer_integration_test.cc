@@ -57,14 +57,16 @@ absl::Status AddReferenceableEntries(const FuzzerConfig& config,
                        .AddEntriesForwardingIpPacketsToGivenPort(
                            egress_port.GetP4rtEncoding())
                        .GetDedupedPiEntities(config.GetIrP4Info()));
-  ASSIGN_OR_RETURN(pdpi::IrTableDefinition mirror_session_table,
-                   gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(),
-                                       "mirror_session_table"));
-  p4::v1::Entity mirror_session_entity;
-  ASSIGN_OR_RETURN(
-      *mirror_session_entity.mutable_table_entry(),
-      FuzzValidTableEntry(&gen, config, switch_state, mirror_session_table));
-  referable_entities.push_back(mirror_session_entity);
+
+  if (config.GetIrP4Info().tables_by_name().contains("mirror_session_table")) {
+    pdpi::IrTableDefinition mirror_session_table =
+        config.GetIrP4Info().tables_by_name().at("mirror_session_table");
+    p4::v1::Entity mirror_session_entity;
+    ASSIGN_OR_RETURN(
+        *mirror_session_entity.mutable_table_entry(),
+        FuzzValidTableEntry(&gen, config, switch_state, mirror_session_table));
+    referable_entities.push_back(mirror_session_entity);
+  }
 
   p4::v1::Entity multicast_group_entity;
   ASSIGN_OR_RETURN(
