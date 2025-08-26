@@ -797,26 +797,6 @@ TEST(EntryBuilder, AddMulticastGroupEntryPortOverloadAddsUniqueReplicas) {
   EXPECT_NE(replicas[1].instance(), replicas[2].instance());
 }
 
-TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      EntryBuilder()
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "\1",
-              .multicast_replica_instance = 15,
-              .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
-          })
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info));
-  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
-                table_entry {
-                  table_name: "multicast_router_interface_table"
-                  action { name: "set_multicast_src_mac" }
-                }
-              )pb"))));
-}
-
 TEST(EntryBuilder, AddMrifEntryRewritingSrcMacAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(

@@ -174,11 +174,8 @@ ConstructEntriesToForwardMcastTrafficToGivenPort(
               {
                   sai::Replica{.egress_port = p4rt_port_id, .instance = 0},
               })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = p4rt_port_id,
-              .multicast_replica_instance = 0,
-              .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 0),
-          })
+	  .AddMrifEntryRewritingSrcMac(p4rt_port_id, /*instance=*/0,
+                                       netaddr::MacAddress(1, 0, 0, 0, 0, 0))
           .LogPdEntries()
           .GetDedupedPiEntities(ir_p4info));
   std::vector<p4::v1::Entity> pi_route_entities;
