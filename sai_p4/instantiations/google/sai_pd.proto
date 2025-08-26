@@ -424,9 +424,7 @@ message AclIngressTableEntry {
       AclMirrorAction acl_mirror = 4;
       AclDropAction acl_drop = 5;
       RedirectToNexthopAction redirect_to_nexthop = 7;
-      // CAUTION: This action is not (yet) supported.
       RedirectToL2mcGroupAction redirect_to_l2mc_group = 6;
-      // CAUTION: This action is not (yet) supported.
       AppendIngressAndEgressTimestampAction
           append_ingress_and_egress_timestamp = 8;
     }
@@ -552,7 +550,6 @@ message AclEgressTableEntry {
     Optional is_ipv6 = 7;     // optional match / Format::HEX_STRING / 1 bits
     Ternary dscp = 8;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary dst_ipv6 = 9;     // ternary match / Format::IPV6 / upper 64 bits
-    Ternary src_mac = 10;     // ternary match / Format::MAC
   }
   Match match = 1;
   message Action {
@@ -616,7 +613,10 @@ message AclPreIngressMetadataTableEntry {
   }
   Match match = 1;
   message Action {
-    SetAclMetadataAction set_acl_metadata = 1;
+    oneof action {
+      SetOuterVlanIdAction set_outer_vlan_id = 2;
+      SetAclMetadataAction set_acl_metadata = 1;
+    }
   }
   Action action = 2;
   int32 priority = 3;
@@ -842,20 +842,6 @@ message AclIngressMirrorAndRedirectTableEntry {
   }
   Action action = 2;
   int32 priority = 3;
-  bytes controller_metadata = 8;
-}
-
-message AclEgressL2TableEntry {
-  message Match {
-    Ternary src_mac = 1;  // ternary match / Format::MAC
-  }
-  Match match = 1;
-  message Action {
-    AclDropAction acl_drop = 1;
-  }
-  Action action = 2;
-  int32 priority = 3;
-  BytesAndPacketsCounterData counter_data = 6;
   bytes controller_metadata = 8;
 }
 
@@ -1086,7 +1072,6 @@ message RedirectToIpmcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToL2mcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
@@ -1134,14 +1119,24 @@ message NoAction {}
 // This action is unique to `MulticastGroupTableEntry` and is not explicitly
 // present in the P4 program.
 message ReplicateAction {
+  // All `Replica`s and `BackupReplica`s must have unique (port, instance)-pairs
+  // within the scope of the `ReplicateAction` that contains them.
+  repeated Replica replicas = 1;
   // Corresponds to `Replica` in p4runtime.proto.
   message Replica {
-    string port = 1;      // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_port'.
+    string port = 1;  // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_instance'.
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+    repeated BackupReplica backup_replicas = 3;
+  }
+  // Corresponds to `BackupReplica` in p4runtime.proto.
+  message BackupReplica {
+    // Refers to 'multicast_router_interface_table.multicast_replica_port'.
+    string port = 1;  // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_instance'.
     string instance = 2;  // Format::HEX_STRING / 16 bits
   }
-  // Each `Replica` must have a unique (port, instance)-pair within the scope of
-  // the `ReplicateAction` that contains it.
-  repeated Replica replicas = 1;
 }
 
 // -- All tables ---------------------------------------------------------------
@@ -1182,7 +1177,6 @@ message TableEntry {
     AclIngressSecurityTableEntry acl_ingress_security_table_entry = 266;
     AclIngressMirrorAndRedirectTableEntry
         acl_ingress_mirror_and_redirect_table_entry = 267;
-    AclEgressL2TableEntry acl_egress_l2_table_entry = 268;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }

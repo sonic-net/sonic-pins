@@ -23,6 +23,7 @@ namespace packetlib {
 constexpr int kEthernetHeaderBitwidth = 48 * 2 + 16;
 constexpr int kStandardIpv4HeaderBitwidth = 160;
 constexpr int kIpv6HeaderBitwidth = 320;
+constexpr int kMinHopByHopOptionsHeaderBitwidth = 64;
 constexpr int kUdpHeaderBitwidth = 64;
 constexpr int kStandardTcpHeaderBitwidth = 5 * 32;
 constexpr int kArpHeaderBitwidth = 28 * 8;
@@ -68,6 +69,14 @@ constexpr int kIpFlowLabelBitwidth = 20;      // IPv6
 constexpr int kIpPayloadLengthBitwidth = 16;  // IPv6
 constexpr int kIpNextHeaderBitwidth = 8;      // IPv6
 constexpr int kIpHopLimitBitwidth = 8;        // IPv6
+
+// IPv6 hop-by-hop options extension constants.
+constexpr int kHopByHopNextHeaderBitwidth = 8;             // IPv6 Options
+constexpr int kHopByHopHeaderExtensionLengthBitwidth = 8;  // IPv6 Options
+constexpr int kHopByHopOptionsAndPaddingBitwidth = 48;     // IPv6 Options
+// Note: The rest of the `HopByHopOptionsHeader` is represented by
+// `more_options_and_padding`, which has a variable length bit-width based on
+// the `header_extension_length`.
 
 // UDP constants.
 constexpr int kUdpPortBitwidth = 16;

@@ -434,6 +434,10 @@ absl::Status SendAndWaitForComplete(absl::string_view operation_url,
 }
 
 namespace {
+	
+constexpr std::string_view kRemoveProtocolPath =
+    "/ixnetwork/traffic/trafficItem/configElement/stack/operations/remove";
+
 // When `run_in_parallel` is true, we generate a single config to start all
 // traffics in `trefs` at once in one call, such as:
 // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
@@ -651,6 +655,51 @@ absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
   if (size_response.response_code != 200)
     return absl::InternalError(absl::StrFormat("unexpected response: %u",
                                                size_response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetFieldSingleValue(const absl::string_view tref,
+                                 const int stack_index, const int field_index,
+                                 const absl::string_view value,
+                                 thinkit::GenericTestbed &generic_testbed) {
+  const std::string field_path = absl::Substitute(
+      "$0/configElement/1/stack/$1/field/$2", tref, stack_index, field_index);
+
+  // Set the value to the given value.
+  const std::string value_json = absl::Substitute(
+      R"({"auto":false,"valueType":"singleValue","singleValue":"$0"})", value);
+  LOG(INFO) << "path " << field_path;
+  LOG(INFO) << "json " << value_json;
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, field_path, value_json));
+  LOG(INFO) << "Returns " << response.response_code;
+  if (response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetFieldValueList(const absl::string_view tref,
+                               const int stack_index, const int field_index,
+                               const absl::Span<const std::string> value,
+                               thinkit::GenericTestbed &generic_testbed) {
+  const std::string field_path = absl::Substitute(
+      "$0/configElement/1/stack/$1/field/$2", tref, stack_index, field_index);
+
+  // Set the value to the array of values.
+  const std::string value_json = absl::Substitute(
+      R"({"auto":false,"valueType":"valueList","valueList":["$0"]})",
+      absl::StrJoin(value, R"(",")"));
+  LOG(INFO) << "path " << field_path;
+  LOG(INFO) << "json " << value_json;
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, field_path, value_json));
+  LOG(INFO) << "Returns " << response.response_code;
+  if (response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", response.response_code));
   return absl::OkStatus();
 }
 
@@ -941,6 +990,16 @@ absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
     return absl::InternalError(
         absl::StrFormat("unexpected response: %u", sip_response.response_code));
   return absl::OkStatus();
+}
+
+absl::Status RemoveProtocolAtIndex(absl::string_view tref, int index,
+                                   thinkit::GenericTestbed &generic_testbed) {
+  std::string delete_json = absl::Substitute(
+      R"json({"arg1": "$0/configElement/1/stack/$1"})json", tref, index);
+  LOG(INFO) << "path " << kRemoveProtocolPath;
+  LOG(INFO) << "json " << delete_json;
+  return SendAndWaitForComplete(kRemoveProtocolPath, delete_json,
+                                generic_testbed);
 }
 
 absl::Status AppendTcp(absl::string_view tref,

@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "middleblock.p4"
-  version: "3.2.1"
+  version: "3.1.2"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -673,7 +673,7 @@ tables {
   match_fields {
     id: 9
     name: "ipmc_table_hit"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
   }
@@ -1210,14 +1210,6 @@ tables {
     bitwidth: 1
     match_type: OPTIONAL
   }
-  match_fields {
-    id: 10
-    name: "src_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
   action_refs {
     id: 16777481
     annotations: "@proto_id(1)"
@@ -1229,35 +1221,6 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767364
-  size: 127
-}
-tables {
-  preamble {
-    id: 33554700
-    name: "egress.acl_egress.acl_egress_l2_table"
-    alias: "acl_egress_l2_table"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@sai_acl(EGRESS)"
-  }
-  match_fields {
-    id: 1
-    name: "src_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
-  action_refs {
-    id: 16777481
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  direct_resource_ids: 318767371
   size: 127
 }
 actions {
@@ -1505,7 +1468,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_l2mc_group"
     alias: "redirect_to_l2mc_group"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2041,17 +2003,6 @@ direct_counters {
     unit: BOTH
   }
   direct_table_id: 33554692
-}
-direct_counters {
-  preamble {
-    id: 318767371
-    name: "egress.acl_egress.acl_egress_l2_counter"
-    alias: "acl_egress_l2_counter"
-  }
-  spec {
-    unit: BOTH
-  }
-  direct_table_id: 33554700
 }
 direct_meters {
   preamble {

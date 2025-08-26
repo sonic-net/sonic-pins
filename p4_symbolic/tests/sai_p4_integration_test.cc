@@ -291,7 +291,7 @@ TEST(P4SymbolicIntegrationTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // Check Ingress.
   EXPECT_EQ(ingress.at("ethernet.src_addr"), "#x222222111111");
   std::string ether_type = ingress.at("ethernet.ether_type");
-  if (ether_type == "#x8100")
+  if (ether_type == "#x8100" || ether_type == "#x9900")
     ether_type = egress.at("vlan.ether_type");  
   EXPECT_EQ(ether_type, "#x0800");
   EXPECT_EQ(ingress.at("ipv4.dst_addr"), "#x0a000a00");
@@ -460,21 +460,15 @@ TEST(P4SymbolicIntegrationTest,
                   sai::Replica{.egress_port = "1", .instance = 1},
                   sai::Replica{.egress_port = "2", .instance = 20},
               })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "1",
-              .multicast_replica_instance = 0,
-              .src_mac = kEgressSrcMac,
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "1",
-              .multicast_replica_instance = 1,
-              .src_mac = kEgressSrcMac,
-          })
-          .AddMulticastRouterInterfaceEntry({
-              .multicast_replica_port = "2",
-              .multicast_replica_instance = 20,
-              .src_mac = kEgressSrcMac,
-          })
+	  .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"1", /*replica_instance=*/0,
+              /*src_mac=*/kEgressSrcMac)
+          .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"1", /*replica_instance=*/1,
+              /*src_mac=*/kEgressSrcMac)
+          .AddMrifEntryRewritingSrcMac(
+              /*egress_port=*/"2", /*replica_instance=*/20,
+              /*src_mac=*/kEgressSrcMac)
           .LogPdEntries()
           .GetDedupedPiEntities(ir_p4info));
 
