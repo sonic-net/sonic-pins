@@ -94,12 +94,11 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget, GenerateAuxiliaryLoopbackEntities) {
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
 
-  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
   pdpi::IrEntities ir_entities;
 
-  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
-                       sai::CreateV1ModelAuxiliaryEntities(
-                           ir_entities, mock_gnmi_stub, ir_p4info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities auxiliary_ir_entities,
+      sai::CreateV1ModelAuxiliaryEntities(ir_entities, mock_gnmi_stub));
   EXPECT_THAT(auxiliary_ir_entities, gutil::EqualsProto(expected_entities));
 }
 
@@ -128,8 +127,6 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
   EXPECT_CALL(mock_gnmi_stub, Get)
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
-
-  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
                        sai::CreateV1ModelAuxiliaryEntities(
@@ -164,7 +161,7 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
                                    }
                                  }
                                )pb"),
-                           mock_gnmi_stub, ir_p4info));
+                           mock_gnmi_stub));
 
   EXPECT_THAT(
       auxiliary_ir_entities,
@@ -209,6 +206,84 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
               }
             }
           )pb")));
+}
+
+// TODO: Remove this test once auxiliary vlan membership entries
+// are no longer generated for SUB_PORT RIFS.
+TEST(AuxiliaryIrEntitiesForV1ModelTarget,
+     GenerateAuxiliaryVlanMembershipTableForSubRifPortEntries) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+        ]
+      }
+    })";
+
+  gnmi::MockgNMIStub mock_gnmi_stub;
+  EXPECT_CALL(mock_gnmi_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
+                       sai::CreateV1ModelAuxiliaryEntities(
+                           gutil::ParseProtoOrDie<pdpi::IrEntities>(
+                               R"pb(
+                                 entities {
+                                   table_entry {
+                                     table_name: "router_interface_table"
+                                     action {
+                                       name: "set_port_and_src_mac_and_vlan_id"
+                                       params {
+                                         name: "vlan_id"
+                                         value { hex_str: "0x1" }
+                                       }
+                                       params {
+                                         name: "port"
+                                         value { str: "1" }
+                                       }
+                                     }
+                                   }
+                                 }
+                               )pb"),
+                           mock_gnmi_stub));
+
+  EXPECT_THAT(auxiliary_ir_entities,
+              gutil::EqualsProto(gutil::ParseProtoOrDie<pdpi::IrEntities>(
+                  R"pb(
+                    entities {
+                      table_entry {
+                        table_name: "v1model_auxiliary_vlan_membership_table"
+                        matches {
+                          name: "vlan_id"
+                          exact { hex_str: "0x1" }
+                        }
+                        matches {
+                          name: "port"
+                          exact { str: "1" }
+                        }
+                        action { name: "v1model_auxiliary_make_tagged_member" }
+                      }
+                    }
+                    entities {
+                      table_entry {
+                        table_name: "vlan_membership_table"
+                        matches {
+                          name: "vlan_id"
+                          exact { hex_str: "0x1" }
+                        }
+                        matches {
+                          name: "port"
+                          exact { str: "1" }
+                        }
+                        action { name: "make_tagged_member" }
+                      }
+                    }
+                  )pb")));
 }
 
 }  // namespace

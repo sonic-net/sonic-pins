@@ -41,8 +41,7 @@ p4::v1::Entity MakeV1modelPacketReplicationEngineEntryRequiredForPunts();
 // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
 // loopback mode).
 absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
-    pdpi::IrEntities ir_entities, gnmi::gNMI::StubInterface& gnmi_stub,
-    pdpi::IrP4Info ir_p4info);
+    pdpi::IrEntities ir_entities, gnmi::gNMI::StubInterface& gnmi_stub);
 
 }  // namespace sai
 
