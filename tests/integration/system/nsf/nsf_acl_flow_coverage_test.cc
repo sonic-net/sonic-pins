@@ -74,7 +74,7 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
-  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param.p4_info, testbed_,
+  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param, testbed_,
                                            *ssh_client_));
   LOG(INFO) << "Programming ACL flows";
   ASSERT_OK(ProgramAclFlows(sut, image_config_param.p4_info));

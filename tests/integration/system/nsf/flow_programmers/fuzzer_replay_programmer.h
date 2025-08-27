@@ -15,13 +15,10 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_FLOW_PROGRAMMERS_FUZZER_REPLAY_PROGRAMMER_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_FLOW_PROGRAMMERS_FUZZER_REPLAY_PROGRAMMER_H_
 
-#include <optional>
-#include <string>
-
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/ssh_client.h"
 
@@ -29,11 +26,11 @@ namespace pins_test {
 
 class FuzzerReplayProgrammer : public FlowProgrammer {
  public:
-   absl::StatusOr<std::optional<std::string>>
-   ProgramFlows(const p4::config::v1::P4Info &p4_info, Testbed &testbed,
-                thinkit::SSHClient &ssh_client) override {
-     return std::nullopt;
-   };
+  absl::Status ProgramFlows(const ImageConfigParams& image_config_param,
+                            Testbed& testbed,
+                            thinkit::SSHClient& ssh_client) override {
+    return absl::OkStatus();
+  };
   absl::Status ClearFlows(Testbed& testbed) override {
     return absl::OkStatus();
   };
