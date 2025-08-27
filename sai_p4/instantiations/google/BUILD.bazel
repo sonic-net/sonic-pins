@@ -385,6 +385,14 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "annotations",
+    hdrs = ["annotations.h"],
+    deps = [
+        "@com_google_absl//absl/strings",
+    ],
+)
+
 # Auxiliary target, see go/totw/128.
 cc_embed_data(
     name = "sai_nonstandard_platforms_embed",
