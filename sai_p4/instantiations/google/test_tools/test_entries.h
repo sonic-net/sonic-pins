@@ -424,6 +424,9 @@ class EntryBuilder {
   EntryBuilder& AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
       absl::string_view egress_port, int replica_instance,
       const netaddr::MacAddress& src_mac);
+  EntryBuilder& AddL2MrifEntry(absl::string_view egress_port,
+                               int replica_instance);
+
   EntryBuilder& AddIngressAclDroppingAllPackets();
   EntryBuilder& AddEgressAclDroppingIpPackets(
       IpVersion ip_version = IpVersion::kIpv4And6);
