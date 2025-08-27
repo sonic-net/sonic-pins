@@ -48,7 +48,6 @@ void NsfAclFlowCoverageTestFixture::TearDown() {
 }
 
 TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
-  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
 
   // The test needs at least 1 image_config_param to run.
   if (GetParam().image_config_params.empty()) {
