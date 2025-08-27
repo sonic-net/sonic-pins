@@ -87,7 +87,7 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
-  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param.p4_info, testbed_,
+  ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param, testbed_,
                                            *ssh_client_));
   LOG(INFO) << "Starting the traffic";
   ASSERT_OK(traffic_helper_->StartTraffic(testbed_));

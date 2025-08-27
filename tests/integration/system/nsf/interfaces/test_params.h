@@ -22,19 +22,12 @@
 
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {
-
-// Struct to hold image label and config parameters to be injected in PINs NSF
-// integration tests.
-struct ImageConfigParams {
-  std::string image_label;
-  std::string gnmi_config;
-  p4::config::v1::P4Info p4_info;
-};
 
 // Struct to hold test parameters to be injected in PINs NSF integration tests.
 //
