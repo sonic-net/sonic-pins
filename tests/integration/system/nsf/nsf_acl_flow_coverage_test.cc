@@ -110,8 +110,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_,
-                                             kNsfTrafficLossErrorPercentage));
+  ASSERT_OK(
+      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
   // testbeds).
