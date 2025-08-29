@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef SAI_ACL_PRE_INGRESS_P4_
 #define SAI_ACL_PRE_INGRESS_P4_
 
@@ -251,6 +265,7 @@ control acl_pre_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_acl_metadata;
+      @proto_id(2) set_outer_vlan_id;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -268,7 +283,13 @@ control acl_pre_ingress(in headers_t headers,
     } else if (headers.ipv6.isValid()) {
       dscp = headers.ipv6.dscp;
       ecn = headers.ipv6.ecn;
-      ip_protocol = headers.ipv6.next_header;
+      if (headers.ipv6.next_header == 0 &&
+          headers.hop_by_hop_options.isValid()) {
+        ip_protocol = headers.hop_by_hop_options.next_header;
+      }
+      else {
+        ip_protocol = headers.ipv6.next_header;
+      }
     }
 
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
