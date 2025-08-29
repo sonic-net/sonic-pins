@@ -1029,6 +1029,21 @@ EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddIngressQoSTimestampingAclEntry(
+    std::string ingress_port) {
+  sai::AclIngressQosTableEntry& acl_entry =
+      *entries_.add_entries()->mutable_acl_ingress_qos_table_entry();
+  acl_entry.mutable_match()->mutable_in_port()->set_value(ingress_port);
+  acl_entry.mutable_action()
+      ->mutable_append_ingress_and_egress_timestamp()
+      ->set_append_ingress_timestamp("0x01");
+  acl_entry.mutable_action()
+      ->mutable_append_ingress_and_egress_timestamp()
+      ->set_append_egress_timestamp("0x01");
+  acl_entry.set_priority(1);
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
     AclQueueAssignments queue_assignments,
     AclMeterConfiguration meter_configuration) {

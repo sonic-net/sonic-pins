@@ -1641,5 +1641,35 @@ TEST(EntryBuilder,
                 })pb"))));
 }
 
+TEST(EntryBuilder,
+     AddIngressAclTableEntryMatchingIngressPortAndInsertingTimestamp) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIngressQoSTimestampingAclEntry(/*in_port =*/"1")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_qos_table"
+                  matches {
+                    name: "in_port"
+                    optional { value { str: "1" } }
+                  }
+                  action {
+                    name: "append_ingress_and_egress_timestamp"
+                    params {
+                      name: "append_ingress_timestamp"
+                      value { hex_str: "0x01" }
+                    }
+                    params {
+                      name: "append_egress_timestamp"
+                      value { hex_str: "0x01" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
 }  // namespace
 }  // namespace sai
