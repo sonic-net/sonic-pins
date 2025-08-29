@@ -40,7 +40,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"
@@ -1037,6 +1037,10 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryWithInvalidIPv4AddressFails) {
 }
 
 TEST_P(L3MulticastTestFixture, DeleteRifWhileInUseFails) {
+  // Reenable once change available in release image.
+  GTEST_SKIP()
+      << "Skipping until can reenable when stack change reaches release image";
+
   const int kPortsToUseInTest = 2;
   ASSERT_OK_AND_ASSIGN(
       const std::vector<std::string> sut_ports_ids,
@@ -1072,8 +1076,7 @@ TEST_P(L3MulticastTestFixture, DeleteRifWhileInUseFails) {
       ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
-                     HasSubstr("[OrchAgent] RIF oid "),
-                     HasSubstr("is still used by multicast group members"),
+                     HasSubstr("is still used by IP multicast group members"),
                      HasSubstr("#2: ABORTED"),
                      HasSubstr("[OrchAgent] SWSS_RC_NOT_EXECUTED"))));
 
