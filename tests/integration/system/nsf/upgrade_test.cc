@@ -24,6 +24,8 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -127,7 +129,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       curr_image_config.image_label, testbed_, *ssh_client_));
 
   LOG(INFO) << "Starting the traffic";
-  RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed_));
+  RETURN_IF_ERROR(
+      traffic_helper_->StartTraffic(testbed_, curr_image_config.config_label));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStartTraffic, component_validators_,
       curr_image_config.image_label, testbed_, *ssh_client_));
@@ -189,18 +192,18 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                          "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
   switch (scenario) {
+    case NsfUpgradeScenario::kNoConfigPush:
+      LOG(INFO) << "Proceeding with no config push scenario";
+      RETURN_IF_ERROR(
+          ValidateTestbedState(testbed_, *ssh_client_, &curr_image_config,
+                               enable_interface_validation_during_nsf,
+                               interfaces_before_config_push));
+      break;
     case NsfUpgradeScenario::kOnlyConfigPush:
       LOG(INFO) << "Proceeding with only config push";
       RETURN_IF_ERROR(PushConfigAndValidate(
           next_image_config, enable_interface_validation_during_nsf));
       break;
-    // case NsfUpgradeScenario::kNoConfigPush:
-    // LOG(INFO) << "Proceeding with no config push scenario";
-    // RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
-    //                                    &curr_image_config,
-    //                                   enable_interface_validation_during_nsf,
-    //                                    interfaces_before_config_push));
-    // break;
     case NsfUpgradeScenario::kConfigPushAfterAclFlowProgram:
       LOG(INFO) << "Proceeding with config push after ACL flow program";
       RETURN_IF_ERROR(
@@ -234,7 +237,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // while injection is ongoing once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
   RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(
-      testbed_, kNsfTrafficLossErrorPercentage));
+      testbed_, next_image_config.max_acceptable_outage));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStopTraffic, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
@@ -277,6 +280,31 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   }
 
   NsfUpgradeScenario scenario = GetRandomNsfUpgradeScenario();
+
+  // In case the NSF Upgrade scenario is chosen to be the one where in each
+  // iteration we skip pushing the config after NSF Upgrade, we intend to keep
+  // the gNMI config and P4 Info constant throughout all the NSF Upgrade
+  // iterations. Hence, we override the gNMI config and P4 Info, along with
+  // other values except the image label, of all the `image_config_params` to be
+  // the same, so that, in case required (eg. by a specific implementation of
+  // `FlowProgrammer` in `ProgramFlows()`), we use the exact same gNMI config,
+  // label, and P4 Info.
+  if (scenario == NsfUpgradeScenario::kNoConfigPush) {
+    LOG(INFO) << "Upgrading with no config push scenario. Overriding the gNMI "
+                 "config and P4 Info of all the items in `image_config_params` "
+                 "to be the same.";
+    for (auto image_config_param = image_config_params.begin() + 1;
+         image_config_param != image_config_params.end();
+         ++image_config_param) {
+      image_config_param->gnmi_config =
+          image_config_params.begin()->gnmi_config;
+      image_config_param->config_label =
+          image_config_params.begin()->config_label;
+      image_config_param->p4_info = image_config_params.begin()->p4_info;
+      image_config_param->max_acceptable_outage =
+          image_config_params.begin()->max_acceptable_outage;
+    }
+  }
 
   // The first element of the given `image_config_params` is considered
   // as the "base" image that will be installed and configured on the
