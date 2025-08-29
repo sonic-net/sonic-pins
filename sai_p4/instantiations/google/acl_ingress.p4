@@ -22,6 +22,8 @@ control acl_ingress(in headers_t headers,
   bit<8> ip_protocol = 0;
   // Cancels out local_metadata.marked_to_copy when true.
   bool cancel_copy = false;
+  // Hop-by-hop options header used for ACL lookup (defaults to outer header).
+  hop_by_hop_options_t hop_by_hop_options = headers.hop_by_hop_options;
 
   @id(ACL_INGRESS_METER_ID)
   @mode(single_rate_two_color)
@@ -261,7 +263,6 @@ control acl_ingress(in headers_t headers,
 #ifdef SAI_INSTANTIATION_TOR
   // TODO: Remove unsupported from ToR when we order ACL
   // insert/deletes during reconcile.
-  @unsupported
 #endif
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
@@ -396,7 +397,9 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(7) redirect_to_nexthop();
+#endif
       @proto_id(8) append_ingress_and_egress_timestamp();
       @defaultonly NoAction;
     }
@@ -722,10 +725,14 @@ control acl_ingress(in headers_t headers,
 // reference analysis will fail.
       @proto_id(4) acl_forward();
       @proto_id(1) acl_mirror();
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(2) redirect_to_nexthop();
+#endif
       @proto_id(3) redirect_to_ipmc_group();
+#if defined(ACL_REDIRECT_TO_PORT_CAPABLE)
       @proto_id(5) redirect_to_port();
       @proto_id(6) acl_mirror_and_redirect_to_port();
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
