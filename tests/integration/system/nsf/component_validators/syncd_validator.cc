@@ -15,10 +15,12 @@
 
 #include <string>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/ssh_client.h"
@@ -27,14 +29,34 @@
 namespace pins_test {
 namespace {
 
-absl::Status ValidateSyncdWarmboot(thinkit::Switch& sut) {
+absl::Status ValidateSyncdWarmboot(
+    thinkit::Switch& sut, absl::flat_hash_set<absl::string_view>& allowlist) {
   return absl::OkStatus();
 }
+
+absl::Status PrepareAllowListInSyncdInit(
+    thinkit::Switch& sut, absl::flat_hash_set<absl::string_view>& allowlist) {
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::Status SyncdValidator::OnNsfReboot(absl::string_view version,
                                          Testbed& testbed,
                                          thinkit::SSHClient& ssh_client) {
-  return ValidateSyncdWarmboot(GetSut(testbed));
+  return ValidateSyncdWarmboot(GetSut(testbed), allowlist_);
 }
+
+absl::Status SyncdValidator::OnInit(absl::string_view version, Testbed& testbed,
+                                    thinkit::SSHClient& ssh_client) {
+  // If we NSF upgrade from 24 April release --> image X --> image Y then we
+  // will see ASIC operations from X --> Y due to b/338694916.
+  // Fetch alternate partition image to know whether we are upgrading from
+  // 24 April release --> image X --> image Y via NSF.
+  // This validator matters when we are in OnInit for image X --> image Y. At
+  // this time, the alternate stack version should be 24 April release and
+  // boot-type should be warm-boot.
+  return PrepareAllowListInSyncdInit(GetSut(testbed), allowlist_);
+}
+
 }  // namespace pins_test
