@@ -14,7 +14,8 @@
 
 #include "tests/integration/system/nsf/traffic_helpers/otg_helper.h"
 
-#include <cmath>
+#include <sys/types.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -25,10 +26,12 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
+#include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "gutil/overload.h"
 #include "gutil/status.h"
@@ -41,6 +44,24 @@
 namespace pins_test {
 namespace {
 
+const int kDefaultMtu = 9000;
+const int kDefaultPacketSize = 256;
+const int kFlowRate = 10;
+const int kFlowRateAtLinerate = 98;
+// RToR tests use L4 ports ranging from 0x3e00(15872) to 0x3eff(16127)
+// inclusively at the destination host.
+const int kFlowTcpDstPortRangeStart = 0x3e00;
+const int kFlowTcpDstPortRangeEnd = 0x3eff;
+
+// Struct to hold the per-flow traffic metrics.
+// `traffic_outage` is the total duration of time the traffic was dropped during
+// the entire duration of traffic flow.
+struct TrafficMetrics {
+  uint64_t frames_dropped;
+  uint64_t bytes_dropped;
+  absl::Duration outage_duration;
+};
+
 absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
                           const otg::SetConfigRequest& request,
                           otg::SetConfigResponse& response) {
@@ -49,9 +70,34 @@ absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
       stub->SetConfig(&context, request, &response));
 }
 
+TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
+                                 bool enable_linerate) {
+  TrafficMetrics metrics;
+  metrics.frames_dropped = flow_metric.frames_tx() - flow_metric.frames_rx();
+  metrics.bytes_dropped = flow_metric.bytes_tx() - flow_metric.bytes_rx();
+  if (flow_metric.frames_tx() == 0) {
+    metrics.outage_duration = absl::InfiniteDuration();
+    return metrics;
+  }
+
+  const double outage_fraction = static_cast<double>(metrics.frames_dropped) /
+                                 static_cast<double>(flow_metric.frames_tx());
+  const double total_duration_ns =
+      flow_metric.timestamps().last_timestamp_ns() -
+      flow_metric.timestamps().first_timestamp_ns();
+  double outage_duration_ns = total_duration_ns * outage_fraction;
+  if (enable_linerate) {
+    outage_duration_ns *= 1e8;
+  }
+  metrics.outage_duration = absl::Nanoseconds(outage_duration_ns);
+
+  return metrics;
+}
+
 }  // namespace
 
-absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
+absl::Status OtgHelper::StartTraffic(Testbed& testbed,
+                                     absl::string_view config_label) {
   return std::visit(
       gutil::Overload{
           [this](std::unique_ptr<thinkit::GenericTestbed>& testbed)
@@ -113,11 +159,11 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             }
 
             // Set MTU.
-            layer1->set_mtu(9000);
+            layer1->set_mtu(kDefaultMtu);
 
             // Create flow.
             auto* flow = config->add_flows();
-            flow->set_name("Host Traffic flow");
+            flow->set_name(absl::StrCat(otg_src_port, "->", otg_dst_port));
 
             // Set Tx / Rx ports.
             flow->mutable_tx_rx()->set_choice(otg::FlowTxRx::Choice::port);
@@ -126,7 +172,7 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
 
             // Set packet size.
             flow->mutable_size()->set_choice(otg::FlowSize::Choice::fixed);
-            flow->mutable_size()->set_fixed(256);
+            flow->mutable_size()->set_fixed(kDefaultPacketSize);
 
             // Set transmission duration.
             flow->mutable_duration()->set_choice(
@@ -135,9 +181,9 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             // Set transmission rate.
             flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
             if (enable_linerate_) {
-              flow->mutable_rate()->set_percentage(98);
+              flow->mutable_rate()->set_percentage(kFlowRateAtLinerate);
             } else {
-              flow->mutable_rate()->set_percentage(5);
+              flow->mutable_rate()->set_percentage(kFlowRate);
             }
 
             // Set capture metrics.
@@ -169,6 +215,18 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
                 otg::PatternFlowIpv6Dst::Choice::value);
             ip_packet->mutable_ipv6()->mutable_src()->set_value(otg_src_ip);
             ip_packet->mutable_ipv6()->mutable_dst()->set_value(otg_dst_ip);
+
+            // Set TCP header.
+            auto* tcp_packet = flow->add_packet();
+            tcp_packet->set_choice(otg::FlowHeader::Choice::tcp);
+            auto* tcp_dst_port = tcp_packet->mutable_tcp()->mutable_dst_port();
+            tcp_dst_port->set_choice(
+                otg::PatternFlowTcpDstPort::Choice::increment);
+            tcp_dst_port->mutable_increment()->set_start(
+                kFlowTcpDstPortRangeStart);
+            tcp_dst_port->mutable_increment()->set_step(1);
+            tcp_dst_port->mutable_increment()->set_count(
+                kFlowTcpDstPortRangeEnd - kFlowTcpDstPortRangeStart + 1);
 
             // Set the config.
             otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
@@ -215,8 +273,14 @@ absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
                 ->mutable_traffic()
                 ->mutable_flow_transmit()
                 ->set_state(otg::StateTrafficFlowTransmit::State::stop);
-            return gutil::GrpcStatusToAbslStatus(
-                stub->SetControlState(&context, request, &response));
+            RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+                stub->SetControlState(&context, request, &response)));
+
+            // Add a 10 second sleep after stopping traffic, to ensure that any
+            // transit packets are accounted for while validating traffic in
+            // any further steps.
+            absl::SleepFor(absl::Seconds(10));
+            return absl::OkStatus();
           },
           [&](thinkit::MirrorTestbed* testbed) {
             return absl::UnimplementedError("MirrorTestbed not implemented");
@@ -225,7 +289,7 @@ absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
 }
 
 absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
-                                        int error_percentage) {
+                                        absl::Duration max_acceptable_outage) {
   return std::visit(
       gutil::Overload{
           [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
@@ -272,18 +336,17 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                 continue;
               }
 
-              uint64_t bytes_drop =
-                  flow_metric.bytes_tx() - flow_metric.bytes_rx();
-              uint64_t frames_drop =
-                  flow_metric.frames_tx() - flow_metric.frames_rx();
-              float_t frames_drop_percent =
-                  (frames_drop / flow_metric.frames_tx()) * 100;
-
-              if (frames_drop_percent <= error_percentage) continue;
+              TrafficMetrics traffic_metrics =
+                  GetTrafficMetrics(flow_metric, enable_linerate_);
+              if (traffic_metrics.outage_duration <= max_acceptable_outage)
+                continue;
 
               errors.push_back(absl::StrCat(
-                  "Flow name:\t\t", flow_metric.name(), "\nBytes dropped:\t\t",
-                  bytes_drop, "\nFrames dropped:\t\t", frames_drop,
+                  "Flow name:\t\t\t", flow_metric.name(),
+                  "\nTraffic outage:\t\t\t", traffic_metrics.outage_duration,
+                  "\nMax acceptable outage:\t\t", max_acceptable_outage,
+                  "\nFrames dropped:\t\t\t", traffic_metrics.frames_dropped,
+                  "\nBytes dropped:\t\t\t", traffic_metrics.bytes_dropped,
                   transmission_stopped ? ""
                                        : "\nTransmission not completed within "
                                          "the expected time."));

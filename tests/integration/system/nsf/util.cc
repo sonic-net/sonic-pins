@@ -76,7 +76,7 @@ using ::p4::v1::Entity;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 
-constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(8);
+constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(11);
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
@@ -295,14 +295,19 @@ absl::Status ValidatePinsSoftwareComponentsBeforeReboot(
 }
 
 absl::Status ValidatePinsSoftwareComponentsAfterReboot(
-    const PinsSoftwareInfo& primary_before_install_reboot,
-    const PinsSoftwareInfo& primary_after_install_reboot,
-    const PinsSoftwareInfo& secondary_after_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_before_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_after_install_reboot,
     absl::string_view expected_version) {
   // Validate that switch has booted to the expected version after
   // install / upgrade and reboot.
   LOG(INFO) << "Validating components after install / upgrade and reboot";
   LOG(INFO) << "Validating if the primary network stack version is different";
+  PinsSoftwareInfo primary_before_install_reboot =
+      pins_component_info_before_install_reboot.primary_network_stack;
+  PinsSoftwareInfo primary_after_install_reboot =
+      pins_component_info_after_install_reboot.primary_network_stack;
+  PinsSoftwareInfo secondary_after_install_reboot =
+      pins_component_info_after_install_reboot.secondary_network_stack;
   if (!expected_version.empty() &&
       primary_after_install_reboot.version != expected_version) {
     return gutil::InternalErrorBuilder()
@@ -635,10 +640,11 @@ absl::Status WaitForNsfReboot(
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
   absl::Time start_time = absl::Now();
-  ASSIGN_OR_RETURN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
+  std::unique_ptr<gnoi::system::System::StubInterface> sut_gnoi_system_stub;
   // Start polling to check for NSF reboot completion.
   while (absl::Now() < (start_time + kNsfRebootWaitTime)) {
     absl::SleepFor(kPollingInterval);
+    ASSIGN_OR_RETURN(sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
     ClientContext context;
     RebootStatusRequest req;
     RebootStatusResponse resp;
@@ -703,8 +709,14 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         absl::string_view gnmi_config,
                         const p4::config::v1::P4Info& p4_info,
-                        bool clear_config) {
-  LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
+                        absl::string_view config_label, bool clear_config) {
+  // TestEnvironment.StoreTestArtifact.
+  if (config_label.empty()) {
+    LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
+  } else {
+    LOG(INFO) << "Pushing config with config label: " << config_label
+              << " on chassis: " << thinkit_switch.ChassisName();
+  }
   if (clear_config) {
     return ConfigureSwitchAndReturnP4RuntimeSession(thinkit_switch, gnmi_config,
                                                     p4_info)
@@ -725,7 +737,8 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         bool clear_config, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
   RETURN_IF_ERROR(PushConfig(sut, image_config_param.gnmi_config,
-                             image_config_param.p4_info, clear_config));
+                             image_config_param.p4_info,
+                             image_config_param.config_label, clear_config));
   return WaitForSwitchState(
       sut,
       check_interfaces_up ? SwitchState::kReady
@@ -758,21 +771,6 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    pdpi::P4RuntimeSession::Create(sut));
   return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
-}
-
-absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
-                                    ReadResponse snapshot_2) {
-  MessageDifferencer differencer;
-  std::string diff_report;
-  AppendIgnoredP4SnapshotFields(&differencer);
-  differencer.ReportDifferencesToString(&diff_report);
-
-  if (!differencer.Compare(snapshot_1, snapshot_2)) {
-    return gutil::InternalErrorBuilder()
-           << "Differences found between the P4 flow snapshots:\n"
-           << diff_report;
-  }
-  return absl::OkStatus();
 }
 
 absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
