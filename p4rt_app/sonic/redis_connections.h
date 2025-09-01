@@ -19,19 +19,18 @@
 #include <utility>
 
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/adapters/zmq_producer_state_table_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
 
 // The P4RT app needs to:
-//   * Write P4RT_TABLE entries into a notification channel.
-//   * Read P4RT_TABLE entries out out of the AppDb and CountersDb.
+//   * Write P4RT_TABLE entries into a zmq message channel.
+//   * Read P4RT_TABLE entries out of the AppDb and CountersDb.
 struct P4rtTable {
-  std::unique_ptr<NotificationProducerAdapter> notification_producer;
-  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
+  std::unique_ptr<ZmqProducerStateTableAdapter> producer;
   std::unique_ptr<TableAdapter> app_db;
   std::unique_ptr<TableAdapter> counter_db;
 };
