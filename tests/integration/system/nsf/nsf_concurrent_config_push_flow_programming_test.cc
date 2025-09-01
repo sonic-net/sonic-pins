@@ -177,8 +177,8 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_,
-                                             kNsfTrafficLossErrorPercentage));
+  ASSERT_OK(
+      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
 
   LOG(INFO) << "Clearing the flows";
   ASSERT_OK(flow_programmer_->ClearFlows(testbed_));
