@@ -732,6 +732,7 @@ control acl_ingress(in headers_t headers,
 #if defined(MIRROR_CAPABLE)
       @proto_id(1) acl_mirror();
 #endif
+
 #if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(2) redirect_to_nexthop();
 #endif
