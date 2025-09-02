@@ -967,5 +967,30 @@ TEST(PacketLib,
               HasSubstr("data length exceeds"));
 }
 
+TEST(PacketLib,
+     UpdateAllComputedFieldsHasNonZeroPaddingForNPaddingInHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers {
+      hop_by_hop_options_header {
+        next_header: "0xfe"
+        header_extension_length: "0x00"
+        # The data length of  exceeds the maximum.
+        options_and_padding: "0x010400010000"
+      }
+    }
+  )pb");
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet).status());
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00010400010000");
+
+  // Verify that the round-tripped packet is the same as the original packet.
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_EQ(parsed_packet.reasons_invalid_size(), 1);
+  EXPECT_THAT(parsed_packet.mutable_reasons_invalid()->Get(0),
+              HasSubstr("byte was non-zero"));
+}
+
 }  // namespace
 }  // namespace packetlib
