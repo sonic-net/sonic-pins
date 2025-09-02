@@ -697,5 +697,68 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
   EXPECT_OK(validation_result1.HasSuccessRateOfAtLeast(1.0));
 }
 
+TEST_P(TunnelDecapTestFixture, NoAdmitTableAclRedirectTunnelTermNoDecapForV4) {
+  if (GetParam().tunnel_type != pins_test::TunnelMatchType::kExactMatch) {
+    GTEST_SKIP();
+  }
+
+  dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
+
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Set testbed environment
+
+  // Initialize the connection, clear all entities, and (for the SUT) push
+  // P4Info.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
+
+  // Get control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_control,
+      GetParam().mirror_testbed->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string in_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+  ASSERT_OK_AND_ASSIGN(std::string out_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+
+  // Install Ingress ACL redirect to nexthop entry on SUT
+  ASSERT_OK(InstallIngressAclRedirectToNexthop(
+      *sut_p4rt_session.get(), out_port, sai::IpVersion::kIpv4));
+
+  // Install tunnel term table entry on SUT
+  ASSERT_OK_AND_ASSIGN(const auto tunnel_entities,
+                       InstallTunnelTermTable(*sut_p4rt_session.get(),
+                                              sut_ir_p4info,
+                                              GetParam().tunnel_type));
+
+  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
+            << " to engress:" << out_port;
+  // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
+  pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
+      .in_port = in_port,
+      .out_port = out_port,
+      .dst_mac = dst_mac,
+      .inner_dst_ipv4 = inner_dst_ipv4,
+      .dst_ipv6 = tunnel_dst_ipv6};
+
+  dvaas_params.packet_test_vector_override = {
+      Ipv4InIpv6NoDecapTestVector(tunnel_v6_match)};
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+
+  // Log statistics and check that things succeeded.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
 }  // namespace
 }  // namespace pins_test
