@@ -613,7 +613,10 @@ message AclPreIngressMetadataTableEntry {
   }
   Match match = 1;
   message Action {
-    SetAclMetadataAction set_acl_metadata = 1;
+    oneof action {
+      SetOuterVlanIdAction set_outer_vlan_id = 2;
+      SetAclMetadataAction set_acl_metadata = 1;
+    }
   }
   Action action = 2;
   int32 priority = 3;

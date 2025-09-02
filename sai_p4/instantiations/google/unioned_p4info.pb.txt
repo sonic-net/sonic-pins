@@ -223,6 +223,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777482
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1905,6 +1909,20 @@ actions {
 }
 actions {
   preamble {
+    id: 16777482
+    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
+    alias: "set_outer_vlan_id"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "vlan_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
     id: 16777483
     name: "ingress.acl_pre_ingress.set_acl_metadata"
     alias: "set_acl_metadata"
@@ -2735,20 +2753,6 @@ actions {
     type_name {
       name: "port_id_t"
     }
-  }
-}
-actions {
-  preamble {
-    id: 16777482
-    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
-    alias: "set_outer_vlan_id"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "vlan_id"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
-    bitwidth: 12
   }
 }
 actions {
