@@ -179,7 +179,12 @@ control acl_egress(in headers_t headers,
         ip_protocol = headers.ipv4.protocol;
       } else if (headers.ipv6.isValid()) {
         dscp = headers.ipv6.dscp;
+        if (headers.hop_by_hop_options.isValid()) {
+        ip_protocol = headers.hop_by_hop_options.next_header;
+      }
+      else {
         ip_protocol = headers.ipv6.next_header;
+      }
       } else {
         ip_protocol = 0;
       }
