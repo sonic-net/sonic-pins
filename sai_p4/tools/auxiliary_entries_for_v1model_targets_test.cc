@@ -18,7 +18,7 @@ using testing::DoAll;
 using testing::Return;
 using testing::SetArgPointee;
 
-TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
+TEST(AuxiliaryIrEntitiesForV1ModelTarget, GenerateAuxiliaryLoopbackEntities) {
   gnmi::GetResponse response;
   *response.add_notification()
        ->add_update()
@@ -29,21 +29,21 @@ TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
         "interface": [
           {
             "name":"EthernetEnabled0",
-             "state":{
+            "state":{
               "loopback-mode":"ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 2
             }
           },
           {
             "name":"EthernetEnabled1",
-             "state":{
+            "state":{
               "loopback-mode":"NOT_ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 4
             }
           },
           {
             "name":"EthernetEnabled2",
-             "state":{
+            "state":{
               "loopback-mode":"ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 5
             }
@@ -95,11 +95,13 @@ TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
 
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
+  pdpi::IrEntities ir_entities;
 
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      sai::CreateV1ModelAuxiliaryTableEntries(mock_gnmi_stub, ir_p4info));
-  EXPECT_THAT(entities, gutil::EqualsProto(expected_entities));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
+                       sai::CreateV1ModelAuxiliaryEntities(
+                           ir_entities, mock_gnmi_stub, ir_p4info));
+  EXPECT_THAT(auxiliary_ir_entities, gutil::EqualsProto(expected_entities));
 }
 
 }  // namespace
+
