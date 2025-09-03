@@ -170,10 +170,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
     const int instance, const netaddr::MacAddress& src_mac) {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
                    sai::EntryBuilder()
-                       .AddMulticastRouterInterfaceEntry(
-                           {.multicast_replica_port = port_id,
-                            .multicast_replica_instance = instance,
-                            .src_mac = src_mac})
+		       .AddMrifEntryRewritingSrcMac(port_id, instance, src_mac)
                        .LogPdEntries()
                        .GetDedupedPiEntities(ir_p4info,
                                              /*allow_unsupported=*/true));
@@ -1603,15 +1600,9 @@ TEST_P(L3MulticastTestFixture, AbleToProgramExpectedMulticastGroupCapacity) {
 
     // Add a normal replication RIF and a "drop" RIF to correspond to the state
     // a multicast group member is allowed to be in.
-    rif_builder
-        .AddMulticastRouterInterfaceEntry(
-            {.multicast_replica_port = port_id,
-             .multicast_replica_instance = kDefaultInstance,
-             .src_mac = src_mac})
-        .AddMulticastRouterInterfaceEntry(
-            {.multicast_replica_port = port_id,
-             .multicast_replica_instance = kDefaultInstance + 1,
-             .src_mac = kDropSrcMacAddress});
+    rif_builder.AddMrifEntryRewritingSrcMac(port_id, kDefaultInstance, src_mac)
+        .AddMrifEntryRewritingSrcMac(port_id, kDefaultInstance + 1,
+                                     kDropSrcMacAddress);
   }
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> rif_entities,
