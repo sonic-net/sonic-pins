@@ -992,5 +992,23 @@ TEST(PacketLib,
               HasSubstr("byte was non-zero"));
 }
 
+TEST(PacketLib,
+     UpdateComputedFieldsAddNPaddingForEmptyOptionsAndPaddingHopByHopOptions) {
+  Packet packet = gutil::ParseProtoOrDie<Packet>(R"pb(
+    headers { hop_by_hop_options_header { next_header: "0xfe" } }
+  )pb");
+  // Update adds a N-padding for an empty options_and_padding.
+  ASSERT_OK(packetlib::UpdateAllComputedFields(packet).status());
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       packetlib::RawSerializePacket(packet));
+  EXPECT_EQ(absl::BytesToHexString(raw_packet), "fe00010400000000");
+
+  // Verify that the round-tripped packet is the same as the original packet.
+  Packet parsed_packet =
+      ParsePacket(raw_packet, Header::kHopByHopOptionsHeader);
+  EXPECT_THAT(PacketSizeInBits(parsed_packet, 0), IsOkAndHolds(64));
+  EXPECT_THAT(parsed_packet, EqualsProto(packet));
+}
+
 }  // namespace
 }  // namespace packetlib
