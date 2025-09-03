@@ -3072,8 +3072,13 @@ absl::StatusOr<int> IcmpHeaderChecksum(Packet packet, int icmp_header_index) {
                        PacketSizeInBytes(packet, icmp_header_index));
       data.AppendBits<32>(icmpv6_size);
       data.AppendBits<24>(0);
-      RETURN_IF_ERROR(
-          SerializeBits<kIpNextHeaderBitwidth>(header.next_header(), data));
+      // The `next_header` field for a ICMP header identifies the upper-layer
+      // protocol. It differs from the typical `next_header` field in an IPv6
+      // header when there are IPV6 extension headers. See
+      // https://datatracker.ietf.org/doc/html/rfc2463#section-2.3, which
+      // specifies that the `next_header` field for a ICMP header must be 58
+      // (0x3a).
+      RETURN_IF_ERROR(SerializeBits<kIpNextHeaderBitwidth>("0x3a", data));
       break;
     }
     case Header::kIpv4Header: {
