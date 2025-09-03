@@ -29,7 +29,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"
@@ -62,6 +61,8 @@ static const auto tunnel_src_ipv6 = netaddr::Ipv6Address(
 static const auto tunnel_src_ipv6_wildcard =
     netaddr::Ipv6Address(0x1122, 0x1122, 0x3344, 0x3344, 0x5566, 0x5566, 0, 0);
 static const auto inner_dst_ipv4 = netaddr::Ipv4Address(0x10, 0, 0, 0x1);
+static const auto inner_dst_ipv4_mask =
+    netaddr::Ipv4Address(0xff, 0xff, 0xff, 0xff);
 static const auto incorrect_dst_ipv6 = netaddr::Ipv6Address(
     0x77, 0x2233, 0x4455, 0x5577, 0x8899, 0xaabb, 0xccdd, 0xeeff);
 static const auto exact_match_mask = netaddr::Ipv6Address(
@@ -70,6 +71,11 @@ static const auto ternary_match_mask =
     netaddr::Ipv6Address(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0, 0);
 static const auto inner_dst_ipv6 = netaddr::Ipv6Address(
     0x2001, 0xdb8, 0x3333, 0x4444, 0x5555, 0x6666, 0x7777, 0x8888);
+static const auto tunnel_dst_ipv6_first64 =
+    netaddr::Ipv6Address(0x11, 0x2233, 0x4455, 0x6677, 0, 0, 0, 0);
+static const auto exact_match_mask_first64 =
+    netaddr::Ipv6Address(0xffff, 0xffff, 0xffff, 0xffff, 0, 0, 0, 0);
+constexpr absl::string_view kRedirectNexthopId = "redirect-nexthop";
 
 packetlib::Packet ParsePacketAndFillInComputedFields(
     const ProtoFixtureRepository& repo, absl::string_view packet_pb) {
@@ -359,8 +365,8 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
       InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info,
                              GetParam().tunnel_type));
 
-  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ing:" << in_port
-            << " to eng:" << out_port;
+  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
+            << " to engress:" << out_port;
   // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
   pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
       .in_port = in_port,
@@ -481,9 +487,10 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
 
   dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
 
-  thinkit::MirrorTestbed& testbed =
+  thinkit::MirrorTestbed &testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
 
+  // Set testbed environment
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
@@ -508,13 +515,13 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
                            sai::IpVersion::kIpv4, /*l3_admit=*/false));
 
   // Install tunnel term table entry on SUT
-  ASSERT_OK_AND_ASSIGN(
-      const auto tunnel_entities,
-      InstallTunnelTermTable(*sut_p4rt_session.get(), sut_ir_p4info,
-                             GetParam().tunnel_type));
+  ASSERT_OK_AND_ASSIGN(const auto tunnel_entities,
+                       InstallTunnelTermTable(*sut_p4rt_session.get(),
+                                              sut_ir_p4info,
+                                              GetParam().tunnel_type));
 
-  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ing:" << in_port
-            << " to eng:" << out_port;
+  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
+            << " to engress:" << out_port;
   // Send IPv4-in-IPv6 Packet and verify that packet is getting
   // dropped as l3-admit is not configured
   pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
@@ -522,11 +529,12 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
       .out_port = out_port,
       .dst_mac = dst_mac,
       .inner_dst_ipv4 = inner_dst_ipv4,
-      .dst_ipv6 = tunnel_dst_ipv6};
+      .dst_ipv6 = tunnel_dst_ipv6,
+  };
   dvaas::PacketTestVector test_vector =
       Ipv4InIpv6DecapTestVector(tunnel_v6_match);
 
-  for (dvaas::SwitchOutput& output :
+  for (dvaas::SwitchOutput &output :
        *test_vector.mutable_acceptable_outputs()) {
     output.clear_packet_ins();
     output.clear_packets();
