@@ -428,6 +428,17 @@ OutgoingConcreteTableReferences(const IrTableReference& reference_info,
             action_partial_references.emplace_back(),
             GetPartialReferenceFromReplica(
                 built_in_replica_field_to_match_field_references, replica));
+	for (const auto& backup_replica : replica.backup_replicas()) {
+          // Because primary and backup replicas share the same checks, we map
+          // the type Replica to BackupReplica in order to reuse logic.
+          p4::v1::Replica backup_replica_as_replica;
+          backup_replica_as_replica.set_port(backup_replica.port());
+          backup_replica_as_replica.set_instance(backup_replica.instance());
+          ASSIGN_OR_RETURN(action_partial_references.emplace_back(),
+                           GetPartialReferenceFromReplica(
+                               built_in_replica_field_to_match_field_references,
+                               backup_replica_as_replica));
+        }
       }
       break;
     }
