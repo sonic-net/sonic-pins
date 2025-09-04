@@ -35,6 +35,7 @@
 #include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir_properties.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -98,15 +99,6 @@ bool EntryUsesAction(const TableEntry& entry,
     }
   }
   return false;
-}
-
-bool IsOmittable(const pdpi::IrMatchFieldDefinition& match_field_definition) {
-  return match_field_definition.match_field().match_type() ==
-             p4::config::v1::MatchField::TERNARY ||
-         match_field_definition.match_field().match_type() ==
-             p4::config::v1::MatchField::OPTIONAL ||
-         match_field_definition.match_field().match_type() ==
-             p4::config::v1::MatchField::LPM;
 }
 
 // Returns the route metadata as an int if it's present in the entry and nullopt
@@ -181,11 +173,15 @@ absl::Status ModifyEntityToAvoidKnownBug(const pdpi::IrP4Info& info,
 // Generates valid entries for `table` until one meets the given
 // `predicate`. Unless an entry with the same keys already exists on the switch,
 // installs the generated entry and updates `state`.
+// installs the generated entry and updates `state`. `custom_constraint` must be
+// a valid P4-Constraints string representing an additional constraint enforced
+// on the generated entry, if empty, no additional constraint is enforced.
 absl::Status GenerateAndInstallEntryThatMeetsPredicate(
     absl::BitGen& gen, pdpi::P4RuntimeSession& session,
     const FuzzerConfig& config, SwitchState& state,
     thinkit::TestEnvironment& environment, absl::string_view table_name,
-    const EntityPredicate& predicate) {
+    const EntityPredicate& predicate,
+    std::optional<absl::string_view> custom_constraint = std::nullopt) {
   Entity entity;
   // As of now, we only support p4 defined tables or the multicast group table.
   // This means that an empty optional also signals that we have the multicast
@@ -204,7 +200,8 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   do {
     if (p4_table_def.has_value()) {
       ASSIGN_OR_RETURN(*entity.mutable_table_entry(),
-                       FuzzValidTableEntry(&gen, config, state, *p4_table_def));
+                       FuzzValidTableEntry(&gen, config, state, *p4_table_def,
+                                           custom_constraint));
 
     } else {
       ASSIGN_OR_RETURN(*entity.mutable_packet_replication_engine_entry()
@@ -258,6 +255,8 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   return state.ApplyUpdate(update);
 }
 
+// Remove function once built-in multicast group table can
+// be treated like any other table.
 // Installs a multicast group entry with and without replicas.
 absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
     absl::BitGen& gen, pdpi::P4RuntimeSession& session,
@@ -344,20 +343,11 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
 
   for (const pdpi::IrTableDefinition& table :
        AllValidTablesForP4RtRole(config)) {
-    // TODO: Stop skipping tables that have constraints once the
-    // fuzzer supports them.
     auto* table_info = p4_constraints::GetTableInfoOrNull(
         constraints_by_table_id, table.preamble().id());
     if (table_info == nullptr) {
       return gutil::InternalErrorBuilder()
              << "Table info not present for id " << table.preamble().id();
-    }
-    if (table_info->constraint.has_value()) {
-      LOG(WARNING) << absl::Substitute(
-          "No entries installed into table '$0' due to use of constraints, "
-          "which are not yet supported by the Fuzzer.",
-          table.preamble().alias());
-      continue;
     }
 
     LOG(INFO) << absl::Substitute("For table '$0', installing entries with:",
@@ -368,8 +358,8 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
     // if possible) that field.
     for (const pdpi::IrMatchFieldDefinition& field :
          AllValidMatchFields(config, table)) {
-      if (!IsOmittable(field) || (environment.MaskKnownFailures() &&
-                                  IsRequiredDueToBug(table, field))) {
+      if (!pdpi::IsOmittable(field) || (environment.MaskKnownFailures() &&
+                                        IsRequiredDueToBug(table, field))) {
         // If the field can't be a wildcard, then any value will do:
         RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
                             gen, session, config, state, environment,
@@ -384,6 +374,12 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
         // If the field can be a wildcard, install one entry with a wildcard and
         // one without.
         for (bool use_field : {true, false}) {
+          std::optional<absl::string_view> additional_constraint;
+          // Remove conditional if statement.
+          if (!pdpi::HasP4RuntimeTranslatedType(field)) {
+            ASSIGN_OR_RETURN(additional_constraint,
+                             FieldPresenceConstraintString(field, use_field));
+          } 
           RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
                               gen, session, config, state, environment,
                               table.preamble().alias(),
@@ -392,7 +388,8 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
                                 return use_field ==
                                        EntryUsesMatchField(entity.table_entry(),
                                                            field);
-                              }))
+                              },
+                              additional_constraint))
                   .SetPrepend()
               << absl::Substitute("while generating entry $0 field $1: ",
                                   (use_field ? "with" : "without"),
@@ -486,8 +483,6 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
 // Installs a table entry per supported, programmable table in a particular
 // order. This ensures that we can generate valid table entries for every table.
 // It is required due to the possibility of references between tables.
-// TODO: This currently skips tables that use constraints. Don't do
-// this once they are supported.
 // TODO: Ideally, this function would use the p4info to extract a list of
 // all tables, ordered such that every table only depends on (i.e. @refers_to)
 // those before it, instead of using our hardcoded, ordered list.
@@ -589,6 +584,8 @@ TEST_P(MatchActionCoverageTestFixture,
                                                    state, testbed.Environment(),
                                                    GetParam().p4info));
 
+  // Remove function once built-in multicast group table can
+  // be treated like any other table.
   // Generates and installs entries for the built-in multicast group table.
   if (!config.GetDisabledFullyQualifiedNames().contains(
           pdpi::GetMulticastGroupTableName())) {
