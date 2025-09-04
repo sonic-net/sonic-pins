@@ -235,8 +235,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // good-to-have feature and we will update the skeleton to validate traffic
   // while injection is ongoing once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
-  RETURN_IF_ERROR(
-      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
+  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(
+      testbed_, next_image_config.max_acceptable_outage));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStopTraffic, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
@@ -283,10 +283,11 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   // In case the NSF Upgrade scenario is chosen to be the one where in each
   // iteration we skip pushing the config after NSF Upgrade, we intend to keep
   // the gNMI config and P4 Info constant throughout all the NSF Upgrade
-  // iterations. Hence, we override the gNMI config, it's label, and P4 Info of
-  // all the `image_config_params` to be the same, so that, in case required
-  // (eg. by a specific implementation of `FlowProgrammer` in `ProgramFlows()`),
-  // we use the exact same gNMI config, label, and P4 Info.
+  // iterations. Hence, we override the gNMI config and P4 Info, along with
+  // other values except the image label, of all the `image_config_params` to be
+  // the same, so that, in case required (eg. by a specific implementation of
+  // `FlowProgrammer` in `ProgramFlows()`), we use the exact same gNMI config,
+  // label, and P4 Info.
   if (scenario == NsfUpgradeScenario::kNoConfigPush) {
     LOG(INFO) << "Upgrading with no config push scenario. Overriding the gNMI "
                  "config and P4 Info of all the items in `image_config_params` "
@@ -299,6 +300,8 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
       image_config_param->config_label =
           image_config_params.begin()->config_label;
       image_config_param->p4_info = image_config_params.begin()->p4_info;
+      image_config_param->max_acceptable_outage =
+          image_config_params.begin()->max_acceptable_outage;
     }
   }
 
