@@ -26,6 +26,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
@@ -86,7 +87,8 @@ TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
 
 }  // namespace
 
-absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
+absl::Status OtgHelper::StartTraffic(Testbed& testbed,
+                                     absl::string_view config_label) {
   return std::visit(
       gutil::Overload{
           [this](std::unique_ptr<thinkit::GenericTestbed>& testbed)
@@ -309,20 +311,17 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
 
               TrafficMetrics traffic_metrics =
                   GetTrafficMetrics(flow_metric, enable_linerate_);
-              LOG(INFO) << "Traffic outage: "
-                        << traffic_metrics.outage_duration;
-              LOG(INFO) << "Max permissible traffic outage: "
-                        << max_acceptable_outage;
               if (traffic_metrics.outage_duration <= max_acceptable_outage)
                 continue;
 
               errors.push_back(absl::StrCat(
-                  "Flow name:\t\t", flow_metric.name(), "\nTraffic outage:\t\t",
+                  "Flow name:\t\t\t\t\t\t\t\t", flow_metric.name(),
+                  "\nTraffic outage:\t\t\t\t\t\t",
                   traffic_metrics.outage_duration,
-                  "\nMax permissible traffic outage:\t\t",
-                  max_acceptable_outage, "\nFrames dropped:\t\t",
-                  traffic_metrics.frames_dropped, "\nBytes dropped:\t\t",
-                  traffic_metrics.bytes_dropped,
+                  "\nMax acceptable outage:\t\t", max_acceptable_outage,
+                  "\nFrames dropped:\t\t\t\t\t\t",
+                  traffic_metrics.frames_dropped,
+                  "\nBytes dropped:\t\t\t\t\t\t", traffic_metrics.bytes_dropped,
                   transmission_stopped ? ""
                                        : "\nTransmission not completed within "
                                          "the expected time."));
