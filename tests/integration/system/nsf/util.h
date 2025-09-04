@@ -37,9 +37,6 @@
 
 namespace pins_test {
 
-// Duration of traffic loss permissible during NSF reboot.
-constexpr absl::Duration kNsfTrafficLossDuration = absl::ZeroDuration();
-
 struct PinsSoftwareInfo {
   std::string name;
   std::string oper_status;
