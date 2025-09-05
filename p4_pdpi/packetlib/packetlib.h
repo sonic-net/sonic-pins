@@ -177,6 +177,7 @@ absl::StatusOr<std::string> GetEthernetTrailer(const packetlib::Packet& packet);
 // checks if the input data is truncated because its bit width exceeds the
 // limitation.
 std::string EtherType(uint32_t ether_type);
+std::string VlanId(uint32_t vlan_id);
 std::string IpVersion(uint32_t version);
 std::string IpIhl(uint32_t ihl);
 std::string IpDscp(uint32_t dscp);
