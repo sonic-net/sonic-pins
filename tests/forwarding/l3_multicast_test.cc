@@ -799,12 +799,6 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 }
 
-// This test confirms that fixed delay programming is achievable by adding
-// group members where the replications are always dropped.
-// Part of our use case requires us to replicate packets that must be dropped,
-// which adds a fixed amount of time before a "real" replicated packet emerges.
-// This test is disabled due to an issue with ACL drop rules.
-// TODO: Re-enable test.
 TEST_P(L3MulticastTestFixture, DISABLED_ConfirmFixedDelayProgramming) {
 
   thinkit::MirrorTestbed& testbed =
