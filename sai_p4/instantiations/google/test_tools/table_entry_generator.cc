@@ -281,7 +281,7 @@ TableEntryGenerator MulticastRouterInterfaceTableGenerator(
       exact { str: "1" }
     }
     action {
-      name: "set_multicast_src_mac"
+      name: "multicast_set_src_mac"
       params {
         name: "src_mac"
         value { mac: "06:05:04:03:02:01" }

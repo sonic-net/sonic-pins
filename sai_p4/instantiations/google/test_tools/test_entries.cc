@@ -513,19 +513,6 @@ EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
   return AddMulticastGroupEntry(multicast_group_id, replicas);
 }
 
-EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
-    const MulticastRouterInterfaceTableEntry& entry) {
-  sai::MulticastRouterInterfaceTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
-  auto& match = *pd_entry.mutable_match();
-  match.set_multicast_replica_port(entry.multicast_replica_port);
-  match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<16>(entry.multicast_replica_instance));
-  auto& action = *pd_entry.mutable_action()->mutable_set_multicast_src_mac();
-  action.set_src_mac(entry.src_mac.ToString());
-  return *this;
-}
-
 namespace {
 // Returns a basic MulticastRouterInterfaceTableEntry without any action.
 sai::MulticastRouterInterfaceTableEntry ActionlessMrifEntry(

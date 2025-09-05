@@ -309,15 +309,6 @@ class EntryBuilder {
   absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
       const pdpi::IrP4Info& ir_p4info) const;
 
-  // Convenience struct corresponding to the proto
-  // `MulticastRouterInterfaceTableEntry`
-  // in `sai_pd.proto`.
-  struct MulticastRouterInterfaceTableEntry {
-    std::string multicast_replica_port;
-    int multicast_replica_instance = 0;
-    netaddr::MacAddress src_mac;
-  };
-
   // Adds an entry that matches all packets and punts them according to
   // `action`.
   EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
@@ -404,11 +395,6 @@ class EntryBuilder {
                                        absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
       int multicast_group_id, absl::Span<const std::string> egress_ports);
-  // TODO: Remove once `mulitcast_set_src_mac` is exclusively used
-  // and such an image is rolled out. Replace all calls with
-  // `AddMrifEntryRewritingSrcMac`.
-  EntryBuilder& AddMulticastRouterInterfaceEntry(
-      const MulticastRouterInterfaceTableEntry& entry);
   EntryBuilder& AddMrifEntryRewritingSrcMac(absl::string_view egress_port,
                                             int replica_instance,
                                             const netaddr::MacAddress& src_mac);
