@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("//gutil/embed_data:build_defs.bzl", "cc_embed_data")
 
 package(
