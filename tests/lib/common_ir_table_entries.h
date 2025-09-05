@@ -22,12 +22,6 @@
 
 namespace pins {
 
-// Returns an IrTableEntry to the L3 Admit table to allow all traffic.
-pdpi::IrTableEntry L3AdmitAllIrTableEntry();
-
-// Returns an IrTableEntry to the VRF table with the provided vrf_id.
-pdpi::IrTableEntry VrfIrTableEntry(absl::string_view vrf_id);
-
 // Returns an ACL_INGRESS flow that will match any packet and punt it to a CPU
 // queue.
 pdpi::IrTableEntry
