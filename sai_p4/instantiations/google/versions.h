@@ -82,6 +82,9 @@
 // Indicates the switch rejects duplicate sub-port RIFs.
 #define SAI_P4_PKGINFO_VERSION_REJECTS_DUPLICATE_SUB_PORT_RIFS "3.1.1"
 
+// Indicates the switch allows reconciliation of the acl_pre_ingress_table.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_PRE_INGRESS_RECONCILE "3.1.2"
+
 // Indicates the switch supports 512 duplicate WCMP members per group in native
 // mode.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_512_DUPLICATE_WCMP_MEMBERS_IN_NATIVE \
@@ -111,6 +114,6 @@ ID_ACTION \
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_REJECTS_DUPLICATE_SUB_PORT_RIFS
+  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_PRE_INGRESS_RECONCILE
 
 #endif // PINS_SAI_VERSIONS_H_
