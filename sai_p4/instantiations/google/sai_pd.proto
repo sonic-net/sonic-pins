@@ -1125,13 +1125,17 @@ message ReplicateAction {
   repeated Replica replicas = 1;
   // Corresponds to `Replica` in p4runtime.proto.
   message Replica {
+    // Refers to 'multicast_router_interface_table.multicast_replica_port'.
     string port = 1;      // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_instance'.
     string instance = 2;  // Format::HEX_STRING / 16 bits
     repeated BackupReplica backup_replicas = 3;
   }
   // Corresponds to `BackupReplica` in p4runtime.proto.
   message BackupReplica {
+    // Refers to 'multicast_router_interface_table.multicast_replica_port'.
     string port = 1;      // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_instance'.
     string instance = 2;  // Format::HEX_STRING / 16 bits
   }
 }
