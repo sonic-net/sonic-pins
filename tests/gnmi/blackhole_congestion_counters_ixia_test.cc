@@ -514,4 +514,28 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   EXPECT_GT(out_discard_counters.switch_blackhole_events, 0);
 }
 
+TEST_P(BlackholeCongestionCountersIxiaTestFixture,
+       TestCongestionsBelowThreshNotIncrementOutDiscardsAndCongestionCounters) {
+  constexpr double kBelowThreshOutDiscardsRate = 0.03;
+  constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
+  constexpr double kOutDiscardRateTolerance = 0.02;
+
+  // TODO: Connect to TestTracker for test status
+
+  ASSERT_OK_AND_ASSIGN(
+      OutDiscardCounters out_discard_counters,
+      TriggerOutDiscards(kBelowThreshOutDiscardsRate, kTrafficDuration));
+
+  // Check the changes are as expected.
+  double observed_out_discard_rate =
+      (double)out_discard_counters.port_out_discard_packets /
+      out_discard_counters.port_out_packets;
+  LOG(INFO) << "Observed out discard rate: " << observed_out_discard_rate;
+  EXPECT_NEAR(observed_out_discard_rate, kBelowThreshOutDiscardsRate,
+              kOutDiscardRateTolerance);
+  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
+}
+
 }  // namespace pins_test
