@@ -27,8 +27,7 @@
 #define ACL_WBB_INGRESS_TABLE_ID 0x02000103                  // 33554691
 #define ACL_EGRESS_TABLE_ID 0x02000104                       // 33554692
 #define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108          // 33554696
-#define ACL_EGRESS_L2_TABLE_ID 0x0200010C                    // 33554700
-// Next available table id: 0x0200010D (33554701)
+// Next available table id: 0x0200010C (33554700)
 
 // --- Actions -----------------------------------------------------------------
 // NOLINTBEGIN (to disable macro names of size > 80 cols)
