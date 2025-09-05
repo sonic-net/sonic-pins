@@ -99,7 +99,7 @@ message IrP4ActionField {
 // representation to be used within annotations.
 enum IrBuiltInAction {
   BUILT_IN_ACTION_UNSPECIFIED = 0;
-  // Corresponds to p4::v1::Replica.
+  // Corresponds to p4::v1::Replica and p4::v1::BackupReplica.
   // String representation in annotations: "builtin::replica"
   BUILT_IN_ACTION_REPLICA = 1;
 }
@@ -109,10 +109,11 @@ enum IrBuiltInAction {
 // representation to be used within `@refers_to`/`@referenced_by` annotations.
 enum IrBuiltInParameter {
   BUILT_IN_PARAMETER_UNSPECIFIED = 0;
-  // Corresponds to p4::v1::Replica::port.
+  // Corresponds to p4::v1::Replica::port and p4::v1::BackupReplica::port.
   // String representation in annotations: "replica.port"
   BUILT_IN_PARAMETER_REPLICA_PORT = 1;
-  // Corresponds to p4::v1::Replica::instance.
+  // Corresponds to p4::v1::Replica::instance and
+  // p4::v1::BackupReplica::instance.
   // String representation in annotations: "replica.instance"
   BUILT_IN_PARAMETER_REPLICA_INSTANCE = 2;
 }
