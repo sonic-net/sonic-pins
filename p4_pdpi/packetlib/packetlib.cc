@@ -3121,6 +3121,10 @@ std::string EtherType(uint32_t ether_type) {
   return ValidateAndConvertToHexString<kEthernetEthertypeBitwidth>(ether_type);
 }
 
+std::string VlanId(uint32_t vlan_id) {
+  return ValidateAndConvertToHexString<kVlanVlanIdentifierBitwidth>(vlan_id);
+}
+
 std::string IpVersion(uint32_t version) {
   return ValidateAndConvertToHexString<kIpVersionBitwidth>(version);
 }
