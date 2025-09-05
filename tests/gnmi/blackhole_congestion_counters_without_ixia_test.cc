@@ -144,6 +144,37 @@ constexpr absl::string_view kIpv6TestPacket = R"pb(
   }
   payload: "Basic IPv6 test packet")pb";
 
+absl::StatusOr<std::string> MakeTestPacket(sai::IpVersion ip_version,
+                                           absl::string_view dst_ip) {
+  packetlib::Packet test_packet;
+  if (ip_version == sai::IpVersion::kIpv4) {
+    test_packet = gutil::ParseProtoOrDie<packetlib::Packet>(
+        absl::Substitute(kIpv4TestPacket, dst_ip));
+  } else {
+    test_packet = gutil::ParseProtoOrDie<packetlib::Packet>(
+        absl::Substitute(kIpv6TestPacket, dst_ip));
+  }
+  LOG(INFO) << "Test packet to send: " << test_packet.DebugString();
+  return packetlib::SerializePacket(test_packet);
+}
+
+// Send packets from control switch to SUT.
+absl::Status SendPackets(thinkit::ControlDevice& control_device,
+                         absl::string_view control_port,
+                         sai::IpVersion ip_version, absl::string_view dst_ip,
+                         uint32_t packets_count) {
+  // Make test packet.
+  ASSIGN_OR_RETURN(std::string test_packet, MakeTestPacket(ip_version, dst_ip));
+
+  // Send packet to SUT.
+  for (uint32_t i = 0; i < packets_count; ++i) {
+    RETURN_IF_ERROR(control_device.SendPacket(control_port, test_packet))
+        << "failed to inject the packet.";
+  }
+  LOG(INFO) << "Successfully sent " << packets_count << " packets.";
+  return absl::OkStatus();
+}
+
 absl::StatusOr<LpmMissCounters>
 BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
     sai::IpVersion ip_version, absl::string_view dst_ip,
