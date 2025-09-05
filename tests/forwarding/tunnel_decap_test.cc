@@ -260,6 +260,98 @@ dvaas::PacketTestVector Ipv4InIpv6DecapTestVector(
   return test_vector;
 }
 
+// Helper function to build a Ipv4 in Ipv6 packet
+dvaas::PacketTestVector Ipv4InIpv6NoDecapTestVector(
+    const TunnelDecapTestVectorParams &packet_vector_param) {
+  ProtoFixtureRepository repo;
+
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(1) +
+                                     "Testing IPv4-in-Ipv6 packets")
+      .RegisterValue("@ingress_port", packet_vector_param.in_port)
+      .RegisterValue("@egress_port", packet_vector_param.out_port)
+      .RegisterValue("@dst_ip", packet_vector_param.inner_dst_ipv4.ToString())
+      .RegisterValue("@dst_ipv6", packet_vector_param.dst_ipv6.ToString())
+      .RegisterValue("@dst_mac", packet_vector_param.dst_mac.ToString())
+      .RegisterValue("@ttl", "0x10")
+      .RegisterValue("@decremented_hop", "0x41");
+
+  dvaas::PacketTestVector test_vector =
+      repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet", R"pb(
+            ethernet_header {
+              ethernet_destination: @dst_mac,
+              ethernet_source: "00:00:22:22:00:00"
+              ethertype: "0x86dd"  # Udp
+            }
+          )pb")
+          .RegisterSnippetOrDie<packetlib::Header>("@ipv6", R"pb(
+            ipv6_header {
+              version: "0x6"
+              dscp: "0x1b"
+              ecn: "0x1"
+              flow_label: "0x12345"
+              # payload_length: filled in automatically.
+              next_header: "0x04"  # next is ipv4
+              hop_limit: 0x42
+              ipv6_source: "1122:1122:3344:3344:5566:5566:7788:7788"
+              ipv6_destination: @dst_ipv6
+            }
+          )pb")
+          .RegisterSnippetOrDie<packetlib::Header>("@ipv4", R"pb(
+            ipv4_header {
+              version: "0x4"
+              dscp: "0x1b"
+              ecn: "0x1"
+              ihl: "0x5"
+              identification: "0x0000"
+              flags: "0x0"
+              ttl: @ttl
+              fragment_offset: "0x0000"
+              # payload_length: filled in automatically.
+              protocol: "0x11"
+              ipv4_source: "10.0.0.8"
+              ipv4_destination: @dst_ip
+            }
+          )pb")
+          .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
+            udp_header { source_port: "0x0014" destination_port: "0x000a" }
+          )pb")
+          .RegisterMessage("@input_packet",
+                           ParsePacketAndFillInComputedFields(repo,
+                                                              R"pb(
+                                                  headers: @ethernet
+                                                  headers: @ipv6
+                                                  headers: @ipv4
+                                                  headers: @udp
+                                                  payload: @payload
+                                                )pb"))
+          .RegisterMessage("@output_packet",
+                           ParsePacketAndFillInComputedFields(repo, R"pb(
+                headers: @ethernet {
+                  ethernet_header {
+                    ethernet_destination: "02:02:02:02:02:02"
+                    ethernet_source: "06:05:04:03:02:01"
+                    ethertype: "0x86dd"
+                  }
+                }
+                headers: @ipv6 { ipv6_header { hop_limit: @decremented_hop } }
+                # As the packet is not decapped, inner packet is not changed
+                headers: @ipv4 {}
+                headers: @udp
+                payload: @payload
+              )pb"))
+          .ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
+            input {
+              type: DATAPLANE
+              packet { port: @ingress_port parsed: @input_packet }
+            }
+            acceptable_outputs {
+              packets { port: @egress_port parsed: @output_packet }
+            }
+          )pb");
+
+  return test_vector;
+}
+
 // Helper routine to install L3 route
 absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
     pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
@@ -296,6 +388,15 @@ absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
   return pi_entities;
 }
 
+// Helper routine to install L3 admit table
+absl::Status InstallL3AdmitTable(pdpi::P4RuntimeSession &switch_session) {
+  LOG(INFO) << "Installing L3 admit rule";
+  sai::EntryBuilder entry_builder =
+      sai::EntryBuilder().AddEntryAdmittingAllPacketsToL3();
+
+  return (entry_builder.LogPdEntries().InstallDedupedEntities(switch_session));
+}
+
 // Helper routine to install L3 route
 absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
                             pdpi::IrP4Info& ir_p4info, std::string given_port,
@@ -318,6 +419,51 @@ absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
       entry_builder.LogPdEntries().GetDedupedPiEntities(ir_p4info));
   RETURN_IF_ERROR(pdpi::InstallPiEntities(switch_session, pi_entities));
   return absl::OkStatus();
+}
+
+// Helper routine to install ingress acl redirect to egress port
+absl::StatusOr<std::vector<p4::v1::Entity>>
+InstallIngressAclRedirectToNexthop(pdpi::P4RuntimeSession &switch_session,
+                                   std::string given_port,
+                                   sai::IpVersion ip_version) {
+  std::vector<p4::v1::Entity> pi_entities;
+  LOG(INFO) << "Installing ACL Redirect on "
+            << (ip_version == sai::IpVersion::kIpv4 ? "IPv4" : "IPv6");
+  sai::MirrorAndRedirectMatchFields match_fields;
+  if (ip_version == sai::IpVersion::kIpv4) {
+    match_fields = sai::MirrorAndRedirectMatchFields{
+        .is_ipv4 = true,
+        .dst_ip =
+            sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+                .value = inner_dst_ipv4,
+                .mask = inner_dst_ipv4_mask,
+            },
+    };
+    LOG(INFO) << "Match fields dst-ip: "
+              << match_fields.dst_ip->value.ToString();
+
+  } else {
+    match_fields = sai::MirrorAndRedirectMatchFields{
+        .is_ipv6 = true,
+        .dst_ipv6 =
+            sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+                .value = tunnel_dst_ipv6_first64,
+                .mask = exact_match_mask_first64,
+            },
+    };
+    LOG(INFO) << "Match fields dst-ipv6: "
+              << match_fields.dst_ipv6->value.ToString();
+  }
+
+  sai::EntryBuilder entry_builder =
+      sai::EntryBuilder()
+          .AddIngressAclEntryRedirectingToNexthop(kRedirectNexthopId,
+                                                  match_fields)
+          .AddNexthopRifNeighborEntries(kRedirectNexthopId, given_port);
+
+  RETURN_IF_ERROR(
+      entry_builder.LogPdEntries().InstallDedupedEntities(switch_session));
+  return pi_entities;
 }
 
 TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
@@ -549,6 +695,135 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
   // Log statistics and check that things succeeded.
   validation_result1.LogStatistics();
   EXPECT_OK(validation_result1.HasSuccessRateOfAtLeast(1.0));
+}
+
+TEST_P(TunnelDecapTestFixture, NoAdmitTableAclRedirectTunnelTermNoDecapForV4) {
+  if (GetParam().tunnel_type != pins_test::TunnelMatchType::kExactMatch) {
+    GTEST_SKIP();
+  }
+
+  dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
+
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Set testbed environment
+
+  // Initialize the connection, clear all entities, and (for the SUT) push
+  // P4Info.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
+
+  // Get control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_control,
+      GetParam().mirror_testbed->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string in_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+  ASSERT_OK_AND_ASSIGN(std::string out_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+
+  // Install Ingress ACL redirect to nexthop entry on SUT
+  ASSERT_OK(InstallIngressAclRedirectToNexthop(
+      *sut_p4rt_session.get(), out_port, sai::IpVersion::kIpv4));
+
+  // Install tunnel term table entry on SUT
+  ASSERT_OK_AND_ASSIGN(const auto tunnel_entities,
+                       InstallTunnelTermTable(*sut_p4rt_session.get(),
+                                              sut_ir_p4info,
+                                              GetParam().tunnel_type));
+
+  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
+            << " to engress:" << out_port;
+  // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
+  pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
+      .in_port = in_port,
+      .out_port = out_port,
+      .dst_mac = dst_mac,
+      .inner_dst_ipv4 = inner_dst_ipv4,
+      .dst_ipv6 = tunnel_dst_ipv6};
+
+  dvaas_params.packet_test_vector_override = {
+      Ipv4InIpv6NoDecapTestVector(tunnel_v6_match)};
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+
+  // Log statistics and check that things succeeded.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
+TEST_P(TunnelDecapTestFixture, AdmitTableAclRedirectTunnelTermDecapForV4) {
+  if (GetParam().tunnel_type != pins_test::TunnelMatchType::kExactMatch) {
+    GTEST_SKIP();
+  }
+
+  dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
+
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Set testbed environment
+
+  // Initialize the connection, clear all entities, and (for the SUT) get
+  // P4Info.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
+
+  // Get control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_control,
+      GetParam().mirror_testbed->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string in_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+  ASSERT_OK_AND_ASSIGN(std::string out_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+
+  // Install L3 admit table  on SUT
+  ASSERT_OK(InstallL3AdmitTable(*sut_p4rt_session.get()));
+
+  // Install Ingress ACL redirect to nexthop entry on SUT
+  ASSERT_OK(InstallIngressAclRedirectToNexthop(
+      *sut_p4rt_session.get(), out_port, sai::IpVersion::kIpv4));
+
+  // Install tunnel term table entry on SUT
+  ASSERT_OK_AND_ASSIGN(const auto tunnel_entities,
+                       InstallTunnelTermTable(*sut_p4rt_session.get(),
+                                              sut_ir_p4info,
+                                              GetParam().tunnel_type));
+
+  LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
+            << " to engress:" << out_port;
+  // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
+  pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
+      .in_port = in_port,
+      .out_port = out_port,
+      .dst_mac = dst_mac,
+      .inner_dst_ipv4 = inner_dst_ipv4,
+      .dst_ipv6 = tunnel_dst_ipv6};
+
+  dvaas_params.packet_test_vector_override = {
+      Ipv4InIpv6DecapTestVector(tunnel_v6_match)};
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+
+  // Log statistics and check that things succeeded.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 }
 
 }  // namespace
