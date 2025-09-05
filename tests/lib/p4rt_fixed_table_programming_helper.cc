@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -29,7 +30,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "tests/lib/common_ir_table_entries.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
 namespace pins {
 
@@ -391,7 +392,15 @@ absl::StatusOr<p4::v1::Update> VrfTableUpdate(const pdpi::IrP4Info& ir_p4_info,
   }
   pdpi::IrUpdate ir_update;
   ir_update.set_type(type);
-  *ir_update.mutable_entity()->mutable_table_entry() = VrfIrTableEntry(vrf_id);
+  ASSIGN_OR_RETURN(
+      pdpi::IrEntities ir_entities,
+      sai::EntryBuilder().AddVrfEntry(vrf_id).GetDedupedIrEntities(ir_p4_info));
+  if (ir_entities.entities_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected exactly one vrf entry, got "
+           << ir_entities.entities_size();
+  }
+  *ir_update.mutable_entity() = std::move(ir_entities.entities(0)); 
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
@@ -442,7 +451,16 @@ absl::StatusOr<p4::v1::Update> L3AdmitAllTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type) {
   pdpi::IrUpdate ir_update;
   ir_update.set_type(type);
-  *ir_update.mutable_entity()->mutable_table_entry() = L3AdmitAllIrTableEntry();
+  ASSIGN_OR_RETURN(pdpi::IrEntities ir_entities,
+                   sai::EntryBuilder()
+                       .AddEntryAdmittingAllPacketsToL3()
+                       .GetDedupedIrEntities(ir_p4_info));
+  if (ir_entities.entities_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected exactly one l3_admit_all entry, got "
+           << ir_entities.entities_size();
+  }
+  *ir_update.mutable_entity() = std::move(ir_entities.entities(0)); 
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
