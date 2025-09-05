@@ -41,11 +41,11 @@ cc_library(
     srcs = ["p4rt_fixed_table_programming_helper.cc"],
     hdrs = ["p4rt_fixed_table_programming_helper.h"],
     deps = [
-        ":common_ir_table_entries",
         "//gutil:proto",
         "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
+        "//sai_p4/instantiations/google/test_tools:test_entries", 
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
