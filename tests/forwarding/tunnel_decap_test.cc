@@ -388,6 +388,15 @@ absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
   return pi_entities;
 }
 
+// Helper routine to install L3 admit table
+absl::Status InstallL3AdmitTable(pdpi::P4RuntimeSession &switch_session) {
+  LOG(INFO) << "Installing L3 admit rule";
+  sai::EntryBuilder entry_builder =
+      sai::EntryBuilder().AddEntryAdmittingAllPacketsToL3();
+
+  return (entry_builder.LogPdEntries().InstallDedupedEntities(switch_session));
+}
+
 // Helper routine to install L3 route
 absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
                             pdpi::IrP4Info& ir_p4info, std::string given_port,
@@ -410,6 +419,51 @@ absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
       entry_builder.LogPdEntries().GetDedupedPiEntities(ir_p4info));
   RETURN_IF_ERROR(pdpi::InstallPiEntities(switch_session, pi_entities));
   return absl::OkStatus();
+}
+
+// Helper routine to install ingress acl redirect to egress port
+absl::StatusOr<std::vector<p4::v1::Entity>>
+InstallIngressAclRedirectToNexthop(pdpi::P4RuntimeSession &switch_session,
+                                   std::string given_port,
+                                   sai::IpVersion ip_version) {
+  std::vector<p4::v1::Entity> pi_entities;
+  LOG(INFO) << "Installing ACL Redirect on "
+            << (ip_version == sai::IpVersion::kIpv4 ? "IPv4" : "IPv6");
+  sai::MirrorAndRedirectMatchFields match_fields;
+  if (ip_version == sai::IpVersion::kIpv4) {
+    match_fields = sai::MirrorAndRedirectMatchFields{
+        .is_ipv4 = true,
+        .dst_ip =
+            sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+                .value = inner_dst_ipv4,
+                .mask = inner_dst_ipv4_mask,
+            },
+    };
+    LOG(INFO) << "Match fields dst-ip: "
+              << match_fields.dst_ip->value.ToString();
+
+  } else {
+    match_fields = sai::MirrorAndRedirectMatchFields{
+        .is_ipv6 = true,
+        .dst_ipv6 =
+            sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+                .value = tunnel_dst_ipv6_first64,
+                .mask = exact_match_mask_first64,
+            },
+    };
+    LOG(INFO) << "Match fields dst-ipv6: "
+              << match_fields.dst_ipv6->value.ToString();
+  }
+
+  sai::EntryBuilder entry_builder =
+      sai::EntryBuilder()
+          .AddIngressAclEntryRedirectingToNexthop(kRedirectNexthopId,
+                                                  match_fields)
+          .AddNexthopRifNeighborEntries(kRedirectNexthopId, given_port);
+
+  RETURN_IF_ERROR(
+      entry_builder.LogPdEntries().InstallDedupedEntities(switch_session));
+  return pi_entities;
 }
 
 TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
