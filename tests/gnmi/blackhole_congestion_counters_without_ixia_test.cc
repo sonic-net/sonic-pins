@@ -254,4 +254,21 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
   EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
 }
 
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestIpv6LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
+  constexpr uint32_t kAboveThreshL3MissCount = 20;
+
+  // TODO: Connect to TestTracker for test status
+
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv6, kIpv6DstIpForL3Miss,
+                       kAboveThreshL3MissCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kAboveThreshL3MissCount);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_lpm_miss_events, 1);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
+}
+
 }  // namespace pins_test
