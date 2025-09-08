@@ -34,6 +34,20 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "compare_p4flows_test",
+    timeout = "long",
+    srcs = ["compare_p4flows_test.cc"],
+    deps = [
+        ":compare_p4flows",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "util",
     testonly = True,
