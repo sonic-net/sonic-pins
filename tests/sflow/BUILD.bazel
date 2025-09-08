@@ -45,6 +45,7 @@ cc_library(
         "//tests:thinkit_sanity_tests",
         "//tests/forwarding:group_programming_util",
         "//tests/forwarding:util",
+        "//tests/integration/system/nsf:compare_p4flows",
         "//tests/integration/system/nsf:util",
         "//tests/integration/system/nsf/interfaces:test_params",
         "//tests/integration/system/nsf/interfaces:testbed",
