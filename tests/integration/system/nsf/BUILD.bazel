@@ -20,6 +20,21 @@ package(
 )
 
 cc_library(
+    name = "compare_p4flows",
+    testonly = True,
+    srcs = ["compare_p4flows.cc"],
+    hdrs = ["compare_p4flows.h"],
+    deps = [
+        "//gutil:status",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "util",
     testonly = True,
     srcs = ["util.cc"],
