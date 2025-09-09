@@ -489,7 +489,9 @@ control routing_resolution(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_ip_nexthop;
+#if defined(TUNNEL_ENCAP_CAPABLE)
       @proto_id(2) set_p2p_tunnel_encap_nexthop;
+#endif
       @proto_id(3) set_ip_nexthop_and_disable_rewrites;
       @defaultonly NoAction;
     }
@@ -588,10 +590,11 @@ control routing_resolution(in headers_t headers,
     // The `wcmp_group_table` should always set a valid `nexthop_id`.
     if (local_metadata.nexthop_id_valid) {
       nexthop_table.apply();
-
+#if defined(TUNNEL_ENCAP_CAPABLE)
       if (tunnel_id_valid) {
         tunnel_table.apply();
       }
+#endif
 
       // The `nexthop_table` should always set a valid
       // `router_interface_id` and `neighbor_id`.

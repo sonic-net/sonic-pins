@@ -3,6 +3,7 @@
 #define ACL_REDIRECT_TO_NEXTHOP_CAPABLE
 #define ACL_REDIRECT_TO_PORT_CAPABLE
 #define MIRROR_CAPABLE
+#define TUNNEL_ENCAP_CAPABLE
 
 #include <v1model.p4>
 
