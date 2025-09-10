@@ -18,7 +18,7 @@ using testing::DoAll;
 using testing::Return;
 using testing::SetArgPointee;
 
-TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
+TEST(AuxiliaryIrEntitiesForV1ModelTarget, GenerateAuxiliaryLoopbackEntities) {
   gnmi::GetResponse response;
   *response.add_notification()
        ->add_update()
@@ -29,21 +29,21 @@ TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
         "interface": [
           {
             "name":"EthernetEnabled0",
-             "state":{
+            "state":{
               "loopback-mode":"ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 2
             }
           },
           {
             "name":"EthernetEnabled1",
-             "state":{
+            "state":{
               "loopback-mode":"NOT_ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 4
             }
           },
           {
             "name":"EthernetEnabled2",
-             "state":{
+            "state":{
               "loopback-mode":"ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 5
             }
@@ -94,12 +94,119 @@ TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
 
-  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
+  pdpi::IrEntities ir_entities;
 
   ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities,
-      sai::CreateV1ModelAuxiliaryTableEntries(mock_gnmi_stub, ir_p4info));
-  EXPECT_THAT(entities, gutil::EqualsProto(expected_entities));
+      pdpi::IrEntities auxiliary_ir_entities,
+      sai::CreateV1ModelAuxiliaryEntities(ir_entities, mock_gnmi_stub));
+  EXPECT_THAT(auxiliary_ir_entities, gutil::EqualsProto(expected_entities));
+}
+
+TEST(AuxiliaryIrEntitiesForV1ModelTarget,
+     GenerateAuxiliaryVlanMembershipTableEntries) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+          {
+            "name":"EthernetEnabled0",
+            "state":{
+              "loopback-mode":"ASIC_MAC_LOCAL",
+              "openconfig-p4rt:id": 2
+            }
+          }
+        ]
+      }
+    })";
+
+  gnmi::MockgNMIStub mock_gnmi_stub;
+  EXPECT_CALL(mock_gnmi_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
+                       sai::CreateV1ModelAuxiliaryEntities(
+                           gutil::ParseProtoOrDie<pdpi::IrEntities>(
+                               R"pb(
+                                 entities {
+                                   table_entry {
+                                     table_name: "vlan_membership_table"
+                                     matches {
+                                       name: "vlan_id"
+                                       exact { hex_str: "0x1" }
+                                     }
+                                     matches {
+                                       name: "port"
+                                       exact { str: "1" }
+                                     }
+                                     action { name: "make_tagged_member" }
+                                   }
+                                 }
+                                 entities {
+                                   table_entry {
+                                     table_name: "vlan_membership_table"
+                                     matches {
+                                       name: "vlan_id"
+                                       exact { hex_str: "0x2" }
+                                     }
+                                     matches {
+                                       name: "port"
+                                       exact { str: "2" }
+                                     }
+                                     action { name: "make_untagged_member" }
+                                   }
+                                 }
+                               )pb"),
+                           mock_gnmi_stub));
+
+  EXPECT_THAT(
+      auxiliary_ir_entities,
+      gutil::EqualsProto(gutil::ParseProtoOrDie<pdpi::IrEntities>(
+          R"pb(
+            entities {
+              table_entry {
+                table_name: "egress_port_loopback_table"
+                matches {
+                  name: "out_port"
+                  exact { str: "2" }
+                }
+                action { name: "egress_loopback" }
+              }
+            }
+            entities {
+              table_entry {
+                table_name: "v1model_auxiliary_vlan_membership_table"
+                matches {
+                  name: "vlan_id"
+                  exact { hex_str: "0x1" }
+                }
+                matches {
+                  name: "port"
+                  exact { str: "1" }
+                }
+                action { name: "v1model_auxiliary_make_tagged_member" }
+              }
+            }
+            entities {
+              table_entry {
+                table_name: "v1model_auxiliary_vlan_membership_table"
+                matches {
+                  name: "vlan_id"
+                  exact { hex_str: "0x2" }
+                }
+                matches {
+                  name: "port"
+                  exact { str: "2" }
+                }
+                action { name: "v1model_auxiliary_make_untagged_member" }
+              }
+            }
+          )pb")));
 }
 
 }  // namespace
+
