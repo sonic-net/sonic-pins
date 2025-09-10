@@ -15,24 +15,25 @@
 
 #include <memory>
 #include <string>
-#include <thread>  
+#include <thread>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  
+#include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 using ::p4::v1::ReadResponse;
