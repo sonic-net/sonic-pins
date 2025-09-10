@@ -94,12 +94,11 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget, GenerateAuxiliaryLoopbackEntities) {
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
 
-  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
   pdpi::IrEntities ir_entities;
 
-  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
-                       sai::CreateV1ModelAuxiliaryEntities(
-                           ir_entities, mock_gnmi_stub, ir_p4info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities auxiliary_ir_entities,
+      sai::CreateV1ModelAuxiliaryEntities(ir_entities, mock_gnmi_stub));
   EXPECT_THAT(auxiliary_ir_entities, gutil::EqualsProto(expected_entities));
 }
 
@@ -128,8 +127,6 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
   EXPECT_CALL(mock_gnmi_stub, Get)
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
-
-  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
                        sai::CreateV1ModelAuxiliaryEntities(
@@ -164,7 +161,7 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
                                    }
                                  }
                                )pb"),
-                           mock_gnmi_stub, ir_p4info));
+                           mock_gnmi_stub));
 
   EXPECT_THAT(
       auxiliary_ir_entities,
