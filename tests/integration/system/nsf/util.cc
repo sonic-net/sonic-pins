@@ -773,21 +773,6 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
 }
 
-absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
-                                    ReadResponse snapshot_2) {
-  MessageDifferencer differencer;
-  std::string diff_report;
-  AppendIgnoredP4SnapshotFields(&differencer);
-  differencer.ReportDifferencesToString(&diff_report);
-
-  if (!differencer.Compare(snapshot_1, snapshot_2)) {
-    return gutil::InternalErrorBuilder()
-           << "Differences found between the P4 flow snapshots:\n"
-           << diff_report;
-  }
-  return absl::OkStatus();
-}
-
 absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
                                 absl::string_view file_name) {
   return GetTestEnvironment(testbed).StoreTestArtifact(file_name,
