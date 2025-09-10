@@ -206,9 +206,6 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
 
 absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
 
-absl::Status CompareP4FlowSnapshots(::p4::v1::ReadResponse snapshot_1,
-                                    ::p4::v1::ReadResponse snapshot_2);
-
 absl::Status SaveP4FlowSnapshot(Testbed& testbed,
                                 ::p4::v1::ReadResponse snapshot,
                                 absl::string_view file_name);
