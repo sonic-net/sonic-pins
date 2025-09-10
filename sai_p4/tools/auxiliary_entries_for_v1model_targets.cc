@@ -221,6 +221,7 @@ absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
   ASSIGN_OR_RETURN(pdpi::IrEntities sub_port_rifs_entities,
                    CreateV1ModelAuxiliaryEntitiesForSubPortRifs(ir_entities));
   auxiliary_ir_entities.MergeFrom(sub_port_rifs_entities);
+
   return auxiliary_ir_entities;
 }
 
