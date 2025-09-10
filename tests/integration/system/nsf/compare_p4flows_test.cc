@@ -95,5 +95,35 @@ constexpr std::string_view kNonVrfTableEntryWithSfeMetadata2 =
            }
          })pb";
 
+TEST(CompareP4FlowsTest, ChangeInActionId) {
+  ReadResponse before_response =
+      gutil::ParseProtoOrDie<ReadResponse>(kVrfTableEntryWithSfeMetadata);
+  ReadResponse after_response =
+      gutil::ParseProtoOrDie<ReadResponse>(kVrfTableEntryWithSfeMetadata2);
+  EXPECT_THAT(
+      CompareP4FlowSnapshots(before_response, after_response),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Differences found between the P4 flow snapshots:")));
+}
+
+TEST(CompareP4FlowsTest, ChangeInTableId) {
+  ReadResponse before_response =
+      gutil::ParseProtoOrDie<ReadResponse>(kVrfTableEntryWithSfeMetadata);
+  ReadResponse after_response =
+      gutil::ParseProtoOrDie<ReadResponse>(kNonVrfTableEntryWithSfeMetadata);
+  EXPECT_THAT(
+      CompareP4FlowSnapshots(before_response, after_response),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Differences found between the P4 flow snapshots:")));
+}
+
+TEST(CompareP4FlowsTest, NonVrfMetadataSuccess) {
+  ReadResponse before_response =
+      gutil::ParseProtoOrDie<ReadResponse>(kNonVrfTableEntryWithSfeMetadata);
+  ReadResponse after_response =
+      gutil::ParseProtoOrDie<ReadResponse>(kNonVrfTableEntryWithSfeMetadata2);
+  EXPECT_THAT(CompareP4FlowSnapshots(before_response, after_response), IsOk());
+}
+
 } // namespace
 } // namespace pins_test
