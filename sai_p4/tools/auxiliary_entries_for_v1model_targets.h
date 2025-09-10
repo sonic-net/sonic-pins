@@ -24,7 +24,8 @@
 
 #include "absl/status/statusor.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/ir.pb.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 
 namespace sai {
 
@@ -36,11 +37,12 @@ namespace sai {
 // Not required by PINS targets, since PINS has this config built-in.
 p4::v1::Entity MakeV1modelPacketReplicationEngineEntryRequiredForPunts();
 
-// Creates entries for v1Model auxiliary tables that model the effects of the
-// given gNMI configuration in on packet forwarding (e.g. port loopback mode).
-absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryTableEntries(
-    gnmi::gNMI::StubInterface& gnmi_stub, pdpi::IrP4Info ir_p4info);
+// Creates entities for v1Model auxiliary tables that model the effects of the
+// given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
+// loopback mode).
+absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
+    pdpi::IrEntities ir_entities, gnmi::gNMI::StubInterface& gnmi_stub);
 
 }  // namespace sai
 
-#endif // PINS_SAI_P4_TOOLS_AUXILIARY_ENTRIES_FOR_V1MODEL_TARGETS_H_
+#endif  // PINS_SAI_P4_TOOLS_AUXILIARY_ENTRIES_FOR_V1MODEL_TARGETS_H_
