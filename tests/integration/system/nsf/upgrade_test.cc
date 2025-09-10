@@ -29,10 +29,13 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -44,8 +47,6 @@
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
           "The NSF milestone to test.");
@@ -611,10 +612,9 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   for (auto image_config_param = image_config_params.begin();
        image_config_param + 1 != image_config_params.end();
        ++image_config_param) {
-    upgrade_status = (NsfUpgradeOrReboot(
+    upgrade_status = NsfUpgradeOrReboot(
         scenario, *image_config_param, *(image_config_param + 1),
-        GetParam().enable_interface_validation_during_nsf,
-        continue_on_failure));
+        GetParam().enable_interface_validation_during_nsf, continue_on_failure);
     if (!upgrade_status.ok()) {
       error_msgs.push_back(absl::StrFormat(
           "%s -> %s: %s", image_config_param->image_version,
