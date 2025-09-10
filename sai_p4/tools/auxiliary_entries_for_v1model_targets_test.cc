@@ -103,5 +103,113 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget, GenerateAuxiliaryLoopbackEntities) {
   EXPECT_THAT(auxiliary_ir_entities, gutil::EqualsProto(expected_entities));
 }
 
+TEST(AuxiliaryIrEntitiesForV1ModelTarget,
+     GenerateAuxiliaryVlanMembershipTableEntries) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+          {
+            "name":"EthernetEnabled0",
+            "state":{
+              "loopback-mode":"ASIC_MAC_LOCAL",
+              "openconfig-p4rt:id": 2
+            }
+          }
+        ]
+      }
+    })";
+
+  gnmi::MockgNMIStub mock_gnmi_stub;
+  EXPECT_CALL(mock_gnmi_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kTor);
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities auxiliary_ir_entities,
+                       sai::CreateV1ModelAuxiliaryEntities(
+                           gutil::ParseProtoOrDie<pdpi::IrEntities>(
+                               R"pb(
+                                 entities {
+                                   table_entry {
+                                     table_name: "vlan_membership_table"
+                                     matches {
+                                       name: "vlan_id"
+                                       exact { hex_str: "0x1" }
+                                     }
+                                     matches {
+                                       name: "port"
+                                       exact { str: "1" }
+                                     }
+                                     action { name: "make_tagged_member" }
+                                   }
+                                 }
+                                 entities {
+                                   table_entry {
+                                     table_name: "vlan_membership_table"
+                                     matches {
+                                       name: "vlan_id"
+                                       exact { hex_str: "0x2" }
+                                     }
+                                     matches {
+                                       name: "port"
+                                       exact { str: "2" }
+                                     }
+                                     action { name: "make_untagged_member" }
+                                   }
+                                 }
+                               )pb"),
+                           mock_gnmi_stub, ir_p4info));
+
+  EXPECT_THAT(
+      auxiliary_ir_entities,
+      gutil::EqualsProto(gutil::ParseProtoOrDie<pdpi::IrEntities>(
+          R"pb(
+            entities {
+              table_entry {
+                table_name: "egress_port_loopback_table"
+                matches {
+                  name: "out_port"
+                  exact { str: "2" }
+                }
+                action { name: "egress_loopback" }
+              }
+            }
+            entities {
+              table_entry {
+                table_name: "v1model_auxiliary_vlan_membership_table"
+                matches {
+                  name: "vlan_id"
+                  exact { hex_str: "0x1" }
+                }
+                matches {
+                  name: "port"
+                  exact { str: "1" }
+                }
+                action { name: "v1model_auxiliary_make_tagged_member" }
+              }
+            }
+            entities {
+              table_entry {
+                table_name: "v1model_auxiliary_vlan_membership_table"
+                matches {
+                  name: "vlan_id"
+                  exact { hex_str: "0x2" }
+                }
+                matches {
+                  name: "port"
+                  exact { str: "2" }
+                }
+                action { name: "v1model_auxiliary_make_untagged_member" }
+              }
+            }
+          )pb")));
+}
+
 }  // namespace
 
