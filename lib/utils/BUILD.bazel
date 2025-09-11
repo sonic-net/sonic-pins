@@ -55,6 +55,19 @@ cc_test(
 )
 
 cc_library(
+    name = "json_test_utils",
+    testonly = True,
+    srcs = ["json_test_utils.cc"],
+    hdrs = ["json_test_utils.h"],
+    deps = [
+        ":json_utils",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
     name = "generic_testbed_utils",
     testonly = True,
     srcs = ["generic_testbed_utils.cc"],
