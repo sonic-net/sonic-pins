@@ -14,6 +14,7 @@
 #
 # PINS test functions that can be run on any infrastructure that supports ThinKit.
 
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
