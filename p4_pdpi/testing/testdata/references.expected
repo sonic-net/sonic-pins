@@ -937,6 +937,162 @@ ConcreteTableReference{
 }
 
 =========================================================================
+OutgoingConcreteTableReferences: BuiltInActionField-Refers-To-P4MatchField reference creates a concrete reference for every instance of the backup-action.
+=========================================================================
+-- INPUT --------------------------------------------------------------
+-- PD table entry --
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0037"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "port_1"
+        instance: "0x0031"
+        backup_replicas {
+          port: "port_3"
+          instance: "0x0033"
+        }
+        backup_replicas {
+          port: "port_4"
+          instance: "0x0034"
+        }
+      }
+      replicas {
+        port: "port_2"
+        instance: "0x0032"
+        backup_replicas {
+          port: "port_5"
+          instance: "0x0035"
+        }
+      }
+    }
+  }
+}
+
+-- ReferenceInfo --
+source_table {
+  built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+}
+destination_table {
+  p4_table {
+    table_name: "other_table"
+  }
+}
+field_references {
+  source {
+    action_field {
+      built_in_action_field {
+        action: BUILT_IN_ACTION_REPLICA
+        parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+      }
+    }
+  }
+  destination {
+    match_field {
+      p4_match_field {
+        field_name: "other_field"
+      }
+    }
+  }
+}
+
+-- OUTPUT -------------------------------------------------------------
+-- ReferenceEntries --
+ConcreteTableReference{
+  source table: 'builtin::multicast_group_table'
+  destination table: 'other_table'
+  fields: {
+    ConcreteFieldReference{ source field: 'replica.port', destination field: 'other_field', value: 'port_1' },
+  }
+}
+ConcreteTableReference{
+  source table: 'builtin::multicast_group_table'
+  destination table: 'other_table'
+  fields: {
+    ConcreteFieldReference{ source field: 'replica.port', destination field: 'other_field', value: 'port_2' },
+  }
+}
+
+=========================================================================
+OutgoingConcreteTableReferences: BuiltInActionField-Refers-To-BuiltInMatchField reference creates a concrete reference for every instance of the backup-action.
+=========================================================================
+-- INPUT --------------------------------------------------------------
+-- PD table entry --
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0037"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "port_1"
+        instance: "0x0031"
+        backup_replicas {
+          port: "port_3"
+          instance: "0x0033"
+        }
+        backup_replicas {
+          port: "port_4"
+          instance: "0x0034"
+        }
+      }
+      replicas {
+        port: "port_2"
+        instance: "0x0032"
+        backup_replicas {
+          port: "port_5"
+          instance: "0x0035"
+        }
+      }
+    }
+  }
+}
+
+-- ReferenceInfo --
+source_table {
+  built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+}
+destination_table {
+  p4_table {
+    table_name: "other_table"
+  }
+}
+field_references {
+  source {
+    action_field {
+      built_in_action_field {
+        action: BUILT_IN_ACTION_REPLICA
+        parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+      }
+    }
+  }
+  destination {
+    match_field {
+      built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+    }
+  }
+}
+
+-- OUTPUT -------------------------------------------------------------
+-- ReferenceEntries --
+ConcreteTableReference{
+  source table: 'builtin::multicast_group_table'
+  destination table: 'other_table'
+  fields: {
+    ConcreteFieldReference{ source field: 'replica.port', destination field: 'multicast_group_id', value: 'port_1' },
+  }
+}
+ConcreteTableReference{
+  source table: 'builtin::multicast_group_table'
+  destination table: 'other_table'
+  fields: {
+    ConcreteFieldReference{ source field: 'replica.port', destination field: 'multicast_group_id', value: 'port_2' },
+  }
+}
+
+=========================================================================
 OutgoingConcreteTableReferences: Multi P4MatchField-Refers-To-MatchField references create a single concrete reference.
 =========================================================================
 -- INPUT --------------------------------------------------------------
