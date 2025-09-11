@@ -58,8 +58,10 @@ using ::p4::v1::ReadResponse;
 
 NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
   absl::BitGen gen;
+  // the functionality of comparing two different configs and selecting
+  // upgrade scenario based on whether the two configs are equal or not.
   int random_index = absl::Uniform(
-      gen, 0, static_cast<int>(NsfUpgradeScenario::kNumNsfUpgradeScenarios));
+      gen, 1, static_cast<int>(NsfUpgradeScenario::kNumNsfUpgradeScenarios));
 
   return static_cast<NsfUpgradeScenario>(random_index);
 }
