@@ -315,13 +315,11 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                 continue;
 
               errors.push_back(absl::StrCat(
-                  "Flow name:\t\t\t\t\t\t\t\t", flow_metric.name(),
-                  "\nTraffic outage:\t\t\t\t\t\t",
-                  traffic_metrics.outage_duration,
+                  "Flow name:\t\t\t", flow_metric.name(),
+                  "\nTraffic outage:\t\t\t", traffic_metrics.outage_duration,
                   "\nMax acceptable outage:\t\t", max_acceptable_outage,
-                  "\nFrames dropped:\t\t\t\t\t\t",
-                  traffic_metrics.frames_dropped,
-                  "\nBytes dropped:\t\t\t\t\t\t", traffic_metrics.bytes_dropped,
+                  "\nFrames dropped:\t\t\t", traffic_metrics.frames_dropped,
+                  "\nBytes dropped:\t\t\t", traffic_metrics.bytes_dropped,
                   transmission_stopped ? ""
                                        : "\nTransmission not completed within "
                                          "the expected time."));
