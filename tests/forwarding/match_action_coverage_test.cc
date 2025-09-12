@@ -307,6 +307,27 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
   return absl::OkStatus();
 }
 
+// Returns a P4-constraints string enforcing that `field` be omitted or present
+// depending on the value of `omit`. If the field is not omittable, returns
+// InvalidArgumentError.
+absl::StatusOr<std::string> FieldPresenceConstraintString(
+    const pdpi::IrMatchFieldDefinition& field, bool present) {
+  std::string op = present ? "!=" : "==";
+  switch (field.match_field().match_type()) {
+    case p4::config::v1::MatchField::TERNARY:
+    case p4::config::v1::MatchField::OPTIONAL:
+      return absl::Substitute("$0::mask $1 0", field.match_field().name(), op);
+    case p4::config::v1::MatchField::LPM:
+      return absl::Substitute("$0::prefix_length $1 0",
+                              field.match_field().name(), op);
+    default:
+      return absl::InvalidArgumentError(
+          absl::Substitute("Match type '$0' is not omittable",
+                           p4::config::v1::MatchField::MatchType_Name(
+                               field.match_field().match_type())));
+  }
+}
+
 // For each programmable table, installs a set of table entries covering all
 // match fields and actions in the following sense:
 // - Each omittable match field is omitted and included in at least one table
