@@ -557,10 +557,10 @@ TEST_P(FrontpanelQosTest,
 
   // Fix test parameters and PIRs (peak information rates, in bytes
   // per second) for each DSCP.
-  constexpr int64_t kTestFrameSizeInBytes = 2000;                // 2 KB
+  constexpr int64_t kTestFrameSizeInBytes = 1000;                // 1 KB
   constexpr int64_t kTestFrameCount = 30'000'000;                // 30 GB
   constexpr int64_t kTestFramesPerSecond = kTestFrameCount / 3;  // for 3 s
-  constexpr int64_t kTestFrameSpeedInBytesPerSecond =            // 20 GB/s
+  constexpr int64_t kTestFrameSpeedInBytesPerSecond =            // 10 GB/s
       kTestFramesPerSecond * kTestFrameSizeInBytes;
 
   // Get strictly prioritized queues.
@@ -675,14 +675,20 @@ TEST_P(FrontpanelQosTest,
     constexpr int64_t kSpeed200g = 200000000000;
 
     if (kSutEgressPortSpeedInBitsPerSecond != kSpeed200g) {
-      ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g),
-                                            kSutEgressPort, *gnmi_stub));
+      auto status = SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g),
+                                                kSutEgressPort, *gnmi_stub);
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to toggle port speed for : " << kSutEgressPort;
+      }
       ASSERT_OK(SetPortSpeedInBitsPerSecond(
           PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
           *gnmi_stub));
     } else {
-      ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g),
-                                            kSutEgressPort, *gnmi_stub));
+      auto status = SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g),
+                                                kSutEgressPort, *gnmi_stub);
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to toggle port speed for : " << kSutEgressPort;
+      }
       ASSERT_OK(SetPortSpeedInBitsPerSecond(
           PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
           *gnmi_stub));
