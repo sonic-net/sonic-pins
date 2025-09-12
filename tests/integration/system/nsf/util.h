@@ -37,9 +37,6 @@
 
 namespace pins_test {
 
-// Duration of traffic loss permissible during NSF reboot.
-constexpr absl::Duration kNsfTrafficLossDuration = absl::ZeroDuration();
-
 struct PinsSoftwareInfo {
   std::string name;
   std::string oper_status;
@@ -116,9 +113,8 @@ absl::Status ValidatePinsSoftwareComponentsBeforeReboot(
 
 // Validates PINS software components after install/upgrade and reboot.
 absl::Status ValidatePinsSoftwareComponentsAfterReboot(
-    const PinsSoftwareInfo& primary_before_install_reboot,
-    const PinsSoftwareInfo& primary_after_install_reboot,
-    const PinsSoftwareInfo& secondary_after_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_before_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_after_install_reboot,
     absl::string_view expected_version = "");
 
 // Runs validations that validate the switch to be ready. Does the switch
@@ -209,9 +205,6 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
                              const p4::config::v1::P4Info& p4_info);
 
 absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
-
-absl::Status CompareP4FlowSnapshots(::p4::v1::ReadResponse snapshot_1,
-                                    ::p4::v1::ReadResponse snapshot_2);
 
 absl::Status SaveP4FlowSnapshot(Testbed& testbed,
                                 ::p4::v1::ReadResponse snapshot,
