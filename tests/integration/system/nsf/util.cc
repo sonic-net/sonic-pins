@@ -76,7 +76,7 @@ using ::p4::v1::Entity;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 
-constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(8);
+constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(11);
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
@@ -295,14 +295,19 @@ absl::Status ValidatePinsSoftwareComponentsBeforeReboot(
 }
 
 absl::Status ValidatePinsSoftwareComponentsAfterReboot(
-    const PinsSoftwareInfo& primary_before_install_reboot,
-    const PinsSoftwareInfo& primary_after_install_reboot,
-    const PinsSoftwareInfo& secondary_after_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_before_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_after_install_reboot,
     absl::string_view expected_version) {
   // Validate that switch has booted to the expected version after
   // install / upgrade and reboot.
   LOG(INFO) << "Validating components after install / upgrade and reboot";
   LOG(INFO) << "Validating if the primary network stack version is different";
+  PinsSoftwareInfo primary_before_install_reboot =
+      pins_component_info_before_install_reboot.primary_network_stack;
+  PinsSoftwareInfo primary_after_install_reboot =
+      pins_component_info_after_install_reboot.primary_network_stack;
+  PinsSoftwareInfo secondary_after_install_reboot =
+      pins_component_info_after_install_reboot.secondary_network_stack;
   if (!expected_version.empty() &&
       primary_after_install_reboot.version != expected_version) {
     return gutil::InternalErrorBuilder()
@@ -766,21 +771,6 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    pdpi::P4RuntimeSession::Create(sut));
   return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
-}
-
-absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
-                                    ReadResponse snapshot_2) {
-  MessageDifferencer differencer;
-  std::string diff_report;
-  AppendIgnoredP4SnapshotFields(&differencer);
-  differencer.ReportDifferencesToString(&diff_report);
-
-  if (!differencer.Compare(snapshot_1, snapshot_2)) {
-    return gutil::InternalErrorBuilder()
-           << "Differences found between the P4 flow snapshots:\n"
-           << diff_report;
-  }
-  return absl::OkStatus();
 }
 
 absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
