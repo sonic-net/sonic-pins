@@ -46,6 +46,8 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -69,6 +71,7 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/util.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
@@ -86,8 +89,6 @@
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins {
 
@@ -1006,52 +1007,52 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       absl::StrCat(prefix, "ipv6_neigh_show.txt"), result));
 
   // APPL_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_db.txt"), result));
 
   // ASIC_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_asic_db.txt"), result));
 
   // CONFIG_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_config_db.txt"), result));
 
   // STATE_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 6 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 6 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_state_db.txt"), result));
 
   // APPL_STATE_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_state_db.txt"), result));
 }
