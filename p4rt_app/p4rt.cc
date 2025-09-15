@@ -67,7 +67,7 @@ using ::grpc::Server;
 using ::grpc::ServerBuilder;
 using ::grpc::ServerCredentials;
 
-#define APP_P4RT_CHANNEL_NAME "P4rt_Channel"
+#define APP_P4RT_CHANNEL_NAME "P4RT_TABLE"
 // By default the P4RT App will run on TCP port 9559. Which is the IANA port
 // reserved for P4Runtime.
 // https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=9559
