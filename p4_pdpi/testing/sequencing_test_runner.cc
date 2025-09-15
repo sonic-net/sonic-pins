@@ -1487,7 +1487,13 @@ void RunGetEntriesUnreachableFromRootsTests(const pdpi::IrP4Info& info) {
             multicast_group_table_entry {
               match { multicast_group_id: "0x0037" }
               action {
-                replicate { replicas { port: "port_1" instance: "0x0031" } }
+                replicate {
+                  replicas {
+                    port: "port_1"
+                    instance: "0x0031"
+                    backup_replicas { port: "port_2" instance: "0x0032" }
+                  }
+                }
               }
             }
           )pb",
@@ -1495,7 +1501,14 @@ void RunGetEntriesUnreachableFromRootsTests(const pdpi::IrP4Info& info) {
             referenced_by_multicast_replica_table_entry {
               match { port: "port_1" instance: "0x0031" }
               action { do_thing_4 {} }
-              controller_metadata: "Not Garbage"
+              controller_metadata: "Not Garbage because of primary replica"
+            }
+          )pb",
+          R"pb(
+            referenced_by_multicast_replica_table_entry {
+              match { port: "port_2" instance: "0x0032" }
+              action { do_thing_4 {} }
+              controller_metadata: "Not Garbage because of backup replica"
             }
           )pb",
           R"pb(
