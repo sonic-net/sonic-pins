@@ -157,11 +157,27 @@ cc_test(
         "//gutil:proto",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
+	"//lib/utils:json_test_utils",
         "//thinkit:generic_testbed",
         "//thinkit:mock_generic_testbed",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "lacp_ixia_helper",
+    testonly = True,
+    srcs = ["lacp_ixia_helper.cc"],
+    hdrs = ["lacp_ixia_helper.h"],
+    deps = [
+        ":ixia_helper",
+        "//gutil:overload",
+        "//thinkit:generic_testbed",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
 

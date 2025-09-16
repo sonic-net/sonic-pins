@@ -24,6 +24,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -378,6 +379,10 @@ absl::StatusOr<IxiaLink> GetIxiaLink(thinkit::GenericTestbed &generic_testbed,
 // Connects to Ixia on the given testbed and returns a string handle identifying
 // the connection (aka "topology ref").
 absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed);
+
+// Converts an integer to a hex string. Does not add a leading "0x".
+inline std::string ToHex(int value) { return absl::StrCat(absl::Hex(value)); }
+
 } // namespace pins_test::ixia
 
 #endif // PINS_THINKIT_IXIA_INTERFACE_H_
