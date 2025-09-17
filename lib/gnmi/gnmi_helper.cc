@@ -1769,14 +1769,15 @@ GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub) {
     if (empty.get<bool>()) {
       continue;
     }
-    ASSIGN_OR_RETURN(json vendor,
-                     GetField(state, "openconfig-platform-ext:vendor-name"));
+
+    // TODO: vendor-name may not be present.
+    std::string vendor = state.value("openconfig-platform-ext:vendor-name", "");
     ASSIGN_OR_RETURN(json part_number, GetField(state, "part-no"));
     ASSIGN_OR_RETURN(json manufactuer_name, GetField(state, "mfg-name"));
     ASSIGN_OR_RETURN(json serial_number, GetField(state, "serial-no"));
     ASSIGN_OR_RETURN(json rev, GetField(state, "firmware-version"));
     part_information[name.get<std::string>()] = TransceiverPart{
-        .vendor = vendor.get<std::string>(),
+	.vendor = std::move(vendor),
         .part_number = part_number.get<std::string>(),
         .manufacturer_name = manufactuer_name.get<std::string>(),
         .serial_number = serial_number.get<std::string>(),
