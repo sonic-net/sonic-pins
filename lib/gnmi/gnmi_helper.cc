@@ -2185,6 +2185,50 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
                                       GnmiSetType::kUpdate, config_json);
 }
 
+absl::Status SetPortIngressTimestamping(bool port_ingress_timestamping,
+                                        absl::string_view interface_name,
+                                        gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/config/insert-ingress-timestamp");
+  std::string config_json;
+  if (port_ingress_timestamping) {
+    config_json = "{\"google-pins-interfaces:insert-ingress-timestamp\":true}";
+  } else {
+    config_json = "{\"google-pins-interfaces:insert-ingress-timestamp\":false}";
+  }
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, config_json);
+}
+
+absl::Status SetPortEgressTimestamping(bool port_egress_timestamping,
+                                       absl::string_view interface_name,
+                                       gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/config/insert-egress-timestamp");
+  std::string config_json;
+  if (port_egress_timestamping) {
+    config_json = "{\"google-pins-interfaces:insert-egress-timestamp\":true}";
+  } else {
+    config_json = "{\"google-pins-interfaces:insert-egress-timestamp\":false}";
+  }
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, config_json);
+}
+
+absl::Status SetPortEncodedIdForTimestamping(
+    int encoded_id, absl::string_view interface_name,
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path = absl::StrCat(
+      "interfaces/interface[name=", interface_name, "]/config/encoded-id");
+  std::string value =
+      absl::StrCat("{\"google-pins-interfaces:encoded-id\":", encoded_id, "}");
+
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, value);
+}
+
 absl::StatusOr<std::string> GetPortPfcRxEnable(
     const absl::string_view interface_name,
     gnmi::gNMI::StubInterface& gnmi_stub) {

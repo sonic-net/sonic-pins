@@ -85,10 +85,6 @@ enum class GnmiFieldType {
 
 enum class DelayType : std::uint8_t { kIngressDelay, kEgressDelay };
 
-// This suggests whether the HST is running in dry-run mode or live-run mode. In
-// live run mode, HST is fully operational with ASIC access.
-enum class HstRunMode : std::uint8_t { kDryRunMode, kLiveRunMode };
-
 // Describes a single interface in a gNMI config.
 struct OpenConfigInterfaceDescription {
   std::string port_name;
@@ -611,6 +607,21 @@ absl::Status SetPortMtu(int port_mtu, const std::string& interface_name,
 absl::Status SetPortLoopbackMode(bool port_loopback,
                                  absl::string_view interface_name,
                                  gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a port ingress timestamping.
+absl::Status SetPortIngressTimestamping(bool port_ingress_timestamping,
+                                        absl::string_view interface_name,
+                                        gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a port egress timestamping.
+absl::Status SetPortEgressTimestamping(bool port_egress_timestamping,
+                                       absl::string_view interface_name,
+                                       gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a ports encoded id for timestamping.
+absl::Status SetPortEncodedIdForTimestamping(
+    int encoded_id, absl::string_view interface_name,
+    gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Set PFC Rx for a port.
 absl::Status SetPortPfcRxEnable(absl::string_view interface_name,
