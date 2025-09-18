@@ -476,21 +476,6 @@ TEST(SflowconfigTest, MoreThanTwoCollectorsFailure) {
           HasSubstr("Number of collectors exceeds max allowed value of 2")));
 }
 
-TEST(SflowconfigTest, MoreThanTwoCollectorsFailure) {
-  EXPECT_THAT(
-      UpdateSflowConfig(
-          kGnmiConfig,
-          /*agent_addr_ipv6=*/"8002:12::aab0",
-          /*collector_address_to_port=*/
-          {{"12:34:56::78", 6343}, {"34:56:78::9a", 6343}},
-          /*sflow_interfaces=*/{{"Ethernet3", true}, {"Ethernet4", true}},
-          /*sampling_rate=*/1000,
-          /*sampling_header_size=*/12),
-      StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          HasSubstr("Number of collectors exceeds max allowed value of 2")));
-}
-
 TEST(SflowconfigTest, ModifyInterfaceNamesSuccess) {
   EXPECT_THAT(UpdateSflowConfig(kGnmiConfig,
                                 /*agent_addr_ipv6=*/"8002:12::aab0",
