@@ -384,10 +384,12 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
         .RegisterValue("@decremented_ttl", "0x3f")
         .RegisterValue("@ipv4_dst", ipv4_address.ToString())
         .RegisterValue("@ipv6_dst", ipv6_address.ToString())
-        .RegisterValue("@payload_ipv4", dvaas::MakeTestPacketTagFromUniqueId(
-                                            unique_payload_ids++))
-        .RegisterValue("@payload_ipv6", dvaas::MakeTestPacketTagFromUniqueId(
-                                            unique_payload_ids++));
+        .RegisterValue(
+            "@payload_ipv4",
+            dvaas::MakeTestPacketPayloadFromUniqueId(unique_payload_ids++))
+        .RegisterValue(
+            "@payload_ipv6",
+            dvaas::MakeTestPacketPayloadFromUniqueId(unique_payload_ids++));
     // Build headers.
     repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
           ethernet_header {
@@ -796,7 +798,13 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 }
 
-TEST_P(L3MulticastTestFixture, DISABLED_ConfirmFixedDelayProgramming) {
+TEST_P(L3MulticastTestFixture, ConfirmFixedDelayProgramming) {
+  if (!gpins::TableHasMatchField(ir_p4info_, "acl_egress_l2_table",
+                                 "src_mac")) {
+    GTEST_SKIP()
+        << "Skipping because match field 'src_mac' is not available in table "
+        << "'acl_egress_l2_table'";
+  }
 
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
@@ -835,8 +843,8 @@ TEST_P(L3MulticastTestFixture, DISABLED_ConfirmFixedDelayProgramming) {
   // Replicas to be dropped will rewrite their source MAC address to be the
   // "drop" MAC address.
   ASSERT_OK_AND_ASSIGN(auto proto_entry,
-                       gutil::ParseTextProto<pdpi::IrTableEntry>(
-                           R"pb(table_name: "acl_egress_table"
+                       gutil::ParseTextProto<pdpi::IrTableEntry>(gutil::ParseTextProto<pdpi::IrTableEntry>(
+                           R"pb(table_name: "acl_egress_l2_table"
                                 priority: 1
                                 matches {
                                   name: "src_mac"
@@ -974,7 +982,7 @@ TEST_P(L3MulticastTestFixture, ReplicatingNTimesToSamePortProducesNCopies) {
       .RegisterValue("@decremented_hop_limit", "0x4f")
       .RegisterValue("@decremented_ttl", "0x3f")
       .RegisterValue("@ipv4_dst", input_ipv4_address.ToString())
-      .RegisterValue("@payload_ipv4", dvaas::MakeTestPacketTagFromUniqueId(
+      .RegisterValue("@payload_ipv4", dvaas::MakeTestPacketPayloadFromUniqueId(
                                           unique_payload_ids++));
 
   // Build headers.

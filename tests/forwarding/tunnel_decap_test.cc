@@ -39,7 +39,6 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -77,20 +76,13 @@ static const auto exact_match_mask_first64 =
     netaddr::Ipv6Address(0xffff, 0xffff, 0xffff, 0xffff, 0, 0, 0, 0);
 constexpr absl::string_view kRedirectNexthopId = "redirect-nexthop";
 
-packetlib::Packet ParsePacketAndFillInComputedFields(
-    const ProtoFixtureRepository& repo, absl::string_view packet_pb) {
-  packetlib::Packet packet = repo.ParseTextOrDie<packetlib::Packet>(packet_pb);
-  CHECK_OK(packetlib::UpdateMissingComputedFields(packet));
-  return packet;
-}
-
 // Helper function to build a Ipv6 in Ipv6 packet
 dvaas::PacketTestVector Ipv6InIpv6DecapTestVector(
     const TunnelDecapTestVectorParams& packet_vector_param) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(1) +
-                                     "Testing IPv6-in-Ipv6 packets")
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketPayloadFromUniqueId(
+                                     1, "Testing IPv6-in-Ipv6 packets"))
       .RegisterValue("@ingress_port", packet_vector_param.in_port)
       .RegisterValue("@egress_port", packet_vector_param.out_port)
       .RegisterValue("@inner_dst_ipv6",
@@ -135,17 +127,17 @@ dvaas::PacketTestVector Ipv6InIpv6DecapTestVector(
           .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
             udp_header { source_port: "0x0014" destination_port: "0x000a" }
           )pb")
-          .RegisterMessage("@input_packet", ParsePacketAndFillInComputedFields(
-                                                repo,
-                                                R"pb(
-                                                  headers: @ethernet
-                                                  headers: @ipv6
-                                                  headers: @inner_ipv6
-                                                  headers: @udp
-                                                  payload: @payload
-                                                )pb"))
+          .RegisterMessage("@input_packet",
+                           repo.ParseTextOrDie<packetlib::Packet>(
+                               R"pb(
+                                 headers: @ethernet
+                                 headers: @ipv6
+                                 headers: @inner_ipv6
+                                 headers: @udp
+                                 payload: @payload
+                               )pb"))
           .RegisterMessage(
-              "@output_packet", ParsePacketAndFillInComputedFields(repo, R"pb(
+              "@output_packet", repo.ParseTextOrDie<packetlib::Packet>(R"pb(
                 headers: @ethernet {
                   ethernet_header {
                     ethernet_destination: "02:02:02:02:02:02"
@@ -175,8 +167,8 @@ dvaas::PacketTestVector Ipv4InIpv6DecapTestVector(
     const TunnelDecapTestVectorParams& packet_vector_param) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(1) +
-                                     "Testing IPv4-in-Ipv6 packets")
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketPayloadFromUniqueId(
+                                     1, "Testing IPv4-in-Ipv6 packets"))
       .RegisterValue("@ingress_port", packet_vector_param.in_port)
       .RegisterValue("@egress_port", packet_vector_param.out_port)
       .RegisterValue("@dst_ip", packet_vector_param.inner_dst_ipv4.ToString())
@@ -225,17 +217,17 @@ dvaas::PacketTestVector Ipv4InIpv6DecapTestVector(
           .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
             udp_header { source_port: "0x0014" destination_port: "0x000a" }
           )pb")
-          .RegisterMessage("@input_packet", ParsePacketAndFillInComputedFields(
-                                                repo,
-                                                R"pb(
-                                                  headers: @ethernet
-                                                  headers: @ipv6
-                                                  headers: @ipv4
-                                                  headers: @udp
-                                                  payload: @payload
-                                                )pb"))
+          .RegisterMessage("@input_packet",
+                           repo.ParseTextOrDie<packetlib::Packet>(
+                               R"pb(
+                                 headers: @ethernet
+                                 headers: @ipv6
+                                 headers: @ipv4
+                                 headers: @udp
+                                 payload: @payload
+                               )pb"))
           .RegisterMessage(
-              "@output_packet", ParsePacketAndFillInComputedFields(repo, R"pb(
+              "@output_packet", repo.ParseTextOrDie<packetlib::Packet>(R"pb(
                 headers: @ethernet {
                   ethernet_header {
                     ethernet_destination: "02:02:02:02:02:02"
@@ -265,8 +257,8 @@ dvaas::PacketTestVector Ipv4InIpv6NoDecapTestVector(
     const TunnelDecapTestVectorParams &packet_vector_param) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(1) +
-                                     "Testing IPv4-in-Ipv6 packets")
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketPayloadFromUniqueId(
+                                     1, "Testing IPv4-in-Ipv6 packets"))
       .RegisterValue("@ingress_port", packet_vector_param.in_port)
       .RegisterValue("@egress_port", packet_vector_param.out_port)
       .RegisterValue("@dst_ip", packet_vector_param.inner_dst_ipv4.ToString())
@@ -316,16 +308,16 @@ dvaas::PacketTestVector Ipv4InIpv6NoDecapTestVector(
             udp_header { source_port: "0x0014" destination_port: "0x000a" }
           )pb")
           .RegisterMessage("@input_packet",
-                           ParsePacketAndFillInComputedFields(repo,
-                                                              R"pb(
-                                                  headers: @ethernet
-                                                  headers: @ipv6
-                                                  headers: @ipv4
-                                                  headers: @udp
-                                                  payload: @payload
-                                                )pb"))
-          .RegisterMessage("@output_packet",
-                           ParsePacketAndFillInComputedFields(repo, R"pb(
+                           repo.ParseTextOrDie<packetlib::Packet>(
+                               R"pb(
+                                 headers: @ethernet
+                                 headers: @ipv6
+                                 headers: @ipv4
+                                 headers: @udp
+                                 payload: @payload
+                               )pb"))
+          .RegisterMessage(
+              "@output_packet", repo.ParseTextOrDie<packetlib::Packet>(R"pb(
                 headers: @ethernet {
                   ethernet_header {
                     ethernet_destination: "02:02:02:02:02:02"
