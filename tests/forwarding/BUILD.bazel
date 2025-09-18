@@ -521,6 +521,7 @@ cc_library(
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_pdpi/string_encodings:decimal_string",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//sai_p4/instantiations/google/test_tools:test_entries",
         "//tests:thinkit_sanity_tests",
         "//tests/lib:p4rt_fixed_table_programming_helper",
         "//tests/lib:switch_test_setup_helpers",
