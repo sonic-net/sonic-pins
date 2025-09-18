@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
