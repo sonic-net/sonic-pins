@@ -16,6 +16,7 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_TRAFFIC_HELPER_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 
@@ -32,7 +33,16 @@ class TrafficHelper {
 
   // Starts traffic with a predefined traffic configuration from a Control
   // Device or Traffic Generator in the testbed.
-  virtual absl::Status StartTraffic(Testbed& testbed) = 0;
+  //
+  // The `config_label`, if present, is the label/version of the config that is
+  // expected to be present on the SUT at the time of starting the traffic
+  // through it.
+  // Note: If not provided, the `config_label` is by default an empty string.
+  virtual absl::Status StartTraffic(Testbed& testbed,
+                                    absl::string_view config_label) = 0;
+  absl::Status StartTraffic(Testbed& testbed) {
+    return StartTraffic(testbed, /*config_label=*/"");
+  }
 
   // Stops traffic in the testbed.
   virtual absl::Status StopTraffic(Testbed& testbed) = 0;
