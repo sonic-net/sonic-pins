@@ -85,10 +85,6 @@ enum class GnmiFieldType {
 
 enum class DelayType : std::uint8_t { kIngressDelay, kEgressDelay };
 
-// This suggests whether the HST is running in dry-run mode or live-run mode. In
-// live run mode, HST is fully operational with ASIC access.
-enum class HstRunMode : std::uint8_t { kDryRunMode, kLiveRunMode };
-
 // Describes a single interface in a gNMI config.
 struct OpenConfigInterfaceDescription {
   std::string port_name;
@@ -388,6 +384,9 @@ inline bool IgnoreCpuPortName(const PortIdByNameIterType& iter) {
   return iter.first == "CPU";
 }
 
+absl::StatusOr<std::vector<std::string>> GetInterfaceNamesForGivenPortNumber(
+    gnmi::gNMI::StubInterface& stub, absl::string_view port_number);
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(
     absl::string_view gnmi_config, absl::string_view field_type = "config",
@@ -513,9 +512,17 @@ absl::StatusOr<absl::btree_set<std::string>>
 GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
     gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Returns true if the transceiver is qualified for the given interface.
+absl::StatusOr<bool> GetTransceiverQualifiedForInterface(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view interface_name);
+
 // Returns a map from interface names to their physical transceiver name.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Returns true if the module is populated for the given interface.
+absl::StatusOr<bool> GetModuleIsPopulatedForInterface(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view interface_name);
 
 // Returns a map from physical transceiver names to their part information.
 absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>
@@ -600,6 +607,21 @@ absl::Status SetPortMtu(int port_mtu, const std::string& interface_name,
 absl::Status SetPortLoopbackMode(bool port_loopback,
                                  absl::string_view interface_name,
                                  gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a port ingress timestamping.
+absl::Status SetPortIngressTimestamping(bool port_ingress_timestamping,
+                                        absl::string_view interface_name,
+                                        gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a port egress timestamping.
+absl::Status SetPortEgressTimestamping(bool port_egress_timestamping,
+                                       absl::string_view interface_name,
+                                       gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a ports encoded id for timestamping.
+absl::Status SetPortEncodedIdForTimestamping(
+    int encoded_id, absl::string_view interface_name,
+    gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Set PFC Rx for a port.
 absl::Status SetPortPfcRxEnable(absl::string_view interface_name,
