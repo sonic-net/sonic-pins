@@ -845,22 +845,9 @@ message AclIngressMirrorAndRedirectTableEntry {
   bytes controller_metadata = 8;
 }
 
-message AclEgressL2TableEntry {
-  message Match {
-    Ternary src_mac = 1;  // ternary match / Format::MAC
-  }
-  Match match = 1;
-  message Action {
-    AclDropAction acl_drop = 1;
-  }
-  Action action = 2;
-  int32 priority = 3;
-  BytesAndPacketsCounterData counter_data = 6;
-  bytes controller_metadata = 8;
-}
-
-// Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
-// of the v1model architecture and is not explicitly present in the P4 program.
+// Corresponds to `MulticastGroupEntry` in p4runtime.proto. 
+// This table is part of the v1model architecture and is not 
+// explicitly present in the P4 program.
 message MulticastGroupTableEntry {
   message Match {
     string multicast_group_id =
@@ -1138,13 +1125,17 @@ message ReplicateAction {
   repeated Replica replicas = 1;
   // Corresponds to `Replica` in p4runtime.proto.
   message Replica {
-    string port = 1;      // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_port'.
+    string port = 1;  // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_instance'.
     string instance = 2;  // Format::HEX_STRING / 16 bits
     repeated BackupReplica backup_replicas = 3;
   }
   // Corresponds to `BackupReplica` in p4runtime.proto.
   message BackupReplica {
-    string port = 1;      // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_port'.
+    string port = 1;  // Format::STRING
+    // Refers to 'multicast_router_interface_table.multicast_replica_instance'.
     string instance = 2;  // Format::HEX_STRING / 16 bits
   }
 }
@@ -1187,7 +1178,6 @@ message TableEntry {
     AclIngressSecurityTableEntry acl_ingress_security_table_entry = 266;
     AclIngressMirrorAndRedirectTableEntry
         acl_ingress_mirror_and_redirect_table_entry = 267;
-    AclEgressL2TableEntry acl_egress_l2_table_entry = 268;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }

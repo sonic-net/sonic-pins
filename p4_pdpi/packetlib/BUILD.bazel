@@ -1,3 +1,4 @@
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
 
 package(
