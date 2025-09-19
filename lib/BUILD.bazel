@@ -179,3 +179,8 @@ cc_proto_library(
     name = "ixia_helper_cc_proto",
     deps = [":ixia_helper_proto"],
 )
+
+cc_library(
+    name = "lacp_ixia_helper",
+    hdrs = ["lacp_ixia_helper.h"],
+)
