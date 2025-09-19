@@ -52,7 +52,7 @@
 
 namespace pins_test::ixia {
 
-using Json = nlohmann::json;
+using Json = ::nlohmann::json;
 using ::json_yang::FormatJsonBestEffort;
 
 absl::StatusOr<int> FindIdByField(const thinkit::HttpResponse &response,
@@ -434,6 +434,15 @@ absl::Status SendAndWaitForComplete(absl::string_view operation_url,
 }
 
 namespace {
+
+constexpr absl::string_view kStartTrafficPath =
+    "/ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking";
+constexpr absl::string_view kGenerateTrafficPath =
+    "/ixnetwork/traffic/trafficItem/operations/generate";
+constexpr absl::string_view kApplyTrafficPath =
+    "/ixnetwork/traffic/operations/apply";
+constexpr absl::string_view kApplyAllTrafficJson = R"({"arg1": "/traffic"})";
+
 // When `run_in_parallel` is true, we generate a single config to start all
 // traffics in `trefs` at once in one call, such as:
 // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
@@ -455,6 +464,38 @@ std::vector<std::string> GetTrefConfigs(
 }
 }  // namespace
 
+absl::Status GenerateAndApplyTrafficItems(
+    absl::Span<const std::string> traffic_items,
+    thinkit::GenericTestbed &testbed) {
+  if (traffic_items.empty()) {
+    LOG(WARNING) << "No traffic items to generate and apply.";
+    return absl::OkStatus();
+  }
+
+  // Start the process of getting the traffic flowing.
+  // POST to /ixnetwork/traffic/trafficItem/operations/generate with
+  // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
+  // "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
+  std::string generate_json = absl::Substitute(
+      R"({"arg1":["$0"]})", absl::StrJoin(traffic_items, R"(",")"));
+  LOG(INFO) << "path " << kGenerateTrafficPath;
+  LOG(INFO) << "json " << generate_json;
+  RETURN_IF_ERROR(
+      SendAndWaitForComplete(kGenerateTrafficPath, generate_json, testbed));
+
+  LOG(INFO) << "path " << kApplyTrafficPath;
+  LOG(INFO) << "json " << kApplyAllTrafficJson;
+  return SendAndWaitForComplete(kApplyTrafficPath, kApplyAllTrafficJson,
+                                testbed);
+}
+
+absl::Status StartTrafficItem(absl::string_view traffic_item,
+                              thinkit::GenericTestbed &testbed) {
+  return SendAndWaitForComplete(
+      kStartTrafficPath, absl::Substitute(R"({"arg1":["$0"]})", traffic_item),
+      testbed);
+}
+
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed) {
   return StartTraffic(std::vector<std::string>{std::string(tref)}, href,
@@ -466,51 +507,16 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
                           thinkit::GenericTestbed &generic_testbed,
                           bool run_in_parallel) {
   LOG(INFO) << "\n\n\n\n\n---------- Starting... ----------\n\n\n\n\n";
-
-  // Extract IxRef from href which is the substring ending at /ixnetwork
-  static constexpr absl::string_view kIxRefUrlComponent = "/ixnetwork";
-  auto ixpos = href.find(kIxRefUrlComponent);
-  if (ixpos == absl::string_view::npos) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Invalid href since 'ixnetwork' substring was not found which is "
-              "needed to extract the Ixia chassis URL portion from href "
-           << href;
-  }
-
-  absl::string_view ixref = href.substr(0, ixpos + kIxRefUrlComponent.size());
-
-  // Start the process of getting the traffic flowing.
-  // POST to /ixnetwork/traffic/trafficItem/operations/generate with
-  // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
-  // "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
-  std::string generate_path =
-      "/ixnetwork/traffic/trafficItem/operations/generate";
-  std::string generate_json =
-      absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
-  LOG(INFO) << "path " << generate_path;
-  LOG(INFO) << "json " << generate_json;
-  RETURN_IF_ERROR(
-      SendAndWaitForComplete(generate_path, generate_json, generic_testbed));
-
-  // POST to /ixnetwork/traffic/operations/apply with
-  // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic"}
-  std::string apply_path = "/ixnetwork/traffic/operations/apply";
-  std::string apply_json = absl::StrCat("{\"arg1\":\"", ixref, "/traffic\"}");
-  LOG(INFO) << "path " << apply_path;
-  LOG(INFO) << "json " << apply_json;
-  RETURN_IF_ERROR(
-      SendAndWaitForComplete(apply_path, apply_json, generic_testbed));
+  RETURN_IF_ERROR(GenerateAndApplyTrafficItems(trefs, generic_testbed));
 
   // POST to
   // /ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking
-  std::string start_path =
-      "/ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking";
-  LOG(INFO) << "path " << start_path;
+  LOG(INFO) << "path " << kStartTrafficPath;
 
   for (const std::string &start_json : GetTrefConfigs(trefs, run_in_parallel)) {
     LOG(INFO) << "json " << start_json;
     RETURN_IF_ERROR(
-        SendAndWaitForComplete(start_path, start_json, generic_testbed));
+        SendAndWaitForComplete(kStartTrafficPath, start_json, generic_testbed));
   }
 
   // GET to /ixnetwork/traffic/trafficItem
@@ -651,6 +657,50 @@ absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
   if (size_response.response_code != 200)
     return absl::InternalError(absl::StrFormat("unexpected response: %u",
                                                size_response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetFieldSingleValue(absl::string_view tref, int stack_index,
+                                 int field_index, absl::string_view value,
+                                 thinkit::GenericTestbed &generic_testbed) {
+  std::string field_path = absl::Substitute(
+      "$0/configElement/1/stack/$1/field/$2", tref, stack_index, field_index);
+
+  // Set the value to the given value.
+  std::string value_json = absl::Substitute(
+      R"({"auto":false,"valueType":"singleValue","singleValue":"$0"})", value);
+  LOG(INFO) << "path " << field_path;
+  LOG(INFO) << "json " << value_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, field_path, value_json));
+  LOG(INFO) << "Returns " << response.response_code;
+  if (response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetFieldValueList(absl::string_view tref, int stack_index,
+                               int field_index,
+                               absl::Span<const std::string> value,
+                               thinkit::GenericTestbed &generic_testbed) {
+  std::string field_path = absl::Substitute(
+      "$0/configElement/1/stack/$1/field/$2", tref, stack_index, field_index);
+
+  // Set the value to the array of values.
+  std::string value_json = absl::Substitute(
+      R"({"auto":false,"valueType":"valueList","valueList":["$0"]})",
+      absl::StrJoin(value, R"(",")"));
+  LOG(INFO) << "path " << field_path;
+  LOG(INFO) << "json " << value_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, field_path, value_json));
+  LOG(INFO) << "Returns " << response.response_code;
+  if (response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", response.response_code));
   return absl::OkStatus();
 }
 
