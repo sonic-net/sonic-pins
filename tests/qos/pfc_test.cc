@@ -356,6 +356,18 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
             queue_counters_before_test.max_periodic_queue_len));
       }));
 
+      ASSERT_OK_AND_ASSIGN(
+          const int64_t pfc_rx_counter_before_traffic,
+          GetGnmiPortPfcCounter(
+              /*port=*/ixia_links_.egress_link.sut_interface,
+              std::to_string(priority), *gnmi_stub_, PfcCountersType::kPfcRx));
+
+      ASSERT_OK_AND_ASSIGN(const int64_t pfc_on2off_counter_before_traffic,
+                           GetGnmiPortPfcCounter(
+                               /*port=*/ixia_links_.egress_link.sut_interface,
+                               std::to_string(priority), *gnmi_stub_,
+                               PfcCountersType::kPfcOn2Off));
+
       // Occasionally the Ixia API cannot keep up and starting traffic
       // fails, so we try up to 3 times.
       ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
@@ -412,6 +424,24 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
       }));
       delta_counters = queue_counters_after_test - queue_counters_before_test;
       EXPECT_EQ(delta_counters.num_packets_dropped, 0);
+
+      ASSERT_OK_AND_ASSIGN(
+          const int64_t pfc_rx_counter_after_traffic,
+          GetGnmiPortPfcCounter(
+              /*port=*/ixia_links_.egress_link.sut_interface,
+              std::to_string(priority), *gnmi_stub_, PfcCountersType::kPfcRx));
+      ASSERT_OK_AND_ASSIGN(const int64_t pfc_on2off_counter_after_traffic,
+                           GetGnmiPortPfcCounter(
+                               /*port=*/ixia_links_.egress_link.sut_interface,
+                               std::to_string(priority), *gnmi_stub_,
+                               PfcCountersType::kPfcOn2Off));
+      // Expect PFC Rx counter and PFC On2Off counters increment by number of
+      // pfc frames sent.
+      EXPECT_EQ(pfc_rx_counter_after_traffic - pfc_rx_counter_before_traffic,
+                pfc_traffic_parameters_.frame_count);
+      EXPECT_EQ(
+          pfc_on2off_counter_after_traffic - pfc_on2off_counter_before_traffic,
+          pfc_traffic_parameters_.frame_count);
 
       // Wait for queue counters to stabilize and then stop main traffic.
       ASSERT_OK(

@@ -252,6 +252,16 @@ absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
 absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
     absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
 
+enum class PfcCountersType {
+  kPfcRx,
+  kPfcOn2Off,
+};
+
+// Get PFC RX port counters.
+absl::StatusOr<int64_t> GetGnmiPortPfcCounter(
+    absl::string_view port, absl::string_view priority,
+    gnmi::gNMI::StubInterface &gnmi_stub, PfcCountersType type);
+
 // Get queues for an egress port.
 absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
     absl::string_view egress_port, gnmi::gNMI::StubInterface &gnmi);
