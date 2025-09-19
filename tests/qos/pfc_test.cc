@@ -356,6 +356,18 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
             queue_counters_before_test.max_periodic_queue_len));
       }));
 
+      ASSERT_OK_AND_ASSIGN(
+          const int64_t pfc_rx_counter_before_traffic,
+          GetGnmiPortPfcCounter(
+              /*port=*/ixia_links_.egress_link.sut_interface,
+              std::to_string(priority), *gnmi_stub_, PfcCountersType::kPfcRx));
+
+      ASSERT_OK_AND_ASSIGN(const int64_t pfc_on2off_counter_before_traffic,
+                           GetGnmiPortPfcCounter(
+                               /*port=*/ixia_links_.egress_link.sut_interface,
+                               std::to_string(priority), *gnmi_stub_,
+                               PfcCountersType::kPfcOn2Off));
+
       // Occasionally the Ixia API cannot keep up and starting traffic
       // fails, so we try up to 3 times.
       ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
@@ -412,6 +424,24 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
       }));
       delta_counters = queue_counters_after_test - queue_counters_before_test;
       EXPECT_EQ(delta_counters.num_packets_dropped, 0);
+
+      ASSERT_OK_AND_ASSIGN(
+          const int64_t pfc_rx_counter_after_traffic,
+          GetGnmiPortPfcCounter(
+              /*port=*/ixia_links_.egress_link.sut_interface,
+              std::to_string(priority), *gnmi_stub_, PfcCountersType::kPfcRx));
+      ASSERT_OK_AND_ASSIGN(const int64_t pfc_on2off_counter_after_traffic,
+                           GetGnmiPortPfcCounter(
+                               /*port=*/ixia_links_.egress_link.sut_interface,
+                               std::to_string(priority), *gnmi_stub_,
+                               PfcCountersType::kPfcOn2Off));
+      // Expect PFC Rx counter and PFC On2Off counters increment by number of
+      // pfc frames sent.
+      EXPECT_EQ(pfc_rx_counter_after_traffic - pfc_rx_counter_before_traffic,
+                pfc_traffic_parameters_.frame_count);
+      EXPECT_EQ(
+          pfc_on2off_counter_after_traffic - pfc_on2off_counter_before_traffic,
+          pfc_traffic_parameters_.frame_count);
 
       // Wait for queue counters to stabilize and then stop main traffic.
       ASSERT_OK(
@@ -496,21 +526,30 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
             ixia_connection_reference_, *generic_testbed_);
       }));
 
-      // Wait for deadlock detection time.
-      absl::SleepFor(GetParam().deadlock_detection_time);
+      // Read counters of the target queue.
+      ASSERT_OK_AND_ASSIGN(
+          const pins_test::QueueCounters queue_counters_deadlock,
+          GetGnmiQueueCounters(/*port=*/ixia_links_.egress_link.sut_interface,
+                               /*queue=*/queue, *gnmi_stub_));
       if (create_deadlock) {
-        // TODO: Assert WD counters incremented by 1
-
-        // Assert DROP COUNTERS ARE NOT INCREMENTING anymore
+        // Check deadlock detected counter incremented by 1.
+        EXPECT_EQ(queue_counters_deadlock.pfc_deadlock_detected,
+                  queue_counters_before_test.pfc_deadlock_detected + 1);
+        // Check that deadlock restored counter has not incremented yet.
+        EXPECT_EQ(queue_counters_deadlock.pfc_deadlock_restored,
+                  queue_counters_before_test.pfc_deadlock_restored);
+        // Assert queue drop counters are not incrementing anymore after
+        // deadlock is detected.
         ASSERT_OK_AND_ASSIGN(QueueCounters queue_counters_delta,
                              GetQueueCountersChange(
                                  /*port=*/ixia_links_.egress_link.sut_interface,
                                  /*queue=*/queue, *gnmi_stub_));
         EXPECT_EQ(queue_counters_delta.num_packets_dropped, 0);
       } else {
-        // TODO: Assert WD counters did not increment.
-
-        // Assert DROP COUNTERS ARE INCREMENTING.
+        // Assert WD counter did not increment.
+        EXPECT_EQ(queue_counters_deadlock.pfc_deadlock_detected,
+                  queue_counters_before_test.pfc_deadlock_detected);
+        // Assert Queue drop counters are incrementing.
         ASSERT_OK_AND_ASSIGN(QueueCounters queue_counters_delta,
                              GetQueueCountersChange(
                                  /*port=*/ixia_links_.egress_link.sut_interface,
@@ -525,6 +564,9 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
       ASSERT_OK(
           ixia::StopTraffic(pfc_traffic_.traffic_item, *generic_testbed_));
       LOG(INFO) << "-- stopped " << pfc_traffic_.traffic_name;
+
+      // Wait for deadlock detection time.
+      absl::SleepFor(GetParam().deadlock_restoration_time);
       // Read counters of the target queue.
       ASSERT_OK_AND_ASSIGN(
           const pins_test::QueueCounters queue_counters_after_test,
@@ -534,6 +576,11 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
       auto delta_counters =
           queue_counters_after_test - queue_counters_before_test;
       LOG(INFO) << "Delta counters: " << delta_counters;
+      // Verify deadlock was restored.
+      if (create_deadlock) {
+        EXPECT_EQ(queue_counters_after_test.pfc_deadlock_restored,
+                  queue_counters_before_test.pfc_deadlock_restored + 1);
+      }
 
       auto drop_duration =
           (delta_counters.num_packets_dropped * kDefaultFrameSize +
