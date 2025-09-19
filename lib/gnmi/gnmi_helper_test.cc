@@ -1465,6 +1465,47 @@ TEST(GetEthernetInterfacePortIDs,
               StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
+TEST(GetInterfaceNamesForGivenPortId, StubSuccessfullyReturnsInterfaceNames) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+          {
+            "name": "Ethernet1/1/1"
+          },
+          {
+            "name": "Ethernet1/2/1"
+          },
+          {
+            "name": "Ethernet1/1/2"
+          },
+          {
+            "name": "Ethernet1/14/2"
+          },
+          {
+            "name": "Ethernet1/10/2"
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<std::string> interface_names_for_given_port_number,
+      GetInterfaceNamesForGivenPortNumber(mock_stub, "1"));
+  const std::vector<std::string> expected_interface_names = {"Ethernet1/1/1",
+                                                             "Ethernet1/1/2"};
+  EXPECT_THAT(interface_names_for_given_port_number,
+              UnorderedPointwise(Eq(), expected_interface_names));
+}
+
 TEST(GetInterfacePortIdMap, StubSuccessfullyReturnsInterfacePortIdMap) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(
@@ -2675,6 +2716,50 @@ TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHaveAResponse) {
       StatusIs(absl::StatusCode::kInternal));
 }
 
+TEST(GetTransceiverQualifiedForInterface, StubSuccessfullyReturnsTrue) {
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(
+      mock_stub,
+      Get(_, EqualsProto(R"pb(type: STATE
+                              prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "interfaces" }
+                                elem {
+                                  name: "interface"
+                                  key { key: "name" value: "Ethernet1" }
+                                }
+                                elem { name: "ethernet" }
+                                elem { name: "state" }
+                                elem { name: "transceiver-qualified" }
+                              }
+                              encoding: JSON_IETF
+          )pb"),
+          _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" target: "chassis" }
+                     update {
+                       path {
+                         elem { name: "interfaces" }
+                         elem {
+                           name: "interface"
+                           key { key: "name" value: "Ethernet1" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "transceiver-qualified" }
+                       }
+                       val {
+                         json_ietf_val: "{\"google-pins-interfaces:transceiver-qualified\":true}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetTransceiverQualifiedForInterface(mock_stub, "Ethernet1"),
+              IsOkAndHolds(true));
+}
+
 TEST(InterfaceToTransceiver, WorksProperly) {
   gnmi::GetResponse response;
   *response.add_notification()
@@ -2763,6 +2848,49 @@ TEST(LoopbackMode, WorksProperly) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_set)));
 }
 
+TEST(GetModuleIsPopulatedForInterface, StubSuccessfullyReturnsTrue) {
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(
+      mock_stub,
+      Get(_, EqualsProto(R"pb(type: STATE
+                              prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "components" }
+                                elem {
+                                  name: "component"
+                                  key { key: "name" value: "1/1" }
+                                }
+                                elem { name: "state" }
+                                elem { name: "empty" }
+                              }
+                              encoding: JSON_IETF
+          )pb"),
+          _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" target: "chassis" }
+                     update {
+                       path {
+                         elem { name: "components" }
+                         elem {
+                           name: "component"
+                           key { key: "name" value: "1/1" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "empty" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-platform:empty\":false}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetModuleIsPopulatedForInterface(mock_stub, "1/1"),
+              IsOkAndHolds(true));
+}
+
 TEST(TransceiverPartInformation, WorksProperly) {
   gnmi::GetResponse response;
   *response.add_notification()
@@ -2795,6 +2923,45 @@ TEST(TransceiverPartInformation, WorksProperly) {
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   absl::flat_hash_map<std::string, TransceiverPart> expected_map{
       {"Ethernet1", TransceiverPart{.vendor = "Vendor",
+                                    .part_number = "123",
+                                    .manufacturer_name = "manufactuer",
+                                    .serial_number = "serial",
+                                    .rev = "ab"}}};
+  EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
+TEST(TransceiverPartInformation, MissingVendorName) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-platform:components": {
+        "component": [
+          {
+            "name": "1/1"
+          },
+          {
+            "name": "Ethernet1",
+            "state": {
+              "empty": false,
+              "part-no": "123",
+              "mfg-name": "manufactuer",
+              "serial-no": "serial",
+              "firmware-version": "ab"
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::flat_hash_map<std::string, TransceiverPart> expected_map{
+      {"Ethernet1", TransceiverPart{.vendor = "",
                                     .part_number = "123",
                                     .manufacturer_name = "manufactuer",
                                     .serial_number = "serial",
