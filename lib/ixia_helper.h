@@ -36,6 +36,11 @@
 
 namespace pins_test::ixia {
 
+inline constexpr int kEthernetStackIndex = 1;
+
+inline constexpr std::string_view kEthernetWithoutFcsName =
+    "Ethernet II without FCS";
+
 // An Ixia port is defined by IP address of chassis, card number and
 // port number.
 // This structure holds these attributes which define an Ixia port.
@@ -126,6 +131,17 @@ absl::StatusOr<std::string> SetUpTrafficItem(
 absl::Status DeleteTrafficItem(absl::string_view tref,
                                thinkit::GenericTestbed &testbed);
 
+// Generates and applies traffic items. This prepares the traffic items for
+// starting.
+absl::Status GenerateAndApplyTrafficItems(
+    absl::Span<const std::string> traffic_items,
+    thinkit::GenericTestbed &testbed);
+
+// Starts the traffic item, assuming it has already been generated and applied.
+// This is useful to start items quicker when they are already prepared.
+absl::Status StartTrafficItem(absl::string_view traffic_item,
+                              thinkit::GenericTestbed &testbed);
+
 // StartTraffic - starts traffic running from the Ixia, as previously
 // configured before calling this function. user supplies the tref or
 // traffic reference returned by IxiaSession and the href returned by
@@ -153,7 +169,7 @@ absl::Status StopTraffic(absl::Span<const std::string> trefs,
 
 // SetFrameRate - sets the frame rate for the traffic to be generated
 // Takes in the tref returned by IxiaSession
-absl::Status SetFrameRate(absl::string_view tref, int64_t fps,
+absl::Status SetFrameRate(absl::string_view tref, float fps,
                           thinkit::GenericTestbed &generic_testbed);
 
 // SetLineRate - sets the line rate as 1-100 percent of max line rate
@@ -173,6 +189,19 @@ absl::Status SetFrameCount(absl::string_view tref, int64_t frames,
 // Takes in the tref returned by IxiaSession
 absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
                           thinkit::GenericTestbed &generic_testbed);
+
+// Sets a field value for a stack of headers given the traffic item, header
+// index, and the field index to a single fixed value.
+absl::Status SetFieldSingleValue(absl::string_view tref, int stack_index,
+                                 int field_index, absl::string_view value,
+                                 thinkit::GenericTestbed &generic_testbed);
+
+// Sets a field value for a stack of headers given the traffic item, header
+// index, and the field index to a list of values that cycle.
+absl::Status SetFieldValueList(absl::string_view tref, int stack_index,
+                               int field_index,
+                               absl::Span<const std::string> value,
+                               thinkit::GenericTestbed &generic_testbed);
 
 // SetDestMac - sets the destination MAC address for frames to be sent
 // Takes in the tref returned by IxiaSession. dmac should be a string
@@ -226,6 +255,10 @@ absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
 // Takes in the tref returned by SetUpTrafficItem.
 absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
                       thinkit::GenericTestbed &generic_testbed);
+
+// Removes the protocol at the given index.
+absl::Status RemoveProtocolAtIndex(absl::string_view tref, int index,
+                                   thinkit::GenericTestbed &generic_testbed);
 
 // AppendTcp - Append TCP template to IP header.
 // Takes in the tref returned by SetUpTrafficItem.
