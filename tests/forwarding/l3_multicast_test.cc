@@ -384,12 +384,12 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
         .RegisterValue("@decremented_ttl", "0x3f")
         .RegisterValue("@ipv4_dst", ipv4_address.ToString())
         .RegisterValue("@ipv6_dst", ipv6_address.ToString())
-        .RegisterValue(
-            "@payload_ipv4",
-            dvaas::MakeTestPacketPayloadFromUniqueId(unique_payload_ids++))
-        .RegisterValue(
-            "@payload_ipv6",
-            dvaas::MakeTestPacketPayloadFromUniqueId(unique_payload_ids++));
+        .RegisterValue("@payload_ipv4",
+                       dvaas::MakeTestPacketTagFromUniqueId(
+                           unique_payload_ids++, "IPv4 UDP packet"))
+        .RegisterValue("@payload_ipv6",
+                       dvaas::MakeTestPacketTagFromUniqueId(
+                           unique_payload_ids++, "IPv6 UDP packet"));
     // Build headers.
     repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
           ethernet_header {
@@ -982,8 +982,11 @@ TEST_P(L3MulticastTestFixture, ReplicatingNTimesToSamePortProducesNCopies) {
       .RegisterValue("@decremented_hop_limit", "0x4f")
       .RegisterValue("@decremented_ttl", "0x3f")
       .RegisterValue("@ipv4_dst", input_ipv4_address.ToString())
-      .RegisterValue("@payload_ipv4", dvaas::MakeTestPacketPayloadFromUniqueId(
-                                          unique_payload_ids++));
+      .RegisterValue(
+          "@payload_ipv4",
+          dvaas::MakeTestPacketTagFromUniqueId(
+              unique_payload_ids++,
+              "IPv4 multicast packet expected to hit multicast group 1"));
 
   // Build headers.
   repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
@@ -1214,7 +1217,7 @@ TEST_P(L3MulticastTestFixture, AddMulticastRifForUnknownPortFails) {
 
   EXPECT_THAT(InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, entities),
               StatusIs(absl::StatusCode::kUnknown,
-                       AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
+                       AllOf(HasSubstr("#1: FAILED_PRECONDITION"),
                              HasSubstr("[P4RT App] Cannot translate port "))));
 }
 
@@ -1432,10 +1435,6 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryWithInvalidIPv4AddressFails) {
 }
 
 TEST_P(L3MulticastTestFixture, DeleteRifWhileInUseFails) {
-  // TODO: Reenable once change available in release image.
-  GTEST_SKIP()
-      << "Skipping until can reenable when stack change reaches release image";
-
   const int kPortsToUseInTest = 2;
   ASSERT_OK_AND_ASSIGN(
       const std::vector<std::string> sut_ports_ids,

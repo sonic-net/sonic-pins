@@ -341,7 +341,7 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
       // Wait for queue to be empty. Try up to 3 times waiting for the queue
       // counters to stabilize.
       pins_test::QueueCounters queue_counters_before_test;
-      EXPECT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(30), [&] {
+      EXPECT_OK(pins::TryUpToNTimes(5, /*delay=*/absl::Seconds(30), [&] {
         // Read counters of the target queue.
         ASSIGN_OR_RETURN(
             queue_counters_before_test,
@@ -437,12 +437,7 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
 
     // Setup PFC traffic priority.
     // TODO : Remove masking failure when issue is fixed.
-    if (!generic_testbed_->Environment().MaskKnownFailures()) {
-      pfc_traffic_parameters_.pfc_parameters->priority_enable_vector = 1
-                                                                       << prio;
-    } else {
-      pfc_traffic_parameters_.pfc_parameters->priority_enable_vector = 0xff;
-    }
+    pfc_traffic_parameters_.pfc_parameters->priority_enable_vector = 1 << prio;
 
     // Calculate PFC frame rate required for deadlock.
     LOG(INFO) << "SUT interface bits per second: "
@@ -471,7 +466,7 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
 
       // Read counters of the target queue.
       pins_test::QueueCounters queue_counters_before_test;
-      ASSERT_OK(pins::TryUpToNTimes(10, /*delay=*/absl::Seconds(5), [&] {
+      ASSERT_OK(pins::TryUpToNTimes(5, /*delay=*/absl::Seconds(30), [&] {
         // Read counters of the target queue.
         ASSIGN_OR_RETURN(
             queue_counters_before_test,

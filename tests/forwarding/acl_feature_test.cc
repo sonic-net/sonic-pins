@@ -79,9 +79,9 @@ dvaas::PacketTestVector UdpPacket(
   ProtoFixtureRepository repo;
 
   repo.RegisterValue("@payload_ipv4",
-                     dvaas::MakeTestPacketPayloadFromUniqueId(1))
+                     dvaas::MakeTestPacketTagFromUniqueId(1, "IPv4 UDP packet"))
       .RegisterValue("@payload_ipv6",
-                     dvaas::MakeTestPacketPayloadFromUniqueId(2))
+                     dvaas::MakeTestPacketTagFromUniqueId(2, "IPv6 UDP packet"))
       .RegisterValue("@ingress_port", egress_port)
       .RegisterValue("@egress_port", egress_port)
       .RegisterValue("@ingress_dst_mac", "00:aa:bb:cc:cc:dd")
