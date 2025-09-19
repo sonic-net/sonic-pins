@@ -570,7 +570,7 @@ TEST_P(FrontpanelQosTest,
   // We use exponentially spaced PIRs, with a base rate that's high enough for
   // buffers to drain quickly. That way we don't have to drain buffers manually
   // between test traffic flows.
-  constexpr int64_t kPirBaseSpeedInBytesPerSecond = 40'000'000;  // 40 MB/s.
+  constexpr int64_t kPirBaseSpeedInBytesPerSecond = 20'000'000;  // 20 MB/s.
   absl::flat_hash_map<std::string, int64_t> kPirByQueueName;
   using DscpsByQueueName =
       std::optional<absl::flat_hash_map<std::string, std::vector<int>>>;
