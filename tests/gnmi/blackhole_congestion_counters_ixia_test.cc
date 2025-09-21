@@ -368,7 +368,6 @@ absl::StatusOr<OutDiscardCounters>
 BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
     const double out_discard_rate, const absl::Duration traffic_duration) {
   // Use NC1 queue to control congestion drop rate.
-  // In SB400, the max bandwidth of NC1 is set to 2% of port speed.
   constexpr int kNc1Dscp = 50;
   constexpr absl::string_view kNc1QueueName = "NC1";
 
