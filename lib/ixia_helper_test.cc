@@ -1,3 +1,16 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "lib/ixia_helper.h"
 
 #include <string>
@@ -11,37 +24,18 @@
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
-#include "include/nlohmann/json.hpp"
 #include "lib/ixia_helper.pb.h"
-#include "lib/utils/json_utils.h"
+#include "lib/utils/json_test_utils.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mock_generic_testbed.h"
 
 namespace pins_test::ixia {
 namespace {
 
-// Matches if the JSON string is equal to expected.
-MATCHER_P(JsonIs, expected_json, "") {
-  absl::StatusOr<nlohmann::json> expected = json_yang::ParseJson(expected_json);
-  CHECK_OK(expected);
-  absl::StatusOr<nlohmann::json> actual = json_yang::ParseJson(arg);
-  if (!actual.ok()) {
-    *result_listener << "Failed to parse JSON: " << arg;
-    return false;
-  }
-
-  nlohmann::json difference = nlohmann::json::diff(*expected, *actual);
-  if (difference.empty()) {
-    return true;
-  }
-
-  *result_listener << "Difference: " << json_yang::DumpJson(difference);
-  return false;
-}
-
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::pins_test::JsonIs;
 
 using ::testing::Eq;
 using ::testing::HasSubstr;
@@ -629,6 +623,9 @@ TEST(IxiaHelper, StartTrafficItem) {
   EXPECT_OK(StartTrafficItem("/ixnetwork/traffic/trafficItem/1",
                              mock_generic_testbed));
 }
+
+// 512 in hex is 0x200 (0x prefix is not included).
+TEST(IxiaHelper, ToHex) { EXPECT_EQ(ToHex(512), "200"); }
 
 }  // namespace
 }  // namespace pins_test::ixia
