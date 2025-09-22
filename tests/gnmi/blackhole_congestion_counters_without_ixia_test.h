@@ -16,16 +16,20 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -37,18 +41,39 @@ struct LpmMissCounters {
   uint64_t switch_blackhole_events;
 };
 
+struct OutDiscardCounters {
+  uint64_t port_out_packets;
+  uint64_t port_out_discard_packets;
+  uint64_t port_blackhole_out_discard_events;
+  uint64_t switch_blackhole_out_discard_events;
+  uint64_t switch_blackhole_events;
+};
+
+struct BlackholeCongestionCountersWithoutIxiaTestFixtureParams {
+  thinkit::GenericTestbedInterface* testbed_interface;
+  std::string gnmi_config;
+  p4::config::v1::P4Info p4_info;
+  thinkit::SSHClient* ssh_client;
+};
+
 class BlackholeCongestionCountersWithoutIxiaTestFixture
-    : public thinkit::GenericTestbedFixture<> {
+    : public thinkit::GenericTestbedFixture<
+          BlackholeCongestionCountersWithoutIxiaTestFixtureParams> {
  protected:
   void SetUp() override;
   void TearDown() override;
   absl::StatusOr<LpmMissCounters> TriggerLpmMisses(
       sai::IpVersion ip_version, uint32_t lpm_miss_packets_count,
       uint32_t lpm_hit_packets_count);
+  absl::StatusOr<OutDiscardCounters> TriggerOutDiscards(
+      uint32_t out_discards_count, uint32_t out_packets_count);
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::vector<InterfaceLink> control_links_;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+  // Takes ownership of the SSHClient parameter.
+  std::unique_ptr<thinkit::SSHClient> ssh_client_ =
+      absl::WrapUnique<thinkit::SSHClient>(this->GetParam().ssh_client);
 };
 
 }  // namespace pins_test
