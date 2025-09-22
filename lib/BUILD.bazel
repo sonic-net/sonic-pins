@@ -194,3 +194,17 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "lacp_ixia_helper_test",
+    srcs = ["lacp_ixia_helper_test.cc"],
+    deps = [
+        ":ixia_helper",
+        ":lacp_ixia_helper",
+        "//gutil:status_matchers",
+        "//lib/utils:json_test_utils",
+        "//thinkit:generic_testbed",
+        "//thinkit:mock_generic_testbed",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
