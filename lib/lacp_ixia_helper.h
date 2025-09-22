@@ -1,7 +1,28 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #ifndef PINS_LIB_LACP_IXIA_HELPER_H_
 #define PINS_LIB_LACP_IXIA_HELPER_H_
 
+#include <cstdint>
+#include <optional>
+#include <string>
 #include <string_view>
+#include <variant>
+#include <vector>
+
+#include "absl/status/statusor.h"
+#include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
 
@@ -58,6 +79,43 @@ inline constexpr int kDefaulted = 1 << 6;
 inline constexpr int kExpired = 1 << 7;
 
 }  // namespace LacpState
+
+// Information about an agent (actor or partner).
+// Each field can either be a single value or a vector of values.
+// If a single value is provided, it will be used for all packets.
+// If a vector is provided, the values will cycle through the vector elements.
+// The strings are always interpreted as hex values (0x prefix is optional).
+struct AgentInfo {
+  std::variant<std::string, std::vector<std::string>> system_priority;
+  std::variant<std::string, std::vector<std::string>> system_id;
+  std::variant<std::string, std::vector<std::string>> key;
+  std::variant<std::string, std::vector<std::string>> port_priority;
+  std::variant<std::string, std::vector<std::string>> port_id;
+  std::variant<std::string, std::vector<std::string>> state;
+};
+
+// Information about the LACP packets to send.
+// Contains the information for actor and partner, as well as the source MAC to
+// set in the Ethernet header.
+struct LacpInfo {
+  std::string source_mac;
+  AgentInfo actor;
+  AgentInfo partner;
+};
+
+// Options for sending traffic. If `packet_count` isn't set, the traffic will be
+// sent continuously.
+struct LacpTrafficItemOptions {
+  float packets_per_second;
+  std::optional<int64_t> packet_count;
+};
+
+// Creates a traffic item that sends LACP packets.
+// The created traffic item still needs to be generated, applied, and then
+// started/stopped.
+absl::StatusOr<std::string> CreateLacpTrafficItem(
+    std::string_view vport, const LacpInfo& lacp_info,
+    const LacpTrafficItemOptions& options, thinkit::GenericTestbed& testbed);
 
 }  // namespace pins_test::ixia
 
