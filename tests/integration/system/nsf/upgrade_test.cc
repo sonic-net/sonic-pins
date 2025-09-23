@@ -239,7 +239,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // Copy image to the switch for installation.
   ASSIGN_OR_RETURN(
       std::string image_version,
-      ImageCopy(next_image_config.image_label, testbed_, *ssh_client_),
+      ImageCopy(next_image_config.image_label, GetSut(testbed_), *ssh_client_),
       _.LogError() << "Copy image to the switch for installation failed");
 
   status = ValidateComponents(
