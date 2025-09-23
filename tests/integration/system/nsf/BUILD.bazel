@@ -20,6 +20,35 @@ package(
 )
 
 cc_library(
+    name = "compare_p4flows",
+    testonly = True,
+    srcs = ["compare_p4flows.cc"],
+    hdrs = ["compare_p4flows.h"],
+    deps = [
+        "//gutil:status",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "compare_p4flows_test",
+    timeout = "long",
+    srcs = ["compare_p4flows_test.cc"],
+    deps = [
+        ":compare_p4flows",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "util",
     testonly = True,
     srcs = ["util.cc"],
@@ -65,6 +94,7 @@ cc_library(
     srcs = ["upgrade_test.cc"],
     hdrs = ["upgrade_test.h"],
     deps = [
+        ":compare_p4flows",
         ":milestone",
         ":util",
         "//gutil:status_matchers",
@@ -72,6 +102,7 @@ cc_library(
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//tests/integration/system/nsf/interfaces:image_config_params",
+        "//tests/integration/system/nsf/interfaces:scenario",
         "//tests/integration/system/nsf/interfaces:test_params",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
@@ -85,8 +116,8 @@ cc_library(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
@@ -111,11 +142,13 @@ cc_library(
     srcs = ["nsf_acl_flow_coverage_test.cc"],
     hdrs = ["nsf_acl_flow_coverage_test.h"],
     deps = [
+        ":compare_p4flows",
         ":util",
         "//gutil:status_matchers",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:flow_programmer",
+        "//tests/integration/system/nsf/interfaces:image_config_params",
         "//tests/integration/system/nsf/interfaces:test_params",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",
@@ -137,6 +170,7 @@ cc_library(
     hdrs = ["nsf_link_flap_test.h"],
     deps = [
         ":util",
+        "//gutil:status",
         "//gutil:status_matchers",
         "//gutil:testing",
         "//tests/gnmi:util",
@@ -147,9 +181,11 @@ cc_library(
         "//thinkit:ssh_client",
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
@@ -189,12 +225,14 @@ cc_library(
     srcs = ["nsf_concurrent_config_push_flow_programming_test.cc"],
     hdrs = ["nsf_concurrent_config_push_flow_programming_test.h"],
     deps = [
+        ":compare_p4flows",
         ":util",
         "//gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/integration/system/nsf/interfaces:component_validator",
         "//tests/integration/system/nsf/interfaces:flow_programmer",
+        "//tests/integration/system/nsf/interfaces:image_config_params",
         "//tests/integration/system/nsf/interfaces:test_params",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/integration/system/nsf/interfaces:traffic_helper",

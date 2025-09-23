@@ -37,9 +37,6 @@
 
 namespace pins_test {
 
-// Duration of traffic loss permissible during NSF reboot.
-constexpr absl::Duration kNsfTrafficLossDuration = absl::ZeroDuration();
-
 struct PinsSoftwareInfo {
   std::string name;
   std::string oper_status;
@@ -84,16 +81,27 @@ void SetupTestbed(TestbedInterface& testbed_interface);
 
 void TearDownTestbed(TestbedInterface& testbed_interface);
 
-absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
+// Returns the testbed object for the given `testbed_interface`. In case a
+// thinkit::MirrorTestbedInterface is provided, it returns a
+// thinkit::MirrorTestbed*. In case a thinkit::GenericTestbedInterface is
+// provided, it returns a std::unique_ptr<thinkit::GenericTestbed>.
+//
+// Note: In most cases, the return value has to be stored in a TestbedHolder
+// object, rather than a Testbed object. This is because the Testbed object
+// converts the unique pointer of the GenericTestbed to a raw pointer and does
+// not take ownership of the underlying object, and may lead to a dangling
+// pointer.
+//
+absl::StatusOr<TestbedHolder> GetTestbed(TestbedInterface &testbed_interface);
 
-thinkit::Switch& GetSut(Testbed& testbed);
+thinkit::Switch &GetSut(const Testbed &testbed);
 
 void ExpectLinkFlaps(TestbedInterface &testbed_interface);
 
-thinkit::TestEnvironment &GetTestEnvironment(Testbed &testbed);
+thinkit::TestEnvironment &GetTestEnvironment(const Testbed &testbed);
 
 // Returns the list of connected interfaces for the SUT.
-std::vector<std::string> GetConnectedInterfacesForSut(Testbed& testbed);
+std::vector<std::string> GetConnectedInterfacesForSut(const Testbed &testbed);
 
 // Fetches PINS software information for a given OS or Network Stack using gNMI.
 absl::StatusOr<PinsSoftwareInfo> GetPinsSoftwareInfo(
@@ -116,9 +124,8 @@ absl::Status ValidatePinsSoftwareComponentsBeforeReboot(
 
 // Validates PINS software components after install/upgrade and reboot.
 absl::Status ValidatePinsSoftwareComponentsAfterReboot(
-    const PinsSoftwareInfo& primary_before_install_reboot,
-    const PinsSoftwareInfo& primary_after_install_reboot,
-    const PinsSoftwareInfo& secondary_after_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_before_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_after_install_reboot,
     absl::string_view expected_version = "");
 
 // Runs validations that validate the switch to be ready. Does the switch
@@ -136,56 +143,69 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
                                 absl::Span<const std::string> interfaces = {});
 
 // Reboot the SUT using the given reboot `method`.
-absl::Status Reboot(gnoi::system::RebootMethod method, Testbed& testbed);
+absl::Status Reboot(gnoi::system::RebootMethod method, thinkit::Switch& sut,
+                    thinkit::TestEnvironment& env,
+                    bool collect_debug_artifacts_before_reboot = true);
 
 // Performs image copy on the inactive side using gNOI, and returns the upgraded
 // image version on success.
 // Note: This doesn't involve a reboot.
 absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
-                                      Testbed& testbed,
+                                      thinkit::Switch& sut,
                                       thinkit::SSHClient& ssh_client);
 
-absl::Status
-InstallRebootPushConfig(Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        const ImageConfigParams &image_config_param);
+absl::Status InstallRebootPushConfig(
+    const Testbed& testbed, thinkit::SSHClient& ssh_client,
+    const ImageConfigParams& sut_image_config_param,
+    const ImageConfigParams& cs_image_config_param);
 
 // Validates P4, gNMI, SSH connections and port status of the SUT and Control
 // Switch (if present) along with validating the stack version of the SUT.
 // Also optionally validates the gNMI config convergence if an
 // `image_config_param` is provided.
 absl::Status ValidateTestbedState(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
+    const Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> interfaces = {});
 
 absl::Status ValidateComponents(
-    absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed &,
+    absl::Status (ComponentValidator::*validate)(absl::string_view,
+                                                 const Testbed &,
                                                  thinkit::SSHClient &),
     absl::Span<const std::unique_ptr<ComponentValidator>> validators,
-    absl::string_view version, Testbed &testbed,
+    absl::string_view version, const Testbed &testbed,
     thinkit::SSHClient &ssh_client);
 
 // Performs NSF Reboot on the SUT in the given testbed.
-absl::Status NsfReboot(Testbed& testbed);
+absl::Status NsfReboot(const Testbed &testbed);
 
 // Waits for the SUT to cold reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
-absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
+absl::Status WaitForReboot(const Testbed &testbed,
+                           thinkit::SSHClient &ssh_client,
                            bool check_interfaces_up = true);
 
 // Waits for the SUT to warm reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
 absl::Status WaitForNsfReboot(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
+    const Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> interfaces = {},
     bool collect_debug_logs_for_nsf_success = true);
 
 // Performs NSF Reboot and waits for the SUT to be ready.
 absl::Status DoNsfRebootAndWaitForSwitchReady(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
+    const Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    bool check_interfaces_up = true,
+    absl::Span<const std::string> interfaces = {});
+
+// Performs an NSF reboot and waits for the SUT to be ready.In the event of an
+// NSF reboot failure, a cold reboot is executed on the switch to recover it.
+absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
+    const Testbed& testbed, thinkit::SSHClient& ssh_client,
     absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> interfaces = {});
@@ -201,26 +221,28 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         const p4::config::v1::P4Info& p4_info,
                         absl::string_view config_label, bool clear_config);
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
-                        Testbed& testbed, thinkit::SSHClient& ssh_client,
-                        bool clear_config = false,
-                        bool check_interfaces_up = true);
+                        thinkit::Switch& thinkit_switch,
+                        thinkit::SSHClient& ssh_client,
+                        bool clear_config = false);
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
                              const p4::config::v1::P4Info& p4_info);
 
-absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
+absl::StatusOr<p4::v1::ReadResponse> TakeP4FlowSnapshot(thinkit::Switch& sut);
 
-absl::Status CompareP4FlowSnapshots(::p4::v1::ReadResponse snapshot_1,
-                                    ::p4::v1::ReadResponse snapshot_2);
-
-absl::Status SaveP4FlowSnapshot(Testbed& testbed,
-                                ::p4::v1::ReadResponse snapshot,
-                                absl::string_view file_name);
+absl::Status SaveP4FlowSnapshot(p4::v1::ReadResponse snapshot,
+                                absl::string_view file_name,
+                                thinkit::TestEnvironment& env);
 
 // Stores the healthz debug artifacts of the SUT with the given `prefix` as:
 // "{prefix}_healthz"
-absl::Status StoreSutDebugArtifacts(absl::string_view prefix, Testbed& testbed);
+absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
+                                    thinkit::Switch& sut,
+                                    thinkit::TestEnvironment& env);
 
+// Appends multiple errors together. This allows tests to identify and report
+// all validation errors instead of returning on the first error.
+void AppendErrorStatus(absl::Status& ret_status, absl::Status status);
 }  // namespace pins_test
 
 #endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_UTIL_H_

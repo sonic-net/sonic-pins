@@ -62,7 +62,7 @@ namespace pins_test {
 namespace {
 
 using ::p4::config::v1::P4Info;
-using pctutil::SutToControlLink;
+using pctutil::SutToControlLinks;
 
 // Returns a set of table entries that will cause a switch to mirror all packets
 // on an incoming port to a mirror-to-port using PSAMP encapsulation and
@@ -132,8 +132,9 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
                                     ir_control_p4info, pi_entities));
 
   // Pick links to be used for packet injection and mirroring.
-  ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
-                       pctutil::PickSutToControlDeviceLinkThatsUp(Testbed()));
+  ASSERT_OK_AND_ASSIGN(
+      SutToControlLinks link_used_for_test_packets,
+      pctutil::PickSutToControlDeviceLinkThatsUp(sut_gnmi_stub.get()));
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
@@ -145,20 +146,15 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
       const std::string kSutIngressPortP4rtId,
       gutil::FindOrStatus(
           p4rt_id_by_interface,
-          link_used_for_test_packets.sut_ingress_port_gnmi_name));
+          link_used_for_test_packets.sut_ingress_port.gnmi_name));
   ASSERT_OK_AND_ASSIGN(
       const std::string kSutEgressPortP4rtId,
       gutil::FindOrStatus(p4rt_id_by_interface,
-                          link_used_for_test_packets.sut_mtp_port_gnmi_name));
+                          link_used_for_test_packets.sut_mtp_port.gnmi_name));
   // Get P4RT IDs for Control Switch ports.
   ASSERT_OK_AND_ASSIGN(auto control_gnmi_stub, control_device.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface,
                        GetAllInterfaceNameToPortId(*control_gnmi_stub));
-  ASSERT_OK_AND_ASSIGN(
-      const std::string kControlSwitchInjectPortP4rtId,
-      gutil::FindOrStatus(
-          p4rt_id_by_interface,
-          link_used_for_test_packets.control_switch_inject_port_gnmi_name));
 
   // Configure mirror session attributes.
   auto mirror_session_params = sai::MirrorSessionParams{
@@ -188,13 +184,13 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   ASSERT_OK_AND_ASSIGN(
       uint64_t out_packets_pre,
       pctutil::GetGnmiStat("out-unicast-pkts",
-                           link_used_for_test_packets.sut_mtp_port_gnmi_name,
+                           link_used_for_test_packets.sut_mtp_port.gnmi_name,
                            sut_gnmi_stub.get()));
   ASSERT_OK_AND_ASSIGN(
       uint64_t in_packets_pre,
       pctutil::GetGnmiStat(
           "in-unicast-pkts",
-          link_used_for_test_packets.sut_ingress_port_gnmi_name,
+          link_used_for_test_packets.sut_ingress_port.gnmi_name,
           sut_gnmi_stub.get()));
 
   const int kPacketCount = 100;
@@ -202,7 +198,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   for (int i = 0; i < kPacketCount; ++i) {
     LOG(INFO) << "Injecting packet at time: " << absl::Now();
     ASSERT_OK(pins::InjectEgressPacket(
-        /*port=*/kControlSwitchInjectPortP4rtId,
+        /*port=*/link_used_for_test_packets.control_switch_inject_port.p4_id,
         /*packet=*/raw_packet,
         /*p4info=*/ir_p4info,
         /*p4rt=*/control_p4rt_session.get(),
@@ -290,7 +286,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
     ASSERT_OK_AND_ASSIGN(
         auto ingress_vendor_port_id,
         pctutil::GetVendorPortId(
-            link_used_for_test_packets.sut_ingress_port_gnmi_name,
+            link_used_for_test_packets.sut_ingress_port.gnmi_name,
             sut_gnmi_stub.get()));
     int gnmi_vendor_port_id = -1;
     ASSERT_TRUE(absl::SimpleAtoi(ingress_vendor_port_id, &gnmi_vendor_port_id));
@@ -314,7 +310,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
       uint64_t in_packets_post,
       pctutil::GetGnmiStat(
           "in-unicast-pkts",
-          link_used_for_test_packets.sut_ingress_port_gnmi_name,
+          link_used_for_test_packets.sut_ingress_port.gnmi_name,
           sut_gnmi_stub.get()));
   // Counter should increment by at least as many packets as were sent.
   EXPECT_GE(in_packets_post, in_packets_pre + kPacketCount);
@@ -332,7 +328,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   ASSERT_OK_AND_ASSIGN(
       uint64_t out_packets_post,
       pctutil::GetGnmiStat("out-unicast-pkts",
-                           link_used_for_test_packets.sut_mtp_port_gnmi_name,
+                           link_used_for_test_packets.sut_mtp_port.gnmi_name,
                            sut_gnmi_stub.get()));
   EXPECT_GE(out_packets_post, out_packets_pre + kPacketCount);
   EXPECT_LE(out_packets_post, out_packets_pre + (kPacketCount * 1.1));
