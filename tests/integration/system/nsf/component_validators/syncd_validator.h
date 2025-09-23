@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_SYNCD_VALIDATOR_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_SYNCD_VALIDATOR_H_
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
@@ -27,24 +28,26 @@ namespace pins_test {
 // Dummy validators added as example of ComponentValidators implementation.
 // Component owners need to have their own implementations and register to be
 // used by the NSF Upgrade tests.
+
 class SyncdValidator : public ComponentValidator {
-  absl::Status OnInit(absl::string_view version, Testbed &testbed,
-                      thinkit::SSHClient &ssh_client) override {
-    LOG(INFO) << "Syncd Init";
-    return absl::OkStatus();
-  }
-  absl::Status OnFlowProgram(absl::string_view version, Testbed &testbed,
+  absl::Status OnImageCopy(absl::string_view version, const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
+
+  absl::Status OnFlowProgram(absl::string_view version, const Testbed &testbed,
                              thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Syncd Flow Program";
     return absl::OkStatus();
   }
-  absl::Status OnFlowCleanup(absl::string_view version, Testbed &testbed,
+  absl::Status OnFlowCleanup(absl::string_view version, const Testbed &testbed,
                              thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Syncd Flow Cleanup";
     return absl::OkStatus();
   }
-  absl::Status OnNsfReboot(absl::string_view version, Testbed& testbed,
-                           thinkit::SSHClient& ssh_client) override;
+  absl::Status OnNsfReboot(absl::string_view version, const Testbed &testbed,
+                           thinkit::SSHClient &ssh_client) override;
+
+private:
+  absl::flat_hash_set<absl::string_view> allowlist_;
 };
 
 }  // namespace pins_test
