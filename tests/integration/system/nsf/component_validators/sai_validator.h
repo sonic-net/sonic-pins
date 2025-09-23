@@ -28,12 +28,12 @@ namespace pins_test {
 // Component owners need to have their own implementations and register to be
 // used by the NSF Upgrade tests.
 class SaiValidator : public ComponentValidator {
-  absl::Status OnInit(absl::string_view version, Testbed &testbed,
+  absl::Status OnInit(absl::string_view version, const Testbed &testbed,
                       thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Sai Init";
     return absl::OkStatus();
   }
-  absl::Status OnFlowCleanup(absl::string_view version, Testbed &testbed,
+  absl::Status OnFlowCleanup(absl::string_view version, const Testbed &testbed,
                              thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Sai Flow Cleanup";
     return absl::OkStatus();

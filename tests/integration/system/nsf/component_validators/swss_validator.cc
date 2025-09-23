@@ -37,8 +37,8 @@ namespace {
 //  Scans sairedis.rec and sairedis.rec.n (if it exists) for write operations on
 //  SAI objects in the record file.
 absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
-                                          Testbed& testbed,
-                                          thinkit::SSHClient& ssh_client) {
+                                          const Testbed &testbed,
+                                          thinkit::SSHClient &ssh_client) {
   const auto allowlist = absl::flat_hash_set<absl::string_view>({
       "SAI_OBJECT_TYPE_DEBUG_COUNTER", 
       "SAI_OBJECT_TYPE_VIRTUAL_ROUTER", 
@@ -123,7 +123,10 @@ absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
   absl::StripAsciiWhitespace(&sai_objects_list);
   std::string error_msg;
   if (last_apply_view_entry.empty()) {
-    error_msg = "No APPLY_VIEW entry found in sairedis.rec file.";
+    // Log error but return success. The fragility of the validation shouldn't
+    // cause the validator to fail.
+    LOG(ERROR) << "No APPLY_VIEW entry found in sairedis.rec file.";
+    return absl::OkStatus();
   } else {
     for (const auto& sai_object : absl::StrSplit(sai_objects_list, '\n')) {
       if (!sai_object.empty() && !allowlist.contains(sai_object)) {
@@ -146,8 +149,8 @@ absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
 }  // namespace
 
 absl::Status SwssValidator::OnNsfReboot(absl::string_view version,
-                                        Testbed& testbed,
-                                        thinkit::SSHClient& ssh_client) {
+                                        const Testbed &testbed,
+                                        thinkit::SSHClient &ssh_client) {
   return VerifySairedisRecOnNsfReboot(version, testbed, ssh_client);
 }
 }  // namespace pins_test

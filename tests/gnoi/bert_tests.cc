@@ -22,10 +22,10 @@
 #include <random>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -40,8 +40,10 @@
 #include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/client_context.h"
+#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -52,11 +54,10 @@
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
+#include "tests/thinkit_gnmi_interface_util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
@@ -72,6 +73,8 @@ ABSL_FLAG(std::vector<std::string>, interfaces, std::vector<std::string>(),
 namespace bert {
 namespace {
 
+using ::gnoi::diag::StartBERTResponse_PerPortResponse;
+using ::gnoi::diag::StopBERTResponse_PerPortResponse;
 using ::google::protobuf::util::MessageDifferencer;
 using ::gutil::IsOkAndHolds;
 using ::testing::HasSubstr;
@@ -147,7 +150,8 @@ void SendStartBertRequestSuccessfullyOnSut(
   EXPECT_EQ(response.bert_operation_id(), request.bert_operation_id());
 
   for (int idx = 0; idx < response.per_port_responses_size(); ++idx) {
-    auto per_port_response = response.per_port_responses(idx);
+    const StartBERTResponse_PerPortResponse &per_port_response =
+        response.per_port_responses(idx);
     SCOPED_TRACE(absl::StrCat("Verifying StartBERT port response on SUT: ",
                               per_port_response.ShortDebugString()));
     EXPECT_EQ(per_port_response.status(), gnoi::diag::BERT_STATUS_OK);
@@ -173,7 +177,8 @@ void SendStartBertRequestSuccessfullyOnControlSwitch(
   EXPECT_EQ(response.bert_operation_id(), request.bert_operation_id());
 
   for (int idx = 0; idx < response.per_port_responses_size(); ++idx) {
-    auto per_port_response = response.per_port_responses(idx);
+    const StartBERTResponse_PerPortResponse &per_port_response =
+        response.per_port_responses(idx);
     SCOPED_TRACE(
         absl::StrCat("Verifying StartBERT port response on control switch: ",
                      per_port_response.ShortDebugString()));
@@ -378,7 +383,8 @@ void CheckRunningBertAndForceAdminDownHelperSut(
     ASSERT_OK_AND_ASSIGN(
         const std::string interface,
         GetInterfaceNameFromOcInterfacePath(result.interface()));
-    std::string peer_interface = sut_to_control_interface_mapping.at(interface);
+    absl::string_view peer_interface =
+        sut_to_control_interface_mapping.at(interface);
     // Check if BERT is running.
     if ((result.status() == gnoi::diag::BERT_STATUS_OK) &&
         (result.peer_lock_established()) &&
@@ -435,7 +441,8 @@ void CheckRunningBertAndForceAdminDownHelperControlSwitch(
     ASSERT_OK_AND_ASSIGN(
         const std::string interface,
         GetInterfaceNameFromOcInterfacePath(result.interface()));
-    std::string peer_interface = control_to_sut_interface_mapping.at(interface);
+    absl::string_view peer_interface =
+        control_to_sut_interface_mapping.at(interface);
     // Check if BERT is running.
     if ((result.status() == gnoi::diag::BERT_STATUS_OK) &&
         (result.peer_lock_established()) &&
@@ -476,7 +483,8 @@ void CheckRunningBertAndForceAdminDown(
         gutil::ParseProtoOrDie<gnoi::types::Path>(
             BuildOpenConfigInterface(interface));
 
-    std::string peer_interface = sut_to_control_interface_mapping.at(interface);
+    absl::string_view peer_interface =
+        sut_to_control_interface_mapping.at(interface);
     *(control_switch_request_peer_admin_down.add_per_port_requests()
           ->mutable_interface()) =
         gutil::ParseProtoOrDie<gnoi::types::Path>(
@@ -491,7 +499,8 @@ void CheckRunningBertAndForceAdminDown(
     *(control_switch_request.add_per_port_requests()->mutable_interface()) =
         gutil::ParseProtoOrDie<gnoi::types::Path>(
             BuildOpenConfigInterface(interface));
-    std::string peer_interface = control_to_sut_interface_mapping.at(interface);
+    absl::string_view peer_interface =
+        control_to_sut_interface_mapping.at(interface);
     *(sut_request_peer_admin_down.add_per_port_requests()
           ->mutable_interface()) =
         gutil::ParseProtoOrDie<gnoi::types::Path>(
@@ -1243,6 +1252,14 @@ TEST_P(BertTest, StartBertSucceeds) {
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 }
 
+// Prune the interfaces that cannot allow disabling each lane independently.
+// These interfaces are not supported for BERT.
+absl::Status PruneUnsupportedInterfaces(
+    std::vector<std::string>& sut_test_interfaces,
+    gnmi::gNMI::StubInterface& sut_gnmi_stub) {
+  return absl::OkStatus();
+}
+
 // Runs the BERT test on current maximum allowed number of interfaces. During
 // the BERT run:
 // 1) Disable admin state of few ports on SUT,
@@ -1265,6 +1282,7 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
 
   // Get all the interfaces that are operational status "UP".
   sut_test_interfaces_ = sut_interfaces_;
+  ASSERT_OK(PruneUnsupportedInterfaces(sut_test_interfaces_, *sut_gnmi_stub_));
   // Resize the interface list if UP ports are more than max number of allowed
   // ports.
   if (sut_test_interfaces_.size() > kMaxAllowedInterfacesToRunBert) {
@@ -1523,7 +1541,8 @@ TEST_P(BertTest, StopBertSucceeds) {
     EXPECT_EQ(response.bert_operation_id(), stop_request.bert_operation_id());
 
     for (int idx = 0; idx < response.per_port_responses_size(); ++idx) {
-      auto per_port_response = response.per_port_responses(idx);
+      const StopBERTResponse_PerPortResponse &per_port_response =
+          response.per_port_responses(idx);
       SCOPED_TRACE(absl::StrCat("Verifying StopBERT port response: ",
                                 per_port_response.ShortDebugString()));
       EXPECT_EQ(per_port_response.status(), gnoi::diag::BERT_STATUS_OK);
@@ -1642,8 +1661,7 @@ TEST_P(BertTest, BertWithNsf) {
   }
 
   // Request NSF on SUT and it should be rejected.
-  pins_test::Testbed testbed_variant = std::move(generic_testbed_);
-  EXPECT_THAT(pins_test::NsfReboot(testbed_variant),
+  EXPECT_THAT(pins_test::NsfReboot(generic_testbed_.get()),
               gutil::StatusIs(absl::StatusCode::kUnavailable));
 
   // Wait for BERT to finish on test interface or timeout.
@@ -1658,7 +1676,7 @@ TEST_P(BertTest, BertWithNsf) {
       bert_request_sut, bert_request_control_switch, *sut_diag_stub_,
       control_device, kTestDuration));
   // Request NSF on SUT and it should be accepted.
-  ASSERT_OK(pins_test::NsfReboot(testbed_variant));
+  ASSERT_OK(pins_test::NsfReboot(generic_testbed_.get()));
 
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
   absl::Status status = WaitForGnoiToBeUnavailable(*sut_gnoi_system_stub);
@@ -1685,8 +1703,8 @@ TEST_P(BertTest, BertWithNsf) {
   }
 
   // Wait for NSF reboot to complete.
-  EXPECT_OK(
-      pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
+  EXPECT_OK(pins_test::WaitForNsfReboot(generic_testbed_.get(),
+                                        *GetParam().ssh_client));
   ASSERT_OK(
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 
