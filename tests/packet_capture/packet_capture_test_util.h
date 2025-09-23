@@ -28,20 +28,26 @@
 namespace pins_test {
 namespace pctutil {
 
-// Represents a link connecting the switch under test (SUT) to a control device.
-struct SutToControlLink {
-  std::string sut_ingress_port_gnmi_name;
-  std::string control_switch_inject_port_gnmi_name;
-  std::string sut_mtp_port_gnmi_name; // mirror to port.
+struct PortInfo {
+  std::string gnmi_name;
+  std::string p4_id;
 };
 
-std::ostream &operator<<(std::ostream &os, const SutToControlLink &link);
+// Represents a group of links connecting the switch under test (SUT) to a
+// control device.
+struct SutToControlLinks {
+  PortInfo sut_ingress_port;
+  PortInfo sut_mtp_port;  // mirror to port.
+  PortInfo control_switch_inject_port;
+};
 
-// Nondeterministically picks and returns a `SutToControlLink` that's up, or
+std::ostream& operator<<(std::ostream& os, const SutToControlLinks& link);
+
+// Nondeterministically picks and returns a `SutToControlLinks` that's up, or
 // returns an error if no such port is found.
 // Currently link is hardcoded to Ethernet1/1/1
-absl::StatusOr<SutToControlLink>
-PickSutToControlDeviceLinkThatsUp(thinkit::MirrorTestbed &testbed);
+absl::StatusOr<SutToControlLinks> PickSutToControlDeviceLinkThatsUp(
+    gnmi::gNMI::StubInterface* gnmi_stub);
 
 // Get vendor port id corresponding to GNMI port name.
 // For example, GNMI port name "Ethernet1/1/1" corresponds to a vendor
