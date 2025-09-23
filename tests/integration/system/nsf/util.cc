@@ -17,6 +17,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -565,8 +566,14 @@ absl::Status InstallRebootPushConfig(
 
   LOG(INFO) << "gNOI install is complete.";
   LOG(INFO) << "Proceeding with config push on SUT.";
-  RETURN_IF_ERROR(PushConfig(sut_image_config_param, testbed, ssh_client,
+  RETURN_IF_ERROR(PushConfig(sut_image_config_param, sut, ssh_client,
                              /*clear_config=*/true));
+  std::vector<std::string> interfaces_to_check =
+      GetConnectedInterfacesForSut(testbed);
+  SwitchState intent_state = SwitchState::kReady;
+  RETURN_IF_ERROR(WaitForSwitchState(sut, intent_state, kTurnUpTimeout,
+                                     ssh_client, interfaces_to_check));
+
   LOG(INFO) << "Initial setup of image install, cold reboot and config push is "
                "complete.";
   return absl::OkStatus();
@@ -768,19 +775,21 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
       p4_info);
 }
 
-absl::Status PushConfig(const ImageConfigParams &image_config_param,
-                        const Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        bool clear_config, bool check_interfaces_up) {
-  thinkit::Switch& sut = GetSut(testbed);
+absl::Status PushConfig(const ImageConfigParams& image_config_param,
+                        thinkit::Switch& thinkit_switch,
+                        thinkit::SSHClient& ssh_client, bool clear_config) {
+  // The gNMI configuration's device ID is dynamically updated with the actual
+  // device ID of the target thinkit switch. This ensures successful config
+  // convergence, as the switch-reported device ID matches the device ID used
+  // for convergence checks. Without this update, a mismatch would occur between
+  // the actual device ID and the original device ID in the gNMI config, leading
+  // to convergence failures.
   const std::string gnmi_config = pins_test::UpdateDeviceIdInJsonConfig(
-      image_config_param.gnmi_config, absl::StrCat(sut.DeviceId()));
-  RETURN_IF_ERROR(PushConfig(sut, gnmi_config, image_config_param.p4_info,
+      image_config_param.gnmi_config, absl::StrCat(thinkit_switch.DeviceId()));
+  RETURN_IF_ERROR(PushConfig(thinkit_switch, gnmi_config,
+                             image_config_param.p4_info,
                              image_config_param.config_label, clear_config));
-  return WaitForSwitchState(
-      sut,
-      check_interfaces_up ? SwitchState::kReady
-                          : SwitchState::kReadyWithoutInterfacesUp,
-      kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
+  return absl::OkStatus();
 }
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,

@@ -16,11 +16,10 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
 
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "gtest/gtest.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -29,8 +28,6 @@
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
-#include "thinkit/switch.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 
