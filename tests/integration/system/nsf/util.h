@@ -143,15 +143,16 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
                                 absl::Span<const std::string> interfaces = {});
 
 // Reboot the SUT using the given reboot `method`.
-absl::Status Reboot(gnoi::system::RebootMethod method, const Testbed& testbed,
+absl::Status Reboot(gnoi::system::RebootMethod method, thinkit::Switch& sut,
+                    thinkit::TestEnvironment& env,
                     bool collect_debug_artifacts_before_reboot = true);
 
 // Performs image copy on the inactive side using gNOI, and returns the upgraded
 // image version on success.
 // Note: This doesn't involve a reboot.
-absl::StatusOr<std::string> ImageCopy(const std::string &image_label,
-                                      const Testbed &testbed,
-                                      thinkit::SSHClient &ssh_client);
+absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
+                                      thinkit::Switch& sut,
+                                      thinkit::SSHClient& ssh_client);
 
 absl::Status InstallRebootPushConfig(
     const Testbed& testbed, thinkit::SSHClient& ssh_client,
@@ -237,7 +238,8 @@ absl::Status SaveP4FlowSnapshot(const Testbed &testbed,
 // Stores the healthz debug artifacts of the SUT with the given `prefix` as:
 // "{prefix}_healthz"
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
-                                    const Testbed &testbed);
+                                    thinkit::Switch& sut,
+                                    thinkit::TestEnvironment& env);
 
 // Appends multiple errors together. This allows tests to identify and report
 // all validation errors instead of returning on the first error.
