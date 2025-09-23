@@ -33,12 +33,12 @@ class FlowProgrammer {
   virtual ~FlowProgrammer() = default;
 
   // Programs predefined flows on the SUT.
-  virtual absl::Status ProgramFlows(const ImageConfigParams& image_config_param,
-                                    Testbed& testbed,
-                                    thinkit::SSHClient& ssh_client) = 0;
+  virtual absl::Status ProgramFlows(const ImageConfigParams &image_config_param,
+                                    const Testbed &testbed,
+                                    thinkit::SSHClient &ssh_client) = 0;
 
   // Clears all flows on the SUT.
-  virtual absl::Status ClearFlows(Testbed& testbed) = 0;
+  virtual absl::Status ClearFlows(const Testbed &testbed) = 0;
 };
 
 }  // namespace pins_test
