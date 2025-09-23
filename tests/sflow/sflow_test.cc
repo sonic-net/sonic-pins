@@ -955,9 +955,7 @@ void VerifySflowResult(absl::string_view sflowtool_output,
       EXPECT_EQ(fields[kSamplingRateIdx], absl::StrCat(sampling_rate));
     }
   }
-  EXPECT_GT(interesting_samples, 0)
-      << "No samples for dst_ip: " << dst_ip << ". Samples are:\n"
-      << sflowtool_output;
+  EXPECT_GT(interesting_samples, 0) << "No samples for dst_ip: " << dst_ip;
 }
 
 void CollectDriverDebugs(thinkit::SSHClient* ssh_client,
