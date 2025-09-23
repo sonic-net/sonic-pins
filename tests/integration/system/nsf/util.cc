@@ -448,7 +448,8 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
       GetSwitchStateString(state), elapsed_time, validator_status.message()));
 }
 
-absl::Status Reboot(RebootMethod method, const Testbed &testbed) {
+absl::Status Reboot(RebootMethod method, const Testbed& testbed,
+                    bool collect_debug_artifacts_before_reboot) {
   LOG(INFO) << "Initiating Switch reboot. Reboot method: "
             << RebootMethod_Name(method);
   thinkit::Switch& sut = GetSut(testbed);
@@ -460,11 +461,13 @@ absl::Status Reboot(RebootMethod method, const Testbed &testbed) {
   RebootResponse response;
   ClientContext context;
 
-  RETURN_IF_ERROR(StoreSutDebugArtifacts(
-      absl::StrCat(
-          "before_", RebootMethod_Name(method), "_reboot_",
-          absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
-      testbed));
+  if (collect_debug_artifacts_before_reboot) {
+    RETURN_IF_ERROR(StoreSutDebugArtifacts(
+        absl::StrCat(
+            "before_", RebootMethod_Name(method), "_reboot_",
+            absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
+        testbed));
+  }
 
   return gutil::GrpcStatusToAbslStatus(
       sut_gnoi_system_stub->Reboot(&context, request, &response));
@@ -698,6 +701,27 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
            << up_time_before_nsf << " After: " << up_time_after_nsf;
   }
   return absl::OkStatus();
+}
+
+absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
+    const Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param,
+    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
+  absl::Status nsf_reboot_status;
+  nsf_reboot_status = DoNsfRebootAndWaitForSwitchReady(
+      testbed, ssh_client, image_config_param, check_interfaces_up, interfaces);
+  if (!nsf_reboot_status.ok()) {
+    ADD_FAILURE() << "NSF reboot failed with: " << nsf_reboot_status;
+    LOG(ERROR) << "Attempting to recover the switch through cold "
+                  "reboot.";
+    RETURN_IF_ERROR(Reboot(RebootMethod::COLD, testbed,
+                           /*collect_debug_artifacts_before_reboot=*/false));
+    RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, check_interfaces_up));
+    return gutil::InternalErrorBuilder()
+           << "NSF reboot failed. Switch recovered successfully through cold "
+              "reboot.";
+  }
+  return nsf_reboot_status;
 }
 
 // In cases where `clear_config` is not set, we do not use the

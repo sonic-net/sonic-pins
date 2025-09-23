@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -39,8 +40,10 @@
 #include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/client_context.h"
+#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -51,11 +54,10 @@
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
+#include "tests/thinkit_gnmi_interface_util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
@@ -1250,6 +1252,14 @@ TEST_P(BertTest, StartBertSucceeds) {
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 }
 
+// Prune the interfaces that cannot allow disabling each lane independently.
+// These interfaces are not supported for BERT.
+absl::Status PruneUnsupportedInterfaces(
+    std::vector<std::string>& sut_test_interfaces,
+    gnmi::gNMI::StubInterface& sut_gnmi_stub) {
+  return absl::OkStatus();
+}
+
 // Runs the BERT test on current maximum allowed number of interfaces. During
 // the BERT run:
 // 1) Disable admin state of few ports on SUT,
@@ -1272,6 +1282,7 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
 
   // Get all the interfaces that are operational status "UP".
   sut_test_interfaces_ = sut_interfaces_;
+  ASSERT_OK(PruneUnsupportedInterfaces(sut_test_interfaces_, *sut_gnmi_stub_));
   // Resize the interface list if UP ports are more than max number of allowed
   // ports.
   if (sut_test_interfaces_.size() > kMaxAllowedInterfacesToRunBert) {
