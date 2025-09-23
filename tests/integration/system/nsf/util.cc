@@ -608,11 +608,12 @@ absl::Status ValidateComponents(
     const absl::Span<const std::unique_ptr<ComponentValidator>> validators,
     absl::string_view version, const Testbed &testbed,
     thinkit::SSHClient &ssh_client) {
+  absl::Status overall_status;
   for (const std::unique_ptr<ComponentValidator>& validator : validators) {
-    RETURN_IF_ERROR(
-        (std::invoke(validate, validator, version, testbed, ssh_client)));
+    AppendErrorStatus(overall_status, std::invoke(validate, validator, version,
+                                                  testbed, ssh_client));
   }
-  return absl::OkStatus();
+  return overall_status;
 }
 
 absl::Status NsfReboot(const Testbed &testbed) {
@@ -810,6 +811,17 @@ absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
   // Implement gNMI state path validation for comparison of
   // the various state paths before and after NSF Upgrade/Reboot.
   return absl::OkStatus();
+}
+
+// TODO: Replace the AppendErrorStatus with StatusBuilder.
+void AppendErrorStatus(absl::Status& ret_status, absl::Status status) {
+  if (status.ok()) {
+    return;
+  }
+  if (ret_status.ok()) {
+    ret_status.Update(status);
+  } else {
+  }
 }
 
 }  // namespace pins_test

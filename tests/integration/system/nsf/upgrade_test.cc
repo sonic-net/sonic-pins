@@ -82,18 +82,6 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
-// Used to append multiple errors. It enables the test to return as many errors
-// as possible during the validation instead of returning on first error.
-// TODO: Replace the AppendErrorStatus with StatusBuilder.
-void AppendErrorStatus(absl::Status &ret_status, absl::Status status) {
-  if (status.ok()) {
-    return;
-  }
-  if (ret_status.ok()) {
-    ret_status.Update(status);
-  } else {
-  }
-}
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
     const ImageConfigParams& image_config_param,
     bool enable_interface_validation_during_nsf) {
