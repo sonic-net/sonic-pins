@@ -532,9 +532,10 @@ absl::StatusOr<std::string> ImageCopy(const std::string &image_label,
   return "";
 }
 
-absl::Status
-InstallRebootPushConfig(const Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        const ImageConfigParams &image_config_param) {
+absl::Status InstallRebootPushConfig(
+    const Testbed& testbed, thinkit::SSHClient& ssh_client,
+    const ImageConfigParams& sut_image_config_param,
+    const ImageConfigParams& cs_image_config_param) {
   thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
 
@@ -545,7 +546,7 @@ InstallRebootPushConfig(const Testbed &testbed, thinkit::SSHClient &ssh_client,
   LOG(INFO) << "gNOI Install: Copying image to inactive partition";
   ASSIGN_OR_RETURN(
       std::string image_version,
-      ImageCopy(image_config_param.image_label, testbed, ssh_client));
+      ImageCopy(sut_image_config_param.image_label, testbed, ssh_client));
 
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_after_install_before_reboot,
@@ -561,8 +562,9 @@ InstallRebootPushConfig(const Testbed &testbed, thinkit::SSHClient &ssh_client,
   // Wait for SSH and containers to be up before pushing config.
   RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, false));
 
-  LOG(INFO) << "gNOI install is complete. Proceeding with config push.";
-  RETURN_IF_ERROR(PushConfig(image_config_param, testbed, ssh_client,
+  LOG(INFO) << "gNOI install is complete.";
+  LOG(INFO) << "Proceeding with config push on SUT.";
+  RETURN_IF_ERROR(PushConfig(sut_image_config_param, testbed, ssh_client,
                              /*clear_config=*/true));
   LOG(INFO) << "Initial setup of image install, cold reboot and config push is "
                "complete.";
@@ -763,8 +765,9 @@ absl::Status PushConfig(const ImageConfigParams &image_config_param,
                         const Testbed &testbed, thinkit::SSHClient &ssh_client,
                         bool clear_config, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
-  RETURN_IF_ERROR(PushConfig(sut, image_config_param.gnmi_config,
-                             image_config_param.p4_info,
+  const std::string gnmi_config = pins_test::UpdateDeviceIdInJsonConfig(
+      image_config_param.gnmi_config, absl::StrCat(sut.DeviceId()));
+  RETURN_IF_ERROR(PushConfig(sut, gnmi_config, image_config_param.p4_info,
                              image_config_param.config_label, clear_config));
   return WaitForSwitchState(
       sut,
@@ -823,5 +826,4 @@ void AppendErrorStatus(absl::Status& ret_status, absl::Status status) {
   } else {
   }
 }
-
 }  // namespace pins_test
