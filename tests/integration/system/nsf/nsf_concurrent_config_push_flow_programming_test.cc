@@ -40,6 +40,7 @@ using ::p4::v1::ReadResponse;
 
 constexpr int kIsolatedLacpSystemPriority = 512;
 constexpr absl::Duration kNsfThreadDelay = absl::Seconds(1);
+constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 
 void NsfConcurrentConfigPushFlowProgrammingTestFixture::SetUp() {
@@ -54,8 +55,11 @@ void NsfConcurrentConfigPushFlowProgrammingTestFixture::SetUp() {
 void NsfConcurrentConfigPushFlowProgrammingTestFixture::TearDown() {
   if (!GetParam().image_config_params.empty()) {
     LOG(INFO) << "Restoring the original config";
-    ASSERT_OK(
-        PushConfig(GetParam().image_config_params[0], testbed_, *ssh_client_));
+    ASSERT_OK(PushConfig(GetParam().image_config_params[0], GetSut(testbed_),
+                         *ssh_client_));
+    ASSERT_OK(WaitForSwitchState(GetSut(testbed_), SwitchState::kReady,
+                                 kTurnUpTimeout, *ssh_client_,
+                                 GetConnectedInterfacesForSut(testbed_)));
   }
   TearDownTestbed(testbed_interface_);
 }
