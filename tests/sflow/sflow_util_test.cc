@@ -1022,7 +1022,7 @@ constexpr absl::string_view kTorSflowGnmiConfig = R"json({
   })json";
 
 TEST(SflowUtilTest, GetSflowCollectorPortTest) {
-  ASSERT_THAT(GetSflowCollectorPort(kTorSflowGnmiConfig), IsOkAndHolds(6344));
+  EXPECT_EQ(GetSflowCollectorPort(), kSflowStandaloneCollectorPort);
 }
 
 constexpr absl::string_view kTorSflowGnmiConfigMissingPort = R"json({
@@ -1041,13 +1041,6 @@ constexpr absl::string_view kTorSflowGnmiConfigMissingPort = R"json({
         }
      }
   })json";
-
-TEST(SflowUtilTest, GetSflowCollectorPortMissingPortTest) {
-  ASSERT_THAT(
-      GetSflowCollectorPort(kTorSflowGnmiConfigMissingPort),
-      StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("sFlow collector config is not populated correctly")));
-}
 
 constexpr absl::string_view kNoCollectorGnmiConfig = R"json({
   "openconfig-interfaces:interfaces": {
@@ -1092,11 +1085,6 @@ constexpr absl::string_view kNoCollectorGnmiConfig = R"json({
     }
   }
 })json";
-
-TEST(SflowUtilTest, GetSflowCollectorPortNoCollectorConfigTest) {
-  ASSERT_THAT(GetSflowCollectorPort(kNoCollectorGnmiConfig),
-              IsOkAndHolds(6343));
-}
 
 TEST(SflowDscpTest, ParseTcpdumpResultA1Success) {
   const std::string tcpdump_result =

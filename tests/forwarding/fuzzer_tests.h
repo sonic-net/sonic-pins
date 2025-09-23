@@ -22,12 +22,14 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
+#include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
-#include "gtest/gtest.h"
 
 namespace p4_fuzzer {
 
@@ -104,6 +106,26 @@ struct FuzzerTestFixtureParams {
   // A function for masking any updates that should not be sent to the switch.
   std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
       [](const AnnotatedUpdate& update) { return false; };
+
+  // A function for modifying any `TableEntry` produced by the Fuzzer. Note that
+  // mutations can override modified values.
+  std::function<absl::Status(const pdpi::IrP4Info&, const SwitchState&,
+                             p4::v1::TableEntry&)>
+      ModifyFuzzedTableEntry =
+          [](const pdpi::IrP4Info&, const SwitchState&, p4::v1::TableEntry&) {
+            // By default, do nothing.
+            return absl::OkStatus();
+          };
+  // A function for modifying any `MulticastGroupEntry` produced by the Fuzzer.
+  // Note that mutations can override modified values.
+  std::function<absl::Status(const pdpi::IrP4Info&, const SwitchState&,
+                             p4::v1::MulticastGroupEntry&)>
+      ModifyFuzzedMulticastGroupEntry = [](const pdpi::IrP4Info&,
+                                           const SwitchState&,
+                                           p4::v1::MulticastGroupEntry&) {
+        // By default, do nothing.
+        return absl::OkStatus();
+      };
 };
 
 class FuzzerTestFixture
