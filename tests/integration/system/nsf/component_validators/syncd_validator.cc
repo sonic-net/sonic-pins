@@ -17,6 +17,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
@@ -47,9 +48,9 @@ absl::Status SyncdValidator::OnNsfReboot(absl::string_view version,
   return ValidateSyncdWarmboot(GetSut(testbed), allowlist_);
 }
 
-absl::Status SyncdValidator::OnInit(absl::string_view version,
-                                    const Testbed &testbed,
-                                    thinkit::SSHClient &ssh_client) {
+absl::Status SyncdValidator::OnImageCopy(absl::string_view version,
+                                         const Testbed& testbed,
+                                         thinkit::SSHClient& ssh_client) {
   return PrepareAllowListInSyncdInit(GetSut(testbed), allowlist_);
 }
 

@@ -29,6 +29,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
+#include "p4_constraints/backend/symbolic_interpreter.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
@@ -343,13 +344,6 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
 
   for (const pdpi::IrTableDefinition& table :
        AllValidTablesForP4RtRole(config)) {
-    auto* table_info = p4_constraints::GetTableInfoOrNull(
-        constraints_by_table_id, table.preamble().id());
-    if (table_info == nullptr) {
-      return gutil::InternalErrorBuilder()
-             << "Table info not present for id " << table.preamble().id();
-    }
-
     LOG(INFO) << absl::Substitute("For table '$0', installing entries with:",
                                   table.preamble().alias());
     std::vector<std::string> required_match_descriptions;
@@ -379,6 +373,37 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
           if (!pdpi::HasP4RuntimeTranslatedType(field)) {
             ASSIGN_OR_RETURN(additional_constraint,
                              FieldPresenceConstraintString(field, use_field));
+            auto* table_info = p4_constraints::GetTableInfoOrNull(
+                constraints_by_table_id, table.preamble().id());
+            if (table_info == nullptr) {
+              return gutil::InternalErrorBuilder()
+                     << "Table info not present for id "
+                     << table.preamble().id();
+            }
+            // TODO: Support P4RT translated types.
+            auto skip_key =
+                [&](absl::string_view key_name) -> absl::StatusOr<bool> {
+              return pdpi::HasP4RuntimeTranslatedType(
+                  table.match_fields_by_name().at(key_name));
+            };
+
+            ASSIGN_OR_RETURN(p4_constraints::ConstraintSolver solver,
+                             p4_constraints::ConstraintSolver::Create(
+                                 *table_info, skip_key));
+            ASSIGN_OR_RETURN(bool is_sat,
+                             solver.AddConstraint(*additional_constraint));
+
+            // If appending the additional constraint makes the constraint
+            // unsatisfiable, then we cannot enforce this field presence.
+            // TODO: b/356774621 - Add parameter that fails test if unsat.
+            if (!is_sat) {
+              LOG(INFO) << "Forcing match field" << field.match_field().name()
+                        << " to be " << (use_field ? "present" : "absent")
+                        << " for entry in table" << table.preamble().alias()
+                        << " is not possible due to being unsatisfiable with"
+                           " existing table constraints.";
+              continue;
+            };
           }
           RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
                               gen, session, config, state, environment,

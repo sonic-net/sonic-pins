@@ -588,12 +588,17 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   }
 
   // The first element of the given `image_config_params` is considered
-  // as the "base" image that will be installed and configured on the
-  // SUT before going ahead with NSF Upgrade/Reboot for the following
+  // as the "base" image for the SUT that will be installed and configured on
+  // the SUT before going ahead with NSF Upgrade/Reboot for the following
   // `image_config_params` (if present) in order.
-
+  //
+  // The last element of the given `image_config_params` is assumed to be the
+  // mainline config params that we will configure the Control Switch with. This
+  // is because we configure the Control Switch only once throughout the NSF
+  // Upgrade iterations.
   ASSERT_OK(InstallRebootPushConfig(testbed_, *ssh_client_,
-                                    image_config_params.front()));
+                                    image_config_params.front(),
+                                    image_config_params.back()));
 
   bool continue_on_failure;
   std::vector<std::string> error_msgs;

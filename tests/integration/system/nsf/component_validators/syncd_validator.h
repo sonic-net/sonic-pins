@@ -30,8 +30,8 @@ namespace pins_test {
 // used by the NSF Upgrade tests.
 
 class SyncdValidator : public ComponentValidator {
-  absl::Status OnInit(absl::string_view version, const Testbed &testbed,
-                      thinkit::SSHClient &ssh_client) override;
+  absl::Status OnImageCopy(absl::string_view version, const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
 
   absl::Status OnFlowProgram(absl::string_view version, const Testbed &testbed,
                              thinkit::SSHClient &ssh_client) override {
