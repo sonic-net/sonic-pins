@@ -19,24 +19,48 @@
 namespace pins_test {
 namespace pctutil {
 
-std::ostream &operator<<(std::ostream &os, const SutToControlLink &link) {
-  return os << absl::StreamFormat("SutToControlLink{"
-                                  ".sut_ingress_port_gnmi_name = %s,"
-                                  ".sut_mtp_port_gnmi_name = %s,"
-                                  ".control_switch_inject_port_gnmi_name = %s"
-                                  "}",
-                                  link.sut_ingress_port_gnmi_name,
-                                  link.sut_mtp_port_gnmi_name,
-                                  link.control_switch_inject_port_gnmi_name);
+std::ostream& operator<<(std::ostream& os, const SutToControlLinks& links) {
+  return os << absl::StreamFormat(
+             "SutToControlLink{"
+             ".sut_ingress_port_gnmi_name = %s,"
+             ".sut_mtp_port_gnmi_name = %s,"
+             ".control_switch_inject_port_p4_id = %s"
+             "}",
+             links.sut_ingress_port.gnmi_name, links.sut_mtp_port.gnmi_name,
+             links.control_switch_inject_port.p4_id);
 }
 
-absl::StatusOr<SutToControlLink>
-PickSutToControlDeviceLinkThatsUp(thinkit::MirrorTestbed &testbed) {
-  // TODO: Pick dynamically instead of hard-coding.
-  return SutToControlLink{.sut_ingress_port_gnmi_name = "Ethernet1/1/1",
-                          .control_switch_inject_port_gnmi_name =
-                              "Ethernet1/1/1",
-                          .sut_mtp_port_gnmi_name = "Ethernet1/2/1"};
+absl::StatusOr<SutToControlLinks> PickSutToControlDeviceLinkThatsUp(
+    gnmi::gNMI::StubInterface* gnmi_stub) {
+  SutToControlLinks links;
+  using UpPortMap = absl::flat_hash_map<std::string, std::string>;
+  ASSIGN_OR_RETURN(UpPortMap up_ports, GetAllUpInterfacePortIdsByName(
+                                           *gnmi_stub, absl::Seconds(30)));
+  if (up_ports.size() < 2) {
+    LOG(ERROR) << "Not enough up ports availanle for packet capture test.";
+    return absl::InternalError("Not enough up ports for packet capture test");
+  }
+
+  auto it = up_ports.begin();
+  links.sut_ingress_port.gnmi_name = it->first;
+  links.sut_ingress_port.p4_id = it->second;
+  ++it;
+  links.sut_mtp_port.gnmi_name = it->first;
+  links.sut_mtp_port.p4_id = it->second;
+
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      gpins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+
+  for (const auto& interface_to_peer_entity : interface_to_peer_entity_map) {
+    if (interface_to_peer_entity.second.GetP4rtEncoding() ==
+        links.sut_ingress_port.p4_id) {
+      links.control_switch_inject_port.p4_id =
+          interface_to_peer_entity.first.GetP4rtEncoding();
+      break;
+    }
+  }
+
+  return links;
 }
 
 absl::StatusOr<std::string>

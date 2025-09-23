@@ -15,24 +15,25 @@
 
 #include <memory>
 #include <string>
-#include <thread>  
+#include <thread>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  
+#include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 using ::p4::v1::ReadResponse;
@@ -79,11 +80,10 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot1,
-                       TakeP4FlowSnapshot(testbed_));
-  ASSERT_OK(
-      SaveP4FlowSnapshot(testbed_, p4flow_snapshot1,
-                         "p4flow_snapshot1_before_programming_flows.txt"));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot1, TakeP4FlowSnapshot(sut));
+  ASSERT_OK(SaveP4FlowSnapshot(p4flow_snapshot1,
+                               "p4flow_snapshot1_before_programming_flows.txt",
+                               environment));
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
@@ -120,15 +120,15 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
       absl::UnknownError("Yet to program flows");
   ReadResponse p4flow_snapshot2;
   std::thread flow_programming_thread([&flow_programming_status, &sut,
-                                       &image_config_param, &p4flow_snapshot2,
-                                       this]() -> absl::Status {
+                                       &environment, &image_config_param,
+                                       &p4flow_snapshot2]() -> absl::Status {
     LOG(INFO) << "Programming ACL flows";
     RETURN_IF_ERROR(ProgramAclFlows(sut, image_config_param.p4_info));
     // P4 snapshot before NSF reboot.
     LOG(INFO) << "Capturing P4 snapshot before NSF reboot";
-    ASSIGN_OR_RETURN(p4flow_snapshot2, TakeP4FlowSnapshot(testbed_));
+    ASSIGN_OR_RETURN(p4flow_snapshot2, TakeP4FlowSnapshot(sut));
     flow_programming_status = SaveP4FlowSnapshot(
-        testbed_, p4flow_snapshot2, "p4flow_snapshot2_before_nsf.txt");
+        p4flow_snapshot2, "p4flow_snapshot2_before_nsf.txt", environment);
     if (flow_programming_status.ok()) {
       LOG(INFO) << "Completed programming ACL flows";
     } else {
@@ -163,10 +163,9 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after NSF reboot";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot3,
-                       TakeP4FlowSnapshot(testbed_));
-  ASSERT_OK(SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
-                               "p4flow_snapshot3_after_nsf.txt"));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot3, TakeP4FlowSnapshot(sut));
+  ASSERT_OK(SaveP4FlowSnapshot(p4flow_snapshot3,
+                               "p4flow_snapshot3_after_nsf.txt", environment));
 
   // Stop and validate traffic
   LOG(INFO) << "Stopping the traffic";
@@ -177,18 +176,17 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(
-      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
+  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_));
 
   LOG(INFO) << "Clearing the flows";
   ASSERT_OK(flow_programmer_->ClearFlows(testbed_));
 
   // P4 snapshot after clearing flows.
   LOG(INFO) << "Capturing P4 snapshot after clearing flows";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot4,
-                       TakeP4FlowSnapshot(testbed_));
-  ASSERT_OK(SaveP4FlowSnapshot(testbed_, p4flow_snapshot4,
-                               "p4flow_snapshot4_after_clearing_flows.txt"));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot4, TakeP4FlowSnapshot(sut));
+  ASSERT_OK(SaveP4FlowSnapshot(p4flow_snapshot4,
+                               "p4flow_snapshot4_after_clearing_flows.txt",
+                               environment));
 
   LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
                "Clearing Flows";
