@@ -74,7 +74,7 @@ ConstructEntriesToMirrorTrafficWithVlanTag(
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> pi_entities,
       sai::EntryBuilder()
-          .AddDisableVlanChecksEntry()
+          .AddDisableIngressVlanChecksEntry()
           .AddMirrorSessionTableEntry(mirror_session)
           .AddMarkToMirrorAclEntry(sai::MarkToMirrorParams{
               .ingress_port = p4rt_src_port_id,
@@ -239,6 +239,8 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
               mirror_session_params.mirror_encap_dst_mac);
     // Parse VLAN header.
     ASSERT_EQ(received_packet.headers(1).has_vlan_header(), true);
+    ASSERT_EQ(received_packet.headers(1).vlan_header().vlan_identifier(),
+              mirror_session_params.mirror_encap_vlan_id);
     // Parse IPv6 header.
     ASSERT_EQ(received_packet.headers(2).has_ipv6_header(), true);
     const auto &ip_header = received_packet.headers(2).ipv6_header();
