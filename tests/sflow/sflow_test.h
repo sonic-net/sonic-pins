@@ -72,6 +72,10 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   thinkit::SSHClient* ssh_client_ = GetParam().ssh_client;
 
   std::vector<IxiaLink> ready_links_;
+  // Used for setting gNMI collector config. It would be set to the same as the
+  // first collector config port. If config does not have any collector config,
+  // it would be set to 6343.
+  int collector_port_;
 };
 
 class SampleSizeTest : public SflowTestFixture {};
@@ -128,8 +132,8 @@ class SflowMirrorTestFixture
   std::string agent_address_;
 
   // Used for setting gNMI collector config. It would be set to the same as the
-  // config collector port. If config does not have any collector config, it
-  // would be set to 6343.
+  // first collector config port. If config does not have any collector config,
+  // it would be set to 6343.
   int collector_port_;
 };
 
