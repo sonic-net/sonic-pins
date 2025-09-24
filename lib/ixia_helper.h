@@ -69,7 +69,7 @@ absl::StatusOr<int> FindIdByField(const thinkit::HttpResponse &response,
 
 // ExtractHref - Extract the href path from the Ixia response provided as
 // input.  Returns either the href string or an error.
-absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp);
+absl::StatusOr<std::string> ExtractHref(const thinkit::HttpResponse &resp);
 
 // Extract ip, card and port from a fully qualified ixia interface name
 // Ixia interface will look something like: "108.177.95.172/4/3" which is the
@@ -111,20 +111,34 @@ IxiaVport(absl::string_view href,
 absl::StatusOr<std::string>
 IxiaSession(absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
 
-// SetUpTrafficItem - Sets up a traffic item with source and destination,
-// and optionally with a `traffic_name` useful for querying stats.
-// Returns either an error or the
-// href string for the first traffic item, e.g. something like
+// Sets up a traffic item with multiple sources and destinations, and optionally
+// with a `traffic_name` useful for querying stats. Returns either an error or
+// the href string for the first traffic item, e.g. something like
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
 // to as a tref is this namespace. Takes in the vref returned by Ixia ports
-// as parameters.
+// as parameters. `is_raw_pkt` indicates whether it is a raw traffic item.
+absl::StatusOr<std::string> SetUpTrafficItemWithMultipleSrcsAndDsts(
+    absl::Span<const std::string> sources,
+    absl::Span<const std::string> destinations, std::string_view traffic_name,
+    thinkit::GenericTestbed &testbed, bool is_raw_pkt = false);
+
+// Sets up a traffic item with a single source and destination. Generates a
+// unique name based on the source and destination.
 absl::StatusOr<std::string> SetUpTrafficItem(
     absl::string_view vref_src, absl::string_view vref_dst,
     thinkit::GenericTestbed &generic_testbed);
-absl::StatusOr<std::string> SetUpTrafficItem(
+
+// Sets up a traffic item with a single source and destination and a traffic
+// name.
+inline absl::StatusOr<std::string> SetUpTrafficItem(
     absl::string_view vref_src, absl::string_view vref_dst,
     absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed,
-    bool is_raw_pkt = false);
+    bool is_raw_pkt = false) {
+  return SetUpTrafficItemWithMultipleSrcsAndDsts(
+      /*sources=*/{std::string(vref_src)},
+      /*destinations=*/{std::string(vref_dst)}, traffic_name, generic_testbed,
+      is_raw_pkt);
+}
 
 // Deletes traffic item. Takes in the tref returned by IxiaSession.
 // Deleting a traffic item manually is not strictly required, but is useful
@@ -203,6 +217,17 @@ absl::Status SetFieldValueList(absl::string_view tref, int stack_index,
                                int field_index,
                                absl::Span<const std::string> value,
                                thinkit::GenericTestbed &generic_testbed);
+
+// Sets a field value to a random range with no duplicates.
+// `min_value` and `max_value` are the min and max values of the range.
+// `step` is the step size between each value.
+// `seed` is the seed for the random number generator.
+// `count` is the number of values to generate.
+absl::Status SetFieldRandomRange(std::string_view tref, int stack_index,
+                                 int field_index, std::string_view min_value,
+                                 std::string_view max_value,
+                                 std::string_view step, int seed, int count,
+                                 thinkit::GenericTestbed &generic_testbed);
 
 // SetDestMac - sets the destination MAC address for frames to be sent
 // Takes in the tref returned by IxiaSession. dmac should be a string
