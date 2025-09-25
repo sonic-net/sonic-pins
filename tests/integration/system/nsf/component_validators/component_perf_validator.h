@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_TELEMETRY_VALIDATOR_H_
-#define PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_TELEMETRY_VALIDATOR_H_
+#ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_COMPONENT_PERF_VALIDATOR_H_
+#define PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_COMPONENT_PERF_VALIDATOR_H_
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -24,11 +24,11 @@
 
 namespace pins_test {
 
-class TelemetryValidator : public ComponentValidator {
-  absl::Status OnNsfReboot(absl::string_view version, const Testbed &testbed,
-                           thinkit::SSHClient &ssh_client) override;
+class ComponentPerfValidator : public ComponentValidator {
+  absl::Status OnNsfReboot(absl::string_view version, const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
 };
 
 }  // namespace pins_test
 
-#endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_TELEMETRY_VALIDATOR_H_
+#endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_COMPONENT_PERF_VALIDATOR_H_

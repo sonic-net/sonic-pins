@@ -24,10 +24,13 @@ cc_library(
     testonly = True,
     hdrs = ["testbed.h"],
     deps = [
+        "//gutil:overload",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -79,6 +82,11 @@ cc_library(
 )
 
 cc_library(
+    name = "scenario",
+    hdrs = ["scenario.h"],
+)
+
+cc_library(
     name = "test_params",
     testonly = True,
     hdrs = ["test_params.h"],
@@ -86,6 +94,7 @@ cc_library(
         ":component_validator",
         ":flow_programmer",
         ":image_config_params",
+        ":scenario",
         ":testbed",
         ":traffic_helper",
         "//thinkit:ssh_client",
