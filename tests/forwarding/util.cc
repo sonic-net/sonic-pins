@@ -84,11 +84,16 @@ absl::Status InjectIngressPacket(const std::string& packet,
   p4::v1::StreamMessageRequest request;
   ASSIGN_OR_RETURN(
       *request.mutable_packet(),
-      sai::MakePiPacketOutMessage(p4info, sai::PacketOutMetadata{
-                                              .submit_to_ingress = true,
-                                              .payload = packet,
-                                              .egress_port = "Unused",
-                                          }));
+      sai::MakePiPacketOutMessage(
+          p4info, sai::PacketOutMetadata{
+                      .submit_to_ingress = true,
+                      .payload = packet,
+                      // Arbitrary, since `egress_port` is ignored when
+                      // `submit_to_ingress` is set. Set to "x" to please both
+                      // PDPI (disallows empty strings) and BMv2 (requires
+                      // string to fit into 9 bits, ignoring leading zeros).
+                      .egress_port = "x",
+                  }));
 
   // Rate limit the packets, if specified.
   if (packet_delay.has_value()) absl::SleepFor(*packet_delay);
