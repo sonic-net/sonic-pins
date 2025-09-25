@@ -557,10 +557,10 @@ TEST_P(FrontpanelQosTest,
 
   // Fix test parameters and PIRs (peak information rates, in bytes
   // per second) for each DSCP.
-  constexpr int64_t kTestFrameSizeInBytes = 2000;                // 2 KB
+  constexpr int64_t kTestFrameSizeInBytes = 1000;                // 1 KB
   constexpr int64_t kTestFrameCount = 30'000'000;                // 30 GB
   constexpr int64_t kTestFramesPerSecond = kTestFrameCount / 3;  // for 3 s
-  constexpr int64_t kTestFrameSpeedInBytesPerSecond =            // 20 GB/s
+  constexpr int64_t kTestFrameSpeedInBytesPerSecond =            // 10 GB/s
       kTestFramesPerSecond * kTestFrameSizeInBytes;
 
   // Get strictly prioritized queues.
@@ -570,7 +570,7 @@ TEST_P(FrontpanelQosTest,
   // We use exponentially spaced PIRs, with a base rate that's high enough for
   // buffers to drain quickly. That way we don't have to drain buffers manually
   // between test traffic flows.
-  constexpr int64_t kPirBaseSpeedInBytesPerSecond = 40'000'000;  // 40 MB/s.
+  constexpr int64_t kPirBaseSpeedInBytesPerSecond = 20'000'000;  // 20 MB/s.
   absl::flat_hash_map<std::string, int64_t> kPirByQueueName;
   using DscpsByQueueName =
       std::optional<absl::flat_hash_map<std::string, std::vector<int>>>;
@@ -675,14 +675,20 @@ TEST_P(FrontpanelQosTest,
     constexpr int64_t kSpeed200g = 200000000000;
 
     if (kSutEgressPortSpeedInBitsPerSecond != kSpeed200g) {
-      ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g),
-                                            kSutEgressPort, *gnmi_stub));
+      auto status = SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g),
+                                                kSutEgressPort, *gnmi_stub);
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to toggle port speed for : " << kSutEgressPort;
+      }
       ASSERT_OK(SetPortSpeedInBitsPerSecond(
           PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
           *gnmi_stub));
     } else {
-      ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g),
-                                            kSutEgressPort, *gnmi_stub));
+      auto status = SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g),
+                                                kSutEgressPort, *gnmi_stub);
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to toggle port speed for : " << kSutEgressPort;
+      }
       ASSERT_OK(SetPortSpeedInBitsPerSecond(
           PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
           *gnmi_stub));

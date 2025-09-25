@@ -22,10 +22,11 @@
 
 namespace pins_test {
 
-// Struct to hold image label, config label, and config parameters to be
-// injected in PINs NSF integration tests.
+// Struct to hold image label, image version, config label and config parameters
+// to be injected in PINs NSF integration tests.
 struct ImageConfigParams {
   std::string image_label;
+  std::string image_version;
   std::string config_label;
   std::string gnmi_config;
   p4::config::v1::P4Info p4_info;
