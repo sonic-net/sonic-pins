@@ -263,8 +263,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
        TestIpv4LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
   constexpr uint32_t kAboveThreshL3MissCount = 20;
 
-  // TODO: Connect to TestTracker for test status
-
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
       TriggerLpmMisses(sai::IpVersion::kIpv4, kAboveThreshL3MissCount,
@@ -279,8 +277,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
 TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
        TestIpv6LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
   constexpr uint32_t kAboveThreshL3MissCount = 20;
-
-  // TODO: Connect to TestTracker for test status
 
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
@@ -297,8 +293,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
        TestIpv4LpmMissesBelowThreshNotIncrementBlackholeLpmMissCounters) {
   constexpr uint32_t kBelowThreshL3MissCount = 5;
 
-  // TODO: Connect to TestTracker for test status
-
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
       TriggerLpmMisses(sai::IpVersion::kIpv4, kBelowThreshL3MissCount,
@@ -313,8 +307,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
 TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
        TestIpv6LpmMissesBelowThreshNotIncrementBlackholeLpmMissCounters) {
   constexpr uint32_t kBelowThreshL3MissCount = 5;
-
-  // TODO: Connect to TestTracker for test status
 
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
@@ -332,8 +324,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
   // Test in-discard rate of 0.025.
   constexpr uint32_t kL3MissCount = 5;
   constexpr uint32_t kL3HitCount = 195;
-
-  // TODO: Connect to TestTracker for test status
 
   // Use LPM misses to trigger in-discard events.
   ASSERT_OK_AND_ASSIGN(
@@ -353,8 +343,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
   constexpr uint32_t kL3MissCount = 1;
   constexpr uint32_t kL3HitCount = 199;
 
-  // TODO: Connect to TestTracker for test status
-
   // Use LPM misses to trigger in-discard events.
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
@@ -373,8 +361,6 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
   constexpr uint32_t kL3MissCount = 5;
   constexpr uint32_t kL3HitCount = 0;
 
-  // TODO: Connect to TestTracker for test status
-
   // Use LPM misses to trigger in-discard events.
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
@@ -385,6 +371,139 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
   EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
   EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
   EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+absl::StatusOr<OutDiscardCounters>
+BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerOutDiscards(
+    uint32_t out_discards_count, uint32_t out_packets_count) {
+  const std::string control_interface = control_links_[0].peer_interface;
+  const std::string sut_interface = control_links_[0].sut_interface;
+
+  LOG(INFO) << "sut_interface: " << sut_interface;
+
+  absl::flat_hash_map<std::string, std::string> port_id_by_interface;
+  ASSIGN_OR_RETURN(port_id_by_interface,
+                   GetAllInterfaceNameToPortId(*gnmi_stub_));
+  ASSIGN_OR_RETURN(const std::string sut_port_id,
+                   gutil::FindOrStatus(port_id_by_interface, sut_interface));
+
+  thinkit::ControlDevice &control_device = generic_testbed_->ControlDevice();
+
+  // Clear entries and set up a route to forward all packets to the SUT port.
+  // Set up egress ACL to drop all IPv6 packets for testing out-discard
+  // counters.
+  RETURN_IF_ERROR(pdpi::ClearEntities(*sut_p4_session_));
+  RETURN_IF_ERROR(sai::EntryBuilder()
+                      .AddEntriesForwardingIpPacketsToGivenPort(sut_port_id)
+                      .AddEgressAclDroppingIpPackets(sai::IpVersion::kIpv6)
+                      .LogPdEntries()
+                      .InstallDedupedEntities(*sut_p4_session_));
+
+  // Read some initial counters via GNMI from the SUT.
+  ASSIGN_OR_RETURN(
+      const uint64_t initial_port_out_pkts,
+      GetInterfaceCounter("out-pkts", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(
+      const uint64_t initial_port_out_discards,
+      GetInterfaceCounter("out-discards", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(BlackholeSwitchCounters initial_blackhole_switch_counters,
+                   GetBlackholeSwitchCounters(*gnmi_stub_));
+  ASSIGN_OR_RETURN(BlackholePortCounters initial_blackhole_port_counters,
+                   GetBlackholePortCounters(sut_interface, *gnmi_stub_));
+
+  LOG(INFO) << "Sending test packets on port: " << control_interface;
+  // All IPv6 packets will be dropped by the egress ACL.
+  RETURN_IF_ERROR(SendPackets(control_device, control_interface,
+                              sai::IpVersion::kIpv6, kIpv6DstIpForL3Hit,
+                              out_discards_count));
+  // All IPv4 packets will be forwarded to the SUT port.
+  RETURN_IF_ERROR(SendPackets(control_device, control_interface,
+                              sai::IpVersion::kIpv4, kIpv4DstIpForL3Hit,
+                              out_packets_count));
+
+  // Wait some time before capturing the port stats.
+  absl::SleepFor(absl::Seconds(15));
+
+  // Re-read the same counters via GNMI from the SUT.
+  ASSIGN_OR_RETURN(
+      const uint64_t final_port_out_pkts,
+      GetInterfaceCounter("out-pkts", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(
+      const uint64_t final_port_out_discards,
+      GetInterfaceCounter("out-discards", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(BlackholeSwitchCounters final_blackhole_switch_counters,
+                   GetBlackholeSwitchCounters(*gnmi_stub_));
+  ASSIGN_OR_RETURN(BlackholePortCounters final_blackhole_port_counters,
+                   GetBlackholePortCounters(sut_interface, *gnmi_stub_));
+
+  // Compute the change for each counter.
+  const uint64_t port_out_pkts_delta =
+      final_port_out_pkts - initial_port_out_pkts;
+  const uint64_t port_out_discards_delta =
+      final_port_out_discards - initial_port_out_discards;
+  BlackholeSwitchCounters blackhole_switch_delta =
+      final_blackhole_switch_counters - initial_blackhole_switch_counters;
+  BlackholePortCounters blackhole_port_delta =
+      final_blackhole_port_counters - initial_blackhole_port_counters;
+
+  return OutDiscardCounters{
+      .port_out_packets = port_out_pkts_delta,
+      .port_out_discard_packets = port_out_discards_delta,
+      .port_blackhole_out_discard_events =
+          blackhole_port_delta.out_discard_events,
+      .switch_blackhole_out_discard_events =
+          blackhole_switch_delta.out_discard_events,
+      // Sometimes fec_not_correctable_events occur which the test can't
+      // control, so subtract those from the switch blackhole counter.
+      .switch_blackhole_events =
+          blackhole_switch_delta.blackhole_events -
+          blackhole_switch_delta.fec_not_correctable_events,
+  };
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestAclDropAboveThreshIncrementBlackholeOutDiscardsCounters) {
+  // Test out-discard rate of 0.025.
+  constexpr uint32_t kOutDiscardsCount = 5;
+  constexpr uint32_t kOutPacketsCount = 200;
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
+
+  // Check the changes are as expected.
+  EXPECT_GE(out_discard_counters.port_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestAclDropBelowThreshNotIncrementOutDiscardsCounters) {
+  // Test out-discard rate of 0.005.
+  constexpr uint32_t kOutDiscardsCount = 1;
+  constexpr uint32_t kOutPacketsCount = 200;
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestAclDropWithLowTrafficNotIncrementOutDiscardsCounters) {
+  // Test when out-discard rate is 1, but the packet count is too low.
+  constexpr uint32_t kOutDiscardsCount = 50;
+  constexpr uint32_t kOutPacketsCount = 50;
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
 }
 
 }  // namespace pins_test
