@@ -25,8 +25,8 @@
 namespace pins_test {
 
 class TelemetryValidator : public ComponentValidator {
-  absl::Status OnNsfReboot(absl::string_view version, Testbed& testbed,
-                           thinkit::SSHClient& ssh_client) override;
+  absl::Status OnNsfReboot(absl::string_view version, const Testbed &testbed,
+                           thinkit::SSHClient &ssh_client) override;
 };
 
 }  // namespace pins_test
