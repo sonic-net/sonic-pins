@@ -208,3 +208,19 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "ixia_protocol_helper",
+    testonly = True,
+    srcs = ["ixia_protocol_helper.cc"],
+    hdrs = ["ixia_protocol_helper.h"],
+    deps = [
+        ":ixia_helper",
+        "//thinkit:generic_testbed",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
