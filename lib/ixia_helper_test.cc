@@ -559,5 +559,70 @@ TEST(IxiaHelper, SetFieldValueList) {
                               mock_generic_testbed));
 }
 
+TEST(IxiaHelper, SetFieldValueListFails) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  // UDP is likely the third header, and destination port is field 2.
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPatch,
+          "/ixnetwork/traffic/trafficItem/1/configElement/1/stack/3/field/2",
+          JsonIs(R"json(
+{
+  "auto": false,
+  "valueType": "valueList",
+  "valueList": [
+    "100",
+    "200"
+  ]
+})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 400}));
+  EXPECT_THAT(SetFieldValueList("/ixnetwork/traffic/trafficItem/1",
+                                /*stack_index=*/3, /*field_index=*/2,
+                                {"100", "200"}, mock_generic_testbed),
+              StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(IxiaHelper, GenerateAndApplyTrafficItems) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          "/ixnetwork/traffic/trafficItem/operations/generate", JsonIs(R"json(
+{
+  "arg1": [
+    "/ixnetwork/traffic/trafficItem/1",
+    "/ixnetwork/traffic/trafficItem/2"
+  ]
+})json")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 200, .response = R"json({"state":"SUCCESS"})json"}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(thinkit::RequestType::kPost,
+                                    "/ixnetwork/traffic/operations/apply",
+                                    JsonIs(R"json({"arg1": "/traffic"})json")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 200, .response = R"json({"state":"SUCCESS"})json"}));
+  EXPECT_OK(GenerateAndApplyTrafficItems(
+      {"/ixnetwork/traffic/trafficItem/1", "/ixnetwork/traffic/trafficItem/2"},
+      mock_generic_testbed));
+}
+
+TEST(IxiaHelper, StartTrafficItem) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          "/ixnetwork/traffic/trafficItem/operations/"
+          "startstatelesstrafficblocking",
+          JsonIs(R"json({"arg1": ["/ixnetwork/traffic/trafficItem/1"]})json")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 200, .response = R"json({"state":"SUCCESS"})json"}));
+  EXPECT_OK(StartTrafficItem("/ixnetwork/traffic/trafficItem/1",
+                             mock_generic_testbed));
+}
+
 }  // namespace
 }  // namespace pins_test::ixia
