@@ -388,6 +388,9 @@ inline bool IgnoreCpuPortName(const PortIdByNameIterType& iter) {
   return iter.first == "CPU";
 }
 
+absl::StatusOr<std::vector<std::string>> GetInterfaceNamesForGivenPortNumber(
+    gnmi::gNMI::StubInterface& stub, absl::string_view port_number);
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(
     absl::string_view gnmi_config, absl::string_view field_type = "config",
@@ -513,9 +516,17 @@ absl::StatusOr<absl::btree_set<std::string>>
 GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
     gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Returns true if the transceiver is qualified for the given interface.
+absl::StatusOr<bool> GetTransceiverQualifiedForInterface(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view interface_name);
+
 // Returns a map from interface names to their physical transceiver name.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Returns true if the module is populated for the given interface.
+absl::StatusOr<bool> GetModuleIsPopulatedForInterface(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view interface_name);
 
 // Returns a map from physical transceiver names to their part information.
 absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>
