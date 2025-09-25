@@ -58,6 +58,7 @@
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "re2/re2.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/forwarding/util.h"
@@ -192,22 +193,12 @@ absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
 }
 
 // Punts all packets on the control switch.
-absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session,
-                                const pdpi::IrP4Info& ir_p4info) {
+absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
   // Trap all packets on control switch.
-  ASSIGN_OR_RETURN(
-      p4::v1::TableEntry punt_all_pi_entry,
-      pdpi::PartialPdTableEntryToPiTableEntry(
-          ir_p4info,
-          gutil::ParseProtoOrDie<sai::TableEntry>(
-              R"pb(
-                acl_ingress_table_entry {
-                  match {}                                  # Wildcard match.
-                  action { acl_trap { qos_queue: "0x7" } }  # Action: punt.
-                  priority: 1                               # Highest priority.
-                }
-              )pb")));
-  return pdpi::InstallPiTableEntry(&p4_session, punt_all_pi_entry);
+  return sai::EntryBuilder()
+      .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+      .LogPdEntries()
+      .InstallDedupedEntities(p4_session);
 }
 
 // Creates members by filling in the controller port ids and random weights for
@@ -566,7 +557,7 @@ void WatchPortTestFixture::SetUp() {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4_info));
   ASSERT_OK(SetUpSut(*sut_p4_session_, ir_p4info, kVrfId));
-  ASSERT_OK(SetUpControlSwitch(*control_p4_session_, ir_p4info));
+  ASSERT_OK(SetUpControlSwitch(*control_p4_session_));
 }
 
 void WatchPortTestFixture::TearDown() {
