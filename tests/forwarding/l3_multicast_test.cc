@@ -1424,6 +1424,10 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryWithInvalidIPv4AddressFails) {
 }
 
 TEST_P(L3MulticastTestFixture, DeleteRifWhileInUseFails) {
+  // TODO: Reenable once change available in release image.
+  GTEST_SKIP()
+      << "Skipping until can reenable when stack change reaches release image";
+
   const int kPortsToUseInTest = 2;
   ASSERT_OK_AND_ASSIGN(
       const std::vector<std::string> sut_ports_ids,
