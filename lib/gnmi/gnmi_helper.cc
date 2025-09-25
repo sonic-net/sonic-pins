@@ -1315,6 +1315,50 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
                    " interfaces that are UP with a port ID."));
 }
 
+absl::StatusOr<std::vector<std::string>> GetInterfaceNamesForGivenPortNumber(
+    gnmi::gNMI::StubInterface& stub, absl::string_view port_number) {
+  ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                   pins_test::GetAllInterfaceOverGnmi(stub, absl::Seconds(60)));
+  if (response.notification_size() < 1) {
+    return absl::InternalError(
+        absl::StrCat("Invalid response: ", response.DebugString()));
+  }
+  const nlohmann::basic_json<> response_json =
+      json::parse(response.notification(0).update(0).val().json_ietf_val());
+
+  const auto oc_intf_json =
+      response_json.find("openconfig-interfaces:interfaces");
+  if (oc_intf_json == response_json.end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
+                     response_json.dump()));
+  }
+  auto oc_intf_list_json = oc_intf_json->find("interface");
+  if (oc_intf_list_json == oc_intf_json->end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  }
+
+  std::vector<std::string> interface_names_for_port_number;
+  for (const auto& element : oc_intf_list_json->items()) {
+    const auto element_name_json = element.value().find("name");
+    if (element_name_json == element.value().end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'name' not found: ", element.value().dump()));
+    }
+    std::string name = element_name_json->get<std::string>();
+    if (name.empty()) {
+      continue;
+    }
+    const std::string kPortIdRegex =
+        absl::StrCat("^Ethernet1/", port_number, "(/.*|$)");
+    if (RE2::FullMatch(name, kPortIdRegex)) {
+      interface_names_for_port_number.push_back(name);
+    }
+  }
+  return interface_names_for_port_number;
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(
     absl::string_view gnmi_config, absl::string_view field_type,
@@ -1653,6 +1697,20 @@ GetP4rtIdOfInterfacesInAsicMacLocalLoopbackMode(
   return loopback_mode_set;
 }
 
+absl::StatusOr<bool> GetTransceiverQualifiedForInterface(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view interface_name) {
+  std::string state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/state/transceiver-qualified");
+  ASSIGN_OR_RETURN(std::string response,
+                   pins_test::GetGnmiStatePathInfo(&gnmi_stub, state_path));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(
+      json transceiver_qualified,
+      GetField(response_json, "google-pins-interfaces:transceiver-qualified"));
+  return transceiver_qualified.get<bool>();
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub) {
   ASSIGN_OR_RETURN(
@@ -1677,6 +1735,18 @@ GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub) {
         transceiver.get<std::string>();
   }
   return interface_to_transceiver;
+}
+
+absl::StatusOr<bool> GetModuleIsPopulatedForInterface(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view interface_name) {
+  std::string state_path = absl::StrCat(
+      "components/component[name=", interface_name, "]/state/empty");
+  ASSIGN_OR_RETURN(std::string response,
+                   pins_test::GetGnmiStatePathInfo(&gnmi_stub, state_path));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json empty,
+                   GetField(response_json, "openconfig-platform:empty"));
+  return !empty.get<bool>();
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>

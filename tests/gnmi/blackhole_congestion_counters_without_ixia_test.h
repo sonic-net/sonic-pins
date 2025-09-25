@@ -37,6 +37,14 @@ struct LpmMissCounters {
   uint64_t switch_blackhole_events;
 };
 
+struct OutDiscardCounters {
+  uint64_t port_out_packets;
+  uint64_t port_out_discard_packets;
+  uint64_t port_blackhole_out_discard_events;
+  uint64_t switch_blackhole_out_discard_events;
+  uint64_t switch_blackhole_events;
+};
+
 class BlackholeCongestionCountersWithoutIxiaTestFixture
     : public thinkit::GenericTestbedFixture<> {
  protected:
@@ -45,6 +53,8 @@ class BlackholeCongestionCountersWithoutIxiaTestFixture
   absl::StatusOr<LpmMissCounters> TriggerLpmMisses(
       sai::IpVersion ip_version, uint32_t lpm_miss_packets_count,
       uint32_t lpm_hit_packets_count);
+  absl::StatusOr<OutDiscardCounters> TriggerOutDiscards(
+      uint32_t out_discards_count, uint32_t out_packets_count);
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::vector<InterfaceLink> control_links_;
