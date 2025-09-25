@@ -295,14 +295,19 @@ absl::Status ValidatePinsSoftwareComponentsBeforeReboot(
 }
 
 absl::Status ValidatePinsSoftwareComponentsAfterReboot(
-    const PinsSoftwareInfo& primary_before_install_reboot,
-    const PinsSoftwareInfo& primary_after_install_reboot,
-    const PinsSoftwareInfo& secondary_after_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_before_install_reboot,
+    const PinsSoftwareComponentInfo& pins_component_info_after_install_reboot,
     absl::string_view expected_version) {
   // Validate that switch has booted to the expected version after
   // install / upgrade and reboot.
   LOG(INFO) << "Validating components after install / upgrade and reboot";
   LOG(INFO) << "Validating if the primary network stack version is different";
+  PinsSoftwareInfo primary_before_install_reboot =
+      pins_component_info_before_install_reboot.primary_network_stack;
+  PinsSoftwareInfo primary_after_install_reboot =
+      pins_component_info_after_install_reboot.primary_network_stack;
+  PinsSoftwareInfo secondary_after_install_reboot =
+      pins_component_info_after_install_reboot.secondary_network_stack;
   if (!expected_version.empty() &&
       primary_after_install_reboot.version != expected_version) {
     return gutil::InternalErrorBuilder()
