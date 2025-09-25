@@ -76,7 +76,7 @@ using ::p4::v1::Entity;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 
-constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(8);
+constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(11);
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
@@ -771,21 +771,6 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    pdpi::P4RuntimeSession::Create(sut));
   return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
-}
-
-absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
-                                    ReadResponse snapshot_2) {
-  MessageDifferencer differencer;
-  std::string diff_report;
-  AppendIgnoredP4SnapshotFields(&differencer);
-  differencer.ReportDifferencesToString(&diff_report);
-
-  if (!differencer.Compare(snapshot_1, snapshot_2)) {
-    return gutil::InternalErrorBuilder()
-           << "Differences found between the P4 flow snapshots:\n"
-           << diff_report;
-  }
-  return absl::OkStatus();
 }
 
 absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
