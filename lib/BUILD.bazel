@@ -226,3 +226,16 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "ixia_protocol_helper_test",
+    srcs = ["ixia_protocol_helper_test.cc"],
+    deps = [
+        ":ixia_protocol_helper",
+        "//gutil:status_matchers",
+        "//lib/utils:json_test_utils",
+        "//thinkit:generic_testbed",
+        "//thinkit:mock_generic_testbed",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
