@@ -36,6 +36,11 @@
 
 namespace pins_test::ixia {
 
+inline constexpr int kEthernetStackIndex = 1;
+
+inline constexpr std::string_view kEthernetWithoutFcsName =
+    "Ethernet II without FCS";
+
 // An Ixia port is defined by IP address of chassis, card number and
 // port number.
 // This structure holds these attributes which define an Ixia port.
@@ -164,7 +169,7 @@ absl::Status StopTraffic(absl::Span<const std::string> trefs,
 
 // SetFrameRate - sets the frame rate for the traffic to be generated
 // Takes in the tref returned by IxiaSession
-absl::Status SetFrameRate(absl::string_view tref, int64_t fps,
+absl::Status SetFrameRate(absl::string_view tref, float fps,
                           thinkit::GenericTestbed &generic_testbed);
 
 // SetLineRate - sets the line rate as 1-100 percent of max line rate
@@ -250,6 +255,10 @@ absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
 // Takes in the tref returned by SetUpTrafficItem.
 absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
                       thinkit::GenericTestbed &generic_testbed);
+
+// Removes the protocol at the given index.
+absl::Status RemoveProtocolAtIndex(absl::string_view tref, int index,
+                                   thinkit::GenericTestbed &generic_testbed);
 
 // AppendTcp - Append TCP template to IP header.
 // Takes in the tref returned by SetUpTrafficItem.
