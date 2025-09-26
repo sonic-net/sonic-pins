@@ -2,18 +2,42 @@
 
 #include <string>
 
+#include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/ixia_helper.pb.h"
+#include "lib/utils/json_utils.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mock_generic_testbed.h"
 
 namespace pins_test::ixia {
+namespace {
+
+// Matches if the JSON string is equal to expected.
+MATCHER_P(JsonIs, expected_json, "") {
+  absl::StatusOr<nlohmann::json> expected = json_yang::ParseJson(expected_json);
+  CHECK_OK(expected);
+  absl::StatusOr<nlohmann::json> actual = json_yang::ParseJson(arg);
+  if (!actual.ok()) {
+    *result_listener << "Failed to parse JSON: " << arg;
+    return false;
+  }
+
+  nlohmann::json difference = nlohmann::json::diff(*expected, *actual);
+  if (difference.empty()) {
+    return true;
+  }
+
+  *result_listener << "Difference: " << json_yang::DumpJson(difference);
+  return false;
+}
 
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
@@ -476,4 +500,70 @@ TEST(IxiaHelper, SendAndWaitForCompleteOperationFailed) {
                        HasSubstr("Failed to start traffic")));
 }
 
+TEST(IxiaHelper, SetFieldSingleValue) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  // Ethernet is the first header, and source MAC is field 1.
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPatch,
+          "/ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/1",
+          JsonIs(R"json(
+{
+  "auto": false,
+  "valueType": "singleValue",
+  "singleValue": "00:00:00:00:00:01"
+})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetFieldSingleValue("/ixnetwork/traffic/trafficItem/1",
+                                /*stack_index=*/1, /*field_index=*/1,
+                                "00:00:00:00:00:01", mock_generic_testbed));
+}
+
+TEST(IxiaHelper, SetFieldSingleValueFails) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  // IP would be the second header, and field 28 is the destination IP,
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPatch,
+          "/ixnetwork/traffic/trafficItem/1/configElement/1/stack/2/field/28",
+          JsonIs(R"json(
+{
+  "auto": false,
+  "valueType": "singleValue",
+  "singleValue": "10.0.0.1"
+})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 400}));
+  EXPECT_THAT(SetFieldSingleValue("/ixnetwork/traffic/trafficItem/1",
+                                  /*stack_index=*/2, /*field_index=*/28,
+                                  "10.0.0.1", mock_generic_testbed),
+              StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(IxiaHelper, SetFieldValueList) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  // Ethernet is the first header, and source MAC is field 1.
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPatch,
+          "/ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/1",
+          JsonIs(R"json(
+{
+  "auto": false,
+  "valueType": "valueList",
+  "valueList": [
+    "00:00:00:00:00:01",
+    "00:00:00:00:00:02"
+  ]
+})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetFieldValueList("/ixnetwork/traffic/trafficItem/1",
+                              /*stack_index=*/1, /*field_index=*/1,
+                              {"00:00:00:00:00:01", "00:00:00:00:00:02"},
+                              mock_generic_testbed));
+}
+
+}  // namespace
 }  // namespace pins_test::ixia
