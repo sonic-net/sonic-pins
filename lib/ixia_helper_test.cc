@@ -707,6 +707,91 @@ TEST(IxiaHelper, SetUpTrafficItemMultipleSrcsAndDstsRaw) {
       mock_generic_testbed, /*is_raw_pkt=*/true));
 }
 
+TEST(IxiaHelper, SetUpTrafficItem) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPost, "/ixnetwork/traffic/trafficItem",
+                  JsonIs(R"json([{"name": "Traffic Item 1"}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"}]})json"}));
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/endpointSet",
+          JsonIs(R"json(
+[{
+  "sources": ["/vport/1/protocols"],
+  "destinations": ["/vport/2/protocols"]
+}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 201}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPatch,
+                  "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/tracking",
+                  JsonIs(R"json({"trackBy": ["flowGroup0"]})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetUpTrafficItem(/*vref_src=*/"/vport/1", /*vref_dst=*/"/vport/2",
+                             "Traffic Item 1", mock_generic_testbed));
+}
+
+// This matcher is used to check that the payload for the traffic item POST has
+// a name that starts with the given prefix.
+MATCHER_P(JsonNameStartsWith, prefix, "") {
+  absl::StatusOr<nlohmann::json> json = json_yang::ParseJson(arg);
+  if (!json.ok()) {
+    *result_listener << "Failed to parse JSON: " << arg;
+    return false;
+  }
+  if (!json->is_array()) {
+    *result_listener << "JSON is not an array: " << json_yang::DumpJson(*json);
+    return false;
+  }
+  if (json->size() != 1) {
+    *result_listener << "JSON is not a single element array: "
+                     << json_yang::DumpJson(*json);
+    return false;
+  }
+  return ExplainMatchResult(StartsWith(prefix), (*json)[0]["name"],
+                            result_listener);
+}
+
+TEST(IxiaHelper, SetUpTrafficItemGeneratedName) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  // Because the name is generated, it appends a random suffix to the name.
+  // We can only match the prefix.
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(thinkit::RequestType::kPost,
+                                    "/ixnetwork/traffic/trafficItem",
+                                    JsonNameStartsWith("/vport/1 -> /vport/2")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"}]})json"}));
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/endpointSet",
+          JsonIs(R"json(
+[{
+  "sources": ["/vport/1/protocols"],
+  "destinations": ["/vport/2/protocols"]
+}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 201}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPatch,
+                  "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/tracking",
+                  JsonIs(R"json({"trackBy": ["flowGroup0"]})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetUpTrafficItem(/*vref_src=*/"/vport/1", /*vref_dst=*/"/vport/2",
+                             mock_generic_testbed));
+}
+
 TEST(IxiaHelper, StartTrafficItem) {
   thinkit::MockGenericTestbed mock_generic_testbed;
   EXPECT_CALL(
