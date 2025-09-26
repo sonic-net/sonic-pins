@@ -14,12 +14,17 @@
 #ifndef PINS_GUTIL_OVERLOADED_H_
 #define PINS_GUTIL_OVERLOADED_H_
 
+#include <utility>
+
 namespace gutil {
 
 // Useful in conjunction with {std,absl}::visit.
 // See https://en.cppreference.com/w/cpp/utility/variant/visit.
 template <class... Ts> struct Overload : Ts... {
   using Ts::operator()...;
+  // Before C++20, we need a constructor to allow for using parenthesis instead
+  // of curly braces.
+  explicit Overload(Ts... ts) : Ts(std::move(ts))... {}
 };
 template <class... Ts> Overload(Ts...) -> Overload<Ts...>;
 
