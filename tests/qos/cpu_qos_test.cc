@@ -126,68 +126,31 @@ absl::Status NsfRebootHelper(Testbed &testbed,
 // Set up the switch to punt packets to CPU.
 absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
                             const netaddr::Ipv4Address &dst_ip,
-                            absl::string_view p4_default_queue,
                             absl::string_view p4_queue,
                             const pdpi::IrP4Info &ir_p4info,
                             pdpi::P4RuntimeSession &p4_session) {
-  if (ir_p4info.tables_by_name().contains("acl_ingress_qos_table")) {
-    auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-        R"pb(
-          acl_ingress_table_entry {
-            match {
-              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
-              is_ipv4 { value: "0x1" }
-              dst_ip { value: "$1" mask: "255.255.255.255" }
-            }
-            action { acl_trap { qos_queue: "$2" } }
-            priority: 1
+  auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+      R"pb(
+        acl_ingress_table_entry {
+          match {
+            dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+            is_ipv4 { value: "0x1" }
+            dst_ip { value: "$1" mask: "255.255.255.255" }
           }
-        )pb",
-        dmac.ToString(), dst_ip.ToString(), p4_default_queue));
-    std::vector<::p4::v1::Entity> pi_entities;
-    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
-                     pdpi::PdTableEntryToPiEntity(ir_p4info, acl_entry));
+          action { acl_trap { qos_queue: "$2" } }
+          priority: 1
+        }
+      )pb",
+      dmac.ToString(), dst_ip.ToString(), p4_queue));
+  p4::v1::TableEntry pi_entry;
+  ASSIGN_OR_RETURN(
+      pi_entry, pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
+      _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
+                     << acl_entry.DebugString() << " error: ");
 
-    auto qos_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-        R"pb(
-          acl_ingress_qos_table_entry {
-            match {
-              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
-              is_ipv4 { value: "0x1" }
-            }
-            action { set_cpu_queue { cpu_queue: "$1" } }
-            priority: 4400
-          }
-        )pb",
-        dmac.ToString(), p4_queue));
-    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
-                     pdpi::PdTableEntryToPiEntity(ir_p4info, qos_entry));
-    return pdpi::InstallPiEntities(&p4_session, ir_p4info, pi_entities);
-  } else {
-    auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-        R"pb(
-          acl_ingress_table_entry {
-            match {
-              dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
-              is_ipv4 { value: "0x1" }
-              dst_ip { value: "$1" mask: "255.255.255.255" }
-            }
-            action { acl_trap { qos_queue: "$2" } }
-            priority: 1
-          }
-        )pb",
-        dmac.ToString(), dst_ip.ToString(), p4_queue));
-    p4::v1::TableEntry pi_entry;
-    ASSIGN_OR_RETURN(
-        pi_entry, pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry),
-        _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
-                       << acl_entry.DebugString() << " error: ");
-
-    LOG(INFO) << "Installing Table Entry: " << acl_entry.ShortDebugString();
-    return gutil::StatusBuilder(
-               pdpi::InstallPiTableEntry(&p4_session, pi_entry))
-           << "Failed to install entry: " << acl_entry.ShortDebugString();
-  }
+  LOG(INFO) << "Installing Table Entry: " << acl_entry.ShortDebugString();
+  return gutil::StatusBuilder(pdpi::InstallPiTableEntry(&p4_session, pi_entry))
+         << "Failed to install entry: " << acl_entry.ShortDebugString();
 }
 
 packetlib::Packet BuildPuntToCpuPacket(const netaddr::MacAddress &dmac,
@@ -1341,7 +1304,6 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
   constexpr uint32_t kBaseIp = 0x0A000000;  // 10.0.0.0
   constexpr int kBasePackets = 10;
   int queue_index = 0;
-  std::string default_queue;
   for (const auto &[name, state] : initial_state.queues()) {
     if (!IsValidCpuQueue(name)) continue;
     if (absl::StartsWith(name, "INBAND_")) continue;
@@ -1349,19 +1311,15 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
         .packets = kBasePackets + queue_index,
         .dst_ip = netaddr::Ipv4Address(std::bitset<32>(kBaseIp + queue_index)),
     });
-    if (default_queue.empty()) {
-      default_queue = name;
-    }
     ++queue_index;
   }
   ASSERT_FALSE(test_cases.empty());
 
   // Set up the switch dataplane with the CPU Queue name.
+  constexpr netaddr::MacAddress kDestMac(std::bitset<48>(0x0A0000000000));
   for (const auto &[queue, setup] : test_cases) {
-    netaddr::MacAddress kDestMac(
-        std::bitset<48>(0x0A0000000000 + setup.dst_ip.ToBitset().to_ulong()));
-    ASSERT_OK(SetUpPuntToCPU(kDestMac, setup.dst_ip, default_queue, queue,
-                             ir_p4info, *sut_p4rt_session));
+    ASSERT_OK(SetUpPuntToCPU(kDestMac, setup.dst_ip, queue, ir_p4info,
+                             *sut_p4rt_session));
   }
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
@@ -1380,8 +1338,6 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
   // Inject the test packets
   constexpr netaddr::Ipv4Address kSrcIp(std::bitset<32>(0x0B000000));
   for (const auto &[queue, setup] : test_cases) {
-    netaddr::MacAddress kDestMac(
-        std::bitset<48>(0x0A0000000000 + setup.dst_ip.ToBitset().to_ulong()));
     packetlib::Packet packet =
         BuildPuntToCpuPacket(kDestMac, kSrcIp, setup.dst_ip);
 
@@ -2364,7 +2320,6 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
                                         /*port=*/"CPU", sut_gnmi_config));
   int queue_index = 0;
-  std::string default_queue_name;
   for (auto &[queue_name, queue_info] : queues) {
     if (!IsValidCpuQueue(queue_info.p4_queue_name)) continue;
     if (absl::StartsWith(queue_info.p4_queue_name, "INBAND_")) continue;
@@ -2373,20 +2328,14 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
       continue;
     }
 
-    if (default_queue_name.empty()) {
-      default_queue_name = queue_name;
-    }
-
     LOG(INFO) << "\n\n\nTesting Queue : " << queue_name
               << "\n===================\n\n\n";
 
     constexpr uint32_t kBaseIp = 0xac000001;
     auto kDestIp = netaddr::Ipv4Address(std::bitset<32>(kBaseIp + queue_index));
-    ASSERT_OK(pdpi::ClearEntities(*sut_p4_session));
     // Install punt entries on control switch
-    ASSERT_OK(SetUpPuntToCPU(dest_mac, kDestIp, default_queue_name,
-                             queue_info.p4_queue_name, ir_p4info,
-                             *sut_p4_session));
+    ASSERT_OK(SetUpPuntToCPU(dest_mac, kDestIp, queue_info.p4_queue_name,
+                             ir_p4info, *sut_p4_session));
 
     ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref, kDestIp.ToString(),
                                            *generic_testbed));
