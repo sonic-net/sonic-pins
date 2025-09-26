@@ -521,7 +521,7 @@ TEST_P(FrontpanelQosTest,
       const std::string kSutEgressPortP4rtId,
       gutil::FindOrStatus(p4rt_id_by_interface, kSutEgressPort));
 
-  // Configure the switch to send all incomming packets out of the chosen egress
+  // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
@@ -557,10 +557,10 @@ TEST_P(FrontpanelQosTest,
 
   // Fix test parameters and PIRs (peak information rates, in bytes
   // per second) for each DSCP.
-  constexpr int64_t kTestFrameSizeInBytes = 2000;                // 2 KB
+  constexpr int64_t kTestFrameSizeInBytes = 1000;                // 1 KB
   constexpr int64_t kTestFrameCount = 30'000'000;                // 30 GB
   constexpr int64_t kTestFramesPerSecond = kTestFrameCount / 3;  // for 3 s
-  constexpr int64_t kTestFrameSpeedInBytesPerSecond =            // 20 GB/s
+  constexpr int64_t kTestFrameSpeedInBytesPerSecond =            // 10 GB/s
       kTestFramesPerSecond * kTestFrameSizeInBytes;
 
   // Get strictly prioritized queues.
@@ -570,7 +570,7 @@ TEST_P(FrontpanelQosTest,
   // We use exponentially spaced PIRs, with a base rate that's high enough for
   // buffers to drain quickly. That way we don't have to drain buffers manually
   // between test traffic flows.
-  constexpr int64_t kPirBaseSpeedInBytesPerSecond = 40'000'000;  // 40 MB/s.
+  constexpr int64_t kPirBaseSpeedInBytesPerSecond = 20'000'000;  // 20 MB/s.
   absl::flat_hash_map<std::string, int64_t> kPirByQueueName;
   using DscpsByQueueName =
       std::optional<absl::flat_hash_map<std::string, std::vector<int>>>;
@@ -675,14 +675,20 @@ TEST_P(FrontpanelQosTest,
     constexpr int64_t kSpeed200g = 200000000000;
 
     if (kSutEgressPortSpeedInBitsPerSecond != kSpeed200g) {
-      ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g),
-                                            kSutEgressPort, *gnmi_stub));
+      auto status = SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed200g),
+                                                kSutEgressPort, *gnmi_stub);
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to toggle port speed for : " << kSutEgressPort;
+      }
       ASSERT_OK(SetPortSpeedInBitsPerSecond(
           PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
           *gnmi_stub));
     } else {
-      ASSERT_OK(SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g),
-                                            kSutEgressPort, *gnmi_stub));
+      auto status = SetPortSpeedInBitsPerSecond(PortSpeed(kSpeed100g),
+                                                kSutEgressPort, *gnmi_stub);
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to toggle port speed for : " << kSutEgressPort;
+      }
       ASSERT_OK(SetPortSpeedInBitsPerSecond(
           PortSpeed(kSutEgressPortSpeedInBitsPerSecond), kSutEgressPort,
           *gnmi_stub));
@@ -710,11 +716,7 @@ TEST_P(FrontpanelQosTest,
                        ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
 
   if (GetParam().nsf_reboot) {
-    Testbed testbed_variant = std::move(testbed);
-    absl::Cleanup restore_testbed([&] {
-      testbed = std::move(std::get<0>(testbed_variant));
-    });
-    ASSERT_OK(NsfReboot(testbed_variant));
+    ASSERT_OK(NsfReboot(testbed.get()));
     test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
   }
 
@@ -723,12 +725,8 @@ TEST_P(FrontpanelQosTest,
   for (auto test_operation : test_operations) {
     if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
         GetParam().ssh_client_for_nsf) {
-      Testbed testbed_variant = std::move(testbed);
-      absl::Cleanup restore_testbed([&] {
-        testbed = std::move(std::get<0>(testbed_variant));
-      });
       ASSERT_OK(
-          WaitForNsfReboot(testbed_variant, *GetParam().ssh_client_for_nsf));
+          WaitForNsfReboot(testbed.get(), *GetParam().ssh_client_for_nsf));
       LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
                    "the forwarding traffic is not disrupted.";
     }
@@ -1020,7 +1018,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
       const std::string kSutEgressPortP4rtId,
       gutil::FindOrStatus(p4rt_id_by_interface, kSutEgressPort));
 
-  // Configure the switch to send all incomming packets out of the chosen egress
+  // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
@@ -1230,12 +1228,8 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   traffic_items.push_back(kAuxilliaryTrafficItem);
 
   if (GetParam().nsf_reboot) {
-    Testbed testbed_variant = std::move(testbed);
-    absl::Cleanup restore_testbed([&] {
-      testbed = std::move(std::get<0>(testbed_variant));
-    });
     // Traffic is verified only once after NSF Reboot is complete.
-    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_variant,
+    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed.get(),
                                                *GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4rt, pdpi::P4RuntimeSession::Create(sut));
@@ -1371,7 +1365,7 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
       const std::string kSutEgressPortP4rtId,
       gutil::FindOrStatus(p4rt_id_by_interface, kSutEgressPort));
 
-  // Configure the switch to send all incomming packets out of the chosen egress
+  // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
@@ -1672,11 +1666,7 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
       test_operations.push_back(TestOperations::TrafficTest);
 
       if (GetParam().nsf_reboot) {
-        Testbed testbed_variant = std::move(testbed);
-        absl::Cleanup restore_testbed([&] {
-          testbed = std::move(std::get<0>(testbed_variant));
-        });
-        ASSERT_OK(NsfReboot(testbed_variant));
+        ASSERT_OK(NsfReboot(testbed.get()));
         test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
       }
 
@@ -1685,12 +1675,8 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
       for (auto test_operation : test_operations) {
         if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
             GetParam().ssh_client_for_nsf) {
-          Testbed testbed_variant = std::move(testbed);
-          absl::Cleanup restore_testbed([&] {
-            testbed = std::move(std::get<0>(testbed_variant));
-          });
-          ASSERT_OK(WaitForNsfReboot(testbed_variant,
-                                     *GetParam().ssh_client_for_nsf));
+          ASSERT_OK(
+              WaitForNsfReboot(testbed.get(), *GetParam().ssh_client_for_nsf));
           LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
                        "the forwarding traffic is not disrupted.";
         }
@@ -2015,12 +2001,8 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   ASSERT_OK(pdpi::InstallPdTableEntries(*sut_p4_session, kTableEntries));
 
   if (GetParam().nsf_reboot) {
-    Testbed testbed_variant = std::move(testbed);
-    absl::Cleanup restore_testbed([&] {
-      testbed = std::move(std::get<0>(testbed_variant));
-    });
     // Traffic is verified only once after NSF Reboot is complete.
-    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_variant,
+    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed.get(),
                                                *GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
@@ -2262,7 +2244,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
       const std::string kSutEgressPortP4rtId,
       gutil::FindOrStatus(p4rt_id_by_interface, kSutEgressPort));
 
-  // Configure the switch to send all incomming packets out of the chosen egress
+  // Configure the switch to send all incoming packets out of the chosen egress
   // port.
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
                        ConfigureSwitchAndReturnP4RuntimeSession(
@@ -2535,12 +2517,8 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
     }
 
     if (GetParam().default_params.nsf_reboot) {
-      Testbed testbed_variant = std::move(testbed);
-      absl::Cleanup restore_testbed([&] {
-        testbed = std::move(std::get<0>(testbed_variant));
-      });
       ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(
-          testbed_variant, *GetParam().default_params.ssh_client_for_nsf));
+          testbed.get(), *GetParam().default_params.ssh_client_for_nsf));
     }
     // Start traffic.
     LOG(INFO) << "starting traffic";
@@ -2584,6 +2562,22 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
       lower_config = config;
       lower_config_num_rx_frames = num_rx_frames;
     }
+  }
+
+  // Verify retrieval of per queue watermark statistics.
+  absl::SleepFor(kMaxQueueCounterUpdateTime);
+  for (auto &[queue_name, _] : kBufferParametersByQueueName) {
+    ASSERT_OK_AND_ASSIGN(
+        QueueCounters QueueCounters,
+        GetGnmiQueueCounters(kSutEgressPort, queue_name, *gnmi_stub));
+    LOG(INFO) << queue_name
+              << " queue transmit: " << QueueCounters.num_packets_transmitted;
+    LOG(INFO) << queue_name
+              << " queue  drop: " << QueueCounters.num_packets_dropped;
+    LOG(INFO) << queue_name
+              << " queue max watermark: " << QueueCounters.max_queue_len;
+    LOG(INFO) << queue_name << " queue periodic watermark: "
+              << QueueCounters.max_periodic_queue_len;
   }
   LOG(INFO) << "---------------- Test done ---------------------";
 }

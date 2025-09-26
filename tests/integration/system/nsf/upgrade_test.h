@@ -49,15 +49,18 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // Note: In case the flow programmer returns a gNMI config, then that will
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
+  // A boolean `continue_on_failure` is passed as reference to continue even in
+  // case of failures during upgrade.
   absl::Status NsfUpgradeOrReboot(NsfUpgradeScenario scenario,
-                                  ImageConfigParams& curr_image_config,
-                                  ImageConfigParams& next_image_config,
-                                  bool enable_interface_validation_during_nsf);
+                                  ImageConfigParams &curr_image_config,
+                                  ImageConfigParams &next_image_config,
+                                  bool enable_interface_validation_during_nsf,
+                                  bool &continue_on_failure);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;
   TestbedInterface testbed_interface_;
-  Testbed testbed_;
+  TestbedHolder testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
 
