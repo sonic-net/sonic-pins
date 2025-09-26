@@ -21,27 +21,18 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "gtest/gtest.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
+#include "tests/integration/system/nsf/interfaces/scenario.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
-
-// NSF Upgrade test scenarios related to gNMI config push and P4 flow
-// programming.
-enum class NsfUpgradeScenario {
-  kNoConfigPush,
-  kOnlyConfigPush,
-  kConfigPushBeforeAclFlowProgram,
-  kConfigPushAfterAclFlowProgram,
-  kNumNsfUpgradeScenarios,
-};
 
 class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
  protected:
