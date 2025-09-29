@@ -34,7 +34,37 @@ absl::StatusOr<std::string> CreateLag(absl::Span<const std::string> vports,
     return absl::InternalError(
         absl::StrCat("Failed to create LAG: ", response.response));
   }
-  return ExtractHref(response);
+  ASSIGN_OR_RETURN(std::string lag_href, ExtractHref(response));
+
+  // Add LACP protocol to the LAG.
+  ASSIGN_OR_RETURN(
+      response, testbed.SendRestRequestToIxia(
+                    thinkit::RequestType::kPost,
+                    absl::StrCat(lag_href, "/protocolStack"), /*payload=*/""));
+  if (response.response_code != 201) {
+    return absl::InternalError(absl::StrCat(
+        "Failed to add protocol stack to LAG: ", response.response));
+  }
+  ASSIGN_OR_RETURN(
+      response,
+      testbed.SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          absl::StrCat(lag_href, "/protocolStack/ethernet"), /*payload=*/""));
+  if (response.response_code != 201) {
+    return absl::InternalError(
+        absl::StrCat("Failed to add Ethernet to LAG: ", response.response));
+  }
+  ASSIGN_OR_RETURN(
+      response,
+      testbed.SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          absl::StrCat(lag_href, "/protocolStack/ethernet/1/lagportlacp"),
+          /*payload=*/""));
+  if (response.response_code != 201) {
+    return absl::InternalError(
+        absl::StrCat("Failed to add LACP to LAG: ", response.response));
+  }
+  return lag_href;
 }
 
 absl::StatusOr<std::string> CreateTopology(std::string_view port,
