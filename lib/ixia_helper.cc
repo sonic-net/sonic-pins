@@ -87,7 +87,7 @@ absl::StatusOr<int> FindIdByField(const thinkit::HttpResponse &response,
 // which in this case would return
 // href = /api/v1/sessions/82/ixnetwork/availableHardware/chassis/1
 //
-absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp) {
+absl::StatusOr<std::string> ExtractHref(const thinkit::HttpResponse &resp) {
   std::string href = "";
   Json config_json = Json::parse(resp.response);
   auto inner_json = config_json["links"];
@@ -260,23 +260,11 @@ absl::StatusOr<std::string> IxiaSession(
   return tref;
 }
 
-absl::StatusOr<std::string> SetUpTrafficItem(
-    absl::string_view vref_src, absl::string_view vref_dst,
-    thinkit::GenericTestbed &generic_testbed) {
-  absl::BitGen gen;
-  std::string traffic_name = absl::StrCat(vref_src, " -> ", vref_dst, " ",
-                                          absl::Uniform<uint32_t>(gen));
-  return SetUpTrafficItem(vref_src, vref_dst, traffic_name, generic_testbed);
-}
-
-// SetupTrafficItem - Sets up a traffic item with source and destination port.
-// Returns either an error or the
-// href string for the first traffic item, e.g. something like
-// "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1"
-absl::StatusOr<std::string> SetUpTrafficItem(
-    absl::string_view vref_src, absl::string_view vref_dst,
-    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed,
-    bool is_raw_pkt) {
+absl::StatusOr<std::string> SetUpTrafficItemWithMultipleSrcsAndDsts(
+    const absl::Span<const std::string> sources,
+    const absl::Span<const std::string> destinations,
+    const std::string_view traffic_name, thinkit::GenericTestbed &testbed,
+    const bool is_raw_pkt) {
   // POST to /traffic/trafficItem with:
   // [{"name":"Unicast Traffic"}]
   constexpr absl::string_view kTrafficPath = "/ixnetwork/traffic/trafficItem";
@@ -291,9 +279,9 @@ absl::StatusOr<std::string> SetUpTrafficItem(
   LOG(INFO) << "path " << kTrafficPath;
   LOG(INFO) << "json " << kTrafficJson;
   ASSIGN_OR_RETURN(
-      thinkit::HttpResponse traffic_response,
-      generic_testbed.SendRestRequestToIxia(thinkit::RequestType::kPost,
-                                            kTrafficPath, kTrafficJson.dump()));
+      const thinkit::HttpResponse traffic_response,
+      testbed.SendRestRequestToIxia(thinkit::RequestType::kPost, kTrafficPath,
+                                    kTrafficJson.dump()));
   LOG(INFO) << "Received code " << traffic_response.response_code;
   LOG(INFO) << "Received response "
             << FormatJsonBestEffort(traffic_response.response);
@@ -305,20 +293,26 @@ absl::StatusOr<std::string> SetUpTrafficItem(
   // something like
   // {"links":[{"rel":"self","method":"GET","href":"/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1"}]}
   // and we need to extract /ixnetwork/traffic/trafficItem/1 for use
-  ASSIGN_OR_RETURN(std::string tref, ExtractHref(traffic_response));
+  ASSIGN_OR_RETURN(const std::string tref, ExtractHref(traffic_response));
   LOG(INFO) << "tref = " << tref;
+
+    // For raw traffic, vport URL needs to be appended with /protocols.
+  const auto adjust_raw = [=](std::string *out, std::string_view vport) {
+    absl::StrAppend(out, vport, "/protocols");
+  };
 
   // POST to /ixnetwork/traffic/trafficItem/1/endpointSet with
   // [{"sources":["/api/v1/sessions/1/ixnetwork/vport/2/protocols"]}]
-  std::string endp_path = tref + "/endpointSet";
-  std::string endp_json = absl::StrCat("[{\"sources\":[\"", vref_src,
-                                       "/protocols\"],\"destinations\":[\"",
-                                       vref_dst, "/protocols\"]}]");
+  const std::string endp_path = absl::StrCat(tref, "/endpointSet");
+  const std::string endp_json = absl::Substitute(
+      R"json([{ "sources": ["$0"], "destinations": ["$1"] }])json",
+      absl::StrJoin(sources, R"(",")", adjust_raw),
+      absl::StrJoin(destinations, R"(",")", adjust_raw));
   LOG(INFO) << "path " << endp_path;
   LOG(INFO) << "json " << endp_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse endp_response,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kPost, endp_path, endp_json));
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse endp_response,
+                   testbed.SendRestRequestToIxia(thinkit::RequestType::kPost,
+                                                 endp_path, endp_json));
   LOG(INFO) << "Received code " << endp_response.response_code;
   LOG(INFO) << "Received response "
             << FormatJsonBestEffort(endp_response.response);
@@ -328,14 +322,13 @@ absl::StatusOr<std::string> SetUpTrafficItem(
                                                endp_response.response));
   }
 
-  std::string trackby_path = tref + "/tracking";
-  std::string trackby_json = "{\"trackBy\":[\"flowGroup0\"]}";
+  const std::string trackby_path = absl::StrCat(tref, "/tracking");
+  const std::string trackby_json = "{\"trackBy\":[\"flowGroup0\"]}";
   LOG(INFO) << "path " << trackby_path;
   LOG(INFO) << "json " << trackby_json;
-  ASSIGN_OR_RETURN(
-      thinkit::HttpResponse trackby_response,
-      generic_testbed.SendRestRequestToIxia(thinkit::RequestType::kPatch,
-                                            trackby_path, trackby_json));
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse trackby_response,
+                   testbed.SendRestRequestToIxia(thinkit::RequestType::kPatch,
+                                                 trackby_path, trackby_json));
 
   LOG(INFO) << "Received code " << trackby_response.response_code;
   LOG(INFO) << "Received response "
@@ -346,6 +339,15 @@ absl::StatusOr<std::string> SetUpTrafficItem(
                                                trackby_response.response));
 
   return tref;
+}
+
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    thinkit::GenericTestbed &generic_testbed) {
+  absl::BitGen gen;
+  const std::string traffic_name = absl::StrCat(vref_src, " -> ", vref_dst, " ",
+                                                absl::Uniform<uint32_t>(gen));
+  return SetUpTrafficItem(vref_src, vref_dst, traffic_name, generic_testbed);
 }
 
 absl::Status DeleteTrafficItem(absl::string_view tref,
@@ -443,6 +445,9 @@ constexpr absl::string_view kApplyTrafficPath =
     "/ixnetwork/traffic/operations/apply";
 constexpr absl::string_view kApplyAllTrafficJson = R"({"arg1": "/traffic"})";
 
+constexpr std::string_view kRemoveProtocolPath =
+    "/ixnetwork/traffic/trafficItem/configElement/stack/operations/remove";
+
 // When `run_in_parallel` is true, we generate a single config to start all
 // traffics in `trefs` at once in one call, such as:
 // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
@@ -465,7 +470,7 @@ std::vector<std::string> GetTrefConfigs(
 }  // namespace
 
 absl::Status GenerateAndApplyTrafficItems(
-    absl::Span<const std::string> traffic_items,
+    const absl::Span<const std::string> traffic_items,
     thinkit::GenericTestbed &testbed) {
   if (traffic_items.empty()) {
     LOG(WARNING) << "No traffic items to generate and apply.";
@@ -489,7 +494,7 @@ absl::Status GenerateAndApplyTrafficItems(
                                 testbed);
 }
 
-absl::Status StartTrafficItem(absl::string_view traffic_item,
+absl::Status StartTrafficItem(const absl::string_view traffic_item,
                               thinkit::GenericTestbed &testbed) {
   return SendAndWaitForComplete(
       kStartTrafficPath, absl::Substitute(R"({"arg1":["$0"]})", traffic_item),
@@ -580,7 +585,7 @@ absl::Status StopTraffic(absl::Span<const std::string> trefs,
   return absl::OkStatus();
 }
 
-absl::Status SetFrameRate(absl::string_view tref, int64_t fps,
+absl::Status SetFrameRate(absl::string_view tref, float fps,
                           thinkit::GenericTestbed &generic_testbed) {
   // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/frameRate
   // with {"rate":NNN,"type":"framesPerSecond"}
@@ -660,10 +665,11 @@ absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
   return absl::OkStatus();
 }
 
-absl::Status SetFieldSingleValue(absl::string_view tref, int stack_index,
-                                 int field_index, absl::string_view value,
+absl::Status SetFieldSingleValue(const absl::string_view tref,
+                                 const int stack_index, const int field_index,
+                                 const absl::string_view value,
                                  thinkit::GenericTestbed &generic_testbed) {
-  std::string field_path = absl::Substitute(
+  const std::string field_path = absl::Substitute(
       "$0/configElement/1/stack/$1/field/$2", tref, stack_index, field_index);
 
   // Set the value to the given value.
@@ -671,7 +677,7 @@ absl::Status SetFieldSingleValue(absl::string_view tref, int stack_index,
       R"({"auto":false,"valueType":"singleValue","singleValue":"$0"})", value);
   LOG(INFO) << "path " << field_path;
   LOG(INFO) << "json " << value_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse response,
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse response,
                    generic_testbed.SendRestRequestToIxia(
                        thinkit::RequestType::kPatch, field_path, value_json));
   LOG(INFO) << "Returns " << response.response_code;
@@ -681,20 +687,52 @@ absl::Status SetFieldSingleValue(absl::string_view tref, int stack_index,
   return absl::OkStatus();
 }
 
-absl::Status SetFieldValueList(absl::string_view tref, int stack_index,
-                               int field_index,
-                               absl::Span<const std::string> value,
+absl::Status SetFieldValueList(const absl::string_view tref,
+                               const int stack_index, const int field_index,
+                               const absl::Span<const std::string> value,
                                thinkit::GenericTestbed &generic_testbed) {
-  std::string field_path = absl::Substitute(
+  const std::string field_path = absl::Substitute(
       "$0/configElement/1/stack/$1/field/$2", tref, stack_index, field_index);
 
   // Set the value to the array of values.
-  std::string value_json = absl::Substitute(
+  const std::string value_json = absl::Substitute(
       R"({"auto":false,"valueType":"valueList","valueList":["$0"]})",
       absl::StrJoin(value, R"(",")"));
   LOG(INFO) << "path " << field_path;
   LOG(INFO) << "json " << value_json;
-  ASSIGN_OR_RETURN(thinkit::HttpResponse response,
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, field_path, value_json));
+  LOG(INFO) << "Returns " << response.response_code;
+  if (response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetFieldRandomRange(const std::string_view tref,
+                                 const int stack_index, const int field_index,
+                                 const std::string_view min_value,
+                                 const std::string_view max_value,
+                                 const std::string_view step, const int seed,
+                                 const int count,
+                                 thinkit::GenericTestbed &generic_testbed) {
+  const std::string field_path = absl::StrCat(
+      tref, "/configElement/1/stack/", stack_index, "/field/", field_index);
+
+  // Set the value to the random range parameters.
+  const std::string value_json =
+      absl::Substitute(R"({"auto":false,
+                           "valueType": "repeatableRandomRange",
+                           "minValue": "$0",
+                           "maxValue": "$1",
+                           "stepValue": "$2",
+                           "seed": $3,
+                           "countValue": $4})",
+                       min_value, max_value, step, seed, count);
+  LOG(INFO) << "path " << field_path;
+  LOG(INFO) << "json " << value_json;
+  ASSIGN_OR_RETURN(const thinkit::HttpResponse response,
                    generic_testbed.SendRestRequestToIxia(
                        thinkit::RequestType::kPatch, field_path, value_json));
   LOG(INFO) << "Returns " << response.response_code;
@@ -991,6 +1029,16 @@ absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
     return absl::InternalError(
         absl::StrFormat("unexpected response: %u", sip_response.response_code));
   return absl::OkStatus();
+}
+
+absl::Status RemoveProtocolAtIndex(absl::string_view tref, int index,
+                                   thinkit::GenericTestbed &generic_testbed) {
+  std::string delete_json = absl::Substitute(
+      R"json({"arg1": "$0/configElement/1/stack/$1"})json", tref, index);
+  LOG(INFO) << "path " << kRemoveProtocolPath;
+  LOG(INFO) << "json " << delete_json;
+  return SendAndWaitForComplete(kRemoveProtocolPath, delete_json,
+                                generic_testbed);
 }
 
 absl::Status AppendTcp(absl::string_view tref,
