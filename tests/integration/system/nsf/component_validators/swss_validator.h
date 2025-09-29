@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_SWSS_VALIDATOR_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_SWSS_VALIDATOR_H_
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
@@ -29,18 +30,17 @@ namespace pins_test {
 // used by the NSF Upgrade tests.
 class SwssValidator : public ComponentValidator {
  public:
-   absl::Status OnInit(absl::string_view version, const Testbed &testbed,
-                       thinkit::SSHClient &ssh_client) override {
-     LOG(INFO) << "Swss Init";
-     return absl::OkStatus();
-   }
-   absl::Status OnFlowProgram(absl::string_view version, const Testbed &testbed,
-                              thinkit::SSHClient &ssh_client) override {
-     LOG(INFO) << "Swss Flow Program";
-     return absl::OkStatus();
-   }
-   absl::Status OnNsfReboot(absl::string_view version, const Testbed &testbed,
-                            thinkit::SSHClient &ssh_client) override;
+  absl::Status OnImageCopy(absl::string_view version, const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
+  absl::Status OnNsfReboot(absl::string_view version, const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
+
+ private:
+  absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
+                                            const Testbed& testbed,
+                                            thinkit::SSHClient& ssh_client);
+
+  absl::flat_hash_set<absl::string_view> allowlist_;
 };
 
 }  // namespace pins_test
