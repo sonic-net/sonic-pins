@@ -2056,7 +2056,7 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
     pins_test::ImageConfigParams image_config_params{
         .gnmi_config = gnmi_config_with_sflow_,
     };
-    ASSERT_OK(pins_test::DoNsfRebootAndWaitForSwitchReady(
+    ASSERT_OK(pins_test::DoNsfRebootAndWaitForSwitchReadyOrRecover(
         testbed_.get(), *ssh_client_, &image_config_params));
     LOG(INFO) << "NSF reboot finished.";
   }
@@ -2544,7 +2544,7 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
   pins_test::ImageConfigParams image_config_params{
       .gnmi_config = std::string(gnmi_config),
   };
-  RETURN_IF_ERROR(pins_test::DoNsfRebootAndWaitForSwitchReady(
+  RETURN_IF_ERROR(pins_test::DoNsfRebootAndWaitForSwitchReadyOrRecover(
       &testbed, *GetParam().ssh_client, &image_config_params));
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"post_nsf_", testbed.Environment());

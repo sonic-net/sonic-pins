@@ -26,7 +26,6 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
@@ -233,8 +232,7 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
     }
   }
   // Final sanity check.
-  absl::Status switch_ready_status = SwitchReady(testbed->Sut());
-  ASSERT_OK(switch_ready_status);
+  ASSERT_OK(SwitchReady(testbed->Sut()));
 }
 
 }  // namespace pins_test

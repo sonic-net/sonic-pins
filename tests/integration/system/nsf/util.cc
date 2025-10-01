@@ -482,25 +482,35 @@ void TearDownTestbed(TestbedInterface& testbed_interface) {
   std::visit([](auto &&testbed) { testbed->TearDown(); }, testbed_interface);
 }
 
-absl::StatusOr<TestbedHolder> GetTestbed(TestbedInterface &testbed_interface) {
+absl::StatusOr<TestbedHolder> GetTestbed(TestbedInterface& testbed_interface,
+                                         bool is_inband_testbed) {
   return std::visit(
       gutil::Overload{
-          [](std::unique_ptr<thinkit::GenericTestbedInterface> &testbed)
+          [&](std::unique_ptr<thinkit::GenericTestbedInterface>& testbed)
               -> absl::StatusOr<TestbedHolder> {
             // Pick a testbed with SUT connected to a traffic generator, be it a
             // software (eg. on a host) or a hardware (eg. Ixia), on 2 ports,
             // one ingress and one egress port.
-            auto requirements =
+            if (is_inband_testbed) {
+              return testbed->GetTestbedWithRequirements(
+                  gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+                      R"pb(
+                        interface_requirements {
+                          count: 0
+                          interface_mode: DISCONNECTED
+                        }
+                      )pb"));
+            }
+            return testbed->GetTestbedWithRequirements(
                 gutil::ParseProtoOrDie<thinkit::TestRequirements>(
                     R"pb(
                       interface_requirements {
                         count: 2
                         interface_mode: TRAFFIC_GENERATOR
                       }
-                    )pb");
-            return testbed->GetTestbedWithRequirements(requirements);
+                    )pb"));
           },
-          [](std::unique_ptr<thinkit::MirrorTestbedInterface> &testbed)
+          [](std::unique_ptr<thinkit::MirrorTestbedInterface>& testbed)
               -> absl::StatusOr<TestbedHolder> {
             return &testbed->GetMirrorTestbed();
           }},
@@ -544,7 +554,6 @@ absl::Status InstallRebootPushConfig(
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_before_install_reboot,
       GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
-
   LOG(INFO) << "gNOI Install: Copying image to inactive partition";
   ASSIGN_OR_RETURN(
       std::string image_version,
@@ -562,7 +571,8 @@ absl::Status InstallRebootPushConfig(
   ASSIGN_OR_RETURN(auto sut_gnoi_os_stub, sut.CreateGnoiOsStub());
 
   // Wait for SSH and containers to be up before pushing config.
-  RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, false));
+  RETURN_IF_ERROR(
+      WaitForReboot(testbed, ssh_client, /*check_interfaces_up=*/false));
 
   LOG(INFO) << "gNOI install is complete.";
   LOG(INFO) << "Proceeding with config push on SUT.";
@@ -587,7 +597,7 @@ absl::Status ValidateTestbedState(
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
   std::vector<std::string> interfaces_to_validate;
-  if (interfaces.empty()) {
+  if (check_interfaces_up && interfaces.empty()) {
     interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
     interfaces = interfaces_to_validate;
   }
@@ -633,20 +643,26 @@ absl::Status NsfReboot(const Testbed &testbed) {
   return Reboot(RebootMethod::NSF, sut, env);
 }
 
-absl::Status WaitForReboot(const Testbed &testbed,
-                           thinkit::SSHClient &ssh_client,
-                           bool check_interfaces_up) {
+absl::Status WaitForReboot(const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client,
+                           bool check_interfaces_up,
+                           absl::Span<const std::string> interfaces) {
   LOG(INFO) << "Waiting for switch to go down and come back up";
   // Wait for switch to go down and come back up.
   thinkit::Switch& sut = GetSut(testbed);
+  std::vector<std::string> interfaces_to_validate;
+  if (check_interfaces_up && interfaces.empty()) {
+    interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
+    interfaces = interfaces_to_validate;
+  }
 
   RETURN_IF_ERROR(WaitForSwitchState(sut, SwitchState::kDown, kTurnDownTimeout,
                                      ssh_client));
-  return WaitForSwitchState(
-      sut,
-      check_interfaces_up ? SwitchState::kReady
-                          : SwitchState::kReadyWithoutInterfacesUp,
-      kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
+  return WaitForSwitchState(sut,
+                            check_interfaces_up
+                                ? SwitchState::kReady
+                                : SwitchState::kReadyWithoutInterfacesUp,
+                            kTurnUpTimeout, ssh_client, interfaces);
 }
 
 absl::Status
@@ -733,7 +749,8 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
                   "reboot.";
     RETURN_IF_ERROR(Reboot(RebootMethod::COLD, sut, env,
                            /*collect_debug_artifacts_before_reboot=*/false));
-    RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, check_interfaces_up));
+    RETURN_IF_ERROR(
+        WaitForReboot(testbed, ssh_client, check_interfaces_up, interfaces));
     return gutil::InternalErrorBuilder()
            << "NSF reboot failed. Switch recovered successfully through cold "
               "reboot.";
@@ -752,7 +769,8 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
 absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         absl::string_view gnmi_config,
                         const p4::config::v1::P4Info& p4_info,
-                        absl::string_view config_label, bool clear_config) {
+                        absl::string_view config_label, bool clear_config,
+                        bool is_inband_testbed) {
   // TestEnvironment.StoreTestArtifact.
   if (config_label.empty()) {
     LOG(INFO) << "Pushing config on " << thinkit_switch.ChassisName();
@@ -761,6 +779,16 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
               << " on chassis: " << thinkit_switch.ChassisName();
   }
   if (clear_config) {
+    // In case of inband testbeds, only gNMI config will be pushed initially.
+    // This is because, pushing P4Info along with gNMI config will delete the
+    // default route on the inband testbed and breaks the gNMI connection. It
+    // is necessary to install the P4 flows to re-establish the connectivity.
+    // Hence we skip the P4Info push for inband testbeds initially. Subsequently
+    // the P4Info will be pushed along with the P4 flows as part of flow
+    // programming.
+    if (is_inband_testbed) {
+      return PushGnmiConfig(thinkit_switch, gnmi_config);
+    }
     return ConfigureSwitchAndReturnP4RuntimeSession(thinkit_switch, gnmi_config,
                                                     p4_info)
         .status();
@@ -777,7 +805,8 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
 
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         thinkit::Switch& thinkit_switch,
-                        thinkit::SSHClient& ssh_client, bool clear_config) {
+                        thinkit::SSHClient& ssh_client, bool clear_config,
+                        bool is_inband_testbed) {
   // The gNMI configuration's device ID is dynamically updated with the actual
   // device ID of the target thinkit switch. This ensures successful config
   // convergence, as the switch-reported device ID matches the device ID used
@@ -786,9 +815,9 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
   // to convergence failures.
   const std::string gnmi_config = pins_test::UpdateDeviceIdInJsonConfig(
       image_config_param.gnmi_config, absl::StrCat(thinkit_switch.DeviceId()));
-  RETURN_IF_ERROR(PushConfig(thinkit_switch, gnmi_config,
-                             image_config_param.p4_info,
-                             image_config_param.config_label, clear_config));
+  RETURN_IF_ERROR(PushConfig(
+      thinkit_switch, gnmi_config, image_config_param.p4_info,
+      image_config_param.config_label, clear_config, is_inband_testbed));
   return absl::OkStatus();
 }
 

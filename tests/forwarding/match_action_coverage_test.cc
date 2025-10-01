@@ -259,10 +259,11 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
             (environment.MaskKnownFailures() && entry_triggers_known_bug)) &&
            absl::Now() < kDeadline);
   // If we timeout, we return an error.
-  if (!predicate(entity)) {
+  if (!predicate(entity) ||
+      (environment.MaskKnownFailures() && entry_triggers_known_bug)) {
     return gutil::DeadlineExceededErrorBuilder() << absl::Substitute(
-               "failed to generate an entry meeting the given predicate for "
-               "table '$0' within 10s",
+               "failed to generate an entry meeting the given predicate and "
+               "doesn't trigger a known bug for table '$0' within 10s",
                table_name);
   }
 
@@ -603,9 +604,32 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
     }
 
     LOG(INFO) << absl::StrCat("Adding auxiliary entry to ", table_name);
-    RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
-                        gen, session, config, state, environment, table_name,
-                        /*predicate=*/[](auto&) { return true; }))
+    RETURN_IF_ERROR(
+        GenerateAndInstallEntryThatMeetsPredicate(
+            gen, session, config, state, environment, table_name,
+            /*predicate=*/
+            [](const Entity& entity) {
+              // Checks that the multicast entry has replicas.
+              bool multicast_has_no_replicas =
+                  entity.has_packet_replication_engine_entry() &&
+                  entity.packet_replication_engine_entry()
+                      .has_multicast_group_entry() &&
+                  entity.packet_replication_engine_entry()
+                      .multicast_group_entry()
+                      .replicas()
+                      .empty();
+
+              // Check that the RIF entry does not have VLAN.
+              // Remove once tunnel encap entries can refer
+              // to RIFs with the `set_port_and_src_mac_and_vlan_id` action.
+              bool rif_has_vlan =
+                  entity.table_entry().table_id() ==
+                      ROUTING_ROUTER_INTERFACE_TABLE_ID &&
+                  entity.table_entry().action().action().action_id() ==
+                      ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID;
+
+              return !rif_has_vlan && !multicast_has_no_replicas;
+            }))
             .SetPrepend()
         << "while trying to generate entry for '" << table_name << "': ";
   }
