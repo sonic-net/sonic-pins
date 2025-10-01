@@ -262,7 +262,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // Perform NSF Reboot and validate switch state after reboot is completed.
   // Since the new config is not pushed yet, passing the existing config for
   // validation.
-  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(
+  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReadyOrRecover(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
   ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub(),
