@@ -174,8 +174,8 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
     ADD_FAILURE() << pre_nsf_link_flap_time.status().message();
   }
   LOG(INFO) << "Initiating NSF reboot";
-  ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(generic_testbed.get(),
-                                             *GetParam().ssh_client));
+  ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(generic_testbed.get(),
+                                                      *GetParam().ssh_client));
   LOG(INFO) << "Flap links after NSF Reboot.";
 
   // Flap links and report the time taken to flap all the links.
