@@ -118,14 +118,14 @@ constexpr absl::string_view kSflowToolName = "sflowtool";
 
 constexpr absl::string_view kSflowtoolLineFormatTemplate =
     "/etc/init.d/sflow-container exec '$0 -l -p $1 &"
-    " pid=$$!; sleep $2; kill -9 $$pid;'";
+    " pid=$$!; sleep $2; kill -SIGTERM $$pid;'";
 
 constexpr absl::string_view kSflowtoolLineFormatNonStopTemplate =
     "/etc/init.d/sflow-container exec '$0 -l -p $1' || true";
 
 constexpr absl::string_view kSflowtoolFullFormatTemplate =
     "/etc/init.d/sflow-container exec '$0 -p $1 &"
-    " pid=$$!; sleep $2; kill -9 $$pid;'";
+    " pid=$$!; sleep $2; kill -SIGTERM $$pid;'";
 
 constexpr absl::string_view kTcpdumpForTos =
     "tcpdump -c $0 -i lo -vv -eX udp and port $1";
@@ -566,7 +566,7 @@ void StopSflowtool(thinkit::SSHClient &ssh_client,
                    absl::string_view device_name,
                    absl::string_view sflowtool_name) {
   const std::string ssh_command =
-      absl::Substitute("kill -9 $$(pidof $0)", sflowtool_name);
+      absl::Substitute("kill -SIGTERM $$(pidof $0)", sflowtool_name);
   LOG(INFO) << "ssh command:" << ssh_command;
   ASSERT_OK_AND_ASSIGN(std::string kill_result,
                        ssh_client.RunCommand(device_name, ssh_command,
