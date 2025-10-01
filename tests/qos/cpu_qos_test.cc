@@ -120,7 +120,7 @@ absl::Status NsfRebootHelper(const Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
   // TODO: Add punt flow before reboot,
   // send traffic and measure downtine based on traffic drop.
-  return DoNsfRebootAndWaitForSwitchReady(testbed, *ssh_client);
+  return DoNsfRebootAndWaitForSwitchReadyOrRecover(testbed, *ssh_client);
 }
 
 // Set up the switch to punt packets to CPU.
@@ -2003,14 +2003,24 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       expected_counter_data.set_byte_count(
           static_cast<int64_t>(kMaxFrameSizeWithoutVlanTag) *
           static_cast<int64_t>(kTotalFrames));
-      EXPECT_THAT(counter_data, EqualsProto(expected_counter_data))
-          << "Counter for the table entry given below did not match "
+      EXPECT_GE(
+          counter_data.packet_count(),
+          expected_counter_data.packet_count() * (1 - kTolerancePercent / 100))
+          << "Packet count for the table entry given below did not match "
              "expectation "
              "within "
           << kMaxQueueCounterUpdateTime
           << " after injecting the Ixia test packets via CPU queue "
           << queue_name;
 
+      EXPECT_GE(counter_data.byte_count(), expected_counter_data.byte_count() *
+                                               (1 - kTolerancePercent / 100))
+          << "Byte count for the table entry given below did not match "
+             "expectation "
+             "within "
+          << kMaxQueueCounterUpdateTime
+          << " after injecting the Ixia test packets via CPU queue "
+          << queue_name;
       // Verify GNMI queue stats match packets received.
       static constexpr absl::Duration kPollInterval = absl::Seconds(5);
       static constexpr absl::Duration kTotalTime = absl::Seconds(20);

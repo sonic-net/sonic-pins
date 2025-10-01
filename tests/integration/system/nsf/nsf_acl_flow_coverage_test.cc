@@ -89,8 +89,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
       absl::StrCat(sut.ChassisName(), "p4flow_snapshot2_before_nsf.txt"),
       environment));
 
-  ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_, *ssh_client_,
-                                             &image_config_param));
+  ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(testbed_, *ssh_client_,
+                                                      &image_config_param));
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after NSF reboot";
