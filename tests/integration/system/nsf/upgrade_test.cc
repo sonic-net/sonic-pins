@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/flags/flag.h"
@@ -127,17 +128,18 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
 
-  absl::StatusOr<ReadResponse> p4_snapshot_1 =
+  absl::StatusOr<ReadResponse> p4_snapshot_before_flow_programming =
       TakeP4FlowSnapshot(GetSut(testbed_));
-  if (!p4_snapshot_1.ok()) {
-    AppendErrorStatus(overall_status,
-                      absl::InternalError(absl::StrFormat(
-                          "Failed to take P4 snapshot before programming flows "
-                          "and starting traffic: %s",
-                          p4_snapshot_1.status().message())));
+  if (!p4_snapshot_before_flow_programming.ok()) {
+    AppendErrorStatus(
+        overall_status,
+        absl::InternalError(absl::StrFormat(
+            "Failed to take P4 snapshot before programming flows "
+            "and starting traffic: %s",
+            p4_snapshot_before_flow_programming.status().message())));
   } else {
     if (!SaveP4FlowSnapshot(
-             *p4_snapshot_1,
+             *p4_snapshot_before_flow_programming,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_before_programming_flows_",
@@ -193,17 +195,17 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot before Upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
 
-  absl::StatusOr<ReadResponse> p4_snapshot_2 =
+  absl::StatusOr<ReadResponse> p4_snapshot_before_nsf_upgrade =
       TakeP4FlowSnapshot(GetSut(testbed_));
-  if (!p4_snapshot_2.ok()) {
+  if (!p4_snapshot_before_nsf_upgrade.ok()) {
     AppendErrorStatus(
         overall_status,
         absl::InternalError(absl::StrFormat(
             "Failed to take P4 snapshot before Upgrade and NSF reboot: %s",
-            p4_snapshot_2.status().message())));
+            p4_snapshot_before_nsf_upgrade.status().message())));
   } else {
     if (!SaveP4FlowSnapshot(
-             *p4_snapshot_2,
+             *p4_snapshot_before_nsf_upgrade,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_before_upgrade_and_nsf_reboot_",
@@ -301,17 +303,17 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
 
-  absl::StatusOr<ReadResponse> p4_snapshot_3 =
+  absl::StatusOr<ReadResponse> p4_snapshot_after_nsf_upgrade =
       TakeP4FlowSnapshot(GetSut(testbed_));
-  if (!p4_snapshot_3.ok()) {
+  if (!p4_snapshot_after_nsf_upgrade.ok()) {
     AppendErrorStatus(
         overall_status,
         absl::InternalError(absl::StrFormat(
             "Failed to take P4 snapshot after Upgrade and NSF reboot: %s",
-            p4_snapshot_3.status().message())));
+            p4_snapshot_after_nsf_upgrade.status().message())));
   } else {
     if (!SaveP4FlowSnapshot(
-             *p4_snapshot_3,
+             *p4_snapshot_after_nsf_upgrade,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_after_upgrade_and_nsf_reboot_",
@@ -459,17 +461,17 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
 
-  absl::StatusOr<ReadResponse> p4_snapshot_4 =
+  absl::StatusOr<ReadResponse> p4_snapshot_after_flow_clearing =
       TakeP4FlowSnapshot(GetSut(testbed_));
-  if (!p4_snapshot_4.ok()) {
+  if (!p4_snapshot_after_flow_clearing.ok()) {
     AppendErrorStatus(
         overall_status,
         absl::InternalError(absl::StrFormat(
             "Failed to take P4 snapshot after cleaning up flows: %s",
-            p4_snapshot_4.status().message())));
+            p4_snapshot_after_flow_clearing.status().message())));
   } else {
     if (!SaveP4FlowSnapshot(
-             *p4_snapshot_4,
+             *p4_snapshot_after_flow_clearing,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_after_clearing_flows_",
@@ -482,11 +484,13 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
     }
   }
 
-  if (p4_snapshot_1.ok() && p4_snapshot_4.ok()) {
+  if (p4_snapshot_before_flow_programming.ok() &&
+      p4_snapshot_after_flow_clearing.ok()) {
     LOG(INFO) << upgrade_path
               << ": Comparing P4 snapshots - Before Programming Flows Vs After "
                  "Clearing Flows";
-    status = CompareP4FlowSnapshots(*p4_snapshot_1, *p4_snapshot_4);
+    status = CompareP4FlowSnapshots(*p4_snapshot_before_flow_programming,
+                                    *p4_snapshot_after_flow_clearing);
     if (!status.ok()) {
       GetTestEnvironment(testbed_)
           .StoreTestArtifact(
@@ -507,11 +511,13 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
     }
   }
 
-  if (p4_snapshot_2.ok() && p4_snapshot_3.ok()) {
+  if (p4_snapshot_before_nsf_upgrade.ok() &&
+      p4_snapshot_after_nsf_upgrade.ok()) {
     LOG(INFO) << upgrade_path
               << ": Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs."
                  "After Upgrade + NSF Reboot";
-    status = CompareP4FlowSnapshots(*p4_snapshot_2, *p4_snapshot_3);
+    status = CompareP4FlowSnapshots(*p4_snapshot_before_nsf_upgrade,
+                                    *p4_snapshot_after_nsf_upgrade);
     if (!status.ok()) {
       GetTestEnvironment(testbed_)
           .StoreTestArtifact(
@@ -615,6 +621,7 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   upgrade_status = NsfUpgradeOrReboot(
       scenario, image_config_params.back(), image_config_params.back(),
       GetParam().enable_interface_validation_during_nsf, continue_on_failure);
+
   if (!upgrade_status.ok()) {
     error_msgs.push_back(absl::StrFormat(
         "%s -> %s: %s", image_config_params.back().image_version,

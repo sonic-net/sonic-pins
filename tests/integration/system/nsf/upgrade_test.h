@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "gtest/gtest.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
@@ -60,6 +61,7 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   TestbedHolder testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
+  absl::StatusOr<::p4::v1::ReadResponse> p4_snapshot_after_nsf_upgrade_;
 };
 
 }  // namespace pins_test
