@@ -609,6 +609,16 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
             gen, session, config, state, environment, table_name,
             /*predicate=*/
             [](const Entity& entity) {
+              // Checks that the multicast entry has replicas.
+              bool multicast_has_no_replicas =
+                  entity.has_packet_replication_engine_entry() &&
+                  entity.packet_replication_engine_entry()
+                      .has_multicast_group_entry() &&
+                  entity.packet_replication_engine_entry()
+                      .multicast_group_entry()
+                      .replicas()
+                      .empty();
+
               // Check that the RIF entry does not have VLAN.
               // Remove once tunnel encap entries can refer
               // to RIFs with the `set_port_and_src_mac_and_vlan_id` action.
@@ -618,7 +628,7 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
                   entity.table_entry().action().action().action_id() ==
                       ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID;
 
-              return !rif_has_vlan;
+              return !rif_has_vlan && !multicast_has_no_replicas;
             }))
             .SetPrepend()
         << "while trying to generate entry for '" << table_name << "': ";

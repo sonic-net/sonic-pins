@@ -42,12 +42,12 @@ namespace {
 
 const int kDefaultMtu = 9000;
 const int kDefaultPacketSize = 256;
-const int kFlowRate = 10;
 const int kFlowRateAtLinerate = 98;
 // RToR tests use L4 ports ranging from 0x3e00(15872) to 0x3eff(16127)
 // inclusively at the destination host.
 const int kFlowTcpDstPortRangeStart = 0x3e00;
 const int kFlowTcpDstPortRangeEnd = 0x3eff;
+const uint64_t kDefaultPacketsPerSecond = 22000;
 
 // Struct to hold the per-flow traffic metrics.
 // `traffic_outage` is the total duration of time the traffic was dropped during
@@ -170,11 +170,12 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
   flow->mutable_duration()->set_choice(otg::FlowDuration::Choice::continuous);
 
   // Set transmission rate.
-  flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
   if (enable_linerate_) {
+    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
     flow->mutable_rate()->set_percentage(kFlowRateAtLinerate);
   } else {
-    flow->mutable_rate()->set_percentage(kFlowRate);
+    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::pps);
+    flow->mutable_rate()->set_pps(kDefaultPacketsPerSecond);
   }
 
   // Set capture metrics.
