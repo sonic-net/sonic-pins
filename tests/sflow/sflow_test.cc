@@ -154,10 +154,10 @@ constexpr absl::string_view kVrfIdPrefix = "vrf-";
 // Used for sFLow collector.
 constexpr char kLocalLoopbackIpv6[] = "::1";
 
-// We need 800 samples/sec for 3 secs to trigger this back off. Let's use 1000
-// samples/sec which are larger values to make sure backoff could be triggered.
+// sFlow needs 800 samples/sec for 3 secs to trigger this back off. Use 1000
+// samples/sec and 10 secs to make sure backoff could be triggered.
 constexpr int kBackOffThresholdSamples = 1000;
-constexpr int kBackoffTrafficDurationSecs = 4;
+constexpr int kBackoffTrafficDurationSecs = 10;
 
 constexpr int kSflowOutPacketsTos = 0x80;
 constexpr absl::string_view kEtherTypeIpv4 = "0x0800";
@@ -1006,52 +1006,52 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       absl::StrCat(prefix, "ipv6_neigh_show.txt"), result));
 
   // APPL_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_db.txt"), result));
 
   // ASIC_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_asic_db.txt"), result));
 
   // CONFIG_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_config_db.txt"), result));
 
   // STATE_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 6 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 6 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_state_db.txt"), result));
 
   // APPL_STATE_DB
-  ASSERT_OK_AND_ASSIGN(
-      result, ssh_client->RunCommand(device_name,
-                                     /*command=*/
-                                     "ctr tasks exec --exec-id tmp db-con "
-                                     "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
-                                     absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result, ssh_client->RunCommand(
+                                   device_name,
+                                   /*command=*/
+                                   "ctr tasks exec --exec-id sflow_test db-con "
+                                   "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
+                                   absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_state_db.txt"), result));
 }
@@ -2677,6 +2677,12 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
             GetControlIrP4Info(), *control_p4_session_, testbed.Environment()));
         LOG(INFO) << "Finished sending packets from control switch after NSF.";
       });
+  absl::Cleanup clean_up([&traffic_thread, &notification] {
+    if (traffic_thread.joinable()) {
+      notification.Notify();
+      traffic_thread.join();
+    }
+  });
 
   // Push config with both control switch loopback0 IP and local loopback IP
   // collector.
