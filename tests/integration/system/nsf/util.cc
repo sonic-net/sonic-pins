@@ -597,7 +597,7 @@ absl::Status ValidateTestbedState(
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
   std::vector<std::string> interfaces_to_validate;
-  if (interfaces.empty()) {
+  if (check_interfaces_up && interfaces.empty()) {
     interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
     interfaces = interfaces_to_validate;
   }
@@ -643,20 +643,26 @@ absl::Status NsfReboot(const Testbed &testbed) {
   return Reboot(RebootMethod::NSF, sut, env);
 }
 
-absl::Status WaitForReboot(const Testbed &testbed,
-                           thinkit::SSHClient &ssh_client,
-                           bool check_interfaces_up) {
+absl::Status WaitForReboot(const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client,
+                           bool check_interfaces_up,
+                           absl::Span<const std::string> interfaces) {
   LOG(INFO) << "Waiting for switch to go down and come back up";
   // Wait for switch to go down and come back up.
   thinkit::Switch& sut = GetSut(testbed);
+  std::vector<std::string> interfaces_to_validate;
+  if (check_interfaces_up && interfaces.empty()) {
+    interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
+    interfaces = interfaces_to_validate;
+  }
 
   RETURN_IF_ERROR(WaitForSwitchState(sut, SwitchState::kDown, kTurnDownTimeout,
                                      ssh_client));
-  return WaitForSwitchState(
-      sut,
-      check_interfaces_up ? SwitchState::kReady
-                          : SwitchState::kReadyWithoutInterfacesUp,
-      kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
+  return WaitForSwitchState(sut,
+                            check_interfaces_up
+                                ? SwitchState::kReady
+                                : SwitchState::kReadyWithoutInterfacesUp,
+                            kTurnUpTimeout, ssh_client, interfaces);
 }
 
 absl::Status
@@ -743,7 +749,8 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
                   "reboot.";
     RETURN_IF_ERROR(Reboot(RebootMethod::COLD, sut, env,
                            /*collect_debug_artifacts_before_reboot=*/false));
-    RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, check_interfaces_up));
+    RETURN_IF_ERROR(
+        WaitForReboot(testbed, ssh_client, check_interfaces_up, interfaces));
     return gutil::InternalErrorBuilder()
            << "NSF reboot failed. Switch recovered successfully through cold "
               "reboot.";

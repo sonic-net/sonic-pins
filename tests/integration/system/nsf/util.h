@@ -183,9 +183,10 @@ absl::Status NsfReboot(const Testbed &testbed);
 
 // Waits for the SUT to cold reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
-absl::Status WaitForReboot(const Testbed &testbed,
-                           thinkit::SSHClient &ssh_client,
-                           bool check_interfaces_up = true);
+absl::Status WaitForReboot(const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client,
+                           bool check_interfaces_up = true,
+                           absl::Span<const std::string> interfaces = {});
 
 // Waits for the SUT to warm reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
