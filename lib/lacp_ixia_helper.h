@@ -116,7 +116,7 @@ struct LacpTrafficItemOptions {
 absl::StatusOr<std::string> CreateLacpTrafficItem(
     std::string_view vport, const LacpInfo& lacp_info,
     const LacpTrafficItemOptions& options, thinkit::GenericTestbed& testbed);
-  
+
 }  // namespace pins_test::ixia
 
 #endif  // PINS_LIB_LACP_IXIA_HELPER_H_
