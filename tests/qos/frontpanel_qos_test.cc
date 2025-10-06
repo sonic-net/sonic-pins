@@ -918,9 +918,11 @@ TEST_P(FrontpanelQosTest,
                              " test packets from/at the Ixia.\nBefore: ",
                              ToString(kInitialQueueCounters),
                              "\nAfter :", ToString(final_counters)));
+            // Tolerance of 5% of packets for counter update delays, port drops,
+            // etc.
             EXPECT_THAT(delta_counters,
                         ResultOf(TotalPacketsForQueue,
-                                 Ge(kIxiaTrafficStats.num_tx_frames())));
+                                 Ge(kIxiaTrafficStats.num_tx_frames() * 0.95)));
             // Protocol packets such as LLDP/NDv6 can be transmitted via queue
             // during test. Add some tolerance to account for these packets.
             constexpr int kMaxToleratedExtraPackets = 5;

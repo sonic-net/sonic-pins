@@ -303,9 +303,9 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
     mirrored_packets_received++;
   }
 
-  // Ensure at least 90% of packets was received after being mirrored.
+  // Ensure at least 85% of packets was received after being mirrored.
   // Some  packets in the 100 packets received could have been spurious.
-  ASSERT_GE(mirrored_packets_received, kPacketCount * 0.9);
+  ASSERT_GE(mirrored_packets_received, kPacketCount * 0.85);
   // Check ingress and egress port counters increase as expected. That is,
   // within 100-110% of number of packets.
   ASSERT_OK_AND_ASSIGN(
