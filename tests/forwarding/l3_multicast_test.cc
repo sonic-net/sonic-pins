@@ -982,8 +982,11 @@ TEST_P(L3MulticastTestFixture, ReplicatingNTimesToSamePortProducesNCopies) {
       .RegisterValue("@decremented_hop_limit", "0x4f")
       .RegisterValue("@decremented_ttl", "0x3f")
       .RegisterValue("@ipv4_dst", input_ipv4_address.ToString())
-      .RegisterValue("@payload_ipv4", dvaas::MakeTestPacketPayloadFromUniqueId(
-                                          unique_payload_ids++));
+      .RegisterValue(
+          "@payload_ipv4",
+          dvaas::MakeTestPacketTagFromUniqueId(
+              unique_payload_ids++,
+              "IPv4 multicast packet expected to hit multicast group 1"));
 
   // Build headers.
   repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
