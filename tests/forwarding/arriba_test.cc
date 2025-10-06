@@ -38,12 +38,12 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
 
-  ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
-                       dvaas::ValidateAgainstArribaTestVector(
-                           *configured_testbed.SutApi().p4rt,
-                           *configured_testbed.ControlSwitchApi().p4rt,
-                           GetParam().arriba_test_vector,
-                           GetParam().validation_params));
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      dvaas::ValidateAgainstArribaTestVector(
+          *configured_testbed.SutApi().p4rt,
+          *configured_testbed.ControlSwitchApi().p4rt,
+          GetParam().arriba_test_vector, GetParam().validation_params));
 
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(
       GetParam().validation_params.expected_minimum_success_rate));
