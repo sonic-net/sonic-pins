@@ -21,14 +21,23 @@
 #include <cstdint>
 #include <limits>
 #include <random>
+#include <string>
+#include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/random/distributions.h"
+#include "absl/status/status.h"
 #include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "glog/logging.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/packetlib/packetlib.h"

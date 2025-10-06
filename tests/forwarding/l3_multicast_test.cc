@@ -1217,7 +1217,7 @@ TEST_P(L3MulticastTestFixture, AddMulticastRifForUnknownPortFails) {
 
   EXPECT_THAT(InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, entities),
               StatusIs(absl::StatusCode::kUnknown,
-                       AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
+                       AllOf(HasSubstr("#1: FAILED_PRECONDITION"),
                              HasSubstr("[P4RT App] Cannot translate port "))));
 }
 
@@ -1435,10 +1435,6 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryWithInvalidIPv4AddressFails) {
 }
 
 TEST_P(L3MulticastTestFixture, DeleteRifWhileInUseFails) {
-  // TODO: Reenable once change available in release image.
-  GTEST_SKIP()
-      << "Skipping until can reenable when stack change reaches release image";
-
   const int kPortsToUseInTest = 2;
   ASSERT_OK_AND_ASSIGN(
       const std::vector<std::string> sut_ports_ids,
