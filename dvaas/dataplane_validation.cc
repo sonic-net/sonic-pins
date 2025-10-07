@@ -492,8 +492,6 @@ absl::Status AttachPacketTrace(
   return absl::OkStatus();
 }
 
-// Stores a given `packet_test_vector` as an ArribaTestVector using only the
-// entries that might be hit by the packet (according to its P4 packet trace).
 absl::Status StorePacketTestVectorAsArribaTestVector(
     const PacketTestVector &packet_test_vector,
     const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>
