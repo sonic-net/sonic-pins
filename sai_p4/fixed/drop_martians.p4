@@ -100,10 +100,7 @@ control drop_martians(in headers_t headers,
              IS_LOOPBACK_IPV4(headers.ipv4.dst_addr) ||
              IS_THIS_HOST_ON_THIS_NETWORK_IPV4(headers.ipv4.dst_addr) ||
              headers.ipv4.src_addr == 0 ||
-             headers.ipv4.dst_addr == 0)) ||
-
-        (headers.inner_ipv6.isValid() && headers.inner_ipv6.hop_limit == 0) ||
-        (headers.inner_ipv4.isValid() && headers.inner_ipv4.ttl == 0))
+             headers.ipv4.dst_addr == 0)))
        ) {
         mark_to_drop(standard_metadata);
     }
