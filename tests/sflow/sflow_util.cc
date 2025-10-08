@@ -293,6 +293,12 @@ absl::StatusOr<std::string> UpdateSflowConfig(
       sflow_collector_config["config"]["port"] = port;
       collector_json_array.push_back(sflow_collector_config);
     }
+
+    if (collector_json_array.size() > kSonicMaxCollector) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Number of collectors exceeds max allowed value of ",
+                       kSonicMaxCollector));
+    }
   }
 
   absl::btree_map<std::string, nlohmann::json> interface_name_to_config_json;
