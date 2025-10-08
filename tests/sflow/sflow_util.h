@@ -84,9 +84,11 @@ absl::Status VerifySflowStatesConverged(
     const absl::flat_hash_map<std::string, bool>& sflow_interfaces);
 
 // Updates `gnmi_config` with sFlow-related config and returns modified config
-// if success. The modified config would sort collector IPs and interface names
-// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` is
-// empty.
+// if success. It would remove existing sFlow collector config and then append
+// `collector_address_and_port` to config. The modified interface config would
+// be sorted by interface name order. Returns an InvalidArgumentError
+// if `agent_addr_ipv6` is empty or `collector_address_and_port` size exceeds
+// max allowed value.
 absl::StatusOr<std::string> UpdateSflowConfig(
 
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
