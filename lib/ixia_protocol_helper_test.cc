@@ -26,6 +26,33 @@ TEST(LacpIxiahHelperTest, CreateLag) {
           .response_code = 201,
           .response =
               R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/lag/1"}]})json"}));
+    EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(thinkit::RequestType::kPost,
+                            "/api/v1/sessions/1/ixnetwork/lag/1/protocolStack",
+                            /*payload=*/""))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/lag/1/protocolStack"}]})json"}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPost,
+                  "/api/v1/sessions/1/ixnetwork/lag/1/protocolStack/ethernet",
+                  /*payload=*/""))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/lag/1/protocolStack/ethernet/1"}]})json"}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(thinkit::RequestType::kPost,
+                                    "/api/v1/sessions/1/ixnetwork/lag/1/"
+                                    "protocolStack/ethernet/1/lagportlacp",
+                                    /*payload=*/""))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/lag/1/protocolStack/ethernet/1/lagportlacp/1"}]})json"}));
   EXPECT_THAT(CreateLag({"/vport/1", "/vport/2"}, mock_generic_testbed),
               IsOkAndHolds("/api/v1/sessions/1/ixnetwork/lag/1"));
 }
