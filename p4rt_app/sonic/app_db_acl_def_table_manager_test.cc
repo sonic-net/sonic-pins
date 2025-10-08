@@ -130,6 +130,35 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                         name: "qos"
                         annotations: "@sai_action_param(QOS_QUEUE)"
                       )pb",
+		      pdpi::STRING))
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(
+                      R"pb(
+                        alias: "complex_metered_action_with_param_and_color"
+                        annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)"
+                        annotations: "@sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)"
+                      )pb")
+                  .param(
+                      R"pb(
+                        id: 1
+                        name: "cpu_queue"
+                        annotations: "@sai_action_param(QOS_QUEUE)"
+                      )pb",
+                      pdpi::STRING)
+                  .param(
+                      R"pb(
+                        id: 2
+                        name: "green_multicast_queue"
+                        annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)"
+                      )pb",
+                      pdpi::STRING)
+                  .param(
+                      R"pb(
+                        id: 3
+                        name: "red_multicast_queue"
+                        annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)"
+                      )pb",
                       pdpi::STRING))
           .entry_action(
               IrActionDefinitionBuilder()
@@ -247,6 +276,14 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
             {"action": "SAI_PACKET_ACTION_DROP", "packet_color": "SAI_PACKET_COLOR_RED"},
             {"action": "QOS_QUEUE", "param": "qos"}])JSON")
                                                        .dump()},
+      {"action/complex_metered_action_with_param_and_color",
+       nlohmann::json::parse(R"JSON(
+           [{"action": "SAI_PACKET_ACTION_FORWARD", "packet_color": "SAI_PACKET_COLOR_GREEN"},
+            {"action": "SAI_PACKET_ACTION_DENY", "packet_color": "SAI_PACKET_COLOR_RED"},
+            {"action": "QOS_QUEUE", "param": "cpu_queue"},
+            {"action": "SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION",  "packet_color": "SAI_PACKET_COLOR_GREEN", "param": "green_multicast_queue"},
+            {"action": "SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION", "packet_color": "SAI_PACKET_COLOR_RED", "param": "red_multicast_queue"}])JSON")
+           .dump()},
       {"action/redirect_action_that_includes_ipmc_type",
        nlohmann::json::parse(R"JSON(
            [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
@@ -1136,40 +1173,6 @@ TEST(InsertAclTableDefinition, DISABLED_FailsWithNonNoActionConstDefaultAction) 
       InsertAclTableDefinition(fake_db, table),
       StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("const_default_action must refer to NoAction.")));
-}
-
-TEST(InsertAclTableDefinition, FailsWithMeteredParameter) {
-  pdpi::IrTableDefinition table =
-      IrTableDefinitionBuilder()
-          .preamble(R"pb(alias: "Table" annotations: "@sai_acl(INGRESS)")pb")
-          .match_field(
-              R"pb(id: 123
-                   name: "match_field"
-                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
-              pdpi::STRING)
-          .entry_action(
-              IrActionDefinitionBuilder()
-                  .preamble(
-                      R"pb(alias: "entry_action"
-                           annotations: "@sai_action(SAI_PACKET_ACTION_DROP)"
-                      )pb")
-                  .param(
-                      R"pb(id: 1
-                           name: "action_param"
-                           annotations: "@sai_action_param(QOS_QUEUE, SAI_PACKET_COLOR_RED)"
-                      )pb"))();
-
-  FakeSonicDbTable fake_table;
-  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
-  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
-  EXPECT_THAT(
-      VerifyAclTableDefinition(table),
-      StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("Action parameters may not include a color.")));
-  EXPECT_THAT(
-      InsertAclTableDefinition(fake_db, table),
-      StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("Action parameters may not include a color.")));
 }
 
 TEST(InsertAclTableDefinition, IgnoresNoActionConstDefaultAction) {
