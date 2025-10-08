@@ -271,43 +271,27 @@ absl::StatusOr<std::string> UpdateSflowConfig(
   gnmi_config_json["openconfig-sampling:sampling"]
                   ["openconfig-sampling-sflow:sflow"]["config"]
                   ["agent-id-ipv6"] = agent_addr_ipv6;
+
+  gnmi_config_json["openconfig-sampling:sampling"]
+                  ["openconfig-sampling-sflow:sflow"]
+                      .erase("collectors");
   if (!collector_address_and_port.empty()) {
-    absl::btree_map<std::string, nlohmann::json>
-        collector_address_port_to_config_json;
+    if (collector_address_and_port.size() > kSonicMaxCollector) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Number of collectors exceeds max allowed value of ",
+                       kSonicMaxCollector));
+    }
+    nlohmann::json& collector_json_array =
+        gnmi_config_json["openconfig-sampling:sampling"]
+                        ["openconfig-sampling-sflow:sflow"]["collectors"]
+                        ["collector"];
     for (const auto& [address, port] : collector_address_and_port) {
       nlohmann::basic_json<> sflow_collector_config;
       sflow_collector_config["address"] = address;
       sflow_collector_config["port"] = port;
       sflow_collector_config["config"]["address"] = address;
       sflow_collector_config["config"]["port"] = port;
-      collector_address_port_to_config_json[absl::StrCat(address, ":", port)] =
-          sflow_collector_config;
-    }
-    nlohmann::json& collector_json_array =
-        gnmi_config_json["openconfig-sampling:sampling"]
-                        ["openconfig-sampling-sflow:sflow"]["collectors"]
-                        ["collector"];
-    if (!collector_json_array.empty() &&
-        collector_json_array.type() != nlohmann::json::value_t::array) {
-      return absl::InvalidArgumentError(
-          "json collector field already exists and is not an array.");
-    }
-
-    // Prune existing collector ip configs.
-    for (nlohmann::json& collector_json : collector_json_array) {
-      std::string address_and_port = absl::StrCat(
-          json_yang::GetSimpleJsonValueAsString(collector_json["address"]), ":",
-          json_yang::GetSimpleJsonValueAsString(collector_json["port"]));
-      auto it = collector_address_port_to_config_json.find(address_and_port);
-      if (it != collector_address_port_to_config_json.end()) {
-        collector_address_port_to_config_json.erase(it);
-      }
-    }
-
-    // Append collector ip config if any.
-    for (const auto& [address_and_port, config_json] :
-         collector_address_port_to_config_json) {
-      collector_json_array.push_back(config_json);
+      collector_json_array.push_back(sflow_collector_config);
     }
 
     if (collector_json_array.size() > kSonicMaxCollector) {
