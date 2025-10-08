@@ -676,11 +676,12 @@ WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
   thinkit::Switch& sut = GetSut(testbed);
   thinkit::TestEnvironment& env = GetTestEnvironment(testbed);
   absl::Time start_time = absl::Now();
-  std::unique_ptr<gnoi::system::System::StubInterface> sut_gnoi_system_stub;
   // Start polling to check for NSF reboot completion.
   while (absl::Now() < (start_time + kNsfRebootWaitTime)) {
     absl::SleepFor(kPollingInterval);
-    ASSIGN_OR_RETURN(sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
+    ASSIGN_OR_RETURN(std::unique_ptr<gnoi::system::System::StubInterface>
+                         sut_gnoi_system_stub,
+                     sut.CreateGnoiSystemStub());
     ClientContext context;
     RebootStatusRequest req;
     RebootStatusResponse resp;
@@ -747,6 +748,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     ADD_FAILURE() << "NSF reboot failed with: " << nsf_reboot_status;
     LOG(ERROR) << "Attempting to recover the switch through cold "
                   "reboot.";
+    thinkit::TestEnvironment& env = GetTestEnvironment(testbed);
     RETURN_IF_ERROR(Reboot(RebootMethod::COLD, sut, env,
                            /*collect_debug_artifacts_before_reboot=*/false));
     RETURN_IF_ERROR(

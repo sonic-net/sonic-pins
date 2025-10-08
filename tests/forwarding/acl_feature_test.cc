@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/dataplane_validation.h"
@@ -29,9 +28,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
-#include "gutil/status.h"  // IWYU pragma: keep
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"

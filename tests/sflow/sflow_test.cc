@@ -36,6 +36,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -1108,21 +1109,27 @@ absl::Status IsExpectedSamplingRateFromGnmi(
   ASSIGN_OR_RETURN(current_interfaces_to_actual_sample_rate,
                    GetSflowActualSamplingRateForInterfaces(
                        gnmi_stub, sflow_enabled_interfaces));
+  std::vector<std::string> error_messages;
   for (const auto& [interface, sample_rate] :
        current_interfaces_to_actual_sample_rate) {
     const int* initial_sample_rate =
         gutil::FindOrNull(initial_interfaces_to_sample_rate, interface);
     if (initial_sample_rate == nullptr) {
-      return absl::FailedPreconditionError(absl::Substitute(
-          "Interface $0 does not have a initial samplerate.", interface));
+      error_messages.push_back(absl::Substitute(
+          "Interface $0 not found in initial_interfaces_to_sample_rate.",
+          interface));
+      continue;
     }
     const int expected_sample_rate = multiple * (*initial_sample_rate);
     if (sample_rate != expected_sample_rate) {
-      return absl::InternalError(
+      error_messages.push_back(
           absl::Substitute("Interface $0 sample rate is not as expected. "
                            "Expected sample rate: $1. Actual sample rate: $2.",
                            interface, expected_sample_rate, sample_rate));
     }
+  }
+  if (!error_messages.empty()) {
+    return absl::InternalError(absl::StrJoin(error_messages, "\n"));
   }
   return absl::OkStatus();
 }
@@ -1271,8 +1278,19 @@ void PerformBackoffTest(
     // Verify sflowtool result when backoff did not happen.
     const int sample_count =
         GetSflowSamplesOnSut(sflow_result, ingress_link.port_id);
+
+    const int kBackoffWindowSecs = 3;
+    // For the first kBackoffWindowSecs, backoff is not triggered so we use the
+    // original sample rate to compute expected samples.
+    // For the reset (kBackoffTrafficDurationSecs - kBackoffWindowSecs), backoff
+    // should be triggered. So we use the doubled sample rate to compute
+    // expected samples.
     const double expected_count =
-        static_cast<double>(packets_num) / interface_sample_rate;
+        static_cast<double>((traffic_rate * kBackoffWindowSecs) /
+                            interface_sample_rate) +
+        static_cast<double>(traffic_rate *
+                            (kBackoffTrafficDurationSecs - kBackoffWindowSecs) /
+                            (2 * interface_sample_rate));
 
     SflowResult result = SflowResult{
         .rule = "Backoff traffic",
