@@ -1271,8 +1271,19 @@ void PerformBackoffTest(
     // Verify sflowtool result when backoff did not happen.
     const int sample_count =
         GetSflowSamplesOnSut(sflow_result, ingress_link.port_id);
+
+    const int kBackoffWindowSecs = 3;
+    // For the first kBackoffWindowSecs, backoff is not triggered so we use the
+    // original sample rate to compute expected samples.
+    // For the reset (kBackoffTrafficDurationSecs - kBackoffWindowSecs), backoff
+    // should be triggered. So we use the doubled sample rate to compute
+    // expected samples.
     const double expected_count =
-        static_cast<double>(packets_num) / interface_sample_rate;
+        static_cast<double>((traffic_rate * kBackoffWindowSecs) /
+                            interface_sample_rate) +
+        static_cast<double>(traffic_rate *
+                            (kBackoffTrafficDurationSecs - kBackoffWindowSecs) /
+                            (2 * interface_sample_rate));
 
     SflowResult result = SflowResult{
         .rule = "Backoff traffic",
