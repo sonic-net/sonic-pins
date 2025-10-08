@@ -41,6 +41,8 @@ struct OutDiscardCounters {
   uint64_t port_blackhole_out_discard_events;
   uint64_t switch_blackhole_out_discard_events;
   uint64_t switch_blackhole_events;
+  uint64_t queue_dropped_packet_events;
+  uint64_t switch_congestion_events;
 };
 
 class BlackholeCongestionCountersIxiaTestFixture
