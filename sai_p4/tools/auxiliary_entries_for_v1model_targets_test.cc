@@ -286,5 +286,76 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
                   )pb")));
 }
 
+TEST(AuxiliaryIrEntitiesForV1ModelTarget,
+     GeneratesAuxiliaryL3AdmitTableEntriesForRifs) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+        ]
+      }
+    })";
+
+  gnmi::MockgNMIStub mock_gnmi_stub;
+  EXPECT_CALL(mock_gnmi_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  ASSERT_OK_AND_ASSIGN(
+      const pdpi::IrEntities auxiliary_ir_entities,
+      sai::CreateV1ModelAuxiliaryEntities(
+          gutil::ParseProtoOrDie<pdpi::IrEntities>(
+              R"pb(
+                entities {
+                  table_entry {
+                    table_name: "router_interface_table"
+                    matches {
+                      name: "router_interface_id"
+                      exact { str: "1" }
+                    }
+                    action {
+                      name: "set_port_and_src_mac"
+                      params {
+                        name: "port"
+                        value { str: "1" }
+                      }
+                      params {
+                        name: "src_mac"
+                        value { mac: "02:2a:10:00:00:03" }
+                      }
+                    }
+                  }
+                }
+              )pb"),
+          mock_gnmi_stub));
+
+  EXPECT_THAT(auxiliary_ir_entities,
+              gutil::EqualsProto(gutil::ParseProtoOrDie<pdpi::IrEntities>(
+                  R"pb(
+                    entities {
+                      table_entry {
+                        table_name: "l3_admit_table"
+                        matches {
+                          name: "in_port"
+                          optional { value { str: "1" } }
+                        }
+                        matches {
+                          name: "dst_mac"
+                          ternary {
+                            value { mac: "02:2a:10:00:00:03" }
+                            mask { mac: "ff:ff:ff:ff:ff:ff" }
+                          }
+                        }
+                        priority: 1
+                        action { name: "admit_to_l3" }
+                      }
+                    }
+                  )pb")));
+}
+
 }  // namespace
 
