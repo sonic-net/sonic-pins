@@ -24,8 +24,10 @@
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/ixia_helper.pb.h"
 #include "lib/utils/json_test_utils.h"
+#include "lib/utils/json_utils.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mock_generic_testbed.h"
 
@@ -38,8 +40,10 @@ using ::gutil::StatusIs;
 using ::pins_test::JsonIs;
 
 using ::testing::Eq;
+using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
 using ::testing::Return;
+using ::testing::StartsWith;
 
 TEST(FindIdByField, FindsId) {
   static constexpr absl::string_view kArray =
@@ -583,6 +587,32 @@ TEST(IxiaHelper, SetFieldValueListFails) {
               StatusIs(absl::StatusCode::kInternal));
 }
 
+TEST(IxiaHelper, SetFieldRandomRange) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  // UDP is likely the third header, and destination port is field 2.
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPatch,
+          "/ixnetwork/traffic/trafficItem/1/configElement/1/stack/3/field/2",
+          JsonIs(R"json(
+{
+  "auto": false,
+  "valueType": "repeatableRandomRange",
+  "minValue": "100",
+  "maxValue": "1000",
+  "stepValue": "10",
+  "seed": 123,
+  "countValue": 100
+})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetFieldRandomRange("/ixnetwork/traffic/trafficItem/1",
+                                /*stack_index=*/3, /*field_index=*/2,
+                                /*min_value=*/"100", /*max_value=*/"1000",
+                                /*step_value=*/"10", /*seed=*/123,
+                                /*count=*/100, mock_generic_testbed));
+}
+
 TEST(IxiaHelper, GenerateAndApplyTrafficItems) {
   thinkit::MockGenericTestbed mock_generic_testbed;
   EXPECT_CALL(
@@ -607,6 +637,74 @@ TEST(IxiaHelper, GenerateAndApplyTrafficItems) {
   EXPECT_OK(GenerateAndApplyTrafficItems(
       {"/ixnetwork/traffic/trafficItem/1", "/ixnetwork/traffic/trafficItem/2"},
       mock_generic_testbed));
+}
+
+TEST(IxiaHelper, SetUpTrafficItemMultipleSrcsAndDsts) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPost, "/ixnetwork/traffic/trafficItem",
+                  JsonIs(R"json([{"name": "Traffic Item 1"}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"}]})json"}));
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/endpointSet",
+          JsonIs(R"json(
+[{
+  "sources": ["/vport/1/protocols", "/vport/2/protocols"],
+  "destinations": ["/vport/3/protocols", "/vport/4/protocols"]
+}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 201}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPatch,
+                  "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/tracking",
+                  JsonIs(R"json({"trackBy": ["flowGroup0"]})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetUpTrafficItemWithMultipleSrcsAndDsts(
+      /*sources=*/{"/vport/1", "/vport/2"},
+      /*destinations=*/{"/vport/3", "/vport/4"}, "Traffic Item 1",
+      mock_generic_testbed, /*is_raw_pkt=*/false));
+}
+
+TEST(IxiaHelper, SetUpTrafficItemMultipleSrcsAndDstsRaw) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost, "/ixnetwork/traffic/trafficItem",
+          JsonIs(
+              R"json([{"name": "Traffic Item 1", "trafficType": "raw"}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 201,
+          .response =
+              R"json({"links":[{"href":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"}]})json"}));
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(
+          thinkit::RequestType::kPost,
+          "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/endpointSet",
+          JsonIs(R"json(
+[{
+  "sources": ["/vport/1/protocols", "/vport/2/protocols"],
+  "destinations": ["/vport/3/protocols", "/vport/4/protocols"]
+}])json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 201}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(
+                  thinkit::RequestType::kPatch,
+                  "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/tracking",
+                  JsonIs(R"json({"trackBy": ["flowGroup0"]})json")))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SetUpTrafficItemWithMultipleSrcsAndDsts(
+      /*sources=*/{"/vport/1", "/vport/2"},
+      /*destinations=*/{"/vport/3", "/vport/4"}, "Traffic Item 1",
+      mock_generic_testbed, /*is_raw_pkt=*/true));
 }
 
 TEST(IxiaHelper, StartTrafficItem) {
