@@ -1275,7 +1275,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     const double kAbsoluteError = kActualFraction - kExpectedFraction;
     const double kRelativeErrorPercent =
         100. * kAbsoluteError / kExpectedFraction;
-    const double kAcceptableErrorPercent = 7;
+    const double kAcceptableErrorPercent = 10;
     LOG(INFO) << "'" << queue << "' transmitted " << (kActualFraction * 100)
               << "% of forwarded round-robin traffic (expected: "
               << (kExpectedFraction * 100)

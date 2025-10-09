@@ -355,9 +355,9 @@ void PrettyPrintDistribution(
 }
 
 // Creates the port_names_per_port_id map from GNMI config.
-absl::StatusOr<absl::flat_hash_map<const std::string, std::string>>
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetPortNamePerPortId(gnmi::gNMI::StubInterface& gnmi_stub) {
-  absl::flat_hash_map<const std::string, std::string> port_name_per_port_id;
+  absl::flat_hash_map<std::string, std::string> port_name_per_port_id;
   ASSIGN_OR_RETURN(auto port_id_per_port_name,
                    pins_test::GetAllInterfaceNameToPortId(gnmi_stub));
   for (const auto& [name, port_id] : port_id_per_port_name) {
