@@ -66,6 +66,7 @@
 
 // Indicates that the program supports ternary rather than optional route
 // metadata in the acl_ingress_table.
+// Also, indicates the program has the MRIF vlan_id p4 constraint.
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
 
 // Indicates that the program supports all valid modifications to the

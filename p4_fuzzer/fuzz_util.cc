@@ -523,7 +523,15 @@ bool IsAccidentallyInvalidUpdate(
         candidate_update.pi().entity().table_entry().table_id(), num_inserts);
   }
 
-  return config.GetIsBuggyUpdateThatShouldBeSkipped()(candidate_update);
+  absl::StatusOr<bool> is_buggy_update =
+      config.GetIsBuggyUpdateThatShouldBeSkipped()(config, candidate_update);
+  if (!is_buggy_update.ok()) {
+    DLOG(FATAL) << "Failed to determine if update is buggy. Update: "
+                << gutil::PrintTextProto(candidate_update)
+                << "\nStatus: " << is_buggy_update.status();
+    return true;
+  }
+  return *is_buggy_update;
 }
 
 // Returns all valid table ids.

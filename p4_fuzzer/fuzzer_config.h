@@ -46,6 +46,9 @@ absl::StatusOr<std::string> GetFullyQualifiedMatchFieldName(
     const pdpi::IrTableDefinition& table_def,
     const pdpi::IrMatchFieldDefinition& match_field_def);
 
+// Forward declaration to allow for circular dependencies.
+class FuzzerConfig;
+
 struct ConfigParams {
   // -- Required ---------------------------------------------------------------
   // NOTE: These values are required for correct function. All of them are
@@ -109,8 +112,12 @@ struct ConfigParams {
   // Ignores the constraints on tables listed when fuzzing entries.
   absl::flat_hash_set<std::string> ignore_constraints_on_tables;
   // A function for masking any updates that should not be sent to the switch.
-  std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
-      [](const AnnotatedUpdate& update) { return false; };
+  std::function<absl::StatusOr<bool>(const FuzzerConfig& config,
+                                     const AnnotatedUpdate&)>
+      IsBuggyUpdateThatShouldBeSkipped =
+          [](const FuzzerConfig& config, const AnnotatedUpdate& update) {
+            return false;
+          };
 };
 
 class FuzzerConfig {
@@ -182,7 +189,9 @@ public:
   GetTreatAsEqualDuringReadDueToKnownBug() const {
     return params_.TreatAsEqualDuringReadDueToKnownBug;
   }
-  const std::function<bool(const AnnotatedUpdate&)>&
+  const std::function<absl::StatusOr<bool>(const FuzzerConfig& config,
+                                           const AnnotatedUpdate&)>&
+
   GetIsBuggyUpdateThatShouldBeSkipped() const {
     return params_.IsBuggyUpdateThatShouldBeSkipped;
   }
