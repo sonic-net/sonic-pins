@@ -48,10 +48,18 @@ absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
 
 absl::Status SupportedPacketReplicationEntryRequest(
     const p4::v1::PacketReplicationEngineEntry& replication_entry) {
+  if (replication_entry.clone_session_entry().session_id() != 0 ||
+      !replication_entry.clone_session_entry().replicas().empty()) {
+    return gutil::UnimplementedErrorBuilder()
+           << "Read request for packet_replication_engine_entry's "
+              "clone_session_entry is not empty: "
+           << replication_entry.ShortDebugString();
+  }
   if (replication_entry.multicast_group_entry().multicast_group_id() != 0 ||
       !replication_entry.multicast_group_entry().replicas().empty()) {
     return gutil::UnimplementedErrorBuilder()
-           << "Read request for packet_replication_engine_entry: "
+	    << "Read request for packet_replication_engine_entry's "
+              "multicast_group_entry is not empty: "
            << replication_entry.ShortDebugString();
   }
   return absl::OkStatus();
@@ -168,7 +176,11 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
             entity.packet_replication_engine_entry()));
         for (const auto& [_, entry] : entity_cache) {
           if (entry.entity_case() ==
-              p4::v1::Entity::kPacketReplicationEngineEntry) {
+		  p4::v1::Entity::kPacketReplicationEngineEntry &&
+              (entity.packet_replication_engine_entry().type_case() ==
+                   entry.packet_replication_engine_entry().type_case() ||
+               entity.packet_replication_engine_entry().type_case() ==
+                   p4::v1::PacketReplicationEngineEntry::TYPE_NOT_SET)) {
             RETURN_IF_ERROR(
                 AppendPacketReplicationEntryReads(responses.back(), entry));
             if (responses.size() >= batch_size) {
