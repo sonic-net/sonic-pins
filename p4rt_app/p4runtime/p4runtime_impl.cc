@@ -643,6 +643,7 @@ PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
 
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+    sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
     std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
@@ -654,6 +655,8 @@ P4RuntimeImpl::P4RuntimeImpl(
     const P4RuntimeImplOptions& p4rt_options)
     : p4rt_table_(std::move(p4rt_table)),
       vrf_table_(std::move(vrf_table)),
+      vlan_table_(std::move(vlan_table)),
+      vlan_member_table_(std::move(vlan_member_table)),
       hash_table_(std::move(hash_table)),
       switch_table_(std::move(switch_table)),
       port_table_(std::move(port_table)),
