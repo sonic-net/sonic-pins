@@ -183,10 +183,10 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
   int iterations = 0;
   for (int i = result.entities_size() - 1; i >= 0; --i && ++iterations) {
     LOG_EVERY_T(INFO, kSecsBetweenLogs)
-        << "Loop has run " << iterations << " iterations, there are "
-        << (result.entities_size() - i) << " remaining entities out of "
-        << pi_entities.size() << " original ones and we have reinstalled "
-        << reinstall_attempts << " of them.";
+        << "Loop has run " << iterations << " iterations, there are " << i
+        << " remaining entities out of " << pi_entities.size()
+        << " original ones and we have reinstalled " << reinstall_attempts
+        << " of them.";
 
     // Store the `pi_entity` in case we need to reinstall it on the switch if no
     // failure occurs.
@@ -492,8 +492,6 @@ absl::Status AttachPacketTrace(
   return absl::OkStatus();
 }
 
-// Stores a given `packet_test_vector` as an ArribaTestVector using only the
-// entries that might be hit by the packet (according to its P4 packet trace).
 absl::Status StorePacketTestVectorAsArribaTestVector(
     const PacketTestVector &packet_test_vector,
     const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>
@@ -596,11 +594,6 @@ absl::Status PostProcessTestVectorFailure(
         best_known_set_of_entities));
   }
 
-  // Output an Arriba test vector to test artifacts.
-  RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
-      test_outcome.test_run().test_vector(), packet_traces,
-      dvaas_test_artifact_writer));
-
   // Output dvaas_regression_test_proto.
   DvaasRegressionTestProto dvaas_regression_test_proto;
   *dvaas_regression_test_proto.mutable_test_vector() =
@@ -617,6 +610,10 @@ absl::Status PostProcessTestVectorFailure(
 
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
+    // Output an Arriba test vector to test artifacts.
+    RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
+        test_outcome.test_run().test_vector(), packet_traces,
+        dvaas_test_artifact_writer));
     absl::Time start = absl::Now();
     RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
                                       dvaas_test_artifact_writer));
@@ -725,19 +722,21 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         pdpi::InstallIrEntities(*control_switch.p4rt, punt_entries));
   }
 
-  // Clear counters prior to test packet injection, so the final counters are
-  // more meaningful.
-  //
-  // CAUTION: As of 2024, this is a not supported by SONIC PINS, and behaves as
-  // a no-op on such switches.
-  RETURN_IF_ERROR(pdpi::ClearTableEntryCounters(*sut.p4rt));
+  if (params.reset_and_collect_counters) {
+    // Clear counters prior to test packet injection, so the final counters are
+    // more meaningful.
+    //
+    // CAUTION: As of 2024, this is a not supported by SONIC PINS, and behaves
+    // as a no-op on such switches.
+    RETURN_IF_ERROR(pdpi::ClearTableEntryCounters(*sut.p4rt));
 
-  // Read and store table entries on SUT as an artifact.
-  ASSIGN_OR_RETURN(pdpi::IrEntities entities,
-                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
-  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-      "sut_ir_entities.pre_packet_injection.txtpb",
-      gutil::PrintTextProto(entities)));
+    // Read and store table entries on SUT as an artifact.
+    ASSIGN_OR_RETURN(pdpi::IrEntities entities,
+                     pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "sut_ir_entities.pre_packet_injection.txtpb",
+        gutil::PrintTextProto(entities)));
+  }
 
   // Store port mapping as an artifact (identity if not given a value).
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map =
@@ -764,6 +763,24 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                      LegitimizeUserProvidedTestVectors(
                          params.packet_test_vector_override, ir_info));
   }
+
+  // Store the test vectors in ArribaTestVector format as an artifact.
+  dvaas::ArribaTestVector arriba_test_vector;
+  ASSIGN_OR_RETURN(pdpi::IrEntities entities,
+                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+  for (const pdpi::IrEntity& ir_entity : entities.entities()) {
+    // TODO: Add support for other entity types.
+    if (ir_entity.has_table_entry()) {
+      *arriba_test_vector.mutable_ir_table_entries()->add_entries() =
+          ir_entity.table_entry();
+    }
+  }
+  for (auto& [id, test_vector] : test_vectors) {
+    (*arriba_test_vector.mutable_packet_test_vector_by_id())[id] = test_vector;
+  }
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "arriba_test_vector.txtpb", gutil::PrintTextProto(arriba_test_vector)));
+
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_vectors.txt", ToString(test_vectors)));
 
@@ -903,7 +920,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
 
   // We read and store all table entries at the very end of the test. This is
   // useful, e.g., for checking per-entry ACL counters when debugging.
-  {
+  if (params.reset_and_collect_counters) {
     // The hardware-level counters are only queried every <= 20 seconds on the
     // switch for performance reasons, so we need to wait to ensure we get the
     // latest values.
