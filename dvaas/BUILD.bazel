@@ -185,6 +185,7 @@ cc_library(
     deps = [
         ":packet_injection",
         ":port_id_map",
+	":test_insights",
         ":test_run_validation",
         ":test_vector",
         ":test_vector_cc_proto",
