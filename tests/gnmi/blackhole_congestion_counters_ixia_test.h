@@ -50,6 +50,7 @@ class BlackholeCongestionCountersIxiaTestFixture
  protected:
   // Acquires testbed with 3 pairs of connected ports between SUT and Ixia.
   void SetUp() override;
+  void TearDown() override;
   absl::StatusOr<InErrorCounters> TriggerInFcsErrors(int frame_rate_per_second,
                                                      int frame_count);
   absl::StatusOr<OutDiscardCounters> TriggerOutDiscards(
