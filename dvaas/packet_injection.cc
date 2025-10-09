@@ -141,9 +141,10 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   // Send packets.
   ASSIGN_OR_RETURN(const pdpi::IrP4Info control_ir_p4info,
                    GetIrP4Info(control_switch));
+  absl::flat_hash_map<int, absl::Time> packet_injection_time_by_id;
   for (const auto& [test_id, packet_test_vector] : packet_test_vector_by_id) {
+    const Packet& packet = packet_test_vector.input().packet();
     if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
-      const Packet& packet = packet_test_vector.input().packet();
 
       // Get corresponding control switch port for the packet's ingress port.
       ASSIGN_OR_RETURN(const P4rtPortId sut_ingress_port,
@@ -158,11 +159,29 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
           control_switch_port.GetP4rtEncoding(),
           absl::HexStringToBytes(packet.hex()), control_ir_p4info,
           &control_switch, injection_delay));
+    } else if (packet_test_vector.input().type() ==
+               SwitchInput::SUBMIT_TO_INGRESS) {
+      // Inject to SUT ingress port.
+      ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
+      std::string raw_packet = absl::HexStringToBytes(packet.hex());
+      RETURN_IF_ERROR(
+          pins::InjectIngressPacket(raw_packet, sut_ir_p4info, &sut));
+    } else if (packet_test_vector.input().type() == SwitchInput::PACKET_OUT) {
+      ASSIGN_OR_RETURN(const P4rtPortId sut_egress_port,
+                       P4rtPortId::MakeFromP4rtEncoding(packet.port()));
+      // Inject to SUT egress port.
+      ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
+      RETURN_IF_ERROR(
+          pins::InjectEgressPacket(sut_egress_port.GetP4rtEncoding(),
+                                    absl::HexStringToBytes(packet.hex()),
+                                    sut_ir_p4info, &sut, injection_delay));
     } else {
+      // TODO: Add support for other input types.
       return absl::UnimplementedError(
           absl::StrCat("Test vector input type not supported\n",
                        packet_test_vector.input().DebugString()));
     }
+    packet_injection_time_by_id[test_id] = absl::Now();
   }
   LOG(INFO) << "Finished injecting test packets";
 
