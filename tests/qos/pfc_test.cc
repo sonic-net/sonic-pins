@@ -147,7 +147,7 @@ void PfcTestWithIxia::SetUp() {
   // Configure SUT.
   ASSERT_OK_AND_ASSIGN(sut_p4rt_session_,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut, std::nullopt, std::nullopt));
+                           sut, std::nullopt, GetParam().p4info));
 
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
