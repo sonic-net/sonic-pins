@@ -56,6 +56,10 @@ public:
   static std::vector<P4rtPortId>
   MakeVectorFromOpenConfigEncodings(absl::Span<const uint32_t> p4rt_port_id);
 
+  // Constructs a P4rtPortId from a hexstring encoding.
+  static absl::StatusOr<P4rtPortId> MakeFromHexstringEncoding(
+      absl::string_view hexstring_encoding);
+
   // Getters.
   // Returns OpenConfig encoding of the port ID, e.g. the uint32 `42`.
   uint32_t GetOpenConfigEncoding() const;

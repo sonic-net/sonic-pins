@@ -219,14 +219,13 @@ added: acceptable_outputs[0].packet_ins[0].hex: "0505050505050505050505050010746
 
 
 ================================================================================
-InternalizeUserProvidedTestVectors Test: input type != DATAPLANE
+InternalizeUserProvidedTestVectors Test: input type = SUBMIT_TO_INGRESS
 ================================================================================
 -- Input ---------------------------------------------------
 -- Input Packet Test Vector #1 --
 input {
   type: SUBMIT_TO_INGRESS
   packet {
-    port: "1"
     parsed {
       headers {
         ethernet_header {
@@ -240,13 +239,36 @@ input {
   }
 }
 acceptable_outputs {
+  packets {
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x0010"
+        }
+      }
+      payload: "test packet #42:"
+    }
+  }
 }
 
 -- Output --------------------------------------------------
-ERROR: UNIMPLEMENTED: problem in user-provided packet test vector: only supported input type is DATAPLANE; found SUBMIT_TO_INGRESS
-Dumping offending test vector:
+-- Internalized Packet Test Vector #1 --
+test packet ID extracted from payload: 42
+diff of internalized vector vs input vector:
+added: input.packet.port: "1"
+added: input.packet.hex: "ffeeddccbbaa554433221100001074657374207061636b6574202334323a"
+added: acceptable_outputs[0].packets[0].hex: "ffeeddccbbaa554433221100001074657374207061636b6574202334323a"
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: input type = PACKET_OUT
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
 input {
-  type: SUBMIT_TO_INGRESS
+  type: PACKET_OUT
   packet {
     port: "1"
     parsed {
@@ -262,7 +284,27 @@ input {
   }
 }
 acceptable_outputs {
+  packets {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x0010"
+        }
+      }
+      payload: "test packet #42:"
+    }
+  }
 }
+
+-- Output --------------------------------------------------
+-- Internalized Packet Test Vector #1 --
+test packet ID extracted from payload: 42
+diff of internalized vector vs input vector:
+added: input.packet.hex: "ffeeddccbbaa554433221100001074657374207061636b6574202334323a"
+added: acceptable_outputs[0].packets[0].hex: "ffeeddccbbaa554433221100001074657374207061636b6574202334323a"
 
 
 ================================================================================

@@ -1,17 +1,20 @@
-57.14% of 7 test vectors passed
-100.00% of 7 test vectors produced the correct number and type of output packets
-4 test vectors forwarded, producing 6 forwarded output packets
-3 test vectors punted, producing 3 punted output packets
-1 test vectors produced no output packets
+4 (57.14%) of 7 test vectors passed
+For 7 (100.00%) of 7 test vectors SUT produced correct number & type of outputs
+For 4 test vectors SUT produced at least one forwarded packet
+For 3 test vectors SUT produced at least one punted packet
+For 1 test vectors SUT produced no output packets
+Overall, SUT produced 6 forwarded packets and 3 punted packets
 None of 2 test vectors attempted had deterministically reproducible failures
-57.14% of 7 test vectors passed
-100.00% of 7 test vectors produced the correct number and type of output packets
-4 test vectors forwarded, producing 6 forwarded output packets
-3 test vectors punted, producing 3 punted output packets
-1 test vectors produced no output packets
+4 (57.14%) of 7 test vectors passed
+For 7 (100.00%) of 7 test vectors SUT produced correct number & type of outputs
+For 4 test vectors SUT produced at least one forwarded packet
+For 3 test vectors SUT produced at least one punted packet
+For 1 test vectors SUT produced no output packets
+Overall, SUT produced 6 forwarded packets and 3 punted packets
 All of 2 test vectors attempted had deterministically reproducible failures
-57.14% of 7 test vectors passed
-100.00% of 7 test vectors produced the correct number and type of output packets
-4 test vectors forwarded, producing 6 forwarded output packets
-3 test vectors punted, producing 3 punted output packets
-1 test vectors produced no output packets
+4 (57.14%) of 7 test vectors passed
+For 7 (100.00%) of 7 test vectors SUT produced correct number & type of outputs
+For 4 test vectors SUT produced at least one forwarded packet
+For 3 test vectors SUT produced at least one punted packet
+For 1 test vectors SUT produced no output packets
+Overall, SUT produced 6 forwarded packets and 3 punted packets
