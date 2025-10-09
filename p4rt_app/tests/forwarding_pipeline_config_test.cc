@@ -410,10 +410,21 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
 
   p4::v1::ReadRequest read_request_pre;
   read_request_pre.set_device_id(p4rt_session_->DeviceId());
-  read_request_pre.add_entities()->mutable_packet_replication_engine_entry();
+  read_request_pre.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry();
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response_pre,
                        p4rt_session_->Read(read_request_pre));
   EXPECT_EQ(read_response_pre.entities_size(), 1);
+
+  p4::v1::ReadRequest read_request_pre_clone;
+  read_request_pre_clone.set_device_id(p4rt_session_->DeviceId());
+  read_request_pre_clone.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_clone_session_entry();
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response_pre_clone,
+                       p4rt_session_->Read(read_request_pre_clone));
+  EXPECT_THAT(read_response_pre_clone.entities(), IsEmpty());
 }
 
 /* TODO(PINS): To handle GoesCriticalIfReadingCacheFails test in November release.
