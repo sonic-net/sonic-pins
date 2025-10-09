@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/dataplane_validation.h"
