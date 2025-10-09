@@ -426,7 +426,8 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
       backend.SynthesizePackets(
           ir_p4info, entities, p4_spec.p4_symbolic_config, ports,
           [&](absl::string_view stats) {
-            return writer.AppendToTestArtifact("test_packet_stats.txt", stats);
+	    return writer.AppendToTestArtifact(
+                "auto_generated_test_packet_stats.txt", stats);
           },
           params.coverage_goals_override, params.packet_synthesis_time_limit));
 
@@ -458,20 +459,19 @@ absl::Status AttachPacketTrace(
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
   // Store the full BMv2 textual log as test artifact.
-  const std::string& packet_hex =
+  const absl::string_view packet_hex =
       failed_packet_test.test_run().test_vector().input().packet().hex();
   ASSIGN_OR_RETURN(int test_id,
                    dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
   const std::string filename =
       "packet_" + std::to_string(test_id) + ".trace.txt";
-  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-      filename, packet_traces[packet_hex][0].bmv2_textual_log()));
-
   auto it = packet_traces.find(packet_hex);
   if (it == packet_traces.end() || it->second.empty()) {
     return absl::InternalError(
         absl::StrCat("Packet trace not found for packet ", packet_hex));
   }
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      filename, packet_traces[packet_hex][0].bmv2_textual_log()));
 
   // Augment failure description with packet trace summary.
   ASSIGN_OR_RETURN(std::string summarized_packet_trace,
@@ -607,6 +607,14 @@ absl::Status PostProcessTestVectorFailure(
 
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "dvaas_regression_test_proto.txt", dvaas_regression_test_proto));
+
+  // TODO: Add support for other test vector types.
+  if (test_outcome.test_run().test_vector().input().type() ==
+          SwitchInput::SUBMIT_TO_INGRESS ||
+      test_outcome.test_run().test_vector().input().type() ==
+          SwitchInput::PACKET_OUT) {
+    return absl::OkStatus();
+  }
 
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
@@ -910,6 +918,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       }
     }
   }
+
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "packet_test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
   ValidationResult validation_result(
       std::move(test_outcomes),

@@ -392,8 +392,8 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
           "ModifyTestRunPreDiffing is set.");
     }
     RETURN_IF_ERROR(diff_params.ModifyExpectedOutputPreDiffing(
-        test_run.test_vector().input(), test_run.actual_output(),
-        *test_run.mutable_test_vector()->mutable_acceptable_outputs(), *sut));
+        test_run.test_vector().input(), test_run.actual_output(), *sut,
+        *test_run.mutable_test_vector()->mutable_acceptable_outputs()));
   }
 
   PacketTestValidationResult result;

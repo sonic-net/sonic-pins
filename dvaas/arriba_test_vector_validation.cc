@@ -14,6 +14,7 @@
 
 #include "dvaas/arriba_test_vector_validation.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -21,6 +22,7 @@
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
+#include "dvaas/test_insights.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
@@ -64,13 +66,21 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
 
   // Prepare single packet test vectors.
   PacketTestVectorById test_vector_by_id;
+  std::vector<PacketTestVector> packet_test_vectors;
   for (const auto& [id, packet_test_vector] :
        arriba_test_vector.packet_test_vector_by_id()) {
     test_vector_by_id[id] = packet_test_vector;
+    packet_test_vectors.push_back(packet_test_vector);
   }
 
   PacketStatistics packet_statistics;
   gutil::BazelTestArtifactWriter artifact_writer;
+
+  // Store test vector insights.
+  ASSIGN_OR_RETURN(const std::string insights_csv,
+                   GetTestInsightsTableAsCsv(packet_test_vectors, ir_p4info));
+  RETURN_IF_ERROR(
+      artifact_writer.AppendToTestArtifact("test_insights.csv", insights_csv));
 
   // Send tests to switch and collect results.
   ASSIGN_OR_RETURN(PacketTestRuns test_runs,
