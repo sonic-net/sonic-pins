@@ -99,15 +99,15 @@ public:
   // or not a table is full, may depend on the entries in other tables as well.
   bool IsTableFull(const uint32_t table_id) const;
 
-  // Returns OK if inserting the `pi_table_entry` into its table  could cause a
-  // resource exhaustion, and a FailedPrecondition error if the entry should fit
-  // within the table's resources.
+  // Returns OK if applying the `pi_update` into its table  could cause a
+  // resource exhaustion, and a FailedPrecondition error if the update should
+  // fit within the table's resources.
   //
   // Keep in mind sizes for P4 tables are minimum guarantees. So while this
   // method may suggest seeing a ResourceExhausted is expected (i.e. return OK),
-  // an actual switch may still accept the insert.
-  absl::Status
-  ResourceExhaustedIsAllowed(const p4::v1::TableEntry &pi_table_entry) const;
+  // an actual switch may still accept the update.
+  absl::Status ResourceExhaustedIsAllowed(
+      const p4::v1::Update& pi_update) const;
 
   // Checks whether all P4 tables are empty.
   bool AllP4TablesEmpty() const;

@@ -361,8 +361,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
         // exhaustion is allowed.
         if (!IsMaskedResource(table.preamble().alias(), current_version)) {
           // Check that table is allowed to have exhausted resources.
-          ASSERT_OK(
-              state.ResourceExhaustedIsAllowed(update.entity().table_entry()))
+          ASSERT_OK(state.ResourceExhaustedIsAllowed(update))
               << "\nUpdate = " << update.DebugString()
               << "\nState = " << state.SwitchStateSummary();
         }

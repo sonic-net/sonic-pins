@@ -23,10 +23,12 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
+#include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -104,8 +106,12 @@ struct FuzzerTestFixtureParams {
   // parameter.
   bool do_not_enforce_fail_on_first_switch_ordering;
   // A function for masking any updates that should not be sent to the switch.
-  std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
-      [](const AnnotatedUpdate& update) { return false; };
+  std::function<absl::StatusOr<bool>(const FuzzerConfig&,
+                                     const AnnotatedUpdate&)>
+      IsBuggyUpdateThatShouldBeSkipped =
+          [](const FuzzerConfig&, const AnnotatedUpdate& update) {
+            return false;
+          };
 
   // A function for modifying any `TableEntry` produced by the Fuzzer. Note that
   // mutations can override modified values.

@@ -20,6 +20,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
 #include "gmock/gmock.h"
@@ -46,11 +47,13 @@ using ::gutil::StatusIs;
 using ::p4::config::v1::Action;
 using ::p4::config::v1::ActionProfile;
 using ::p4::config::v1::ActionRef;
+using ::p4::config::v1::MatchField;
 using ::p4::config::v1::P4Info;
 using ::p4::config::v1::Preamble;
 using ::p4::config::v1::Table;
 using ::p4::v1::ActionProfileAction;
 using ::p4::v1::Entity;
+using ::p4::v1::FieldMatch;
 using ::p4::v1::MulticastGroupEntry;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
@@ -649,7 +652,7 @@ TEST(SwitchStateTest, SetEntitiesSetsEntities) {
 //   * 1 action profile
 //   * 1 table which uses the action profile.
 //   * 1 table which does not use the action profile.
-class ResourceLimitsTest : public testing::Test {
+class ResourceExhaustionAllowedTest : public testing::Test {
  protected:
   // Tests should specify the P4Info values that are relevant. For example, when
   // verifying behavior around the table size the test should set '.table_size =
@@ -698,6 +701,12 @@ class ResourceLimitsTest : public testing::Test {
     table->mutable_preamble()->set_alias("action_set_table");
     table->mutable_preamble()->add_annotations("@oneshot");
     table->set_size(options.table_size);
+    // The table needs a simple match field to create unique entries.
+    MatchField* match_field = table->add_match_fields();
+    match_field->set_id(kActionProfileTableMatchFieldId);
+    match_field->set_match_type(MatchField::EXACT);
+    // Set excessively large to hold arbitrary key strings used in testing.
+    match_field->set_bitwidth(1024);
     // The table needs to link to the action.
     ActionRef* action_ref = table->add_action_refs();
     action_ref->set_id(action->preamble().id());
@@ -719,12 +728,17 @@ class ResourceLimitsTest : public testing::Test {
     return CreateIrP4Info(info);
   }
 
-  Update GetUpdateWithWeights(absl::Span<const int32_t> weights) {
+  Update GetUpdateWithWeights(absl::string_view key,
+                              absl::Span<const int32_t> weights,
+                              p4::v1::Update::Type type) {
     Update update;
-    update.set_type(Update::INSERT);
+    update.set_type(type);
 
     TableEntry* entry = update.mutable_entity()->mutable_table_entry();
     entry->set_table_id(TableWithActionProfileId());
+    FieldMatch* match_field = entry->add_match();
+    match_field->set_field_id(kActionProfileTableMatchFieldId);
+    match_field->mutable_exact()->set_value(key);
     for (int32_t weight : weights) {
       ActionProfileAction* profile = entry->mutable_action()
                                          ->mutable_action_profile_action_set()
@@ -735,49 +749,13 @@ class ResourceLimitsTest : public testing::Test {
 
     return update;
   }
+
+ private:
+  const uint32_t kActionProfileTableMatchFieldId = 1;
 };
 
-TEST_F(ResourceLimitsTest, ReturnsFailedPreconditionWhenEntryWillFit) {
-  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
-                       GetIrP4Info(P4InfoOptions{
-                           .table_size = 10,
-                           .action_profile_size = 10,
-                           .action_profile_max_group_size = 10,
-                           .set_selector_size_semantics = true,
-                       }));
-  SwitchState state(ir_p4info);
-
-  // Insert an entry to use up some space, then check for new space.
-  ASSERT_OK(state.ApplyUpdate(GetUpdateWithWeights({1, 1, 1})));
-  EXPECT_THAT(
-      state.ResourceExhaustedIsAllowed(
-          GetUpdateWithWeights({2}).entity().table_entry()),
-      StatusIs(absl::StatusCode::kFailedPrecondition,
-               AllOf(HasSubstr("1 entries"), HasSubstr("weight of 3"))));
-}
-
-TEST_F(ResourceLimitsTest,
-       ReturnsFailedPreconditionWhenOnlyTableSizeIsChecked) {
-  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
-                       GetIrP4Info(P4InfoOptions{
-                           .table_size = 10,
-                           .action_profile_size = 10,
-                           .action_profile_max_group_size = 10,
-                           .set_selector_size_semantics = true,
-                       }));
-  SwitchState state(ir_p4info);
-
-  Update update;
-  update.set_type(Update::INSERT);
-  TableEntry* entry = update.mutable_entity()->mutable_table_entry();
-  entry->set_table_id(TableWithoutActionProfileId());
-
-  // Insert an entry to use up some space, then check for new space.
-  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update.entity().table_entry()),
-              StatusIs(absl::StatusCode::kFailedPrecondition));
-}
-
-TEST_F(ResourceLimitsTest, ReturnsOkForTooManyTableResourcesUsed) {
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsFailedPreconditionForDeleteUpdate) {
   ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
                        GetIrP4Info(P4InfoOptions{
                            .table_size = 1,
@@ -787,60 +765,311 @@ TEST_F(ResourceLimitsTest, ReturnsOkForTooManyTableResourcesUsed) {
                        }));
   SwitchState state(ir_p4info);
 
-  // Insert 1 table entry to use up the space.
-  ASSERT_OK(state.ApplyUpdate(GetUpdateWithWeights({1})));
-  EXPECT_OK(state.ResourceExhaustedIsAllowed(
-      GetUpdateWithWeights({1}).entity().table_entry()));
+  p4::v1::Update update;
+  update.set_type(Update::DELETE);
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
-TEST_F(ResourceLimitsTest, ReturnsOkForTooMuchWeightBeingUsed) {
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsUnimplementedErrorForMulticastUpdate) {
   ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
                        GetIrP4Info(P4InfoOptions{
-                           .table_size = 10,
-                           .action_profile_size = 3,
+                           .table_size = 1,
+                           .action_profile_size = 10,
                            .action_profile_max_group_size = 10,
                            .set_selector_size_semantics = true,
                        }));
   SwitchState state(ir_p4info);
 
-  // We should expect a resource exhausted for one member using too much, or the
-  // sum total of all members being too much.
-  EXPECT_OK(state.ResourceExhaustedIsAllowed(
-      GetUpdateWithWeights({4}).entity().table_entry()));
-  EXPECT_OK(state.ResourceExhaustedIsAllowed(
-      GetUpdateWithWeights({1, 1, 1, 1}).entity().table_entry()));
+  p4::v1::Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry();
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kUnimplemented));
 }
 
-TEST_F(ResourceLimitsTest, ReturnsOkForTooManyActionsBeingUsed) {
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsInvalidArgumentWhenModifyingNonExistentActionSelectorEntry) {
   ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
                        GetIrP4Info(P4InfoOptions{
-                           .table_size = 10,
-                           .action_profile_size = 3,
+                           .table_size = 1,
+                           .action_profile_size = 10,
                            .action_profile_max_group_size = 10,
                            .set_selector_size_semantics = true,
-                           .max_member_weight = 4096,
                        }));
   SwitchState state(ir_p4info);
 
-  EXPECT_OK(state.ResourceExhaustedIsAllowed(
-      GetUpdateWithWeights({1, 10, 4, 2}).entity().table_entry()));
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"non_existent_entry", {2}, Update::MODIFY)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-// If a group size is too large, the switch must return an InvalidArgumentError,
-// so we do the same.
-TEST_F(ResourceLimitsTest, ReturnsInvalidArgumentForGroupSizesBeingTooLarge) {
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsOkOnUpdateThatWontFitTableSizeOtherwiseError) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info, GetIrP4Info(P4InfoOptions{
+                                               .table_size = 1,
+                                           }));
+  SwitchState state(ir_p4info);
+
+  Update update;
+  update.set_type(Update::INSERT);
+  TableEntry* entry = update.mutable_entity()->mutable_table_entry();
+  entry->set_table_id(TableWithoutActionProfileId());
+  entry->mutable_action()->mutable_action()->set_action_id(ActionId());
+
+  // Initial insert does not cause resource exhaustion.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  // Resource exhaustion allowed on second insert.
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(update));
+
+  update.set_type(Update::MODIFY);
+  // Resource exhaustion not allowed on modify.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(update),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsErrorOnMaxGroupSizeWeightViolation) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .table_size = 10,
+                           .action_profile_size = 10,
+                           .action_profile_max_group_size = 10,
+                           .set_selector_size_semantics = true,
+                       }));
+  SwitchState state(ir_p4info);
+
+  // Error due to violating max_group_size on INSERT.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {25}, Update::INSERT)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {5, 10, 10}, Update::INSERT)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+
+  // Insert entry for modifies.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"entry", {5}, Update::INSERT)));
+
+  // Error due to violating max_group_size on MODIFY.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {25}, Update::MODIFY)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {5, 10, 10}, Update::MODIFY)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(
+    ResourceExhaustionAllowedTest,
+    ReturnsOkOnUpdateThatWontFitUsingSumOfWeightsOtherwiseReturnsErrorWithReason) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .table_size = 10,
+                           .action_profile_size = 10,
+                           .action_profile_max_group_size = 10,
+                           .set_selector_size_semantics = true,
+                       }));
+  SwitchState state(ir_p4info);
+
+  // Insert an entry to use up some space.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"entry", {5}, Update::INSERT)));
+
+  // Inserts that DO NOT exhaust weight resources.
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(
+          GetUpdateWithWeights(/*key=*/"other_entry", {5}, Update::INSERT)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("1 entries"), HasSubstr("total weight of 5"),
+                     HasSubstr("needs 5"))));
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+          /*key=*/"other_entry", {1, 2, 2}, Update::INSERT)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("1 entries"), HasSubstr("total weight of 5"),
+                     HasSubstr("needs 5"))));
+
+  // Inserts that DO exhaust weight resources.
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(
+      GetUpdateWithWeights(/*key=*/"other_entry", {10}, Update::INSERT)));
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+      /*key=*/"other_entry", {2, 4, 4}, Update::INSERT)));
+
+  // Modifies that DO NOT exhaust weight resources. Note that these entries are
+  // the same as the ones that caused resource exhaustion on insert.
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(
+          GetUpdateWithWeights(/*key=*/"entry", {10}, Update::MODIFY)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("1 entries"), HasSubstr("total weight of 5"),
+                     HasSubstr("needs 10"), HasSubstr("had weight 5"))));
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(
+          GetUpdateWithWeights(/*key=*/"entry", {2, 4, 4}, Update::MODIFY)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("1 entries"), HasSubstr("total weight of 5"),
+                     HasSubstr("needs 10"), HasSubstr("had weight 5"))));
+
+  // For modifies that exhaust resource exhaustion, see
+  // `ReturnsOkOnModifyUpdateThatWontFitUsingSumOfWeightsOtherwiseReturnsErrorWithReason`.
+}
+
+TEST_F(
+    ResourceExhaustionAllowedTest,
+    ReturnsOkOnModifyUpdateThatWontFitUsingSumOfWeightsOtherwiseReturnsErrorWithReason) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .table_size = 10,
+                           .action_profile_size = 10,
+                           .action_profile_max_group_size = 10,
+                           .set_selector_size_semantics = true,
+                       }));
+  SwitchState state(ir_p4info);
+
+  // Insert an entry to use up some space.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"other_entry", {5}, Update::INSERT)));
+  // Insert another entry that will be modified.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"mod_entry", {2}, Update::INSERT)));
+
+  // Modifies that DO NOT exhaust weight resources.
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(
+          GetUpdateWithWeights(/*key=*/"mod_entry", {5}, Update::MODIFY)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("2 entries"), HasSubstr("total weight of 7"),
+                     HasSubstr("needs 5"), HasSubstr("had weight 2"))));
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(
+          GetUpdateWithWeights(/*key=*/"mod_entry", {1, 2, 2}, Update::MODIFY)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("2 entries"), HasSubstr("total weight of 7"),
+                     HasSubstr("needs 5"), HasSubstr("had weight 2"))));
+
+  // Modifies that DO exhaust weight resources.
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(
+      GetUpdateWithWeights(/*key=*/"mod_entry", {10}, Update::MODIFY)));
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(
+      GetUpdateWithWeights(/*key=*/"mod_entry", {2, 4, 4}, Update::MODIFY)));
+}
+
+TEST_F(ResourceExhaustionAllowedTest,
+       ReturnsErrorOnMaxGroupSizeMemberViolation) {
   ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
                        GetIrP4Info(P4InfoOptions{
                            .table_size = 10,
                            .action_profile_size = 10,
                            .action_profile_max_group_size = 3,
                            .set_selector_size_semantics = true,
+                           .max_member_weight = 128,
                        }));
   SwitchState state(ir_p4info);
 
-  EXPECT_THAT(state.ResourceExhaustedIsAllowed(
-                  GetUpdateWithWeights({1, 1, 1, 1}).entity().table_entry()),
+  // Error due to violating max_group_size on INSERT.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {5, 5, 5, 5}, Update::INSERT)),
               StatusIs(absl::StatusCode::kInvalidArgument));
+
+  // Error due to violating max_member_weight on INSERT.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {200}, Update::INSERT)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+
+  // Insert entry for modifies.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"entry", {5}, Update::INSERT)));
+
+  // Error due to violating max_group_size on MODIFY.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {5, 5, 5, 5}, Update::MODIFY)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+
+  // Error due to violating max_member_weight on MODIFY.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"entry", {200}, Update::MODIFY)),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(
+    ResourceExhaustionAllowedTest,
+    ReturnsOkOnUpdateThatWontFitUsingSumOfMembersOtherwiseReturnsErrorWithReason) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .table_size = 10,
+                           .action_profile_size = 5,
+                           .action_profile_max_group_size = 5,
+                           .set_selector_size_semantics = true,
+                           .max_member_weight = 128,
+                       }));
+  SwitchState state(ir_p4info);
+
+  // Insert an entry to use up some space.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"entry", {10, 20, 30}, Update::INSERT)));
+
+  // Insert that DOES NOT exhaust weight resources.
+  EXPECT_THAT(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+                  /*key=*/"other_entry", {40, 50}, Update::INSERT)),
+              StatusIs(absl::StatusCode::kFailedPrecondition,
+                       AllOf(HasSubstr("1 entries"), HasSubstr("3 members"),
+                             HasSubstr("needs 2"))));
+
+  // Insert that DOES exhaust member resources.
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+      /*key=*/"other_entry", {40, 50, 60}, Update::INSERT)));
+
+  // Modify that DOES NOT exhaust member resources. Note that this entry is
+  // the same as the one that caused resource exhaustion on insert.
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(
+          GetUpdateWithWeights(/*key=*/"entry", {40, 50, 60}, Update::MODIFY)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("1 entries"), HasSubstr("3 members"),
+                     HasSubstr("needs 3"), HasSubstr("had 3 members"))));
+
+  // For modifies that exhaust resource exhaustion, see
+  // `ReturnsOkOnModifyUpdateThatWontFitUsingSumOfMembersOtherwiseReturnsErrorWithReason`.
+}
+
+TEST_F(
+    ResourceExhaustionAllowedTest,
+    ReturnsOkOnModifyUpdateThatWontFitUsingSumOfMembersOtherwiseReturnsErrorWithReason) {
+  ASSERT_OK_AND_ASSIGN(IrP4Info ir_p4info,
+                       GetIrP4Info(P4InfoOptions{
+                           .table_size = 10,
+                           .action_profile_size = 5,
+                           .action_profile_max_group_size = 5,
+                           .set_selector_size_semantics = true,
+                           .max_member_weight = 128,
+                       }));
+  SwitchState state(ir_p4info);
+
+  // Insert an entry to use up some space.
+  ASSERT_OK(state.ApplyUpdate(GetUpdateWithWeights(
+      /*key=*/"other_entry", {10, 20, 30}, Update::INSERT)));
+  // Insert another entry that will be modified.
+  ASSERT_OK(state.ApplyUpdate(
+      GetUpdateWithWeights(/*key=*/"mod_entry", {40, 50}, Update::INSERT)));
+
+  // Modifies that DO NOT exhaust member resources.
+  EXPECT_THAT(
+      state.ResourceExhaustedIsAllowed(GetUpdateWithWeights(
+          /*key=*/"mod_entry", {60, 70}, Update::MODIFY)),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("2 entries"), HasSubstr("5 members"),
+                     HasSubstr("needs 2"), HasSubstr("had 2 members"))));
+
+  // Modifies that DO exhaust member resources.
+  EXPECT_OK(state.ResourceExhaustedIsAllowed(
+      GetUpdateWithWeights(/*key=*/"mod_entry", {60, 70, 80}, Update::MODIFY)));
 }
 
 }  // namespace

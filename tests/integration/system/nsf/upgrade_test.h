@@ -38,7 +38,8 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   void TearDown() override;
 
   absl::Status PushConfigAndValidate(
-      const ImageConfigParams& image_config_params,
+      const ImageConfigParams& curr_image_config_params,
+      const ImageConfigParams& next_image_config_params,
       bool enable_interface_validation_during_nsf);
 
   // Assumption: Valid config (gNMI and P4Info) has been pushed (to avoid
