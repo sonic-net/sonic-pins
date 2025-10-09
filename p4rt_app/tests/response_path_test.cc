@@ -273,7 +273,9 @@ TEST_F(ResponsePathTest, DuplicatePacketReplicationEngineEntryInsertFails) {
 
   // Reading back we should only see one result.
   p4::v1::ReadRequest read_request;
-  read_request.add_entities()->mutable_packet_replication_engine_entry();
+  read_request.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry();
   ASSERT_OK_AND_ASSIGN(
       p4::v1::ReadResponse read_response,
       pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
