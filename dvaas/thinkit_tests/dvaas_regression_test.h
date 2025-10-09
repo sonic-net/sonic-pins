@@ -31,6 +31,11 @@ struct DvaasRegressionTestParams {
   // that can be used to reproduce the failure of the test vector, the P4Info,
   // and a boolean indicating whether the test is currently failing.
   DvaasRegressionTestProto dvaas_regression_test_proto;
+
+  // By default, the test will clean up the testbed after the test is done.
+  // However, for debugging, it is often useful to leave the testbed in the
+  // failure state after the fact.
+  bool clean_up_after_test = true;
 };
 
 // TODO: Combine all the information required for a
