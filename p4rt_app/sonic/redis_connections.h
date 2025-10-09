@@ -38,7 +38,7 @@ struct P4rtTable {
 
 // The P4RT app needs to:
 //   * Write VRF_TABLE entries into the AppDb.
-//   * Read VRF_TABLE entries out out of the AppStateDb.
+//   * Read VRF_TABLE entries out of the AppStateDb.
 //   * Support failed updates through the response path.
 //   * Support state verification between the AppDb and AppStateDb.
 struct VrfTable {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google LLC
+ * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 
+#include <memory>
+
+#include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/string_view.h"
 #include "gutil/collections.h"
@@ -22,33 +25,33 @@
 
 namespace p4rt_app {
 
-absl::StatusOr<std::unique_ptr<CpuQueueTranslator>> CpuQueueTranslator::Create(
+absl::StatusOr<std::unique_ptr<QueueTranslator>> QueueTranslator::Create(
     const std::vector<std::pair<std::string, std::string>>& name_id_pairs) {
-  std::unique_ptr<CpuQueueTranslator> translator = Empty();
+  std::unique_ptr<QueueTranslator> translator = Empty();
   for (const auto& [name, id_string] : name_id_pairs) {
     int id;
     if (!absl::SimpleAtoi(id_string, &id)) {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Non-integer ID for Cpu Queue Name/ID pair: [" << name << " : "
+             << "Non-integer ID for Queue Name/ID pair: [" << name << " : "
              << id_string << "]";
     }
     if (!translator->name_to_id_.insert_or_assign(name, id).second) {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Duplicate IDs found for CPU Queue Name '" << name << "'";
+             << "Duplicate IDs found for Queue Name '" << name << "'";
     }
     if (!translator->id_to_name_.insert_or_assign(id, name).second) {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Duplicate Names found for CPU Queue ID '" << id << "'";
+             << "Duplicate Names found for Queue ID '" << id << "'";
     }
   }
   return translator;
 }
 
-absl::StatusOr<std::string> CpuQueueTranslator::IdToName(int queue_id) const {
+absl::StatusOr<std::string> QueueTranslator::IdToName(int queue_id) const {
   return gutil::FindOrStatus(id_to_name_, queue_id);
 }
 
-absl::StatusOr<int> CpuQueueTranslator::NameToId(
+absl::StatusOr<int> QueueTranslator::NameToId(
     absl::string_view queue_name) const {
   return gutil::FindOrStatus(name_to_id_, queue_name);
 }

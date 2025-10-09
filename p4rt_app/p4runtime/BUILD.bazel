@@ -132,11 +132,11 @@ cc_library(
     srcs = ["p4runtime_impl.cc"],
     hdrs = ["p4runtime_impl.h"],
     deps = [
-        ":cpu_queue_translator",
         ":ir_translation",
         ":p4info_verification",
         ":p4runtime_read",
         ":packetio_helpers",
+	":queue_translator",
         ":resource_utilization",
         ":sdn_controller_manager",
         "//gutil:collections",
@@ -191,8 +191,8 @@ cc_library(
     testonly = True,
     hdrs = ["mock_p4runtime_impl.h"],
     deps = [
-        ":cpu_queue_translator",
         ":p4runtime_impl",
+	":queue_translator",
         "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest",
@@ -204,8 +204,8 @@ cc_library(
     srcs = ["p4runtime_read.cc"],
     hdrs = ["p4runtime_read.h"],
     deps = [
-        ":cpu_queue_translator",
         ":ir_translation",
+	":queue_translator",
         "//gutil:status",
         "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir_cc_proto",
@@ -274,7 +274,7 @@ cc_library(
     srcs = ["ir_translation.cc"],
     hdrs = ["ir_translation.h"],
     deps = [
-        ":cpu_queue_translator",
+	":queue_translator",
         "//gutil:collections",
         "//gutil:status",
         "//p4_pdpi:ir",
@@ -299,8 +299,8 @@ cc_test(
     name = "ir_translation_test",
     srcs = ["ir_translation_test.cc"],
     deps = [
-        ":cpu_queue_translator",
         ":ir_translation",
+	":queue_translator",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
@@ -380,9 +380,9 @@ cc_test(
 )
 
 cc_library(
-    name = "cpu_queue_translator",
-    srcs = ["cpu_queue_translator.cc"],
-    hdrs = ["cpu_queue_translator.h"],
+    name = "queue_translator",
+    srcs = ["queue_translator.cc"],
+    hdrs = ["queue_translator.h"],
     deps = [
         "//gutil:collections",
         "//gutil:status",
@@ -394,10 +394,10 @@ cc_library(
 )
 
 cc_test(
-    name = "cpu_queue_translator_test",
-    srcs = ["cpu_queue_translator_test.cc"],
+    name = "queue_translator_test",
+    srcs = ["queue_translator_test.cc"],
     deps = [
-        ":cpu_queue_translator",
+        ":queue_translator",
         "//gutil:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",

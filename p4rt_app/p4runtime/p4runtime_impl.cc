@@ -60,11 +60,11 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/translation_options.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/p4runtime_read.h"
 #include "p4rt_app/p4runtime/packetio_helpers.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
@@ -279,7 +279,7 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator) {
   const auto pdpi_options = pdpi::TranslationOptions{
       // When deleting we only consider the key. Actions don't matter so we
       // don't waste time trying to translate that part even if the controller
@@ -355,7 +355,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator,
+    const QueueTranslator& cpu_queue_translator,
     pdpi::IrWriteResponse* response) {
   absl::flat_hash_set<pdpi::EntityKey> keys_in_request;
   bool has_duplicates = false;
@@ -485,7 +485,7 @@ absl::StatusOr<absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>>
 RebuildEntityEntryCache(
     const pdpi::IrP4Info& p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator,
+    const QueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
   absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> cache;
   // Get all P4RT keys associated with IrTableEntry objects from the AppDb.
@@ -564,7 +564,7 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator,
+    const QueueTranslator& cpu_queue_translator,
     const p4::v1::Entity::EntityCase entity_type,
     std::vector<std::string>& failures) {
   // Translate the Entity cache into IR entries for comparison.
@@ -643,6 +643,7 @@ PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
 
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+    sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
     std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
@@ -654,6 +655,8 @@ P4RuntimeImpl::P4RuntimeImpl(
     const P4RuntimeImplOptions& p4rt_options)
     : p4rt_table_(std::move(p4rt_table)),
       vrf_table_(std::move(vrf_table)),
+      vlan_table_(std::move(vlan_table)),
+      vlan_member_table_(std::move(vlan_member_table)),
       hash_table_(std::move(hash_table)),
       switch_table_(std::move(switch_table)),
       port_table_(std::move(port_table)),
@@ -666,7 +669,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       system_state_(system_state),
       netdev_translator_(netdev_translator), */
       translate_port_ids_(p4rt_options.translate_port_ids),
-      cpu_queue_translator_(CpuQueueTranslator::Empty()),
+      cpu_queue_translator_(QueueTranslator::Empty()),
       is_freeze_mode_(p4rt_options.is_freeze_mode) {
   absl::optional<std::string> init_failure;
 
@@ -1321,10 +1324,17 @@ P4RuntimeImpl::GetFlowProgrammingStatistics() {
   return stats;
 }
 
-void P4RuntimeImpl::SetCpuQueueTranslator(
-    std::unique_ptr<CpuQueueTranslator> translator) {
+void P4RuntimeImpl::SetQueueTranslator(
+    std::unique_ptr<QueueTranslator> translator,
+    const std::string& queue_table_key) {
   absl::MutexLock l(&server_state_lock_);
-  cpu_queue_translator_ = std::move(translator);
+
+  if (queue_table_key == "CPU") {
+    cpu_queue_translator_ = std::move(translator);
+  } else {
+    LOG(WARNING) << "Ignoring unknown queue table key '" << queue_table_key
+                 << "'";
+  }
 }
 
 sonic::PacketIoCounters P4RuntimeImpl::GetPacketIoCounters() {
