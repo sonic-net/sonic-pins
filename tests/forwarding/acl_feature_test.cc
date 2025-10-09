@@ -41,7 +41,6 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -53,14 +52,6 @@ namespace pins_test {
 namespace {
 
 using ::google::protobuf::contrib::fixtures::ProtoFixtureRepository;
-
-packetlib::Packet ParsePacketAndFillInComputedFields(
-    const ProtoFixtureRepository& repo, absl::string_view packet_pb) {
-  packetlib::Packet packet = repo.ParseTextOrDie<packetlib::Packet>(packet_pb);
-  CHECK_OK(packetlib::PadPacketToMinimumSize(packet));
-  CHECK_OK(packetlib::UpdateMissingComputedFields(packet));
-  return packet;
-}
 
 // Setup ingress ACL forward all packets.
 absl::Status SetUpIngressAclForwardingAllPackets(
@@ -87,7 +78,10 @@ dvaas::PacketTestVector UdpPacket(
     std::optional<sai::PuntAction> punt_action) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(1))
+  repo.RegisterValue("@payload_ipv4",
+                     dvaas::MakeTestPacketPayloadFromUniqueId(1))
+      .RegisterValue("@payload_ipv6",
+                     dvaas::MakeTestPacketPayloadFromUniqueId(2))
       .RegisterValue("@ingress_port", egress_port)
       .RegisterValue("@egress_port", egress_port)
       .RegisterValue("@ingress_dst_mac", "00:aa:bb:cc:cc:dd")
@@ -130,16 +124,16 @@ dvaas::PacketTestVector UdpPacket(
           .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
             udp_header { source_port: "0x0014" destination_port: "0x000a" }
           )pb")
-          .RegisterMessage("@input_packet", ParsePacketAndFillInComputedFields(
-                                                repo,
-                                                R"pb(
-                                                  headers: @ethernet
-                                                  headers: @ipv4
-                                                  headers: @udp
-                                                  payload: @payload
-                                                )pb"))
+          .RegisterMessage("@input_packet_ipv4",
+                       repo.ParseTextOrDie<packetlib::Packet>(
+                           R"pb(
+                             headers: @ethernet_ipv4
+                             headers: @ipv4
+                             headers: @udp
+                             payload: @payload_ipv4
+                           )pb"))
           .RegisterMessage(
-              "@output_packet", ParsePacketAndFillInComputedFields(repo, R"pb(
+              "@output_packet_ipv4", repo.ParseTextOrDie<packetlib::Packet>(R"pb(
                 headers: @ethernet {
                   ethernet_header {
                     ethernet_destination: @egress_dst_mac
