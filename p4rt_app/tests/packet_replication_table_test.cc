@@ -30,8 +30,11 @@ namespace p4rt_app {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::gutil::IsOk;
 using ::gutil::StatusIs;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
+using ::testing::Not;
 
 class PacketReplicationTableTest
     : public test_lib::P4RuntimeComponentTestFixture {
@@ -310,6 +313,7 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
   EXPECT_THAT(read_response2.entities(0),
               EqualsProto(request2.updates(0).entity()));
 }
+
 TEST_F(PacketReplicationTableTest, PopulatedReadRequestFails) {
   // Read back the entry which should result in the same packet replication
   // entry.
@@ -324,6 +328,101 @@ TEST_F(PacketReplicationTableTest, PopulatedReadRequestFails) {
   EXPECT_FALSE(read_response.ok());
   EXPECT_THAT(read_response, StatusIs(absl::StatusCode::kUnknown,
                                       HasSubstr("multicast_group_id: 1")));
+}
+
+TEST_F(PacketReplicationTableTest, CloneSessionReadIsEmpty) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
+                       test_lib::IrWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: INSERT
+                               entity {
+                                 packet_replication_engine_entry {
+                                   multicast_group_entry {
+                                     multicast_group_id: 1
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
+                                   }
+                                 }
+                               }
+                             })pb",
+                           ir_p4_info_));
+
+  // First, insert a multicast group entry.
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  // Attempt to read back a clone_session_entry.  The response should be empty.
+  p4::v1::ReadRequest read_request;
+  read_request.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_clone_session_entry();
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  EXPECT_THAT(read_response.entities(), IsEmpty());
+}
+
+TEST_F(PacketReplicationTableTest, PopulatedCloneSessionReadRequestsFail) {
+  p4::v1::ReadRequest read_request_with_session_id;
+  read_request_with_session_id.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_clone_session_entry()
+      ->set_session_id(1);
+
+  EXPECT_THAT(pdpi::SetMetadataAndSendPiReadRequest(
+                  p4rt_session_.get(), read_request_with_session_id),
+              StatusIs(absl::StatusCode::kUnknown, HasSubstr("session_id: 1")));
+
+  p4::v1::ReadRequest read_request_with_clone_replica;
+  auto* clone_with_replica = read_request_with_clone_replica.add_entities()
+                                 ->mutable_packet_replication_engine_entry()
+                                 ->mutable_clone_session_entry();
+  auto* replica = clone_with_replica->add_replicas();
+  replica->set_instance(2);
+
+  EXPECT_THAT(pdpi::SetMetadataAndSendPiReadRequest(
+                  p4rt_session_.get(), read_request_with_clone_replica),
+              Not(IsOk()));
+}
+
+TEST_F(PacketReplicationTableTest,
+       UnsetPacketReplicationEntryTypeReturnsMulticastGroupEntry) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
+                       test_lib::IrWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: INSERT
+                               entity {
+                                 packet_replication_engine_entry {
+                                   multicast_group_entry {
+                                     multicast_group_id: 1
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
+                                   }
+                                 }
+                               }
+                             })pb",
+                           ir_p4_info_));
+
+  // First, insert a multicast group entry.
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  // Read back a packet replication engine entry.  Expect the multicast group
+  // entry to be returned.
+  p4::v1::ReadRequest read_request;
+  read_request.add_entities()->mutable_packet_replication_engine_entry();
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_EQ(read_response.entities_size(), 1);  // Only one entity.
+  EXPECT_THAT(read_response.entities(0),
+              EqualsProto(request.updates(0).entity()));
 }
 
 TEST_F(PacketReplicationTableTest, CannotTranslatePortFailure) {
