@@ -29,10 +29,14 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -44,8 +48,6 @@
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
           "The NSF milestone to test.");
@@ -66,7 +68,6 @@ NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
 }
 }  // namespace
 
-// approach than using std::variant (eg. type-erasure or typed tests).
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
   traffic_helper_ = GetParam().create_traffic_helper();
@@ -81,18 +82,6 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
-// Used to append multiple errors. It enables the test to return as many errors
-// as possible during the validation instead of returning on first error.
-// TODO: Replace the AppendErrorStatus with StatusBuilder.
-void AppendErrorStatus(absl::Status &ret_status, absl::Status status) {
-  if (status.ok()) {
-    return;
-  }
-  if (ret_status.ok()) {
-    ret_status.Update(status);
-  } else {
-  }
-}
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
     const ImageConfigParams& image_config_param,
     bool enable_interface_validation_during_nsf) {
