@@ -116,7 +116,7 @@ const sai::NexthopRewriteOptions kNextHopRewriteOptions = {
 // frames.
 constexpr int kFrameCheckSequenceSize = 4;
 
-absl::Status NsfRebootHelper(Testbed &testbed,
+absl::Status NsfRebootHelper(const Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
   // TODO: Add punt flow before reboot,
   // send traffic and measure downtine based on traffic drop.
@@ -763,7 +763,7 @@ TEST_P(CpuQosTestWithoutIxia,
     initial_cpu_queue_state = cpu_queue_state;
   }
 
-  // Ensure tha the switch did not punt packets to the controller via P4RT.
+  // Ensure that the switch did not punt packets to the controller via P4RT.
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::StreamMessageResponse> pi_responses,
                        sut_p4rt_session->ReadStreamChannelResponsesAndFinish());
   for (const auto &pi_response : pi_responses) {
@@ -838,8 +838,7 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
       IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    pins_test::Testbed testbed = &Testbed();
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1031,8 +1030,7 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    pins_test::Testbed testbed = &Testbed();
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1166,8 +1164,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
   }
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    pins_test::Testbed testbed = &Testbed();
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1323,8 +1320,7 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
   }
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    pins_test::Testbed testbed = &Testbed();
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
                          pdpi::P4RuntimeSession::Create(Sut()));
@@ -1388,9 +1384,9 @@ constexpr float kMeterCounterTolerance = 5.0;
 // Ixia configurations:
 // 1. Frames sent per second by Ixia.
 // 2. Total frames sent by Ixia.
-// 3. Default framesize.
-// 4. Maximum framesize.
-// 5. Minimum framesize.
+// 3. Default frame size.
+// 4. Maximum frame size.
+// 5. Minimum frame size.
 constexpr int kFramesPerSecond = 1000000;
 constexpr int kTotalFrames = 10000000;
 constexpr absl::Duration kTrafficDuration =
@@ -1542,15 +1538,8 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   constexpr absl::string_view kPuntTtl0Test = "ttl0_punt_test";
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed_variant = std::move(generic_testbed);
-    absl::Cleanup restore_testbed([&] {
-      // NSF `Testbed` should use raw pointer of
-      // GenericTestbed
-      generic_testbed = std::move(std::get<0>(testbed_variant));
-    });
-    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
-    // however take control of the testbed object.
-    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(
+        NsfRebootHelper(generic_testbed.get(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
@@ -1601,7 +1590,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
                       queue_info.gnmi_queue_name));
       }
 
-      // Set framesize based on supported control plane bandwidth.
+      // Set frame size based on supported control plane bandwidth.
       int frame_size = GetParam().control_plane_bandwidth_bytes_per_second /
                        queue_info.rate_packets_per_second;
       // Framesize lesser than 64 bytes is not a viable frame, hence we will
@@ -1864,15 +1853,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       ir_p4info.tables_by_name().contains(kAclIngressQosTable);
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed_variant = std::move(generic_testbed);
-    absl::Cleanup restore_testbed([&] {
-      // NSF `Testbed` should use raw pointer of
-      // GenericTestbed
-      generic_testbed = std::move(std::get<0>(testbed_variant));
-    });
-    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
-    // however take control of the testbed object.
-    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(
+        NsfRebootHelper(generic_testbed.get(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
@@ -1902,7 +1884,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       continue;
     }
     // Lets set flow rate limit to be half of queue limit so that queue limit
-    // doesnt take effect.
+    // doesn't take effect.
     int flow_rate_limit_in_bytes_per_second =
         (kMaxFrameSizeWithoutVlanTag * queue_info.rate_packets_per_second) / 2;
 
@@ -2286,13 +2268,8 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
                                         *generic_testbed));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed_variant = std::move(generic_testbed);
-    absl::Cleanup restore_testbed([&] {
-      generic_testbed = std::move(std::get<0>(testbed_variant));
-    });
-    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
-    // however take control of the testbed object.
-    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
+    ASSERT_OK(
+        NsfRebootHelper(generic_testbed.get(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {

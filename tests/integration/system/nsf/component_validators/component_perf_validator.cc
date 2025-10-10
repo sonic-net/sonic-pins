@@ -11,16 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "tests/integration/system/nsf/component_validators/syncd_validator.h"
+
+#include "tests/integration/system/nsf/component_validators/component_perf_validator.h"
 
 #include <string>
+#include <utility>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
-#include "lib/gnmi/gnmi_helper.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/ssh_client.h"
@@ -29,28 +35,18 @@
 namespace pins_test {
 namespace {
 
-absl::Status ValidateSyncdWarmboot(
-    thinkit::Switch& sut, absl::flat_hash_set<absl::string_view>& allowlist) {
-  return absl::OkStatus();
-}
+absl::Status ValidateComponentWarmbootPerformance(thinkit::Switch& sut) {
+  absl::Status ret_status;
 
-absl::Status PrepareAllowListInSyncdInit(
-    thinkit::Switch& sut, absl::flat_hash_set<absl::string_view>& allowlist) {
-  return absl::OkStatus();
+  return ret_status;
 }
 
 }  // namespace
 
-absl::Status SyncdValidator::OnNsfReboot(absl::string_view version,
-                                         const Testbed &testbed,
-                                         thinkit::SSHClient &ssh_client) {
-  return ValidateSyncdWarmboot(GetSut(testbed), allowlist_);
-}
-
-absl::Status SyncdValidator::OnInit(absl::string_view version,
-                                    const Testbed &testbed,
-                                    thinkit::SSHClient &ssh_client) {
-  return PrepareAllowListInSyncdInit(GetSut(testbed), allowlist_);
+absl::Status ComponentPerfValidator::OnNsfReboot(
+    absl::string_view version, const Testbed& testbed,
+    thinkit::SSHClient& ssh_client) {
+  return ValidateComponentWarmbootPerformance(GetSut(testbed));
 }
 
 }  // namespace pins_test

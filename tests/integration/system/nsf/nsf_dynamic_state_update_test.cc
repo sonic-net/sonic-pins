@@ -36,6 +36,8 @@
 
 namespace pins_test {
 
+using ::gnoi::system::RebootMethod;
+
 TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
   GetParam().mirror_testbed->ExpectLinkFlaps();
   // Get mirror testbed
@@ -47,8 +49,6 @@ TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
   thinkit::Switch& control_switch = mirror_testbed.ControlSwitch();
 
   // Get pins_test testbed
-  pins_test::Testbed testbed;
-  testbed.emplace<thinkit::MirrorTestbed*>(&mirror_testbed);
 
   // Get ssh client and gnmi stub
   thinkit::SSHClient& ssh_client = *GetParam().ssh_client;
@@ -80,19 +80,20 @@ TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
   ASSERT_THAT(
       GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), intf_to_check),
       gutil::IsOkAndHolds(OperStatus::kUp));
-  ASSERT_OK(NsfReboot(testbed));
+  ASSERT_OK(NsfReboot(&mirror_testbed));
   EXPECT_OK(WaitForSwitchState(sut, SwitchState::kDown, absl::Seconds(90),
                                ssh_client));
   EXPECT_OK(
       SetAdminStatus(control_switch_gnmi_stub.get(), intf_to_check, "DOWN"));
-  if (!WaitForNsfReboot(testbed, ssh_client, /*image_config_param=*/nullptr,
+  if (!WaitForNsfReboot(&mirror_testbed, ssh_client,
+                        /*image_config_param=*/nullptr,
                         /*check_interfaces_up =*/false)
            .ok()) {
     // Cold reboot the testbed as the failed NSF reboot could leave the testbed
     // in unhealthy state
     LOG(INFO) << "NSF reboot failed. Cold rebooting the switch.";
-    EXPECT_OK(Reboot(gnoi::system::RebootMethod::COLD, testbed));
-    EXPECT_OK(WaitForReboot(testbed, ssh_client, false));
+    EXPECT_OK(Reboot(RebootMethod::COLD, &mirror_testbed));
+    EXPECT_OK(WaitForReboot(&mirror_testbed, ssh_client, false));
     FAIL() << "Failure in NSF reboot.";
   }
   EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*control_switch_gnmi_stub.get(),
