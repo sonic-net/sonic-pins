@@ -19,7 +19,7 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <thread>  //NOLINT
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -33,12 +33,9 @@
 #include "gmock/gmock.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/client_context.h"
-#include "grpcpp/impl/codegen/call_op_set.h"
-#include "grpcpp/impl/codegen/client_context.h"
 #include "grpcpp/support/sync_stream.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/basic_traffic/basic_traffic.h"
@@ -47,7 +44,6 @@
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/annotation_util.h"
 #include "p4_fuzzer/fuzz_util.h"
@@ -128,33 +124,22 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
   ASSERT_OK_AND_ASSIGN(std::vector<P4rtPortId> port_ids,
                        pins_test::GetMatchingP4rtPortIds(
                            *gnmi_stub, pins_test::IsEnabledEthernetInterface));
-  p4::config::v1::P4Info p4_info = GetParam().p4_info;
-  if (p4_info.tables().empty()) {
-    LOG(INFO) << "No P4Info passed, using the one on the switch.";
+
+  p4::config::v1::P4Info p4_info;
+  {
     ASSERT_OK_AND_ASSIGN(auto p4rt_session,
                          pdpi::P4RuntimeSession::Create(testbed->Sut()));
     ASSERT_OK_AND_ASSIGN(p4::v1::GetForwardingPipelineConfigResponse response,
                          pdpi::GetForwardingPipelineConfig(p4rt_session.get()));
     p4_info = std::move(*response.mutable_config()->mutable_p4info());
   }
-  ASSERT_OK_AND_ASSIGN(
-      p4_fuzzer::FuzzerConfig config,
-      p4_fuzzer::FuzzerConfig::Create(
-          p4_info, p4_fuzzer::ConfigParams{
-                       .ports = std::move(port_ids),
-                       .qos_queues = {"0x0", "0x1", "0x2", "0x3", "0x4", "0x5",
-                                      "0x6", "0x7"},
-                       .role = "sdn_controller",
-                       .mutate_update_probability = 0.1,
-                       .tables_for_which_to_not_exceed_resource_guarantees =
-                           {"vrf_table", "mirror_session_table"},
-                       // TODO: Remove once P4RT translated types
-                       // are supported by P4-constraints.
-                       .ignore_constraints_on_tables =
-                           {
-                               "ingress.routing_lookup.vrf_table",
-                           },
-                   }));
+
+  p4_fuzzer::ConfigParams fuzzer_config_params =
+      GetParam().fuzzer_config_params;
+  fuzzer_config_params.ports = std::move(port_ids);
+  ASSERT_OK_AND_ASSIGN(p4_fuzzer::FuzzerConfig config,
+                       p4_fuzzer::FuzzerConfig::Create(
+                           p4_info, std::move(fuzzer_config_params)));
   ASSERT_OK_AND_ASSIGN(
       auto p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
