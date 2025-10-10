@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/random/random.h"
@@ -56,10 +57,19 @@
 namespace pins {
 namespace {
 
-// Depending on the test we may want to send packets with, or without, a VLAN
-// ID. If the test want's to use a VLAN ID it should choose the value itself,
-// otherwise it can use this constant to say no VLAN ID should be set.
-constexpr absl::string_view kNoVlanId = "";
+constexpr absl::string_view kIpv4Ethertype = "0x0800";
+
+packetlib::VlanHeader PopulateVlanHeader(absl::string_view vlan_id) {
+  packetlib::VlanHeader header;
+  header.set_priority_code_point("0x0");
+  header.set_drop_eligible_indicator("0x0");
+  header.set_vlan_identifier(vlan_id);
+  header.set_ethertype(kIpv4Ethertype);
+
+  return header;
+}
+
+using TagHeader = std::variant<packetlib::VlanHeader, packetlib::CsigHeader>;
 
 // send_to_ingress is a special port created on the switch which allows the CPU
 // to inject a packet into the ingress pipeline.
@@ -240,7 +250,7 @@ absl::Status AdmitL3Route(pdpi::P4RuntimeSession& session,
 }
 
 absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
-                                      absl::string_view vlan_id,
+                                      std::optional<TagHeader> tag_header,
                                       absl::string_view dst_ip,
                                       absl::string_view payload) {
   packetlib::Packet packet;
@@ -249,18 +259,19 @@ absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
   auto* ethernet = packet.add_headers();
   ethernet->mutable_ethernet_header()->set_ethernet_destination(dst_mac);
   ethernet->mutable_ethernet_header()->set_ethernet_source("00:00:22:22:00:00");
-  ethernet->mutable_ethernet_header()->set_ethertype("0x0800");
+  ethernet->mutable_ethernet_header()->set_ethertype(kIpv4Ethertype);
 
-  // VLAN
-  if (!vlan_id.empty()) {
-    auto* vlan = packet.add_headers();
-    vlan->mutable_vlan_header()->set_priority_code_point("0x0");
-    vlan->mutable_vlan_header()->set_drop_eligible_indicator("0x0");
-    vlan->mutable_vlan_header()->set_vlan_identifier(vlan_id);
-    vlan->mutable_vlan_header()->set_ethertype(
-        ethernet->ethernet_header().ethertype());
-
-    ethernet->mutable_ethernet_header()->set_ethertype("0x8100");
+  if (tag_header.has_value()) {
+    auto tag = tag_header.value();
+    if (std::holds_alternative<packetlib::VlanHeader>(tag)) {
+      *packet.add_headers()->mutable_vlan_header() =
+          std::get<packetlib::VlanHeader>(tag);
+      ethernet->mutable_ethernet_header()->set_ethertype("0x8100");
+    } else {
+      *packet.add_headers()->mutable_csig_header() =
+          std::get<packetlib::CsigHeader>(tag);
+      ethernet->mutable_ethernet_header()->set_ethertype("0x9900");
+    }
   }
 
   // IP
@@ -291,7 +302,8 @@ absl::StatusOr<std::string> UdpPacket(absl::string_view dst_mac,
 absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
                            const pdpi::IrP4Info& ir_p4info,
                            absl::string_view port_id, int packet_count,
-                           absl::string_view dst_mac, absl::string_view vlan_id,
+                           absl::string_view dst_mac,
+                           std::optional<TagHeader> tag_header,
                            absl::string_view dst_ip,
                            absl::string_view payload) {
   LOG(INFO) << absl::StreamFormat("Sending %d packets with %s, %s to port %s.",
@@ -299,7 +311,7 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
 
   for (int i = 0; i < packet_count; ++i) {
     ASSIGN_OR_RETURN(std::string packet,
-                     UdpPacket(dst_mac, vlan_id, dst_ip,
+                     UdpPacket(dst_mac, tag_header, dst_ip,
                                absl::Substitute("[Packet:$0] $1", i, payload)));
     // Rate limit to 500pps to avoid punt packet drops on the control switch.
     if (port_id == kSendToIngress) {
@@ -407,7 +419,8 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
       "Testing L3 forwarding. This packet should be dropped.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_ports[0], kNumberOfTestPackets,
-                          /*dst_mac=*/"00:aa:bb:cc:cc:dd", kNoVlanId,
+                          /*dst_mac=*/"00:aa:bb:cc:cc:dd",
+                          /*tag_header=*/std::nullopt,
                           /*dst_ip=*/"10.0.0.1", kBadPayload));
 
   // Then send the "good" packets.
@@ -415,7 +428,8 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_ports[0], kNumberOfTestPackets,
-                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
+                          /*dst_mac=*/"00:01:02:03:04:05",
+                          /*tag_header=*/std::nullopt,
                           /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   int good_packet_count = 0;
@@ -494,7 +508,8 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
     std::string dst_mac = absl::StrFormat("00:01:02:03:%02d:05", i);
     ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                             control_ports[0], kNumberOfTestPackets, dst_mac,
-                            kNoVlanId, /*dst_ip=*/"10.0.0.1", kGoodPayload));
+                            /*tag_header=*/std::nullopt,
+                            /*dst_ip=*/"10.0.0.1", kGoodPayload));
   }
 
   int good_packet_count = 0;
@@ -568,7 +583,8 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
       "Testing L3 forwarding. This packet should be dropped.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_ports[1], kNumberOfTestPackets,
-                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
+                          /*dst_mac=*/"00:01:02:03:04:05",
+                          /*tag_header=*/std::nullopt,
                           /*dst_ip=*/"10.0.0.1", kBadPayload));
 
   // Then send the "good" packets.
@@ -576,7 +592,8 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_ports[0], kNumberOfTestPackets,
-                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
+                          /*dst_mac=*/"00:01:02:03:04:05",
+                          /*tag_header=*/std::nullopt,
                           /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   int good_packet_count = 0;
@@ -643,7 +660,8 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           sut_ports[0], kNumberOfTestPackets,
-                          /*dst_mac=*/"00:00:00:00:00:01", kNoVlanId,
+                          /*dst_mac=*/"00:00:00:00:00:01",
+                          /*tag_header=*/std::nullopt,
                           /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   int good_packet_count = 0;
@@ -737,10 +755,12 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
   // Send the "bad" packets first to give them the most time.
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_ports[0], kNumberOfTestPackets, drop_dst_mac,
-                          kNoVlanId, /*dst_ip=*/"10.0.0.1", kBadPayload));
+                          /*tag_header=*/std::nullopt,
+                          /*dst_ip=*/"10.0.0.1", kBadPayload));
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_ports[0], kNumberOfTestPackets, good_dst_mac,
-                          kNoVlanId, /*dst_ip=*/"10.0.0.1", kGoodPayload));
+                          /*tag_header=*/std::nullopt,
+                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   // Wait for all the good packets to get punted back on the control switch.
   int good_packet_count = 0;
@@ -853,10 +873,12 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
   const int kNumberOfTestPackets = 100;
   const std::string kGoodPayload =
       "Testing L3 forwarding. This packet should arrive to packet in.";
-  ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
-                          control_ports[0], kNumberOfTestPackets,
-                          /*dst_mac=*/"00:01:02:03:04:05", /*vlan_id=*/"0x004",
-                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
+  ASSERT_OK(
+      SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_, control_ports[0],
+                    kNumberOfTestPackets,
+                    /*dst_mac=*/"00:01:02:03:04:05",
+                    /*tag_header=*/PopulateVlanHeader(/*vlan_id=*/"0x004"),
+                    /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   int good_packet_count = 0;
   ASSERT_OK(control_switch_p4rt_session_->HandleNextNStreamMessages(
@@ -1002,7 +1024,8 @@ TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
       "Testing L3 forwarding. This packet should be dropped.";
   ASSERT_OK(SendUdpPacket(*control_switch_p4rt_session_, ir_p4info_,
                           control_port, kNumberOfTestPackets,
-                          /*dst_mac=*/"00:01:02:03:04:05", kNoVlanId,
+                          /*dst_mac=*/"00:01:02:03:04:05",
+                          /*tag_header=*/std::nullopt,
                           /*dst_ip=*/"10.0.0.1", kBadPayload));
 
   // Then send the "good" packets.
@@ -1010,7 +1033,8 @@ TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
       "Testing L3 forwarding. This packet should arrive to packet in.";
   ASSERT_OK(SendUdpPacket(*sut_p4rt_session_, ir_p4info_, kSendToIngress,
                           kNumberOfTestPackets, /*dst_mac=*/"00:01:02:03:04:05",
-                          kNoVlanId, /*dst_ip=*/"10.0.0.1", kGoodPayload));
+                          /*tag_header=*/std::nullopt,
+                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
   int good_packet_count = 0;
   int bad_packet_count = 0;
