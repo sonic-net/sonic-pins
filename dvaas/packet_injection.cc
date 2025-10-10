@@ -22,6 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "dvaas/port_id_map.h"
@@ -35,6 +36,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/utils/ir.h"
 #include "tests/forwarding/util.h"
 
 namespace dvaas {
@@ -106,9 +108,16 @@ absl::StatusOr<P4rtPortId> GetSutEgressPortFromControlSwitchPacketIn(
     const MirrorTestbedP4rtPortIdMap& mirror_testbed_port_map) {
   ASSIGN_OR_RETURN(const std::string control_switch_ingress_port_p4rt_encoding,
                    GetIngressPortFromIrPacketIn(packet_in));
-  ASSIGN_OR_RETURN(const P4rtPortId control_switch_ingress_port,
-                   P4rtPortId::MakeFromP4rtEncoding(
-                       control_switch_ingress_port_p4rt_encoding));
+  P4rtPortId control_switch_ingress_port;
+  if (absl::StartsWith(control_switch_ingress_port_p4rt_encoding, "0x")) {
+    ASSIGN_OR_RETURN(control_switch_ingress_port,
+                     P4rtPortId::MakeFromHexstringEncoding(
+                         control_switch_ingress_port_p4rt_encoding));
+  } else {
+    ASSIGN_OR_RETURN(control_switch_ingress_port,
+                     P4rtPortId::MakeFromP4rtEncoding(
+                         control_switch_ingress_port_p4rt_encoding));
+  }
   return mirror_testbed_port_map.GetSutPortConnectedToControlSwitchPort(
       control_switch_ingress_port);
 }
@@ -116,7 +125,9 @@ absl::StatusOr<P4rtPortId> GetSutEgressPortFromControlSwitchPacketIn(
 absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
     const pdpi::IrPacketIn& packet_in) {
   for (const auto& metadata : packet_in.metadata()) {
-    if (metadata.name() == "ingress_port") return metadata.value().str();
+    if (metadata.name() == "ingress_port") {
+      return pdpi::IrValueString(metadata.value());
+    }
   }
   return absl::InvalidArgumentError(
       "IrPacketIn does not contain 'ingress_port' metadata.");
