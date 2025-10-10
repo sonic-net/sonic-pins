@@ -26,13 +26,13 @@ namespace pins_test {
 class OtgHelper : public TrafficHelper {
  public:
   OtgHelper(bool enable_linerate = false) : enable_linerate_(enable_linerate) {}
-  absl::Status StartTraffic(Testbed& testbed,
+  absl::Status StartTraffic(const Testbed &testbed,
                             absl::string_view config_label) override;
-  absl::Status StopTraffic(Testbed& testbed) override;
-  absl::Status ValidateTraffic(Testbed& testbed,
+  absl::Status StopTraffic(const Testbed &testbed) override;
+  absl::Status ValidateTraffic(const Testbed &testbed,
                                absl::Duration max_acceptable_outage) override;
 
- private:
+private:
   bool enable_linerate_;
 };
 

@@ -26,14 +26,14 @@ namespace pins_test {
 
 class FuzzerReplayProgrammer : public FlowProgrammer {
  public:
-  absl::Status ProgramFlows(const ImageConfigParams& image_config_param,
-                            Testbed& testbed,
-                            thinkit::SSHClient& ssh_client) override {
-    return absl::OkStatus();
-  };
-  absl::Status ClearFlows(Testbed& testbed) override {
-    return absl::OkStatus();
-  };
+   absl::Status ProgramFlows(const ImageConfigParams &image_config_param,
+                             const Testbed &testbed,
+                             thinkit::SSHClient &ssh_client) override {
+     return absl::OkStatus();
+   };
+   absl::Status ClearFlows(const Testbed &testbed) override {
+     return absl::OkStatus();
+   };
 };
 
 }  // namespace pins_test

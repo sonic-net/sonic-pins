@@ -81,7 +81,7 @@ dvaas::PacketTestVector Ipv6InIpv6DecapTestVector(
     const TunnelDecapTestVectorParams& packet_vector_param) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketPayloadFromUniqueId(
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(
                                      1, "Testing IPv6-in-Ipv6 packets"))
       .RegisterValue("@ingress_port", packet_vector_param.in_port)
       .RegisterValue("@egress_port", packet_vector_param.out_port)
@@ -167,7 +167,7 @@ dvaas::PacketTestVector Ipv4InIpv6DecapTestVector(
     const TunnelDecapTestVectorParams& packet_vector_param) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketPayloadFromUniqueId(
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(
                                      1, "Testing IPv4-in-Ipv6 packets"))
       .RegisterValue("@ingress_port", packet_vector_param.in_port)
       .RegisterValue("@egress_port", packet_vector_param.out_port)
@@ -257,7 +257,7 @@ dvaas::PacketTestVector Ipv4InIpv6NoDecapTestVector(
     const TunnelDecapTestVectorParams &packet_vector_param) {
   ProtoFixtureRepository repo;
 
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketPayloadFromUniqueId(
+  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(
                                      1, "Testing IPv4-in-Ipv6 packets"))
       .RegisterValue("@ingress_port", packet_vector_param.in_port)
       .RegisterValue("@egress_port", packet_vector_param.out_port)
