@@ -15,10 +15,12 @@
 #include "tests/integration/system/nsf/upgrade_test.h"
 
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -66,6 +68,14 @@ NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
 
   return static_cast<NsfUpgradeScenario>(random_index);
 }
+
+// Checks for any changes in the expected interfaces and their operational
+// states.
+// @interface_to_oper_status_map is used as a baseline to compare it with the
+// data returned by GetInterfaceToOperStatusMapOverGnmi during this check.
+// @trigger is to state the actions/events performed prior to calling
+// this helper. As we add this to the overall status we can clearly identify the
+// cause of this checks failure.
 }  // namespace
 
 void NsfUpgradeTest::SetUp() {
@@ -109,8 +119,12 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       curr_image_config.image_label, next_image_config.image_version,
       next_image_config.image_label);
   LOG(INFO) << "Initiating " << upgrade_path;
-
+  thinkit::Switch& sut = GetSut(testbed_);
   std::vector<std::string> interfaces_to_check;
+
+  ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  LOG(INFO) << "Capture interfaces and their port status prior to NSF reboot.";
+
   RETURN_IF_ERROR(ValidateTestbedState(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
@@ -156,7 +170,6 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   LOG(INFO) << "Programming flows before starting the traffic";
   RETURN_IF_ERROR(flow_programmer_->ProgramFlows(curr_image_config, testbed_,
                                                  *ssh_client_));
-  thinkit::Switch& sut = GetSut(testbed_);
   RETURN_IF_ERROR(ValidateTestbedState(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
@@ -217,8 +230,6 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       LOG(ERROR) << "Failed to save P4 snapshot before upgrade and NSF reboot";
     }
   }
-
-  ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
 
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_before_upgrade_reboot,
