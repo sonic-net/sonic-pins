@@ -80,7 +80,8 @@ struct FailureEnhancementOptions {
   bool collect_packet_trace = true;
   // Minimize the set of test vectors that caused the first
   // `max_number_of_failures_to_minimize` failures.
-  int max_number_of_failures_to_minimize = 1;
+  // TODO: Re-enable when minimization algorithm is fixed.
+  int max_number_of_failures_to_minimize = 0;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
@@ -357,6 +358,14 @@ absl::StatusOr<std::string> GetPacketTraceSummary(
 absl::Status AttachPacketTrace(
     dvaas::PacketTestOutcome& failed_packet_test,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer);
+
+// Stores a given `packet_test_vector` as an ArribaTestVector using only the
+// entries that might be hit by the packet (according to its P4 packet trace).
+absl::Status StorePacketTestVectorAsArribaTestVector(
+    const PacketTestVector& packet_test_vector,
+    const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer);
 

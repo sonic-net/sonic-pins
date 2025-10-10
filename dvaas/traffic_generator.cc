@@ -682,6 +682,12 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
       if (test_outcome.test_result().has_failure()) {
         RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
                                           dvaas_test_artifact_writer));
+
+        // Output an Arriba test vector to test artifacts.
+        RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
+            test_outcome.test_run().test_vector(), packet_traces,
+            dvaas_test_artifact_writer));
+
         packet_trace_count_++;
       }
     }
