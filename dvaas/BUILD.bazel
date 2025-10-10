@@ -71,6 +71,16 @@ cc_library(
     ],
 )
 
+proto_library(
+    name = "dvaas_detective_proto",
+    srcs = ["dvaas_detective.proto"],
+)
+
+cc_proto_library(
+    name = "dvaas_detective_cc_proto",
+    deps = [":dvaas_detective_proto"],
+)
+
 cc_test(
     name = "dataplane_validation_test",
     srcs = ["dataplane_validation_test.cc"],
