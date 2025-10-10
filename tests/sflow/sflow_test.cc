@@ -19,7 +19,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -40,12 +39,13 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "absl/synchronization/mutex.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -69,13 +69,13 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/util.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
-#include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "tests/sflow/sflow_breakout_test.h"
 #include "tests/sflow/sflow_util.h"
@@ -86,8 +86,6 @@
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins {
 
@@ -2055,19 +2053,11 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
       EXPECT_OK(sut_p4_session_->Finish());
       sut_p4_session_.reset(nullptr);
     }
-    pins_test::Testbed testbed_variant;
-    testbed_variant.emplace<std::unique_ptr<thinkit::GenericTestbed>>(
-        std::move(testbed_));
-    absl::Cleanup restore_testbed([this, &testbed_variant] {
-      // TODO: NSF `Testbed` should use raw pointer of
-      // GenericTestbed
-      testbed_ = std::move(std::get<0>(testbed_variant));
-    });
     pins_test::ImageConfigParams image_config_params{
         .gnmi_config = gnmi_config_with_sflow_,
     };
     ASSERT_OK(pins_test::DoNsfRebootAndWaitForSwitchReady(
-        testbed_variant, *ssh_client_, &image_config_params));
+        testbed_.get(), *ssh_client_, &image_config_params));
     LOG(INFO) << "NSF reboot finished.";
   }
 
@@ -2549,19 +2539,17 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"pre_nsf_", testbed.Environment());
   LOG(INFO) << "Start NSF reboot on switch";
-  pins_test::Testbed testbed_variant;
-  testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
   ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_before_nsf,
-                   pins_test::TakeP4FlowSnapshot(testbed_variant));
+                   pins_test::TakeP4FlowSnapshot(&testbed));
   pins_test::ImageConfigParams image_config_params{
       .gnmi_config = std::string(gnmi_config),
   };
   RETURN_IF_ERROR(pins_test::DoNsfRebootAndWaitForSwitchReady(
-      testbed_variant, *GetParam().ssh_client, &image_config_params));
+      &testbed, *GetParam().ssh_client, &image_config_params));
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"post_nsf_", testbed.Environment());
   ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_after_nsf,
-                   pins_test::TakeP4FlowSnapshot(testbed_variant));
+                   pins_test::TakeP4FlowSnapshot(&testbed));
   RETURN_IF_ERROR(pins_test::CompareP4FlowSnapshots(p4flow_snapshot_before_nsf,
                                                     p4flow_snapshot_after_nsf));
   LOG(INFO) << "NSF reboot finished and switch is converged.";
