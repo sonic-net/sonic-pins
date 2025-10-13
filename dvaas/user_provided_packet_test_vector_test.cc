@@ -295,19 +295,52 @@ std::vector<TestCase> GetPositiveTestCases() {
               )pb"),
           },
   };
-  return test_cases;
-}  // namespace
-
-std::vector<TestCase> GetNegativeTestCases() {
-  std::vector<TestCase> test_cases;
 
   test_cases.emplace_back() = TestCase{
-      .description = "input type != DATAPLANE",
+      .description = "input type = SUBMIT_TO_INGRESS",
       .vectors =
           {
               gutil::ParseProtoOrDie<PacketTestVector>(R"pb(
                 input {
                   type: SUBMIT_TO_INGRESS
+                  packet {
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+                          ethernet_source: "55:44:33:22:11:00"
+                          ethertype: "0x0010"
+                        }
+                      }
+                      payload: "test packet #42:"
+                    }
+                  }
+                }
+                acceptable_outputs {
+                  packets {
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+                          ethernet_source: "55:44:33:22:11:00"
+                          ethertype: "0x0010"
+                        }
+                      }
+                      payload: "test packet #42:"
+                    }
+                  }
+                }
+              )pb"),
+          },
+  };
+
+  test_cases.emplace_back() = TestCase{
+      .description = "input type = PACKET_OUT",
+      .vectors =
+          {
+              gutil::ParseProtoOrDie<PacketTestVector>(R"pb(
+                input {
+                  type: PACKET_OUT
                   packet {
                     port: "1"
                     parsed {
@@ -322,10 +355,29 @@ std::vector<TestCase> GetNegativeTestCases() {
                     }
                   }
                 }
-                acceptable_outputs {}
+                acceptable_outputs {
+                  packets {
+                    port: "1"
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+                          ethernet_source: "55:44:33:22:11:00"
+                          ethertype: "0x0010"
+                        }
+                      }
+                      payload: "test packet #42:"
+                    }
+                  }
+                }
               )pb"),
           },
   };
+  return test_cases;
+}
+
+std::vector<TestCase> GetNegativeTestCases() {
+  std::vector<TestCase> test_cases;
 
   test_cases.emplace_back() = TestCase{
       .description = "missing expectation",
@@ -586,6 +638,7 @@ std::vector<TestCase> GetNegativeTestCases() {
               )pb"),
           },
   };
+
   return test_cases;
 }
 
