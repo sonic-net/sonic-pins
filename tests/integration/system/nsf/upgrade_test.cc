@@ -93,18 +93,20 @@ void NsfUpgradeTest::SetUp() {
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
-    const ImageConfigParams& image_config_param,
+    const ImageConfigParams& curr_image_config_params,
+    const ImageConfigParams& next_image_config_params,
     bool enable_interface_validation_during_nsf) {
-  RETURN_IF_ERROR(PushConfig(image_config_param, GetSut(testbed_), *ssh_client_,
+  RETURN_IF_ERROR(PushConfig(next_image_config_params, GetSut(testbed_),
+                             *ssh_client_,
                              /*clear_config=*/false));
   std::vector<std::string> interfaces_to_check;
 
   RETURN_IF_ERROR(ValidateTestbedState(
-      testbed_, *ssh_client_, &image_config_param,
+      testbed_, *ssh_client_, &next_image_config_params,
       enable_interface_validation_during_nsf, interfaces_to_check));
   return ValidateComponents(
       &ComponentValidator::OnConfigPush, component_validators_,
-      image_config_param.image_label, testbed_, *ssh_client_);
+      next_image_config_params.image_label, testbed_, *ssh_client_);
 }
 
 absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
@@ -347,7 +349,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
     case NsfUpgradeScenario::kOnlyConfigPush:
       LOG(INFO) << upgrade_path << ": Proceeding with only config push";
 
-      status = PushConfigAndValidate(next_image_config,
+      status = PushConfigAndValidate(curr_image_config, next_image_config,
                                      enable_interface_validation_during_nsf);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
@@ -371,7 +373,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                               status.message())));
       }
 
-      status = PushConfigAndValidate(next_image_config,
+      status = PushConfigAndValidate(curr_image_config, next_image_config,
                                      enable_interface_validation_during_nsf);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
@@ -386,7 +388,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
     case NsfUpgradeScenario::kConfigPushBeforeAclFlowProgram:
       LOG(INFO) << upgrade_path
                 << ": Proceeding with config push before ACL flow program";
-      status = PushConfigAndValidate(next_image_config,
+      status = PushConfigAndValidate(curr_image_config, next_image_config,
                                      enable_interface_validation_during_nsf);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
