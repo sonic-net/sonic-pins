@@ -76,12 +76,6 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   PacketStatistics packet_statistics;
   gutil::BazelTestArtifactWriter artifact_writer;
 
-  // Store test vector insights.
-  ASSIGN_OR_RETURN(const std::string insights_csv,
-                   GetTestInsightsTableAsCsv(packet_test_vectors, ir_p4info));
-  RETURN_IF_ERROR(
-      artifact_writer.AppendToTestArtifact("test_insights.csv", insights_csv));
-
   // Send tests to switch and collect results.
   ASSIGN_OR_RETURN(PacketTestRuns test_runs,
                    SendTestPacketsAndCollectOutputs(
@@ -121,6 +115,12 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       ValidateTestRuns(test_runs, params.switch_output_diff_params));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
+
+  // Store test insights.
+  ASSIGN_OR_RETURN(const std::string insights_csv,
+                   GetTestInsightsTableAsCsv(test_outcomes, ir_p4info));
+  RETURN_IF_ERROR(
+      artifact_writer.AppendToTestArtifact("test_insights.csv", insights_csv));
 
   ValidationResult validation_result(std::move(test_outcomes),
                                      /*packet_synthesis_result=*/{});

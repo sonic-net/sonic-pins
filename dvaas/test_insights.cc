@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <queue>
 #include <string>
 #include <vector>
@@ -56,11 +57,17 @@ constexpr absl::string_view kNotAppliedAction = "not applied";
 
 namespace {
 
-struct PacketTestVectorCsvRow {
+// Values for various features of a single packet test.
+// The fields in the struct correspond to columns in the test insights table and
+// each instance corresponds to one row in the table.
+struct TestInsightsRow {
   int id;
+  std::optional<int> functional_cluster_id;
   std::vector<std::string> actions;
   std::string acceptable_outcomes;
-  std::string packet;
+  std::optional<std::string> actual_outcome;
+  std::optional<bool> test_pass;
+  std::string input_packet;
 };
 
 // Topologically sorts the partial orders and returns a total order.
@@ -112,13 +119,25 @@ absl::StatusOr<std::vector<std::string>> GetTotalOrderFromPartialOrders(
   return total_order;
 }
 
-// Infers the order of table application of `target_tables` from the given
-// packet traces. Tables in `target_tables` that are not found in the packet
+// Infers the order of table application tables from the given
+// packet traces. Tables in `ir_p4info` that are not found in the packet
 // traces are ordered lexicographically and appended to the end of the
 // returned order.
 absl::StatusOr<std::vector<std::string>> InferOrderOfTablesFromPacketTraces(
     absl::Span<const dvaas::PacketTestVector> test_vectors,
-    const absl::flat_hash_set<std::string>& target_tables) {
+    const pdpi::IrP4Info& ir_p4info) {
+  // Get SAI tables from P4Info.
+  absl::flat_hash_set<std::string> target_tables;
+  for (const auto& [table_name, table] : ir_p4info.tables_by_name()) {
+    // Avoid BMv2's internal tables.
+    if (table.preamble().id() == 0) continue;
+    // Avoid v1model auxiliary tables.
+    if (table_name == "egress_port_loopback_table") continue;
+    if (table_name == "v1model_auxiliary_vlan_membership_table") continue;
+    if (table_name == "ingress_clone_table") continue;
+    target_tables.insert(table.preamble().name());
+  }
+
   // Infer partial orders from packet traces.
   std::vector<std::vector<std::string>> tables_partial_orders;
   for (const dvaas::PacketTestVector& test_vector : test_vectors) {
@@ -159,6 +178,30 @@ absl::StatusOr<std::vector<std::string>> InferOrderOfTablesFromPacketTraces(
   return tables_total_order;
 }
 
+// For the given list of fully qualified table names, returns the corresponding
+// list of table aliases (as defined in `ir_p4info`).
+absl::StatusOr<std::vector<std::string>> GetTableAliases(
+    const std::vector<std::string>& fully_qualified_table_names,
+    const pdpi::IrP4Info& ir_p4info) {
+  // Build a map from fully qualified table name to table alias.
+  absl::flat_hash_map<std::string, std::string>
+      fully_qualified_table_name_to_alias;
+  for (const auto& [table_name, table] : ir_p4info.tables_by_name()) {
+    fully_qualified_table_name_to_alias[table.preamble().name()] = table_name;
+  }
+
+  std::vector<std::string> table_aliases;
+  for (const auto& table : fully_qualified_table_names) {
+    const auto it = fully_qualified_table_name_to_alias.find(table);
+    if (it == fully_qualified_table_name_to_alias.end()) {
+      return absl::InternalError("Table alias not found for table: " + table);
+    } else {
+      table_aliases.push_back(it->second);
+    }
+  }
+  return table_aliases;
+}
+
 // For each table, returns the set of actions that were applied according to
 // the given packet traces.
 absl::btree_map<std::string, absl::btree_set<std::string>> GetTableToActions(
@@ -194,53 +237,38 @@ absl::btree_map<std::string, absl::btree_set<std::string>> GetTableToActions(
   return table_to_actions;
 }
 
+// Return a text description of the switch output.
+std::string GetSwitchOutputDescription(const SwitchOutput& switch_output) {
+  std::string outcome = "drop";
+  if (!switch_output.packets().empty() && !switch_output.packet_ins().empty()) {
+    outcome = "punt_and_forward";
+  } else if (!switch_output.packets().empty()) {
+    outcome = "forward";
+  } else if (!switch_output.packet_ins().empty()) {
+    outcome = "punt";
+  }
+  return outcome;
+}
+
+// Return a text description of the acceptable outcomes.
 std::string GetAcceptableOutcomesDescription(
     const dvaas::PacketTestVector& packet_test_vector) {
   absl::btree_set<std::string> acceptable_outcomes;
   for (const auto& acceptable_output :
        packet_test_vector.acceptable_outputs()) {
-    std::string outcome = "drop";
-    if (!acceptable_output.packets().empty() &&
-        !acceptable_output.packet_ins().empty()) {
-      outcome = "punt_and_forward";
-    } else if (!acceptable_output.packets().empty()) {
-      outcome = "forward";
-    } else if (!acceptable_output.packet_ins().empty()) {
-      outcome = "punt";
-    }
-    acceptable_outcomes.insert(outcome);
+    acceptable_outcomes.insert(GetSwitchOutputDescription(acceptable_output));
   }
   return absl::StrJoin(acceptable_outcomes, "/");
 }
 
-}  // namespace
-
-absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
+// Returns a list of test insights rows corresponding to the given list of
+// packet test vectors.
+absl::StatusOr<std::vector<TestInsightsRow>> GetTestInsightsRows(
     absl::Span<const dvaas::PacketTestVector> packet_test_vectors,
-    const pdpi::IrP4Info& ir_p4info) {
-  std::string csv;
-
-  // Get SAI tables from P4Info.
-  absl::flat_hash_set<std::string> target_tables;
-  absl::flat_hash_map<std::string, std::string>
-      fully_qualified_table_name_to_alias;
-  for (const auto& [table_name, table] : ir_p4info.tables_by_name()) {
-    fully_qualified_table_name_to_alias[table.preamble().name()] = table_name;
-    // Avoid BMv2's internal tables.
-    if (table.preamble().id() == 0) continue;
-    // Avoid v1model auxiliary tables.
-    if (table_name == "egress_port_loopback_table") continue;
-    if (table_name == "v1model_auxiliary_vlan_membership_table") continue;
-    if (table_name == "ingress_clone_table") continue;
-    target_tables.insert(table.preamble().name());
-  }
-
-  ASSIGN_OR_RETURN(
-      std::vector<std::string> ordered_tables,
-      InferOrderOfTablesFromPacketTraces(packet_test_vectors, target_tables));
+     const std::vector<std::string>& ordered_tables) {
+  std::vector<TestInsightsRow> rows;
 
   // Create one row per packet test vector.
-  std::vector<PacketTestVectorCsvRow> rows;
   for (const PacketTestVector& packet_test_vector : packet_test_vectors) {
     std::vector<dvaas::PacketTrace> packet_traces;
     for (const auto& acceptable_output :
@@ -274,58 +302,117 @@ absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
         .actions = ordered_actions,
         .acceptable_outcomes =
             GetAcceptableOutcomesDescription(packet_test_vector),
-        .packet = gutil::PrintShortTextProto(packet_test_vector.input()),
+	.input_packet = gutil::PrintShortTextProto(packet_test_vector.input()),
     });
   }
 
-  // Sort rows, put the rows with same actions together.
-  std::sort(
-      rows.begin(), rows.end(),
-      [](const PacketTestVectorCsvRow& lhs, const PacketTestVectorCsvRow& rhs) {
-        if (lhs.actions != rhs.actions) return lhs.actions < rhs.actions;
-        if (lhs.acceptable_outcomes != rhs.acceptable_outcomes)
-          return lhs.acceptable_outcomes < rhs.acceptable_outcomes;
-        if (lhs.packet != rhs.packet) return lhs.packet < rhs.packet;
-        if (lhs.id != rhs.id) return lhs.id < rhs.id;
-        return false;
-      });
-
   // Cluster the rows. Put rows with same (action, outcomes) in the same
   // cluster.
-  struct PacketTestVectorCsvRowFunctionalClusterComparator {
-    bool operator()(const PacketTestVectorCsvRow& lhs,
-                    const PacketTestVectorCsvRow& rhs) const {
+  struct FunctionalClusterComparator {
+    bool operator()(const TestInsightsRow& lhs,
+                    const TestInsightsRow& rhs) const {
       if (lhs.actions != rhs.actions) return lhs.actions < rhs.actions;
       return lhs.acceptable_outcomes < rhs.acceptable_outcomes;
     }
   };
-  absl::btree_map<PacketTestVectorCsvRow, int,
-                  PacketTestVectorCsvRowFunctionalClusterComparator>
+  absl::btree_map<TestInsightsRow, int, FunctionalClusterComparator>
       row_to_functional_cluster_id;
-  for (const auto& row : rows) {
+  for (auto& row : rows) {
     row_to_functional_cluster_id.insert(
         {row, row_to_functional_cluster_id.size()});
+  row.functional_cluster_id = row_to_functional_cluster_id.at(row);
   }
 
+  return rows;
+}
+
+}  // namespace
+
+absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
+    absl::Span<const dvaas::PacketTestVector> packet_test_vectors,
+    const pdpi::IrP4Info& ir_p4info) {
+  std::string csv;
+
+  ASSIGN_OR_RETURN(
+      const std::vector<std::string> ordered_tables,
+      InferOrderOfTablesFromPacketTraces(packet_test_vectors, ir_p4info));
+
+  ASSIGN_OR_RETURN(std::vector<TestInsightsRow> rows,
+                   GetTestInsightsRows(packet_test_vectors, ordered_tables));
+
+  // Sort rows, placing rows with the same functional cluster near each other.
+  std::sort(rows.begin(), rows.end(),
+            [](const TestInsightsRow& lhs, const TestInsightsRow& rhs) {
+              if (lhs.functional_cluster_id != rhs.functional_cluster_id)
+                return lhs.functional_cluster_id < rhs.functional_cluster_id;
+              return lhs.id < rhs.id;
+            });
+
   // Create CSV header.
-  std::vector<std::string> ordered_table_aliases;
-  for (const auto& table : ordered_tables) {
-    const auto it = fully_qualified_table_name_to_alias.find(table);
-    if (it == fully_qualified_table_name_to_alias.end()) {
-      return absl::InternalError("Table alias not found for table: " + table);
-    } else {
-      ordered_table_aliases.push_back(it->second);
-    }
-  }
+  ASSIGN_OR_RETURN(std::vector<std::string> ordered_table_aliases,
+                   GetTableAliases(ordered_tables, ir_p4info));
   absl::SubstituteAndAppend(&csv,
                             "test vector id,functional cluster,$0, "
                             "accceptable outcomes,input packet\n",
                             absl::StrJoin(ordered_table_aliases, ","));
   // Add CSV rows.
   for (const auto& row : rows) {
+    absl::SubstituteAndAppend(&csv, "$0,$1,$2,$3,$4\n", row.id,
+                              *row.functional_cluster_id,
+                              absl::StrJoin(row.actions, ","),
+                              row.acceptable_outcomes, row.input_packet);
+  }
+
+  return csv;
+}
+
+absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
+    const PacketTestOutcomes& test_outcomes, const pdpi::IrP4Info& ir_p4info) {
+  std::string csv;
+
+  std::vector<PacketTestVector> packet_test_vectors;
+  packet_test_vectors.reserve(test_outcomes.outcomes_size());
+  for (const auto& test_outcome : test_outcomes.outcomes()) {
+    packet_test_vectors.push_back(test_outcome.test_run().test_vector());
+  }
+
+  ASSIGN_OR_RETURN(
+      const std::vector<std::string> ordered_tables,
+      InferOrderOfTablesFromPacketTraces(packet_test_vectors, ir_p4info));
+
+  ASSIGN_OR_RETURN(std::vector<TestInsightsRow> rows,
+                   GetTestInsightsRows(packet_test_vectors, ordered_tables));
+
+  int index = 0;
+  for (const PacketTestOutcome& test_outcome : test_outcomes.outcomes()) {
+    rows[index].test_pass = !test_outcome.test_result().has_failure();
+    rows[index].actual_outcome =
+        GetSwitchOutputDescription(test_outcome.test_run().actual_output());
+    ++index;
+  }
+
+  // Sort rows, placing rows with the same functional cluster near each other.
+  std::sort(rows.begin(), rows.end(),
+            [](const TestInsightsRow& lhs, const TestInsightsRow& rhs) {
+              if (lhs.functional_cluster_id != rhs.functional_cluster_id)
+                return lhs.functional_cluster_id < rhs.functional_cluster_id;
+              return lhs.id < rhs.id;
+            });
+
+  // Create CSV header.
+  ASSIGN_OR_RETURN(std::vector<std::string> ordered_table_aliases,
+                   GetTableAliases(ordered_tables, ir_p4info));
+  absl::SubstituteAndAppend(&csv,
+                            "test vector id,functional cluster,$0,"
+                            "accceptable outcomes,actual outcome,test "
+                            "pass,input packet\n",
+                            absl::StrJoin(ordered_table_aliases, ","));
+  // Add CSV rows.
+  for (const auto& row : rows) {
     absl::SubstituteAndAppend(
-        &csv, "$0,$1,$2,$3,$4\n", row.id, row_to_functional_cluster_id.at(row),
-        absl::StrJoin(row.actions, ","), row.acceptable_outcomes, row.packet);
+        &csv, "$0,$1,$2,$3,$4,$5,$6\n", row.id, *row.functional_cluster_id,
+        absl::StrJoin(row.actions, ","), row.acceptable_outcomes,
+        *row.actual_outcome, (*row.test_pass ? "yes" : "no"), row.input_packet);
   }
 
   return csv;
