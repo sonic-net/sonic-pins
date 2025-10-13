@@ -17,9 +17,7 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <memory>
 #include <string>
-#include <variant>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -33,13 +31,11 @@
 #include "artifacts/otg.pb.h"
 #include "glog/logging.h"
 #include "grpcpp/client_context.h"
-#include "gutil/overload.h"
 #include "gutil/status.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed.h"
 
 namespace pins_test {
 namespace {
@@ -96,271 +92,241 @@ TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
 
 }  // namespace
 
-absl::Status OtgHelper::StartTraffic(Testbed& testbed,
+absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
                                      absl::string_view config_label) {
-  return std::visit(
-      gutil::Overload{
-          [this](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> absl::Status {
-            ASSIGN_OR_RETURN(std::vector<InterfaceLink> up_links,
-                             GetUpLinks(GetAllTrafficGeneratorLinks, *testbed));
-            if (up_links.size() < 2) {
-              return absl::InvalidArgumentError(
-                  "Test requires at least 2 SUT ports connected to a Software "
-                  "(Host) or Hardware (Ixia) Traffic Generator");
-            }
+  ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
+                   GetGenericTestbed(testbed));
+  ASSIGN_OR_RETURN(std::vector<InterfaceLink> up_links,
+                   GetUpLinks(GetAllTrafficGeneratorLinks, *generic_testbed));
+  if (up_links.size() < 2) {
+    return absl::InvalidArgumentError(
+        "Test requires at least 2 SUT ports connected to a Software "
+        "(Host) or Hardware (Ixia) Traffic Generator");
+  }
 
-            // We sort the peer interfaces to ensure that the traffic Tx/Rx
-            // interfaces match with those programmed on the SUT.
-            absl::c_sort(up_links,
-                         [](const InterfaceLink& a, const InterfaceLink& b) {
-                           return a.peer_interface < b.peer_interface;
-                         });
+  // We sort the peer interfaces to ensure that the traffic Tx/Rx
+  // interfaces match with those programmed on the SUT.
+  absl::c_sort(up_links, [](const InterfaceLink &a, const InterfaceLink &b) {
+    return a.peer_interface < b.peer_interface;
+  });
 
-            // Create config.
-            otg::SetConfigRequest set_config_request;
-            otg::SetConfigResponse set_config_response;
-            auto* config = set_config_request.mutable_config();
+  // Create config.
+  otg::SetConfigRequest set_config_request;
+  otg::SetConfigResponse set_config_response;
+  auto *config = set_config_request.mutable_config();
 
-            // Randomly pick source and destination hosts.
-            const std::string otg_src_port =
-                up_links.front().peer_traffic_location;
-            const std::string otg_dst_port =
-                up_links.back().peer_traffic_location;
-            const std::string otg_src_mac = up_links.front().peer_mac_address;
-            const std::string otg_dst_mac = up_links.back().peer_mac_address;
-            const std::string otg_src_ip = up_links.front().peer_ipv6_address;
-            const std::string otg_dst_ip = up_links.back().peer_ipv6_address;
-            const std::string otg_src_loc =
-                up_links.front().peer_traffic_location;
-            const std::string otg_dst_loc =
-                up_links.back().peer_traffic_location;
+  // Run traffic through all hosts.
+  // Randomly pick source and destination hosts.
+  const std::string otg_src_port = up_links.front().peer_traffic_location;
+  const std::string otg_dst_port = up_links.back().peer_traffic_location;
+  const std::string otg_src_mac = up_links.front().peer_mac_address;
+  const std::string otg_dst_mac = up_links.back().peer_mac_address;
+  const std::string otg_src_ip = up_links.front().peer_ipv6_address;
+  const std::string otg_dst_ip = up_links.back().peer_ipv6_address;
+  const std::string otg_src_loc = up_links.front().peer_traffic_location;
+  const std::string otg_dst_loc = up_links.back().peer_traffic_location;
 
-            // Add ports.
-            auto* src_port = config->add_ports();
-            auto* dst_port = config->add_ports();
-            src_port->set_name(otg_src_port);
-            dst_port->set_name(otg_dst_port);
-            src_port->set_location(otg_src_loc);
-            dst_port->set_location(otg_dst_loc);
+  // Add ports.
+  auto *src_port = config->add_ports();
+  auto *dst_port = config->add_ports();
+  src_port->set_name(otg_src_port);
+  dst_port->set_name(otg_dst_port);
+  src_port->set_location(otg_src_loc);
+  dst_port->set_location(otg_dst_loc);
 
-            // helper function. Set layer1.
-            auto* layer1 = config->add_layer1();
-            layer1->set_name("ly");
-            layer1->add_port_names(otg_src_port);
-            layer1->add_port_names(otg_dst_port);
+  // Move each of the below configurations into a
+  // helper function. Set layer1.
+  auto *layer1 = config->add_layer1();
+  layer1->set_name("ly");
+  layer1->add_port_names(otg_src_port);
+  layer1->add_port_names(otg_dst_port);
 
-            // linerate.
-            // Set speed.
-            if (enable_linerate_) {
-              layer1->set_speed(otg::Layer1::Speed::speed_200_gbps);
-            } else {
-              layer1->set_speed(otg::Layer1::Speed::speed_1_gbps);
-            }
+  // Set speed dynamically to ensure maximum
+  // linerate.
+  // Set speed.
+  if (enable_linerate_) {
+    layer1->set_speed(otg::Layer1::Speed::speed_200_gbps);
+  } else {
+    layer1->set_speed(otg::Layer1::Speed::speed_1_gbps);
+  }
 
-            // Set MTU.
-            layer1->set_mtu(kDefaultMtu);
+  // Set MTU.
+  layer1->set_mtu(kDefaultMtu);
 
-            // Create flow.
-            auto* flow = config->add_flows();
-            flow->set_name(absl::StrCat(otg_src_port, "->", otg_dst_port));
+  // Create flow.
+  auto *flow = config->add_flows();
+  flow->set_name(absl::StrCat(otg_src_port, "->", otg_dst_port));
 
-            // Set Tx / Rx ports.
-            flow->mutable_tx_rx()->set_choice(otg::FlowTxRx::Choice::port);
-            flow->mutable_tx_rx()->mutable_port()->set_tx_name(otg_src_port);
-            flow->mutable_tx_rx()->mutable_port()->set_rx_name(otg_dst_port);
+  // Set Tx / Rx ports.
+  flow->mutable_tx_rx()->set_choice(otg::FlowTxRx::Choice::port);
+  flow->mutable_tx_rx()->mutable_port()->set_tx_name(otg_src_port);
+  flow->mutable_tx_rx()->mutable_port()->set_rx_name(otg_dst_port);
 
-            // Set packet size.
-            flow->mutable_size()->set_choice(otg::FlowSize::Choice::fixed);
-            flow->mutable_size()->set_fixed(kDefaultPacketSize);
+  // Set packet size.
+  flow->mutable_size()->set_choice(otg::FlowSize::Choice::fixed);
+  flow->mutable_size()->set_fixed(kDefaultPacketSize);
 
-            // Set transmission duration.
-            flow->mutable_duration()->set_choice(
-                otg::FlowDuration::Choice::continuous);
+  // Set transmission duration.
+  flow->mutable_duration()->set_choice(otg::FlowDuration::Choice::continuous);
 
-            // Set transmission rate.
-            flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
-            if (enable_linerate_) {
-              flow->mutable_rate()->set_percentage(kFlowRateAtLinerate);
-            } else {
-              flow->mutable_rate()->set_percentage(kFlowRate);
-            }
+  // Set transmission rate.
+  flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
+  if (enable_linerate_) {
+    flow->mutable_rate()->set_percentage(kFlowRateAtLinerate);
+  } else {
+    flow->mutable_rate()->set_percentage(kFlowRate);
+  }
 
-            // Set capture metrics.
-            flow->mutable_metrics()->set_enable(true);
-            flow->mutable_metrics()->set_loss(false);
-            flow->mutable_metrics()->set_timestamps(true);
-            flow->mutable_metrics()->mutable_latency()->set_enable(true);
-            flow->mutable_metrics()->mutable_latency()->set_mode(
-                otg::FlowLatencyMetrics::Mode::cut_through);
+  // Set capture metrics.
+  flow->mutable_metrics()->set_enable(true);
+  flow->mutable_metrics()->set_loss(false);
+  flow->mutable_metrics()->set_timestamps(true);
+  flow->mutable_metrics()->mutable_latency()->set_enable(true);
+  flow->mutable_metrics()->mutable_latency()->set_mode(
+      otg::FlowLatencyMetrics::Mode::cut_through);
 
-            // Set ethernet header.
-            auto* eth_packet = flow->add_packet();
-            eth_packet->set_choice(otg::FlowHeader::Choice::ethernet);
-            eth_packet->mutable_ethernet()->mutable_src()->set_choice(
-                otg::PatternFlowEthernetSrc::Choice::value);
-            eth_packet->mutable_ethernet()->mutable_dst()->set_choice(
-                otg::PatternFlowEthernetDst::Choice::value);
-            eth_packet->mutable_ethernet()->mutable_src()->set_value(
-                otg_src_mac);
-            eth_packet->mutable_ethernet()->mutable_dst()->set_value(
-                otg_dst_mac);
+  // Set ethernet header.
+  auto *eth_packet = flow->add_packet();
+  eth_packet->set_choice(otg::FlowHeader::Choice::ethernet);
+  eth_packet->mutable_ethernet()->mutable_src()->set_choice(
+      otg::PatternFlowEthernetSrc::Choice::value);
+  eth_packet->mutable_ethernet()->mutable_dst()->set_choice(
+      otg::PatternFlowEthernetDst::Choice::value);
+  eth_packet->mutable_ethernet()->mutable_src()->set_value(otg_src_mac);
+  eth_packet->mutable_ethernet()->mutable_dst()->set_value(otg_dst_mac);
 
-            // Set IP header.
-            auto* ip_packet = flow->add_packet();
-            ip_packet->set_choice(otg::FlowHeader::Choice::ipv6);
-            ip_packet->mutable_ipv6()->mutable_src()->set_choice(
-                otg::PatternFlowIpv6Src::Choice::value);
-            ip_packet->mutable_ipv6()->mutable_dst()->set_choice(
-                otg::PatternFlowIpv6Dst::Choice::value);
-            ip_packet->mutable_ipv6()->mutable_src()->set_value(otg_src_ip);
-            ip_packet->mutable_ipv6()->mutable_dst()->set_value(otg_dst_ip);
+  // Set IP header.
+  auto *ip_packet = flow->add_packet();
+  ip_packet->set_choice(otg::FlowHeader::Choice::ipv6);
+  ip_packet->mutable_ipv6()->mutable_src()->set_choice(
+      otg::PatternFlowIpv6Src::Choice::value);
+  ip_packet->mutable_ipv6()->mutable_dst()->set_choice(
+      otg::PatternFlowIpv6Dst::Choice::value);
+  ip_packet->mutable_ipv6()->mutable_src()->set_value(otg_src_ip);
+  ip_packet->mutable_ipv6()->mutable_dst()->set_value(otg_dst_ip);
 
-            // Set TCP header.
-            auto* tcp_packet = flow->add_packet();
-            tcp_packet->set_choice(otg::FlowHeader::Choice::tcp);
-            auto* tcp_dst_port = tcp_packet->mutable_tcp()->mutable_dst_port();
-            tcp_dst_port->set_choice(
-                otg::PatternFlowTcpDstPort::Choice::increment);
-            tcp_dst_port->mutable_increment()->set_start(
-                kFlowTcpDstPortRangeStart);
-            tcp_dst_port->mutable_increment()->set_step(1);
-            tcp_dst_port->mutable_increment()->set_count(
-                kFlowTcpDstPortRangeEnd - kFlowTcpDstPortRangeStart + 1);
+  // Set TCP header.
+  auto *tcp_packet = flow->add_packet();
+  tcp_packet->set_choice(otg::FlowHeader::Choice::tcp);
+  auto *tcp_dst_port = tcp_packet->mutable_tcp()->mutable_dst_port();
+  tcp_dst_port->set_choice(otg::PatternFlowTcpDstPort::Choice::increment);
+  tcp_dst_port->mutable_increment()->set_start(kFlowTcpDstPortRangeStart);
+  tcp_dst_port->mutable_increment()->set_step(1);
+  tcp_dst_port->mutable_increment()->set_count(kFlowTcpDstPortRangeEnd -
+                                               kFlowTcpDstPortRangeStart + 1);
 
-            // Set the config.
-            otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
+  // Set the config.
+  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
 
-            RETURN_IF_ERROR(WaitForCondition(SetOtgConfig, absl::Minutes(5),
-                                             stub, set_config_request,
-                                             set_config_response));
+  RETURN_IF_ERROR(WaitForCondition(SetOtgConfig, absl::Minutes(5), stub,
+                                   set_config_request, set_config_response));
 
-            // Start the traffic.
-            otg::SetControlStateRequest request;
-            otg::SetControlStateResponse response;
-            grpc::ClientContext context;
-            request.mutable_control_state()->set_choice(
-                otg::ControlState::Choice::traffic);
-            request.mutable_control_state()->mutable_traffic()->set_choice(
-                otg::StateTraffic::Choice::flow_transmit);
-            request.mutable_control_state()
-                ->mutable_traffic()
-                ->mutable_flow_transmit()
-                ->set_state(otg::StateTrafficFlowTransmit::State::start);
-            return gutil::GrpcStatusToAbslStatus(
-                stub->SetControlState(&context, request, &response));
-          },
-          [&](thinkit::MirrorTestbed* testbed) {
-            return absl::UnimplementedError("MirrorTestbed not implemented");
-          }},
-      testbed);
+  // Start the traffic.
+  otg::SetControlStateRequest request;
+  otg::SetControlStateResponse response;
+  grpc::ClientContext context;
+  request.mutable_control_state()->set_choice(
+      otg::ControlState::Choice::traffic);
+  request.mutable_control_state()->mutable_traffic()->set_choice(
+      otg::StateTraffic::Choice::flow_transmit);
+  request.mutable_control_state()
+      ->mutable_traffic()
+      ->mutable_flow_transmit()
+      ->set_state(otg::StateTrafficFlowTransmit::State::start);
+  return gutil::GrpcStatusToAbslStatus(
+      stub->SetControlState(&context, request, &response));
 }
 
-absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
-  return std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> absl::Status {
-            otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
-            otg::SetControlStateRequest request;
-            otg::SetControlStateResponse response;
-            ::grpc::ClientContext context;
-            request.mutable_control_state()->set_choice(
-                otg::ControlState::Choice::traffic);
-            request.mutable_control_state()->mutable_traffic()->set_choice(
-                otg::StateTraffic::Choice::flow_transmit);
-            request.mutable_control_state()
-                ->mutable_traffic()
-                ->mutable_flow_transmit()
-                ->set_state(otg::StateTrafficFlowTransmit::State::stop);
-            RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
-                stub->SetControlState(&context, request, &response)));
+absl::Status OtgHelper::StopTraffic(const Testbed &testbed) {
+  ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
+                   GetGenericTestbed(testbed));
+  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  otg::SetControlStateRequest request;
+  otg::SetControlStateResponse response;
+  ::grpc::ClientContext context;
+  request.mutable_control_state()->set_choice(
+      otg::ControlState::Choice::traffic);
+  request.mutable_control_state()->mutable_traffic()->set_choice(
+      otg::StateTraffic::Choice::flow_transmit);
+  request.mutable_control_state()
+      ->mutable_traffic()
+      ->mutable_flow_transmit()
+      ->set_state(otg::StateTrafficFlowTransmit::State::stop);
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      stub->SetControlState(&context, request, &response)));
 
-            // Add a 10 second sleep after stopping traffic, to ensure that any
-            // transit packets are accounted for while validating traffic in
-            // any further steps.
-            absl::SleepFor(absl::Seconds(10));
-            return absl::OkStatus();
-          },
-          [&](thinkit::MirrorTestbed* testbed) {
-            return absl::UnimplementedError("MirrorTestbed not implemented");
-          }},
-      testbed);
+  // Add a 10 second sleep after stopping traffic, to ensure that any
+  // transit packets are accounted for while validating traffic in
+  // any further steps.
+  absl::SleepFor(absl::Seconds(10));
+  return absl::OkStatus();
 }
 
-absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
+absl::Status OtgHelper::ValidateTraffic(const Testbed &testbed,
                                         absl::Duration max_acceptable_outage) {
-  return std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> absl::Status {
-            otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
-            otg::GetMetricsRequest metrics_req;
-            otg::GetMetricsResponse metrics_res;
-            grpc::ClientContext metrics_ctx;
+  ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
+                   GetGenericTestbed(testbed));
+  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  otg::GetMetricsRequest metrics_req;
+  otg::GetMetricsResponse metrics_res;
+  grpc::ClientContext metrics_ctx;
 
-            metrics_req.mutable_metrics_request()->set_choice(
-                otg::MetricsRequest::Choice::flow);
-            RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
-                stub->GetMetrics(&metrics_ctx, metrics_req, &metrics_res)));
+  metrics_req.mutable_metrics_request()->set_choice(
+      otg::MetricsRequest::Choice::flow);
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      stub->GetMetrics(&metrics_ctx, metrics_req, &metrics_res)));
 
-            RETURN_IF_ERROR(testbed->Environment().StoreTestArtifact(
-                absl::StrCat("OTG_Traffic_Metrics_",
-                             absl::FormatTime("%H_%M_%S", absl::Now(),
-                                              absl::LocalTimeZone()),
-                             ".txt"),
-                metrics_res.DebugString()));
-            // Verify flow metrics is not empty.
-            if (metrics_res.metrics_response().flow_metrics().empty()) {
-              return absl::InternalError(
-                  "Cannot validate traffic as no flow metrics received.");
-            }
+  RETURN_IF_ERROR(generic_testbed->Environment().StoreTestArtifact(
+      absl::StrCat(
+          "OTG_Traffic_Metrics_",
+          absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone()),
+          ".txt"),
+      metrics_res.DebugString()));
+  // Verify flow metrics is not empty.
+  if (metrics_res.metrics_response().flow_metrics().empty()) {
+    return absl::InternalError(
+        "Cannot validate traffic as no flow metrics received.");
+  }
 
-            // Verify transmission completion and no frames or bytes drops for
-            // each flow.
-            std::vector<std::string> errors;
-            for (const auto& flow_metric :
-                 metrics_res.metrics_response().flow_metrics()) {
-              bool transmission_stopped =
-                  flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
+  // Verify transmission completion and no frames or bytes drops for
+  // each flow.
+  std::vector<std::string> errors;
+  for (const auto &flow_metric :
+       metrics_res.metrics_response().flow_metrics()) {
+    bool transmission_stopped =
+        flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
 
-              if (flow_metric.frames_tx() == 0) {
-                errors.push_back(
-                    absl::StrCat("Flow name:\t\t", flow_metric.name(),
-                                 "\nFrames Tx:\t\t", flow_metric.frames_tx(),
-                                 "\nBytes Tx:\t\t", flow_metric.bytes_tx(),
-                                 transmission_stopped
-                                     ? ""
-                                     : "\nTransmission not completed within "
-                                       "the expected time."));
-                continue;
-              }
+    if (flow_metric.frames_tx() == 0) {
+      errors.push_back(absl::StrCat(
+          "Flow name:\t\t", flow_metric.name(), "\nFrames Tx:\t\t",
+          flow_metric.frames_tx(), "\nBytes Tx:\t\t", flow_metric.bytes_tx(),
+          transmission_stopped ? ""
+                               : "\nTransmission not completed within "
+                                 "the expected time."));
+      continue;
+    }
 
-              TrafficMetrics traffic_metrics =
-                  GetTrafficMetrics(flow_metric, enable_linerate_);
-              if (traffic_metrics.outage_duration <= max_acceptable_outage)
-                continue;
+    TrafficMetrics traffic_metrics =
+        GetTrafficMetrics(flow_metric, enable_linerate_);
+    if (traffic_metrics.outage_duration <= max_acceptable_outage)
+      continue;
 
-              errors.push_back(absl::StrCat(
-                  "Flow name:\t\t\t", flow_metric.name(),
-                  "\nTraffic outage:\t\t\t", traffic_metrics.outage_duration,
-                  "\nMax acceptable outage:\t\t", max_acceptable_outage,
-                  "\nFrames dropped:\t\t\t", traffic_metrics.frames_dropped,
-                  "\nBytes dropped:\t\t\t", traffic_metrics.bytes_dropped,
-                  transmission_stopped ? ""
-                                       : "\nTransmission not completed within "
-                                         "the expected time."));
-            }
+    errors.push_back(absl::StrCat(
+        "Flow name:\t\t\t", flow_metric.name(), "\nTraffic outage:\t\t\t",
+        traffic_metrics.outage_duration, "\nMax acceptable outage:\t\t",
+        max_acceptable_outage, "\nFrames dropped:\t\t\t",
+        traffic_metrics.frames_dropped, "\nBytes dropped:\t\t\t",
+        traffic_metrics.bytes_dropped,
+        transmission_stopped ? ""
+                             : "\nTransmission not completed within "
+                               "the expected time."));
+  }
 
-            if (errors.empty()) return absl::OkStatus();
-            return absl::InternalError(absl::StrCat(
-                "Following errors were observed while validating traffic:\n\n",
-                absl::StrJoin(errors, "\n\n")));
-          },
-          [&](thinkit::MirrorTestbed* testbed) {
-            return absl::UnimplementedError("MirrorTestbed not implemented");
-          }},
-      testbed);
+  if (errors.empty())
+    return absl::OkStatus();
+  return absl::InternalError(absl::StrCat(
+      "Following errors were observed while validating traffic:\n\n",
+      absl::StrJoin(errors, "\n\n")));
 }
 
 }  // namespace pins_test
