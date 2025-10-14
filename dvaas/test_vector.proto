@@ -51,6 +51,8 @@ message SwitchOutput {
   repeated Packet packets = 1;
   // The packets punted by the switch using packet io.
   repeated PacketIn packet_ins = 2;
+  // The trace of the packet through the switch.
+  dvaas.PacketTrace packet_trace = 3;
 }
 
 // The input to a switch.

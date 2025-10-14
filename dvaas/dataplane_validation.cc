@@ -183,10 +183,10 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
   int iterations = 0;
   for (int i = result.entities_size() - 1; i >= 0; --i && ++iterations) {
     LOG_EVERY_T(INFO, kSecsBetweenLogs)
-        << "Loop has run " << iterations << " iterations, there are "
-        << (result.entities_size() - i) << " remaining entities out of "
-        << pi_entities.size() << " original ones and we have reinstalled "
-        << reinstall_attempts << " of them.";
+        << "Loop has run " << iterations << " iterations, there are " << i
+        << " remaining entities out of " << pi_entities.size()
+        << " original ones and we have reinstalled " << reinstall_attempts
+        << " of them.";
 
     // Store the `pi_entity` in case we need to reinstall it on the switch if no
     // failure occurs.
@@ -492,8 +492,6 @@ absl::Status AttachPacketTrace(
   return absl::OkStatus();
 }
 
-// Stores a given `packet_test_vector` as an ArribaTestVector using only the
-// entries that might be hit by the packet (according to its P4 packet trace).
 absl::Status StorePacketTestVectorAsArribaTestVector(
     const PacketTestVector &packet_test_vector,
     const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>
@@ -764,6 +762,22 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                      LegitimizeUserProvidedTestVectors(
                          params.packet_test_vector_override, ir_info));
   }
+
+  // Store the test vectors in ArribaTestVector format as an artifact.
+  dvaas::ArribaTestVector arriba_test_vector;
+  for (const pdpi::IrEntity& ir_entity : entities.entities()) {
+    // TODO: Add support for other entity types.
+    if (ir_entity.has_table_entry()) {
+      *arriba_test_vector.mutable_ir_table_entries()->add_entries() =
+          ir_entity.table_entry();
+    }
+  }
+  for (auto& [id, test_vector] : test_vectors) {
+    (*arriba_test_vector.mutable_packet_test_vector_by_id())[id] = test_vector;
+  }
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "arriba_test_vector.txtpb", gutil::PrintTextProto(arriba_test_vector)));
+
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_vectors.txt", ToString(test_vectors)));
 
