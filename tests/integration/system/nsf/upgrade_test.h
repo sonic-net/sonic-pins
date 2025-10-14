@@ -60,7 +60,7 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;
   TestbedInterface testbed_interface_;
-  Testbed testbed_;
+  TestbedHolder testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
 
