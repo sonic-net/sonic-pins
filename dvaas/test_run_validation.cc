@@ -141,6 +141,15 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
       const PacketIn& expected_packet_in = expected_output.packet_ins(i);
 
       MessageDifferencer differ;
+      // Ignore logical field `reasons_invalid` since it is redundant (computed
+      // from other fields) and misleading (not part of the actual packet in).
+      const google::protobuf::FieldDescriptor* reasons_invalid_descriptor =
+          packetlib::Packet::descriptor()->FindFieldByName("reasons_invalid");
+      if (reasons_invalid_descriptor == nullptr) {
+        LOG(FATAL) << "Could not find field "  // Crash ok: testonly code
+                      "'reasons_invalid' in packetlib::Packet";
+      }
+      differ.IgnoreField(reasons_invalid_descriptor);
       for (auto* field : params.ignored_packetlib_fields)
         differ.IgnoreField(field);
       std::string diff;
