@@ -81,6 +81,16 @@ cc_proto_library(
     deps = [":dvaas_detective_proto"],
 )
 
+cc_library(
+    name = "dvaas_detective",
+    srcs = ["dvaas_detective.cc"],
+    hdrs = ["dvaas_detective.h"],
+    deps = [
+        ":dvaas_detective_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
 cc_test(
     name = "dataplane_validation_test",
     srcs = ["dataplane_validation_test.cc"],
