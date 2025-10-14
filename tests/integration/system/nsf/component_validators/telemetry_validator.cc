@@ -30,15 +30,15 @@
 namespace pins_test {
 namespace {
 
-absl::Status ValidateTelemetryWarmboot(Testbed& testbed,
-                                       thinkit::SSHClient& ssh_client) {
+absl::Status ValidateTelemetryWarmboot(const Testbed &testbed,
+                                       thinkit::SSHClient &ssh_client) {
   return absl::OkStatus();
 }
 }  // namespace
 
 absl::Status TelemetryValidator::OnNsfReboot(absl::string_view version,
-                                             Testbed& testbed,
-                                             thinkit::SSHClient& ssh_client) {
+                                             const Testbed &testbed,
+                                             thinkit::SSHClient &ssh_client) {
   return ValidateTelemetryWarmboot(testbed, ssh_client);
 }
 
