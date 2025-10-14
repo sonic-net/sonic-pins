@@ -427,6 +427,27 @@ TEST(TestRunValidationTest, PacketFieldReasonsInvalidIsIgnored) {
   ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
+TEST(TestRunValidationTest, PacketInFieldReasonsInvalidIsIgnored) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packet_ins {
+          parsed {
+            reasons_invalid: "invalid reason 1"
+            reasons_invalid: "invalid reason 2"
+          }
+        }
+      }
+    }
+    actual_output { packet_ins { parsed {} } }
+  )pb");
+
+  // Validation must succeed.
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
+}
+
 TEST(TestRunValidationTest, ModifyExpectedOutputPreDiffingTest) {
   PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
     test_vector {
