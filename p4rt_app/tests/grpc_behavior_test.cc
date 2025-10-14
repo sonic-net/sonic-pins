@@ -14,6 +14,7 @@
 #include <grpcpp/support/status.h>
 
 #include <memory>
+#include <utility>
 
 #include "glog/logging.h"
 #include "gmock/gmock.h"
@@ -44,6 +45,8 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
   // Dummy RedisDB tables.
   sonic::P4rtTable dummy_p4rt_table;
   sonic::VrfTable dummy_vrf_table;
+  sonic::VlanTable dummy_vlan_table;
+  sonic::VlanMemberTable dummy_vlan_member_table;
   sonic::HashTable dummy_hash_table;
   sonic::SwitchTable dummy_switch_table;
   sonic::PortTable dummy_port_table;
@@ -62,6 +65,7 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
 
   return P4RuntimeImpl(
       std::move(dummy_p4rt_table), std::move(dummy_vrf_table),
+      std::move(dummy_vlan_table), std::move(dummy_vlan_member_table),
       std::move(dummy_hash_table), std::move(dummy_switch_table),
       std::move(dummy_port_table), std::move(dummy_host_stats_table),
       std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>(),
