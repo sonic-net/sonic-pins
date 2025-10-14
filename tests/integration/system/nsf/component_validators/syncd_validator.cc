@@ -42,13 +42,14 @@ absl::Status PrepareAllowListInSyncdInit(
 }  // namespace
 
 absl::Status SyncdValidator::OnNsfReboot(absl::string_view version,
-                                         Testbed& testbed,
-                                         thinkit::SSHClient& ssh_client) {
+                                         const Testbed &testbed,
+                                         thinkit::SSHClient &ssh_client) {
   return ValidateSyncdWarmboot(GetSut(testbed), allowlist_);
 }
 
-absl::Status SyncdValidator::OnInit(absl::string_view version, Testbed& testbed,
-                                    thinkit::SSHClient& ssh_client) {
+absl::Status SyncdValidator::OnInit(absl::string_view version,
+                                    const Testbed &testbed,
+                                    thinkit::SSHClient &ssh_client) {
   return PrepareAllowListInSyncdInit(GetSut(testbed), allowlist_);
 }
 

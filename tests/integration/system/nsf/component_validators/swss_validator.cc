@@ -37,8 +37,8 @@ namespace {
 //  Scans sairedis.rec and sairedis.rec.n (if it exists) for write operations on
 //  SAI objects in the record file.
 absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
-                                          Testbed& testbed,
-                                          thinkit::SSHClient& ssh_client) {
+                                          const Testbed &testbed,
+                                          thinkit::SSHClient &ssh_client) {
   const auto allowlist = absl::flat_hash_set<absl::string_view>({
       "SAI_OBJECT_TYPE_DEBUG_COUNTER", 
       "SAI_OBJECT_TYPE_VIRTUAL_ROUTER", 
@@ -149,8 +149,8 @@ absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
 }  // namespace
 
 absl::Status SwssValidator::OnNsfReboot(absl::string_view version,
-                                        Testbed& testbed,
-                                        thinkit::SSHClient& ssh_client) {
+                                        const Testbed &testbed,
+                                        thinkit::SSHClient &ssh_client) {
   return VerifySairedisRecOnNsfReboot(version, testbed, ssh_client);
 }
 }  // namespace pins_test
