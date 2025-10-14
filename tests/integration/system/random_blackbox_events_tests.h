@@ -15,11 +15,22 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_RANDOM_BLACKBOX_EVENTS_TESTS_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_RANDOM_BLACKBOX_EVENTS_TESTS_H_
 
+#include <optional>
+
+#include "p4/config/v1/p4info.pb.h"
+#include "p4_fuzzer/fuzzer_config.h"
 #include "thinkit/generic_testbed_fixture.h"
 
 namespace pins_test {
 
-class RandomBlackboxEventsTest : public thinkit::GenericTestbedFixture<> {};
+struct RandomBlackboxEventsTestParams {
+  thinkit::GenericTestbedInterface* testbed_interface;
+  std::optional<p4::config::v1::P4Info> p4_info;
+  p4_fuzzer::ConfigParams fuzzer_config_params;
+};
+
+class RandomBlackboxEventsTest
+    : public thinkit::GenericTestbedFixture<RandomBlackboxEventsTestParams> {};
 
 } // namespace pins_test
 
