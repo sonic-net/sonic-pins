@@ -84,7 +84,9 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   } else {
     EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
   }
-  ASSERT_OK(configured_testbed.RestoreToOriginalConfiguration());
+  if (GetParam().clean_up_after_test) {
+    ASSERT_OK(configured_testbed.RestoreToOriginalConfiguration());
+  }
 }
 
 } // namespace
