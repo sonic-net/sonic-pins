@@ -143,6 +143,10 @@ struct DataplaneValidationParams {
   // A struct to store configurable parameters for packet failure determinism.
   // Parameters in `failure_enhancement_options` are assigned default values.
   FailureEnhancementOptions failure_enhancement_options;
+
+  // If true, collect and print the switch counters.
+  bool reset_and_collect_counters = true;
+
 };
 
 // Forward declaration. See below for description.
