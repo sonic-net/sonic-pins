@@ -34,6 +34,20 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "compare_p4flows_test",
+    timeout = "long",
+    srcs = ["compare_p4flows_test.cc"],
+    deps = [
+        ":compare_p4flows",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "util",
     testonly = True,
@@ -80,6 +94,7 @@ cc_library(
     srcs = ["upgrade_test.cc"],
     hdrs = ["upgrade_test.h"],
     deps = [
+        ":compare_p4flows",
         ":milestone",
         ":util",
         "//gutil:status_matchers",
@@ -128,6 +143,7 @@ cc_library(
     srcs = ["nsf_acl_flow_coverage_test.cc"],
     hdrs = ["nsf_acl_flow_coverage_test.h"],
     deps = [
+        ":compare_p4flows",
         ":util",
         "//gutil:status_matchers",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
@@ -207,6 +223,7 @@ cc_library(
     srcs = ["nsf_concurrent_config_push_flow_programming_test.cc"],
     hdrs = ["nsf_concurrent_config_push_flow_programming_test.h"],
     deps = [
+        ":compare_p4flows",
         ":util",
         "//gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
