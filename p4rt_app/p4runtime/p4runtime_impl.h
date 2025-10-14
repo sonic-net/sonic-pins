@@ -94,6 +94,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 public:
   P4RuntimeImpl(
       sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+      sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
       sonic::HashTable hash_table, sonic::SwitchTable switch_table,
       sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
       std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
@@ -286,6 +287,8 @@ private:
   // Interfaces which are used to update entries in the RedisDB tables.
   sonic::P4rtTable p4rt_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::VrfTable vrf_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::VlanTable vlan_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::VlanMemberTable vlan_member_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HashTable hash_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);

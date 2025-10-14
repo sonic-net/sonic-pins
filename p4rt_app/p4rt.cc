@@ -67,6 +67,8 @@ using ::grpc::Server;
 using ::grpc::ServerBuilder;
 using ::grpc::ServerCredentials;
 
+#define APP_P4RT_VLAN_TABLE_NAME "VLAN_TABLE_P4"
+#define APP_P4RT_VLAN_MEMBER_TABLE_NAME "VLAN_MEMBER_TABLE_P4"
 #define APP_P4RT_CHANNEL_NAME "P4RT_TABLE"
 // By default the P4RT App will run on TCP port 9559. Which is the IANA port
 // reserved for P4Runtime.
@@ -214,6 +216,44 @@ sonic::VrfTable CreateVrfTable(swss::DBConnector* app_db,
           app_db, APP_VRF_TABLE_NAME),
       .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           app_state_db, APP_VRF_TABLE_NAME),
+  };
+}
+
+sonic::VlanTable CreateVlanTable(swss::DBConnector* app_db,
+                                 swss::DBConnector* app_state_db) {
+  const std::string kVlanResponseChannel =
+      absl::StrCat("APPL_DB_", APP_P4RT_VLAN_TABLE_NAME, "_RESPONSE_CHANNEL");
+  const std::string kVlanMemberResponseChannel = absl::StrCat(
+      "APPL_DB_", APP_P4RT_VLAN_MEMBER_TABLE_NAME, "_RESPONSE_CHANNEL");
+
+  return sonic::VlanTable{
+      .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
+          app_db, APP_P4RT_VLAN_TABLE_NAME),
+      .notification_consumer =
+          absl::make_unique<sonic::ConsumerNotifierAdapter>(
+              kVlanResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, APP_P4RT_VLAN_TABLE_NAME),
+      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_state_db, APP_P4RT_VLAN_TABLE_NAME),
+  };
+}
+
+sonic::VlanMemberTable CreateVlanMemberTable(swss::DBConnector* app_db,
+                                             swss::DBConnector* app_state_db) {
+  const std::string kVlanMemberResponseChannel = absl::StrCat(
+      "APPL_DB_", APP_P4RT_VLAN_MEMBER_TABLE_NAME, "_RESPONSE_CHANNEL");
+
+  return sonic::VlanMemberTable{
+      .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
+          app_db, APP_P4RT_VLAN_MEMBER_TABLE_NAME),
+      .notification_consumer =
+          absl::make_unique<sonic::ConsumerNotifierAdapter>(
+              kVlanMemberResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, APP_P4RT_VLAN_MEMBER_TABLE_NAME),
+      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_state_db, APP_P4RT_VLAN_MEMBER_TABLE_NAME),
   };
 }
 
@@ -394,6 +434,10 @@ int main(int argc, char** argv) {
       p4rt_app::CreateP4rtTable(&app_db, &counters_db);
   p4rt_app::sonic::VrfTable vrf_table =
       p4rt_app::CreateVrfTable(&app_db, &app_state_db);
+  p4rt_app::sonic::VlanTable vlan_table =
+      p4rt_app::CreateVlanTable(&app_db, &app_state_db);
+  p4rt_app::sonic::VlanMemberTable vlan_member_table =
+      p4rt_app::CreateVlanMemberTable(&app_db, &app_state_db);
   p4rt_app::sonic::HashTable hash_table =
       p4rt_app::CreateHashTable(&app_db, &app_state_db);
   p4rt_app::sonic::SwitchTable switch_table =
@@ -427,7 +471,8 @@ int main(int argc, char** argv) {
   // Create the P4RT server. If boot up in warm start mode, set p4runtime_server
   // in freeze mode to reject requests until unfreeze.
   p4rt_app::P4RuntimeImpl p4runtime_server(
-      std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
+      std::move(p4rt_table), std::move(vrf_table), std::move(vlan_table),
+      std::move(vlan_member_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table), std::move(host_stats_table), 
       std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>(),
       std::move(packetio_impl),
