@@ -28,7 +28,7 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/annotation_parser.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 
 namespace p4rt_app {
 namespace {
@@ -58,7 +58,7 @@ absl::Status TranslatePortValue(
 // Optionally translates a CPU queue between CPU queue name and CPU Queue ID
 // syntax.
 absl::Status OptionallyTranslateCpuQueue(TranslationDirection direction,
-                                         const CpuQueueTranslator& translator,
+					 const QueueTranslator& translator,
                                          pdpi::IrValue& value) {
   if (value.format_case() != pdpi::IrValue::kStr) {
     return gutil::InvalidArgumentErrorBuilder()
@@ -355,7 +355,7 @@ absl::StatusOr<pdpi::IrEntity> TranslatePiEntityForOrchAgent(
     const p4::v1::Entity& pi_entity, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only) {
+    const QueueTranslator& cpu_queue_translator, bool translate_key_only) {
   pdpi::IrEntity ir_entity;
   switch (pi_entity.entity_case()) {
     case p4::v1::Entity::kTableEntry: {
@@ -389,7 +389,7 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
     const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only) {
+    const QueueTranslator& cpu_queue_translator, bool translate_key_only) {
   auto ir_table_entry =
       pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry,
                              pdpi::TranslationOptions{
@@ -413,7 +413,7 @@ TranslatePiPacketReplicationEngineEntryForOrchAgent(
     const p4::v1::PacketReplicationEngineEntry& pi_packet_replication_entry,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only) {
+    const QueueTranslator& cpu_queue_translator, bool translate_key_only) {
   auto ir_packet_replication_engine_entry =
       pdpi::PiPacketReplicationEngineEntryToIr(
           ir_p4_info, pi_packet_replication_entry,
@@ -438,7 +438,7 @@ absl::Status UpdateIrEntityForOrchAgent(
     pdpi::IrEntity& ir_entity, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator) {
   switch (ir_entity.entity_case()) {
     case pdpi::IrEntity::kTableEntry:
       RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
@@ -463,7 +463,7 @@ absl::Status UpdateIrTableEntryForOrchAgent(
     pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator) {
   // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
   // We don't allow overwriting of the p4info, so static is ok here.
 
@@ -484,7 +484,7 @@ absl::Status UpdateIrPacketReplicationEngineEntryForOrchAgent(
     pdpi::IrPacketReplicationEngineEntry& ir_packet_replication_entry,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator) {
   RETURN_IF_ERROR(TranslatePacketReplicationEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,

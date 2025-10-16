@@ -1,4 +1,4 @@
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
@@ -76,33 +76,33 @@ MATCHER_P(LacksNameToIdTranslation, name,
   return true;
 }
 
-TEST(CpuQueueTranslator, CreateFailsForNonIntegerId) {
-  EXPECT_THAT(CpuQueueTranslator::Create({{"a", "1.2"}}),
+TEST(QueueTranslator, CreateFailsForNonIntegerId) {
+  EXPECT_THAT(QueueTranslator::Create({{"a", "1.2"}}),
               StatusIs(absl::StatusCode::kInvalidArgument));
-  EXPECT_THAT(CpuQueueTranslator::Create({
+  EXPECT_THAT(QueueTranslator::Create({
                   {"b", "1.2"},
               }),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(CpuQueueTranslator, CreateFailsForRepeatedQueueName) {
-  EXPECT_THAT(CpuQueueTranslator::Create({
+TEST(QueueTranslator, CreateFailsForRepeatedQueueName) {
+  EXPECT_THAT(QueueTranslator::Create({
                   {"a", "1"},
                   {"a", "3"},
               }),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(CpuQueueTranslator, CreateFailsForRepeatedQueueId) {
-  EXPECT_THAT(CpuQueueTranslator::Create({
+TEST(QueueTranslator, CreateFailsForRepeatedQueueId) {
+  EXPECT_THAT(QueueTranslator::Create({
                   {"b", "2"},
                   {"c", "2"},
               }),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(CpuQueueTranslator, CreateFailsWhenSomeValuesAreInvalid) {
-  EXPECT_THAT(CpuQueueTranslator::Create({
+TEST(QueueTranslator, CreateFailsWhenSomeValuesAreInvalid) {
+  EXPECT_THAT(QueueTranslator::Create({
                   {"a", "1"},
                   {"b", "2.2"},
                   {"c", "3"},
@@ -111,14 +111,14 @@ TEST(CpuQueueTranslator, CreateFailsWhenSomeValuesAreInvalid) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(CpuQueueTranslator, MissingTranslationReturnsNotFoundError) {
-  auto empty = CpuQueueTranslator::Empty();
+TEST(QueueTranslator, MissingTranslationReturnsNotFoundError) {
+  auto empty = QueueTranslator::Empty();
   EXPECT_THAT(empty->IdToName(1), StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(empty->NameToId("a"), StatusIs(absl::StatusCode::kNotFound));
 }
 
-TEST(CpuQueueTranslator, CanTranslateIdToName) {
-  ASSERT_OK_AND_ASSIGN(auto translator, CpuQueueTranslator::Create({
+TEST(QueueTranslator, CanTranslateIdToName) {
+  ASSERT_OK_AND_ASSIGN(auto translator, QueueTranslator::Create({
                                             {"a", "1"},
                                             {"b", "2"},
                                             {"c", "3"},
@@ -128,8 +128,8 @@ TEST(CpuQueueTranslator, CanTranslateIdToName) {
   EXPECT_THAT(translator->IdToName(3), IsOkAndHolds("c"));
 }
 
-TEST(CpuQueueTranslator, CanTranslateNameToId) {
-  ASSERT_OK_AND_ASSIGN(auto translator, CpuQueueTranslator::Create({
+TEST(QueueTranslator, CanTranslateNameToId) {
+  ASSERT_OK_AND_ASSIGN(auto translator, QueueTranslator::Create({
                                             {"a", "1"},
                                             {"b", "2"},
                                             {"c", "3"},

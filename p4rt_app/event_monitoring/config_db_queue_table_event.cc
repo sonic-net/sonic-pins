@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4rt_app/event_monitoring/config_db_cpu_queue_table_event.h"
+#include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
 
 #include <memory>
 #include <string>
@@ -20,23 +20,26 @@
 
 #include "absl/status/status.h"
 #include "gutil/status.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "swss/schema.h"
 
 namespace p4rt_app {
 
-absl::Status ConfigDbCpuQueueTableEventHandler::HandleEvent(
+absl::Status ConfigDbQueueTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
-  // Ignore non-CPU Queue mapping
-  if (key != "CPU") return absl::OkStatus();
+  // Ignore Queue mappings for other keys.
+  if (key != queue_table_key_) return absl::OkStatus();
   if (operation == DEL_COMMAND) {
-    p4runtime_.SetCpuQueueTranslator(CpuQueueTranslator::Empty());
+    p4runtime_.SetQueueTranslator(QueueTranslator::Empty(), queue_table_key_);
   } else {
-    ASSIGN_OR_RETURN(auto translator, CpuQueueTranslator::Create(values));
-    p4runtime_.SetCpuQueueTranslator(std::move(translator));
+    ASSIGN_OR_RETURN(
+        auto translator, QueueTranslator::Create(values),
+        _ << "Unable create queue translator for table " << queue_table_key_);
+    p4runtime_.SetQueueTranslator(std::move(translator), queue_table_key_);
   }
   return absl::OkStatus();
 }
 
 }  // namespace p4rt_app
+

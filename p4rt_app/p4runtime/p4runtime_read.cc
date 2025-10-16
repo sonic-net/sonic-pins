@@ -26,8 +26,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/table_utility.h"
@@ -69,8 +69,7 @@ absl::Status AppendAclCounterData(
     p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator,
-    sonic::P4rtTable& p4rt_table) {
+    const QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
   ASSIGN_OR_RETURN(
       pdpi::IrTableEntry ir_table_entry,
       TranslatePiTableEntryForOrchAgent(
@@ -95,8 +94,7 @@ absl::Status AppendTableEntryReads(
     const std::string& role_name, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator,
-    sonic::P4rtTable& p4rt_table) {
+    const QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
   // Fetch the table definition since it will inform how we process the read
   // request.
   auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
@@ -150,7 +148,7 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
+    QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
   std::vector<p4::v1::ReadResponse> responses;
   responses.push_back(p4::v1::ReadResponse{});
   for (const auto& entity : request.entities()) {

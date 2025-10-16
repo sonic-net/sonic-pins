@@ -22,7 +22,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/sonic/redis_connections.h"
 
 namespace p4rt_app {
@@ -35,7 +35,7 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> &entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string> &port_translation_map,
-    CpuQueueTranslator &cpu_queue_translator, sonic::P4rtTable &p4rt_table);
+    QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table);
 } // namespace p4rt_app
 
 #endif // PINS_P4RT_APP_P4RUNTIME_P4RUNTIME_READ_H_
