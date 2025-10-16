@@ -21,7 +21,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/utils/ir_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -40,8 +40,8 @@ const pdpi::IrP4Info& GetIrP4Info() {
   return sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
 }
 
-const CpuQueueTranslator& EmptyCpuQueueTranslator() {
-  static const auto* const kTranslator = CpuQueueTranslator::Empty().release();
+const QueueTranslator& EmptyCpuQueueTranslator() {
+  static const auto* const kTranslator = QueueTranslator::Empty().release();
   return *kTranslator;
 }
 
@@ -623,7 +623,7 @@ TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
 
   // Translate the table entry using the cpu queue translator.
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue15", "15"}}));
+                       QueueTranslator::Create({{"queue15", "15"}}));
   EXPECT_OK(UpdateIrEntityForOrchAgent(
       queue_name_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
       /*port_translation_map=*/{}, *cpu_queue_translator));
@@ -663,7 +663,7 @@ TEST(TranslateTableEntry, IgnoresUnknownCpuQueueNameToAppDbIdTranslation) {
 
   // Add a different queue.
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue1", "1"}}));
+                       QueueTranslator::Create({{"queue1", "1"}}));
 
   EXPECT_OK(UpdateIrEntityForOrchAgent(
       ir_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
@@ -696,7 +696,7 @@ TEST(TranslateTableEntry, TranslatesAppDbCpuQueueIdToName) {
       ->set_str("queue10");
 
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue10", "10"}}));
+                       QueueTranslator::Create({{"queue10", "10"}}));
 
   TranslateTableEntryOptions options = {
       .direction = TranslationDirection::kForController,
@@ -732,7 +732,7 @@ TEST(TranslateTableEntry, IgnoresUnknownAppDbCpuQueueIdToNameTranslation) {
 
   // Set up a different queue.
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue2", "2"}}));
+                       QueueTranslator::Create({{"queue2", "2"}}));
 
   TranslateTableEntryOptions options = {
       .direction = TranslationDirection::kForController,

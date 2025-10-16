@@ -18,7 +18,7 @@
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "p4rt_app/event_monitoring/config_db_cpu_queue_table_event.h"
+#include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
@@ -41,7 +41,8 @@ class CpuQueueTest : public test_lib::P4RuntimeComponentTestFixture {
 };
 
 TEST_F(CpuQueueTest, CpuQueueIdsResultInAppDbQueueIds) {
-  ConfigDbCpuQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer());
+  ConfigDbQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer(),
+                                            "CPU");
   ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "CPU", {{"queue10", "10"}}));
 
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
@@ -74,7 +75,8 @@ TEST_F(CpuQueueTest, CpuQueueIdsResultInAppDbQueueIds) {
 }
 
 TEST_F(CpuQueueTest, CpuQueueNamesResultInAppDbQueueIds) {
-  ConfigDbCpuQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer());
+  ConfigDbQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer(),
+                                            "CPU");
   ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "CPU", {{"queue10", "10"}}));
 
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
@@ -107,7 +109,8 @@ TEST_F(CpuQueueTest, CpuQueueNamesResultInAppDbQueueIds) {
 }
 
 TEST_F(CpuQueueTest, CpuQueueIdsReadBackAsIds) {
-  ConfigDbCpuQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer());
+  ConfigDbQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer(),
+                                            "CPU");
   ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "CPU", {{"queue10", "10"}}));
 
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
@@ -141,7 +144,8 @@ TEST_F(CpuQueueTest, CpuQueueIdsReadBackAsIds) {
 }
 
 TEST_F(CpuQueueTest, CpuQueueNamesReadBackAsNames) {
-  ConfigDbCpuQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer());
+  ConfigDbQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer(),
+                                            "CPU");
   ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "CPU", {{"queue10", "10"}}));
 
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
@@ -216,7 +220,8 @@ TEST_F(CpuQueueTest, PreservesIdsIfCpuQueueTranslatorIsNeverSet) {
 }
 
 TEST_F(CpuQueueTest, ForwardsUnknownQueueNamesToAppDb) {
-  ConfigDbCpuQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer());
+  ConfigDbQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer(),
+                                            "CPU");
   ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "CPU", {{"queue10", "10"}}));
 
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
