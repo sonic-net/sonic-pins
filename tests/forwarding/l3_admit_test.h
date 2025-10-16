@@ -54,6 +54,15 @@ protected:
             testbed.Sut(), testbed.ControlSwitch(),
             /*gnmi_config=*/std::nullopt, /*p4_info=*/GetParam().p4info));
 
+    // Store the original control switch gNMI interface config before changing
+    // it.
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
+        testbed.ControlSwitch().CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(original_control_interfaces_,
+                         pins_test::GetInterfacesAsProto(
+                             *control_gnmi_stub, gnmi::GetRequest::CONFIG));
+
     // The L3Admit tests assume identical P4RT port IDs are used between the SUT
     // and control switch. So sending a packet from a given port ID on the
     // control switch means it will arrive on the same port ID on the SUT. To
@@ -65,7 +74,19 @@ protected:
     ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::GetIrP4Info(*sut_p4rt_session_));
   }
 
-  void TearDown() override { GetParam().testbed_interface->TearDown(); }
+  void TearDown() override {
+    // Restore the original control switch gNMI interface config's P4RT IDs.
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
+        GetParam()
+            .testbed_interface->GetMirrorTestbed()
+            .ControlSwitch()
+            .CreateGnmiStub());
+    ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_gnmi_stub,
+                                             original_control_interfaces_));
+
+    GetParam().testbed_interface->TearDown();
+  }
 
   ~L3AdmitTestFixture() override { delete GetParam().testbed_interface; }
 
@@ -75,6 +96,11 @@ protected:
   std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session_;
 
   pdpi::IrP4Info ir_p4info_;
+
+  // Captures the control interfaces at the start of the test. These may be
+  // changed during testing to mirror those of the SUT. They will then be
+  // returned to their previous state during teardown.
+  pins_test::openconfig::Interfaces original_control_interfaces_;
 };
 
 } // namespace pins
