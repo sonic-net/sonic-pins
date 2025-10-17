@@ -29,6 +29,8 @@
 #include "thinkit/ssh_client.h"
 
 namespace pins {
+// Sflow collector port used in standalone test.
+constexpr int kSflowStandaloneCollectorPort = 6344;
 
 // Returns true iff
 // ["openconfig-sampling:sampling"]["openconfig-sampling-sflow:sflow"]["config"]["enabled"]
@@ -143,8 +145,8 @@ absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
 absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
                                         const std::string& ip2);
 
-// Returns the collector port from `gnmi_config` collector config first
-absl::StatusOr<int> GetSflowCollectorPort(absl::string_view gnmi_config);
+// Returns kSflowStandaloneCollectorPort.
+int GetSflowCollectorPort();
 
 // Checks if state db port index table exists for `interfaces`.
 absl::Status CheckStateDbPortIndexTableExists(

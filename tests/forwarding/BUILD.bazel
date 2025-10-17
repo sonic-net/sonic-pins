@@ -78,6 +78,7 @@ cc_library(
         "//thinkit:mirror_testbed_fixture",
         "//thinkit:test_environment",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
 	"@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",

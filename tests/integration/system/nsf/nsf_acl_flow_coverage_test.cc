@@ -47,7 +47,7 @@ void NsfAclFlowCoverageTestFixture::TearDown() {
 }
 
 TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
-
+  thinkit::TestEnvironment& environment = GetTestEnvironment(testbed_);
   // The test needs at least 1 image_config_param to run.
   if (GetParam().image_config_params.empty()) {
     GTEST_SKIP() << "No image config params provided";
@@ -64,12 +64,12 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot1,
-                       TakeP4FlowSnapshot(testbed_));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot1, TakeP4FlowSnapshot(sut));
   ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot1,
+      p4flow_snapshot1,
       absl::StrCat(sut.ChassisName(),
-                   "p4flow_snapshot1_before_programming_flows.txt")));
+                   "p4flow_snapshot1_before_programming_flows.txt"),
+      environment));
 
   // Program all the flows.
   LOG(INFO) << "Programming L3 flows before starting the traffic";
@@ -83,22 +83,22 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
 
   // P4 snapshot before NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before NSF reboot";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot2,
-                       TakeP4FlowSnapshot(testbed_));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot2, TakeP4FlowSnapshot(sut));
   ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot2,
-      absl::StrCat(sut.ChassisName(), "p4flow_snapshot2_before_nsf.txt")));
+      p4flow_snapshot2,
+      absl::StrCat(sut.ChassisName(), "p4flow_snapshot2_before_nsf.txt"),
+      environment));
 
   ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_, *ssh_client_,
                                              &image_config_param));
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after NSF reboot";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot3,
-                       TakeP4FlowSnapshot(testbed_));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot3, TakeP4FlowSnapshot(sut));
   ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot3,
-      absl::StrCat(sut.ChassisName(), "p4flow_snapshot3_after_nsf.txt")));
+      p4flow_snapshot3,
+      absl::StrCat(sut.ChassisName(), "p4flow_snapshot3_after_nsf.txt"),
+      environment));
 
   // Stop and validate traffic
   LOG(INFO) << "Stopping the traffic";
@@ -118,12 +118,12 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
 
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
-  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot4,
-                       TakeP4FlowSnapshot(testbed_));
+  ASSERT_OK_AND_ASSIGN(ReadResponse p4flow_snapshot4, TakeP4FlowSnapshot(sut));
   ASSERT_OK(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot4,
+      p4flow_snapshot4,
       absl::StrCat(sut.ChassisName(),
-                   "p4flow_snapshot4_after_clearing_flows.txt")));
+                   "p4flow_snapshot4_after_clearing_flows.txt"),
+      environment));
 
   LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
                "Clearing Flows";

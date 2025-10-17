@@ -22,6 +22,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/version.h"
@@ -39,6 +40,7 @@
 #include "p4_pdpi/ir_properties.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
+#include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
@@ -125,17 +127,54 @@ absl::StatusOr<std::optional<int>> ExtractRouteMetadataAsIntFromEntry(
 // Such bugs should be masked using the FuzzerConfig's
 // `disabled_fully_qualified_names`.
 absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
-                                            const Entity& entity) {
+                                            const Entity& entity,
+                                            const SwitchState& state) {
   // Convert the entry to IR to simplify logic.
   ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity, pdpi::PiEntityToIr(info, entity));
 
   ASSIGN_OR_RETURN(std::optional<int> route_metadata,
                    ExtractRouteMetadataAsIntFromEntry(ir_entity.table_entry()));
-  if (route_metadata.has_value()) {
-    // Route metadata values between 56 and 63 are reserved for internal switch
-    // operations.
-    // TODO: This should be handled by P4 Constraints.
-    return *route_metadata >= 56;
+  // Route metadata values between 56 and 63 are reserved for internal switch
+  // operations.
+  // TODO: This should be handled by P4 Constraints.
+  if (route_metadata.has_value() && *route_metadata >= 56) {
+    return true;
+  }
+
+  // Remove once tunnel encap entries can refer to RIFs with
+  // the `set_port_and_src_mac_and_vlan_id` action.
+  if (entity.table_entry().table_id() == ROUTING_TUNNEL_TABLE_ID &&
+      entity.table_entry().action().action().action_id() ==
+          ROUTING_MARK_FOR_P2P_TUNNEL_ENCAP_ACTION_ID) {
+    std::string referenced_rif;
+    for (const auto& param : ir_entity.table_entry().action().params()) {
+      if (param.name() == "router_interface_id") {
+        referenced_rif = param.value().str();
+        break;
+      }
+    }
+
+    // Search for referenced RIF entry.
+    p4::v1::TableEntry rif_entry_key_only;
+    rif_entry_key_only.set_table_id(ROUTING_ROUTER_INTERFACE_TABLE_ID);
+    p4::v1::FieldMatch& rif_field = *rif_entry_key_only.add_match();
+    // Field ID 1 is `router_interface_id` and the only match field.
+    rif_field.set_field_id(1);
+    rif_field.mutable_exact()->set_value(referenced_rif);
+    std::optional<p4::v1::TableEntry> stored_rif_entry =
+        state.GetTableEntry(rif_entry_key_only);
+
+    if (!stored_rif_entry.has_value()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Tunnel encap entry refers to RIF that does not exist. Entry: "
+             << gutil::PrintTextProto(ir_entity.table_entry());
+    }
+
+    // tunnel encap entries cannot refer to RIFs with
+    // the `set_port_and_src_mac_and_vlan_id` action.
+    if (stored_rif_entry->action().action().action_id() ==
+        ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
+      return true;
   }
   return false;
 }
@@ -213,8 +252,9 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
       RETURN_IF_ERROR(
           ModifyEntityToAvoidKnownBug(config.GetIrP4Info(), entity));
     }
-    ASSIGN_OR_RETURN(entry_triggers_known_bug,
-                     EntityTriggersKnownBug(config.GetIrP4Info(), entity));
+    ASSIGN_OR_RETURN(
+        entry_triggers_known_bug,
+        EntityTriggersKnownBug(config.GetIrP4Info(), entity, state));
   } while ((!predicate(entity) ||
             (environment.MaskKnownFailures() && entry_triggers_known_bug)) &&
            absl::Now() < kDeadline);
@@ -508,9 +548,8 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
 // Installs a table entry per supported, programmable table in a particular
 // order. This ensures that we can generate valid table entries for every table.
 // It is required due to the possibility of references between tables.
-// TODO: Ideally, this function would use the p4info to extract a list of
-// all tables, ordered such that every table only depends on (i.e. @refers_to)
-// those before it, instead of using our hardcoded, ordered list.
+// Remove this function once auxiliary entries are installed
+// via dependency rank in P4Info.
 absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
                                       pdpi::P4RuntimeSession& session,
                                       const FuzzerConfig& config,
@@ -532,6 +571,12 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
   };
 
   for (const auto& table_name : kOrderedTablesToInsertEntriesInto) {
+    // mirror_session_table is only present in a few instantiations, so the test
+    // needs to skip it if it is not present.
+    if (table_name == "mirror_session_table" &&
+        !config.GetIrP4Info().tables_by_name().contains(table_name)) {
+      continue;
+    }
     std::string fully_qualified_name = table_name;
     if (table_name != pdpi::GetMulticastGroupTableName()) {
       ASSIGN_OR_RETURN(const pdpi::IrTableDefinition& table,
