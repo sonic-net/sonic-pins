@@ -66,7 +66,8 @@ constexpr absl::string_view kIpv6DstIpForL3Hit = "F105:0102::2356";
 constexpr absl::string_view kIpv6DstIpForL3Miss = "F205:102::9845";
 
 void BlackholeCongestionCountersWithoutIxiaTestFixture::SetUp() {
-  thinkit::GenericTestbedFixture<>::SetUp();
+  thinkit::GenericTestbedFixture<
+      BlackholeCongestionCountersWithoutIxiaTestFixtureParams>::SetUp();
   thinkit::TestRequirements requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
           R"pb(interface_requirements {
@@ -95,7 +96,8 @@ void BlackholeCongestionCountersWithoutIxiaTestFixture::SetUp() {
 void BlackholeCongestionCountersWithoutIxiaTestFixture::TearDown() {
   ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
   ASSERT_OK(sut_p4_session_->Finish());
-  thinkit::GenericTestbedFixture<>::TearDown();
+  thinkit::GenericTestbedFixture<
+      BlackholeCongestionCountersWithoutIxiaTestFixtureParams>::TearDown();
 }
 
 // Packet proto messages sent from control switch to SUT.
