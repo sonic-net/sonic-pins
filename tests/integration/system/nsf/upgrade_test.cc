@@ -82,18 +82,6 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
-// Used to append multiple errors. It enables the test to return as many errors
-// as possible during the validation instead of returning on first error.
-// TODO: Replace the AppendErrorStatus with StatusBuilder.
-void AppendErrorStatus(absl::Status &ret_status, absl::Status status) {
-  if (status.ok()) {
-    return;
-  }
-  if (ret_status.ok()) {
-    ret_status.Update(status);
-  } else {
-  }
-}
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
     const ImageConfigParams& image_config_param,
     bool enable_interface_validation_during_nsf) {
@@ -251,7 +239,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // Copy image to the switch for installation.
   ASSIGN_OR_RETURN(
       std::string image_version,
-      ImageCopy(next_image_config.image_label, testbed_, *ssh_client_),
+      ImageCopy(next_image_config.image_label, GetSut(testbed_), *ssh_client_),
       _.LogError() << "Copy image to the switch for installation failed");
 
   status = ValidateComponents(
@@ -600,12 +588,17 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   }
 
   // The first element of the given `image_config_params` is considered
-  // as the "base" image that will be installed and configured on the
-  // SUT before going ahead with NSF Upgrade/Reboot for the following
+  // as the "base" image for the SUT that will be installed and configured on
+  // the SUT before going ahead with NSF Upgrade/Reboot for the following
   // `image_config_params` (if present) in order.
-
+  //
+  // The last element of the given `image_config_params` is assumed to be the
+  // mainline config params that we will configure the Control Switch with. This
+  // is because we configure the Control Switch only once throughout the NSF
+  // Upgrade iterations.
   ASSERT_OK(InstallRebootPushConfig(testbed_, *ssh_client_,
-                                    image_config_params.front()));
+                                    image_config_params.front(),
+                                    image_config_params.back()));
 
   bool continue_on_failure;
   std::vector<std::string> error_msgs;
