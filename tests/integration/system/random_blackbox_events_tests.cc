@@ -33,6 +33,7 @@
 #include "gmock/gmock.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/client_context.h"
+#include "grpcpp/impl/call_op_set.h"
 #include "grpcpp/support/sync_stream.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
@@ -126,7 +127,9 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
                            *gnmi_stub, pins_test::IsEnabledEthernetInterface));
 
   p4::config::v1::P4Info p4_info;
-  {
+  if (GetParam().p4_info.has_value()) {
+    p4_info = *std::move(GetParam().p4_info);
+  } else {
     ASSERT_OK_AND_ASSIGN(auto p4rt_session,
                          pdpi::P4RuntimeSession::Create(testbed->Sut()));
     ASSERT_OK_AND_ASSIGN(p4::v1::GetForwardingPipelineConfigResponse response,
