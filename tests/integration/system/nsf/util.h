@@ -153,9 +153,10 @@ absl::StatusOr<std::string> ImageCopy(const std::string &image_label,
                                       const Testbed &testbed,
                                       thinkit::SSHClient &ssh_client);
 
-absl::Status
-InstallRebootPushConfig(const Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        const ImageConfigParams &image_config_param);
+absl::Status InstallRebootPushConfig(
+    const Testbed& testbed, thinkit::SSHClient& ssh_client,
+    const ImageConfigParams& sut_image_config_param,
+    const ImageConfigParams& cs_image_config_param);
 
 // Validates P4, gNMI, SSH connections and port status of the SUT and Control
 // Switch (if present) along with validating the stack version of the SUT.
@@ -241,7 +242,6 @@ absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
 // Appends multiple errors together. This allows tests to identify and report
 // all validation errors instead of returning on the first error.
 void AppendErrorStatus(absl::Status& ret_status, absl::Status status);
-
 }  // namespace pins_test
 
 #endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_UTIL_H_
