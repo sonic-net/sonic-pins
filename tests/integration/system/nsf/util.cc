@@ -800,8 +800,7 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
   return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
 }
 
-absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(const Testbed &testbed) {
-  thinkit::Switch& sut = GetSut(testbed);
+absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(thinkit::Switch& sut) {
   ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
   read_request.add_entities()->mutable_packet_replication_engine_entry();
@@ -810,10 +809,10 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(const Testbed &testbed) {
   return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
 }
 
-absl::Status SaveP4FlowSnapshot(const Testbed &testbed, ReadResponse snapshot,
-                                absl::string_view file_name) {
-  return GetTestEnvironment(testbed).StoreTestArtifact(file_name,
-                                                       snapshot.DebugString());
+absl::Status SaveP4FlowSnapshot(ReadResponse snapshot,
+                                absl::string_view file_name,
+                                thinkit::TestEnvironment& env) {
+  return env.StoreTestArtifact(file_name, snapshot.DebugString());
 }
 
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,

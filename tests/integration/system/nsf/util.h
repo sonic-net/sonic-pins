@@ -228,12 +228,11 @@ absl::Status PushConfig(const ImageConfigParams &image_config_param,
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
                              const p4::config::v1::P4Info& p4_info);
 
-absl::StatusOr<::p4::v1::ReadResponse>
-TakeP4FlowSnapshot(const Testbed &testbed);
+absl::StatusOr<p4::v1::ReadResponse> TakeP4FlowSnapshot(thinkit::Switch& sut);
 
-absl::Status SaveP4FlowSnapshot(const Testbed &testbed,
-                                ::p4::v1::ReadResponse snapshot,
-                                absl::string_view file_name);
+absl::Status SaveP4FlowSnapshot(p4::v1::ReadResponse snapshot,
+                                absl::string_view file_name,
+                                thinkit::TestEnvironment& env);
 
 // Stores the healthz debug artifacts of the SUT with the given `prefix` as:
 // "{prefix}_healthz"
