@@ -238,6 +238,10 @@ absl::Status SaveP4FlowSnapshot(const Testbed &testbed,
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
                                     const Testbed &testbed);
 
+// Appends multiple errors together. This allows tests to identify and report
+// all validation errors instead of returning on the first error.
+void AppendErrorStatus(absl::Status& ret_status, absl::Status status);
+
 }  // namespace pins_test
 
 #endif  // PINS_TESTS_INTEGRATION_SYSTEM_NSF_UTIL_H_
