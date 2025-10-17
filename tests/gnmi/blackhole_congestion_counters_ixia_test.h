@@ -41,6 +41,8 @@ struct OutDiscardCounters {
   uint64_t port_blackhole_out_discard_events;
   uint64_t switch_blackhole_out_discard_events;
   uint64_t switch_blackhole_events;
+  uint64_t queue_dropped_packet_events;
+  uint64_t switch_congestion_events;
 };
 
 class BlackholeCongestionCountersIxiaTestFixture
@@ -48,6 +50,7 @@ class BlackholeCongestionCountersIxiaTestFixture
  protected:
   // Acquires testbed with 3 pairs of connected ports between SUT and Ixia.
   void SetUp() override;
+  void TearDown() override;
   absl::StatusOr<InErrorCounters> TriggerInFcsErrors(int frame_rate_per_second,
                                                      int frame_count);
   absl::StatusOr<OutDiscardCounters> TriggerOutDiscards(
