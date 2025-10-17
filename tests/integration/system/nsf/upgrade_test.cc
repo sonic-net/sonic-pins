@@ -14,7 +14,6 @@
 
 #include "tests/integration/system/nsf/upgrade_test.h"
 
-#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -85,17 +84,8 @@ void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
     const ImageConfigParams& image_config_param,
     bool enable_interface_validation_during_nsf) {
-  // We set the `check_interfaces_up` as `false` and not as
-  // `enable_interface_validation_during_nsf`. This is because we already
-  // validate the interfaces in the next statement in `ValidateTestbedState`.
-  // Moreover, the interface validation in `PushConfig` is redundant because of
-  // the same reason. However. the interface validation in `PushConfig` always
-  // picks the interfaces from the model and does not yet support taking an
-  // input of interfaces-to-check, which causes it to fail interface validation
-  // in Replay scenario where DVaaS is enabled.
-  RETURN_IF_ERROR(PushConfig(image_config_param, testbed_, *ssh_client_,
-                             /*clear_config=*/false,
-                             /*check_interfaces_up=*/false));
+  RETURN_IF_ERROR(PushConfig(image_config_param, GetSut(testbed_), *ssh_client_,
+                             /*clear_config=*/false));
   std::vector<std::string> interfaces_to_check;
 
   RETURN_IF_ERROR(ValidateTestbedState(
@@ -137,24 +127,24 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
 
-  ReadResponse p4flow_snapshot1;
-  auto status_or_p4_snapshot1 = TakeP4FlowSnapshot(testbed_);
-  if (!status_or_p4_snapshot1.ok()) {
+  absl::StatusOr<ReadResponse> p4_snapshot_1 =
+      TakeP4FlowSnapshot(GetSut(testbed_));
+  if (!p4_snapshot_1.ok()) {
     AppendErrorStatus(overall_status,
                       absl::InternalError(absl::StrFormat(
                           "Failed to take P4 snapshot before programming flows "
                           "and starting traffic: %s",
-                          status_or_p4_snapshot1.status().message())));
+                          p4_snapshot_1.status().message())));
   } else {
-    p4flow_snapshot1 = status_or_p4_snapshot1.value();
     if (!SaveP4FlowSnapshot(
-             testbed_, p4flow_snapshot1,
+             *p4_snapshot_1,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_before_programming_flows_",
                           absl::FormatTime("%H_%M_%S", absl::Now(),
                                            absl::LocalTimeZone()),
-                          ".txt"))
+                          ".txt"),
+             GetTestEnvironment(testbed_))
              .ok()) {
       LOG(ERROR) << "Failed to save P4 snapshot before programming flows";
     }
@@ -203,24 +193,24 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot before Upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
 
-  ReadResponse p4flow_snapshot2;
-  auto status_or_p4_snapshot2 = TakeP4FlowSnapshot(testbed_);
-  if (!status_or_p4_snapshot2.ok()) {
+  absl::StatusOr<ReadResponse> p4_snapshot_2 =
+      TakeP4FlowSnapshot(GetSut(testbed_));
+  if (!p4_snapshot_2.ok()) {
     AppendErrorStatus(
         overall_status,
         absl::InternalError(absl::StrFormat(
             "Failed to take P4 snapshot before Upgrade and NSF reboot: %s",
-            status_or_p4_snapshot2.status().message())));
+            p4_snapshot_2.status().message())));
   } else {
-    p4flow_snapshot2 = status_or_p4_snapshot2.value();
     if (!SaveP4FlowSnapshot(
-             testbed_, p4flow_snapshot2,
+             *p4_snapshot_2,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_before_upgrade_and_nsf_reboot_",
                           absl::FormatTime("%H_%M_%S", absl::Now(),
                                            absl::LocalTimeZone()),
-                          ".txt"))
+                          ".txt"),
+             GetTestEnvironment(testbed_))
              .ok()) {
       LOG(ERROR) << "Failed to save P4 snapshot before upgrade and NSF reboot";
     }
@@ -272,7 +262,7 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // Perform NSF Reboot and validate switch state after reboot is completed.
   // Since the new config is not pushed yet, passing the existing config for
   // validation.
-  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(
+  RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReadyOrRecover(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
   ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub(),
@@ -311,24 +301,24 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
 
-  ReadResponse p4flow_snapshot3;
-  auto status_or_p4_snapshot3 = TakeP4FlowSnapshot(testbed_);
-  if (!status_or_p4_snapshot3.ok()) {
+  absl::StatusOr<ReadResponse> p4_snapshot_3 =
+      TakeP4FlowSnapshot(GetSut(testbed_));
+  if (!p4_snapshot_3.ok()) {
     AppendErrorStatus(
         overall_status,
         absl::InternalError(absl::StrFormat(
             "Failed to take P4 snapshot after Upgrade and NSF reboot: %s",
-            status_or_p4_snapshot3.status().message())));
+            p4_snapshot_3.status().message())));
   } else {
-    p4flow_snapshot3 = status_or_p4_snapshot3.value();
     if (!SaveP4FlowSnapshot(
-             testbed_, p4flow_snapshot3,
+             *p4_snapshot_3,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_after_upgrade_and_nsf_reboot_",
                           absl::FormatTime("%H_%M_%S", absl::Now(),
                                            absl::LocalTimeZone()),
-                          ".txt"))
+                          ".txt"),
+             GetTestEnvironment(testbed_))
              .ok()) {
       LOG(ERROR) << "Failed to save P4 snapshot after upgrade and NSF reboot";
     }
@@ -469,34 +459,34 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
 
-  ReadResponse p4flow_snapshot4;
-  auto status_or_p4_snapshot4 = TakeP4FlowSnapshot(testbed_);
-  if (!status_or_p4_snapshot4.ok()) {
+  absl::StatusOr<ReadResponse> p4_snapshot_4 =
+      TakeP4FlowSnapshot(GetSut(testbed_));
+  if (!p4_snapshot_4.ok()) {
     AppendErrorStatus(
         overall_status,
         absl::InternalError(absl::StrFormat(
             "Failed to take P4 snapshot after cleaning up flows: %s",
-            status_or_p4_snapshot4.status().message())));
+            p4_snapshot_4.status().message())));
   } else {
-    p4flow_snapshot4 = status_or_p4_snapshot4.value();
     if (!SaveP4FlowSnapshot(
-             testbed_, p4flow_snapshot4,
+             *p4_snapshot_4,
              absl::StrCat(curr_image_config.image_version, "_",
                           next_image_config.image_version,
                           "_p4flow_snapshot_after_clearing_flows_",
                           absl::FormatTime("%H_%M_%S", absl::Now(),
                                            absl::LocalTimeZone()),
-                          ".txt"))
+                          ".txt"),
+             GetTestEnvironment(testbed_))
              .ok()) {
       LOG(ERROR) << "Failed to save P4 snapshot after clearing flows";
     }
   }
 
-  if (status_or_p4_snapshot1.ok() && status_or_p4_snapshot4.ok()) {
+  if (p4_snapshot_1.ok() && p4_snapshot_4.ok()) {
     LOG(INFO) << upgrade_path
               << ": Comparing P4 snapshots - Before Programming Flows Vs After "
                  "Clearing Flows";
-    status = CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4);
+    status = CompareP4FlowSnapshots(*p4_snapshot_1, *p4_snapshot_4);
     if (!status.ok()) {
       GetTestEnvironment(testbed_)
           .StoreTestArtifact(
@@ -517,11 +507,11 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
     }
   }
 
-  if (status_or_p4_snapshot2.ok() && status_or_p4_snapshot3.ok()) {
+  if (p4_snapshot_2.ok() && p4_snapshot_3.ok()) {
     LOG(INFO) << upgrade_path
               << ": Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs."
                  "After Upgrade + NSF Reboot";
-    status = CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3);
+    status = CompareP4FlowSnapshots(*p4_snapshot_2, *p4_snapshot_3);
     if (!status.ok()) {
       GetTestEnvironment(testbed_)
           .StoreTestArtifact(

@@ -18,6 +18,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
@@ -32,20 +33,38 @@
 
 namespace pins_test {
 namespace {
+
+constexpr absl::string_view k31JulyRelease = "pins_release_20240731";
+
+// The following objects will always be modified after APPLY_VIEW.
+const absl::flat_hash_set<absl::string_view> kAllowList =
+    absl::flat_hash_set<absl::string_view>({
+        "SAI_OBJECT_TYPE_DEBUG_COUNTER",
+        "SAI_OBJECT_TYPE_VIRTUAL_ROUTER",
+    });
+
+}  // namespace
+
 //  Checks sairedis.rec file matches in SUT after APPLY_VIEW.
 //  Filters records starting at timestamp after APPLY_VIEW.
 //  Scans sairedis.rec and sairedis.rec.n (if it exists) for write operations on
 //  SAI objects in the record file.
-absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
-                                          const Testbed &testbed,
-                                          thinkit::SSHClient &ssh_client) {
-  const auto allowlist = absl::flat_hash_set<absl::string_view>({
-      "SAI_OBJECT_TYPE_DEBUG_COUNTER", 
-      "SAI_OBJECT_TYPE_VIRTUAL_ROUTER", 
-      "SAI_OBJECT_TYPE_ROUTER_INTERFACE", 
-      "SAI_OBJECT_TYPE_HOSTIF_TRAP_GROUP", 
-      "SAI_OBJECT_TYPE_HOSTIF",  
-  });
+absl::Status SwssValidator::VerifySairedisRecOnNsfReboot(
+    absl::string_view version, const Testbed& testbed,
+    thinkit::SSHClient& ssh_client) {
+  // Add always expected objects in the allow list.
+  absl::flat_hash_set<absl::string_view> allowlist = kAllowList;
+  // Add release specific objects in the allow list.
+  if (!allowlist_.empty()) {
+    allowlist.insert(allowlist_.begin(), allowlist_.end());
+    allowlist_.clear();
+  }
+
+  std::string allowlist_str;
+  for (const auto obj : allowlist) {
+    absl::StrAppend(&allowlist_str, obj, ", ");
+  }
+  LOG(INFO) << "Allowlist for APPLY_VIEW: " << allowlist_str;
 
   constexpr absl::Duration kRunCommandTimeout = absl::Minutes(2);
   constexpr char kSairedisRecFile[] = "/var/log/tmp/or-con/swss/sairedis.rec";
@@ -146,7 +165,34 @@ absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
   }
   return absl::OkStatus();
 }
-}  // namespace
+
+absl::Status SwssValidator::OnImageCopy(absl::string_view version,
+                                        const Testbed& testbed,
+                                        thinkit::SSHClient& ssh_client) {
+  ASSIGN_OR_RETURN(auto sut_gnmi_stub, GetSut(testbed).CreateGnmiStub());
+  ASSIGN_OR_RETURN(PinsSoftwareComponentInfo software_info,
+                   GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+
+  if (absl::StrContains(software_info.primary_network_stack.version,
+                        k31JulyRelease) &&
+      software_info.primary_network_stack.version !=
+          software_info.secondary_network_stack.version) {
+    LOG(INFO) << "Allowing additional APPLY_VIEW object operations during NSF "
+                 "upgrade from "
+              << k31JulyRelease << " to "
+              << software_info.secondary_network_stack.version;
+    allowlist_ = absl::flat_hash_set<absl::string_view>({
+        // Objects set by CoppOrch.
+        "SAI_OBJECT_TYPE_HOSTIF_TRAP_GROUP",
+        "SAI_OBJECT_TYPE_HOSTIF",
+        // Objects set by P4Orch ACL rule manager.
+        "SAI_OBJECT_TYPE_HOSTIF_USER_DEFINED_TRAP",
+        "SAI_OBJECT_TYPE_HOSTIF_TABLE_ENTRY",
+    });
+  }
+
+  return absl::OkStatus();
+}
 
 absl::Status SwssValidator::OnNsfReboot(absl::string_view version,
                                         const Testbed &testbed,

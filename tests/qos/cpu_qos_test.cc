@@ -120,7 +120,7 @@ absl::Status NsfRebootHelper(const Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
   // TODO: Add punt flow before reboot,
   // send traffic and measure downtine based on traffic drop.
-  return DoNsfRebootAndWaitForSwitchReady(testbed, *ssh_client);
+  return DoNsfRebootAndWaitForSwitchReadyOrRecover(testbed, *ssh_client);
 }
 
 // Set up the switch to punt packets to CPU.

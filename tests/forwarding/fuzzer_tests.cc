@@ -91,19 +91,10 @@ namespace {
 // Buffer time to wind down testing after the test iterations are complete.
 constexpr absl::Duration kEndOfTestBuffer = absl::Minutes(10);
 
+// Returns true if the given table should be masked with `current_version`.
 bool IsMaskedResource(absl::string_view table_name,
                       gutil::Version current_version) {
   absl::flat_hash_set<std::string> masked_tables = {};
-
-  // TODO: Remove version check when the P4Info version in release
-  // is equal or higher than SAI_P4_PKGINFO_VERSION_FIXED_INGRESS_ACL_RESOURCE.
-  gutil::Version version_with_good_ingress_acls = gutil::ParseVersionOrDie(
-      SAI_P4_PKGINFO_VERSION_FIXED_INGRESS_ACL_RESOURCE);
-  if (current_version < version_with_good_ingress_acls) {
-    masked_tables.insert("acl_ingress_table");
-    masked_tables.insert("acl_ingress_security_table");
-    masked_tables.insert("acl_ingress_mirror_and_redirect_table");
-  }
   return masked_tables.contains(table_name);
 }
 

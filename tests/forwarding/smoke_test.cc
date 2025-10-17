@@ -21,11 +21,14 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -41,8 +44,6 @@
 #include "tests/forwarding/test_data.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/test_environment.h"
 
@@ -51,6 +52,7 @@ namespace {
 
 using ::gutil::EqualsProto;
 using ::gutil::IsOk;
+using ::gutil::StatusIs;
 using ::testing::ElementsAre;
 using ::testing::Not;
 
@@ -284,7 +286,7 @@ ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
 }
 
-TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
+TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
 
@@ -314,16 +316,8 @@ ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
                        pdpi::PartialPdTableEntryToPiTableEntry(
 		       ir_p4info, pd_entry));
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
-  ASSERT_OK_AND_ASSIGN(auto entries,
-                       pdpi::ReadPiTableEntries(sut_p4rt_session.get()));
-  EXPECT_THAT(entries, ElementsAre(EqualsProto(pi_entry)));
-
-  // An auxiliary RedisDB tool that takes a snapshot of the database has issues
-  // with reading non-UTF-8 compliant characters. This is only used for
-  // debugging in testing, so we just clear the SUT table before finishing the
-  // test to avoid the problem.
-  ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
+  EXPECT_THAT(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry),
+              StatusIs(absl::StatusCode::kUnknown));
 }
 
 TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
