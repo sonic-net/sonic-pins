@@ -75,12 +75,11 @@ void BlackholeCongestionCountersIxiaTestFixture::SetUp() {
   // Hook up to gNMI.
   ASSERT_OK_AND_ASSIGN(gnmi_stub_, generic_testbed_->Sut().CreateGnmiStub());
 
-  // TODO: Set up thresholds for test and push config to switch.
   // Set up P4 Runtime session.
-  ASSERT_OK_AND_ASSIGN(
-      sut_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          generic_testbed_->Sut(), GetParam().gnmi_config, GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           generic_testbed_->Sut(),
+                           /*gnmi_config=*/std::nullopt, GetParam().p4_info));
 
   ASSERT_OK_AND_ASSIGN(
       traffic_generator_links_,
@@ -214,8 +213,6 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
       kInFcsErrorAboveThreshFramesPerSecond *
       kInFcsErrorAboveThreshFramesDurationSeconds;
 
-  // TODO: Connect to TestTracker for test status
-
   ASSERT_OK_AND_ASSIGN(InErrorCounters in_fcs_error_counters_delta,
                        TriggerInFcsErrors(kInFcsErrorAboveThreshFramesPerSecond,
                                           kInFcsErrorAboveThreshFrameCount));
@@ -223,9 +220,9 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   // Check the changes are as expected.
   EXPECT_EQ(in_fcs_error_counters_delta.port_in_error_packets,
             kInFcsErrorAboveThreshFrameCount);
-  EXPECT_GT(in_fcs_error_counters_delta.port_blackhole_in_error_events, 0);
-  EXPECT_GT(in_fcs_error_counters_delta.switch_blackhole_in_error_events, 0);
-  EXPECT_GT(in_fcs_error_counters_delta.switch_blackhole_events, 0);
+  EXPECT_GE(in_fcs_error_counters_delta.port_blackhole_in_error_events, 1);
+  EXPECT_GE(in_fcs_error_counters_delta.switch_blackhole_in_error_events, 1);
+  EXPECT_GE(in_fcs_error_counters_delta.switch_blackhole_events, 1);
   EXPECT_EQ(in_fcs_error_counters_delta.port_blackhole_in_error_events,
             in_fcs_error_counters_delta.switch_blackhole_events);
 }
@@ -237,8 +234,6 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   constexpr int kInFcsErrorBelowThreshFrameCount =
       kInFcsErrorBelowThreshFramesPerSecond *
       kInFcsErrorBelowThreshFramesDurationSeconds;
-
-  // TODO: Connect to TestTracker for test status
 
   ASSERT_OK_AND_ASSIGN(InErrorCounters in_fcs_error_counters_delta,
                        TriggerInFcsErrors(kInFcsErrorBelowThreshFramesPerSecond,
@@ -398,6 +393,7 @@ BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
   // Get egress port NC1 queue speed in bits per second.
   ASSIGN_OR_RETURN(const int64_t out_queue_pir,
                    GetQueuePir(sut_out_port, kNc1QueueName, *gnmi_stub_));
+  LOG(INFO) << "SUT out port: " << sut_out_port << " Queue: " << kNc1QueueName;
   LOG(INFO) << "Egress queue pir (bits/second): " << out_queue_pir;
 
   const double frame_rate_at_line_speed_of_out_queue =
@@ -433,6 +429,11 @@ BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
                    GetBlackholeSwitchCounters(*gnmi_stub_));
   ASSIGN_OR_RETURN(BlackholePortCounters initial_blackhole_port_counters,
                    GetBlackholePortCounters(sut_out_port, *gnmi_stub_));
+  ASSIGN_OR_RETURN(
+      const uint64_t initial_queue_dropped_packet_events,
+      GetCongestionQueueCounter(sut_out_port, kNc1QueueName, *gnmi_stub_));
+  ASSIGN_OR_RETURN(const uint64_t initial_switch_congestion_events,
+                   GetCongestionSwitchCounter(*gnmi_stub_));
 
   RETURN_IF_ERROR(ixia::StartTraffic(ixia_setup_result.traffic_ref,
                                      ixia_setup_result.topology_ref,
@@ -463,6 +464,11 @@ BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
                    GetBlackholeSwitchCounters(*gnmi_stub_));
   ASSIGN_OR_RETURN(BlackholePortCounters final_blackhole_port_counters,
                    GetBlackholePortCounters(sut_out_port, *gnmi_stub_));
+  ASSIGN_OR_RETURN(
+      const uint64_t final_queue_dropped_packet_events,
+      GetCongestionQueueCounter(sut_out_port, kNc1QueueName, *gnmi_stub_));
+  ASSIGN_OR_RETURN(const uint64_t final_switch_congestion_events,
+                   GetCongestionSwitchCounter(*gnmi_stub_));
 
   // Compute the change for each counter.
   const uint64_t port_out_pkts_delta =
@@ -473,6 +479,10 @@ BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
       final_blackhole_switch_counters - initial_blackhole_switch_counters;
   BlackholePortCounters blackhole_port_delta =
       final_blackhole_port_counters - initial_blackhole_port_counters;
+  const uint64_t queue_dropped_packet_events_delta =
+      final_queue_dropped_packet_events - initial_queue_dropped_packet_events;
+  const uint64_t switch_congestion_events_delta =
+      final_switch_congestion_events - initial_switch_congestion_events;
 
   return OutDiscardCounters{
       .port_out_packets = port_out_pkts_delta,
@@ -486,6 +496,8 @@ BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
       .switch_blackhole_events =
           blackhole_switch_delta.blackhole_events -
           blackhole_switch_delta.fec_not_correctable_events,
+      .queue_dropped_packet_events = queue_dropped_packet_events_delta,
+      .switch_congestion_events = switch_congestion_events_delta,
   };
 }
 
@@ -494,8 +506,6 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   constexpr double kAboveThreshOutDiscardsRate = 0.07;
   constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
   constexpr double kOutDiscardRateTolerance = 0.02;
-
-  // TODO: Connect to TestTracker for test status
 
   ASSERT_OK_AND_ASSIGN(
       OutDiscardCounters out_discard_counters,
@@ -508,9 +518,11 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   LOG(INFO) << "Observed out discard rate: " << observed_out_discard_rate;
   EXPECT_NEAR(observed_out_discard_rate, kAboveThreshOutDiscardsRate,
               kOutDiscardRateTolerance);
-  EXPECT_GT(out_discard_counters.port_blackhole_out_discard_events, 0);
-  EXPECT_GT(out_discard_counters.switch_blackhole_out_discard_events, 0);
-  EXPECT_GT(out_discard_counters.switch_blackhole_events, 0);
+  EXPECT_GE(out_discard_counters.port_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_events, 1);
+  EXPECT_GE(out_discard_counters.queue_dropped_packet_events, 1);
+  EXPECT_GE(out_discard_counters.switch_congestion_events, 1);
 }
 
 TEST_P(BlackholeCongestionCountersIxiaTestFixture,
@@ -518,8 +530,6 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   constexpr double kBelowThreshOutDiscardsRate = 0.03;
   constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
   constexpr double kOutDiscardRateTolerance = 0.02;
-
-  // TODO: Connect to TestTracker for test status
 
   ASSERT_OK_AND_ASSIGN(
       OutDiscardCounters out_discard_counters,
@@ -532,9 +542,8 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   LOG(INFO) << "Observed out discard rate: " << observed_out_discard_rate;
   EXPECT_NEAR(observed_out_discard_rate, kBelowThreshOutDiscardsRate,
               kOutDiscardRateTolerance);
-  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
-  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
-  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
+  EXPECT_EQ(out_discard_counters.queue_dropped_packet_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_congestion_events, 0);
 }
 
 }  // namespace pins_test
