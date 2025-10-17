@@ -955,9 +955,7 @@ void VerifySflowResult(absl::string_view sflowtool_output,
       EXPECT_EQ(fields[kSamplingRateIdx], absl::StrCat(sampling_rate));
     }
   }
-  EXPECT_GT(interesting_samples, 0)
-      << "No samples for dst_ip: " << dst_ip << ". Samples are:\n"
-      << sflowtool_output;
+  EXPECT_GT(interesting_samples, 0) << "No samples for dst_ip: " << dst_ip;
 }
 
 void CollectDriverDebugs(thinkit::SSHClient* ssh_client,
@@ -2540,7 +2538,7 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
                      /*prefix=*/"pre_nsf_", testbed.Environment());
   LOG(INFO) << "Start NSF reboot on switch";
   ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_before_nsf,
-                   pins_test::TakeP4FlowSnapshot(&testbed));
+                   pins_test::TakeP4FlowSnapshot(testbed.Sut()));
   pins_test::ImageConfigParams image_config_params{
       .gnmi_config = std::string(gnmi_config),
   };
@@ -2549,7 +2547,7 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"post_nsf_", testbed.Environment());
   ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_after_nsf,
-                   pins_test::TakeP4FlowSnapshot(&testbed));
+                   pins_test::TakeP4FlowSnapshot(testbed.Sut()));
   RETURN_IF_ERROR(pins_test::CompareP4FlowSnapshots(p4flow_snapshot_before_nsf,
                                                     p4flow_snapshot_after_nsf));
   LOG(INFO) << "NSF reboot finished and switch is converged.";
