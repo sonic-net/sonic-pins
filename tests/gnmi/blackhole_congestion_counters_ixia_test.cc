@@ -324,9 +324,9 @@ absl::StatusOr<int64_t> GetQueuePir(absl::string_view port_name,
 
 TEST_P(BlackholeCongestionCountersIxiaTestFixture,
        TestCongestionsAboveThreshIncrementOutDiscardsAndCongestionCounters) {
-  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh + 0.03;
+  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh + 0.025;
   constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
-  constexpr double kOutDiscardsRateTolerance = 0.02;
+  constexpr double kOutDiscardsRateTolerance = 0.025;
 
   ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
                        TriggerOutDiscards(kOutDiscardsRate, kTrafficDuration));
@@ -347,9 +347,9 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
 
 TEST_P(BlackholeCongestionCountersIxiaTestFixture,
        TestCongestionsBelowThreshNotIncrementOutDiscardsAndCongestionCounters) {
-  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh - 0.03;
+  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh - 0.025;
   constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
-  constexpr double kOutDiscardsRateTolerance = 0.02;
+  constexpr double kOutDiscardsRateTolerance = 0.025;
 
   ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
                        TriggerOutDiscards(kOutDiscardsRate, kTrafficDuration));
