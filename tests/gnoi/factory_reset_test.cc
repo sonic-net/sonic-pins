@@ -45,7 +45,7 @@ constexpr absl::Duration kPingReachabilityInterval = absl::Seconds(2);
 constexpr absl::Duration kPingTimeout = absl::Seconds(1);
 constexpr int kConsecutivePingsRequired = 3;
 constexpr absl::Duration kFactoryResetWaitForUpTime = absl::Minutes(25);
-constexpr absl::Duration kSshSessionTimeout = absl::Seconds(5);
+constexpr absl::Duration kSshSessionTimeout = absl::Seconds(20);
 
 void IssueGnoiFactoryResetAndValidateStatus(
     thinkit::Switch& sut, const gnoi::factory_reset::StartRequest& request,

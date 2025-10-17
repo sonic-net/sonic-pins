@@ -143,7 +143,8 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
                                 absl::Span<const std::string> interfaces = {});
 
 // Reboot the SUT using the given reboot `method`.
-absl::Status Reboot(gnoi::system::RebootMethod method, const Testbed &testbed);
+absl::Status Reboot(gnoi::system::RebootMethod method, const Testbed& testbed,
+                    bool collect_debug_artifacts_before_reboot = true);
 
 // Performs image copy on the inactive side using gNOI, and returns the upgraded
 // image version on success.
@@ -196,6 +197,14 @@ absl::Status WaitForNsfReboot(
 absl::Status DoNsfRebootAndWaitForSwitchReady(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
     absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    bool check_interfaces_up = true,
+    absl::Span<const std::string> interfaces = {});
+
+// Performs an NSF reboot and waits for the SUT to be ready.In the event of an
+// NSF reboot failure, a cold reboot is executed on the switch to recover it.
+absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
+    const Testbed& testbed, thinkit::SSHClient& ssh_client,
+    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> interfaces = {});
 
