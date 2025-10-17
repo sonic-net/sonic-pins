@@ -21,7 +21,6 @@
 
 #include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "p4_pdpi/p4_runtime_session.h"
