@@ -622,11 +622,6 @@ StatusOr<IrActionInfo::SaiAction> ParseActionParam(
                      _ << " Failed to process action parameter ["
                        << param.ShortDebugString() << "].");
   }
-  if (!sai_action.color.empty()) {
-    return InvalidArgumentErrorBuilder()
-           << "Action parameter [" << param.ShortDebugString()
-           << "] specifies a color. Action parameters may not include a color.";
-  }
   if (param.param().name().empty()) {
     return InvalidArgumentErrorBuilder()
            << "ACL action parameter [" << param.ShortDebugString()
