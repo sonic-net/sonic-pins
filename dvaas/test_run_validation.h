@@ -63,8 +63,8 @@ struct SwitchOutputDiffParams {
   // recommended as a last resort, fixing the simulation should be preferred.
   std::function<absl::Status(
       const SwitchInput& input, const SwitchOutput& actual_output,
-      google::protobuf::RepeatedPtrField<SwitchOutput>& acceptable_outputs,
-      SwitchApi& sut)>
+      const SwitchApi& sut,
+      google::protobuf::RepeatedPtrField<SwitchOutput>& acceptable_outputs)>
       ModifyExpectedOutputPreDiffing;
 };
 
