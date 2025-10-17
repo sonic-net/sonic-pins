@@ -31,11 +31,12 @@
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
+#include "lib/utils/json_utils.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -51,6 +52,7 @@
 #include "thinkit/switch.h"
 
 namespace pins_test {
+namespace {
 
 using ::nlohmann::json;
 
@@ -65,37 +67,62 @@ constexpr absl::string_view kIpv4DstIpForL3Miss = "10.10.30.10";
 constexpr absl::string_view kIpv6DstIpForL3Hit = "F105:0102::2356";
 constexpr absl::string_view kIpv6DstIpForL3Miss = "F205:102::9845";
 
-void BlackholeCongestionCountersWithoutIxiaTestFixture::SetUp() {
-  thinkit::GenericTestbedFixture<>::SetUp();
-  thinkit::TestRequirements requirements =
-      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
-          R"pb(interface_requirements {
-                 count: 1
-                 interface_mode: CONTROL_INTERFACE
-               })pb");
+constexpr int kDecimalToMilliPercent = 1e5;
+constexpr int kLpmMissesThresh = 10;
+constexpr double kInDiscardsRateThresh = 0.05;
+constexpr double kOutDiscardsRateThresh = 0.05;
+constexpr uint64_t kInDiscardsRateThreshMilliPercent =
+    kInDiscardsRateThresh * kDecimalToMilliPercent;
+constexpr uint64_t kOutDiscardsRateThreshMilliPercent =
+    kOutDiscardsRateThresh * kDecimalToMilliPercent;
+constexpr int kMinInPacketsThresh = 100;
+constexpr int kMinOutPacketsThresh = 100;
+constexpr int kEccSingleBitErrorsThresh = 0;
+constexpr int kRecoveredParityErrorsThresh = 0;
 
-  ASSERT_OK_AND_ASSIGN(generic_testbed_,
-                       GetTestbedWithRequirements(requirements));
+const char kOpenConfigSystemParseKey[] = "openconfig-system:system";
+const char kPinsDiagParseKey[] = "diag:diag";
 
-  // Hook up to gNMI.
-  ASSERT_OK_AND_ASSIGN(gnmi_stub_, generic_testbed_->Sut().CreateGnmiStub());
+// Takes a `gnmi_config` from the config generator and returns a modified
+// version that sets up blackhole and congestion related configs and thresholds
+// for the testbed. If the testbed does not support blackhole and congestion
+// monitoring, returns an error status.
+absl::StatusOr<std::string> SetUpBlackholeCongestionConfig(
+    absl::string_view gnmi_config) {
+  ASSIGN_OR_RETURN(json gnmi_config_json, json_yang::ParseJson(gnmi_config));
 
-  // Set up P4 Runtime session.
-  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
-                       ConfigureSwitchAndReturnP4RuntimeSession(
-                           generic_testbed_->Sut(),
-                           /*gnmi_config=*/std::nullopt, GetParam().p4_info));
+  // Gets the switch-level and port-level configs.
+  json& switch_config =
+      gnmi_config_json[kOpenConfigSystemParseKey][kPinsDiagParseKey]["config"];
+  json& port_profiles =
+      gnmi_config_json[kOpenConfigSystemParseKey][kPinsDiagParseKey]
+                      ["port-profiles"]["port-profile"];
 
-  ASSERT_OK_AND_ASSIGN(control_links_,
-                       GetUpLinks(GetAllControlLinks, *generic_testbed_));
-  ASSERT_FALSE(control_links_.empty())
-      << "Need at least 1 SUT interface to test";
-}
+  if (switch_config.empty() || port_profiles.empty()) {
+    return absl::NotFoundError(
+        "Blackhole and congestion monitoring not supported on testbed: Failed "
+        "to get switch-level or port-level configs.");
+  }
 
-void BlackholeCongestionCountersWithoutIxiaTestFixture::TearDown() {
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
-  ASSERT_OK(sut_p4_session_->Finish());
-  thinkit::GenericTestbedFixture<>::TearDown();
+  // Updates switch-level configs.
+  switch_config["blackhole-monitoring-enable"] = true;
+  switch_config["congestion-monitoring-enable"] = true;
+  switch_config["ecc-single-bit-errors-threshold"] = kEccSingleBitErrorsThresh;
+  switch_config["recovered-parity-errors-threshold"] =
+      kRecoveredParityErrorsThresh;
+  switch_config["lpm-misses-threshold"] = kLpmMissesThresh;
+
+  // Updates port-level configs.
+  for (json& port_profile : port_profiles) {
+    port_profile["config"]["in-discards-rate-threshold"] =
+        kInDiscardsRateThreshMilliPercent;
+    port_profile["config"]["out-discards-rate-threshold"] =
+        kOutDiscardsRateThreshMilliPercent;
+    port_profile["config"]["min-incoming-pkt-threshold"] = kMinInPacketsThresh;
+    port_profile["config"]["min-outgoing-pkt-threshold"] = kMinOutPacketsThresh;
+  }
+
+  return json_yang::DumpJson(gnmi_config_json);
 }
 
 // Packet proto messages sent from control switch to SUT.
@@ -177,6 +204,209 @@ absl::Status SendPackets(thinkit::ControlDevice& control_device,
   return absl::OkStatus();
 }
 
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestIpv4LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
+  constexpr uint32_t kLpmMissesCount = kLpmMissesThresh + 5;
+
+  ASSERT_OK_AND_ASSIGN(LpmMissCounters lpm_miss_counters,
+                       TriggerLpmMisses(sai::IpVersion::kIpv4, kLpmMissesCount,
+                                        /*lpm_hit_packets_count=*/0));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_lpm_miss_events, 1);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestIpv6LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
+  constexpr uint32_t kLpmMissesCount = kLpmMissesThresh + 5;
+
+  ASSERT_OK_AND_ASSIGN(LpmMissCounters lpm_miss_counters,
+                       TriggerLpmMisses(sai::IpVersion::kIpv6, kLpmMissesCount,
+                                        /*lpm_hit_packets_count=*/0));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_lpm_miss_events, 1);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestIpv4LpmMissesBelowThreshNotIncrementBlackholeLpmMissCounters) {
+  constexpr uint32_t kLpmMissesCount = kLpmMissesThresh - 5;
+
+  ASSERT_OK_AND_ASSIGN(LpmMissCounters lpm_miss_counters,
+                       TriggerLpmMisses(sai::IpVersion::kIpv4, kLpmMissesCount,
+                                        /*lpm_hit_packets_count=*/0));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_lpm_miss_events, 0);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestIpv6LpmMissesBelowThreshNotIncrementBlackholeLpmMissCounters) {
+  constexpr uint32_t kLpmMissesCount = kLpmMissesThresh - 5;
+
+  ASSERT_OK_AND_ASSIGN(LpmMissCounters lpm_miss_counters,
+                       TriggerLpmMisses(sai::IpVersion::kIpv6, kLpmMissesCount,
+                                        /*lpm_hit_packets_count=*/0));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_lpm_miss_events, 0);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestInDiscardsAboveThreshIncrementBlackholeInDiscardCounters) {
+  constexpr double kInDiscardsRate = kInDiscardsRateThresh + 0.03;
+  constexpr uint32_t kInPacketsCount = kMinInPacketsThresh + 50;
+  constexpr uint32_t kLpmMissesCount = kInPacketsCount * kInDiscardsRate;
+  constexpr uint32_t kLpmHitsCount = kInPacketsCount - kLpmMissesCount;
+
+  // Use LPM misses to trigger in-discard events.
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kLpmMissesCount, kLpmHitsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount + kLpmHitsCount);
+  EXPECT_EQ(lpm_miss_counters.port_in_discards, kLpmMissesCount);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_in_discard_events, 1);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestInDiscardsBelowThreshNotIncrementBlackholeInDiscardCounters) {
+  constexpr double kInDiscardsRate = kInDiscardsRateThresh - 0.03;
+  constexpr uint32_t kInPacketsCount = kMinInPacketsThresh + 50;
+  constexpr uint32_t kLpmMissesCount = kInPacketsCount * kInDiscardsRate;
+  constexpr uint32_t kLpmHitsCount = kInPacketsCount - kLpmMissesCount;
+
+  // Use LPM misses to trigger in-discard events.
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kLpmMissesCount, kLpmHitsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount + kLpmHitsCount);
+  EXPECT_EQ(lpm_miss_counters.port_in_discards, kLpmMissesCount);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestPacketCountBelowThreshNotIncrementBlackholeInDiscardCounters) {
+  constexpr double kInDiscardsRate = kInDiscardsRateThresh + 0.03;
+  constexpr uint32_t kInPacketsCount = kMinInPacketsThresh - 50;
+  constexpr uint32_t kLpmMissesCount = kInPacketsCount * kInDiscardsRate;
+  constexpr uint32_t kLpmHitsCount = kInPacketsCount - kLpmMissesCount;
+
+  // Use LPM misses to trigger in-discard events.
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kLpmMissesCount, kLpmHitsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kLpmMissesCount + kLpmHitsCount);
+  EXPECT_EQ(lpm_miss_counters.port_in_discards, kLpmMissesCount);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestAclDropAboveThreshIncrementBlackholeOutDiscardsCounters) {
+  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh + 0.03;
+  constexpr uint32_t kOutPacketsCount = kMinOutPacketsThresh + 50;
+  constexpr uint32_t kOutDiscardsCount = kOutPacketsCount * kOutDiscardsRate;
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
+
+  // Check the changes are as expected.
+  EXPECT_GE(out_discard_counters.port_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestAclDropBelowThreshNotIncrementOutDiscardsCounters) {
+  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh - 0.03;
+  constexpr uint32_t kOutPacketsCount = kMinOutPacketsThresh + 50;
+  constexpr uint32_t kOutDiscardsCount = kOutPacketsCount * kOutDiscardsRate;
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestAclDropWithLowTrafficNotIncrementOutDiscardsCounters) {
+  constexpr uint32_t kOutPacketsCount = kMinOutPacketsThresh - 50;
+  constexpr uint32_t kOutDiscardsCount = kOutPacketsCount;
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
+}
+
+}  // namespace
+
+void BlackholeCongestionCountersWithoutIxiaTestFixture::SetUp() {
+  thinkit::GenericTestbedFixture<
+      BlackholeCongestionCountersWithoutIxiaTestFixtureParams>::SetUp();
+  thinkit::TestRequirements requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 1
+                 interface_mode: CONTROL_INTERFACE
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(generic_testbed_,
+                       GetTestbedWithRequirements(requirements));
+
+  ASSERT_OK_AND_ASSIGN(std::string blackhole_congestion_config,
+                       SetUpBlackholeCongestionConfig(GetParam().gnmi_config));
+  ASSERT_OK(generic_testbed_->Environment().StoreTestArtifact(
+      "gnmi_config.txt", GetParam().gnmi_config));
+  ASSERT_OK(generic_testbed_->Environment().StoreTestArtifact(
+      "blackhole_congestion_config.txt", blackhole_congestion_config));
+
+  // Hook up to gNMI.
+  ASSERT_OK_AND_ASSIGN(gnmi_stub_, generic_testbed_->Sut().CreateGnmiStub());
+
+  // Set up P4 Runtime session.
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
+                       ConfigureSwitchAndReturnP4RuntimeSession(
+                           generic_testbed_->Sut(), blackhole_congestion_config,
+                           GetParam().p4_info));
+
+  ASSERT_OK_AND_ASSIGN(control_links_,
+                       GetUpLinks(GetAllControlLinks, *generic_testbed_));
+  ASSERT_FALSE(control_links_.empty())
+      << "Need at least 1 SUT interface to test";
+}
+
+void BlackholeCongestionCountersWithoutIxiaTestFixture::TearDown() {
+  // Restores the gNMI config and clears table entries.
+  ASSERT_OK(PushGnmiConfig(generic_testbed_->Sut(), GetParam().gnmi_config));
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  ASSERT_OK(sut_p4_session_->Finish());
+  thinkit::GenericTestbedFixture<
+      BlackholeCongestionCountersWithoutIxiaTestFixtureParams>::TearDown();
+}
+
 absl::StatusOr<LpmMissCounters>
 BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
     sai::IpVersion ip_version, uint32_t lpm_miss_packets_count,
@@ -190,7 +420,7 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
   ASSIGN_OR_RETURN(const std::string sut_port_id,
                    gutil::FindOrStatus(port_id_by_interface, sut_interface));
 
-  thinkit::ControlDevice &control_device = generic_testbed_->ControlDevice();
+  thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
 
   RETURN_IF_ERROR(pdpi::ClearEntities(*sut_p4_session_));
   RETURN_IF_ERROR(sai::EntryBuilder()
@@ -259,120 +489,6 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
   };
 }
 
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestIpv4LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
-  constexpr uint32_t kAboveThreshL3MissCount = 20;
-
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kAboveThreshL3MissCount,
-                       /*lpm_hit_packets_count=*/0));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kAboveThreshL3MissCount);
-  EXPECT_GE(lpm_miss_counters.switch_blackhole_lpm_miss_events, 1);
-  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestIpv6LpmMissesAboveThreshIncrementBlackholeLpmMissCounters) {
-  constexpr uint32_t kAboveThreshL3MissCount = 20;
-
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv6, kAboveThreshL3MissCount,
-                       /*lpm_hit_packets_count=*/0));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kAboveThreshL3MissCount);
-  EXPECT_GE(lpm_miss_counters.switch_blackhole_lpm_miss_events, 1);
-  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestIpv4LpmMissesBelowThreshNotIncrementBlackholeLpmMissCounters) {
-  constexpr uint32_t kBelowThreshL3MissCount = 5;
-
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kBelowThreshL3MissCount,
-                       /*lpm_hit_packets_count=*/0));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kBelowThreshL3MissCount);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_lpm_miss_events, 0);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestIpv6LpmMissesBelowThreshNotIncrementBlackholeLpmMissCounters) {
-  constexpr uint32_t kBelowThreshL3MissCount = 5;
-
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv6, kBelowThreshL3MissCount,
-                       /*lpm_hit_packets_count=*/0));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kBelowThreshL3MissCount);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_lpm_miss_events, 0);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestInDiscardsAboveThreshIncrementBlackholeInDiscardCounters) {
-  // Test in-discard rate of 0.025.
-  constexpr uint32_t kL3MissCount = 5;
-  constexpr uint32_t kL3HitCount = 195;
-
-  // Use LPM misses to trigger in-discard events.
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kL3MissCount, kL3HitCount));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kL3MissCount + kL3HitCount);
-  EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
-  EXPECT_GE(lpm_miss_counters.switch_blackhole_in_discard_events, 1);
-  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestInDiscardsBelowThreshNotIncrementBlackholeInDiscardCounters) {
-  // Test in-discard rate of 0.005.
-  constexpr uint32_t kL3MissCount = 1;
-  constexpr uint32_t kL3HitCount = 199;
-
-  // Use LPM misses to trigger in-discard events.
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kL3MissCount, kL3HitCount));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kL3MissCount + kL3HitCount);
-  EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestPacketCountBelowThreshNotIncrementBlackholeInDiscardCounters) {
-  // Test when in-discard rate is 1, but the packet count is too low.
-  constexpr uint32_t kL3MissCount = 5;
-  constexpr uint32_t kL3HitCount = 0;
-
-  // Use LPM misses to trigger in-discard events.
-  ASSERT_OK_AND_ASSIGN(
-      LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kL3MissCount, kL3HitCount));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(lpm_miss_counters.port_in_packets, kL3MissCount);
-  EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
-  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
-}
-
 absl::StatusOr<OutDiscardCounters>
 BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerOutDiscards(
     uint32_t out_discards_count, uint32_t out_packets_count) {
@@ -387,7 +503,7 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerOutDiscards(
   ASSIGN_OR_RETURN(const std::string sut_port_id,
                    gutil::FindOrStatus(port_id_by_interface, sut_interface));
 
-  thinkit::ControlDevice &control_device = generic_testbed_->ControlDevice();
+  thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
 
   // Clear entries and set up a route to forward all packets to the SUT port.
   // Set up egress ACL to drop all IPv6 packets for testing out-discard
@@ -459,51 +575,6 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerOutDiscards(
           blackhole_switch_delta.blackhole_events -
           blackhole_switch_delta.fec_not_correctable_events,
   };
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestAclDropAboveThreshIncrementBlackholeOutDiscardsCounters) {
-  // Test out-discard rate of 0.025.
-  constexpr uint32_t kOutDiscardsCount = 5;
-  constexpr uint32_t kOutPacketsCount = 200;
-
-  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
-                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
-
-  // Check the changes are as expected.
-  EXPECT_GE(out_discard_counters.port_blackhole_out_discard_events, 1);
-  EXPECT_GE(out_discard_counters.switch_blackhole_out_discard_events, 1);
-  EXPECT_GE(out_discard_counters.switch_blackhole_events, 1);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestAclDropBelowThreshNotIncrementOutDiscardsCounters) {
-  // Test out-discard rate of 0.005.
-  constexpr uint32_t kOutDiscardsCount = 1;
-  constexpr uint32_t kOutPacketsCount = 200;
-
-  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
-                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
-  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
-  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
-}
-
-TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
-       TestAclDropWithLowTrafficNotIncrementOutDiscardsCounters) {
-  // Test when out-discard rate is 1, but the packet count is too low.
-  constexpr uint32_t kOutDiscardsCount = 50;
-  constexpr uint32_t kOutPacketsCount = 50;
-
-  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
-                       TriggerOutDiscards(kOutDiscardsCount, kOutPacketsCount));
-
-  // Check the changes are as expected.
-  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
-  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
-  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
 }
 
 }  // namespace pins_test
