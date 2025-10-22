@@ -220,10 +220,10 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         absl::string_view gnmi_config,
                         const p4::config::v1::P4Info& p4_info,
                         absl::string_view config_label, bool clear_config);
-absl::Status PushConfig(const ImageConfigParams &image_config_param,
-                        const Testbed &testbed, thinkit::SSHClient &ssh_client,
-                        bool clear_config = false,
-                        bool check_interfaces_up = true);
+absl::Status PushConfig(const ImageConfigParams& image_config_param,
+                        thinkit::Switch& thinkit_switch,
+                        thinkit::SSHClient& ssh_client,
+                        bool clear_config = false);
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
                              const p4::config::v1::P4Info& p4_info);

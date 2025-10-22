@@ -14,7 +14,6 @@
 
 #include "tests/integration/system/nsf/upgrade_test.h"
 
-#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -85,17 +84,8 @@ void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
     const ImageConfigParams& image_config_param,
     bool enable_interface_validation_during_nsf) {
-  // We set the `check_interfaces_up` as `false` and not as
-  // `enable_interface_validation_during_nsf`. This is because we already
-  // validate the interfaces in the next statement in `ValidateTestbedState`.
-  // Moreover, the interface validation in `PushConfig` is redundant because of
-  // the same reason. However. the interface validation in `PushConfig` always
-  // picks the interfaces from the model and does not yet support taking an
-  // input of interfaces-to-check, which causes it to fail interface validation
-  // in Replay scenario where DVaaS is enabled.
-  RETURN_IF_ERROR(PushConfig(image_config_param, testbed_, *ssh_client_,
-                             /*clear_config=*/false,
-                             /*check_interfaces_up=*/false));
+  RETURN_IF_ERROR(PushConfig(image_config_param, GetSut(testbed_), *ssh_client_,
+                             /*clear_config=*/false));
   std::vector<std::string> interfaces_to_check;
 
   RETURN_IF_ERROR(ValidateTestbedState(
