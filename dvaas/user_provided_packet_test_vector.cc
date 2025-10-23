@@ -72,14 +72,19 @@ absl::StatusOr<int> LegitimizePacketInAndReturnId(
 absl::Status LegitimizeTestVector(
     PacketTestVector vector, const pdpi::IrP4Info& ir_info,
     PacketTestVectorById& legitimized_test_vectors_by_id) {
-  if (vector.input().type() != SwitchInput::DATAPLANE) {
-    return gutil::UnimplementedErrorBuilder()
-           << "only supported input type is DATAPLANE; found "
-           << SwitchInput::Type_Name(vector.input().type());
-  }
 
   // Legitimize input packet.
   Packet& input_packet = *vector.mutable_input()->mutable_packet();
+
+  // TODO: Revisit this when the decision about what to do with
+  // input ports for submit_to_ingress test vectors is finalized.
+  if (vector.input().type() == SwitchInput::SUBMIT_TO_INGRESS) {
+    // The port will be ignored for submit_to_ingress packets so using an
+    // arbitrary port is fine.
+    if (input_packet.port().empty()) {
+      input_packet.set_port("1");
+    }
+  }
   ASSIGN_OR_RETURN(int id, LegitimizePacketAndReturnId(input_packet),
                    _.SetPrepend() << "invalid input packet: ");
 

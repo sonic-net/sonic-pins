@@ -14,6 +14,11 @@
 
 #include "tests/forwarding/arriba_test.h"
 
+#include <cassert>
+#include <vector>
+
+#include "absl/container/btree_set.h"
+#include "absl/log/log.h"
 #include "dvaas/arriba_test_vector_validation.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/validation_result.h"
@@ -21,7 +26,10 @@
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
+#include "lib/p4rt/p4rt_port.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 
 namespace pins_test {
 namespace {
@@ -31,10 +39,21 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
                        dvaas::MirrorTestbedConfigurator::Create(
                            &GetParam().mirror_testbed->GetMirrorTestbed()));
 
+  std::vector<pdpi::IrTableEntry> used_entries_list(
+      GetParam().arriba_test_vector.ir_table_entries().entries().begin(),
+      GetParam().arriba_test_vector.ir_table_entries().entries().end());
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info,
+                       pdpi::GetIrP4Info(*configured_testbed.SutApi().p4rt));
+
+  ASSERT_OK_AND_ASSIGN(
+      absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
+      GetUsedP4rtPortIds(GetParam().arriba_test_vector, used_entries_list,
+                         ir_p4_info));
+  LOG(INFO) << "Number of used P4rt port ids: " << used_p4rt_port_ids.size();
+
   ASSERT_OK(configured_testbed.ConfigureForForwardingTest({
-      .configure_sut_port_ids_for_expected_entries = true,
-      .sut_entries_to_expect_after_configuration =
-          GetParam().arriba_test_vector.ir_table_entries(),
+      .p4rt_port_ids_to_configure = used_p4rt_port_ids,
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
 
