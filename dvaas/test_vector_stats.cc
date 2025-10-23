@@ -53,12 +53,15 @@ void AddTestVectorStats(const PacketTestOutcome& outcome,
                num_punted == acceptable_output.packet_ins_size();
       });
   if (has_correct_num_outputs) {
-    stats.num_vectors_with_correct_number_of_outputs += 1;
+    stats.num_vectors_where_sut_produced_correct_number_of_outputs += 1;
   }
 
-  stats.num_vectors_forwarding += num_forwarded > 0 ? 1 : 0;
-  stats.num_vectors_punting += num_punted > 0 ? 1 : 0;
-  stats.num_vectors_dropping += num_forwarded == 0 && num_punted == 0;
+  stats.num_vectors_where_sut_forwarded_at_least_one_packet +=
+      num_forwarded > 0 ? 1 : 0;
+  stats.num_vectors_where_sut_punted_at_least_one_packet +=
+      num_punted > 0 ? 1 : 0;
+  stats.num_vectors_where_sut_produced_no_output +=
+      num_forwarded == 0 && num_punted == 0;
   stats.num_packets_forwarded += num_forwarded;
   stats.num_packets_punted += num_punted;
 }
@@ -85,8 +88,8 @@ std::string ExplainPercent(int numerator, int denominator) {
 }
 
 std::string ExplainFraction(int numerator, int denominator) {
-  return absl::StrFormat("%s of %d", ExplainPercent(numerator, denominator),
-                         denominator);
+  return absl::StrFormat("%d (%s) of %d", numerator,
+                         ExplainPercent(numerator, denominator), denominator);
 }
 
 }  // namespace
@@ -122,19 +125,24 @@ std::string ExplainTestVectorStats(const TestVectorStats& stats) {
       ExplainFraction(stats.num_vectors_passed, stats.num_vectors));
   absl::StrAppendFormat(
       &result,
-      "%s test vectors produced the correct number and type of output "
-      "packets\n",
-      ExplainFraction(stats.num_vectors_with_correct_number_of_outputs,
-                      stats.num_vectors));
+      "For %s test vectors SUT produced correct number & type of outputs\n",
+      ExplainFraction(
+          stats.num_vectors_where_sut_produced_correct_number_of_outputs,
+          stats.num_vectors));
   absl::StrAppendFormat(
       &result,
-      "%d test vectors forwarded, producing %d forwarded output packets\n",
-      stats.num_vectors_forwarding, stats.num_packets_forwarded);
+      "For %d test vectors SUT produced at least one forwarded packet\n",
+      stats.num_vectors_where_sut_forwarded_at_least_one_packet);
   absl::StrAppendFormat(
-      &result, "%d test vectors punted, producing %d punted output packets\n",
-      stats.num_vectors_punting, stats.num_packets_punted);
-  absl::StrAppendFormat(&result, "%d test vectors produced no output packets\n",
-                        stats.num_vectors_dropping);
+      &result, "For %d test vectors SUT produced at least one punted packet\n",
+      stats.num_vectors_where_sut_punted_at_least_one_packet);
+  absl::StrAppendFormat(&result,
+                        "For %d test vectors SUT produced no output packets\n",
+                        stats.num_vectors_where_sut_produced_no_output);
+  absl::StrAppendFormat(
+      &result,
+      "Overall, SUT produced %d forwarded packets and %d punted packets\n",
+      stats.num_packets_forwarded, stats.num_packets_punted);
   ExplainReproducibilityRate(stats, result);
   return result;
 }

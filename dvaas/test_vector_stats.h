@@ -27,10 +27,10 @@ struct TestVectorStats {
   int num_vectors_passed = 0;
   // Can be higher than `num_vectors_passed`, e.g. because the outputs
   // could have incorrect header field values.
-  int num_vectors_with_correct_number_of_outputs = 0;
-  int num_vectors_forwarding = 0;
-  int num_vectors_punting = 0;
-  int num_vectors_dropping = 0;
+  int num_vectors_where_sut_produced_correct_number_of_outputs = 0;
+  int num_vectors_where_sut_forwarded_at_least_one_packet = 0;
+  int num_vectors_where_sut_punted_at_least_one_packet = 0;
+  int num_vectors_where_sut_produced_no_output = 0;
 
   int num_packets_forwarded = 0;
   int num_packets_punted = 0;
