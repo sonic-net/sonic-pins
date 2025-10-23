@@ -34,6 +34,14 @@ absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
     absl::Span<const dvaas::PacketTestVector> packet_test_vectors,
     const pdpi::IrP4Info& ir_p4info);
 
+// Returns a CSV table of test outcome insights for the given packet test
+// outcomes. Each row corresponds to a one packet test outcome. Columns include
+// various features of the test packet, including actions applied per table,
+// acceptable outcomes, actual outcome, validation result, etc.
+absl::StatusOr<std::string> GetTestInsightsTableAsCsv(
+    const PacketTestOutcomes& packet_test_outcomes,
+    const pdpi::IrP4Info& ir_p4info);
+
 }  // namespace dvaas
 
 #endif  // PINS_DVAAS_TEST_INSIGHTS_H_
