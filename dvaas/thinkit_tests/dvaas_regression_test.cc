@@ -2,17 +2,19 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
+#include "absl/container/btree_set.h"
+#include "absl/log/log.h"
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
-#include "gutil/status_matchers.h" 
-#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status_matchers.h"  
+#include "gutil/status_matchers.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "tests/lib/switch_test_setup_helpers.h"
@@ -48,18 +50,25 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   // TODO: Directly pass in IR entities instead of extracting IR
   // table entries once support for IR entities has been added to
   // `ConfigureForForwardingTest`.
-  pdpi::IrTableEntries ir_table_entries;
+  std::vector<pdpi::IrTableEntry> used_entries_list;
   for (const pdpi::IrEntity& ir_entity :
        GetParam()
            .dvaas_regression_test_proto.minimal_set_of_entities()
            .entities()) {
     if (ir_entity.has_table_entry()) {
-      *ir_table_entries.add_entries() = ir_entity.table_entry();
+      used_entries_list.push_back(ir_entity.table_entry());
     }
   }
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4_info,
+                       pdpi::GetIrP4Info(*configured_testbed.SutApi().p4rt));
+  ASSERT_OK_AND_ASSIGN(
+      absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
+      pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
+  LOG(INFO) << "Number of used P4rt port ids: " << used_p4rt_port_ids.size();
+
   ASSERT_OK(configured_testbed.ConfigureForForwardingTest({
-      .configure_sut_port_ids_for_expected_entries = true,
-      .sut_entries_to_expect_after_configuration = ir_table_entries,
+      .p4rt_port_ids_to_configure = used_p4rt_port_ids,
       .mirror_sut_ports_ids_to_control_switch = true,
   }));
   // Install the entities on the switch.

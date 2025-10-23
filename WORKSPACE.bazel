@@ -119,6 +119,15 @@ load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
 
 rules_pkg_dependencies()
 
+# -- Load Yggdrasil Decision Forests -------------------------------------------
+
+load("@com_google_ydf//yggdrasil_decision_forests:library.bzl", ydf_load_deps = "load_dependencies")
+
+ydf_load_deps(
+    exclude_repo = "tensorflow",
+    repo_name = "@com_google_ydf",
+)
+
 # == Dependencies needed for testing and formatting only =======================
 
 # -- Load p4c ------------------------------------------------------------------
