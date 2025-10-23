@@ -62,6 +62,17 @@ TEST(P4rtPortId, RoundtripsFromString) {
       port_id);
 }
 
+TEST(P4rtPortId, MakeFromHexstringEncodingWorks) {
+  constexpr int kP4rtPortIdInt = 42;
+  const std::string kP4rtPortIdString = "42";
+  const std::string kP4rtPortIdHexString = "0x2a";
+  ASSERT_OK_AND_ASSIGN(
+      P4rtPortId port_id,
+      P4rtPortId::MakeFromHexstringEncoding(kP4rtPortIdHexString));
+  EXPECT_EQ(port_id.GetOpenConfigEncoding(), kP4rtPortIdInt);
+  EXPECT_EQ(port_id.GetP4rtEncoding(), kP4rtPortIdString);
+}
+
 TEST(P4rtPortId, GetBmv2P4rtEncodingWorksForPortsFittingIn9Bits) {
   EXPECT_THAT(P4rtPortId::MakeFromOpenConfigEncoding(0).GetBmv2P4rtEncoding(),
               IsOkAndHolds(Eq(std::string(1, '\0'))));
