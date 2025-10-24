@@ -28,6 +28,7 @@
 #include "gutil/status.h"
 #include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 
 namespace pins_test {
 
@@ -59,6 +60,13 @@ std::vector<P4rtPortId> P4rtPortId::MakeVectorFromOpenConfigEncodings(
     result.push_back(P4rtPortId::MakeFromOpenConfigEncoding(p4rt_port_id));
   }
   return result;
+}
+
+absl::StatusOr<P4rtPortId> P4rtPortId::MakeFromHexstringEncoding(
+    absl::string_view hexstring_encoding) {
+  ASSIGN_OR_RETURN(uint32_t p4rt_port_id_int,
+                   pdpi::HexStringToUint32(hexstring_encoding));
+  return P4rtPortId(p4rt_port_id_int);
 }
 
 uint32_t P4rtPortId::GetOpenConfigEncoding() const { return p4rt_port_id_; }

@@ -135,7 +135,11 @@ message PacketTestOutcomes {
 message ArribaTestVector {
   // TODO: Add expected P4Info/PipelineConfig.
   // Table entries to be installed on the SUT.
+  // Note: Deprecated. Use `ir_entities` instead.
+  // TODO:  Remove `ir_table_entries` once all test vectors are
+  // migrated to `ir_entities`.
   pdpi.IrTableEntries ir_table_entries = 1;
+  pdpi.IrEntities ir_entities = 3;
   // A map of id to PacketTestVector with that id.
   map<int64, PacketTestVector> packet_test_vector_by_id = 2;
 }

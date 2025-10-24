@@ -21,6 +21,8 @@
 
 #include "absl/base/nullability.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -32,17 +34,17 @@
 #include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace dvaas {
 
@@ -78,6 +80,20 @@ std::optional<pdpi::IrPacketMetadata> GetPacketInMetadataByName(
   return std::nullopt;
 }
 
+absl::Status IgnoreField(MessageDifferencer& differ,
+                         const google::protobuf::Descriptor& descriptor,
+                         absl::string_view field_name) {
+  const google::protobuf::FieldDescriptor* field_descriptor =
+      descriptor.FindFieldByName(field_name);
+  if (field_descriptor == nullptr) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Could not find field '%s' in '%s'", field_name,
+                        descriptor.full_name()));
+  }
+  differ.IgnoreField(field_descriptor);
+  return absl::OkStatus();
+}
+
 bool CompareSwitchOutputs(SwitchOutput actual_output,
                           SwitchOutput expected_output,
                           const SwitchOutputDiffParams& params,
@@ -109,16 +125,17 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     MessageDifferencer differ;
     // Ignore logical field `reasons_invalid` since it is redundant (computed
     // from other fields) and misleading (not part of the actual packet).
-    const google::protobuf::FieldDescriptor* reasons_invalid_descriptor =
-        packetlib::Packet::descriptor()->FindFieldByName("reasons_invalid");
-    if (reasons_invalid_descriptor == nullptr) {
-      LOG(FATAL) << "Could not find field "  // Crash ok: testonly code
-                    "'reasons_invalid' in packetlib::Packet";
-    }
-    differ.IgnoreField(reasons_invalid_descriptor);
-
-    for (auto* field : params.ignored_packetlib_fields)
+    CHECK_OK(  // Crash ok: testonly code
+        IgnoreField(differ, *packetlib::Packet::descriptor(),
+                    "reasons_invalid"));
+    for (auto* field : params.ignored_packetlib_fields) {
       differ.IgnoreField(field);
+    }
+    if (params.ManualPayloadCheck) {
+      CHECK_OK(  // Crash ok: testonly code
+          IgnoreField(differ, *packetlib::Packet::descriptor(), "payload"));
+    }
+
     std::string diff;
     differ.ReportDifferencesToString(&diff);
     if (!differ.Compare(expected_packet.parsed(), actual_packet.parsed())) {
@@ -133,6 +150,14 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
                                     actual_packet.port());
       return false;
     }
+    if (params.ManualPayloadCheck) {
+      std::optional<std::string> result = params.ManualPayloadCheck(
+          actual_packet.parsed().payload(), expected_packet.parsed().payload());
+      if (result.has_value()) {
+        *listener << "has packet " << i << " with invalid payload: " << *result;
+        return false;
+      }
+    }
   }
 
   if (!params.treat_expected_and_actual_outputs_as_having_no_packet_ins) {
@@ -141,8 +166,20 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
       const PacketIn& expected_packet_in = expected_output.packet_ins(i);
 
       MessageDifferencer differ;
-      for (auto* field : params.ignored_packetlib_fields)
+      // Ignore logical field `reasons_invalid` since it is redundant (computed
+      // from other fields) and misleading (not part of the actual packet in).
+      CHECK_OK(  // Crash ok: testonly code
+          IgnoreField(differ, *packetlib::Packet::descriptor(),
+                      "reasons_invalid"));
+      for (auto* field : params.ignored_packetlib_fields) {
         differ.IgnoreField(field);
+      }
+
+      if (params.ManualPayloadCheck) {
+        CHECK_OK(  // Crash ok: testonly code
+            IgnoreField(differ, *packetlib::Packet::descriptor(), "payload"));
+      }
+
       std::string diff;
       differ.ReportDifferencesToString(&diff);
       if (!differ.Compare(expected_packet_in.parsed(),
@@ -150,6 +187,16 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
         *listener << "has packet in " << i
                   << " with mismatched header fields:\n  " << Indent(2, diff);
         return false;
+      }
+      if (params.ManualPayloadCheck) {
+        std::optional<std::string> result =
+            params.ManualPayloadCheck(actual_packet_in.parsed().payload(),
+                                      expected_packet_in.parsed().payload());
+        if (result.has_value()) {
+          *listener << "has packet in " << i
+                    << " with invalid payload: " << *result;
+          return false;
+        }
       }
 
       // Check that received packet in has desired metadata (except for ignored
@@ -392,8 +439,8 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
           "ModifyTestRunPreDiffing is set.");
     }
     RETURN_IF_ERROR(diff_params.ModifyExpectedOutputPreDiffing(
-        test_run.test_vector().input(), test_run.actual_output(),
-        *test_run.mutable_test_vector()->mutable_acceptable_outputs(), *sut));
+        test_run.test_vector().input(), test_run.actual_output(), *sut,
+        *test_run.mutable_test_vector()->mutable_acceptable_outputs()));
   }
 
   PacketTestValidationResult result;

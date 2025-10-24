@@ -19,6 +19,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/strings/str_format.h"
 #include "dvaas/test_vector.pb.h"
+#include "gtest/gtest.h"
 
 namespace dvaas {
 
@@ -53,14 +54,57 @@ void AddTestVectorStats(const PacketTestOutcome& outcome,
                num_punted == acceptable_output.packet_ins_size();
       });
   if (has_correct_num_outputs) {
-    stats.num_vectors_with_correct_number_of_outputs += 1;
+    stats.num_vectors_where_sut_produced_correct_number_of_outputs += 1;
   }
 
-  stats.num_vectors_forwarding += num_forwarded > 0 ? 1 : 0;
-  stats.num_vectors_punting += num_punted > 0 ? 1 : 0;
-  stats.num_vectors_dropping += num_forwarded == 0 && num_punted == 0;
+  stats.num_vectors_where_sut_forwarded_at_least_one_packet +=
+      num_forwarded > 0 ? 1 : 0;
+  stats.num_vectors_where_sut_punted_at_least_one_packet +=
+      num_punted > 0 ? 1 : 0;
+  stats.num_vectors_where_sut_produced_no_output +=
+      num_forwarded == 0 && num_punted == 0;
   stats.num_packets_forwarded += num_forwarded;
   stats.num_packets_punted += num_punted;
+
+  // Compute expectation stats.
+  bool forwarding_allowed =
+      absl::c_any_of(outcome.test_run().test_vector().acceptable_outputs(),
+                     [](const SwitchOutput& acceptable_output) {
+                       return acceptable_output.packets_size() > 0;
+                     });
+  bool forwarding_required =
+      absl::c_all_of(outcome.test_run().test_vector().acceptable_outputs(),
+                     [](const SwitchOutput& acceptable_output) {
+                       return acceptable_output.packets_size() > 0;
+                     });
+  bool punting_allowed =
+      absl::c_any_of(outcome.test_run().test_vector().acceptable_outputs(),
+                     [](const SwitchOutput& acceptable_output) {
+                       return acceptable_output.packet_ins_size() > 0;
+                     });
+  bool punting_required =
+      absl::c_all_of(outcome.test_run().test_vector().acceptable_outputs(),
+                     [](const SwitchOutput& acceptable_output) {
+                       return acceptable_output.packet_ins_size() > 0;
+                     });
+  bool no_output_allowed =
+      absl::c_any_of(outcome.test_run().test_vector().acceptable_outputs(),
+                     [](const SwitchOutput& acceptable_output) {
+                       return acceptable_output.packets_size() == 0 &&
+                              acceptable_output.packet_ins_size() == 0;
+                     });
+  bool no_output_required =
+      absl::c_all_of(outcome.test_run().test_vector().acceptable_outputs(),
+                     [](const SwitchOutput& acceptable_output) {
+                       return acceptable_output.packets_size() == 0 &&
+                              acceptable_output.packet_ins_size() == 0;
+                     });
+  stats.max_vectors_with_forwarding_expected += forwarding_allowed ? 1 : 0;
+  stats.min_vectors_with_forwarding_expected += forwarding_required ? 1 : 0;
+  stats.max_vectors_with_punting_expected += punting_allowed ? 1 : 0;
+  stats.min_vectors_with_punting_expected += punting_required ? 1 : 0;
+  stats.max_vectors_with_no_output_expected += no_output_allowed ? 1 : 0;
+  stats.min_vectors_with_no_output_expected += no_output_required ? 1 : 0;
 }
 
 }  // namespace
@@ -85,58 +129,86 @@ std::string ExplainPercent(int numerator, int denominator) {
 }
 
 std::string ExplainFraction(int numerator, int denominator) {
-  return absl::StrFormat("%s of %d", ExplainPercent(numerator, denominator),
-                         denominator);
+  return absl::StrFormat("%d (%s) of %d", numerator,
+                         ExplainPercent(numerator, denominator), denominator);
+}
+
+std::string ExplainRange(int min, int max) {
+  if (min == max) return absl::StrFormat("%d", min);
+  return absl::StrFormat("%d - %d", min, max);
 }
 
 }  // namespace
-
-// 1. Don't print reproducibility message if no packets were replicated.
-// 2. Don't print reproducibility message unless all test vector
-//    failures were reproducible or all test vector failures were
-//    irreproducible.
-void ExplainReproducibilityRate(const TestVectorStats& stats,
-                                std::string& result) {
-  if (stats.num_vectors_with_reproducibility_rate <= 0) return;
-  if (stats.num_deterministic_failures ==
-      stats.num_vectors_with_reproducibility_rate) {
-    absl::StrAppendFormat(
-        &result,
-        "All of %d test vectors attempted had deterministically "
-        "reproducible failures\n",
-        stats.num_vectors_with_reproducibility_rate);
-  } else if (stats.num_deterministic_failures == 0) {
-    absl::StrAppendFormat(
-        &result,
-        "None of %d test vectors attempted had deterministically "
-        "reproducible failures\n",
-        stats.num_vectors_with_reproducibility_rate);
-  }
-}
 
 std::string ExplainTestVectorStats(const TestVectorStats& stats) {
   std::string result;
 
   absl::StrAppendFormat(
-      &result, "%s test vectors passed\n",
+      &result, "%s test vectors passed\nThe System Under Test (SUT):\n",
       ExplainFraction(stats.num_vectors_passed, stats.num_vectors));
+
   absl::StrAppendFormat(
       &result,
-      "%s test vectors produced the correct number and type of output "
-      "packets\n",
-      ExplainFraction(stats.num_vectors_with_correct_number_of_outputs,
-                      stats.num_vectors));
+      "- forwarded:                          for %d test vectors "
+      "(expected: %s)\n",
+      stats.num_vectors_where_sut_forwarded_at_least_one_packet,
+      ExplainRange(stats.min_vectors_with_forwarding_expected,
+                   stats.max_vectors_with_forwarding_expected));
   absl::StrAppendFormat(
       &result,
-      "%d test vectors forwarded, producing %d forwarded output packets\n",
-      stats.num_vectors_forwarding, stats.num_packets_forwarded);
+      "- punted:                             for %d test vectors "
+      "(expected: %s)\n",
+      stats.num_vectors_where_sut_punted_at_least_one_packet,
+      ExplainRange(stats.min_vectors_with_punting_expected,
+                   stats.max_vectors_with_punting_expected));
   absl::StrAppendFormat(
-      &result, "%d test vectors punted, producing %d punted output packets\n",
-      stats.num_vectors_punting, stats.num_packets_punted);
-  absl::StrAppendFormat(&result, "%d test vectors produced no output packets\n",
-                        stats.num_vectors_dropping);
-  ExplainReproducibilityRate(stats, result);
+      &result,
+      "- dropped:                            for %d test vectors "
+      "(expected: %s)\n",
+      stats.num_vectors_where_sut_produced_no_output,
+      ExplainRange(stats.min_vectors_with_no_output_expected,
+                   stats.max_vectors_with_no_output_expected));
+
+  // If some test vectors didn't pass, but came close, explain how many.
+  const int num_almost_passed =
+      stats.num_vectors_where_sut_produced_correct_number_of_outputs -
+      stats.num_vectors_passed;
+  if (num_almost_passed > 0) {
+    absl::StrAppendFormat(
+        &result,
+        "- came close* to expected behavior:   for %d failing test vectors\n"
+        "  (*produced expected number of forwarded/punted packets, but with "
+        "unexpected header/payload values)\n",
+        num_almost_passed);
+  }
+
   return result;
+}
+
+void RecordStatsAsGoogleTestProperties(const TestVectorStats& stats) {
+  using ::testing::Test;
+  Test::RecordProperty("tag_num_vectors", stats.num_vectors);
+  Test::RecordProperty("tag_num_vectors_passed", stats.num_vectors_passed);
+  Test::RecordProperty(
+      "tag_pass_percentage",
+      ExplainPercent(stats.num_vectors_passed, stats.num_vectors));
+  Test::RecordProperty(
+      "tag_num_vectors_where_sut_produced_correct_number_of_outputs",
+      stats.num_vectors_where_sut_produced_correct_number_of_outputs);
+  Test::RecordProperty(
+      "tag_num_vectors_where_sut_forwarded_at_least_one_packet",
+      stats.num_vectors_where_sut_forwarded_at_least_one_packet);
+  Test::RecordProperty("tag_num_vectors_where_sut_punted_at_least_one_packet",
+                       stats.num_vectors_where_sut_punted_at_least_one_packet);
+  Test::RecordProperty("tag_num_vectors_where_sut_produced_no_output",
+                       stats.num_vectors_where_sut_produced_no_output);
+  Test::RecordProperty("tag_num_packets_forwarded",
+                       stats.num_packets_forwarded);
+  Test::RecordProperty("tag_num_packets_punted", stats.num_packets_punted);
+  Test::RecordProperty("tag_num_deterministic_failures",
+                       stats.num_deterministic_failures);
+  Test::RecordProperty("tag_num_vectors_with_reproducibility_rate",
+                       stats.num_vectors_with_reproducibility_rate);
 }
 
 }  // namespace dvaas
