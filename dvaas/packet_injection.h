@@ -18,11 +18,14 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
