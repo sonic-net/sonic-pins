@@ -14,6 +14,7 @@
 
 #include "dvaas/dataplane_validation.h"
 
+#include <bitset>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -30,6 +31,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "dvaas/packet_injection.h"
@@ -58,6 +60,7 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/sequencing.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -453,6 +456,35 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   return generate_test_vectors_result;
 }
 
+// Returns the packet hex as it appears in the Bmv2 textual log for the given
+// switch input.
+absl::StatusOr<std::string> GetBmv2PacketHex(
+    const dvaas::SwitchInput& switch_input) {
+  switch (switch_input.type()) {
+    case SwitchInput::SUBMIT_TO_INGRESS: {
+      // Test vector prediction (test_vector_prediction.cc) adds this header to
+      // submit to ingress packets, so the packet hex in the BMv2 log
+      // will include this header.
+      // TODO: Clean this up to use a single source of truth once
+      // we have a better way to handle submit-to-ingress test vectors.
+      constexpr auto kSubmitToIngressSaiP4PacketOutHeader =
+          std::bitset<16>(0b0000'0000'0100'0000);
+      return absl::StrCat(
+          absl::StripPrefix(
+              pdpi::BitsetToHexString(kSubmitToIngressSaiP4PacketOutHeader),
+              "0x"),
+          absl::StripPrefix(switch_input.packet().hex(), "0x"));
+    }
+    case SwitchInput::PACKET_OUT: {
+      // TODO: Support PACKET_OUT (submit to egress) test vectors.
+      return absl::UnimplementedError(
+          "PACKET_OUT (submit to egress) test vectors are not supported.");
+    }
+    default:
+      return switch_input.packet().hex();
+  }
+}
+
 absl::Status AttachPacketTrace(
     dvaas::PacketTestOutcome& failed_packet_test,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
@@ -463,15 +495,24 @@ absl::Status AttachPacketTrace(
       failed_packet_test.test_run().test_vector().input().packet().hex();
   ASSIGN_OR_RETURN(int test_id,
                    dvaas::ExtractIdFromTaggedPacketInHex(packet_hex));
+  ASSIGN_OR_RETURN(
+      std::string bmv2_packet_hex,
+      GetBmv2PacketHex(failed_packet_test.test_run().test_vector().input()));
+
+  if (failed_packet_test.test_run().test_vector().input().type() ==
+      SwitchInput::PACKET_OUT) {
+    return absl::OkStatus();
+  }
+
   const std::string filename =
       "packet_" + std::to_string(test_id) + ".trace.txt";
-  auto it = packet_traces.find(packet_hex);
+  auto it = packet_traces.find(bmv2_packet_hex);
   if (it == packet_traces.end() || it->second.empty()) {
     return absl::InternalError(
-        absl::StrCat("Packet trace not found for packet ", packet_hex));
+        absl::StrCat("Packet trace not found for packet ", bmv2_packet_hex));
   }
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-      filename, packet_traces[packet_hex][0].bmv2_textual_log()));
+      filename, packet_traces[bmv2_packet_hex][0].bmv2_textual_log()));
 
   // Augment failure description with packet trace summary.
   ASSIGN_OR_RETURN(std::string summarized_packet_trace,
@@ -508,7 +549,9 @@ absl::Status StorePacketTestVectorAsArribaTestVector(
 
   // Restrict the ArribaTestVector's table entries to the ones hit by the packet
   // test vector according to the P4 simulation.
-  for (const auto &packet_trace : packet_traces.at(packet_hex)) {
+  ASSIGN_OR_RETURN(std::string bmv2_packet_hex,
+                   GetBmv2PacketHex(packet_test_vector.input()));
+  for (const auto& packet_trace : packet_traces.at(bmv2_packet_hex)) {
     // In case of non-deterministic output (e.g. WCMP), find the union of all
     // entries that could be hit.
     for (const dvaas::Event &event : packet_trace.events()) {
