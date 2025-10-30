@@ -122,6 +122,12 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
+  // Store test insights.
+  ASSIGN_OR_RETURN(const std::string insights_csv,
+                   GetTestInsightsTableAsCsv(test_outcomes, ir_p4info));
+  RETURN_IF_ERROR(
+      artifact_writer.AppendToTestArtifact("test_insights.csv", insights_csv));
+
   ValidationResult validation_result(std::move(test_outcomes),
                                      /*packet_synthesis_result=*/{});
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
