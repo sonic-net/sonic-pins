@@ -459,10 +459,9 @@ TEST(TestRunValidationTest, ModifyExpectedOutputPreDiffingTest) {
           SwitchOutputDiffParams{
               .ModifyExpectedOutputPreDiffing =
                   [](const SwitchInput& input,
-                     const SwitchOutput& actual_output,
+		     const SwitchOutput& actual_output, const SwitchApi& sut,
                      google::protobuf::RepeatedPtrField<dvaas::SwitchOutput>&
-                         acceptable_expected_outputs,
-                     SwitchApi& sut) {
+			 acceptable_expected_outputs) {
                     *acceptable_expected_outputs.at(0)
                          .mutable_packets(0)
                          ->mutable_parsed()
