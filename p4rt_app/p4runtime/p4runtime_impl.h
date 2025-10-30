@@ -42,7 +42,7 @@
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
@@ -94,6 +94,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 public:
   P4RuntimeImpl(
       sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+      sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
       sonic::HashTable hash_table, sonic::SwitchTable switch_table,
       sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
       std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
@@ -203,8 +204,8 @@ public:
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Sets the CPU Queue translator.
-  virtual void
-  SetCpuQueueTranslator(std::unique_ptr<CpuQueueTranslator> translator)
+  virtual void SetQueueTranslator(std::unique_ptr<QueueTranslator> translator,
+                                  const std::string& queue_table_key)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   sonic::PacketIoCounters GetPacketIoCounters()
@@ -286,6 +287,8 @@ private:
   // Interfaces which are used to update entries in the RedisDB tables.
   sonic::P4rtTable p4rt_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::VrfTable vrf_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::VlanTable vlan_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::VlanMemberTable vlan_member_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HashTable hash_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
@@ -367,8 +370,8 @@ private:
       capacity_by_action_profile_name_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Utility to perform translations between CPU queue name and id.
-  std::unique_ptr<CpuQueueTranslator>
-      cpu_queue_translator_ ABSL_GUARDED_BY(server_state_lock_);
+  std::unique_ptr<QueueTranslator> cpu_queue_translator_
+      ABSL_GUARDED_BY(server_state_lock_);
   // Performance statistics for P4RT Write().
   EventDataTracker<int> write_batch_requests_
       ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
