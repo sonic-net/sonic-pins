@@ -40,12 +40,16 @@ public:
   // Accessors for AppDb tables.
   sonic::FakeSonicDbTable &GetP4rtAppDbTable();
   sonic::FakeSonicDbTable &GetVrfAppDbTable();
+  sonic::FakeSonicDbTable& GetVlanAppDbTable();
+  sonic::FakeSonicDbTable& GetVlanMemberAppDbTable();
   sonic::FakeSonicDbTable &GetHashAppDbTable();
   sonic::FakeSonicDbTable &GetSwitchAppDbTable();
   sonic::FakeSonicDbTable &GetPortAppDbTable();
 
   // Accessors for AppStateDb tables.
   sonic::FakeSonicDbTable &GetVrfAppStateDbTable();
+  sonic::FakeSonicDbTable& GetVlanAppStateDbTable();
+  sonic::FakeSonicDbTable& GetVlanMemberAppStateDbTable();
   sonic::FakeSonicDbTable &GetHashAppStateDbTable();
   sonic::FakeSonicDbTable &GetSwitchAppStateDbTable();
   sonic::FakeSonicDbTable &GetPortAppStateDbTable();
@@ -79,6 +83,8 @@ private:
   // Faked AppStateDb tables.
   sonic::FakeSonicDbTable fake_p4rt_state_table_;
   sonic::FakeSonicDbTable fake_vrf_state_table_;
+  sonic::FakeSonicDbTable fake_vlan_state_table_;
+  sonic::FakeSonicDbTable fake_vlan_member_state_table_;
   sonic::FakeSonicDbTable fake_hash_state_table_;
   sonic::FakeSonicDbTable fake_switch_state_table_;
   sonic::FakeSonicDbTable fake_port_state_table_;
@@ -86,6 +92,8 @@ private:
   // Faked AppDb tables.
   sonic::FakeSonicDbTable fake_p4rt_table_;
   sonic::FakeSonicDbTable fake_vrf_table_;
+  sonic::FakeSonicDbTable fake_vlan_table_;
+  sonic::FakeSonicDbTable fake_vlan_member_table_;
   sonic::FakeSonicDbTable fake_hash_table_;
   sonic::FakeSonicDbTable fake_switch_table_;
   sonic::FakeSonicDbTable fake_port_table_;

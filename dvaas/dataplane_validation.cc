@@ -651,6 +651,14 @@ absl::Status PostProcessTestVectorFailure(
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "dvaas_regression_test_proto.txt", dvaas_regression_test_proto));
 
+  // TODO: Add support for other test vector types.
+  if (test_outcome.test_run().test_vector().input().type() ==
+          SwitchInput::SUBMIT_TO_INGRESS ||
+      test_outcome.test_run().test_vector().input().type() ==
+          SwitchInput::PACKET_OUT) {
+    return absl::OkStatus();
+  }
+
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
     // Output an Arriba test vector to test artifacts.

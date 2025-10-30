@@ -280,7 +280,7 @@ cc_test(
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
-        "//p4rt_app/event_monitoring:config_db_cpu_queue_table_event",
+	"//p4rt_app/event_monitoring:config_db_queue_table_event",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
