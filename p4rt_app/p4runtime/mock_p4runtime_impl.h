@@ -14,11 +14,13 @@
 #ifndef PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
 #define PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
 
+#include <memory>
+
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/server_context.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/p4runtime/queue_translator.h"
 #include "gmock/gmock.h"
 
 namespace p4rt_app {
@@ -72,8 +74,10 @@ public:
               (const std::string &path, const std::string &log_level),
               (override));
 
-  MOCK_METHOD(void, SetCpuQueueTranslator,
-              (std::unique_ptr<CpuQueueTranslator>), (override));
+  MOCK_METHOD(void, SetQueueTranslator,
+              (std::unique_ptr<QueueTranslator>,
+               const std::string& queue_table_key),
+              (override));
 
   /* TODO(PINS): To handle Component, System & Interface Translator in November
    release. private: swss::MockComponentStateHelper

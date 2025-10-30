@@ -43,11 +43,16 @@ namespace test_lib {
 
 P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
     : fake_vrf_state_table_("AppStateDb:VRF_TABLE"),
+      fake_vlan_state_table_("AppStateDb:VLAN_TABLE_P4"),
+      fake_vlan_member_state_table_("AppStateDb:VLAN_MEMBER_TABLE_P4"),
       fake_hash_state_table_("AppStateDb:HASH_TABLE"),
       fake_switch_state_table_("AppStateDb:SWITCH_TABLE"),
       fake_port_state_table_("AppStateDb:PORT_TABLE"),
       fake_p4rt_table_("AppDb:P4RT_TABLE"),
       fake_vrf_table_("AppDb:VRF_TABLE", &fake_vrf_state_table_),
+      fake_vlan_table_("AppDb:VLAN_TABLE_P4", &fake_vlan_state_table_),
+      fake_vlan_member_table_("AppDb:VLAN_MEMBER_TABLE_P4",
+                              &fake_vlan_member_state_table_),
       fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
       fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_),
       fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_),
@@ -56,6 +61,8 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   const std::string kP4rtTableName = "P4RT_TABLE";
   const std::string kPortTableName = "PORT_TABLE";
   const std::string kVrfTableName = "VRF_TABLE";
+  const std::string kVlanTableName = "VLAN_TABLE_P4";
+  const std::string kVlanMemberTableName = "VLAN_MEMBER_TABLE_P4";
   const std::string kHashTableName = "HASH_TABLE";
   const std::string kSwitchTableName = "SWITCH_TABLE";
   const std::string kHostStatsTableName = "HOST_STATS_TABLE";
@@ -90,6 +97,31 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
                                                            kVrfTableName),
       .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
           &fake_vrf_state_table_, kVrfTableName),
+  };
+
+  // Create interfaces to access VLAN_TABLE_P4 and VLAN_MEMBER_TABLE_P4 entries.
+  sonic::VlanTable vlan_table{
+      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
+          &fake_vlan_table_),
+      .notification_consumer =
+          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+              &fake_vlan_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_vlan_table_,
+                                                           kVlanTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_vlan_state_table_, kVlanTableName),
+  };
+
+  sonic::VlanMemberTable vlan_member_table{
+      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
+          &fake_vlan_member_table_),
+      .notification_consumer =
+          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+              &fake_vlan_member_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_vlan_member_table_, kVlanMemberTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_vlan_member_state_table_, kVlanMemberTableName),
   };
 
   // Create interfaces to access HASH_TABLE entries.
@@ -148,7 +180,8 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
 
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
-      std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
+      std::move(p4rt_table), std::move(vrf_table), std::move(vlan_table),
+      std::move(vlan_member_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
       std::move(host_stats_table), std::move(fake_warm_boot_state_adapter),
       std::move(fake_packetio_interface),
@@ -190,6 +223,14 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVrfAppDbTable() {
   return fake_vrf_table_;
 }
 
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVlanAppDbTable() {
+  return fake_vlan_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVlanMemberAppDbTable() {
+  return fake_vlan_member_table_;
+}
+
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHashAppDbTable() {
   return fake_hash_table_;
 }
@@ -204,6 +245,14 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppDbTable() {
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVrfAppStateDbTable() {
   return fake_vrf_state_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVlanAppStateDbTable() {
+  return fake_vlan_state_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVlanMemberAppStateDbTable() {
+  return fake_vlan_member_state_table_;
 }
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHashAppStateDbTable() {

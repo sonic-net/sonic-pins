@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_CPU_QUEUE_TABLE_EVENT_H_
-#define PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_CPU_QUEUE_TABLE_EVENT_H_
+#ifndef PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_QUEUE_TABLE_EVENT_H_
+#define PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_QUEUE_TABLE_EVENT_H_
 
 #include <string>
 #include <utility>
@@ -24,19 +24,21 @@
 
 namespace p4rt_app {
 
-class ConfigDbCpuQueueTableEventHandler : public sonic::StateEventHandler {
-public:
-  explicit ConfigDbCpuQueueTableEventHandler(P4RuntimeImpl *p4runtime)
-      : p4runtime_(*p4runtime) {}
+class ConfigDbQueueTableEventHandler : public sonic::StateEventHandler {
+ public:
+  explicit ConfigDbQueueTableEventHandler(P4RuntimeImpl* p4runtime,
+                                          std::string queue_table_key)
+      : p4runtime_(*p4runtime), queue_table_key_(std::move(queue_table_key)) {}
 
   absl::Status HandleEvent(
-      const std::string &operation, const std::string &key,
-      const std::vector<std::pair<std::string, std::string>> &values) final;
+      const std::string& operation, const std::string& key,
+      const std::vector<std::pair<std::string, std::string>>& values) final;
 
-private:
-  P4RuntimeImpl &p4runtime_;
+ private:
+  P4RuntimeImpl& p4runtime_;
+  const std::string queue_table_key_;
 };
 
-} // namespace p4rt_app
+}  // namespace p4rt_app
 
-#endif // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_CPU_QUEUE_TABLE_EVENT_H_
+#endif  // PINS__P4RT_APP_EVENT_MONITORING_CONFIG_DB_QUEUE_TABLE_EVENT_H_
