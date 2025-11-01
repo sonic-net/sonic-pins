@@ -16,12 +16,15 @@
 #define PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 
 #include <optional>
+#include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
 namespace dvaas {
@@ -54,11 +57,18 @@ struct ArribaTestVectorValidationParams {
       DefaultIsExpectedUnsolicitedPacket;
 };
 
+// Retrieves the set of P4RT ports used in the given `arriba_test_vector` (table
+// entries and test packet).
+absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
+    const ArribaTestVector& arriba_test_vector,
+    const std::vector<pdpi::IrTableEntry>& used_entries_list,
+    const pdpi::IrP4Info& ir_p4_info);
+
 // Validates the `sut` in the provided mirror testbed (`sut` and
 // `control_switch`) against the given `arriba_test_vector`. It does so by
 // installing the entries in the test vector (on SUT), injecting the input
-// packets, collecting the output packets, and comparing the results with the
-// expected outputs for each input packet.
+// packets, collecting the output packets, and comparing the results with
+// the expected outputs for each input packet.
 //
 // Pre-condition:
 //   - The same P4Info and gNMI configs used in the generation of the given
