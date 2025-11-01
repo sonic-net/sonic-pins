@@ -14,14 +14,24 @@
 
 #include "dvaas/dvaas_detective.h"
 
+#include <algorithm>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/types/variant.h"
 #include "dvaas/dvaas_detective.pb.h"
+#include "dvaas/test_vector.pb.h"
+#include "gutil/overload.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 namespace dvaas_internal {
+
 namespace {
 
 std::string DetectiveClusterToString(const DetectiveCluster& cluster,
@@ -40,6 +50,46 @@ std::string DetectiveClusterToString(const DetectiveCluster& cluster,
 }
 
 }  // namespace
+
+std::string FeatureValueToString(const FeatureValue& value) {
+  return absl::visit(
+      gutil::Overload{
+          [](const NumericalValue& num) { return absl::StrCat(num); },
+          [](const CategoricalValue& str) { return str; }},
+      value);
+}
+
+absl::flat_hash_map<std::string, FeatureValue> TestOutcomeToFeatureMap(
+    const PacketTestOutcome& test_outcome) {
+  absl::flat_hash_map<std::string, FeatureValue> result;
+
+  // Feature extraction is scoped to ensure the extraction of one set of
+  // features is independent of the extraction of another set. If this function
+  // becomes too large, scoped blocks should be refactored into functions.
+  {
+    int num_expected_output_packets = 0;
+    int num_expected_packet_ins = 0;
+    for (const auto& output :
+         test_outcome.test_run().test_vector().acceptable_outputs()) {
+      num_expected_output_packets =
+          std::max(num_expected_output_packets, output.packets_size());
+      num_expected_packet_ins =
+          std::max(num_expected_packet_ins, output.packet_ins_size());
+    }
+    result["# expected output packets"] =
+        static_cast<float>(num_expected_output_packets);
+    result["# expected punted packets"] =
+        static_cast<float>(num_expected_packet_ins);
+  }
+
+  result["# acceptable behaviors according to P4 simulation"] =
+      static_cast<float>(
+          test_outcome.test_run().test_vector().acceptable_outputs_size());
+  result["test result"] =
+      test_outcome.test_result().has_failure() ? "fail" : "pass";
+
+  return result;
+}
 
 std::string DetectiveExplanationToString(
     const DetectiveExplanation& explanation) {
