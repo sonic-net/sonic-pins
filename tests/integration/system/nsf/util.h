@@ -92,7 +92,8 @@ void TearDownTestbed(TestbedInterface& testbed_interface);
 // not take ownership of the underlying object, and may lead to a dangling
 // pointer.
 //
-absl::StatusOr<TestbedHolder> GetTestbed(TestbedInterface &testbed_interface);
+absl::StatusOr<TestbedHolder> GetTestbed(TestbedInterface& testbed_interface,
+                                         bool is_inband_testbed = false);
 
 thinkit::Switch &GetSut(const Testbed &testbed);
 
@@ -182,9 +183,10 @@ absl::Status NsfReboot(const Testbed &testbed);
 
 // Waits for the SUT to cold reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
-absl::Status WaitForReboot(const Testbed &testbed,
-                           thinkit::SSHClient &ssh_client,
-                           bool check_interfaces_up = true);
+absl::Status WaitForReboot(const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client,
+                           bool check_interfaces_up = true,
+                           absl::Span<const std::string> interfaces = {});
 
 // Waits for the SUT to warm reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
@@ -219,11 +221,14 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
 absl::Status PushConfig(thinkit::Switch& thinkit_switch,
                         absl::string_view gnmi_config,
                         const p4::config::v1::P4Info& p4_info,
-                        absl::string_view config_label, bool clear_config);
+                        absl::string_view config_label, bool clear_config,
+                        bool is_inband_testbed = false);
+
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         thinkit::Switch& thinkit_switch,
                         thinkit::SSHClient& ssh_client,
-                        bool clear_config = false);
+                        bool clear_config = false,
+                        bool is_inband_testbed = false);
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
                              const p4::config::v1::P4Info& p4_info);

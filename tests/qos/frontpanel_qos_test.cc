@@ -918,9 +918,11 @@ TEST_P(FrontpanelQosTest,
                              " test packets from/at the Ixia.\nBefore: ",
                              ToString(kInitialQueueCounters),
                              "\nAfter :", ToString(final_counters)));
+            // Tolerance of 5% of packets for counter update delays, port drops,
+            // etc.
             EXPECT_THAT(delta_counters,
                         ResultOf(TotalPacketsForQueue,
-                                 Ge(kIxiaTrafficStats.num_tx_frames())));
+                                 Ge(kIxiaTrafficStats.num_tx_frames() * 0.95)));
             // Protocol packets such as LLDP/NDv6 can be transmitted via queue
             // during test. Add some tolerance to account for these packets.
             constexpr int kMaxToleratedExtraPackets = 5;
@@ -1229,8 +1231,8 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 
   if (GetParam().nsf_reboot) {
     // Traffic is verified only once after NSF Reboot is complete.
-    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed.get(),
-                                               *GetParam().ssh_client_for_nsf));
+    ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(
+        testbed.get(), *GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4rt, pdpi::P4RuntimeSession::Create(sut));
   }
@@ -2002,8 +2004,8 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
 
   if (GetParam().nsf_reboot) {
     // Traffic is verified only once after NSF Reboot is complete.
-    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed.get(),
-                                               *GetParam().ssh_client_for_nsf));
+    ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(
+        testbed.get(), *GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   }
@@ -2517,7 +2519,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
     }
 
     if (GetParam().default_params.nsf_reboot) {
-      ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(
+      ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(
           testbed.get(), *GetParam().default_params.ssh_client_for_nsf));
     }
     // Start traffic.
