@@ -274,7 +274,9 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+#if defined(IP_MULTICAST_CAPABLE)
             local_metadata.route_hit = ipv4_multicast_table.apply().hit;
+#endif
           }
         }
       } else { // IPv4 unicast.
@@ -288,7 +290,9 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+#if defined(IP_MULTICAST_CAPABLE)
             local_metadata.route_hit = ipv6_multicast_table.apply().hit;
+#endif
           }
         }
       } else { // IPv6 unicast.

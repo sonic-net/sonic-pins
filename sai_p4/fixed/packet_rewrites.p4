@@ -125,14 +125,16 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
         @id(2);
     }
     actions = {
-      // TODO: Remove once no longer in use.
-      // Deprecated: use `set_src_mac` instead.
-      @proto_id(1) set_multicast_src_mac;
       @proto_id(2) l2_multicast_passthrough;
+#if defined(IP_MULTICAST_CAPABLE)
+      // TODO: Remove once no longer in use.
+      // Deprecated: use `multicast_set_src_mac` instead.
+      @proto_id(1) set_multicast_src_mac;
       @proto_id(3) multicast_set_src_mac;
       @proto_id(4) multicast_set_src_mac_and_vlan_id;
       @proto_id(5) multicast_set_src_mac_and_dst_mac_and_vlan_id;
       @proto_id(6) multicast_set_src_mac_and_preserve_ingress_vlan_id;
+#endif
     }
     size = ROUTING_MULTICAST_SOURCE_MAC_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
