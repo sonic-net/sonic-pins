@@ -187,6 +187,9 @@ control acl_pre_ingress(in headers_t headers,
   @sai_acl(PRE_INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @sai_acl_priority(5)
+#if defined(SAI_INSTANTIATION_TOR)
+  @nonessential_for_upgrade
+#endif
   @entry_restriction("
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
