@@ -14,10 +14,9 @@
 // =============================================================================
 // Integration test between SAI-P4 and the P4-Fuzzer library.
 
-#include <string>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
@@ -67,6 +66,16 @@ absl::Status AddReferenceableEntries(const FuzzerConfig& config,
         FuzzValidTableEntry(&gen, config, switch_state, mirror_session_table));
     referable_entities.push_back(mirror_session_entity);
   }
+
+  ASSIGN_OR_RETURN(pdpi::IrTableDefinition multicast_router_interface_table,
+                   gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(),
+                                       "multicast_router_interface_table"));
+  p4::v1::Update mrif_update;
+  mrif_update.set_type(p4::v1::Update::INSERT);
+  ASSIGN_OR_RETURN(*mrif_update.mutable_entity()->mutable_table_entry(),
+                   FuzzValidTableEntry(&gen, config, switch_state,
+                                       multicast_router_interface_table));
+  RETURN_IF_ERROR(switch_state.ApplyUpdate(mrif_update));
 
   p4::v1::Entity multicast_group_entity;
   ASSIGN_OR_RETURN(
