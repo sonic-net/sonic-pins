@@ -160,6 +160,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   auto mirror_session_params = sai::MirrorSessionParams{
       .mirror_session_id = "psamp_mirror",
       .monitor_port = kSutEgressPortP4rtId,
+      .monitor_backup_port = kSutEgressPortP4rtId,
       .mirror_encap_src_mac = "00:00:00:22:22:22",
       .mirror_encap_dst_mac = "00:00:00:44:44:44",
       .mirror_encap_vlan_id = "0x0fe",

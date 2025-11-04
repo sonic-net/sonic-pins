@@ -20,7 +20,10 @@
 #include <optional>
 #include <string>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "gtest/gtest.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -46,6 +49,13 @@ struct WatchPortTestParams {
   // critical state related tests will be skipped.
   absl::optional<std::function<absl::Status(thinkit::Switch& test_switch)>>
       set_critical_alarm;
+  // Optional function that checks the watchport pruning duration against the
+  // threshold and exports the data to perfgate.
+  absl::optional<std::function<absl::Status(
+      absl::string_view chassis_name,
+      const absl::flat_hash_map<absl::string_view, absl::Duration>&
+          port_state_to_pruning_duration)>>
+      check_and_export_duration;
 };
 
 // WatchPortTestFixture for testing watch port action.

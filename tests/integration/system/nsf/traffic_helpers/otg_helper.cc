@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -29,7 +30,6 @@
 #include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
-#include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "gutil/status.h"
 #include "lib/utils/generic_testbed_utils.h"
@@ -92,6 +92,53 @@ TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
 
 }  // namespace
 
+void OtgHelper::ConfigureFlowBaseSettings(::otg::Flow* flow,
+                                          absl::string_view src_port,
+                                          absl::string_view dst_port) {
+  // Set Tx / Rx ports.
+  flow->mutable_tx_rx()->set_choice(otg::FlowTxRx::Choice::port);
+  flow->mutable_tx_rx()->mutable_port()->set_tx_name(src_port);
+  flow->mutable_tx_rx()->mutable_port()->set_rx_name(dst_port);
+
+  // Set packet size.
+  flow->mutable_size()->set_choice(otg::FlowSize::Choice::fixed);
+  flow->mutable_size()->set_fixed(kDefaultPacketSize);
+
+  // Set transmission duration.
+  flow->mutable_duration()->set_choice(otg::FlowDuration::Choice::continuous);
+
+  // Set transmission rate.
+  if (enable_linerate_) {
+    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
+    flow->mutable_rate()->set_percentage(kFlowRateAtLinerate / 2);
+  } else {
+    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::pps);
+    flow->mutable_rate()->set_pps(kDefaultPacketsPerSecond);
+  }
+
+  // Set capture metrics.
+  flow->mutable_metrics()->set_enable(true);
+  flow->mutable_metrics()->set_loss(false);
+  flow->mutable_metrics()->set_timestamps(true);
+  flow->mutable_metrics()->mutable_latency()->set_enable(true);
+  flow->mutable_metrics()->mutable_latency()->set_mode(
+      otg::FlowLatencyMetrics::Mode::cut_through);
+}
+
+void OtgHelper::ConfigureFlowEthernetHeader(::otg::Flow* flow,
+                                            absl::string_view src_mac,
+                                            absl::string_view dst_mac) {
+  // Set ethernet header.
+  auto* eth_packet = flow->add_packet();
+  eth_packet->set_choice(otg::FlowHeader::Choice::ethernet);
+  eth_packet->mutable_ethernet()->mutable_src()->set_choice(
+      otg::PatternFlowEthernetSrc::Choice::value);
+  eth_packet->mutable_ethernet()->mutable_dst()->set_choice(
+      otg::PatternFlowEthernetDst::Choice::value);
+  eth_packet->mutable_ethernet()->mutable_src()->set_value(src_mac);
+  eth_packet->mutable_ethernet()->mutable_dst()->set_value(dst_mac);
+}
+
 absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
                                      absl::string_view config_label) {
   ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
@@ -153,51 +200,15 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
   // Set MTU.
   layer1->set_mtu(kDefaultMtu);
 
-  // Create flow.
-  auto *flow = config->add_flows();
-  flow->set_name(absl::StrCat(otg_src_port, "->", otg_dst_port));
+  // Create TCP flow.
+  auto* tcp_flow = config->add_flows();
+  tcp_flow->set_name(absl::StrCat(otg_src_port, "->", otg_dst_port, "_TCP"));
 
-  // Set Tx / Rx ports.
-  flow->mutable_tx_rx()->set_choice(otg::FlowTxRx::Choice::port);
-  flow->mutable_tx_rx()->mutable_port()->set_tx_name(otg_src_port);
-  flow->mutable_tx_rx()->mutable_port()->set_rx_name(otg_dst_port);
-
-  // Set packet size.
-  flow->mutable_size()->set_choice(otg::FlowSize::Choice::fixed);
-  flow->mutable_size()->set_fixed(kDefaultPacketSize);
-
-  // Set transmission duration.
-  flow->mutable_duration()->set_choice(otg::FlowDuration::Choice::continuous);
-
-  // Set transmission rate.
-  if (enable_linerate_) {
-    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
-    flow->mutable_rate()->set_percentage(kFlowRateAtLinerate);
-  } else {
-    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::pps);
-    flow->mutable_rate()->set_pps(kDefaultPacketsPerSecond);
-  }
-
-  // Set capture metrics.
-  flow->mutable_metrics()->set_enable(true);
-  flow->mutable_metrics()->set_loss(false);
-  flow->mutable_metrics()->set_timestamps(true);
-  flow->mutable_metrics()->mutable_latency()->set_enable(true);
-  flow->mutable_metrics()->mutable_latency()->set_mode(
-      otg::FlowLatencyMetrics::Mode::cut_through);
-
-  // Set ethernet header.
-  auto *eth_packet = flow->add_packet();
-  eth_packet->set_choice(otg::FlowHeader::Choice::ethernet);
-  eth_packet->mutable_ethernet()->mutable_src()->set_choice(
-      otg::PatternFlowEthernetSrc::Choice::value);
-  eth_packet->mutable_ethernet()->mutable_dst()->set_choice(
-      otg::PatternFlowEthernetDst::Choice::value);
-  eth_packet->mutable_ethernet()->mutable_src()->set_value(otg_src_mac);
-  eth_packet->mutable_ethernet()->mutable_dst()->set_value(otg_dst_mac);
+  ConfigureFlowBaseSettings(tcp_flow, otg_src_port, otg_dst_port);
+  ConfigureFlowEthernetHeader(tcp_flow, otg_src_mac, otg_dst_mac);
 
   // Set IP header.
-  auto *ip_packet = flow->add_packet();
+  auto* ip_packet = tcp_flow->add_packet();
   ip_packet->set_choice(otg::FlowHeader::Choice::ipv6);
   ip_packet->mutable_ipv6()->mutable_src()->set_choice(
       otg::PatternFlowIpv6Src::Choice::value);
@@ -207,7 +218,7 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
   ip_packet->mutable_ipv6()->mutable_dst()->set_value(otg_dst_ip);
 
   // Set TCP header.
-  auto *tcp_packet = flow->add_packet();
+  auto* tcp_packet = tcp_flow->add_packet();
   tcp_packet->set_choice(otg::FlowHeader::Choice::tcp);
   auto *tcp_dst_port = tcp_packet->mutable_tcp()->mutable_dst_port();
   tcp_dst_port->set_choice(otg::PatternFlowTcpDstPort::Choice::increment);
