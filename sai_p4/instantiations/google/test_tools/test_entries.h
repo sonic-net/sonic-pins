@@ -229,9 +229,14 @@ struct RouterInterfaceTableParams {
 
 // Convenience struct corresponding to the protos `p4::v1::Replica` and
 // `sai::ReplicateAction::Replica`.
+struct BackupReplica {
+  std::string egress_port;
+  int instance = 0;
+};
 struct Replica {
   std::string egress_port;
   int instance = 0;
+  std::vector<BackupReplica> backup_replicas;
 };
 
 // Match fields of an ingress mirror or redirect table entry.
