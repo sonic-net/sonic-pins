@@ -285,6 +285,7 @@ absl::Status OtgHelper::ValidateTraffic(const Testbed &testbed,
 
   metrics_req.mutable_metrics_request()->set_choice(
       otg::MetricsRequest::Choice::flow);
+  metrics_req.mutable_metrics_request()->mutable_flow();
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
       stub->GetMetrics(&metrics_ctx, metrics_req, &metrics_res)));
 
