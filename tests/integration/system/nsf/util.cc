@@ -747,6 +747,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     ADD_FAILURE() << "NSF reboot failed with: " << nsf_reboot_status;
     LOG(ERROR) << "Attempting to recover the switch through cold "
                   "reboot.";
+    thinkit::TestEnvironment& env = GetTestEnvironment(testbed);
     RETURN_IF_ERROR(Reboot(RebootMethod::COLD, sut, env,
                            /*collect_debug_artifacts_before_reboot=*/false));
     RETURN_IF_ERROR(
