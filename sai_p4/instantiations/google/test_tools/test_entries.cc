@@ -88,10 +88,17 @@ sai::TableEntry MakeRouterInterfaceTableEntry(
     action.set_src_mac(params.src_mac.ToString());
     action.set_vlan_id(params.vlan_id.value());
   } else {
-    sai::SetPortAndSrcMacAction& action =
-        *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
-    action.set_src_mac(params.src_mac.ToString());
-    action.set_port(params.egress_port);
+    if (params.skip_my_mac_programming) {
+      sai::UnicastSetPortAndSrcMacAction& action =
+          *rif_entry.mutable_action()->mutable_unicast_set_port_and_src_mac();
+      action.set_port(params.egress_port);
+      action.set_src_mac(params.src_mac.ToString());
+    } else {
+      sai::SetPortAndSrcMacAction& action =
+          *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
+      action.set_port(params.egress_port);
+      action.set_src_mac(params.src_mac.ToString());
+    }
   }
   return table_entry;
 }
@@ -726,11 +733,13 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
           .substr(0, 32);
 
   // Create router interface entry.
-  *entries_.add_entries() = MakeRouterInterfaceTableEntry(
-      RouterInterfaceTableParams{.router_interface_id = kRifId,
-                                 .egress_port = std::string(egress_port),
-                                 .src_mac = src_mac,
-                                 .vlan_id = rewrite_options.egress_rif_vlan});
+  *entries_.add_entries() =
+      MakeRouterInterfaceTableEntry(RouterInterfaceTableParams{
+          .router_interface_id = kRifId,
+          .egress_port = std::string(egress_port),
+          .src_mac = src_mac,
+          .vlan_id = rewrite_options.egress_rif_vlan,
+          .skip_my_mac_programming = rewrite_options.skip_my_mac_programming});
 
   // If no DST is provided, DMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's DST rewrite, we choose

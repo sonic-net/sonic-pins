@@ -403,6 +403,7 @@ control routing_resolution(in headers_t headers,
       router_interface_id_value : exact @id(1)
                                         @name("router_interface_id");
     }
+    // TODO: Remove once no longer in use on our switches.
     actions = {
       @proto_id(1) set_port_and_src_mac;
       @proto_id(2) set_port_and_src_mac_and_vlan_id;
