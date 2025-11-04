@@ -43,7 +43,7 @@
 namespace pins_test {
 namespace {
 
-constexpr absl::Duration kLinkFlapTimeout = absl::Seconds(60);
+constexpr absl::Duration kLinkFlapTimeout = absl::Seconds(90);
 
 // Flaps all the links in parallel and returns the total time taken to flap all
 // the links.

@@ -211,9 +211,10 @@ struct BufferParameters {
 
 // queue info.
 struct QueueInfoByQueueName {
-  std::string gnmi_queue_name;        // Openconfig queue name.
-  std::string p4_queue_name;          // P4 queue name.
-  int rate_packets_per_second = 0;    // Rate of packets in packets per second.
+  std::string gnmi_queue_name;  // Openconfig queue name.
+  std::string p4_queue_name;    // P4 queue name.
+  int64_t rate_packets_per_second =
+      0;                              // Rate of packets in packets per second.
   double shared_buffer_static_limit;  // Statically configured shared buffer
                                       // limit of queue.
   int scheduler_be_pkts;              // Burst excess packets.
@@ -259,7 +260,8 @@ absl::StatusOr<std::vector<std::string>> GetQueuesByEgressPort(
 // Extract CPU queues and their bursty traffic info from the gNMI config.
 absl::StatusOr<absl::flat_hash_map<std::string, QueueInfoByQueueName>>
 ExtractQueueInfoViaGnmiConfig(absl::string_view port,
-                              absl::string_view gnmi_config);
+                              absl::string_view gnmi_config,
+                              bool is_rate_mode_in_packets = true);
 
 absl::StatusOr<absl::flat_hash_set<std::string>> ExtractCPUQueuesViaGnmiConfig(
     absl::string_view gnmi_config);

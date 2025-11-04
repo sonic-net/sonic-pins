@@ -672,7 +672,7 @@ absl::StatusOr<int64_t> GetGnmiPortEcnCounter(
   ASSIGN_OR_RETURN(
       std::string ecn_counter_response,
       GetGnmiStatePathInfo(&gnmi_stub, openconfig_transmit_count_state_path,
-                           "google-pins-interfaces:out-ecn-marked-pkts"));
+                           "interfaces:out-ecn-marked-pkts"));
 
   int64_t ecn_counters;
   if (!absl::SimpleAtoi(StripQuotes(ecn_counter_response), &ecn_counters)) {
@@ -714,7 +714,8 @@ absl::StatusOr<int64_t> GetGnmiPortIngressCounter(
 // the test.
 absl::StatusOr<absl::flat_hash_map<std::string, QueueInfoByQueueName>>
 ExtractQueueInfoViaGnmiConfig(absl::string_view port,
-                              absl::string_view gnmi_config) {
+                              absl::string_view gnmi_config,
+                              bool is_rate_mode_in_packets) {
   nlohmann::json config = nlohmann::json::parse(gnmi_config);
   if (!config.is_object()) {
     return absl::InvalidArgumentError("Could not parse gnmi configuration.");
@@ -744,9 +745,11 @@ ExtractQueueInfoViaGnmiConfig(absl::string_view port,
                 .get<std::string>();
         queue_info[queue_name].gnmi_queue_name = queue_name;
         queue_info[queue_name].p4_queue_name = queue_name;
-        std::string peak_rate = scheduler["two-rate-three-color"]["config"]
-                                         ["google-pins-qos:pir-pkts"]
-                                             .get<std::string>();
+        std::string peak_rate =
+            scheduler["two-rate-three-color"]["config"]
+                     [is_rate_mode_in_packets ? "qos:pir-pkts"
+                                              : "pir"]
+                         .get<std::string>();
         if (!absl::SimpleAtoi(
                 peak_rate, &queue_info[queue_name].rate_packets_per_second)) {
           return absl::InternalError(
@@ -755,9 +758,11 @@ ExtractQueueInfoViaGnmiConfig(absl::string_view port,
         }
         LOG(INFO) << "Queue: " << queue_name
                   << ", configured rate:" << peak_rate;
-        int be_pkts = scheduler["two-rate-three-color"]["config"]
-                               ["google-pins-qos:be-pkts"]
-                                   .get<int>();
+        int be_pkts =
+            scheduler["two-rate-three-color"]["config"]
+                     [is_rate_mode_in_packets ? "qos:be-pkts"
+                                              : "be"]
+                         .get<int>();
         queue_info[queue_name].scheduler_be_pkts = be_pkts;
       }
       break;

@@ -92,7 +92,8 @@ CheckControlDeviceInterfaceLinkState(thinkit::GenericTestbed &generic_testbed,
 
 absl::Status SetAdminStatus(gnmi::gNMI::StubInterface* gnmi_stub,
                             absl::string_view if_name,
-                            absl::string_view if_status) {
+                            absl::string_view if_status,
+                            absl::Duration timeout) {
   std::string enable_status;
   if (if_status == "UP") {
     enable_status = kEnabledTrue;
@@ -108,7 +109,7 @@ absl::Status SetAdminStatus(gnmi::gNMI::StubInterface* gnmi_stub,
       absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
   RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
       gnmi_stub, if_enabled_config_path, GnmiSetType::kUpdate, enable_status));
-  absl::SleepFor(absl::Seconds(15));
+  absl::SleepFor(timeout);
 
   // Verifies /interfaces/interface[name=<port>]/state/admin-status = UP/DOWN.
   std::string if_state_path =

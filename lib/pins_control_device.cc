@@ -141,9 +141,9 @@ PinsControlDevice::CollectPackets() {
                   type: INSERT
                   table_entry {
                     acl_ingress_table_entry {
-                      match {}  # Wildcard match.
+                      match {}                                  # Wildcard match.
                       action { acl_trap { qos_queue: "0x7" } }  # Action: punt.
-                      priority: 1  # Highest priority.
+                      priority: 1                               # Highest priority.
                     }
                   }
                 })pb")));

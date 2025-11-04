@@ -2319,9 +2319,9 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
         params_by_queue_name[queue_name].weight = 1;
       }
       params_by_queue_name[queue_name].committed_information_rate = 0;
-      // Limit peak rate to 10% of line rate so queue is always full.
+      // Limit peak rate to 1% of line rate so queue is always full.
       params_by_queue_name[queue_name].peak_information_rate =
-          0.1 * links.egress_link.sut_interface_bits_per_second / 8;
+          0.01 * links.egress_link.sut_interface_bits_per_second / 8;
     }
     ASSERT_OK(SetSchedulerPolicyParameters(kSutEgressPortSchedulerPolicy,
                                            params_by_queue_name, *gnmi_stub));
