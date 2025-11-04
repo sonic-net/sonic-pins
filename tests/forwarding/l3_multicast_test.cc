@@ -57,6 +57,7 @@
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/lib/p4info_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 #include "util/gtl/value_or_die.h"
 
@@ -85,6 +86,32 @@ struct ReplicaPair {
 };
 
 enum class IpmcGroupAssignmentMechanism { kAclRedirect, kIpMulticastTable };
+
+struct VlanForwardingParams {
+  bool disable_ingress_vlan_checks = false;
+  bool disable_egress_vlan_checks = false;
+  // input_vlan_id indicates vlan membership of the ingress port
+  std::optional<int> input_vlan_id = std::nullopt;
+  // input_vlan_tagging_mode indicates mode of vlan membership of the ingress
+  // port
+  std::optional<sai::VlanTaggingMode> input_vlan_tagging_mode = std::nullopt;
+  // out_ports_vlan_id indicates vlan membership of the output ports
+  std::optional<int> out_ports_vlan_id = std::nullopt;
+  // out_ports_vlan_tagging_mode indicates mode of vlan membership of the output
+  // ports
+  std::optional<sai::VlanTaggingMode> out_ports_vlan_tagging_mode =
+      std::nullopt;
+};
+
+struct MulticastForwardingParams {
+  // SUT port IDs used as ingress and egress ports for multicast replicas.
+  std::vector<std::string> sut_port_ids;
+  netaddr::MacAddress next_hop_dst_mac;
+  IpmcGroupAssignmentMechanism assignment_mechanism;
+  int number_replicas_per_group;
+  int number_multicast_groups;
+  VlanForwardingParams vlan_forwarding_params;
+};
 
 // Multicast IPv4 addresses of the form 226.10.#.#. The last two bytes
 // are computed based on the multicast group ID.
@@ -164,16 +191,44 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfaceIDs(
   return result;
 }
 
+struct MrifTableEntryParams {
+  std::string egress_port;
+  // multicast replica instance
+  int instance;
+  netaddr::MacAddress src_mac;
+  std::optional<netaddr::MacAddress> next_hop_dst_mac = std::nullopt;
+  std::optional<bool> preserve_ingress_vlan_id = std::nullopt;
+  std::optional<int> egress_vlan_id = std::nullopt;
+};
+
 // Add table entries for multicast_router_interface_table.
 absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
-    const pdpi::IrP4Info& ir_p4info, const std::string& port_id,
-    const int instance, const netaddr::MacAddress& src_mac) {
-  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
-                   sai::EntryBuilder()
-		       .AddMrifEntryRewritingSrcMac(port_id, instance, src_mac)
-                       .LogPdEntries()
-                       .GetDedupedPiEntities(ir_p4info,
-                                             /*allow_unsupported=*/true));
+    const pdpi::IrP4Info& ir_p4info, const MrifTableEntryParams& params) {
+  std::vector<p4::v1::Entity> entities;
+  sai::EntryBuilder entry_builder;
+  if (params.egress_vlan_id.has_value()) {
+    if (params.preserve_ingress_vlan_id.has_value() &&
+        (params.preserve_ingress_vlan_id.value() ==
+         params.egress_vlan_id.value())) {
+      entry_builder.AddMrifEntryRewritingSrcMacAndPreservingIngressVlanId(
+          params.egress_port, params.instance, params.src_mac);
+    } else {
+      if (params.next_hop_dst_mac.has_value()) {
+        entry_builder.AddMrifEntryRewritingSrcMacDstMacAndVlanId(
+            params.egress_port, params.instance, params.src_mac,
+            params.next_hop_dst_mac.value(), params.egress_vlan_id.value());
+      } else {
+        entry_builder.AddMrifEntryRewritingSrcMacAndVlanId(
+            params.egress_port, params.instance, params.src_mac,
+            params.egress_vlan_id.value());
+      }
+    }
+  } else {
+    entry_builder.AddMrifEntryRewritingSrcMac(params.egress_port,
+                                              params.instance, params.src_mac);
+  }
+  ASSIGN_OR_RETURN(
+      entities, entry_builder.LogPdEntries().GetDedupedPiEntities(ir_p4info));
   return entities;
 }
 
@@ -251,18 +306,56 @@ absl::Status ClearEntities(pdpi::P4RuntimeSession& session,
   return absl::OkStatus();
 }
 
+std::string GetVlanIdHexStr(int val) {
+  return absl::StrCat("0x", absl::Hex(val, absl::kZeroPad3));
+}
+
+absl::Status InstallVlanMembershipEntries(
+    pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
+    const std::vector<std::string>& sut_port_ids,
+    const VlanForwardingParams& test_params) {
+  sai::EntryBuilder entry_builder;
+
+  // ingress/egress disable checks do it only for the first multicast group
+  // for scale setups
+  if (test_params.disable_ingress_vlan_checks) {
+    entry_builder.AddDisableIngressVlanChecksEntry();
+  }
+  if (test_params.disable_egress_vlan_checks) {
+    entry_builder.AddDisableEgressVlanChecksEntry();
+  }
+
+  if (test_params.input_vlan_id.has_value()) {
+    entry_builder.AddVlanEntry(
+        GetVlanIdHexStr(test_params.input_vlan_id.value()));
+    entry_builder.AddVlanMembershipEntry(
+        GetVlanIdHexStr(test_params.input_vlan_id.value()), sut_port_ids[0],
+        test_params.input_vlan_tagging_mode.value());
+  }
+
+  if (test_params.out_ports_vlan_id.has_value()) {
+    entry_builder.AddVlanEntry(
+        GetVlanIdHexStr(test_params.out_ports_vlan_id.value()));
+    for (int r = 1; r < sut_port_ids.size(); ++r) {
+      entry_builder.AddVlanMembershipEntry(
+          GetVlanIdHexStr(test_params.out_ports_vlan_id.value()),
+          sut_port_ids[r], test_params.out_ports_vlan_tagging_mode.value());
+    }
+  }
+
+  return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
+}
+
 // Setup multicast and other related tables for forwarding multicast packets.
 absl::Status SetupDefaultMulticastProgramming(
     pdpi::P4RuntimeSession& session, const pdpi::IrP4Info& ir_p4info,
-    const p4::v1::Update_Type& update_type, int number_multicast_groups,
-    int replicas_per_group, const std::vector<std::string>& port_ids,
-    IpmcGroupAssignmentMechanism assignment_mechanism,
+    const p4::v1::Update_Type& update_type, MulticastForwardingParams params,
     std::vector<p4::v1::Entity>& entities_created) {
-  if (port_ids.size() < replicas_per_group) {
+  if (params.sut_port_ids.size() < params.number_replicas_per_group) {
     return gutil::InternalErrorBuilder()
            << "Not enough port IDs provided to setup multicast programming:"
-           << " expected: " << replicas_per_group
-           << " received: " << port_ids.size();
+           << " expected: " << params.number_replicas_per_group
+           << " received: " << params.sut_port_ids.size();
   }
 
   // Setup admission for all L3 packets, a default VRF,
@@ -281,15 +374,25 @@ absl::Status SetupDefaultMulticastProgramming(
                           acl_entities.end());
   // Setup multicast RIF table.
   std::vector<p4::v1::Entity> rif_entities;
-  for (int m = 0; m < number_multicast_groups; ++m) {
-    for (int r = 0; r < replicas_per_group; ++r) {
-      const std::string& port_id = port_ids.at(r + 1);
+  for (int m = 0; m < params.number_multicast_groups; ++m) {
+    for (int r = 0; r < params.number_replicas_per_group; ++r) {
+      const std::string& port_id = params.sut_port_ids[r + 1];
       // Unique Ether src mac base address.
-      ASSIGN_OR_RETURN(netaddr::MacAddress src_mac,
-                       GetSrcMacForReplica(m, replicas_per_group, r));
+      ASSIGN_OR_RETURN(
+          netaddr::MacAddress src_mac,
+          GetSrcMacForReplica(m, params.number_replicas_per_group, r));
+      int instance = params.number_replicas_per_group * m + r;
+      const MrifTableEntryParams rif_params = {
+          .egress_port = port_id,
+          .instance = instance,
+          .src_mac = src_mac,
+          .next_hop_dst_mac = params.next_hop_dst_mac,
+          .preserve_ingress_vlan_id =
+              params.vlan_forwarding_params.input_vlan_id.has_value() ? true
+                                                                      : false,
+          .egress_vlan_id = params.vlan_forwarding_params.out_ports_vlan_id};
       ASSIGN_OR_RETURN(auto rifs,
-                       CreateRifTableEntities(ir_p4info, port_id,
-                                              kDefaultInstance, src_mac));
+                       CreateRifTableEntities(ir_p4info, rif_params));
       rif_entities.insert(rif_entities.end(), rifs.begin(), rifs.end());
     }
   }
@@ -299,11 +402,12 @@ absl::Status SetupDefaultMulticastProgramming(
 
   // Setup multicast groups and group members.
   std::vector<p4::v1::Entity> mc_entities;
-  for (int m = 0; m < number_multicast_groups; ++m) {
+  for (int m = 0; m < params.number_multicast_groups; ++m) {
     std::vector<ReplicaPair> replicas;
-    for (int r = 0; r < replicas_per_group; ++r) {
-      const std::string& port_id = port_ids.at(r + 1);
-      replicas.push_back({port_id, kDefaultInstance});
+    for (int r = 0; r < params.number_replicas_per_group; ++r) {
+      const std::string& port_id = params.sut_port_ids[r + 1];
+      int instance = params.number_replicas_per_group * m + r;
+      replicas.push_back({port_id, instance});
     }
     // Note: multicast group ID 0 is not valid.
     int multicast_group_id = m + 1;
@@ -315,11 +419,12 @@ absl::Status SetupDefaultMulticastProgramming(
   entities_created.insert(entities_created.end(), mc_entities.begin(),
                           mc_entities.end());
 
-  if (assignment_mechanism == IpmcGroupAssignmentMechanism::kAclRedirect) {
+  if (params.assignment_mechanism ==
+      IpmcGroupAssignmentMechanism::kAclRedirect) {
     // Setup multicast group assignment (ACL redirect).
     // In the default traffic test setup, we only send traffic on one port
     // (port_index 0), so we only need to add one ACL entry.
-    const std::string& port_id = port_ids[0];
+    const std::string& port_id = params.sut_port_ids[0];
     ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_entities,
                      sai::EntryBuilder()
                          .AddIngressAclEntryRedirectingToMulticastGroup(
@@ -335,7 +440,7 @@ absl::Status SetupDefaultMulticastProgramming(
 
   // Setup multicast group assignment (IPMC entries).
   std::vector<p4::v1::Entity> ipmc_entities;
-  for (int m = 0; m < number_multicast_groups; ++m) {
+  for (int m = 0; m < params.number_multicast_groups; ++m) {
     ASSIGN_OR_RETURN(const netaddr::Ipv4Address ipv4_address,
                      GetIpv4AddressForReplica(m));
     uint8_t multicast_group_id = m + 1;
@@ -359,99 +464,186 @@ absl::Status SetupDefaultMulticastProgramming(
   return absl::OkStatus();
 }
 
-// Build test packets that match the multicast table entries
+struct TestVectorParams {
+  // sut_port_ids is the list of ports that are used for multicast replication.
+  // The first port is the ingress port and the rest are the egress ports.
+  std::vector<std::string> sut_port_ids;
+  // The index of the multicast group that the input packets are expected to
+  // match.
+  int input_group_index;
+  // The index of the multicast group that the output packets are expected to
+  // match.
+  int output_group_index;
+  int replicas_per_group;
+  int output_replica_start_index = 0;
+  // input_vlan_id indicates vlan membership of the ingress port
+  std::optional<int> input_vlan_id = std::nullopt;
+  // out_ports_vlan_id indicates vlan membership of the output ports
+  std::optional<int> out_ports_vlan_id = std::nullopt;
+};
+
+// Build a test vector that injects one IPv4 and one IPv6 test packet.  The
+// input packets are formatted such that they are expected to match the
+// multicast group specified by the `input_group_index`.  The multicast group
+// is expected to be active, and the output packets are expected to be formatted
+// according to the multicast group specified by the `output_group_index`.
 absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
-    const std::vector<std::string>& port_ids, int number_multicast_groups,
-    int replicas_per_group, bool expect_output_packets = true) {
+    const TestVectorParams& params) {
   // Test packets injected and expected results.
   std::vector<dvaas::PacketTestVector> expectations;
   // All packets will be injected on the same port.
-  const std::string& in_port = port_ids.at(0);
-  int total_packets = 0;
-  int unique_payload_ids = 1;
-  for (int m = 0; m < number_multicast_groups; ++m) {
-    ASSIGN_OR_RETURN(const auto ipv4_address, GetIpv4AddressForReplica(m));
-    ASSIGN_OR_RETURN(const auto ipv6_address, GetIpv6AddressForReplica(m));
-    // Construct the input packets.
-    // We will inject 2 packets to touch each multicast group, one using IPv4
-    // and one using IPv6.
-    ProtoFixtureRepository repo;
-    repo.RegisterValue("@ingress_port", in_port)
-        .RegisterValue("@egress_src_mac", kOriginalSrcMacAddress.ToString())
-        .RegisterValue("@ttl", "0x40")
-        .RegisterValue("@hop_limit", "0x50")
-        .RegisterValue("@decremented_hop_limit", "0x4f")
-        .RegisterValue("@decremented_ttl", "0x3f")
-        .RegisterValue("@ipv4_dst", ipv4_address.ToString())
-        .RegisterValue("@ipv6_dst", ipv6_address.ToString())
-        .RegisterValue(
-            "@payload_ipv4",
-            dvaas::MakeTestPacketPayloadFromUniqueId(unique_payload_ids++))
-        .RegisterValue(
-            "@payload_ipv6",
-            dvaas::MakeTestPacketPayloadFromUniqueId(unique_payload_ids++));
-    // Build headers.
-    repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
-          ethernet_header {
-            ethernet_destination: "01:00:5e:01:01:01"
-            ethernet_source: @egress_src_mac
-            ethertype: "0x0800"  # IPv4
-          }
-        )pb")
-        .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv6", R"pb(
-          ethernet_header {
-            ethernet_destination: "33:33:00:00:00:01"
-            ethernet_source: @egress_src_mac
-            ethertype: "0x86dd"  # IPv6
-          }
-        )pb")
-        .RegisterSnippetOrDie<packetlib::Header>("@ipv4", R"pb(
-          ipv4_header {
-            version: "0x4"
-            ihl: "0x5"
-            dscp: "0x00"
-            ecn: "0x0"
-            # total_length: filled in automatically.
-            identification: "0x0000"
-            flags: "0x0"
-            fragment_offset: "0x0000"
-            ttl: @ttl
-            protocol: "0x11"
-            # checksum: filled in automatically
-            ipv4_source: "128.252.7.36"
-            ipv4_destination: @ipv4_dst
-          }
-        )pb")
-        .RegisterSnippetOrDie<packetlib::Header>("@ipv6", R"pb(
-          ipv6_header {
-            version: "0x6"
-            dscp: "0x00"
-            ecn: "0x1"
-            flow_label: "0x12345"
-            # payload_length: filled in automatically.
-            next_header: "0x11"
-            hop_limit: @hop_limit
-            ipv6_source: "2002:ad12:4100:3::"
-            ipv6_destination: @ipv6_dst
-          }
-        )pb")
-        .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
-          udp_header {
-            source_port: "0x0567"       # 1383
-            destination_port: "0x1234"  # 4660
-            # length: filled in automatically
-            # checksum: filled in automatically
-          }
-        )pb")
-        .RegisterMessage("@input_packet_ipv4", ParsePacketAndPadToMinimumSize(
+  const std::string& in_port = params.sut_port_ids[0];
+  int unique_payload_ids = 2 * params.input_group_index + 1;
+
+  // We will inject 2 packets to touch each multicast group, one using IPv4
+  // and one using IPv6.
+  ASSIGN_OR_RETURN(const auto ipv4_address,
+                   GetIpv4AddressForReplica(params.input_group_index));
+  ASSIGN_OR_RETURN(const auto ipv6_address,
+                   GetIpv6AddressForReplica(params.input_group_index));
+  ProtoFixtureRepository repo;
+  repo.RegisterValue("@ingress_port", in_port)
+      .RegisterValue("@egress_src_mac", kOriginalSrcMacAddress.ToString())
+      .RegisterValue("@ttl", "0x40")
+      .RegisterValue("@hop_limit", "0x50")
+      .RegisterValue("@decremented_hop_limit", "0x4f")
+      .RegisterValue("@decremented_ttl", "0x3f")
+      .RegisterValue("@ipv4_dst", ipv4_address.ToString())
+      .RegisterValue("@ipv6_dst", ipv6_address.ToString())
+      .RegisterValue("@payload_ipv4",
+                     dvaas::MakeTestPacketTagFromUniqueId(unique_payload_ids++,
+                                                          "IPv4 UDP packet"))
+      .RegisterValue("@payload_ipv6",
+                     dvaas::MakeTestPacketTagFromUniqueId(unique_payload_ids++,
+                                                          "IPv6 UDP packet"));
+  if (params.input_vlan_id.has_value()) {
+    repo.RegisterValue("@input_vlan_id",
+                       GetVlanIdHexStr(params.input_vlan_id.value()));
+  }
+  if (params.out_ports_vlan_id.has_value()) {
+    repo.RegisterValue("@out_ports_vlan_id",
+                       GetVlanIdHexStr(params.out_ports_vlan_id.value()));
+  }
+
+  // Build headers.
+  repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
+        ethernet_header {
+          ethernet_destination: "01:00:5e:01:01:01",
+          ethernet_source: @egress_src_mac
+          ethertype: "0x0800"  # IPv4
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv6", R"pb(
+        ethernet_header {
+          ethernet_destination: "33:33:00:00:00:01"
+          ethernet_source: @egress_src_mac
+          ethertype: "0x86dd"  # IPv6
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4_vlan", R"pb(
+        ethernet_header {
+          ethernet_destination: "01:00:5e:01:01:01",
+          ethernet_source: @egress_src_mac
+          ethertype: "0x8100"  # vlan
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv6_vlan", R"pb(
+        ethernet_header {
+          ethernet_destination: "33:33:00:00:00:01",
+          ethernet_source: @egress_src_mac
+          ethertype: "0x8100"  # vlan
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@vlan_ipv4", R"pb(
+        vlan_header {
+          priority_code_point: "0x0",
+          drop_eligible_indicator: "0x0",
+          vlan_identifier: "0x0",
+          ethertype: "0x0800"  # IPv4
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@vlan_ipv6", R"pb(
+        vlan_header {
+          priority_code_point: "0x0",
+          drop_eligible_indicator: "0x0",
+          vlan_identifier: "0x0",
+          ethertype: "0x86dd"  # IPv6
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ipv4", R"pb(
+        ipv4_header {
+          version: "0x4"
+          ihl: "0x5"
+          dscp: "0x00"
+          ecn: "0x0"
+          # total_length: filled in automatically.
+          identification: "0x0000"
+          flags: "0x0"
+          fragment_offset: "0x0000"
+          ttl: @ttl
+          protocol: "0x11"
+          # checksum: filled in automatically
+          ipv4_source: "128.252.7.36"
+          ipv4_destination: @ipv4_dst
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ipv6", R"pb(
+        ipv6_header {
+          version: "0x6"
+          dscp: "0x00"
+          ecn: "0x1"
+          flow_label: "0x12345"
+          # payload_length: filled in automatically.
+          next_header: "0x11"
+          hop_limit: @hop_limit
+          ipv6_source: "2002:ad12:4100:3::"
+          ipv6_destination: @ipv6_dst
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
+        udp_header {
+          source_port: "0x0567"       # 1383
+          destination_port: "0x1234"  # 4660
+          # length: filled in automatically
+          # checksum: filled in automatically
+        }
+      )pb");
+
+  if (params.input_vlan_id.has_value()) {
+    repo.RegisterMessage(
+        "@input_packet_ipv4",
+        ParsePacketAndPadToMinimumSize(
+            repo,
+            R"pb(
+              headers: @ethernet_ipv4_vlan
+              headers:
+                  @vlan_ipv4 { vlan_header { vlan_identifier: @input_vlan_id } }
+              headers: @ipv4
+              headers: @udp
+              payload: @payload_ipv4
+            )pb"));
+    repo.RegisterMessage(
+        "@input_packet_ipv6",
+        ParsePacketAndPadToMinimumSize(
+            repo,
+            R"pb(
+              headers: @ethernet_ipv6_vlan
+              headers:
+                  @vlan_ipv6 { vlan_header { vlan_identifier: @input_vlan_id } }
+              headers: @ipv6
+              headers: @udp
+              payload: @payload_ipv6
+            )pb"));
+  } else {
+    repo.RegisterMessage("@input_packet_ipv4", ParsePacketAndPadToMinimumSize(
                                                    repo,
                                                    R"pb(
                                                      headers: @ethernet_ipv4
                                                      headers: @ipv4
                                                      headers: @udp
                                                      payload: @payload_ipv4
-                                                   )pb"))
-        .RegisterMessage("@input_packet_ipv6", ParsePacketAndPadToMinimumSize(
+                                                   )pb"));
+    repo.RegisterMessage("@input_packet_ipv6", ParsePacketAndPadToMinimumSize(
                                                    repo,
                                                    R"pb(
                                                      headers: @ethernet_ipv6
@@ -459,15 +651,63 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
                                                      headers: @udp
                                                      payload: @payload_ipv6
                                                    )pb"));
-    // Build up acceptable_outputs string, to account for each replica.
-    dvaas::SwitchOutput expected_ipv4_output;
-    dvaas::SwitchOutput expected_ipv6_output;
-    for (int r = 0; r < replicas_per_group; ++r) {
-      ASSIGN_OR_RETURN(const auto egress_src_mac,
-                       GetSrcMacForReplica(m, replicas_per_group, r));
+  }
+
+  // Build up acceptable_outputs string, to account for each replica.
+  dvaas::SwitchOutput expected_ipv4_output;
+  dvaas::SwitchOutput expected_ipv6_output;
+  for (int r = params.output_replica_start_index; r < params.replicas_per_group;
+       ++r) {
+    ASSIGN_OR_RETURN(const auto egress_src_mac,
+                     GetSrcMacForReplica(params.output_group_index,
+                                         params.replicas_per_group, r));
+
+    if (params.out_ports_vlan_id.has_value()) {
       // IPv4
       *expected_ipv4_output.add_packets() =
-          repo.RegisterValue("@egress_port", port_ids.at(r + 1))
+          repo.RegisterValue("@egress_port", params.sut_port_ids[r + 1])
+              .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
+              .RegisterMessage(
+                  "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                    headers: @ethernet_ipv4_vlan {
+                      ethernet_header { ethernet_source: @egress_src_mac }
+                    }
+                    headers: @vlan_ipv4 {
+                      vlan_header { vlan_identifier: @out_ports_vlan_id }
+                    }
+                    headers: @ipv4 { ipv4_header { ttl: @decremented_ttl } }
+                    headers: @udp
+                    payload: @payload_ipv4
+                  )pb"))
+              .ParseTextOrDie<dvaas::Packet>(R"pb(
+                port: @egress_port
+                parsed: @output_packet
+              )pb");
+      // IPv6
+      *expected_ipv6_output.add_packets() =
+          repo.RegisterValue("@egress_port", params.sut_port_ids[r + 1])
+              .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
+              .RegisterMessage(
+                  "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                    headers: @ethernet_ipv6_vlan {
+                      ethernet_header { ethernet_source: @egress_src_mac }
+                    }
+                    headers: @vlan_ipv6 {
+                      vlan_header { vlan_identifier: @out_ports_vlan_id }
+                    }
+                    headers: @ipv6 {
+                      ipv6_header { hop_limit: @decremented_hop_limit }
+                    }
+                    headers: @udp
+                    payload: @payload_ipv6
+                  )pb"))
+              .ParseTextOrDie<dvaas::Packet>(R"pb(
+                port: @egress_port
+                parsed: @output_packet
+              )pb");
+    } else {
+      *expected_ipv4_output.add_packets() =
+          repo.RegisterValue("@egress_port", params.sut_port_ids[r + 1])
               .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
               .RegisterMessage(
                   "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
@@ -484,7 +724,7 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               )pb");
       // IPv6
       *expected_ipv6_output.add_packets() =
-          repo.RegisterValue("@egress_port", port_ids.at(r + 1))
+          repo.RegisterValue("@egress_port", params.sut_port_ids[r + 1])
               .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
               .RegisterMessage(
                   "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
@@ -501,32 +741,13 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
                 port: @egress_port
                 parsed: @output_packet
               )pb");
-    }  // for replica
-    LOG(INFO) << "Packets will be sent on port " << in_port;
-    LOG(INFO) << "Expected outputs should be " << total_packets << " packets";
+    }  // for out_ports_vlan_id
+  }  // for replica
+  LOG(INFO) << "Packets will be sent on port " << in_port;
 
-    if (expect_output_packets) {
-      expectations.emplace_back() =
-          repo.RegisterMessage("@expected_ipv4_output", expected_ipv4_output)
-              .ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
-                input {
-                  type: DATAPLANE
-                  packet { port: @ingress_port parsed: @input_packet_ipv4 }
-                }
-                acceptable_outputs: @expected_ipv4_output
-              )pb");
-      expectations.emplace_back() =
-          repo.RegisterMessage("@expected_ipv6_output", expected_ipv6_output)
-              .ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
-                input {
-                  type: DATAPLANE
-                  packet { port: @ingress_port parsed: @input_packet_ipv6 }
-                }
-                acceptable_outputs: @expected_ipv6_output
-              )pb");
-    } else {
-      expectations.push_back(repo.ParseTextOrDie<dvaas::PacketTestVector>(
-          R"pb(
+  expectations.emplace_back() =
+      repo.RegisterMessage("@expected_ipv4_output", expected_ipv4_output)
+          .ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
             input {
               type: DATAPLANE
               packet { port: @ingress_port parsed: @input_packet_ipv4 }
@@ -538,8 +759,32 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               type: DATAPLANE
               packet { port: @ingress_port parsed: @input_packet_ipv6 }
             }
-          )pb"));
-    }
+            acceptable_outputs: @expected_ipv6_output
+          )pb");
+
+  return expectations;
+}
+
+// Build test packets that match the multicast table entries
+absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
+    const MulticastForwardingParams& params) {
+  // Test packets injected and expected results.
+  std::vector<dvaas::PacketTestVector> expectations;
+  for (int m = 0; m < params.number_multicast_groups; ++m) {
+    ASSIGN_OR_RETURN(
+        auto group_expectations,
+        BuildTestVectors({
+            .sut_port_ids = params.sut_port_ids,
+            .input_group_index = m,
+            .output_group_index = m,
+            .replicas_per_group = params.number_replicas_per_group,
+            .output_replica_start_index = 0,
+            .input_vlan_id = params.vlan_forwarding_params.input_vlan_id,
+            .out_ports_vlan_id =
+                params.vlan_forwarding_params.out_ports_vlan_id,
+        }));
+    expectations.insert(expectations.end(), group_expectations.begin(),
+                        group_expectations.end());
   }  // for multicast group
   return expectations;
 }
@@ -602,10 +847,11 @@ TEST_P(L3MulticastTestFixture,
 
 TEST_P(L3MulticastTestFixture, DeleteNonexistentRifEntryFails) {
   // Unable to delete RIF entry that was not added.
-  ASSERT_OK_AND_ASSIGN(
-      const auto entities,
-      CreateRifTableEntities(ir_p4info_, /*port_id=*/"1", kDefaultInstance,
-                             kOriginalSrcMacAddress));
+  const MrifTableEntryParams rif_params = {.egress_port = "1",
+                                           .instance = kDefaultInstance,
+                                           .src_mac = kOriginalSrcMacAddress};
+  ASSERT_OK_AND_ASSIGN(const auto entities,
+                       CreateRifTableEntities(ir_p4info_, rif_params));
 
   EXPECT_THAT(ClearEntities(*sut_p4rt_session_, ir_p4info_, entities),
               StatusIs(absl::StatusCode::kUnknown,
@@ -673,7 +919,6 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentIpmcEntryFails) {
 TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  const int kNumberMulticastGroupsInTest = 1;
   const int kPortsToUseInTest = 2;
   // Collect port IDs.
   // Get SUT and control ports to test on.
@@ -684,20 +929,21 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   // --------------------------------------------------------------------------
   // Add multicast programming.
   // --------------------------------------------------------------------------
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+  };
   LOG(INFO) << "Adding multicast programming.";
   std::vector<p4::v1::Entity> entities_created;
-  ASSERT_OK(SetupDefaultMulticastProgramming(
-      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
-      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
-      sut_ports_ids, IpmcGroupAssignmentMechanism::kIpMulticastTable,
-      entities_created));
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
   // Build test packets.
-  ASSERT_OK_AND_ASSIGN(
-      auto vectors,
-      BuildTestVectors(sut_ports_ids, kNumberMulticastGroupsInTest,
-                       /*replicas_per_group=*/kPortsToUseInTest,
-                       /*expect_output_packets=*/true));
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
   // Send test packets.
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
   dvaas::DataplaneValidationParams dvaas_params =
@@ -753,7 +999,6 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
 
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  constexpr int kNumberMulticastGroupsInTest = 1;
   constexpr int kPortsToUseInTest = 2;
 
   // Get set of ports on the SUT and control switch to test on.
@@ -761,21 +1006,21 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
       const std::vector<std::string> sut_ports_ids,
       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
                          kPortsToUseInTest + 1));
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kAclRedirect,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+  };
 
   std::vector<p4::v1::Entity> entities_created;
-  ASSERT_OK(SetupDefaultMulticastProgramming(
-      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
-      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
-      sut_ports_ids, IpmcGroupAssignmentMechanism::kAclRedirect,
-      entities_created));
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
 
   // Build test packets.
-  ASSERT_OK_AND_ASSIGN(
-      auto vectors,
-      BuildTestVectors(sut_ports_ids, kNumberMulticastGroupsInTest,
-                       /*replicas_per_group=*/kPortsToUseInTest,
-                       /*expect_output_packets=*/true));
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
 
   // Send test packets.
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
@@ -798,6 +1043,131 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 }
 
+// This test confirms that when a participant drops out of a multicast group,
+// there is is no longer an externally replicated packet received.
+TEST_P(L3MulticastTestFixture, UnregisteredParticipantProgramming) {
+
+  if (!pins::TableHasMatchField(ir_p4info_, "acl_egress_l2_table",
+                                 "src_mac")) {
+    GTEST_SKIP()
+        << "Skipping because match field 'src_mac' is not available in table "
+        << "'acl_egress_l2_table'";
+  }
+
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  constexpr int kPortsToUseInTest = 2;
+
+  // Get set of ports on the SUT and control switch to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+  };
+
+  // Setup 3 RIFs, 2 with valid source MAC addresses and 1 with the drop MAC
+  // address.  Have multicast group begin expecting replication to all members.
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  // Add additional drop RIF.
+  constexpr int kDropInstance = 33;
+  const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[1],
+                                           .instance = kDropInstance,
+                                           .src_mac = kDropSrcMacAddress};
+  ASSERT_OK_AND_ASSIGN(auto rif_entities,
+                       CreateRifTableEntities(ir_p4info_, rif_params));
+  ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
+                                    rif_entities));
+
+  // Create the Egress ACL entry to drop relevant Ethernet source MAC.
+  ASSERT_OK_AND_ASSIGN(auto proto_entry,
+                       gutil::ParseTextProto<pdpi::IrTableEntry>(
+                           R"pb(table_name: "acl_egress_l2_table"
+                                priority: 1
+                                matches {
+                                  name: "src_mac"
+                                  ternary {
+                                    value { mac: "02:2a:10:00:00:02" }
+                                    mask { mac: "ff:ff:ff:ff:ff:ff" }
+                                  }
+                                }
+                                action { name: "acl_drop" }
+                           )pb"));
+
+  EXPECT_OK(pdpi::InstallIrTableEntry(*sut_p4rt_session_.get(), proto_entry));
+
+  // Build test packets expecting 2 replicas received per packet sent.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+
+  // Reestablish primary-ship of P4RT connection.
+  ASSERT_OK_AND_ASSIGN(sut_p4rt_session_,
+                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+
+  // ----------------------------------------------------------------------
+  // Update multicast group to change 1 member to unsubscribe.
+  // ----------------------------------------------------------------------
+  std::vector<ReplicaPair> replicas;
+  replicas.push_back({sut_ports_ids[1], kDropInstance});
+  replicas.push_back({sut_ports_ids[2], /*.instance=*/1});  // unchanged
+  ASSERT_OK_AND_ASSIGN(auto update_multicast_group_entities,
+                       CreateMulticastGroupEntities(
+                           ir_p4info_, /*multicast_group_id=*/1, replicas));
+  ASSERT_OK(
+      pdpi::SendPiUpdates(sut_p4rt_session_.get(),
+                          pdpi::CreatePiUpdates(update_multicast_group_entities,
+                                                p4::v1::Update::MODIFY)));
+
+  // Send traffic and confirm only 1 replica received (instead of 2).
+  ASSERT_OK_AND_ASSIGN(
+      auto update_vectors,
+      BuildTestVectors({.sut_port_ids = sut_ports_ids,
+                        .input_group_index = 0,
+                        .output_group_index = 0,
+                        .replicas_per_group = kPortsToUseInTest,
+                        .output_replica_start_index = 1}));
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas_params.packet_test_vector_override = update_vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult update_validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  update_validation_result.LogStatistics();
+  EXPECT_OK(update_validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
+// This test confirms that fixed delay programming is achievable by adding
+// group members where the replications are always dropped.
+// Part of our use case requires us to replicate packets that must be dropped,
+// which adds a fixed amount of time before a "real" replicated packet emerges.
 TEST_P(L3MulticastTestFixture, ConfirmFixedDelayProgramming) {
   if (!pins::TableHasMatchField(ir_p4info_, "acl_egress_l2_table",
                                  "src_mac")) {
@@ -808,7 +1178,6 @@ TEST_P(L3MulticastTestFixture, ConfirmFixedDelayProgramming) {
 
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  constexpr int kNumberMulticastGroupsInTest = 1;
   // We'll use 4 "drop" replicas and 2 expected replications.
   constexpr int kPortsToUseInTest = 6;
 
@@ -818,23 +1187,30 @@ TEST_P(L3MulticastTestFixture, ConfirmFixedDelayProgramming) {
       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
                          kPortsToUseInTest + 1));
 
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+  };
+
   // Setup 6 RIFs, 2 with valid source MAC addresses and 4 with the drop MAC
   // address.
   std::vector<p4::v1::Entity> entities_created;
-  ASSERT_OK(SetupDefaultMulticastProgramming(
-      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
-      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
-      sut_ports_ids, IpmcGroupAssignmentMechanism::kIpMulticastTable,
-      entities_created));
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
 
   // Add the 4 drop RIFs using the first 4 ports for replication.
   constexpr int kDropInstance = 33;
   for (int port_index = 1; port_index <= 4; ++port_index) {
-    ASSERT_OK_AND_ASSIGN(
-        auto rif_entities,
-        CreateRifTableEntities(ir_p4info_, sut_ports_ids[port_index],
-                               kDropInstance, kDropSrcMacAddress));
+    const MrifTableEntryParams rif_params = {
+        .egress_port = sut_ports_ids[port_index],
+        .instance = kDropInstance,
+        .src_mac = kDropSrcMacAddress};
+    ASSERT_OK_AND_ASSIGN(auto rif_entities,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
     ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
                                       rif_entities));
   }
@@ -879,11 +1255,11 @@ TEST_P(L3MulticastTestFixture, ConfirmFixedDelayProgramming) {
   // 4 of the "prefix" replicas should have been dropped.
   ASSERT_OK_AND_ASSIGN(
       auto update_vectors,
-      BuildInputOutputVectors(sut_ports_ids,
-                              /*input_group_index=*/0,
-                              /*output_group_index=*/0,
-                              /*replicas_per_group=*/kPortsToUseInTest,
-                              /*output_replica_start_index=*/4));
+      BuildTestVectors({.sut_port_ids = sut_ports_ids,
+                        .input_group_index = 0,
+                        .output_group_index = 0,
+                        .replicas_per_group = kPortsToUseInTest,
+                        .output_replica_start_index = 4}));
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
   dvaas::DataplaneValidationParams dvaas_params =
       dvaas::DefaultpinsDataplaneValidationParams();
@@ -907,10 +1283,8 @@ TEST_P(L3MulticastTestFixture, ConfirmFixedDelayProgramming) {
 // This test confirms replicating N times to the same port (using different
 // replica instances) will produce N output packets.
 TEST_P(L3MulticastTestFixture, ReplicatingNTimesToSamePortProducesNCopies) {
-
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  constexpr int kNumberMulticastGroupsInTest = 1;
   constexpr int kOutputPortsToUseInTest = 1;
   constexpr int kInitialReplicasPerGroup = 1;
 
@@ -920,16 +1294,21 @@ TEST_P(L3MulticastTestFixture, ReplicatingNTimesToSamePortProducesNCopies) {
       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
                          kOutputPortsToUseInTest + 1));
 
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kInitialReplicasPerGroup,
+      .number_multicast_groups = 1,
+  };
+
   // Setup 3 RIFs, all on same port but that use different instances.
   // We will expect that the multicast group will produce three copies.
   // Setup default programming assuming only 1 replica to start, since default
   // programming wants to output on different ports.
   std::vector<p4::v1::Entity> entities_created;
-  ASSERT_OK(SetupDefaultMulticastProgramming(
-      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
-      kNumberMulticastGroupsInTest,
-      /*replicas_per_group=*/kInitialReplicasPerGroup, sut_ports_ids,
-      IpmcGroupAssignmentMechanism::kIpMulticastTable, entities_created));
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
 
   // Add additional active RIF that will replicate to the same port.
@@ -939,13 +1318,17 @@ TEST_P(L3MulticastTestFixture, ReplicatingNTimesToSamePortProducesNCopies) {
                           /*replicas_number=*/1));
   constexpr int kExtraInstance = 1;
   constexpr int kExtraInstanceTwo = 2;
+  const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[1],
+                                           .instance = kExtraInstance,
+                                           .src_mac = kExtraSrcMac};
   ASSERT_OK_AND_ASSIGN(auto rif_entities,
-                       CreateRifTableEntities(ir_p4info_, sut_ports_ids[1],
-                                              kExtraInstance, kExtraSrcMac));
+                       CreateRifTableEntities(ir_p4info_, rif_params));
   // Create another RIF with different instance but same src MAC.
+  const MrifTableEntryParams rif_params2 = {.egress_port = sut_ports_ids[1],
+                                            .instance = kExtraInstanceTwo,
+                                            .src_mac = kExtraSrcMac};
   ASSERT_OK_AND_ASSIGN(auto rif_entities2,
-                       CreateRifTableEntities(ir_p4info_, sut_ports_ids[1],
-                                              kExtraInstanceTwo, kExtraSrcMac));
+                       CreateRifTableEntities(ir_p4info_, rif_params2));
   ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
                                     rif_entities));
   ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
@@ -1140,7 +1523,6 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
 
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  constexpr int kNumberMulticastGroupsInTest = 2;
   constexpr int kPortsToUseInTest = 2;
 
   // Get set of ports on the SUT and control switch to test on.
@@ -1149,12 +1531,17 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
                          kPortsToUseInTest + 1));
 
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 2,
+  };
+
   std::vector<p4::v1::Entity> entities_created;
-  ASSERT_OK(SetupDefaultMulticastProgramming(
-      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
-      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
-      sut_ports_ids, IpmcGroupAssignmentMechanism::kIpMulticastTable,
-      entities_created));
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
 
   // Setup the ACL redirect path to use multicast group 2.
   constexpr int kMulticastGroup2 = 2;
@@ -1180,11 +1567,13 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
   // assign to multicast group 1.  However, expect the ACL redirect path to
   // override the IPMC table assignment such that multicast group 2 will be
   // the outputs.
-  ASSERT_OK_AND_ASSIGN(
-      auto vectors,
-      BuildInputOutputVectors(sut_ports_ids, /*input_group_index=*/0,
-                              /*output_group_index=*/1,
-                              /*replicas_per_group=*/kPortsToUseInTest));
+  ASSERT_OK_AND_ASSIGN(auto vectors,
+                       BuildTestVectors({
+                           .sut_port_ids = sut_ports_ids,
+                           .input_group_index = 0,
+                           .output_group_index = 1,
+                           .replicas_per_group = kPortsToUseInTest,
+                       }));
 
   // Send test packets.
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
@@ -1210,10 +1599,11 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
 TEST_P(L3MulticastTestFixture, AddMulticastRifForUnknownPortFails) {
   // Unable to add an entry if the port does not exist.
   const std::string kUnknownPortId = "20000";
-  ASSERT_OK_AND_ASSIGN(
-      const auto entities,
-      CreateRifTableEntities(ir_p4info_, kUnknownPortId, kDefaultInstance,
-                             kOriginalSrcMacAddress));
+  const MrifTableEntryParams rif_params = {.egress_port = kUnknownPortId,
+                                           .instance = kDefaultInstance,
+                                           .src_mac = kOriginalSrcMacAddress};
+  ASSERT_OK_AND_ASSIGN(const auto entities,
+                       CreateRifTableEntities(ir_p4info_, rif_params));
 
   EXPECT_THAT(InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, entities),
               StatusIs(absl::StatusCode::kUnknown,
@@ -1228,11 +1618,11 @@ TEST_P(L3MulticastTestFixture, AddMulticastReplicaForUnknownPortInstanceFails) {
       const auto sut_ports_ids,
       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
                          kPortsToUseInTest));
-
-  ASSERT_OK_AND_ASSIGN(
-      const auto rif_entities,
-      CreateRifTableEntities(ir_p4info_, sut_ports_ids.at(0), kDefaultInstance,
-                             kOriginalSrcMacAddress));
+  const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[0],
+                                           .instance = kDefaultInstance,
+                                           .src_mac = kOriginalSrcMacAddress};
+  ASSERT_OK_AND_ASSIGN(const auto rif_entities,
+                       CreateRifTableEntities(ir_p4info_, rif_params));
   // Purposefully do not create a RIF for the second port ID.
   EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
                                     rif_entities));
@@ -1268,10 +1658,11 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryForUnknownMulticastGroupFails) {
 
   std::vector<p4::v1::Entity> rif_entities;
   for (int r = 0; r < kPortsToUseInTest; ++r) {
-    ASSERT_OK_AND_ASSIGN(
-        const auto rifs,
-        CreateRifTableEntities(ir_p4info_, sut_ports_ids.at(r),
-                               kDefaultInstance, kOriginalSrcMacAddress));
+    const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[r],
+                                             .instance = kDefaultInstance,
+                                             .src_mac = kOriginalSrcMacAddress};
+    ASSERT_OK_AND_ASSIGN(const auto rifs,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
     rif_entities.insert(rif_entities.end(), rifs.begin(), rifs.end());
   }
   EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
@@ -1331,10 +1722,11 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryForUnknownVrfFails) {
 
   std::vector<p4::v1::Entity> rif_entities;
   for (int r = 0; r < kPortsToUseInTest; ++r) {
-    ASSERT_OK_AND_ASSIGN(
-        const auto rifs,
-        CreateRifTableEntities(ir_p4info_, sut_ports_ids.at(r),
-                               kDefaultInstance, kOriginalSrcMacAddress));
+    const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[r],
+                                             .instance = kDefaultInstance,
+                                             .src_mac = kOriginalSrcMacAddress};
+    ASSERT_OK_AND_ASSIGN(const auto rifs,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
     rif_entities.insert(rif_entities.end(), rifs.begin(), rifs.end());
   }
   EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
@@ -1384,10 +1776,11 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryWithInvalidIPv4AddressFails) {
 
   std::vector<p4::v1::Entity> rif_entities;
   for (int r = 0; r < kPortsToUseInTest; ++r) {
-    ASSERT_OK_AND_ASSIGN(
-        const auto rifs,
-        CreateRifTableEntities(ir_p4info_, sut_ports_ids[r], kDefaultInstance,
-                               kOriginalSrcMacAddress));
+    const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[r],
+                                             .instance = kDefaultInstance,
+                                             .src_mac = kOriginalSrcMacAddress};
+    ASSERT_OK_AND_ASSIGN(const auto rifs,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
     rif_entities.insert(rif_entities.end(), rifs.begin(), rifs.end());
   }
   EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
@@ -1443,10 +1836,11 @@ TEST_P(L3MulticastTestFixture, DeleteRifWhileInUseFails) {
 
   std::vector<p4::v1::Entity> rif_entities;
   for (int r = 0; r < kPortsToUseInTest; ++r) {
-    ASSERT_OK_AND_ASSIGN(
-        const auto rifs,
-        CreateRifTableEntities(ir_p4info_, sut_ports_ids[r], kDefaultInstance,
-                               kOriginalSrcMacAddress));
+    const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[r],
+                                             .instance = kDefaultInstance,
+                                             .src_mac = kOriginalSrcMacAddress};
+    ASSERT_OK_AND_ASSIGN(const auto rifs,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
     rif_entities.insert(rif_entities.end(), rifs.begin(), rifs.end());
   }
   EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
@@ -1489,10 +1883,11 @@ TEST_P(L3MulticastTestFixture, DeleteMulticastGroupWhileInUseFails) {
 
   std::vector<p4::v1::Entity> rif_entities;
   for (int r = 0; r < kPortsToUseInTest; ++r) {
-    ASSERT_OK_AND_ASSIGN(
-        const auto rifs,
-        CreateRifTableEntities(ir_p4info_, sut_ports_ids[r], kDefaultInstance,
-                               kOriginalSrcMacAddress));
+    const MrifTableEntryParams rif_params = {.egress_port = sut_ports_ids[r],
+                                             .instance = kDefaultInstance,
+                                             .src_mac = kOriginalSrcMacAddress};
+    ASSERT_OK_AND_ASSIGN(const auto rifs,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
     rif_entities.insert(rif_entities.end(), rifs.begin(), rifs.end());
   }
   EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
@@ -1562,10 +1957,13 @@ TEST_P(L3MulticastTestFixture, AbleToProgramExpectedMulticastRifCapacity) {
                          GetSrcMacForReplica(/*multicast_group_index=*/r,
                                              /*replicas_per_group=*/1,
                                              /*replicas_number=*/0));
-    ASSERT_OK_AND_ASSIGN(
-        auto rifs,
-        CreateRifTableEntities(ir_p4info_, port_id,
-                               /*instance=*/r / kPortsToUseInTest, src_mac));
+    const MrifTableEntryParams rif_params = {
+        .egress_port = port_id,
+        .instance = r / kPortsToUseInTest,
+        .src_mac = src_mac,
+    };
+    ASSERT_OK_AND_ASSIGN(auto rifs,
+                         CreateRifTableEntities(ir_p4info_, rif_params));
 
     absl::Status add_status =
         pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, rifs);
@@ -1655,19 +2053,126 @@ TEST_P(L3MulticastTestFixture, AbleToProgramExpectedMulticastGroupCapacity) {
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities));
 }
 
-// TEST_P(L3MulticastTestFixture, PerformanceInitializationTime) {
-//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
-// }
-// TEST_P(L3MulticastTestFixture, PerformanceMulticastGroupAdjustmentRate) {
-//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
-// }
-// TEST_P(L3MulticastTestFixture, PerformanceReplicaArrivalTimeWithFixedDelay) {
-//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
-// }
-// TEST_P(L3MulticastTestFixture,
-//        PerformanceReplicaArrivalTimeWithUnregisteredParticipants) {
-//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
-// }
+TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacRewrite) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kPortsToUseInTest = 3;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+      .vlan_forwarding_params = {
+          .disable_ingress_vlan_checks = true,
+          .disable_egress_vlan_checks = true,
+          .input_vlan_id = 0x100,
+          .input_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+          .out_ports_vlan_id = 0x100,
+          .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+      }};
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+  LOG(INFO) << "Adding VLAN Membership.";
+  ASSERT_OK(InstallVlanMembershipEntries(*sut_p4rt_session_, ir_p4info_,
+                                         test_params.sut_port_ids,
+                                         test_params.vlan_forwarding_params));
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
+TEST_P(L3MulticastTestFixture,
+       SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kPortsToUseInTest = 3;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kAclRedirect,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+      .vlan_forwarding_params = {
+          .disable_ingress_vlan_checks = true,
+          .disable_egress_vlan_checks = true,
+          .input_vlan_id = 0x100,
+          .input_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+          .out_ports_vlan_id = 0x100,
+          .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+      }};
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+  LOG(INFO) << "Adding VLAN Membership.";
+  ASSERT_OK(InstallVlanMembershipEntries(*sut_p4rt_session_, ir_p4info_,
+                                         sut_ports_ids,
+                                         test_params.vlan_forwarding_params));
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
 }  // namespace
 
 void L3MulticastTestFixture::SetUp() {
