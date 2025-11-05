@@ -43,6 +43,7 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
+#include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
@@ -1894,7 +1895,7 @@ void P4RuntimeImpl::SetFreezeMode(bool freeze_mode) {
 absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
     const std::vector<std::pair<std::string, std::string>>& port_ids,
     const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
-    const std::optional<int>& device_id,
+    const std::optional<uint64_t>& device_id,
     const std::vector<std::string>& ports) {
   /**
    * controller_manager_, packetio_impl_, component_state_, system_state_,
@@ -1903,6 +1904,16 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
    */
   {
     absl::MutexLock l(&server_state_lock_);
+
+    // Skip P4Info reconciliation if it wasn't present before warm reboot.
+    const std::vector<std::pair<std::string, std::string>> db_attributes =
+        host_stats_table_.state_db->get("CONFIG");
+    if (db_attributes.empty()) {
+      LOG(WARNING) << "No P4Info present before warm reboot"
+                   << ", skipping P4Info reconciliation";
+      return absl::OkStatus();
+    }
+
     // LINT.IfChange(reconciliation_precondition)
     // TODO: Check if component_state_, system_state_, netdev_translator_
     // are initialized. Check if controller_manager_ and packetio_impl_ are
@@ -1919,6 +1930,7 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
       return absl::FailedPreconditionError(
           "p4info file path is not set during warm reboot reconciliation");
     }
+
     p4::v1::SetForwardingPipelineConfigRequest saved_config;
     RETURN_IF_ERROR(gutil::ReadProtoFromFile(*forwarding_config_full_path_,
                                              saved_config.mutable_config()))

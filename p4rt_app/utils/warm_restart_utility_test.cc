@@ -195,9 +195,16 @@ TEST_F(WarmRestartUtilityTest, GetCpuQueueIdsFromConfigDb) {
 
 TEST_F(WarmRestartUtilityTest, GetDeviceIdFromConfigDb) {
   EXPECT_FALSE(warm_restart_util_->GetDeviceIdFromConfigDb().has_value());
-  node_cfg_table_config_db_->set("integrated_circuit0", {{"node-id", "1"}});
+
+  // node-id can be greater than INT_MAX (2147483647 for 32-bit Integers);
+  node_cfg_table_config_db_->set("integrated_circuit0",
+                                 {{"node-id", "2795435351"}});
   EXPECT_TRUE(warm_restart_util_->GetDeviceIdFromConfigDb().has_value());
-  EXPECT_EQ(warm_restart_util_->GetDeviceIdFromConfigDb().value(), 1);
+  EXPECT_EQ(warm_restart_util_->GetDeviceIdFromConfigDb().value(), 2795435351);
+
+  node_cfg_table_config_db_->set("integrated_circuit0",
+                                 {{"node-id", "invalid node-id"}});
+  EXPECT_FALSE(warm_restart_util_->GetDeviceIdFromConfigDb().has_value());
 }
 
 TEST_F(WarmRestartUtilityTest, GetPortsFromConfigDb) {

@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4rt_app/utils/warm_restart_utility.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -77,13 +78,17 @@ WarmRestartUtil::GetCpuQueueIdsFromConfigDb() {
   return cpu_queue_config_db_->get("CPU");
 }
 
-std::optional<int> WarmRestartUtil::GetDeviceIdFromConfigDb() {
+std::optional<uint64_t> WarmRestartUtil::GetDeviceIdFromConfigDb() {
   for (const auto& [field, value] :
        node_cfg_config_db_->get("integrated_circuit0")) {
     if (field == "node-id") {
-      int device_id;
+      uint64_t device_id;
       if (absl::SimpleAtoi(value, &device_id)) {
         return device_id;
+      } else {
+        LOG(WARNING) << "Failed to parse node-id '" << value
+                     << "' from ConfigDB. Device ID will not be restored.";
+        break;
       }
     }
   }

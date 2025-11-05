@@ -442,6 +442,9 @@ TEST_F(WarmRestartTest, ReconciliationSucceeds) {
       kDeviceId, {"Ethernet0", "Ethernet4", "SEND_TO_INGRESS"}));
   // State Verification
   EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  // Presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info was
+  // pushed before warm reboot and has been restored during warm bootup.
+  EXPECT_OK(p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"));
 
   // Verify that the ports are added by AddPacketIoPort during reconciliation.
   EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
@@ -511,6 +514,9 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithAclEntries) {
       {{"Ethernet4", "2"}}, {}, kDeviceId, {"Ethernet4", "SEND_TO_INGRESS"}));
   // State Verification
   EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  // Presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info was
+  // pushed before warm reboot and has been restored during warm bootup.
+  EXPECT_OK(p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"));
 }
 
 TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
@@ -570,10 +576,18 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
       {{"Ethernet4", "2"}}, {}, kDeviceId, {"Ethernet4", "SEND_TO_INGRESS"}));
   // State Verification
   EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  // Presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info was
+  // pushed before warm reboot and has been restored during warm bootup.
+  EXPECT_OK(p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"));
 }
 
-TEST_F(WarmRestartTest, DISABLED_ReconciliationFailsP4infoNotFound) {
-  // Fails since P4Info is not saved in the file system.
+TEST_F(WarmRestartTest, ReconciliationFailsP4infoNotFoundAndPushed) {
+  // The presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info
+  // was pushed before warm reboot.
+  p4rt_service_->GetHostStatsStateDbTable().InsertTableEntry(
+      "CONFIG", {{"last-configuration-timestamp",
+                  absl::StrCat(absl::ToUnixNanos(absl::Now()))}});
+  // Reconciliation fails since P4Info is not saved in the file system.
   EXPECT_THAT(
       p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {}, 1, {}),
       StatusIs(absl::StatusCode::kInvalidArgument));
@@ -584,10 +598,18 @@ TEST_F(WarmRestartTest, DISABLED_ReconciliationFailsP4infoNotFound) {
   EXPECT_THAT(p4runtime_impl->RebuildSwStateAfterWarmboot({}, {}, kDeviceId,
                                                           {"SEND_TO_INGRESS"}),
               StatusIs(absl::StatusCode::kFailedPrecondition));
-  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStage(),
-            swss::WarmStart::STAGE_RECONCILIATION);
-  EXPECT_TRUE(
-      p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStageFailureFlag());
+}
+
+TEST_F(WarmRestartTest, ReconciliationSucceedsP4infoNotFoundAndNotPushed) {
+  // The absence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info
+  // wasn't pushed before warm reboot.
+  EXPECT_THAT(
+      p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"),
+      StatusIs(absl::StatusCode::kNotFound));
+  // P4Info reconciliation should succeed when P4Info wasn't pushed before warm
+  // reboot, and thus it isn't present after warm reboot.
+  EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
+      {{"Ethernet4", "2"}}, {}, kDeviceId, {"Ethernet4", "SEND_TO_INGRESS"}));
 }
 
 TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {

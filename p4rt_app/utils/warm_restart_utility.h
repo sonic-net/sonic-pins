@@ -74,7 +74,7 @@ class WarmRestartUtil {
 
   // Query the device id from Config DB, to update device id during
   // reconciliation.
-  std::optional<int> GetDeviceIdFromConfigDb();
+  std::optional<uint64_t> GetDeviceIdFromConfigDb();
 
   // Query all ports from Config DB, to rebuild packetio_impl_->port_to_socket_
   // during reconciliation.
