@@ -32,8 +32,8 @@ message DetectiveCluster {
   // this property (e.g. "input_packet_is_ipv4 == true && input_ttl == 2").
   string defining_property = 1;
 
-  // Predicted test outcome for this group (true = pass, false = fail).
-  bool predicted_outcome = 2;
+  // Whether the predicted test outcome for this group is pass or fail.
+  bool predicted_outcome_is_pass = 2;
 
   // TODO: Replace counts with `PacketTestOutcomes`.
   // Number of passing tests in this group.

@@ -121,12 +121,45 @@ test_result {
 # expected punted packets: 2
 test result: pass
 ================================================================================
+ExtractExplanationFromModel Test
+================================================================================
+-- Input: RandomForestWithSingleTree  ----------------------------
+? [expected(output packets) >= 1.5] # root non-leaf
+|
++- T -> [fail : 0 passes, 5 fails] # multicast leaf
+|
++- F -> ? [expected(packet-ins) >= 0.5] # unicast non-leaf
+        |
+        +- T -> [fail : 0 passes, 5 fails] # unicast w/ punt leaf
+        |
+        +- F -> [pass : 5 passes, 0 fails] # unicast w/o punt leaf
+-- Output: DetectiveExplanation proto ----------------------
+clusters {
+  defining_property: "expected(output packets) >= 1.5"
+  failing_tests: 5
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 0.5
+}
+clusters {
+  defining_property: "expected(output packets) < 1.5 && expected(packet-ins) >= 0.5"
+  failing_tests: 5
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 0.5
+}
+clusters {
+  defining_property: "expected(output packets) < 1.5 && expected(packet-ins) < 0.5"
+  predicted_outcome_is_pass: true
+  passing_tests: 5
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 1
+}
+================================================================================
 DVaaS DetectiveExplanationToString Test
 ================================================================================
 -- Input: DetectiveExplanation proto -----------------------------
 clusters {
   defining_property: "input ttl < 2"
-  predicted_outcome: true
+  predicted_outcome_is_pass: true
   passing_tests: 50
   failing_tests: 50
   accuracy_of_predicted_outcome: 0.5
@@ -169,7 +202,7 @@ DVaaS DetectiveExplanationToString Test
 -- Input: DetectiveExplanation proto -----------------------------
 clusters {
   defining_property: "input ttl < 2"
-  predicted_outcome: true
+  predicted_outcome_is_pass: true
   passing_tests: 25
   failing_tests: 25
   accuracy_of_predicted_outcome: 0.5
@@ -201,14 +234,14 @@ DVaaS DetectiveExplanationToString Test
 -- Input: DetectiveExplanation proto -----------------------------
 clusters {
   defining_property: "expected(output packets) < 2"
-  predicted_outcome: true
+  predicted_outcome_is_pass: true
   passing_tests: 1220
   accuracy_of_predicted_outcome: 1
   coverage_for_predicted_outcome: 0.82
 }
 clusters {
   defining_property: "expected(packet-ins) < 1"
-  predicted_outcome: true
+  predicted_outcome_is_pass: true
   passing_tests: 256
   accuracy_of_predicted_outcome: 1
   coverage_for_predicted_outcome: 0.17
