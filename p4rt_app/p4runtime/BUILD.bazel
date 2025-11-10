@@ -163,7 +163,7 @@ cc_library(
         "@boost//:bimap",
         "@boost//:graph",
         "@com_github_google_glog//:glog",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+	"@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:interpreter",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -193,7 +193,7 @@ cc_library(
     deps = [
         ":p4runtime_impl",
 	":queue_translator",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+	"@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest",
     ],
