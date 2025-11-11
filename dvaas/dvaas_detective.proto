@@ -37,13 +37,13 @@ message DetectiveCluster {
 
   // TODO: Replace counts with `PacketTestOutcomes`.
   // Number of passing tests in this group.
-  float passing_tests = 3;
+  double passing_tests = 3;
   // Number of failing tests in this group.
-  float failing_tests = 4;
+  double failing_tests = 4;
 
   // Accuracy of the predicted outcome for this group (i.e. the fraction of
   // test outcomes in this group that match the predicted outcome).
-  float accuracy_of_predicted_outcome = 5;
+  double accuracy_of_predicted_outcome = 5;
 
   // Coverage is calculated with respect to all `PacketTestOutcomes` in a
   // `DetectiveExplanation`.
@@ -53,7 +53,7 @@ message DetectiveCluster {
   //   coverage = passing_tests / all passing tests
   // For a failing prediction:
   //   coverage = failing_tests / all failing tests
-  float coverage_for_predicted_outcome = 6;
+  double coverage_for_predicted_outcome = 6;
 
   // NOTE: Accuracy and coverage are both important, but high values does not
   // necessarily mean the explanation is good. For inuition, it's possible to
