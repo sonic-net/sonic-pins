@@ -34,9 +34,10 @@
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "gutil/collections.h"
-#include "gutil/proto.h"
-#include "gutil/status.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/proto.h"
+#include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -49,7 +50,6 @@
 #include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {

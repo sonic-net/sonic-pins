@@ -25,9 +25,9 @@ cc_library(
     deps = [
         ":sflow_breakout_test",
         ":sflow_util",
-        "//gutil:collections",
-        "//gutil:status_matchers",
-        "//gutil:testing",
+        "//gutil/gutil:collections",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
         "//lib:ixia_helper",
         "//lib/gnmi:gnmi_helper",
         "//lib/utils:json_utils",
@@ -114,7 +114,7 @@ cc_library(
     hdrs = ["sflow_breakout_test.h"],
     deps = [
         ":sflow_util",
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
         "//tests:thinkit_gnmi_interface_util",
@@ -141,8 +141,8 @@ cc_test(
     srcs = ["sflow_util_test.cc"],
     deps = [
         ":sflow_util",
-        "//gutil:status_matchers",
-        "//gutil:testing",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
         "//thinkit:mock_ssh_client",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_google_absl//absl/container:flat_hash_set",

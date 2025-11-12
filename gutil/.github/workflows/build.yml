@@ -1,0 +1,80 @@
+name: build
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run daily at midnight to ensure we catch regressions.
+    - cron: "0 0 * * *"
+  # Allow manual triggering of the workflow.
+  # https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/manually-running-a-workflow
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mount bazel cache
+        uses: actions/cache/restore@v4
+        with:
+          path: "~/.cache/bazel"
+          key: bazel-${{ hashFiles('*.bazel', '*.bazelrc') }}-${{ github.ref_name }}
+          restore-keys: |
+            bazel-${{hashFiles('*.bazel', '*.bazelrc') }}
+            bazel-
+
+      - name: Save start time
+        uses: josStorer/get-current-time@v2
+        id: start-time
+        with:
+          # Unix timestamp -- seconds since 1970.
+          format: X
+
+      - name: Build
+        run: bazel build --test_output=errors //...
+      - name: Test
+        run: bazel test --test_output=errors //...
+
+      - name: Save end time
+        # Always save the end time so we can calculate the build duration.
+        if: always()
+        uses: josStorer/get-current-time@v2
+        id: end-time
+        with:
+          # Unix timestamp -- seconds since 1970.
+          format: X
+
+      - name: Calculate build duration
+        # Always calculate the build duration so we can update the cache if needed.
+        if: always()
+        run: |
+          START=${{ steps.start-time.outputs.formattedTime }}
+          END=${{ steps.end-time.outputs.formattedTime }}
+          DURATION=$(( $END - $START ))
+          echo "duration=$DURATION" | tee "$GITHUB_ENV"
+
+
+      - name: Compress cache
+        # Always compress the cache so we can update the cache if needed.
+        if: always()
+        run: rm -rf $(bazel info repository_cache)
+
+      - name: Save bazel cache
+        uses: actions/cache/save@v4
+        # Only create a new cache entry if we're on the main branch or the build takes >5mins.
+        #
+        # NOTE: Even though `always()` evaluates to true, and `true && x == x`, the `always() &&`
+        # prefix is not redundant! The call to `always()` has a side effect, which is to override
+        # the default behavior of automagically canceling this step if a previous step failed.
+        # (Don't blame me, blame GitHub Actions!)
+        if: always() && (github.ref_name == 'main' || env.duration > 300)
+        with:
+          path: "~/.cache/bazel"
+          key: bazel-${{ hashFiles('*.bazel', '*.bazelrc') }}-${{ github.ref_name }}-${{ github.run_id }}

@@ -24,7 +24,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/string_encodings/safe.h"
 

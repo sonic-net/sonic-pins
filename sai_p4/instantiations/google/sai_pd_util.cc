@@ -13,7 +13,7 @@ absl::optional<std::string> TableEntryName(const sai::TableEntry& entry) {
   const google::protobuf::FieldDescriptor* field =
       entry.GetReflection()->GetOneofFieldDescriptor(entry, oneof);
   if (field == nullptr) return absl::nullopt;
-  return field->name();
+  return std::string(field->name());
 }
 
 absl::optional<std::string> TableName(const sai::TableEntry& entry) {

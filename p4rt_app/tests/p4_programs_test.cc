@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <cstdint>
+#include <nlohmann/json.hpp>
 #include <vector>
 
 #include "absl/strings/ascii.h"
@@ -19,7 +20,7 @@
 #include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
 #include "gtest/gtest.h"
-#include "gutil/status_matchers.h"
+#include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -29,7 +30,6 @@
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace {

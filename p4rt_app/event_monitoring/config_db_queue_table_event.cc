@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "swss/schema.h"
 
