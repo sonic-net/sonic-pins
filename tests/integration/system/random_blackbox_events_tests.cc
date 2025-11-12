@@ -146,6 +146,12 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
       auto p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, std::move(p4_info)));
+  absl::Cleanup clear_p4rt_entries = [&] {
+    absl::Status status = pdpi::ClearEntities(*p4rt_session);
+    if (!status.ok()) {
+      LOG(ERROR) << "Failed to cleanup table entries: " << status;
+    }
+  };
   {
     ScopedThread p4rt_fuzzer([&config,
                               &p4rt_session](const bool& time_to_exit) {

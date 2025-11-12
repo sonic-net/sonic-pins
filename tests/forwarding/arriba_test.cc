@@ -35,6 +35,8 @@ namespace pins_test {
 namespace {
 
 TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
+  testing::Test::RecordProperty("description", GetParam().description);
+
   ASSERT_OK_AND_ASSIGN(dvaas::MirrorTestbedConfigurator configured_testbed,
                        dvaas::MirrorTestbedConfigurator::Create(
                            &GetParam().mirror_testbed->GetMirrorTestbed()));
