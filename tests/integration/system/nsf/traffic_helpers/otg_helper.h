@@ -18,6 +18,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "artifacts/otg.pb.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 
@@ -25,7 +26,12 @@ namespace pins_test {
 
 class OtgHelper : public TrafficHelper {
  public:
-  OtgHelper(bool enable_linerate = false) : enable_linerate_(enable_linerate) {}
+  // If `enable_linerate` is true, the traffic will be sent at a fraction of the
+  // linerate, and `linerate_gbps` must be set to the correct speed for the
+  // traffic metrics to be correct.
+  explicit OtgHelper(bool enable_linerate = false, float linerate_gbps = 200.0f)
+      : enable_linerate_(enable_linerate), linerate_gbps_(linerate_gbps) {}
+
   // Configures the base settings for the flow:
   // - Packet size
   // - Transmission duration
@@ -43,6 +49,7 @@ class OtgHelper : public TrafficHelper {
 
 private:
   bool enable_linerate_;
+  float linerate_gbps_;
 };
 
 }  // namespace pins_test

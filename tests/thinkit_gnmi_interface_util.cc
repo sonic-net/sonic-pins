@@ -578,10 +578,21 @@ absl::StatusOr<absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>>
 GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                             const std::string& port,
                             absl::string_view breakout_mode) {
+  // Check port exists on the switch.
+  ASSIGN_OR_RETURN(
+      auto interface_to_oper_status_map,
+      GetInterfaceToOperStatusMapOverGnmi(*sut_gnmi_stub, absl::Seconds(60)));
+
   absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo> port_infos;
   ASSIGN_OR_RETURN(port_infos,
                    GetExpectedPortInfoForBreakoutMode(port, breakout_mode));
+  std::vector<std::string> skipped_ports;
   for (auto& [port_name, breakout_info] : port_infos) {
+    // Current port is not on switch, skip.
+    if (!interface_to_oper_status_map.contains(port_name)) {
+      skipped_ports.push_back(port_name);
+      continue;
+    }
     auto if_state_path = absl::StrCat("interfaces/interface[name=", port_name,
                                       "]/state/oper-status");
     auto resp_parse_str = "openconfig-interfaces:oper-status";
@@ -604,6 +615,9 @@ GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
              "port "
           << port_name);
     breakout_info.physical_channels = state_path_response;
+  }
+  for (const std::string& skipped_port : skipped_ports) {
+    port_infos.erase(skipped_port);
   }
   return port_infos;
 }
