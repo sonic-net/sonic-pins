@@ -173,8 +173,9 @@ public:
   // -----|--------|--------|--------|
   //  "C" | Reject | Reject |  Add   |
   // -----|--------|--------|--------|
-  virtual absl::Status AddPortTranslation(const std::string &port_name,
-                                          const std::string &port_id)
+  virtual absl::Status AddPortTranslation(const std::string& port_name,
+                                          const std::string& port_id,
+                                          bool update_dbs = true)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Removes a port translation. Returns an error for an empty port name.
@@ -218,11 +219,8 @@ public:
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // TODO: Move to warm boot state adaptor and add tests.
-  // In WarmBoot mode, poll and return OA Reconciliation status, timeout after
-  // 1min. If OA is RECONCILED/FAILED, exit loop early.
-  swss::WarmStart::WarmStartState
-  GetOrchAgentWarmStartReconcliationState() const;
+  grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
 protected:
   // Simple constructor that should only be used for testing purposes.
@@ -267,7 +265,8 @@ private:
   // Returns an error if the config is not provided, or if the existing
   // forwarding state cannot be preserved for the given config by the target.
   grpc::Status ReconcileAndCommitPipelineConfig(
-      const p4::v1::SetForwardingPipelineConfigRequest &request)
+      const p4::v1::SetForwardingPipelineConfigRequest& request,
+      bool commit_to_hardware = true)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Tries to save the forwarding config to a file. If the
@@ -287,6 +286,11 @@ private:
   // and calls into the sonic::StartReceive to spawn the receiver thread.
   ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
   StartReceive(bool use_genetlink);
+
+  // Enter critical state and write component state to DB.
+  // Caller should take server_state_lock_.
+  grpc::Status EnterCriticalState(const std::string& message)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Mutex for constraining actions to access and modify server state.
   absl::Mutex server_state_lock_;
@@ -350,7 +354,8 @@ private:
   later.
   // When the switch is in critical state the P4RT service shuould not accept
   // write requests, but can still handle reads.
-  swss::ComponentStateHelperInterface& component_state_;
+  swss::ComponentStateHelperInterface& component_state_
+      ABSL_GUARDED_BY(server_state_lock_);
   swss::SystemStateHelperInterface& system_state_;
 
   // Some controllers may want to use port names that include the

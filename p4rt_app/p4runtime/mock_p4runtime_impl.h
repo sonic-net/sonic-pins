@@ -62,7 +62,8 @@ public:
               (override));
 
   MOCK_METHOD(absl::Status, AddPortTranslation,
-              (const std::string &port_name, const std::string &port_id),
+              (const std::string& port_name, const std::string& port_id,
+               bool update_dbs),
               (override));
 
   MOCK_METHOD(absl::Status, RemovePortTranslation,
