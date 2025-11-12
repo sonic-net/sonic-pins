@@ -24,7 +24,7 @@ cc_library(
     testonly = True,
     hdrs = ["testbed.h"],
     deps = [
-        "//gutil:overload",
+        "//gutil/gutil:overload",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
         "//thinkit:mirror_testbed",

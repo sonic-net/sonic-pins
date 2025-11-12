@@ -26,7 +26,7 @@ cc_binary(
     ],
     deps = [
         ":test_util",
-        "//gutil:io",
+        "//gutil/gutil:io",
         "//p4_pdpi/internal:ordered_map",
         "//p4_symbolic/symbolic",
         "//p4_symbolic/symbolic:solver_state",
@@ -46,7 +46,7 @@ cc_library(
     srcs = ["z3_util.cc"],
     hdrs = ["z3_util.h"],
     deps = [
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4_pdpi/string_encodings:bit_string",
         "//p4_pdpi/string_encodings:hex_string",
         "@com_github_z3prover_z3//:api",
@@ -65,8 +65,8 @@ cc_library(
     srcs = ["test_util.cc"],
     hdrs = ["test_util.h"],
     deps = [
-        "//gutil:io",
-        "//gutil:proto",
+        "//gutil/gutil:io",
+        "//gutil/gutil:proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status:statusor",
@@ -79,7 +79,7 @@ cc_test(
     srcs = ["z3_util_test.cc"],
     deps = [
         ":z3_util",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4_pdpi/string_encodings:bit_string",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/numeric:int128",

@@ -39,10 +39,12 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
-#include "gutil/status_matchers.h" 
-#include "gutil/testing.h"
-#include "gutil/version.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
+#include "gutil/gutil/version.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -67,8 +69,6 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 

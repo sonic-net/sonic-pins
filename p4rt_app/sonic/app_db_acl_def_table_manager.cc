@@ -16,6 +16,7 @@
 
 #include <iterator>
 #include <list>
+#include <nlohmann/json.hpp>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -29,10 +30,9 @@
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"
-#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
 #include "swss/saiaclschema.h"
 #include "swss/table.h"

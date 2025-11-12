@@ -28,16 +28,14 @@
 #include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/proto_matchers.h"
-#include "gutil/status_matchers.h"
-#include "gutil/testing.h"
+#include "gutil/gutil/proto_matchers.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins {
 namespace {
