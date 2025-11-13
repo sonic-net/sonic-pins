@@ -1412,6 +1412,34 @@ TEST(AddNexthopRifNeighborEntriesTest,
                         )pb"))}));
 }
 
+TEST(AddNexthopRifNeighborEntriesTest, SkipMyMacProgramming) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddNexthopRifNeighborEntries(
+              "nexthop-1", "port-1",
+              NexthopRewriteOptions{.skip_my_mac_programming = true})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(),
+              UnorderedElementsAre(
+                  Partially(EqualsProto(R"pb(table_entry {
+                                               table_name: "neighbor_table"
+                                             })pb")),
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "nexthop_table"
+                             action { name: "set_ip_nexthop" }
+                           }
+                      )pb")),
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "router_interface_table"
+                             action { name: "unicast_set_port_and_src_mac" }
+                           })pb"))));
+}
+
 TEST(AddNexthopRifNeighborEntriesTest,
      SrcMacRewriteDisabledAndDstMacRewriteEnabled) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);

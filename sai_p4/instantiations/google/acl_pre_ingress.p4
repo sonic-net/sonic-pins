@@ -198,6 +198,10 @@ control acl_pre_ingress(in headers_t headers,
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    // Only allow IP field matches for IP packets.
+    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
+    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
 #if defined(SAI_INSTANTIATION_TOR) 
     // DSCP is only allowed on IP traffic.
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
@@ -225,6 +229,9 @@ control acl_pre_ingress(in headers_t headers,
       ip_protocol : ternary
           @id(4) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
+      local_metadata.l4_dst_port : ternary
+          @id(11) @name("l4_dst_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
 #if defined(SAI_INSTANTIATION_TOR) 
       headers.icmp.type : ternary
           @id(5) @name("icmpv6_type")

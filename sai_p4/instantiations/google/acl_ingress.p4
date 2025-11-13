@@ -709,9 +709,6 @@ control acl_ingress(in headers_t headers,
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
 #if defined(IP_MULTICAST_CAPABLE)
       local_metadata.route_hit : optional
-        // TODO: To accurately reflect the semantics, rename to
-        // `route_hit`, once this breaking name-change is supported on the
-        // controller side.
         @id(9) @name("ipmc_table_hit")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT);
 #endif
