@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "wbb.p4"
-  version: "3.2.6"
+  version: "4.0.0"
   arch: "v1model"
   organization: "Google"
 }
