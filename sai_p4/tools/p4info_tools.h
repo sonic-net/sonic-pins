@@ -16,7 +16,6 @@
 #define PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_
 
 #include "p4/config/v1/p4info.pb.h"
-#include "sai_p4/instantiations/google/instantiations.h"
 
 namespace sai {
 
@@ -24,19 +23,26 @@ namespace sai {
 // Returns true if any hash seed was set.
 bool SetSaiHashSeed(p4::config::v1::P4Info &p4info, uint32_t seed);
 
-// Modifies all action profiles to use the sum_of_members semantics and sets
-// their various sizes accordingly using the minimum guaranteed size library.
-// Returns true if any field was changed.
-bool ApplySumOfMembersSemanticsForActionProfiles(
-    p4::config::v1::P4Info& p4info);
+// Parameters for applying sum of weights WCMP capacity.
+struct SumOfWeightsCapacity {
+  int total_weight;
+  int max_group_size;
+};
 
-// Modifies all action profiles to use the sum_of_weights semantics and sets
-// their various sizes accordingly using the minimum guaranteed size library.
-// Since our ToRs generally have smaller guarantees, the `is_tor` boolean
-// accounts for that when getting the correct value from the library.
-// Returns true if any field was changed.
-bool ApplySumOfWeightsSemanticsForActionProfiles(
-    sai::Instantiation instantiation, p4::config::v1::P4Info& p4info);
+// Parameters for applying sum of members WCMP capacity.
+struct SumOfMembersCapacity {
+  int total_members;
+  int max_group_size;
+  int max_member_weight;
+};
+
+// Overrides the current WCMP capacity settings with the requested settings.
+// Returns true if the override was applied or if the existing P4Info matches
+// the overridden settings.
+bool OverrideWcmpCapacity(p4::config::v1::P4Info& p4_info,
+                          const SumOfMembersCapacity& capacity);
+bool OverrideWcmpCapacity(p4::config::v1::P4Info& p4_info,
+                          const SumOfWeightsCapacity& capacity);
 
 }  // namespace sai
 
