@@ -21,11 +21,11 @@
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
+#include "include/nlohmann/json.hpp"
 #include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/ir_builder.h"
-#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace sonic {

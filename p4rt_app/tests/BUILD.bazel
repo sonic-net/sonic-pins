@@ -192,11 +192,11 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_grpc_grpc//:grpc++_public_hdrs",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

@@ -30,9 +30,9 @@
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"
-#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
 #include "swss/saiaclschema.h"
 #include "swss/table.h"
