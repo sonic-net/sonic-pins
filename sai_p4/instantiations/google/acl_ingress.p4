@@ -707,9 +707,11 @@ control acl_ingress(in headers_t headers,
         @id(8) @name("vrf_id")
         @refers_to(vrf_table, vrf_id)
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
+#if defined(IP_MULTICAST_CAPABLE)
       local_metadata.route_hit : optional
         @id(9) @name("ipmc_table_hit")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT);
+#endif
     }
     actions = {
 // We don't usually restrict actions to instantiations because they don't

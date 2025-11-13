@@ -27,12 +27,12 @@ cc_library(
         "//p4_pdpi/utils:annotation_parser",
         "//p4rt_app/utils:table_utility",
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -47,10 +47,10 @@ cc_test(
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/utils:ir_builder",
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -123,11 +123,11 @@ cc_library(
         "//p4_pdpi/utils:ir",
         "//p4rt_app/utils:table_utility",
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -457,6 +457,7 @@ cc_library(
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -496,6 +497,7 @@ cc_library(
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/utils:annotation_parser",
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -525,6 +527,7 @@ cc_test(
         "//p4rt_app/sonic/adapters:fake_table_adapter",
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
@@ -532,7 +535,6 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
