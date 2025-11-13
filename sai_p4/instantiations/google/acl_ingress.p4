@@ -527,6 +527,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_COUNTING_TABLE_ID)
   @sai_acl_priority(7)
   @sai_acl(INGRESS)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Only allow IP field matches for IP packets.
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
@@ -706,12 +707,14 @@ control acl_ingress(in headers_t headers,
         @id(8) @name("vrf_id")
         @refers_to(vrf_table, vrf_id)
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
+#if defined(IP_MULTICAST_CAPABLE)
       local_metadata.route_hit : optional
         // TODO: To accurately reflect the semantics, rename to
         // `route_hit`, once this breaking name-change is supported on the
         // controller side.
         @id(9) @name("ipmc_table_hit")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT);
+#endif
     }
     actions = {
 // We don't usually restrict actions to instantiations because they don't
@@ -728,21 +731,24 @@ control acl_ingress(in headers_t headers,
 // if these actions are visible in instantiations that don't have
 // mirror_session_table, reference entries generation in IrP4Info and
 // reference analysis will fail.
-      @proto_id(4) acl_forward();
 #if defined(MIRROR_CAPABLE)
       @proto_id(1) acl_mirror();
 #endif
-
-#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
-      @proto_id(2) redirect_to_nexthop();
-#endif
-      @proto_id(3) redirect_to_ipmc_group();
-#if defined(ACL_REDIRECT_TO_PORT_CAPABLE)
-      @proto_id(5) redirect_to_port();
-#endif
 #if defined(MIRROR_CAPABLE) && defined(ACL_REDIRECT_TO_PORT_CAPABLE)
-      @proto_id(6) acl_mirror_and_redirect_to_port();
+      @proto_id(2) acl_mirror_and_redirect_to_port();
 #endif
+#if defined(ACL_REDIRECT_TO_PORT_CAPABLE)
+      @proto_id(6) redirect_to_port();
+#endif
+      @proto_id(3) acl_forward();
+#if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
+      @proto_id(4) redirect_to_nexthop();
+#endif
+#if defined(IP_MULTICAST_CAPABLE)
+      @proto_id(5) redirect_to_ipmc_group();
+      @proto_id(7) redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy();
+#endif
+      @proto_id(8) set_cpu_queue_and_cancel_copy();
       @defaultonly NoAction;
     }
     const default_action = NoAction;

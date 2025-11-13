@@ -142,6 +142,7 @@ tables {
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@sai_acl_priority(5)"
     annotations: "@entry_restriction(\"\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n\n\n\n\n\n\n\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n\n  \")"
+    annotations: "@nonessential_for_upgrade"
     annotations: "@entry_restriction(\"\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n\n    // DSCP is only allowed on IP traffic.\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow icmp_type matches for ICMP packets\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n\n\n\n\n  \")"
   }
   match_fields {
@@ -914,6 +915,7 @@ tables {
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@sai_acl_priority(7)"
     annotations: "@sai_acl(INGRESS)"
+    annotations: "@nonessential_for_upgrade"
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
@@ -1216,12 +1218,12 @@ tables {
     match_type: EXACT
   }
   action_refs {
-    id: 16777241
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
     id: 16777247
     annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777241
+    annotations: "@proto_id(1)"
   }
   action_refs {
     id: 16777248
@@ -1518,28 +1520,36 @@ tables {
     match_type: OPTIONAL
   }
   action_refs {
-    id: 16777475
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777476
     annotations: "@proto_id(1)"
   }
   action_refs {
-    id: 16777490
+    id: 16777495
     annotations: "@proto_id(2)"
   }
   action_refs {
-    id: 16777491
+    id: 16777494
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
+    id: 16777475
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777494
+    id: 16777490
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
+    id: 16777491
     annotations: "@proto_id(5)"
   }
   action_refs {
-    id: 16777495
-    annotations: "@proto_id(6)"
+    id: 16777498
+    annotations: "@proto_id(7)"
+  }
+  action_refs {
+    id: 16777499
+    annotations: "@proto_id(8)"
   }
   action_refs {
     id: 21257015
@@ -2662,6 +2672,22 @@ actions {
 }
 actions {
   preamble {
+    id: 16777499
+    name: "ingress.acl_ingress.set_cpu_queue_and_cancel_copy"
+    alias: "set_cpu_queue_and_cancel_copy"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
+  }
+  params {
+    id: 1
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "cpu_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
@@ -2682,6 +2708,31 @@ actions {
     annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
+  }
+}
+actions {
+  preamble {
+    id: 16777498
+    name: "ingress.acl_ingress.redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
+    alias: "redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+    bitwidth: 16
+  }
+  params {
+    id: 2
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "cpu_queue_t"
+    }
   }
 }
 actions {
