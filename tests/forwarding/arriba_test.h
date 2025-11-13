@@ -16,6 +16,7 @@
 #define PINS_TESTS_FORWARDING_ARRIBA_TEST_H_
 
 #include <memory>
+#include <string>
 
 #include "dvaas/arriba_test_vector_validation.h"
 #include "dvaas/test_vector.pb.h"
@@ -32,6 +33,9 @@ struct ArribaTestParams {
   // the SUT in the given testbed.
   dvaas::ArribaTestVector arriba_test_vector;
   dvaas::ArribaTestVectorValidationParams validation_params;
+  // If true, waits for all enabled ports to be up on SUT and control switch.
+  bool wait_for_all_enabled_interfaces_to_be_up = true;
+  const std::string description;
 };
 
 // An ArribaTest validates the given testbed against the given ArribaTestVector.

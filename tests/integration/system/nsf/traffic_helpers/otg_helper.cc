@@ -58,6 +58,19 @@ struct TrafficMetrics {
   absl::Duration outage_duration;
 };
 
+// Gets the default transmission rate for flows.
+otg::FlowRate GetDefaultTransmissionRate(bool enable_linerate) {
+  otg::FlowRate flow_rate;
+  if (enable_linerate) {
+    flow_rate.set_choice(otg::FlowRate::Choice::percentage);
+    flow_rate.set_percentage(kFlowRateAtLinerate / 2);
+  } else {
+    flow_rate.set_choice(otg::FlowRate::Choice::pps);
+    flow_rate.set_pps(kDefaultPacketsPerSecond);
+  }
+  return flow_rate;
+}
+
 absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
                           const otg::SetConfigRequest& request,
                           otg::SetConfigResponse& response) {
@@ -67,7 +80,7 @@ absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
 }
 
 TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
-                                 bool enable_linerate) {
+                                 bool enable_linerate, float linerate_gbps) {
   TrafficMetrics metrics;
   metrics.frames_dropped = flow_metric.frames_tx() - flow_metric.frames_rx();
   metrics.bytes_dropped = flow_metric.bytes_tx() - flow_metric.bytes_rx();
@@ -78,14 +91,18 @@ TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
 
   const double outage_fraction = static_cast<double>(metrics.frames_dropped) /
                                  static_cast<double>(flow_metric.frames_tx());
-  const double total_duration_ns =
-      flow_metric.timestamps().last_timestamp_ns() -
-      flow_metric.timestamps().first_timestamp_ns();
-  double outage_duration_ns = total_duration_ns * outage_fraction;
-  if (enable_linerate) {
-    outage_duration_ns *= 1e8;
-  }
-  metrics.outage_duration = absl::Nanoseconds(outage_duration_ns);
+  const absl::Duration total_duration = [=, &flow_metric] {
+    otg::FlowRate flow_rate = GetDefaultTransmissionRate(enable_linerate);
+    if (flow_rate.choice() == otg::FlowRate::Choice::pps) {
+      return absl::Seconds(flow_metric.frames_tx() / flow_rate.pps());
+    } else {
+      double linerate_bytes_per_second = linerate_gbps * 1e9 / 8.0;
+      double actual_bytes_per_second =
+          linerate_bytes_per_second * flow_rate.percentage() / 100.0;
+      return absl::Seconds(flow_metric.bytes_tx() / actual_bytes_per_second);
+    }
+  }();
+  metrics.outage_duration = total_duration * outage_fraction;
 
   return metrics;
 }
@@ -108,13 +125,7 @@ void OtgHelper::ConfigureFlowBaseSettings(::otg::Flow* flow,
   flow->mutable_duration()->set_choice(otg::FlowDuration::Choice::continuous);
 
   // Set transmission rate.
-  if (enable_linerate_) {
-    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
-    flow->mutable_rate()->set_percentage(kFlowRateAtLinerate / 2);
-  } else {
-    flow->mutable_rate()->set_choice(otg::FlowRate::Choice::pps);
-    flow->mutable_rate()->set_pps(kDefaultPacketsPerSecond);
-  }
+  *flow->mutable_rate() = GetDefaultTransmissionRate(enable_linerate_);
 
   // Set capture metrics.
   flow->mutable_metrics()->set_enable(true);
@@ -320,9 +331,8 @@ absl::Status OtgHelper::ValidateTraffic(const Testbed &testbed,
     }
 
     TrafficMetrics traffic_metrics =
-        GetTrafficMetrics(flow_metric, enable_linerate_);
-    if (traffic_metrics.outage_duration <= max_acceptable_outage)
-      continue;
+        GetTrafficMetrics(flow_metric, enable_linerate_, linerate_gbps_);
+    if (traffic_metrics.outage_duration <= max_acceptable_outage) continue;
 
     errors.push_back(absl::StrCat(
         "Flow name:\t\t\t", flow_metric.name(), "\nTraffic outage:\t\t\t",

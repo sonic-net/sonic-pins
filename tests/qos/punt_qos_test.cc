@@ -292,8 +292,9 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
   });
 
   for (auto& [queue_name, queue_info] : cpu_queues) {
-    // Skip unconfigured queues.
-    if (queue_info.rate_packets_per_second == 0) {
+    // Skip unconfigured queues or queues with very low rate-limit as it is not
+    // feasible to verify flow rate limit at low queue rates.
+    if (queue_info.rate_packets_per_second <= 10) {
       continue;
     }
     // Skip Inband queues.

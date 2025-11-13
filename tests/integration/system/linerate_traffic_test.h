@@ -34,6 +34,7 @@ namespace pins_test {
 struct LineRateTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
   p4::config::v1::P4Info p4info;
+  bool log_counters = true;
 };
 
 class LineRateTrafficTest : public testing::TestWithParam<LineRateTestParams> {

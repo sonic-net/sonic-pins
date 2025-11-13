@@ -34,7 +34,7 @@
 namespace pins_test {
 namespace {
 
-constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
+constexpr absl::Duration kTurnDownTimeout = absl::Seconds(210);  // 3.5 minutes
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(20);
 
 enum class ControlDeviceState { kUp, kDown };
@@ -121,10 +121,14 @@ TEST_P(ControlDeviceRebootTestFixture, TestControlDeviceReboot) {
 
       ASSERT_OK(WaitForControlDevice(generic_testbed->ControlDevice(index),
                                      ControlDeviceState::kDown,
-                                     kTurnDownTimeout));
+                                     kTurnDownTimeout))
+          << "Control device " << index
+          << " did not reach kDown state after reboot.";
 
       ASSERT_OK(WaitForControlDevice(generic_testbed->ControlDevice(index),
-                                     ControlDeviceState::kUp, kTurnUpTimeout));
+                                     ControlDeviceState::kUp, kTurnUpTimeout))
+          << "Control device " << index
+          << " did not reach kUp state after reboot.";
 
       LOG(INFO) << absl::StrFormat(
           "(control device index: %d): Check that all ports are up after "

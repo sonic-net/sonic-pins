@@ -55,7 +55,8 @@ enum class PacketCaptureTestPacketType {
   kIcmpv4,
   kIcmpv6,
   kArpRequest,
-  kArpResponse
+  kArpResponse,
+  kBgp
 };
 
 inline std::string PacketCaptureTestPacketTypeToString(
@@ -69,6 +70,8 @@ inline std::string PacketCaptureTestPacketTypeToString(
       return "ARP_REQUEST";
     case PacketCaptureTestPacketType::kArpResponse:
       return "ARP_RESPONSE";
+    case PacketCaptureTestPacketType::kBgp:
+      return "BGP";
   }
   return "none";
 }

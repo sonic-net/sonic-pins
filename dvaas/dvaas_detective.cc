@@ -15,6 +15,8 @@
 #include "dvaas/dvaas_detective.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <variant>
@@ -24,6 +26,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -43,18 +46,6 @@
 namespace dvaas {
 namespace dvaas_internal {
 
-// In order to train our model, we must specify a label. For the most part, a
-// label is just another categorical feature, except the model classifies data
-// based on that feature (e.g. if categorical feature F can be X,Y or Z and F is
-// the label, then a data example will be classified as either X, Y, or Z).
-//
-// Our code mostly treats the label (i.e. test result: pass/fail) like any
-// other feature, but with a fixed feature name and possible values defined by
-// the constants below.
-constexpr absl::string_view kTestResultFeatureName = "test result";
-constexpr absl::string_view kPassTestResultFeatureValue = "pass";
-constexpr absl::string_view kFailTestResultFeatureValue = "fail";
-
 namespace ydf = ::yggdrasil_decision_forests;
 using ydf::model::random_forest::RandomForestModel;
 
@@ -62,15 +53,40 @@ namespace {
 
 using ydf::dataset::proto::DataSpecification;
 
+// In order to train our model, we must specify a label. For the most part, a
+// label is just another categorical feature, except the model classifies data
+// based on that feature. For example:
+//  - Categorical feature F can have value X, Y, or Z
+//  - Feature F is designated as the label
+//  - Therefore, the model classifies data as either X, Y, or Z
+// Our code mostly treats the label like any other feature, but with a fixed
+// feature name and values defined by the constants below.
+constexpr absl::string_view kTestResultFeatureName = "test result";
+constexpr absl::string_view kPassTestResultFeatureValue = "pass";
+constexpr absl::string_view kFailTestResultFeatureValue = "fail";
+
+// Feature names used by DVaaS Detective.
+constexpr absl::string_view kExpectedOutputPacketsFeatureName =
+    "# expected output packets";
+constexpr absl::string_view kExpectedPuntedPacketsFeatureName =
+    "# expected punted packets";
+constexpr absl::string_view kAcceptableBehaviorsFeatureName =
+    "# acceptable switch behaviors according to P4 simulation";
+
 std::string DetectiveClusterToString(const DetectiveCluster& cluster,
                                      float total_predicted_outcomes) {
   bool passed = cluster.predicted_outcome_is_pass();
-  return absl::Substitute(
-      "* $0 -> $1\n"
-      "  * accuracy: $2%, with $3 exceptions that $4 instead\n"
-      "  * coverage: $5%, accounting for $6/$7 $8 test vectors\n",
-      cluster.defining_property(), passed ? "pass" : "fail",
-      cluster.accuracy_of_predicted_outcome() * 100,
+  return absl::StrFormat(
+      "* %s -> %s\n"
+      "  * accuracy: %.0f%%, %.0f out of %.0f test vectors that match the "
+      "conditions %s (remaining %.0f %s instead)\n"
+      "  * coverage: %.0f%%, accounting for %.0f out of %.0f %s test vectors\n",
+      cluster.defining_property().empty() ? "<no conditions>"
+                                          : cluster.defining_property(),
+      passed ? "pass" : "fail", cluster.accuracy_of_predicted_outcome() * 100,
+      passed ? cluster.passing_tests() : cluster.failing_tests(),
+      cluster.passing_tests() + cluster.failing_tests(),
+      passed ? "pass" : "fail",
       passed ? cluster.failing_tests() : cluster.passing_tests(),
       passed ? "fail" : "pass", cluster.coverage_for_predicted_outcome() * 100,
       passed ? cluster.passing_tests() : cluster.failing_tests(),
@@ -207,6 +223,15 @@ std::string FeatureValueToString(const FeatureValue& value) {
       value);
 }
 
+std::vector<absl::string_view> GetListOfFeatureNames() {
+  return {
+      kExpectedOutputPacketsFeatureName,
+      kExpectedPuntedPacketsFeatureName,
+      kAcceptableBehaviorsFeatureName,
+      kTestResultFeatureName,
+  };
+}
+
 absl::flat_hash_map<std::string, FeatureValue> TestOutcomeToFeatureMap(
     const PacketTestOutcome& test_outcome) {
   absl::flat_hash_map<std::string, FeatureValue> result;
@@ -224,21 +249,49 @@ absl::flat_hash_map<std::string, FeatureValue> TestOutcomeToFeatureMap(
       num_expected_packet_ins =
           std::max(num_expected_packet_ins, output.packet_ins_size());
     }
-    result["# expected output packets"] =
+    result[kExpectedOutputPacketsFeatureName] =
         static_cast<float>(num_expected_output_packets);
-    result["# expected punted packets"] =
+    result[kExpectedPuntedPacketsFeatureName] =
         static_cast<float>(num_expected_packet_ins);
   }
 
-  result["# acceptable behaviors according to P4 simulation"] =
-      static_cast<float>(
-          test_outcome.test_run().test_vector().acceptable_outputs_size());
+  result[kAcceptableBehaviorsFeatureName] = static_cast<float>(
+      test_outcome.test_run().test_vector().acceptable_outputs_size());
   result[kTestResultFeatureName] =
       test_outcome.test_result().has_failure()
           ? std::string(kFailTestResultFeatureValue)
           : std::string(kPassTestResultFeatureValue);
 
   return result;
+}
+
+absl::StatusOr<std::string> WriteTempCsvFileFromPacketTestOutcomes(
+    const PacketTestOutcomes& test_outcomes) {
+  // Create CSV rows.
+  std::vector<absl::string_view> ordered_feature_names =
+      GetListOfFeatureNames();
+  std::vector<std::string> csv_rows;
+  csv_rows.reserve(1 + test_outcomes.outcomes_size());
+  csv_rows.push_back(absl::StrJoin(ordered_feature_names, ","));
+  for (const auto& test_outcome : test_outcomes.outcomes()) {
+    absl::flat_hash_map<std::string, FeatureValue> feature_map =
+        TestOutcomeToFeatureMap(test_outcome);
+    std::vector<std::string> ordered_feature_values;
+    ordered_feature_values.reserve(ordered_feature_names.size());
+    for (const auto& feature_name : ordered_feature_names) {
+      ordered_feature_values.push_back(
+          FeatureValueToString(feature_map[feature_name]));
+    }
+    csv_rows.push_back(absl::StrJoin(ordered_feature_values, ","));
+  }
+
+  // Write CSV file.
+  char* tmp_file = std::tmpnam(nullptr);
+  if (tmp_file == nullptr) {
+    return absl::InternalError("Failed to create temporary file.");
+  }
+  std::ofstream(tmp_file) << absl::StrJoin(csv_rows, "\n");
+  return tmp_file;
 }
 
 absl::StatusOr<DetectiveExplanation> ExtractExplanationFromModel(
