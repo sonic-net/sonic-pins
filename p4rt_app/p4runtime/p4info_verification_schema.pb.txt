@@ -215,6 +215,18 @@ tables {
   actions { name: "no_action" }
 }
 tables {
+  name: "vlan_table"
+  match_fields { name: "vlan_id" format: HEX_STRING type: EXACT bitwidth: 12 }
+  actions { name: "no_action" }
+}
+tables {
+  name: "vlan_membership_table"
+  match_fields { name: "vlan_id" format: HEX_STRING type: EXACT bitwidth: 12 }
+  match_fields { name: "port" format: STRING type: EXACT }
+  actions { name: "make_tagged_member" }
+  actions { name: "make_untagged_member" }
+}
+tables {
   name: "wcmp_group_table"
   match_fields { name: "wcmp_group_id" format: STRING type: EXACT }
   actions {
