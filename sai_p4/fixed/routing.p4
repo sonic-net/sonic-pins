@@ -346,11 +346,14 @@ control routing_resolution(in headers_t headers,
     size = NEIGHBOR_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
-  // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_SUB_PORT, and
-  // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
+  // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_SUB_PORT,
+  // and SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
   // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS, and
   // SAI_ROUTER_INTERFACE_ATTR_OUTER_VLAN_ID.
-  @id(ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
+  // Sets SAI_ROUTER_INTERFACE_ATTR_MY_MAC to a SAI_OBJECT_TYPE_MY_MAC, thus
+  // preventing the implicit creation of a MY_MAC entry in SAI (l3_admit_table
+  // at P4).
+  @id(ROUTING_UNICAST_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
   // TODO: Remove @unsupported when the switch supports this
   // action.
   @unsupported
@@ -358,7 +361,7 @@ control routing_resolution(in headers_t headers,
     // Disallow reserved VLAN IDs with implementation-defined semantics.
     vlan_id != 0 && vlan_id != 4095"
   )
-  action set_port_and_src_mac_and_vlan_id(@id(1) port_id_t port,
+  action unicast_set_port_and_src_mac_and_vlan_id(@id(1) port_id_t port,
                                           @id(2) @format(MAC_ADDRESS)
                                           ethernet_addr_t src_mac,
                                           @id(3) vlan_id_t vlan_id) {
@@ -378,7 +381,7 @@ control routing_resolution(in headers_t headers,
   action set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
-    set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
+    unicast_set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
   }
 
   // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_PORT, and
@@ -393,7 +396,7 @@ control routing_resolution(in headers_t headers,
   action unicast_set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
-    set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
+    unicast_set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
@@ -406,7 +409,7 @@ control routing_resolution(in headers_t headers,
     // TODO: Remove once no longer in use on our switches.
     actions = {
       @proto_id(1) set_port_and_src_mac;
-      @proto_id(2) set_port_and_src_mac_and_vlan_id;
+      @proto_id(2) unicast_set_port_and_src_mac_and_vlan_id;
       @proto_id(3) unicast_set_port_and_src_mac;
       @defaultonly NoAction;
     }

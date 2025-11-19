@@ -14,7 +14,6 @@
 
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
-#include <algorithm>
 #include <bitset>
 #include <optional>
 #include <vector>

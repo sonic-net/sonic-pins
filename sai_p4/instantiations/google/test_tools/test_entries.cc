@@ -86,8 +86,9 @@ sai::TableEntry MakeRouterInterfaceTableEntry(
   rif_entry.mutable_match()->set_router_interface_id(
       params.router_interface_id);
   if (params.vlan_id.has_value()) {
-    sai::SetPortAndSrcMacAndVlanIdAction& action =
-        *rif_entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
+    sai::UnicastSetPortAndSrcMacAndVlanIdAction& action =
+        *rif_entry.mutable_action()
+             ->mutable_unicast_set_port_and_src_mac_and_vlan_id();
     action.set_port(params.egress_port);
     action.set_src_mac(params.src_mac.ToString());
     action.set_vlan_id(params.vlan_id.value());
@@ -200,18 +201,30 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
       gutil::Version version_uses_route_hit_acl_qualifier_name,
       gutil::ParseVersion(
           SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME));
+  ASSIGN_OR_RETURN(
+      gutil::Version kVersionUsesUnicastSetPortAndSrcMacAndVlanAction,
+      gutil::ParseVersion(
+          SAI_P4_PKGINFO_VERSION_USES_UNICAST_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION));  // NOLINT
 
   // TODO: Version-based workarounds. Use Babel in the future.
   for (auto& ir_entity : *ir_entities.mutable_entities()) {
-    if (current_version < version_uses_route_hit_acl_qualifier_name) {
-      if (ir_entity.table_entry().table_name() !=
-          "acl_ingress_mirror_and_redirect_table")
-        continue;
+    if (current_version < version_uses_route_hit_acl_qualifier_name &&
+        ir_entity.table_entry().table_name() ==
+            "acl_ingress_mirror_and_redirect_table") {
       for (auto& match : *ir_entity.mutable_table_entry()->mutable_matches()) {
         if (match.name() == "route_hit") {
           match.set_name("ipmc_table_hit");
         }
       }
+    }
+
+    // NOTE: A table entry can have an action or action set, but this action is
+    // not used in action sets so no need to check entries with action sets.
+    if (current_version < kVersionUsesUnicastSetPortAndSrcMacAndVlanAction &&
+        ir_entity.table_entry().action().name() ==
+            "unicast_set_port_and_src_mac_and_vlan_id") {
+      ir_entity.mutable_table_entry()->mutable_action()->set_name(
+          "set_port_and_src_mac_and_vlan_id");
     }
   }
   return ir_entities;

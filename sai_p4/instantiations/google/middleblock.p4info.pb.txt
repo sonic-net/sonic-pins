@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "middleblock.p4"
-  version: "4.0.0"
+  version: "5.0.0"
   arch: "v1model"
   organization: "Google"
   platform_properties {
@@ -1638,8 +1638,8 @@ actions {
 actions {
   preamble {
     id: 16777243
-    name: "ingress.routing_resolution.set_port_and_src_mac_and_vlan_id"
-    alias: "set_port_and_src_mac_and_vlan_id"
+    name: "ingress.routing_resolution.unicast_set_port_and_src_mac_and_vlan_id"
+    alias: "unicast_set_port_and_src_mac_and_vlan_id"
     annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
