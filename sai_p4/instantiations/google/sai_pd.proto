@@ -366,6 +366,9 @@ message DisableEgressVlanChecksTableEntry {
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
 //   ether_type != 0x0800 && ether_type != 0x86dd;
+// ## Forbid match on ethertype if is_ip* is set.
+//   (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) ->
+//   ether_type::mask == 0;
 // ## Only allow IP field matches for IP packets.
 //   dst_ip::mask != 0 -> is_ipv4 == 1;
 //   src_ip::mask != 0 -> is_ipv4 == 1;
@@ -525,6 +528,10 @@ message AclWbbIngressTableEntry {
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
 //   ether_type != 0x0800 && ether_type != 0x86dd;
+// ## Forbid match on ethertype if is_ip* is set.
+//   (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) ->
+//   ether_type::mask == 0; dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 ||
+//   is_ipv6 == 1);
 //   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Only allow IP field matches for IP packets.
 // ## TODO: Enable once p4-constraints bug is fixed.
@@ -632,6 +639,9 @@ message AclPreIngressMetadataTableEntry {
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
 //   ether_type != 0x0800 && ether_type != 0x86dd;
+// ## Forbid match on ethertype if is_ip* is set.
+//   (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) ->
+//   ether_type::mask == 0;
 // ## Only allow IP field matches for IP packets.
 //   ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 //   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
@@ -760,6 +770,14 @@ message AclIngressCountingTableEntry {
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
 //   ether_type != 0x0800 && ether_type != 0x86dd;
+//   ether_type != 0x0800 && ether_type != 0x86dd;" "(is_ip::mask != 0 ||
+//   is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;"
+//   "dst_ip::mask != 0 -> is_ipv4 == 1; src_ip::mask != 0 -> is_ipv4 == 1;
+//   src_ipv6::mask != 0 -> is_ipv6 == 1;" "is_ip::mask != 0 -> (is_ipv4::mask
+//   == 0 && is_ipv6::mask == 0); is_ipv4::mask != 0 -> (is_ip::mask == 0 &&
+//   is_ipv6::mask == 0); is_ipv6::mask != 0 -> (is_ip::mask == 0 &&
+//   is_ipv4::mask == 0);" "is_ipv4::mask != 0 -> (is_ipv4 == 1); is_ipv6::mask
+//   != 0 -> (is_ipv6 == 1);
 // ## Only allow IP field matches for IP packets.
 //   dst_ip::mask != 0 -> is_ipv4 == 1;
 //   src_ip::mask != 0 -> is_ipv4 == 1;
