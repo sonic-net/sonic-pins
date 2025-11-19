@@ -1,0 +1,256 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package packetlib;
+
+// Describes a network packet.
+message Packet {
+  // Headers in order, starting with outermost header. Can be empty.
+  repeated Header headers = 1;
+  // Arbitrary sequence of raw, uninterpreted bytes.
+  bytes payload = 2;
+  // Explanation why parsing has stopped early due to a feature that is not
+  // supported. Describes a problem with the first set of bytes in `payload`.
+  // Only used in the output of parsing functions, and is ignored during
+  // serialization.
+  string reason_not_fully_parsed = 3;
+  // Explanation why the parsed set of headers is not valid (e.g., invalid
+  // checksum). Only covers `headers`, not the `payload`.
+  // Only used in the output of parsing functions, and is ignored during
+  // serialization.
+  repeated string reasons_invalid = 4;
+}
+
+// Multiple packets.
+message Packets {
+  repeated Packet packets = 1;
+}
+
+// Describes a network packet header. This is not an exhaustive list of headers,
+// and not every header may support all fields available for that particular
+// header (e.g. optional fields may not be supported).
+//
+// Individual header fields are named roughly according to what the
+// corresponding Wikipedia article names the fields, and fields are ordered
+// based on the order of the fields in the packet.
+//
+// The header fields use the format from PDPI's ir.proto, i.e.
+// "00:11:ab:cd:ef:22" for  MAC addresses, "10.0.0.2" or
+// "fe80::21a:11ff:fe17:5f80" for IP addresses, and hex strings such as "0x0800"
+// for most other fields. This allows us to distinguish the absence of fields
+// even though we use proto3, since the empty string is never a valid value.
+message Header {
+  oneof header {
+    EthernetHeader ethernet_header = 1;
+    Ipv4Header ipv4_header = 2;
+    Ipv6Header ipv6_header = 3;
+    UdpHeader udp_header = 4;
+    TcpHeader tcp_header = 5;
+    ArpHeader arp_header = 6;
+    IcmpHeader icmp_header = 7;
+    VlanHeader vlan_header = 8;
+    GreHeader gre_header = 9;
+    SaiP4BMv2PacketInHeader sai_p4_bmv2_packet_in_header = 10;
+    IpfixHeader ipfix_header = 11;
+    PsampHeader psamp_header = 12;
+    PspHeader psp_header = 14;
+    HopByHopOptionsHeader hop_by_hop_options_header = 16;
+  }
+}
+
+// An ethernet header.
+// Only a handful of ethertypes are supported.
+message EthernetHeader {
+  string ethernet_destination = 1;  // Format::MAC
+  string ethernet_source = 2;       // Format::MAC
+  string ethertype = 3;             // 16 bits
+}
+
+// A VLAN header.
+// Only a handful of ethertypes are supported.
+message VlanHeader {
+  string priority_code_point = 1;      // 3 bits
+  string drop_eligible_indicator = 2;  // 1 bit
+  string vlan_identifier = 3;          // 12 bits
+  string ethertype = 4;                // 16 bits
+}
+
+// An ARP header.
+// It is assumed to be used with Ethernet and IPv4.
+message ArpHeader {
+  string hardware_type = 1;  // 16 bits (computed field, constant 1 (Ethernet))
+  string protocol_type = 2;  // 16 bits (computed field, constant 0x800 (IPv4))
+  string hardware_length = 3;          // 8 bits (computed field, constant 6)
+  string protocol_length = 4;          // 8 bits (computed field, constant 4)
+  string operation = 5;                // 16 bits
+  string sender_hardware_address = 6;  // Format::MAC
+  string sender_protocol_address = 7;  // Format::IPV4
+  string target_hardware_address = 8;  // Format::MAC
+  string target_protocol_address = 9;  // Format::IPV4
+}
+
+// An IPv4 header.
+message Ipv4Header {
+  string version = 1;            //  4 bits (computed field, constant 4)
+  string ihl = 2;                //  4 bits (computed field)
+  string dscp = 3;               //  6 bits
+  string ecn = 4;                //  2 bits
+  string total_length = 5;       // 16 bits (computed field)
+  string identification = 6;     // 16 bits
+  string flags = 7;              //  3 bits
+  string fragment_offset = 8;    // 13 bits
+  string ttl = 9;                //  8 bits
+  string protocol = 10;          //  8 bits
+  string checksum = 11;          // 16 bits (computed field)
+  string ipv4_source = 12;       // Format::IPV4
+  string ipv4_destination = 13;  // Format::IPV4
+  // Empty string when IHL = 5. Sequence of (IHL - 5) uninterpreted 32-bit words
+  // in hex format when IHL > 5. Includes the options, but may contain
+  // additional trailing bits so as to match in length what is specified by IHL.
+  string uninterpreted_options = 14;
+}
+
+// An IPv6 header.
+message Ipv6Header {
+  string version = 1;           //  4 bits (computed field, constant 6)
+  string dscp = 2;              //  6 bits
+  string ecn = 3;               //  2 bits
+  string flow_label = 4;        // 20 bits
+  string payload_length = 5;    // 16 bits (computed field)
+  string next_header = 6;       // 8 bits
+  string hop_limit = 7;         // 8 bits
+  string ipv6_source = 8;       // Format::IPV6
+  string ipv6_destination = 9;  // Format::IPV6
+}
+
+// An IPv6 hop-by-hop options extension header
+// (https://datatracker.ietf.org/doc/html/rfc2460#section-4.3).
+message HopByHopOptionsHeader {
+  string next_header = 1;              // 8 bits
+  string header_extension_length = 2;  // 8 bits
+  string options_and_padding = 3;      // 48 bits
+}
+
+// An ICMP header.
+message IcmpHeader {
+  string type = 1;            // 8 bits
+  string code = 2;            // 8 bits
+  string checksum = 3;        // 16 bits (computed field)
+  string rest_of_header = 4;  // 32 bits
+}
+
+// A UDP header.
+message UdpHeader {
+  string source_port = 1;       // 16 bits
+  string destination_port = 2;  // 16 bits
+  string length = 3;            // 16 bits (computed field)
+  string checksum = 4;          // 16 bits (computed field)
+}
+
+// A TCP header.
+message TcpHeader {
+  string source_port = 1;             // 16 bits
+  string destination_port = 2;        // 16 bits
+  string sequence_number = 3;         // 32 bits
+  string acknowledgement_number = 4;  // 32 bits
+  string data_offset = 5;             // 4 bits (computed field)
+  string rest_of_header = 6;          // 60 bits.
+  // Empty string when data_offset = 5. Sequence of (data_offset - 5)
+  // uninterpreted 32-bit words in hex format when data_offset > 5.
+  string uninterpreted_options = 7;
+}
+
+// Standard GRE packet header (RFC 2784).
+message GreHeader {
+  // If the checksum_present bit is set, then the checksum and the reserved1
+  // fields are present and the checksum field contains valid information.
+  string checksum_present = 1;  // 1 bit
+  string reserved0 = 2;         // 12 bits (computed field, constant 0)
+  // The version field must contain value zero (RFC 2784).
+  string version = 3;  // 3 bits (computed field, constant 0)
+  // Indicates the EtherType of the encapsulated payload.
+  string protocol_type = 4;  // 16 bits
+  // Empty string if checksum_bit is not set.
+  string checksum = 5;  // 16 bits (computed field, optional)
+  // Empty string if checksum_bit is not set.
+  string reserved1 = 6;  // 16 bits (optional)
+}
+
+// Packet IO header is used to encapsulate packet-ins, i.e. packets punted from
+// the switch to the controller, in SAI P4 / PINS. Never extracted during
+// parsing, but serialized during deparsing for packets punted to the
+// controller.
+message SaiP4BMv2PacketInHeader {
+  // The port the packet ingressed on.
+  string ingress_port = 1;  // 9 bits
+  // The initial intended egress port decided for the packet by the pipeline.
+  string target_egress_port = 2;  // 9 bits
+  // Padding field to align the header to 8-bit multiple, as required by BMv2.
+  string unused_pad = 3;  // 6 bits
+}
+
+// IP Flow Information eXport header (RFC 7011 through RFC 7015, RFC 5103).
+message IpfixHeader {
+  // Version of IPFIX to which this Message conforms.
+  string version = 1;  // 16 bits
+  // Total length of the IPFIX Message, octets
+  string length = 2;  // 16 bits (computed field)
+  // Time at which the IPFIX Message Header leaves the Exporter,
+  // seconds since the Unix epoch
+  string export_time = 3;  // 32 bits
+  // Incremental sequence counter modulo 2^32 of all IPFIX Data Records
+  // sent in the current stream from the current Observation Domain by
+  // the Exporting Process.
+  string sequence_number = 4;  // 32 bits
+  // An identifier of the Observation Domain that is locally
+  // unique to the Exporting Process.
+  string observation_domain_id = 5;  // 32 bits
+}
+
+// Packet Sampling protocol header (RFC 5476)
+message PsampHeader {
+  string template_id = 1;  // 16 bits
+  // PSAMP packet length.
+  string length = 2;  // 16 bits (computed field)
+  // Ingress timestamp in nanoseconds.
+  string observation_time = 3;  // 64 bits
+  string flowset = 4;           // 16 bits
+  string next_hop_index = 5;    // 16 bits
+  string epoch = 6;             // 16 bits
+  string ingress_port = 7;      // 16 bits
+  string egress_port = 8;       // 16 bits
+  string user_meta_field = 9;   // 16 bits
+  string dlb_id = 10;           // 8 bit
+  // Variable packet length identifier - 0xFF.
+  string variable_length = 11;        // 8 bits (computed field)
+  string packet_sampled_length = 12;  // 16 bits (computed field)
+}
+
+// Precision Time Protocol header (RFC 1588-2008)
+// message PspHeader (https://github.com/google/psp)
+message PspHeader {
+  string next_header = 1;
+  string header_ext_length = 2;
+  string reserved0 = 3;
+  string crypt_offset = 4;
+  string sample_bit = 5;
+  string drop_bit = 6;
+  string version = 7;
+  string virtualization_cookie_present = 8;
+  string reserved1 = 9;
+  string security_parameters_index = 10;
+  string initialization_vector = 11;
+}
