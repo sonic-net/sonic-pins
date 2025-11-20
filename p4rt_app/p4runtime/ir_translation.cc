@@ -16,8 +16,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
-#include "absl/strings/numbers.h"
-#include "absl/strings/str_format.h"
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
@@ -67,19 +65,13 @@ absl::Status OptionallyTranslateCpuQueue(TranslationDirection direction,
   }
   switch (direction) {
     case TranslationDirection::kForController: {
-      int queue_id;
-      if (!absl::SimpleHexAtoi(value.str(), &queue_id)) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Expected AppDB CPU Queue as hex string. Got '" << value.str()
-               << "'.";
-      }
-      auto queue_name = translator.IdToName(queue_id);
-      if (queue_name.ok()) value.set_str(*queue_name);
+      ASSIGN_OR_RETURN(*value.mutable_str(),
+                       translator.OptionallyTranslateIdToName(value.str()));
       return absl::OkStatus();
     }
     case TranslationDirection::kForOrchAgent: {
-      auto queue_id = translator.NameToId(value.str());
-      if (queue_id.ok()) value.set_str(absl::StrFormat("%#x", *queue_id));
+      value.set_str(
+          translator.OptionallyTranslateNameToIdInHexString(value.str()));
       return absl::OkStatus();
     }
   }

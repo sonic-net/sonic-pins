@@ -23,6 +23,7 @@
 #include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "p4_pdpi/ir.pb.h"
 namespace p4rt_app {
 
 // QueueTranslator is an immutable bidirectional map that translates between
@@ -43,6 +44,16 @@ class QueueTranslator {
   // Perform a translation between queue name and id.
   absl::StatusOr<std::string> IdToName(int queue_id) const;
   absl::StatusOr<int> NameToId(absl::string_view queue_name) const;
+
+  // Perform a translation from queue id to name if id is found in id_to_name_
+  // map, or return the queue id if value is already a number. Return invalid
+  // argument error if the value is not a number.
+  absl::StatusOr<std::string> OptionallyTranslateIdToName(
+      absl::string_view value) const;
+  // Perform a translation from queue name to id in hex string format if name is
+  // found in name_to_id_ map or if the queue name is a number.
+  std::string OptionallyTranslateNameToIdInHexString(
+      absl::string_view value) const;
 
  protected:
   QueueTranslator() = default;

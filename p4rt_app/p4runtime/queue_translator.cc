@@ -19,6 +19,8 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
@@ -54,6 +56,31 @@ absl::StatusOr<std::string> QueueTranslator::IdToName(int queue_id) const {
 absl::StatusOr<int> QueueTranslator::NameToId(
     absl::string_view queue_name) const {
   return gutil::FindOrStatus(name_to_id_, queue_name);
+}
+
+absl::StatusOr<std::string> QueueTranslator::OptionallyTranslateIdToName(
+    absl::string_view value) const {
+  int queue_id;
+  if (!absl::SimpleHexAtoi(value, &queue_id)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected AppDB queue as hex string. Got '" << value << "'.";
+  }
+  absl::StatusOr<std::string> queue_name = IdToName(queue_id);
+  return queue_name.ok() ? queue_name.value() : std::string(value);
+}
+
+std::string QueueTranslator::OptionallyTranslateNameToIdInHexString(
+    absl::string_view value) const {
+  absl::StatusOr<int> queue_id = NameToId(value);
+  if (queue_id.ok()) {
+    return absl::StrFormat("%#x", *queue_id);
+  }
+  if (int queue_num = 0; absl::SimpleAtoi(value, &queue_num) ||
+                         absl::SimpleHexAtoi(value, &queue_num)) {
+    // If the value is a number, format it as hex.
+    return absl::StrFormat("%#x", queue_num);
+  }
+  return std::string(value);
 }
 
 }  // namespace p4rt_app

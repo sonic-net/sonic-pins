@@ -14,11 +14,9 @@
 #ifndef PINS_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
 #define PINS_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "boost/bimap.hpp"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 
