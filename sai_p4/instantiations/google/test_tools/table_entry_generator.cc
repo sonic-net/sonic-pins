@@ -17,6 +17,7 @@
 #include <bitset>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -37,6 +38,28 @@ namespace sai {
 namespace {
 
 constexpr absl::string_view kVrf80 = "vrf-80";
+
+// Returns a compatible IP type match if supported by the table. Returns
+// std::nullopt is no IP match is supported.
+std::optional<pdpi::IrMatch> IpTypeMatch(
+    const pdpi::IrTableDefinition& table_definition) {
+  std::string ip_match;
+  if (table_definition.match_fields_by_name().contains("is_ip")) {
+    ip_match = "is_ip";
+  } else if (table_definition.match_fields_by_name().contains("is_ipv6")) {
+    ip_match = "is_ipv6";
+  } else if (table_definition.match_fields_by_name().contains("is_ipv4")) {
+    ip_match = "is_ipv4";
+  } else {
+    return std::nullopt;
+  }
+  pdpi::IrMatch match;
+  if (!ip_match.empty()) {
+    match.set_name(ip_match);
+    match.mutable_optional()->mutable_value()->set_hex_str("0x1");
+  }
+  return match;
+}
 
 pdpi::IrTableEntry DefaultVrf80Entry() {
   auto entry = gutil::ParseTextProto<pdpi::IrTableEntry>(absl::Substitute(
@@ -131,6 +154,10 @@ TableEntryGenerator AclPreIngressTableGenerator(
                             })pb",
                        kVrf80));
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
+    // Add an IP match if supported by the table.
+  if (auto match = IpTypeMatch(table_definition); match.has_value()) {
+    *base_entry->add_matches() = *match;
+  }
   generator.generator = IrMatchFieldAndPriorityGenerator(
       table_definition, *base_entry, "src_mac");
   return generator;
@@ -162,10 +189,6 @@ TableEntryGenerator AclPreIngressMetadataTableGenerator(
 
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_pre_ingress_metadata_table"
-           matches {
-             name: "is_ip"
-             optional { value { hex_str: "0x1" } }
-           }
            action {
              name: "set_acl_metadata"
              params {
@@ -174,6 +197,12 @@ TableEntryGenerator AclPreIngressMetadataTableGenerator(
              }
            })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
+  
+  // Add an IP match if supported by the table.
+  if (auto match = IpTypeMatch(table_definition); match.has_value()) {
+    *base_entry->add_matches() = *match;
+  }
+
   generator.generator = IrMatchFieldAndPriorityGenerator(
       table_definition, *base_entry, "ip_protocol");
   return generator;
@@ -226,10 +255,6 @@ TableEntryGenerator AclIngressSecurityTableGenerator(
   TableEntryGenerator generator;
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_ingress_security_table"
-           matches {
-             name: "is_ipv4"
-             optional { value { hex_str: "0x1" } }
-           }
            action { name: "acl_drop" })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
   generator.generator = IrMatchFieldAndPriorityGenerator(
@@ -242,6 +267,7 @@ TableEntryGenerator AclIngressQosTableGenerator(
   TableEntryGenerator generator;
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_ingress_qos_table"
+           meter_config { cir: 5000 cburst: 5000 pir: 5000 pburst: 5000 }
            matches {
              name: "is_ipv4"
              optional { value { hex_str: "0x1" } }

@@ -755,16 +755,22 @@ TEST(EntryBuilder, AddEntryPuntingPacketsWithDstMacWithPuntAction) {
 
 TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities replica_overload_entities,
-                       EntryBuilder()
-                           .AddMulticastGroupEntry(
-                               123,
-                               {
-                                   Replica{.egress_port = "\1", .instance = 11},
-                                   Replica{.egress_port = "\2", .instance = 22},
-                               })
-                           .LogPdEntries()
-                           .GetDedupedIrEntities(kIrP4Info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities replica_overload_entities,
+      EntryBuilder()
+          .AddMulticastGroupEntry(
+              123,
+              {
+                  Replica{.egress_port = "\1",
+                          .instance = 11,
+                          .backup_replicas = {BackupReplica{.egress_port = "\3",
+                                                            .instance = 33},
+                                              BackupReplica{.egress_port = "\4",
+                                                            .instance = 44}}},
+                  Replica{.egress_port = "\2", .instance = 22},
+              })
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
   EXPECT_THAT(replica_overload_entities.entities(),
               ElementsAre(HasOneofCase<pdpi::IrEntity>(
                   "entity", pdpi::IrEntity::kPacketReplicationEngineEntry)));
@@ -1410,6 +1416,34 @@ TEST(AddNexthopRifNeighborEntriesTest,
                                action { name: "set_dst_mac" }
                              }
                         )pb"))}));
+}
+
+TEST(AddNexthopRifNeighborEntriesTest, SkipMyMacProgramming) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddNexthopRifNeighborEntries(
+              "nexthop-1", "port-1",
+              NexthopRewriteOptions{.skip_my_mac_programming = true})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(),
+              UnorderedElementsAre(
+                  Partially(EqualsProto(R"pb(table_entry {
+                                               table_name: "neighbor_table"
+                                             })pb")),
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "nexthop_table"
+                             action { name: "set_ip_nexthop" }
+                           }
+                      )pb")),
+                  Partially(EqualsProto(
+                      R"pb(table_entry {
+                             table_name: "router_interface_table"
+                             action { name: "unicast_set_port_and_src_mac" }
+                           })pb"))));
 }
 
 TEST(AddNexthopRifNeighborEntriesTest,

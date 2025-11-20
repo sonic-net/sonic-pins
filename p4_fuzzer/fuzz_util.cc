@@ -519,8 +519,11 @@ bool IsAccidentallyInvalidUpdate(
     }
     // If the table cannot accommodate sufficiently many inserts, then the
     // candidate update is 'bad'.
-    return !switch_state.CanAccommodateInserts(
-        candidate_update.pi().entity().table_entry().table_id(), num_inserts);
+    if (!switch_state.CanAccommodateInserts(
+            candidate_update.pi().entity().table_entry().table_id(),
+            num_inserts)) {
+      return true;
+    }
   }
 
   absl::StatusOr<bool> is_buggy_update =

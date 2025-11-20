@@ -68,7 +68,6 @@ message RouterInterfaceTableEntry {
     oneof action {
       SetPortAndSrcMacAction set_port_and_src_mac = 1;
       SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
-      // CAUTION: This action is not (yet) supported.
       UnicastSetPortAndSrcMacAction unicast_set_port_and_src_mac = 3;
     }
   }
@@ -596,20 +595,25 @@ message AclPreIngressVlanTableEntry {
 // ## Forbid unsupported combinations of IP_TYPE fields.
 //   is_ipv4::mask != 0 -> (is_ipv4 == 1);
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
+// ## Only allow IP field matches for IP packets.
+//   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+// ## Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
+//   l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
 //   dst_ip::mask != 0 -> is_ipv4 == 1;
 //   dst_ipv6::mask != 0 -> is_ipv6 == 1;
 message AclPreIngressMetadataTableEntry {
   message Match {
-    Optional is_ip = 1;       // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;     // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;     // optional match / Format::HEX_STRING / 1 bits
-    Ternary ip_protocol = 4;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary icmpv6_type = 5;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary dscp = 6;         // ternary match / Format::HEX_STRING / 6 bits
-    Ternary ecn = 7;          // ternary match / Format::HEX_STRING / 2 bits
-    Optional in_port = 8;     // optional match / Format::STRING
-    Ternary dst_ip = 9;       // ternary match / Format::IPV4
-    Ternary dst_ipv6 = 10;    // ternary match / Format::IPV6 / upper 64 bits
+    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
+    Ternary ip_protocol = 4;   // ternary match / Format::HEX_STRING / 8 bits
+    Ternary icmpv6_type = 5;   // ternary match / Format::HEX_STRING / 8 bits
+    Ternary dscp = 6;          // ternary match / Format::HEX_STRING / 6 bits
+    Ternary ecn = 7;           // ternary match / Format::HEX_STRING / 2 bits
+    Optional in_port = 8;      // optional match / Format::STRING
+    Ternary dst_ip = 9;        // ternary match / Format::IPV4
+    Ternary dst_ipv6 = 10;     // ternary match / Format::IPV6 / upper 64 bits
+    Ternary l4_dst_port = 11;  // ternary match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
@@ -829,12 +833,12 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      AclForwardAction acl_forward = 2;
+      AclForwardAction acl_forward = 3;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 4;
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 5;
       RedirectToPortAction redirect_to_port = 6;
-      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 3;
+      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 2;
       RedirectToIpmcGroupAndSetCpuQueueAndCancelCopyAction
           redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy = 7;
       SetCpuQueueAndCancelCopyAction set_cpu_queue_and_cancel_copy = 8;
@@ -995,7 +999,6 @@ message DisableIngressVlanChecksAction {}
 
 message DisableEgressVlanChecksAction {}
 
-// CAUTION: This action is not (yet) supported.
 message UnicastSetPortAndSrcMacAction {
   string port = 1;     // Format::STRING
   string src_mac = 2;  // Format::MAC
