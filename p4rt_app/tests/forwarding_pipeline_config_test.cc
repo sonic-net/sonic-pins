@@ -159,6 +159,7 @@ class ForwardingPipelineConfigTest : public testing::Test {
     // Restart a new P4RT service.
     p4rt_service_ =
         std::make_unique<test_lib::P4RuntimeGrpcService>(P4RuntimeImplOptions{
+            .translate_port_ids = false,
             .forwarding_config_full_path = config_save_path_,
         });
     RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));

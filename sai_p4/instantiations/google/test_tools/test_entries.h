@@ -109,6 +109,8 @@ struct SetVlanId {
 
 // -- Match Fields and Params --------------------------------------------------
 
+// TODO: As this struct is not only used for nexthop rewrite, it should
+// be renamed to better reflect the intended usage.
 // Rewrite-related options for nexthop action generation.
 struct NexthopRewriteOptions {
   bool disable_decrement_ttl = false;
@@ -129,6 +131,15 @@ struct NexthopRewriteOptions {
   // action with `vlan_id = egress_rif_vlan`. When absent, the RIF will instead
   // use the `set_port_and_src_mac` action.
   std::optional<std::string> egress_rif_vlan = std::nullopt;
+  // TODO: once the `unicast_set_port_and_src_mac` action is fully
+  // rolled out, remove this option and, for tests that need the old action,
+  // manually build the entries.
+  //
+  // If true, makes the RIF use the `unicast_set_port_and_src_mac` action to
+  // skip creating new a entry in switch's My MAC table (otherwise the legacy
+  // `set_port_and_src_mac` action is used). For RIF with vlan_id, this option
+  // is ignored, since it always skips My MAC entry creation.
+  bool skip_my_mac_programming = false;
 };
 
 enum class IpVersion {
@@ -213,13 +224,19 @@ struct RouterInterfaceTableParams {
   std::string egress_port;
   netaddr::MacAddress src_mac;
   std::optional<std::string> vlan_id;
+  bool skip_my_mac_programming = false;
 };
 
 // Convenience struct corresponding to the protos `p4::v1::Replica` and
 // `sai::ReplicateAction::Replica`.
+struct BackupReplica {
+  std::string egress_port;
+  int instance = 0;
+};
 struct Replica {
   std::string egress_port;
   int instance = 0;
+  std::vector<BackupReplica> backup_replicas;
 };
 
 // Match fields of an ingress mirror or redirect table entry.

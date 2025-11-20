@@ -67,6 +67,9 @@ using ::p4::v1::WriteRequest;
 
 namespace {
 
+// Maximum time to wait for a non-streaming gRPC request to complete.
+constexpr absl::Duration kNonStreamingGRPCReqTimeout = absl::Minutes(2);
+
 absl::StatusOr<p4::v1::TableEntry> GetPiTableEntryFromSwitch(
     P4RuntimeSession* session, const pdpi::TableEntryKey& target_key) {
   // Some targets only support wildcard reads, so we read back all entries
@@ -225,6 +228,8 @@ absl::Status P4RuntimeSession::Write(const p4::v1::WriteRequest& request) {
 grpc::Status P4RuntimeSession::WriteAndReturnGrpcStatus(
     const p4::v1::WriteRequest& request) {
   grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
   p4::v1::WriteResponse response;
   return stub_->Write(&context, request, &response);
 }
@@ -232,6 +237,8 @@ grpc::Status P4RuntimeSession::WriteAndReturnGrpcStatus(
 absl::StatusOr<p4::v1::ReadResponse> P4RuntimeSession::Read(
     const p4::v1::ReadRequest& request) {
   grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
   auto reader = stub_->Read(&context, request);
 
   p4::v1::ReadResponse result;
@@ -247,6 +254,8 @@ absl::StatusOr<p4::v1::ReadResponse> P4RuntimeSession::Read(
 absl::Status P4RuntimeSession::SetForwardingPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request) {
   grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
   p4::v1::SetForwardingPipelineConfigResponse response;
   return gutil::GrpcStatusToAbslStatus(
       stub_->SetForwardingPipelineConfig(&context, request, &response));
@@ -256,6 +265,8 @@ absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
 P4RuntimeSession::GetForwardingPipelineConfig(
     const p4::v1::GetForwardingPipelineConfigRequest& request) {
   grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
   p4::v1::GetForwardingPipelineConfigResponse response;
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
       stub_->GetForwardingPipelineConfig(&context, request, &response)));

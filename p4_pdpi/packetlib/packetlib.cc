@@ -873,7 +873,7 @@ void HopByHopOptionsInvalidOptionsAndPadding(
     }
     int option_data_length = static_cast<int>(byte_string->at(++i));
     // Option's data length exceeds the remaining bytes.
-    if (option_data_length > byte_string->size() - i) {
+    if (option_data_length >= byte_string->size() - i) {
       output.push_back(absl::StrCat(
           error_prefix, "expected data length exceeds the remaining bytes: ",
           option_data_length, " > ", byte_string->size() - i));
