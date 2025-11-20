@@ -358,8 +358,10 @@ control routing_resolution(in headers_t headers,
   // action.
   @unsupported
   @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;
     // Disallow reserved VLAN IDs with implementation-defined semantics.
-    vlan_id != 0 && vlan_id != 4095"
+    vlan_id != 0 && vlan_id != 4095;"
   )
   action unicast_set_port_and_src_mac_and_vlan_id(@id(1) port_id_t port,
                                           @id(2) @format(MAC_ADDRESS)
@@ -378,6 +380,10 @@ control routing_resolution(in headers_t headers,
   // packets with the same port and source mac address, though the given
   // entry is not visible north of SAI.
   @id(ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID)
+  @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;"
+  )
   action set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
@@ -393,6 +399,10 @@ control routing_resolution(in headers_t headers,
   // TODO Remove unsupported when the switch supports this action.
   @unsupported
   @id(UNICAST_SET_PORT_AND_SRC_MAC_ACTION_ID)
+   @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;"
+  )
   action unicast_set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
