@@ -402,6 +402,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
             capacity_by_action_profile_name, resources_in_batch);
     if (!resource_change.ok()) {
       entry_status = GetIrUpdateStatus(resource_change.status());
+      LOG(WARNING) << resource_change.status().message();
       break;
     }
 

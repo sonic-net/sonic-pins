@@ -274,7 +274,9 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+#if defined(IP_MULTICAST_CAPABLE)
             local_metadata.route_hit = ipv4_multicast_table.apply().hit;
+#endif
           }
         }
       } else { // IPv4 unicast.
@@ -288,7 +290,9 @@ control routing_lookup(in headers_t headers,
         if (IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           // Packets failing ingress VLAN checks do not go through IPMC lookup
           if (!local_metadata.marked_to_drop_by_ingress_vlan_checks) {
+#if defined(IP_MULTICAST_CAPABLE)
             local_metadata.route_hit = ipv6_multicast_table.apply().hit;
+#endif
           }
         }
       } else { // IPv6 unicast.
@@ -399,6 +403,7 @@ control routing_resolution(in headers_t headers,
       router_interface_id_value : exact @id(1)
                                         @name("router_interface_id");
     }
+    // TODO: Remove once no longer in use on our switches.
     actions = {
       @proto_id(1) set_port_and_src_mac;
       @proto_id(2) set_port_and_src_mac_and_vlan_id;

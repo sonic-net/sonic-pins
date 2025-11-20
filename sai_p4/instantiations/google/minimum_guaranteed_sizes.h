@@ -47,7 +47,7 @@
 
 #define ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE 2048
 
-#define ROUTER_INTERFACE_TABLE_MINIMUM_GUARANTEED_SIZE 190
+#define ROUTER_INTERFACE_TABLE_MINIMUM_GUARANTEED_SIZE 4096
 #define L3_ADMIT_TABLE_MINIMUM_GUARANTEED_SIZE 64
 // Workaround: effectively disable resource checking by setting to large number.
 // TODO: Remove this workaround.
@@ -119,7 +119,7 @@
 #endif
 
 #define ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 127
-#define ACL_EGRESS_DHCP_TO_HOST_TABLE_MINIMUM_GUARANTEED_SIZE 256
+#define ACL_EGRESS_DHCP_TO_HOST_TABLE_MINIMUM_GUARANTEED_SIZE 255
 
 // 1 entry for LLDP, 1 entry for ND, and 6 entries for traceroute: TTL 0,1,2 for
 // IPv4 and IPv6

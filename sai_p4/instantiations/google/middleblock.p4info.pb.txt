@@ -678,28 +678,36 @@ tables {
     match_type: OPTIONAL
   }
   action_refs {
-    id: 16777475
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777476
     annotations: "@proto_id(1)"
   }
   action_refs {
-    id: 16777490
+    id: 16777495
     annotations: "@proto_id(2)"
   }
   action_refs {
-    id: 16777491
+    id: 16777494
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
+    id: 16777475
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777494
+    id: 16777490
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
+    id: 16777491
     annotations: "@proto_id(5)"
   }
   action_refs {
-    id: 16777495
-    annotations: "@proto_id(6)"
+    id: 16777498
+    annotations: "@proto_id(7)"
+  }
+  action_refs {
+    id: 16777499
+    annotations: "@proto_id(8)"
   }
   action_refs {
     id: 21257015
@@ -860,7 +868,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 190
+  size: 4096
 }
 tables {
   preamble {
@@ -1044,12 +1052,12 @@ tables {
     match_type: EXACT
   }
   action_refs {
-    id: 16777241
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
     id: 16777247
     annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777241
+    annotations: "@proto_id(1)"
   }
   action_refs {
     id: 16777248
@@ -1456,6 +1464,22 @@ actions {
 }
 actions {
   preamble {
+    id: 16777499
+    name: "ingress.acl_ingress.set_cpu_queue_and_cancel_copy"
+    alias: "set_cpu_queue_and_cancel_copy"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
+  }
+  params {
+    id: 1
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "cpu_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
@@ -1529,6 +1553,31 @@ actions {
     annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
+  }
+}
+actions {
+  preamble {
+    id: 16777498
+    name: "ingress.acl_ingress.redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
+    alias: "redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+    bitwidth: 16
+  }
+  params {
+    id: 2
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "cpu_queue_t"
+    }
   }
 }
 actions {
