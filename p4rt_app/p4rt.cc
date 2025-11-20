@@ -485,11 +485,6 @@ int main(int argc, char** argv) {
     // TODO: Use warm boot state adaptor.
     swss::WarmStart::setWarmStartState(
         "p4rt", swss::WarmStart::WarmStartState::INITIALIZED);
-    // TODO: Perform Reconciliation.
-    p4runtime_server.GetOrchAgentWarmStartReconcliationState();
-    // TODO: If P4RT and OA is reconciled and SV is
-    // disabled, then unfreeze P4RT server. If SV is enabled, run SV and keep
-    // p4runtimer_server frozen until unfreeze notification is received.
   }
 
   // Create a server to listen on the unix socket port.

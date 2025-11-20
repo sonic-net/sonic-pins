@@ -160,6 +160,7 @@ cc_test(
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//p4rt_app/utils:table_utility",
         "//sai_p4/instantiations/google:clos_stage",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
