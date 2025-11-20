@@ -105,6 +105,25 @@ control drop_martians(in headers_t headers,
         mark_to_drop(standard_metadata);
     }
 
+// TODO: Remove guard once p4-symbolic suports assertions.
+#ifndef PLATFORM_P4SYMBOLIC
+    if(headers.hop_by_hop_options.isValid()) {
+        assert(headers.hop_by_hop_options.header_extension_length == 0);
+    }
+
+    if(headers.inner_hop_by_hop_options.isValid()) {
+        assert(headers.inner_hop_by_hop_options.header_extension_length == 0);
+    }
+#endif
+
+    // PINs switches drop packets with hop-by-hop options by choice, not by
+    // necessity. All expected packets should be punted, so we mark them all to
+    // drop by choice to get some deterministic behavior.
+    if (headers.hop_by_hop_options.isValid() ||
+        headers.inner_hop_by_hop_options.isValid()) {
+        mark_to_drop(standard_metadata);
+    }
+
     // TODO: Drop the rest of martian packets.
   }
 }  // control drop_martians
