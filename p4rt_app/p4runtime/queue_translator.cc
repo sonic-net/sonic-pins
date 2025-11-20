@@ -16,6 +16,7 @@
 #include "p4rt_app/p4runtime/queue_translator.h"
 
 #include <memory>
+#include <string>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
@@ -81,6 +82,14 @@ std::string QueueTranslator::OptionallyTranslateNameToIdInHexString(
     return absl::StrFormat("%#x", queue_num);
   }
   return std::string(value);
+}
+
+std::string QueueTranslator::DumpDebugData() const {
+  std::string rv;
+  for (const auto& [name, id] : name_to_id_) {
+    absl::StrAppend(&rv, name, " : ", id, "\n");
+  }
+  return rv;
 }
 
 }  // namespace p4rt_app

@@ -1251,6 +1251,24 @@ absl::Status P4RuntimeImpl::RemovePortTranslation(
   return absl::OkStatus();
 }
 
+std::string P4RuntimeImpl::DumpPortTranslationDebugData() {
+  absl::MutexLock l(&server_state_lock_);
+  std::string rv;
+  for (const auto& [name, id] : port_translation_map_) {
+    absl::StrAppend(&rv, name, " : ", id, "\n");
+  }
+  return rv;
+}
+
+std::string P4RuntimeImpl::DumpEntityCache() {
+  absl::MutexLock l(&server_state_lock_);
+  std::string rv;
+  for (const auto& [key, entity] : entity_cache_) {
+    absl::StrAppend(&rv, key, " :\n", entity.ShortDebugString(), "\n\n");
+  }
+  return rv;
+}
+
 absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
                                           const std::string& log_level) {
   sonic::PacketIoCounters counters = GetPacketIoCounters();
@@ -1262,6 +1280,25 @@ absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
       absl::FormatTime(absl::Now()), counters.packet_out_sent,
       counters.packet_out_errors, counters.packet_in_received,
       counters.packet_in_errors);
+
+  RETURN_IF_ERROR(gutil::WriteFile(DumpEntityCache(), path + "/entity_cache"));
+
+  RETURN_IF_ERROR(gutil::WriteFile(DumpPortTranslationDebugData(),
+                                   path + "/port_translation_map"));
+
+  absl::MutexLock l(&server_state_lock_);
+  std::string cpu_queue_str = cpu_queue_translator_
+                                  ? cpu_queue_translator_->DumpDebugData()
+                                  : "unassigned";
+  std::string fp_queue_str =
+      front_panel_queue_translator_
+          ? front_panel_queue_translator_->DumpDebugData()
+          : "unassigned";
+
+  RETURN_IF_ERROR(
+      gutil::WriteFile("CPU queue translation map\n" + cpu_queue_str + "\n\n" +
+                           "FRONT_PANEL queue translation map\n" + fp_queue_str,
+                       path + "/queue_translation_maps"));
 
   return gutil::WriteFile(debug_str, path + "/packet_io_counters");
 }

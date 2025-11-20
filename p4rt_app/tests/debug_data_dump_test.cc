@@ -19,13 +19,19 @@
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/io.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
+#include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace {
+
+using ::testing::HasSubstr;
 
 class DebugDataDumpTest : public test_lib::P4RuntimeComponentTestFixture {
  protected:
@@ -35,14 +41,51 @@ class DebugDataDumpTest : public test_lib::P4RuntimeComponentTestFixture {
 };
 
 TEST_F(DebugDataDumpTest, VerifyDebugDumpPacketIoCountersToCorrectFile) {
-  std::string temp_dir = testing::TempDir();
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ConfigDbQueueTableEventHandler db_handler(&p4rt_service_.GetP4rtServer());
+  ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "CPU", {{"queue10", "10"}}));
+  ASSERT_OK(db_handler.HandleEvent(SET_COMMAND, "FRONT_PANEL",
+                                   {{"fq_queue12", "12"}}));
 
+  // Add entry so entity cache is populated.
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
+                       test_lib::PdWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: INSERT
+                               table_entry {
+                                 acl_ingress_table_entry {
+                                   match { is_ip { value: "0x1" } }
+                                   priority: 10
+                                   action { acl_copy { qos_queue: "0xa" } }
+                                 }
+                               }
+                             }
+                           )pb",
+                           ir_p4_info_));
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  std::string temp_dir = testing::TempDir();
   EXPECT_OK(p4rt_service_.GetP4rtServer().DumpDebugData(temp_dir, "alert"));
 
-  // Check if the file exists.
+  // Check if files exist and have values.
   ASSERT_OK_AND_ASSIGN(std::string packetio_debugs,
                        gutil::ReadFile(temp_dir + "/packet_io_counters"));
   ASSERT_FALSE(packetio_debugs.empty());
+
+  ASSERT_OK_AND_ASSIGN(std::string port_translation_debugs,
+                       gutil::ReadFile(temp_dir + "/port_translation_map"));
+  EXPECT_THAT(port_translation_debugs, HasSubstr("Ethernet0 : 1\n"));
+
+  ASSERT_OK_AND_ASSIGN(std::string queue_translation_debugs,
+                       gutil::ReadFile(temp_dir + "/queue_translation_maps"));
+  EXPECT_THAT(queue_translation_debugs, HasSubstr("queue10 : 10\n"));
+  EXPECT_THAT(queue_translation_debugs, HasSubstr("fq_queue12 : 12\n"));
+
+  ASSERT_OK_AND_ASSIGN(std::string entity_cache_debugs,
+                       gutil::ReadFile(temp_dir + "/entity_cache"));
+  ASSERT_FALSE(entity_cache_debugs.empty());
 }
 
 }  // namespace

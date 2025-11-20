@@ -39,6 +39,8 @@ class QueueTranslator {
     return absl::WrapUnique(new QueueTranslator());
   }
 
+  std::string DumpDebugData() const;
+
   ~QueueTranslator() = default;
 
   // Perform a translation between queue name and id.

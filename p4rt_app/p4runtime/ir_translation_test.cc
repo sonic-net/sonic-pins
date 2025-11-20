@@ -665,6 +665,293 @@ TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
   EXPECT_THAT(queue_name_table_entry, EqualsProto(queue_id_table_entry));
 }
 
+TEST(TranslateTableEntry,
+     TranslatesCpuQueueNumToAppDbHexStringWithTranslatorRecognizedQueue) {
+  pdpi::IrEntity queue_num_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "is_ip"
+            optional { value { hex_str: "0x1" } }
+          }
+          action {
+            name: "acl_trap"
+            params {
+              name: "qos_queue"
+              value { str: "15" }
+            }
+          }
+        }
+      )pb",
+      &queue_num_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
+                       QueueTranslator::Create({{"queue15", "15"}}));
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_num_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, *cpu_queue_translator,
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same except the cpu queue value has been
+  // converted to a hex string.
+  pdpi::IrEntity queue_id_entry = queue_num_entry;
+  queue_id_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("0xf");
+  EXPECT_THAT(queue_num_entry, EqualsProto(queue_id_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForController.
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = false,
+      .port_map = {},
+      .cpu_queue_translator = *cpu_queue_translator,
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+  };
+
+  // Expect that everything is the same except the cpu queue value has been
+  // converted to the queue name.
+  pdpi::IrEntity queue_name_entry = queue_id_entry;
+  queue_name_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("queue15");
+
+  EXPECT_OK(
+      TranslateTableEntry(options, *queue_id_entry.mutable_table_entry()));
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_name_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, *cpu_queue_translator,
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same except the cpu queue value has been
+  // converted to a hex string.
+  queue_id_entry = queue_num_entry;
+  queue_id_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("0xf");
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+}
+
+TEST(TranslateTableEntry,
+     TranslatesCpuQueueNumToAppDbHexStringWithTranslatorUnrecognizedQueue) {
+  pdpi::IrEntity queue_num_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "is_ip"
+            optional { value { hex_str: "0x1" } }
+          }
+          action {
+            name: "acl_trap"
+            params {
+              name: "qos_queue"
+              value { str: "15" }
+            }
+          }
+        }
+      )pb",
+      &queue_num_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_num_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same except the cpu queue value has been
+  // converted to a hex string.
+  pdpi::IrEntity queue_id_entry = queue_num_entry;
+  queue_id_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("0xf");
+  EXPECT_THAT(queue_num_entry, EqualsProto(queue_id_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForController.
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = false,
+      .port_map = {},
+      .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+  };
+
+  // Expect that everything is the same.
+  pdpi::IrEntity queue_name_entry = queue_id_entry;
+  EXPECT_OK(
+      TranslateTableEntry(options, *queue_id_entry.mutable_table_entry()));
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_name_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+}
+
+TEST(TranslateTableEntry,
+     TranslatesCpuQueueNumToAppDbHexStringWithQueueInHexString) {
+  pdpi::IrEntity queue_num_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "is_ip"
+            optional { value { hex_str: "0x1" } }
+          }
+          action {
+            name: "acl_trap"
+            params {
+              name: "qos_queue"
+              value { str: "0xf" }
+            }
+          }
+        }
+      )pb",
+      &queue_num_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_num_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same.
+  pdpi::IrEntity queue_id_entry = queue_num_entry;
+  EXPECT_THAT(queue_num_entry, EqualsProto(queue_id_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForController.
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = false,
+      .port_map = {},
+      .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+  };
+
+  // Expect that everything is the same.
+  pdpi::IrEntity queue_name_entry = queue_id_entry;
+  EXPECT_OK(
+      TranslateTableEntry(options, *queue_id_entry.mutable_table_entry()));
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_name_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+}
+
+TEST(TranslateTableEntry,
+     TranslatesCpuQueueNumToAppDbHexStringWithQueueZeroInHexString) {
+  pdpi::IrEntity queue_num_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "is_ip"
+            optional { value { hex_str: "0x1" } }
+          }
+          action {
+            name: "acl_trap"
+            params {
+              name: "qos_queue"
+              value { str: "0x0" }
+            }
+          }
+        }
+      )pb",
+      &queue_num_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
+                       QueueTranslator::Create({{"queue0", "0"}}));
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_num_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, *cpu_queue_translator,
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same, except the cpu queue value "0x0" has
+  // been converted to "0".
+  pdpi::IrEntity queue_id_entry = queue_num_entry;
+  queue_id_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("0");  // absl::StrFormat("%#x", 0) == "0"
+  EXPECT_THAT(queue_num_entry, EqualsProto(queue_id_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForController.
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = false,
+      .port_map = {},
+      .cpu_queue_translator = *cpu_queue_translator,
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+  };
+
+  // Expect that everything is the same except the cpu queue value has been
+  // converted to the queue name.
+  pdpi::IrEntity queue_name_entry = queue_id_entry;
+  queue_name_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("queue0");
+  EXPECT_OK(
+      TranslateTableEntry(options, *queue_id_entry.mutable_table_entry()));
+  EXPECT_THAT(queue_id_entry, EqualsProto(queue_name_entry));
+
+  // Translate the table entry using the cpu queue translator, direction
+  // TranslationDirection::kForOrchAgent.
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      queue_name_entry, GetIrP4Info(), /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+      EmptyFrontPanelQueueTranslator()));
+
+  // Expect that everything is the same, except the cpu queue name has
+  // been translated to queue id.
+  EXPECT_THAT(queue_name_entry, EqualsProto(queue_id_entry));
+}
+
 TEST(TranslateTableEntry, TranslatesFrontPanelQueueNameToAppDbId) {
   // Since we do not currently have a general P4Info with a table using the
   // front_panel_queue_t, create a mock P4 info to test translation.
