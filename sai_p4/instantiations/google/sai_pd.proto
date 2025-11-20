@@ -581,6 +581,7 @@ message AclPreIngressVlanTableEntry {
     Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
     Ternary vlan_id = 5;     // ternary match / Format::HEX_STRING / 12 bits
     Optional in_port = 6;    // optional match / Format::STRING
+    Ternary tpid = 7;        // ternary match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
