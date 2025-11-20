@@ -1831,7 +1831,7 @@ actions {
     name: "ingress.routing_resolution.unicast_set_port_and_src_mac_and_vlan_id"
     alias: "unicast_set_port_and_src_mac_and_vlan_id"
     annotations: "@unsupported"
-    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095;\")"
   }
   params {
     id: 1
@@ -1857,6 +1857,7 @@ actions {
     id: 16777218
     name: "ingress.routing_resolution.set_port_and_src_mac"
     alias: "set_port_and_src_mac"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\")"
   }
   params {
     id: 1
@@ -1878,6 +1879,7 @@ actions {
     name: "ingress.routing_resolution.unicast_set_port_and_src_mac"
     alias: "unicast_set_port_and_src_mac"
     annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\")"
   }
   params {
     id: 1
@@ -2093,7 +2095,7 @@ actions {
     id: 16777249
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_vlan_id"
-    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095;\")"
   }
   params {
     id: 1
@@ -2112,6 +2114,7 @@ actions {
     id: 16777248
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac"
     alias: "multicast_set_src_mac"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\")"
   }
   params {
     id: 1
@@ -2125,7 +2128,7 @@ actions {
     id: 16777250
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_dst_mac_and_vlan_id"
     alias: "multicast_set_src_mac_and_dst_mac_and_vlan_id"
-    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095;\")"
   }
   params {
     id: 1
@@ -2150,6 +2153,7 @@ actions {
     id: 16777251
     name: "egress.packet_rewrites.multicast_rewrites.multicast_set_src_mac_and_preserve_ingress_vlan_id"
     alias: "multicast_set_src_mac_and_preserve_ingress_vlan_id"
+    annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\")"
   }
   params {
     id: 1

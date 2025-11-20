@@ -39,8 +39,11 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_VLAN_ID_ACTION_ID)
   @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;
     // Disallow reserved VLAN IDs with implementation-defined semantics.
-    vlan_id != 0 && vlan_id != 4095")
+    vlan_id != 0 && vlan_id != 4095;"
+    )
   action multicast_set_src_mac_and_vlan_id(
       @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
       @id(2) vlan_id_t vlan_id) {
@@ -52,6 +55,10 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_ACTION_ID)
+  @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;"
+  )
   action multicast_set_src_mac(@id(1) @format(MAC_ADDRESS)
                                ethernet_addr_t src_mac) {
     multicast_set_src_mac_and_vlan_id(src_mac, INTERNAL_VLAN_ID);
@@ -59,8 +66,11 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_DST_MAC_AND_VLAN_ID_ACTION_ID)
   @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;
     // Disallow reserved VLAN IDs with implementation-defined semantics.
-    vlan_id != 0 && vlan_id != 4095")
+    vlan_id != 0 && vlan_id != 4095;"
+  )
   action multicast_set_src_mac_and_dst_mac_and_vlan_id(
       @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac,
       @id(2) @format(MAC_ADDRESS) ethernet_addr_t dst_mac,
@@ -76,6 +86,10 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 
   @id(ROUTING_IP_MULTICAST_SET_SRC_MAC_AND_PRESERVE_INGRESS_VLAN_ID_ACTION_ID)
+  @action_restriction("
+    // Disallow invalid SRC MACs.
+    src_mac != 0;"
+  )
   action multicast_set_src_mac_and_preserve_ingress_vlan_id(
       @id(1) @format(MAC_ADDRESS) ethernet_addr_t src_mac) {
     local_metadata.enable_src_mac_rewrite = true;
