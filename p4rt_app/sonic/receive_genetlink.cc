@@ -161,9 +161,10 @@ absl::Status ProcessReceiveMessage(struct nl_msg* msg, void* arg) {
           if (name_or.ok()) {
             target_port_name = *name_or;
           } else {
-            LOG(WARNING) << "Unable to get target egress port from the packet "
-                            "metadata, error: "
-                         << name_or.status();
+            // This message is only logged once every minute to avoid spamming
+            LOG_EVERY_N_SEC(WARNING, 60) << "Unable to get target egress port "
+                                            "from the packet metadata, error: "
+                                         << name_or.status();
           }
           break;
         }

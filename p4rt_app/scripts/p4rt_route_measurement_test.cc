@@ -1224,8 +1224,8 @@ absl::StatusOr<P4WriteRequests> ComputeVlanMemberWriteRequests(
     }
   }
 
-  RETURN_IF_ERROR(
-      VerifyP4WriteRequestSizes(requests, number_batches, batch_size));
+  RETURN_IF_ERROR(VerifyP4WriteRequestSizes(
+      requests, number_batches, batch_size, /*modify_supported=*/false));
   return requests;
 }
 

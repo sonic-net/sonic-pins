@@ -44,6 +44,8 @@ public:
                                  SonicDbEntryList &values,
                                  int64_t timeout_ms = 60000LL) override;
 
+  void DrainNotifications() override;
+
 private:
   // The SONiC table maintains a list of notifications that this fake can
   // request.
