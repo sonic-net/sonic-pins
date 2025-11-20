@@ -51,6 +51,8 @@ inline constexpr char kTarget[] = "target";
 // name of the switch for requests.
 inline constexpr char kTestChassisNameForGnmi[] = "chassis";
 
+constexpr absl::Duration kVerifyOperStateDefaultTimeout = absl::Seconds(15);
+
 // Breakout mode is represented as vector of breakout speed.
 enum class BreakoutSpeed {
   k100GB,
@@ -671,5 +673,20 @@ absl::StatusOr<std::string> GetOcOsNetworkStackGnmiStatePathInfo(
 absl::StatusOr<uint64_t> GetInterfaceCounter(
     absl::string_view stat_name, absl::string_view interface,
     gnmi::gNMI::StubInterface* gnmi_stub);
+
+// Creates the port_names_per_port_id map from GNMI config.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetPortNamePerPortId(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Enable/Disable the interface using GNMI config path.
+absl::Status SetInterfaceEnabledState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                      absl::string_view if_name, bool enabled);
+
+// Verifies the given interface's desired oper status is reflected in the state
+// path.
+absl::Status VerifyInterfaceOperState(
+    gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view if_name,
+    OperStatus desired_state,
+    absl::Duration timeout = kVerifyOperStateDefaultTimeout);
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

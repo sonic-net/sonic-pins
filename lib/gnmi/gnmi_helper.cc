@@ -2411,4 +2411,44 @@ absl::StatusOr<uint64_t> GetInterfaceCounter(
   }
   return stat;
 }
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetPortNamePerPortId(gnmi::gNMI::StubInterface& gnmi_stub) {
+  absl::flat_hash_map<std::string, std::string> port_name_per_port_id;
+  ASSIGN_OR_RETURN(auto port_id_per_port_name,
+                   pins_test::GetAllInterfaceNameToPortId(gnmi_stub));
+  for (const auto& [name, port_id] : port_id_per_port_name) {
+    port_name_per_port_id[port_id] = name;
+  }
+  return port_name_per_port_id;
+}
+
+absl::Status SetInterfaceEnabledState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                      absl::string_view if_name, bool enabled) {
+  const std::string config_value = enabled ? "true" : "false";
+  const std::string if_admin_config_path =
+      absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
+  return SetGnmiConfigPath(&gnmi_stub, if_admin_config_path,
+                           pins_test::GnmiSetType::kUpdate,
+                           absl::Substitute("{\"enabled\":$0}", config_value));
+}
+
+absl::Status VerifyInterfaceOperState(gnmi::gNMI::StubInterface& gnmi_stub,
+                                      absl::string_view if_name,
+                                      OperStatus desired_state,
+                                      absl::Duration timeout) {
+  absl::Time end_time = absl::Now() + timeout;
+  OperStatus current_state;
+  do {
+    if (absl::Now() > end_time) {
+      return absl::DeadlineExceededError(
+          absl::Substitute("Unable to validate interface: $0 to state: $1",
+                           if_name, desired_state));
+    }
+    absl::SleepFor(absl::Seconds(1));
+    ASSIGN_OR_RETURN(current_state,
+                     GetInterfaceOperStatusOverGnmi(gnmi_stub, if_name));
+  } while (current_state != desired_state);
+  return absl::OkStatus();
+}
 }  // namespace pins_test

@@ -27,11 +27,11 @@
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
-#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace sonic {
