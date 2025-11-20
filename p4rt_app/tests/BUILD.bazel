@@ -292,6 +292,20 @@ cc_test(
 )
 
 cc_test(
+    name = "front_panel_queue_name_and_id_test",
+    srcs = ["front_panel_queue_name_and_id_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//p4rt_app/event_monitoring:config_db_queue_table_event",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_test(
     name = "packet_replication_table_test",
     srcs = ["packet_replication_table_test.cc"],
     tags = ["exclusive"],

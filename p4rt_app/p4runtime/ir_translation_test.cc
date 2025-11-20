@@ -45,6 +45,11 @@ const QueueTranslator& EmptyCpuQueueTranslator() {
   return *kTranslator;
 }
 
+const QueueTranslator& EmptyFrontPanelQueueTranslator() {
+  static const auto* const kTranslator = QueueTranslator::Empty().release();
+  return *kTranslator;
+}
+
 TEST(PortTranslationTest, TranslatePort) {
   boost::bimap<std::string, std::string> map;
   map.insert({"key0", "val0"});
@@ -89,6 +94,7 @@ TEST(PortIdTranslationTest, ActionParameterUpdatedToPortName) {
           .translate_port_ids = true,
           .port_map = port_translation_map,
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.action().params_size(), 1);
@@ -124,6 +130,7 @@ TEST(PortIdTranslationTest, WatchPortUpdatedToPortName) {
           .translate_port_ids = true,
           .port_map = port_translation_map,
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
 
@@ -154,6 +161,7 @@ TEST(PortIdTranslationTest, ExactMatchFieldUpdatedToPortName) {
           .translate_port_ids = true,
           .port_map = port_translation_map,
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
@@ -180,6 +188,7 @@ TEST(PortIdTranslationTest, OptionalMatchFieldUpdatedToPortName) {
           .translate_port_ids = true,
           .port_map = port_translation_map,
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
@@ -207,6 +216,7 @@ TEST(PortNamePassthroughTest, ActionParametersIgnoresPortName) {
           .translate_port_ids = false,
           .port_map = {},
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.action().params_size(), 1);
@@ -238,6 +248,7 @@ TEST(PortNamePassthroughTest, WatchPortIgnoresPortName) {
           .translate_port_ids = false,
           .port_map = {},
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
 
@@ -264,6 +275,7 @@ TEST(PortNamePassthroughTest, ExactMatchFieldIgnoresPortName) {
           .translate_port_ids = false,
           .port_map = {},
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
@@ -287,6 +299,7 @@ TEST(PortNamePassthroughTest, OptionalMatchFieldIgnoresPortName) {
           .translate_port_ids = false,
           .port_map = {},
           .cpu_queue_translator = EmptyCpuQueueTranslator(),
+          .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
@@ -306,16 +319,18 @@ TEST(IrTranslationTest, InvalidTableNameFails) {
                                           &table_entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
-  EXPECT_THAT(TranslateTableEntry(
-                  TranslateTableEntryOptions{
-                      .direction = TranslationDirection::kForOrchAgent,
-                      .ir_p4_info = GetIrP4Info(),
-                      .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
-                  table_entry),
-              StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_name")));
+  EXPECT_THAT(
+      TranslateTableEntry(
+          TranslateTableEntryOptions{
+              .direction = TranslationDirection::kForOrchAgent,
+              .ir_p4_info = GetIrP4Info(),
+              .translate_port_ids = true,
+              .port_map = port_translation_map,
+              .cpu_queue_translator = EmptyCpuQueueTranslator(),
+              .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+          },
+          table_entry),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_name")));
 }
 
 TEST(IrTranslationTest, InvalidMatchFieldNameFails) {
@@ -333,16 +348,18 @@ TEST(IrTranslationTest, InvalidMatchFieldNameFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
-  EXPECT_THAT(TranslateTableEntry(
-                  TranslateTableEntryOptions{
-                      .direction = TranslationDirection::kForOrchAgent,
-                      .ir_p4_info = GetIrP4Info(),
-                      .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
-                  table_entry),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      TranslateTableEntry(
+          TranslateTableEntryOptions{
+              .direction = TranslationDirection::kForOrchAgent,
+              .ir_p4_info = GetIrP4Info(),
+              .translate_port_ids = true,
+              .port_map = port_translation_map,
+              .cpu_queue_translator = EmptyCpuQueueTranslator(),
+              .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+          },
+          table_entry),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(IrTranslationTest, InvalidMatchFieldTypeFails) {
@@ -357,16 +374,18 @@ TEST(IrTranslationTest, InvalidMatchFieldTypeFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
-  EXPECT_THAT(TranslateTableEntry(
-                  TranslateTableEntryOptions{
-                      .direction = TranslationDirection::kForOrchAgent,
-                      .ir_p4_info = GetIrP4Info(),
-                      .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
-                  table_entry),
-              StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_field")));
+  EXPECT_THAT(
+      TranslateTableEntry(
+          TranslateTableEntryOptions{
+              .direction = TranslationDirection::kForOrchAgent,
+              .ir_p4_info = GetIrP4Info(),
+              .translate_port_ids = true,
+              .port_map = port_translation_map,
+              .cpu_queue_translator = EmptyCpuQueueTranslator(),
+              .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+          },
+          table_entry),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_field")));
 }
 
 TEST(IrTranslationTest, InvalidActionNameFails) {
@@ -384,16 +403,18 @@ TEST(IrTranslationTest, InvalidActionNameFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
-  EXPECT_THAT(TranslateTableEntry(
-                  TranslateTableEntryOptions{
-                      .direction = TranslationDirection::kForOrchAgent,
-                      .ir_p4_info = GetIrP4Info(),
-                      .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
-                  table_entry),
-              StatusIs(absl::StatusCode::kInternal, HasSubstr("some_action")));
+  EXPECT_THAT(
+      TranslateTableEntry(
+          TranslateTableEntryOptions{
+              .direction = TranslationDirection::kForOrchAgent,
+              .ir_p4_info = GetIrP4Info(),
+              .translate_port_ids = true,
+              .port_map = port_translation_map,
+              .cpu_queue_translator = EmptyCpuQueueTranslator(),
+              .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+          },
+          table_entry),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("some_action")));
 }
 
 TEST(IrTranslationTest, InvalidActionParameterNameFails) {
@@ -411,16 +432,18 @@ TEST(IrTranslationTest, InvalidActionParameterNameFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
-  EXPECT_THAT(TranslateTableEntry(
-                  TranslateTableEntryOptions{
-                      .direction = TranslationDirection::kForOrchAgent,
-                      .ir_p4_info = GetIrP4Info(),
-                      .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
-                  table_entry),
-              StatusIs(absl::StatusCode::kInternal, HasSubstr("some_param")));
+  EXPECT_THAT(
+      TranslateTableEntry(
+          TranslateTableEntryOptions{
+              .direction = TranslationDirection::kForOrchAgent,
+              .ir_p4_info = GetIrP4Info(),
+              .translate_port_ids = true,
+              .port_map = port_translation_map,
+              .cpu_queue_translator = EmptyCpuQueueTranslator(),
+              .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+          },
+          table_entry),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("some_param")));
 }
 
 TEST(IrTranslationTest, ActionParametersWithUnsupportedFormatFails) {
@@ -438,16 +461,18 @@ TEST(IrTranslationTest, ActionParametersWithUnsupportedFormatFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
-  EXPECT_THAT(TranslateTableEntry(
-                  TranslateTableEntryOptions{
-                      .direction = TranslationDirection::kForController,
-                      .ir_p4_info = GetIrP4Info(),
-                      .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
-                  table_entry),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      TranslateTableEntry(
+          TranslateTableEntryOptions{
+              .direction = TranslationDirection::kForController,
+              .ir_p4_info = GetIrP4Info(),
+              .translate_port_ids = true,
+              .port_map = port_translation_map,
+              .cpu_queue_translator = EmptyCpuQueueTranslator(),
+              .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+          },
+          table_entry),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(P4RuntimeTweaksP4InfoTest, ForOrchAgentSetsCompositeUdfFormatToString) {
@@ -626,7 +651,8 @@ TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
                        QueueTranslator::Create({{"queue15", "15"}}));
   EXPECT_OK(UpdateIrEntityForOrchAgent(
       queue_name_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
-      /*port_translation_map=*/{}, *cpu_queue_translator));
+      /*port_translation_map=*/{}, *cpu_queue_translator,
+      EmptyFrontPanelQueueTranslator()));
 
   // Expect that everything is the same except the cpu queue name has been
   // translated.
@@ -637,6 +663,124 @@ TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
       ->mutable_value()
       ->set_str("0xf");
   EXPECT_THAT(queue_name_table_entry, EqualsProto(queue_id_table_entry));
+}
+
+TEST(TranslateTableEntry, TranslatesFrontPanelQueueNameToAppDbId) {
+  // Since we do not currently have a general P4Info with a table using the
+  // front_panel_queue_t, create a mock P4 info to test translation.
+  pdpi::IrTableDefinition ir_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(alias: "Table" id: 1)pb")
+          .match_field(R"pb(id: 123 name: "match_field_name")pb", pdpi::IPV4)
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(R"pb(alias: "action_name")pb")
+                  .param(R"pb(name: "my_queue"
+                              type_name { name: "front_panel_queue_t" } ")pb"))
+          .size(512)();
+
+  pdpi::IrP4Info ir_p4_info;
+  (*ir_p4_info.mutable_tables_by_id())[1] = ir_table;
+  (*ir_p4_info.mutable_tables_by_name())["Table"] = ir_table;
+
+  pdpi::IrEntity front_panel_name_table_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_entry {
+          table_name: "Table"
+          matches {
+            name: "match_field_name"
+            exact { hex_str: "0x1" }
+          }
+          action {
+            name: "action_name"
+            params {
+              name: "my_queue"
+              value { str: "fp_queue12" }
+            }
+          }
+        }
+      )pb",
+      &front_panel_name_table_entry));
+
+  // Translate the table entry using the front panel queue translator.
+  ASSERT_OK_AND_ASSIGN(auto front_panel_queue_translator,
+                       QueueTranslator::Create({{"fp_queue12", "12"}}));
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      front_panel_name_table_entry, ir_p4_info, /*translate_port_ids=*/false,
+      /*port_translation_map=*/{}, EmptyFrontPanelQueueTranslator(),
+      *front_panel_queue_translator));
+
+  // Expect that everything is the same except the cpu queue name has been
+  // translated.
+  pdpi::IrEntity front_panel_id_table_entry = front_panel_name_table_entry;
+  front_panel_id_table_entry.mutable_table_entry()
+      ->mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("0xc");
+  EXPECT_THAT(front_panel_name_table_entry,
+              EqualsProto(front_panel_id_table_entry));
+}
+
+TEST(TranslateTableEntry, TranslatesAppDbFrontPanelQueueIdToName) {
+  // Since we do not currently have a general P4Info with a table using the
+  // front_panel_queue_t, create a mock P4 info to test translation.
+  pdpi::IrTableDefinition ir_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(alias: "Table" id: 1)pb")
+          .match_field(R"pb(id: 123 name: "match_field_name")pb", pdpi::IPV4)
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(R"pb(alias: "action_name")pb")
+                  .param(R"pb(name: "my_queue"
+                              type_name { name: "front_panel_queue_t" } ")pb"))
+          .size(512)();
+
+  pdpi::IrP4Info ir_p4_info;
+  (*ir_p4_info.mutable_tables_by_id())[1] = ir_table;
+  (*ir_p4_info.mutable_tables_by_name())["Table"] = ir_table;
+
+  pdpi::IrTableEntry front_panel_id_table_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_name: "Table"
+        matches {
+          name: "match_field_name"
+          exact { hex_str: "0x1" }
+        }
+        action {
+          name: "action_name"
+          params {
+            name: "my_queue"
+            value { str: "0x21" }
+          }
+        }
+      )pb",
+      &front_panel_id_table_entry));
+
+  pdpi::IrTableEntry front_panel_name_table_entry = front_panel_id_table_entry;
+  front_panel_name_table_entry.mutable_action()
+      ->mutable_params(0)
+      ->mutable_value()
+      ->set_str("fp_queue33");
+
+  // Translate the table entry using the front panel queue translator.
+  ASSERT_OK_AND_ASSIGN(auto front_panel_queue_translator,
+                       QueueTranslator::Create({{"fp_queue33", "33"}}));
+
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = ir_p4_info,
+      .translate_port_ids = false,
+      .port_map = {},
+      .cpu_queue_translator = EmptyFrontPanelQueueTranslator(),
+      .front_panel_queue_translator = *front_panel_queue_translator,
+  };
+
+  EXPECT_OK(TranslateTableEntry(options, front_panel_id_table_entry));
+  EXPECT_THAT(front_panel_id_table_entry,
+              EqualsProto(front_panel_name_table_entry));
 }
 
 TEST(TranslateTableEntry, IgnoresUnknownCpuQueueNameToAppDbIdTranslation) {
@@ -664,10 +808,10 @@ TEST(TranslateTableEntry, IgnoresUnknownCpuQueueNameToAppDbIdTranslation) {
   // Add a different queue.
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
                        QueueTranslator::Create({{"queue1", "1"}}));
-
   EXPECT_OK(UpdateIrEntityForOrchAgent(
       ir_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
-      /*port_translation_map=*/{}, *cpu_queue_translator));
+      /*port_translation_map=*/{}, *cpu_queue_translator,
+      EmptyFrontPanelQueueTranslator()));
   EXPECT_THAT(ir_table_entry, EqualsProto(original_table_entry));
 }
 
@@ -704,6 +848,7 @@ TEST(TranslateTableEntry, TranslatesAppDbCpuQueueIdToName) {
       .translate_port_ids = false,
       .port_map = {},
       .cpu_queue_translator = *cpu_queue_translator,
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
 
   EXPECT_OK(TranslateTableEntry(options, ir_table_entry));
@@ -740,6 +885,7 @@ TEST(TranslateTableEntry, IgnoresUnknownAppDbCpuQueueIdToNameTranslation) {
       .translate_port_ids = false,
       .port_map = {},
       .cpu_queue_translator = *cpu_queue_translator,
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
 
   EXPECT_OK(TranslateTableEntry(options, ir_table_entry));
@@ -770,6 +916,7 @@ TEST(TranslateTableEntry, FailsIfAppDbQueueIsNotAHexStringString) {
       .translate_port_ids = false,
       .port_map = {},
       .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   EXPECT_FALSE(TranslateTableEntry(options, ir_table_entry).ok());
 }
@@ -798,6 +945,7 @@ TEST(TranslateTableEntry, FailsIfAppDbQueueIsNotAString) {
       .translate_port_ids = false,
       .port_map = {},
       .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   EXPECT_FALSE(TranslateTableEntry(options, ir_table_entry).ok());
 }
@@ -820,6 +968,7 @@ TEST(TranslatePacketReplication, FailsIfPacketReplicationHasDuplicateReplicas) {
   EXPECT_FALSE(TranslatePiEntityForOrchAgent(
                    pi_entity, GetIrP4Info(), /*translate_port_ids=*/true,
                    /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+                   EmptyFrontPanelQueueTranslator(),
                    /*translate_key_only=*/false)
                    .ok());
 }
@@ -843,6 +992,7 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToOaSuccess) {
       .translate_port_ids = true,
       .port_map = port_translation_map,
       .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   pdpi::IrPacketReplicationEngineEntry updated = entry;
   updated.mutable_multicast_group_entry()->mutable_replicas(0)->set_port(
@@ -873,6 +1023,7 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToControllerSuccess) {
       .translate_port_ids = true,
       .port_map = port_translation_map,
       .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   pdpi::IrPacketReplicationEngineEntry updated = entry;
   updated.mutable_multicast_group_entry()->mutable_replicas(0)->set_port("1");
@@ -901,6 +1052,7 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToOaMissingPort) {
       .translate_port_ids = true,
       .port_map = port_translation_map,
       .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   EXPECT_THAT(TranslatePacketReplicationEntry(options, entry),
               StatusIs(absl::StatusCode::kInvalidArgument));
@@ -924,10 +1076,11 @@ TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
   port_translation_map.insert({"Ethernet0", "1"});
   port_translation_map.insert({"Ethernet1", "2"});
   auto cpu_queue_translator = EmptyCpuQueueTranslator();
+  auto front_panel_queue_translator = EmptyFrontPanelQueueTranslator();
 
   EXPECT_OK(UpdateIrEntityForOrchAgent(
       entry, GetIrP4Info(), /*translate_port_ids=*/true, port_translation_map,
-      cpu_queue_translator));
+      cpu_queue_translator, front_panel_queue_translator));
 
   // Expect that replica ports have changed.
   pdpi::IrEntity updated_entry = entry;
@@ -945,10 +1098,12 @@ TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
 TEST(TranslateUnknown, UpdateEmptyEntityFails) {
   pdpi::IrEntity entry;
   auto cpu_queue_translator = EmptyCpuQueueTranslator();
+  auto front_panel_queue_translator = EmptyFrontPanelQueueTranslator();
   EXPECT_THAT(UpdateIrEntityForOrchAgent(entry, GetIrP4Info(),
                                          /*translate_port_ids=*/true,
                                          /*port_translation_map=*/{},
-                                         cpu_queue_translator),
+                                         cpu_queue_translator,
+                                         front_panel_queue_translator),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -957,6 +1112,7 @@ TEST(TranslateEntity, UnsupportedEntityTypeFails) {
   EXPECT_FALSE(TranslatePiEntityForOrchAgent(
                    pi_entity, GetIrP4Info(), /*translate_port_ids=*/true,
                    /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+                   EmptyFrontPanelQueueTranslator(),
                    /*translate_key_only=*/false)
                    .ok());
 }

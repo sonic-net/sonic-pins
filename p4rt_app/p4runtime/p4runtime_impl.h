@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <thread> // NOLINT
 #include <utility>
@@ -54,6 +55,9 @@
 // #include "swss/intf_translator.h"
 
 namespace p4rt_app {
+
+enum class QueueType { kCpu, kFrontPanel };
+std::ostream& operator<<(std::ostream& os, QueueType qt);
 
 struct P4RuntimeImplOptions {
   bool use_genetlink = false;
@@ -203,9 +207,9 @@ public:
   absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Sets the CPU Queue translator.
-  virtual void SetQueueTranslator(std::unique_ptr<QueueTranslator> translator,
-                                  const std::string& queue_table_key)
+  // Assigns the CPU or FRONT_PANEL queue translator.
+  virtual void AssignQueueTranslator(
+      const QueueType queue_type, std::unique_ptr<QueueTranslator> translator)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   sonic::PacketIoCounters GetPacketIoCounters()
@@ -372,6 +376,10 @@ private:
   // Utility to perform translations between CPU queue name and id.
   std::unique_ptr<QueueTranslator> cpu_queue_translator_
       ABSL_GUARDED_BY(server_state_lock_);
+  // Utility to perform translations between FRONT_PANEL queue name and id.
+  std::unique_ptr<QueueTranslator> front_panel_queue_translator_
+      ABSL_GUARDED_BY(server_state_lock_);
+
   // Performance statistics for P4RT Write().
   EventDataTracker<int> write_batch_requests_
       ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};

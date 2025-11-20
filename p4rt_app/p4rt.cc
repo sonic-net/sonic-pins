@@ -390,7 +390,7 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
       config_db_monitor, "CPU_PORT", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbQueueTableEventHandler>(
-      config_db_monitor, "QUEUE_NAME_TO_ID_MAP", p4runtime_server, "CPU");
+      config_db_monitor, "QUEUE_NAME_TO_ID_MAP", p4runtime_server);
 
   while (*monitor_config_db_events) {
     absl::Status status = config_db_monitor.WaitForNextEventAndHandle();

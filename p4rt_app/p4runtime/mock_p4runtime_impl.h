@@ -74,9 +74,8 @@ public:
               (const std::string &path, const std::string &log_level),
               (override));
 
-  MOCK_METHOD(void, SetQueueTranslator,
-              (std::unique_ptr<QueueTranslator>,
-               const std::string& queue_table_key),
+  MOCK_METHOD(void, AssignQueueTranslator,
+              (const QueueType queue_type, std::unique_ptr<QueueTranslator>),
               (override));
 
   /* TODO(PINS): To handle Component, System & Interface Translator in November

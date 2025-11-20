@@ -145,6 +145,7 @@ cc_test(
         ":config_db_queue_table_event",
         "//gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
+        "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/p4runtime:queue_translator",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
