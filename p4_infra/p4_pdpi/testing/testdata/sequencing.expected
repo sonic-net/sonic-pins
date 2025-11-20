@@ -1,0 +1,2725 @@
+=========================================================================
+SequenceTest: Empty input
+=========================================================================
+
+--- PD updates (input):
+<empty>
+
+--- Write requests (output):
+<empty>
+
+=========================================================================
+SequenceTest: INSERT EntryWithOneKey{key-a} -> INSERT EntryThatRefersTo{key-a}
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-a"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: DELETE EntryThatRefersTo{key-a} -> DELETE EntryWithOneKey{key-a}
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-a"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: INSERT EntryWithTwoKeys{key-a, 0x002} -> INSERT EntryThatRefersTo{key-a, 0x002}
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x002"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x002"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: DELETE EntryThatRefersTo{key-a, 0x002} -> DELETE EntryWithTwoKeys{key-a, 0x002}
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x002"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x002"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: INSERT EntryThatRefersTo{key-a, 0x002}, INSERT EntryWithTwoKeys{key-c, 0x004}
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-c"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-c"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: DELETE EntryThatRefersTo{key-a, 0x002}, DELETE EntryWithTwoKeys{key-c, 0x004}
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-c"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-c"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] INSERT EntryThatRefersTo{key-a, 0x002}, INSERT EntryWithTwoKeys{key-a, 0x004} should be in a single batch and no change in orders
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] DELETE EntryWithTwoKeys{key-a, 0x004}, DELETE EntryThatRefersTo{key-a, 0x002} should be in a single batch no change in orders
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] INSERT Entries that don't refer to each other should be in one batch and maintain the original orders.
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x003"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-c"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x003"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-c"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] DELETE Entries that don't refer to each other should be in one batch and maintain the original orders.
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x003"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-c"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: DELETE
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-c"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x003"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: INSERT EntryWithOneKey{key-a} ->INSERT EntryThatRefersTo{key-a} , another entry
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  lpm2_table_entry {
+    match {
+      ipv6 {
+        value: "ffff::abcd:0:0"
+        prefix_length: 96
+      }
+    }
+    action {
+      NoAction {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    lpm2_table_entry {
+      match {
+        ipv6 {
+          value: "ffff::abcd:0:0"
+          prefix_length: 96
+        }
+      }
+      action {
+        NoAction {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-a"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: INSERT EntryWithOneKey{key-a} -> INSERTEntryThatRefersTo{key-a} ,INSERT EntryWithOneKey{key-b} -> INSERTEntryThatRefersTo{key-b}
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x002"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-b"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-b"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-b"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-a"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x002"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-b"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: INSERT EntryThatRefersTo{key-a}<- INSERT EntryWithOneKey{key-a} -> INSERT EntryThatRefersTo{key-a}. Two INSERT refers to the same referred entry.
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x002"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-a"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x002"
+      }
+      action {
+        referring_to_one_match_field_action {
+          referring_id_1: "key-a"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: referring via match fields for INSERT
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_match_field_table_entry {
+    match {
+      referring_id_1: "key-a"
+      referring_id_2: "0x001"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x001"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x001"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_match_field_table_entry {
+      match {
+        referring_id_1: "key-a"
+        referring_id_2: "0x001"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: referring via match fields for DELETE
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x001"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_match_field_table_entry {
+    match {
+      referring_id_1: "key-a"
+      referring_id_2: "0x001"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_match_field_table_entry {
+      match {
+        referring_id_1: "key-a"
+        referring_id_2: "0x001"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x001"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SortTest: Empty input
+=========================================================================
+
+--- PD entries (input):
+<empty>
+
+--- Sorted entities (output):
+<empty>
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a, 0x002}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithTwoKeys{key-a, 0x002} -> EntryThatRefersTo{key-a, 0x002}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryThatRefersTo{key-a, 0x002} -> EntryWithTwoKeys{key-c, 0x004}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+=========================================================================
+SortTest: Entries at same rank should maintain the original order.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+packet_count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    packet_count_and_meter {
+    }
+  }
+}
+
+--- Sorted entities (output):
+packet_count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    packet_count_and_meter {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a} , another entry
+=========================================================================
+
+--- PD entries (input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a} ,EntryWithOneKey{key-b} -> EntryThatRefersTo{key-b}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+=========================================================================
+SortTest: two_match_fields_table_entry -> referring_by_match_field_table_entry
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Empty input generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+<empty>
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: All root entries means no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x003"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x002"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Root referring to the only entry generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Garbage is unreachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+--- Unreachable entries from roots (output):
+one_match_field_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Root referring to dependency and a standalone Root generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "non-exist"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: All entries are garbage.
+=========================================================================
+
+--- PD entries (input):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+--- Unreachable entries from roots (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Two roots referring to one dependency generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x002"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Children and grand children of the root are not garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_to_referring_by_match_field_table_entry {
+  match {
+    referring_to_referring_id_1: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child dependency"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Garbage referring to other is garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+--- Unreachable entries from roots (output):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Garbage referring to other dependency is garbage, but other dependencies that are referred by a root won't be removed.
+=========================================================================
+
+--- PD entries (input):
+referring_to_referring_by_match_field_table_entry {
+  match {
+    referring_to_referring_id_1: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child dependency"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grandchild dependency referenced by garbage"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x001"
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+--- Unreachable entries from roots (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x001"
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Conglomeration test.
+=========================================================================
+
+--- PD entries (input):
+referring_to_referring_by_match_field_table_entry {
+  match {
+    referring_to_referring_id_1: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child dependency"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-b"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-b"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-c"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "non-exist"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+--- Unreachable entries from roots (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-b"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-b"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Entries referenced by multicast entries are not garbage collected
+=========================================================================
+
+--- PD entries (input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0037"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "port_1"
+        instance: "0x0031"
+        backup_replicas {
+          port: "port_2"
+          instance: "0x0032"
+        }
+      }
+    }
+  }
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_1"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Not Garbage because of primary replica"
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_2"
+    instance: "0x0032"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Not Garbage because of backup replica"
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_12"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+--- Unreachable entries from roots (output):
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_12"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referred to non-root entries are unreachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referred to non-root entries are unreachable and the fully referred to entry is reachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "fully referred to via both match fields"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via action: partially referred to non-root entries are unreachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via action: partially referred to non-root entries are unreachable and the fully referred entry is reachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child fully referred by all match fields"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Referred to Entries with same match fields but different actions and metadata are reachable
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child fully referred to by all match fields"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x00000001"
+      arg1: "0x00000002"
+    }
+  }
+  controller_metadata: "Referred to child with a :)"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+SplitUpWriteRequestTest: max_write_request_size smaller than 1 results in error.
+=========================================================================
+Max update size must be > 0. Max update size: 0
+
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 1 max update size: 1
+
+-- SplitUpWriteRequest output:
+number of write requests: 1
+=========================================================================
+SplitUpWriteRequestTest: No splitting if update_size is smaller than max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 1 max update size: 2
+
+-- SplitUpWriteRequest output:
+number of write requests: 1
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 6 max update size: 2
+
+-- SplitUpWriteRequest output:
+number of write requests: 3
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 123 max update size: 55
+
+-- SplitUpWriteRequest output:
+number of write requests: 3
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 123 max update size: 5
+
+-- SplitUpWriteRequest output:
+number of write requests: 25
