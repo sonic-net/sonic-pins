@@ -37,5 +37,12 @@ bool FakeConsumerNotifierAdapter::WaitForNotificationAndPop(
   return true;
 }
 
+void FakeConsumerNotifierAdapter::DrainNotifications() {
+  std::string op, data;
+  SonicDbEntryList values;
+  while (sonic_db_table_->GetNextNotification(op, data, values).ok()) {
+  }
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app

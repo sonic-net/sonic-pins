@@ -30,6 +30,7 @@
 #include "gutil/gutil/proto.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
@@ -41,6 +42,9 @@ ABSL_FLAG(
     std::string, input_file, "",
     "Input file in SAI PD format(sai::Update proto), see go/p4rt-sample-entry");
 ABSL_FLAG(uint64_t, p4rt_device_id, 1, "P4RT device ID");
+ABSL_FLAG(sai::Instantiation, switch_instantiation,
+          sai::Instantiation::kMiddleblock,
+          "The switch instantiation to test.");
 
 namespace {
 
@@ -88,7 +92,7 @@ class P4rtTableWriter {
   ~P4rtTableWriter() {
     // Cleanup all entries, if specified.
     if (cleanall_) {
-      auto status = pdpi::ClearTableEntries(p4rt_session_.get());
+      auto status = pdpi::ClearEntities(*p4rt_session_);
       if (!status.ok()) {
         LOG(ERROR) << "Unable to clear enries on the switch: "
                    << status.ToString();
@@ -148,10 +152,10 @@ int main(int argc, char** argv) {
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session =
       std::move(*p4rt_session_or);
 
-  const p4::config::v1::P4Info& p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  const pdpi::IrP4Info& ir_p4info =
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+  sai::Instantiation switch_instantiation =
+      absl::GetFlag(FLAGS_switch_instantiation);
+  const p4::config::v1::P4Info& p4info = sai::GetP4Info(switch_instantiation);
+  const pdpi::IrP4Info& ir_p4info = sai::GetIrP4Info(switch_instantiation);
 
   // Push P4 Info Config file if specified.
   if (absl::GetFlag(FLAGS_push_config)) {
