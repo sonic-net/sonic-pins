@@ -38,6 +38,8 @@ public:
                             std::vector<swss::FieldValueTuple> &values,
                             int64_t timeout_ms = 60000LL);
 
+  virtual void DrainNotifications();
+
 protected:
   // Test only constructor for Mock and Fake classes.
   ConsumerNotifierAdapter() = default;

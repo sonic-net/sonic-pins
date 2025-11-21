@@ -16,11 +16,11 @@
 #include <cstdint>
 #include <memory>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/support/sync_stream.h"

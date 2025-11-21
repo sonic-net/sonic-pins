@@ -13,21 +13,24 @@
 // limitations under the License.
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 
+#include <cstdint>
 #include <iostream>
 #include <memory>
+#include <string>
 
+#include "absl/flags/flag.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "gflags/gflags.h"
 #include "grpcpp/security/credentials.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
-DEFINE_string(p4rt_server_address, "unix:/sock/p4rt.sock",
-              "Server address of the P4RT service.");
-DEFINE_uint64(p4rt_device_id, 183807201, "Device ID for the P4RT service");
-DEFINE_bool(use_insecure_credentials, false,
-            "Use insecure credentials when connecting to the P4RT service.");
+ABSL_FLAG(std::string, p4rt_server_address, "unix:/sock/p4rt.sock",
+          "Server address of the P4RT service.");
+ABSL_FLAG(uint64_t, p4rt_device_id, 183807201,
+          "Device ID for the P4RT service");
+ABSL_FLAG(bool, use_insecure_credentials, false,
+          "Use insecure credentials when connecting to the P4RT service.");
 
 namespace p4rt_app {
 
@@ -45,14 +48,16 @@ void Error(absl::string_view message) {
 
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> CreateP4rtSession() {
   std::shared_ptr<grpc::ChannelCredentials> credentials;
-  if (FLAGS_use_insecure_credentials) {
+  if (absl::GetFlag(FLAGS_use_insecure_credentials)) {
     credentials = grpc::InsecureChannelCredentials();
   } else {
     credentials = grpc::experimental::LocalCredentials(UDS);
   }
 
-  auto stub = pdpi::CreateP4RuntimeStub(FLAGS_p4rt_server_address, credentials);
-  return pdpi::P4RuntimeSession::Create(std::move(stub), FLAGS_p4rt_device_id);
+  auto stub = pdpi::CreateP4RuntimeStub(
+      absl::GetFlag(FLAGS_p4rt_server_address), credentials);
+  return pdpi::P4RuntimeSession::Create(std::move(stub),
+                                        absl::GetFlag(FLAGS_p4rt_device_id));
 }
 
 }  // namespace p4rt_app

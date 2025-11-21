@@ -17,9 +17,9 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/numbers.h"
-#include "glog/logging.h"
 #include "swss/schema.h"
 
 namespace p4rt_app {

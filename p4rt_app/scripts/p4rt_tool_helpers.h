@@ -14,17 +14,19 @@
 #ifndef PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
 #define PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
 
+#include <cstdint>
 #include <memory>
+#include <string>
 
+#include "absl/flags/declare.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gflags/gflags.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
 // Flags to configure the P4RT connection.
-DECLARE_string(p4rt_server_address);
-DECLARE_uint64(p4rt_device_id);
-DECLARE_bool(use_insecure_credentials);
+ABSL_DECLARE_FLAG(std::string, p4rt_server_address);
+ABSL_DECLARE_FLAG(uint64_t, p4rt_device_id);
+ABSL_DECLARE_FLAG(bool, use_insecure_credentials);
 
 namespace p4rt_app {
 
