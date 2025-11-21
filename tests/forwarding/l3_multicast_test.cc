@@ -430,7 +430,7 @@ absl::Status SetupDefaultMulticastProgramming(
                      sai::EntryBuilder()
                          .AddIngressAclEntryRedirectingToMulticastGroup(
                              /*multicast_group_id=*/1,
-                             {.in_port = port_id, .ipmc_table_hit = false})
+			     {.in_port = port_id, .route_hit = false})
                          .LogPdEntries()
                          .GetDedupedPiEntities(ir_p4info));
     RETURN_IF_ERROR(pdpi::InstallPiEntities(&session, ir_p4info, acl_entities));
@@ -1550,12 +1550,8 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> acl_entities,
       sai::EntryBuilder()
-          // .AddIngressAclEntryRedirectingToMulticastGroup(
-          //     kMulticastGroup2,
-          //     {.in_port = input_port_id, .ipmc_table_hit = false})
           .AddIngressAclEntryRedirectingToMulticastGroup(
-              kMulticastGroup2,
-              {.in_port = input_port_id, .ipmc_table_hit = true})
+	      kMulticastGroup2, {.in_port = input_port_id, .route_hit = true})
           .LogPdEntries()
           .GetDedupedPiEntities(ir_p4info_));
   ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
