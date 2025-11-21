@@ -709,7 +709,7 @@ control acl_ingress(in headers_t headers,
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
 #if defined(IP_MULTICAST_CAPABLE)
       local_metadata.route_hit : optional
-        @id(9) @name("ipmc_table_hit")
+        @id(9) @name("route_hit")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT);
 #endif
     }

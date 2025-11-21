@@ -1070,7 +1070,50 @@ TEST(EntryBuilder,
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   MirrorAndRedirectMatchFields match_fields = {
       .in_port = "1",
-      .ipmc_table_hit = true,
+      .route_hit = true,
+      .vlan_id = 1,
+      .is_ipv4 = true,
+      .dst_ip =
+          sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+              .value = netaddr::Ipv4Address(0x10, 0, 0, 0x1),
+              .mask = netaddr::Ipv4Address(0xff, 0xff, 0xff, 0xff),
+          },
+      .is_ipv6 = true,
+      .dst_ipv6 =
+          sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+              .value = netaddr::Ipv6Address(0x10, 0, 0, 0, 0, 0, 0, 0x1),
+              .mask = netaddr::Ipv6Address(0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                           0xff, 0xff),
+          },
+      .vrf = "vrf-1",
+  };
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToNexthop("nexthop", match_fields)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_mirror_and_redirect_table"
+                  matches { name: "vlan_id" }
+                  matches { name: "in_port" }
+                  matches { name: "route_hit" }
+                  matches { name: "is_ipv4" }
+                  matches { name: "dst_ip" }
+                  matches { name: "is_ipv6" }
+                  matches { name: "dst_ipv6" }
+                  matches { name: "vrf_id" }
+                })pb"))));
+}
+
+TEST(EntryBuilder,
+     AddIngressAclEntryRedirectingToNexthopWithIpmcTableHitWorks) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  *kIrP4Info.mutable_pkg_info()->mutable_version() = "3.2.6";
+  MirrorAndRedirectMatchFields match_fields = {
+      .in_port = "1",
+      .route_hit = true,
       .vlan_id = 1,
       .is_ipv4 = true,
       .dst_ip =
@@ -1125,7 +1168,7 @@ TEST(EntryBuilder,
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   MirrorAndRedirectMatchFields match_fields = {
       .in_port = "1",
-      .ipmc_table_hit = true,
+      .route_hit = true,
       .vlan_id = 1,
       .is_ipv4 = true,
       .dst_ip =
@@ -1153,7 +1196,7 @@ TEST(EntryBuilder,
                   table_name: "acl_ingress_mirror_and_redirect_table"
                   matches { name: "vlan_id" }
                   matches { name: "in_port" }
-                  matches { name: "ipmc_table_hit" }
+                  matches { name: "route_hit" }
                   matches { name: "is_ipv4" }
                   matches { name: "dst_ip" }
                   matches { name: "is_ipv6" }
