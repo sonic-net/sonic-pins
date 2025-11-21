@@ -39,9 +39,11 @@ cc_test(
     srcs = ["p4_fuzzer_integration_test.cc"],
     deps = [
         "//gutil:collections",
+	"//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//gutil:testing",
         "//lib/p4rt:p4rt_port",
+	"//p4_fuzzer:fuzzer_cc_proto",
         "//p4_fuzzer:fuzzer_config",
         "//p4_fuzzer:mutation_and_fuzz_util",
         "//p4_fuzzer:switch_state",
