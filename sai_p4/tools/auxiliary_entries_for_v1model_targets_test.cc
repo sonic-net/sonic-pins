@@ -237,7 +237,7 @@ TEST(AuxiliaryIrEntitiesForV1ModelTarget,
                                    table_entry {
                                      table_name: "router_interface_table"
                                      action {
-                                       name: "set_port_and_src_mac_and_vlan_id"
+                                       name: "unicast_set_port_and_src_mac_and_vlan_id"
                                        params {
                                          name: "vlan_id"
                                          value { hex_str: "0x1" }
