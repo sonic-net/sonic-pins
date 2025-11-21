@@ -31,12 +31,10 @@ public:
                                        const std::string &channel);
   virtual ~NotificationProducerAdapter() = default;
 
-  virtual void send(const std::vector<swss::KeyOpFieldsValuesTuple> &kofv);
+  virtual void send_with_op_key(const std::string& op, const std::string& key,
+                                std::vector<swss::FieldValueTuple>& fv);
 
-  virtual void send_with_op_key(const std::string &op, const std::string &key,
-                                std::vector<swss::FieldValueTuple> &fv);
-
-protected:
+ protected:
   // Test only constructor used to construct Mock & Fake classes.
   NotificationProducerAdapter() = default;
 
