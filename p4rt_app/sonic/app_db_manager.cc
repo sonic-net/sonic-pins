@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -32,8 +33,8 @@
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
-#include "gutil/collections.h"
-#include "gutil/status.h"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
@@ -44,7 +45,6 @@
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
-#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
 #include "swss/schema.h"
 #include "swss/table.h"

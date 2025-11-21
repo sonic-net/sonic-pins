@@ -17,7 +17,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"

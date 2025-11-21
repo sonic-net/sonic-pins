@@ -19,10 +19,12 @@
 #include "absl/log/log.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
-#include "gutil/proto.h"
-#include "gutil/status_matchers.h"
-#include "gutil/test_artifact_writer.h"
-#include "gutil/testing.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/proto.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/test_artifact_writer.h"
+#include "gutil/gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
@@ -32,8 +34,6 @@
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace p4_symbolic::packet_synthesizer {
 namespace {

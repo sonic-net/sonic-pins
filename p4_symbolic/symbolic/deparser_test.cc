@@ -22,7 +22,9 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
-#include "gutil/status_matchers.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -31,8 +33,6 @@
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/test_util.h"
 #include "z3++.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace p4_symbolic {
 namespace {

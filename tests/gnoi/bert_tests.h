@@ -27,16 +27,16 @@
 #include "absl/strings/substitute.h"
 #include "diag/diag.grpc.pb.h"
 #include "glog/logging.h"
-#include "gutil/status_matchers.h"
-#include "gutil/testing.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace bert {
 
