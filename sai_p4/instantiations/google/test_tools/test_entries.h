@@ -38,6 +38,7 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/ternary.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
@@ -93,6 +94,14 @@ enum class PuntAction {
   kTrap,
   // Punts copy of packet without preventing packet from being forwarded.
   kCopy,
+};
+
+struct CopyAction {
+  std::string cpu_queue = "0x7";
+};
+
+struct TrapAction {
+  std::string cpu_queue = "0x7";
 };
 
 struct SetNextHopId {
@@ -284,6 +293,13 @@ struct AclPreIngressVlanTableMatchFields {
   std::optional<std::string> in_port;
 };
 
+struct AclIngressEntry {
+  std::optional<bool> is_ip;
+  pdpi::Ternary<std::bitset<packetlib::kIpProtocolBitwidth>> ip_protocol;
+  std::variant<CopyAction, TrapAction> punt_action;
+  int priority = 1;
+};
+
 // -- Entry Builder ------------------------------------------------------------
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
@@ -442,6 +458,7 @@ class EntryBuilder {
       absl::string_view vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt,
       int priority = 1);
+  EntryBuilder& AddIngressAclEntry(const AclIngressEntry& params);
   EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
