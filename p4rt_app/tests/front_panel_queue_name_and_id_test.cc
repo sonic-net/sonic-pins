@@ -35,9 +35,8 @@ TEST_F(FrontPanelQueueTest, FrontPanelQueueIdsResultInAppDbQueueIds) {
   ASSERT_OK(
       db_handler.HandleEvent(SET_COMMAND, "FRONT_PANEL", {{"queue15", "15"}}));
 
-  // TODO: This requires front_panel_queue_t to be in the P4 info
-  // before we can test entries this way.
-
+  // TODO: This requires unicast_queue_t and multicast_queue_t to
+  // be in the P4 info before we can test entries this way.
   // ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
   //                      test_lib::PdWriteRequestToPi(
   //                          R"pb(

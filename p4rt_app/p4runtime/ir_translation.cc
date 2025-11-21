@@ -40,7 +40,7 @@ bool IsCpuQueue(const p4::config::v1::P4NamedType& type) {
 }
 
 bool IsFrontPanelQueue(const p4::config::v1::P4NamedType& type) {
-  return type.name() == "front_panel_queue_t";
+  return type.name() == "unicast_queue_t" || type.name() == "multicast_queue_t";
 }
 
 absl::Status TranslatePortValue(
