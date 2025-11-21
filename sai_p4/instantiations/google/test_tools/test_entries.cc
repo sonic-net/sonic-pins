@@ -29,11 +29,13 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "glog/logging.h"
 #include "gutil/overload.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
+#include "gutil/version.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -42,12 +44,14 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/ternary.h"
 #include "p4_pdpi/translation_options.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/versions.h"
 
 namespace sai {
 namespace {
@@ -190,6 +194,26 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
                        sai::GetUnionedIrP4Info(), entries_,
                        pdpi::TranslationOptions{.allow_unsupported = true}));
   gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
+  ASSIGN_OR_RETURN(gutil::Version current_version,
+                   gutil::ParseVersion(ir_p4info.pkg_info().version()));
+  ASSIGN_OR_RETURN(
+      gutil::Version version_uses_route_hit_acl_qualifier_name,
+      gutil::ParseVersion(
+          SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME));
+
+  // TODO: Version-based workarounds. Use Babel in the future.
+  for (auto& ir_entity : *ir_entities.mutable_entities()) {
+    if (current_version < version_uses_route_hit_acl_qualifier_name) {
+      if (ir_entity.table_entry().table_name() !=
+          "acl_ingress_mirror_and_redirect_table")
+        continue;
+      for (auto& match : *ir_entity.mutable_table_entry()->mutable_matches()) {
+        if (match.name() == "route_hit") {
+          match.set_name("ipmc_table_hit");
+        }
+      }
+    }
+  }
   return ir_entities;
 }
 
@@ -767,6 +791,33 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddIngressAclEntry(const AclIngressEntry& params) {
+  sai::AclIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_ingress_table_entry();
+  if (params.is_ip.has_value()) {
+    entry.mutable_match()->mutable_is_ip()->set_value(
+        BoolToHexString(*params.is_ip));
+  }
+  if (!params.ip_protocol.IsWildcard()) {
+    *entry.mutable_match()->mutable_ip_protocol() =
+        BitSetTernaryToSai<packetlib::kIpProtocolBitwidth>(params.ip_protocol);
+  }
+  entry.set_priority(params.priority);
+
+  std::visit(gutil::Overload{
+                 [&](CopyAction action) {
+                   entry.mutable_action()->mutable_acl_copy()->set_qos_queue(
+                       action.cpu_queue);
+                 },
+                 [&](TrapAction action) {
+                   entry.mutable_action()->mutable_acl_trap()->set_qos_queue(
+                       action.cpu_queue);
+                 },
+             },
+             params.punt_action);
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
     absl::string_view nexthop_id,
     const MirrorAndRedirectMatchFields& match_fields, int priority) {
@@ -776,9 +827,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   if (match_fields.in_port.has_value()) {
     entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
   }
-  if (match_fields.ipmc_table_hit.has_value()) {
-    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
-        BoolToHexString(*match_fields.ipmc_table_hit));
+  if (match_fields.route_hit.has_value()) {
+    entry.mutable_match()->mutable_route_hit()->set_value(
+        BoolToHexString(*match_fields.route_hit));
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
@@ -834,9 +885,9 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
   if (match_fields.in_port.has_value()) {
     entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
   }
-  if (match_fields.ipmc_table_hit.has_value()) {
-    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
-        BoolToHexString(*match_fields.ipmc_table_hit));
+  if (match_fields.route_hit.has_value()) {
+    entry.mutable_match()->mutable_route_hit()->set_value(
+        BoolToHexString(*match_fields.route_hit));
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
@@ -913,9 +964,9 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   if (match_fields.in_port.has_value()) {
     entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
   }
-  if (match_fields.ipmc_table_hit.has_value()) {
-    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
-        BoolToHexString(*match_fields.ipmc_table_hit));
+  if (match_fields.route_hit.has_value()) {
+    entry.mutable_match()->mutable_route_hit()->set_value(
+        BoolToHexString(*match_fields.route_hit));
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(

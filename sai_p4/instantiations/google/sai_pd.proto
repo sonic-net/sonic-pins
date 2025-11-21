@@ -825,10 +825,9 @@ message AclIngressMirrorAndRedirectTableEntry {
     Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
     // Refers to 'vrf_table.vrf_id'.
-    Optional vrf_id = 8; // optional match / Format::STRING
-    Optional ipmc_table_hit =
-        9;                // optional match / Format::HEX_STRING / 1 bits
-    Ternary dst_ip = 10;  // ternary match / Format::IPV4
+    Optional vrf_id = 8;     // optional match / Format::STRING
+    Optional route_hit = 9;  // optional match / Format::HEX_STRING / 1 bits
+    Ternary dst_ip = 10;     // ternary match / Format::IPV4
   }
   Match match = 1;
   message Action {
