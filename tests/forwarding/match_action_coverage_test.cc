@@ -155,7 +155,7 @@ absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
   }
 
   // Remove once tunnel encap entries can refer to RIFs with
-  // the `set_port_and_src_mac_and_vlan_id` action.
+  // the `unicast_set_port_and_src_mac_and_vlan_id` action.
   if (entity.table_entry().table_id() == ROUTING_TUNNEL_TABLE_ID &&
       entity.table_entry().action().action().action_id() ==
           ROUTING_MARK_FOR_P2P_TUNNEL_ENCAP_ACTION_ID) {
@@ -184,9 +184,9 @@ absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
     }
 
     // tunnel encap entries cannot refer to RIFs with
-    // the `set_port_and_src_mac_and_vlan_id` action.
+    // the `unicast_set_port_and_src_mac_and_vlan_id` action.
     if (stored_rif_entry->action().action().action_id() ==
-        ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
+	ROUTING_UNICAST_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
       return true;
   }
   return false;
