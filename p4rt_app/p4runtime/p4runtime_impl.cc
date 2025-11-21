@@ -67,6 +67,7 @@
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
+#include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
@@ -279,7 +280,8 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator) {
   const auto pdpi_options = pdpi::TranslationOptions{
       // When deleting we only consider the key. Actions don't matter so we
       // don't waste time trying to translate that part even if the controller
@@ -334,8 +336,9 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
   // Apply any custom translation that are needed on the switch side to
   // account for gNMI configs (e.g. port ID translation).
   RETURN_IF_ERROR(
-      UpdateIrEntityForOrchAgent(*ir_entity, p4_info, translate_port_ids,
-                                 port_translation_map, cpu_queue_translator));
+      UpdateIrEntityForOrchAgent(*ir_entity, p4_info, 
+                                 translate_port_ids, port_translation_map,
+                                 cpu_queue_translator, front_panel_queue_translator));
 
   ASSIGN_OR_RETURN(auto entity_key,
                    pdpi::EntityKey::MakeEntityKey(*normalized_pi_entry));
@@ -356,6 +359,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
     pdpi::IrWriteResponse* response) {
   absl::flat_hash_set<pdpi::EntityKey> keys_in_request;
   bool has_duplicates = false;
@@ -370,7 +374,8 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     // not try to handle it in lower layers).
     absl::StatusOr<sonic::AppDbEntry> app_db_entry = PiUpdateToAppDbEntry(
         p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
-        port_translation_map, cpu_queue_translator);
+        port_translation_map, cpu_queue_translator,
+        front_panel_queue_translator);
     if (!app_db_entry.ok()) {
       entry_status = GetIrUpdateStatus(app_db_entry.status());
       break;
@@ -487,6 +492,7 @@ RebuildEntityEntryCache(
     const pdpi::IrP4Info& p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
     sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
   absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> cache;
   // Get all P4RT keys associated with IrTableEntry objects from the AppDb.
@@ -501,6 +507,7 @@ RebuildEntityEntryCache(
             .translate_port_ids = translate_port_ids,
             .port_map = port_translation_map,
             .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
         },
         ir_table_entry));
 
@@ -542,6 +549,7 @@ RebuildEntityEntryCache(
             .translate_port_ids = translate_port_ids,
             .port_map = port_translation_map,
             .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
         },
         ir_entry));
     auto pi_entry = pdpi::IrPacketReplicationEngineEntryToPi(p4_info, ir_entry);
@@ -566,6 +574,7 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
     const p4::v1::Entity::EntityCase entity_type,
     std::vector<std::string>& failures) {
   // Translate the Entity cache into IR entries for comparison.
@@ -577,7 +586,8 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
     }
     auto ir_entity = TranslatePiEntityForOrchAgent(
         pi_entity, ir_p4_info, translate_port_ids, port_translation_map,
-        cpu_queue_translator, /*translate_key_only=*/false);
+        cpu_queue_translator, front_panel_queue_translator, 
+        /*translate_key_only=*/false);
     if (!ir_entity.ok()) {
       failure_count++;
       continue;
@@ -642,6 +652,21 @@ PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
 
 }  // namespace
 
+std::ostream& operator<<(std::ostream& os, QueueType qt) {
+  switch (qt) {
+    case QueueType::kCpu:
+      os << "CPU";
+      break;
+    case QueueType::kFrontPanel:
+      os << "FRONT_PANEL";
+      break;
+    default:
+      os << "UNKNOWN";
+      break;
+  }
+  return os;
+}
+
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
     sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
@@ -671,6 +696,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       netdev_translator_(netdev_translator), */
       translate_port_ids_(p4rt_options.translate_port_ids),
       cpu_queue_translator_(QueueTranslator::Empty()),
+      front_panel_queue_translator_(QueueTranslator::Empty()),
       is_freeze_mode_(p4rt_options.is_freeze_mode) {
   absl::optional<std::string> init_failure;
 
@@ -685,6 +711,18 @@ P4RuntimeImpl::P4RuntimeImpl(
     init_failure = absl::StrCat("Failed to spawn Receive thread, error: ",
                                 status_or.status().ToString());
   }
+}
+
+grpc::Status P4RuntimeImpl::EnterCriticalState(const std::string& message) {
+  LOG(ERROR) << "Entering critical state: " << message;
+  return grpc::Status(grpc::StatusCode::INTERNAL,
+                      absl::StrCat("[P4RT App going CRITICAL] ", message));
+}
+
+grpc::Status P4RuntimeImpl::GrabLockAndEnterCriticalState(
+    absl::string_view message) {
+  absl::MutexLock l(&server_state_lock_);
+  return EnterCriticalState(std::string(message));
 }
 
 grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
@@ -714,7 +752,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     sonic::AppDbUpdates app_db_updates = PiEntityUpdatesToIr(
         *request, *ir_p4info_, entity_cache_, capacity_by_action_profile_name_,
         *p4_constraint_info_, translate_port_ids_, port_translation_map_,
-        *cpu_queue_translator_, rpc_response);
+        *cpu_queue_translator_, *front_panel_queue_translator_, rpc_response);
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
@@ -841,7 +879,7 @@ grpc::Status P4RuntimeImpl::Read(
     auto responses_status = ReadAllEntitiesInBatches(
         kReadResponseBatchSize, *request, *ir_p4info_, entity_cache_,
         translate_port_ids_, port_translation_map_, *cpu_queue_translator_,
-        p4rt_table_);
+        *front_panel_queue_translator_, p4rt_table_);
     if (!responses_status.ok()) {
       LOG(WARNING) << "Read failure: " << responses_status.status();
       return grpc::Status(
@@ -1159,7 +1197,8 @@ absl::Status P4RuntimeImpl::RemovePacketIoPort(const std::string& port_name) {
 // -----|--------|--------|--------|
 //  "C" | Reject | Reject |  Add   |
 absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
-                                               const std::string& port_id) {
+                                               const std::string& port_id,
+                                               bool update_dbs) {
   absl::MutexLock l(&server_state_lock_);
 
   // Do not allow empty strings.
@@ -1179,8 +1218,10 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
   const auto name_iter = port_translation_map_.left.find(port_name);
   if (name_iter != port_translation_map_.left.end() &&
       name_iter->second == port_id) {
-    port_table_.app_db->set(port_name, {{"id", port_id}});
-    port_table_.app_state_db->set(port_name, {{"id", port_id}});
+    if (update_dbs) {
+      port_table_.app_db->set(port_name, {{"id", port_id}});
+      port_table_.app_state_db->set(port_name, {{"id", port_id}});
+    }
     return absl::OkStatus();
   }
 
@@ -1199,8 +1240,10 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
     port_translation_map_.left.erase(name_iter);
   }
   port_translation_map_.insert({port_name, port_id});
-  port_table_.app_db->set(port_name, {{"id", port_id}});
-  port_table_.app_state_db->set(port_name, {{"id", port_id}});
+  if (update_dbs) {
+    port_table_.app_db->set(port_name, {{"id", port_id}});
+    port_table_.app_state_db->set(port_name, {{"id", port_id}});
+  }
   return absl::OkStatus();
 }
 
@@ -1226,6 +1269,24 @@ absl::Status P4RuntimeImpl::RemovePortTranslation(
   return absl::OkStatus();
 }
 
+std::string P4RuntimeImpl::DumpPortTranslationDebugData() {
+  absl::MutexLock l(&server_state_lock_);
+  std::string rv;
+  for (const auto& [name, id] : port_translation_map_) {
+    absl::StrAppend(&rv, name, " : ", id, "\n");
+  }
+  return rv;
+}
+
+std::string P4RuntimeImpl::DumpEntityCache() {
+  absl::MutexLock l(&server_state_lock_);
+  std::string rv;
+  for (const auto& [key, entity] : entity_cache_) {
+    absl::StrAppend(&rv, key, " :\n", entity.ShortDebugString(), "\n\n");
+  }
+  return rv;
+}
+
 absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
                                           const std::string& log_level) {
   sonic::PacketIoCounters counters = GetPacketIoCounters();
@@ -1238,10 +1299,29 @@ absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
       counters.packet_out_errors, counters.packet_in_received,
       counters.packet_in_errors);
 
+  RETURN_IF_ERROR(gutil::WriteFile(DumpEntityCache(), path + "/entity_cache"));
+
+  RETURN_IF_ERROR(gutil::WriteFile(DumpPortTranslationDebugData(),
+                                   path + "/port_translation_map"));
+
+  absl::MutexLock l(&server_state_lock_);
+  std::string cpu_queue_str = cpu_queue_translator_
+                                  ? cpu_queue_translator_->DumpDebugData()
+                                  : "unassigned";
+  std::string fp_queue_str =
+      front_panel_queue_translator_
+          ? front_panel_queue_translator_->DumpDebugData()
+          : "unassigned";
+
+  RETURN_IF_ERROR(
+      gutil::WriteFile("CPU queue translation map\n" + cpu_queue_str + "\n\n" +
+                           "FRONT_PANEL queue translation map\n" + fp_queue_str,
+                       path + "/queue_translation_maps"));
+
   return gutil::WriteFile(debug_str, path + "/packet_io_counters");
 }
 
-//absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
+//absl::Status P4RuntimeImpl::VerifyState(bool update_component_state)
 absl::Status P4RuntimeImpl::VerifyState() {
   absl::MutexLock l(&server_state_lock_);
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
@@ -1249,7 +1329,8 @@ absl::Status P4RuntimeImpl::VerifyState() {
   // Verify the P4RT_TABLE entries against the cache.
   std::vector<pdpi::IrEntity> p4rt_entities = GetIrEntitiesFromCache(
       entity_cache_, *ir_p4info_, translate_port_ids_, port_translation_map_,
-      *cpu_queue_translator_, p4::v1::Entity::kTableEntry, failures);
+      *cpu_queue_translator_, *front_panel_queue_translator_,
+      p4::v1::Entity::kTableEntry, failures);
   std::vector<std::string> p4rt_table_failures =
       sonic::VerifyP4rtTableWithCacheEntities(*p4rt_table_.app_db,
                                               p4rt_entities, *ir_p4info_);
@@ -1289,6 +1370,7 @@ absl::Status P4RuntimeImpl::VerifyState() {
   std::vector<pdpi::IrEntity> packet_replication_entries =
       GetIrEntitiesFromCache(entity_cache_, *ir_p4info_, translate_port_ids_,
                              port_translation_map_, *cpu_queue_translator_,
+                             *front_panel_queue_translator_,
                              p4::v1::Entity::kPacketReplicationEngineEntry,
                              failures);
   std::vector<std::string> packet_replication_table_failures =
@@ -1325,16 +1407,16 @@ P4RuntimeImpl::GetFlowProgrammingStatistics() {
   return stats;
 }
 
-void P4RuntimeImpl::SetQueueTranslator(
-    std::unique_ptr<QueueTranslator> translator,
-    const std::string& queue_table_key) {
+void P4RuntimeImpl::AssignQueueTranslator(
+    const QueueType queue_type, std::unique_ptr<QueueTranslator> translator) {
   absl::MutexLock l(&server_state_lock_);
 
-  if (queue_table_key == "CPU") {
+  if (queue_type == QueueType::kCpu) {
     cpu_queue_translator_ = std::move(translator);
+  } else if (queue_type == QueueType::kFrontPanel) {
+    front_panel_queue_translator_ = std::move(translator);
   } else {
-    LOG(WARNING) << "Ignoring unknown queue table key '" << queue_table_key
-                 << "'";
+    LOG(WARNING) << "Ignoring unknown queue type '" << queue_type << "'";
   }
 }
 
@@ -1374,12 +1456,13 @@ grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
   // Rebuild the table_entry cache.
   auto entity_cache = RebuildEntityEntryCache(
       *ir_p4info_, translate_port_ids_, port_translation_map_,
-      *cpu_queue_translator_, p4rt_table_, vrf_table_);
+      *cpu_queue_translator_, *front_panel_queue_translator_, 
+      p4rt_table_, vrf_table_);
   if (!entity_cache.ok()) {
     LOG(ERROR) << "Failed to build the table cache during COMMIT: "
                << entity_cache.status();
     return EnterCriticalState(entity_cache.status().ToString());
-/*TODO(PINS): To handle component_state_ later.
+  /*TODO(PINS): To handle component_state_ later.
     return EnterCriticalState(entity_cache.status().ToString(),
                               component_state_); */
   }
@@ -1415,7 +1498,8 @@ grpc::Status P4RuntimeImpl::CommitPipelineConfig(
 }
 
 grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
-    const p4::v1::SetForwardingPipelineConfigRequest& request) {
+    const p4::v1::SetForwardingPipelineConfigRequest& request,
+    bool commit_to_hardware) {
   auto config_info = PreprocessConfig(request);
   if (!config_info.ok()) {
     return gutil::AbslStatusToGrpcStatus(config_info.status());
@@ -1437,13 +1521,74 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
             diff_report));
   }
 
+  // If the IrP4Info hasn't been set then we need to configure the lower layers.
+  if (!ir_p4info_.has_value()) {
+    // Collect any P4RT constraints from the P4Info.
+    auto constraint_info =
+        p4_constraints::P4ToConstraintInfo(request.config().p4info());
+    if (!constraint_info.ok()) {
+      LOG(WARNING) << "Could not get constraint info from P4Info: "
+                   << constraint_info.status();
+      return gutil::AbslStatusToGrpcStatus(
+          absl::Status(constraint_info.status().code(),
+                       absl::StrCat("[P4 Constraint] ",
+                                    constraint_info.status().message())));
+    }
+
+    // Convert the P4Info into an IrP4Info.
+    auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
+    if (!ir_p4info.ok()) {
+      LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
+                   << ir_p4info.status();
+      return gutil::AbslStatusToGrpcStatus(absl::Status(
+          ir_p4info.status().code(),
+          absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
+    }
+    // Remove `@unsupported` entities so their use in requests will be rejected.
+    pdpi::RemoveUnsupportedEntities(*ir_p4info);
+    TranslateIrP4InfoForOrchAgent(*ir_p4info);
+
+    // Apply ir_p4info to DB if we are committing to DB.
+    if (commit_to_hardware) {
+      // Apply a config if we don't currently have one.
+      absl::Status config_result = ConfigureAppDbTables(*ir_p4info);
+      if (!config_result.ok()) {
+        LOG(ERROR) << "Failed to apply ForwardingPipelineConfig: "
+                   << config_result;
+        // TODO: cleanup P4RT table definitions instead of going
+        // critical.
+        return grpc::Status(grpc::StatusCode::INTERNAL,
+                            config_result.ToString());
+      }
+    }
+
+    // Store resource utilization limits for any ActionProfiles.
+    for (const auto& [action_profile_name, action_profile_def] :
+         ir_p4info->action_profiles_by_name()) {
+      capacity_by_action_profile_name_[action_profile_name] =
+          GetActionProfileResourceCapacity(action_profile_def);
+      LOG(INFO) << "Adding action profile limits for '" << action_profile_name
+                << "': max_weights_for_all_groups="
+                << action_profile_def.action_profile().size();
+    }
+
+    // Update P4RuntimeImpl's state only if we succeed.
+    p4_constraint_info_ = *std::move(constraint_info);
+    ir_p4info_ = *std::move(ir_p4info);
+  }
+
   // The ForwardingPipelineConfig is still updated in case the cookie value has
   // been changed.
-  if (ir_p4info_.has_value()) {
-    forwarding_pipeline_config_ = request.config();
-    LOG(INFO)
-        << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
-    return SavePipelineConfig(*forwarding_pipeline_config_);
+  forwarding_pipeline_config_ = request.config();
+
+  // Save the ForwardingPipelineConfig if we are committing.
+  if (commit_to_hardware) {
+    grpc::Status saved = SavePipelineConfig(*forwarding_pipeline_config_);
+    if (!saved.ok()) {
+      LOG(ERROR) << "Successfully applied, but could not save the "
+                 << "ForwardingPipelineConfig: " << saved.error_message();
+      return saved;
+    }
   }
 
   // Configure the lower layers.
@@ -1635,22 +1780,6 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
 
   // Spawn the receiver thread.
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
-}
-
-swss::WarmStart::WarmStartState
-P4RuntimeImpl::GetOrchAgentWarmStartReconcliationState() const {
-  constexpr absl::Duration kPollDuration = absl::Minutes(1);
-  const absl::Time kTimeout = absl::Now() + kPollDuration;
-  swss::WarmStart::WarmStartState oa_wb_state;
-  while (absl::Now() < kTimeout) {
-    swss::WarmStart::getWarmStartState("orchagent", oa_wb_state);
-    if (oa_wb_state == swss::WarmStart::WarmStartState::RECONCILED ||
-        oa_wb_state == swss::WarmStart::WarmStartState::WSDISABLED) {
-      return oa_wb_state;
-    }
-    absl::SleepFor(absl::Seconds(1));
-  }
-  return swss::WarmStart::WarmStartState::WSUNKNOWN;
 }
 
 }  // namespace p4rt_app

@@ -69,12 +69,15 @@ absl::Status AppendAclCounterData(
     p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
+    sonic::P4rtTable& p4rt_table) {
   ASSIGN_OR_RETURN(
       pdpi::IrTableEntry ir_table_entry,
       TranslatePiTableEntryForOrchAgent(
           pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
-          cpu_queue_translator, /*translate_key_only=*/false));
+          cpu_queue_translator, front_panel_queue_translator,
+          /*translate_key_only=*/false));
 
   RETURN_IF_ERROR(sonic::AppendCounterDataForTableEntry(
       ir_table_entry, p4rt_table, ir_p4_info));
@@ -94,7 +97,9 @@ absl::Status AppendTableEntryReads(
     const std::string& role_name, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
+    sonic::P4rtTable& p4rt_table) {
   // Fetch the table definition since it will inform how we process the read
   // request.
   auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
@@ -127,7 +132,7 @@ absl::Status AppendTableEntryReads(
   if (table_type == table::Type::kAcl) {
     RETURN_IF_ERROR(AppendAclCounterData(
         *response_entry, ir_p4_info, translate_port_ids, port_translation_map,
-        cpu_queue_translator, p4rt_table));
+        cpu_queue_translator, front_panel_queue_translator, p4rt_table));
   }
 
   return absl::OkStatus();
@@ -148,7 +153,9 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
+    QueueTranslator& cpu_queue_translator,
+    QueueTranslator& front_panel_queue_translator,
+    sonic::P4rtTable& p4rt_table) {
   std::vector<p4::v1::ReadResponse> responses;
   responses.push_back(p4::v1::ReadResponse{});
   for (const auto& entity : request.entities()) {
@@ -161,7 +168,8 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
             RETURN_IF_ERROR(AppendTableEntryReads(
                 responses.back(), entry.table_entry(), request.role(),
                 ir_p4_info, translate_port_ids, port_translation_map,
-                cpu_queue_translator, p4rt_table));
+                cpu_queue_translator, front_panel_queue_translator,
+                p4rt_table));
             if (responses.size() >= batch_size) {
               responses.push_back(p4::v1::ReadResponse{});
             }

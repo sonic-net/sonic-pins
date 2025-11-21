@@ -156,6 +156,7 @@ cc_library(
         "//p4rt_app/sonic:response_handler",
         "//p4rt_app/sonic:state_verification",
         "//p4rt_app/sonic:vrf_entry_translation",
+        "//p4rt_app/sonic/adapters:table_adapter",
         "//p4rt_app/sonic/adapters:warm_boot_state_adapter",
         "//p4rt_app/utils:event_data_tracker",
         "//p4rt_app/utils:status_utility",
@@ -163,7 +164,7 @@ cc_library(
         "@boost//:bimap",
         "@boost//:graph",
         "@com_github_google_glog//:glog",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+	"@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:interpreter",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -193,7 +194,7 @@ cc_library(
     deps = [
         ":p4runtime_impl",
 	":queue_translator",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+	"@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest",
     ],
@@ -287,11 +288,10 @@ cc_library(
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -386,10 +386,12 @@ cc_library(
     deps = [
         "//gutil:collections",
         "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 

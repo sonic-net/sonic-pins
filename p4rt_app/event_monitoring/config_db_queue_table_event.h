@@ -26,9 +26,8 @@ namespace p4rt_app {
 
 class ConfigDbQueueTableEventHandler : public sonic::StateEventHandler {
  public:
-  explicit ConfigDbQueueTableEventHandler(P4RuntimeImpl* p4runtime,
-                                          std::string queue_table_key)
-      : p4runtime_(*p4runtime), queue_table_key_(std::move(queue_table_key)) {}
+  explicit ConfigDbQueueTableEventHandler(P4RuntimeImpl* p4runtime)
+      : p4runtime_(*p4runtime) {}
 
   absl::Status HandleEvent(
       const std::string& operation, const std::string& key,
@@ -36,7 +35,6 @@ class ConfigDbQueueTableEventHandler : public sonic::StateEventHandler {
 
  private:
   P4RuntimeImpl& p4runtime_;
-  const std::string queue_table_key_;
 };
 
 }  // namespace p4rt_app

@@ -29,13 +29,17 @@ namespace p4rt_app {
 
 // Reads all table entries from the cache and return in batches (of batch_size).
 // For each ACL entry we also fetch counter data from CounterDb.
+// TODO: Encapsulate translation arguments.
 absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
     int batch_size, const p4::v1::ReadRequest &request,
     const pdpi::IrP4Info &ir_p4_info,
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> &entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string> &port_translation_map,
-    QueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table);
+    QueueTranslator& cpu_queue_translator,
+    QueueTranslator& front_panel_queue_translator,
+    sonic::P4rtTable& p4rt_table);
+
 } // namespace p4rt_app
 
 #endif // PINS_P4RT_APP_P4RUNTIME_P4RUNTIME_READ_H_

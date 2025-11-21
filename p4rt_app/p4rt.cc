@@ -390,7 +390,7 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
       config_db_monitor, "CPU_PORT", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbQueueTableEventHandler>(
-      config_db_monitor, "QUEUE_NAME_TO_ID_MAP", p4runtime_server, "CPU");
+      config_db_monitor, "QUEUE_NAME_TO_ID_MAP", p4runtime_server);
 
   while (*monitor_config_db_events) {
     absl::Status status = config_db_monitor.WaitForNextEventAndHandle();
@@ -485,11 +485,6 @@ int main(int argc, char** argv) {
     // TODO: Use warm boot state adaptor.
     swss::WarmStart::setWarmStartState(
         "p4rt", swss::WarmStart::WarmStartState::INITIALIZED);
-    // TODO: Perform Reconciliation.
-    p4runtime_server.GetOrchAgentWarmStartReconcliationState();
-    // TODO: If P4RT and OA is reconciled and SV is
-    // disabled, then unfreeze P4RT server. If SV is enabled, run SV and keep
-    // p4runtimer_server frozen until unfreeze notification is received.
   }
 
   // Create a server to listen on the unix socket port.

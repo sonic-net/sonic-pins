@@ -1,5 +1,7 @@
 #include "p4rt_app/p4runtime/queue_translator.h"
 
+#include <string>
+
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -9,6 +11,7 @@ namespace p4rt_app {
 namespace {
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::testing::HasSubstr;
 
 // Succeeds if the translator has both translations:
 //   IdToName(id) == name
@@ -137,6 +140,50 @@ TEST(QueueTranslator, CanTranslateNameToId) {
   EXPECT_THAT(translator->NameToId("a"), IsOkAndHolds(1));
   EXPECT_THAT(translator->NameToId("b"), IsOkAndHolds(2));
   EXPECT_THAT(translator->NameToId("c"), IsOkAndHolds(3));
+}
+
+TEST(QueueTranslator, OptionallyTranslateIdToName) {
+  ASSERT_OK_AND_ASSIGN(auto translator, QueueTranslator::Create({
+                                            {"a", "1"},
+                                            {"c", "3"},
+                                            {"d", "11"},
+                                        }));
+
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("1"), IsOkAndHolds("a"));
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("3"), IsOkAndHolds("c"));
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("11"),
+              IsOkAndHolds("11"));
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("0xb"),
+              IsOkAndHolds("d"));
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("0"), IsOkAndHolds("0"));
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("0x3"),
+              IsOkAndHolds("c"));
+  EXPECT_THAT(translator->OptionallyTranslateIdToName("a"), IsOkAndHolds("a"));
+}
+
+TEST(QueueTranslator, OptionallyTranslateNameToIdInHexString) {
+  ASSERT_OK_AND_ASSIGN(auto translator, QueueTranslator::Create({
+                                            {"a", "1"},
+                                            {"c", "3"},
+                                        }));
+  EXPECT_EQ(translator->OptionallyTranslateNameToIdInHexString("a"), "0x1");
+  EXPECT_EQ(translator->OptionallyTranslateNameToIdInHexString("c"), "0x3");
+  EXPECT_EQ(translator->OptionallyTranslateNameToIdInHexString("0x3"), "0x3");
+  // TODO: Accept queue number in non-hex-string format for now.
+  EXPECT_EQ(translator->OptionallyTranslateNameToIdInHexString("3"), "0x3");
+  EXPECT_EQ(translator->OptionallyTranslateNameToIdInHexString("0"), "0");
+}
+
+TEST(QueueTranslator, DebugDataMatches) {
+  ASSERT_OK_AND_ASSIGN(auto translator, QueueTranslator::Create({
+                                            {"a", "1"},
+                                            {"b", "2"},
+                                            {"c", "3"},
+                                        }));
+  std::string dump = translator->DumpDebugData();
+  EXPECT_THAT(dump, HasSubstr("a : 1\n"));
+  EXPECT_THAT(dump, HasSubstr("b : 2\n"));
+  EXPECT_THAT(dump, HasSubstr("c : 3\n"));
 }
 
 }  // namespace

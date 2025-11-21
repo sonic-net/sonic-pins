@@ -503,6 +503,14 @@ EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
     pd_replica.set_port(replica.egress_port);
     pd_replica.set_instance(
         pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica.instance));
+    for (const BackupReplica& backup_replica : replica.backup_replicas) {
+      sai::ReplicateAction::BackupReplica& pd_backup_replica =
+          *pd_replica.add_backup_replicas();
+      pd_backup_replica.set_port(backup_replica.egress_port);
+      pd_backup_replica.set_instance(
+          pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(
+              backup_replica.instance));
+    }
   }
   return *this;
 }

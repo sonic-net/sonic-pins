@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <thread> // NOLINT
 #include <utility>
@@ -54,6 +55,9 @@
 // #include "swss/intf_translator.h"
 
 namespace p4rt_app {
+
+enum class QueueType { kCpu, kFrontPanel };
+std::ostream& operator<<(std::ostream& os, QueueType qt);
 
 struct P4RuntimeImplOptions {
   bool use_genetlink = false;
@@ -169,8 +173,9 @@ public:
   // -----|--------|--------|--------|
   //  "C" | Reject | Reject |  Add   |
   // -----|--------|--------|--------|
-  virtual absl::Status AddPortTranslation(const std::string &port_name,
-                                          const std::string &port_id)
+  virtual absl::Status AddPortTranslation(const std::string& port_name,
+                                          const std::string& port_id,
+                                          bool update_dbs = true)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Removes a port translation. Returns an error for an empty port name.
@@ -188,13 +193,16 @@ public:
   // tables (e.g. VRF_TABLE) could cause false positives.
   virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  std::string DumpPortTranslationDebugData();
+  std::string DumpEntityCache();
+
   // Dump various debug data for the P4RT App, including:
   // * PacketIO counters.
-  //
-  // TODO: Dump other artifacts(e.g. P4Info, internal cache and
-  // mappings etc.)
-  virtual absl::Status DumpDebugData(const std::string &path,
-                                     const std::string &log_level)
+  // * Port translation map.
+  // * Queue translations maps.
+  // * Internal cache.
+  virtual absl::Status DumpDebugData(const std::string& path,
+                                     const std::string& log_level)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Returns performance statistics relating to the P4Runtime flow programming
@@ -203,19 +211,16 @@ public:
   absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Sets the CPU Queue translator.
-  virtual void SetQueueTranslator(std::unique_ptr<QueueTranslator> translator,
-                                  const std::string& queue_table_key)
+  // Assigns the CPU or FRONT_PANEL queue translator.
+  virtual void AssignQueueTranslator(
+      const QueueType queue_type, std::unique_ptr<QueueTranslator> translator)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // TODO: Move to warm boot state adaptor and add tests.
-  // In WarmBoot mode, poll and return OA Reconciliation status, timeout after
-  // 1min. If OA is RECONCILED/FAILED, exit loop early.
-  swss::WarmStart::WarmStartState
-  GetOrchAgentWarmStartReconcliationState() const;
+  grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
 protected:
   // Simple constructor that should only be used for testing purposes.
@@ -260,7 +265,8 @@ private:
   // Returns an error if the config is not provided, or if the existing
   // forwarding state cannot be preserved for the given config by the target.
   grpc::Status ReconcileAndCommitPipelineConfig(
-      const p4::v1::SetForwardingPipelineConfigRequest &request)
+      const p4::v1::SetForwardingPipelineConfigRequest& request,
+      bool commit_to_hardware = true)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Tries to save the forwarding config to a file. If the
@@ -280,6 +286,11 @@ private:
   // and calls into the sonic::StartReceive to spawn the receiver thread.
   ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
   StartReceive(bool use_genetlink);
+
+  // Enter critical state and write component state to DB.
+  // Caller should take server_state_lock_.
+  grpc::Status EnterCriticalState(const std::string& message)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Mutex for constraining actions to access and modify server state.
   absl::Mutex server_state_lock_;
@@ -343,7 +354,8 @@ private:
   later.
   // When the switch is in critical state the P4RT service shuould not accept
   // write requests, but can still handle reads.
-  swss::ComponentStateHelperInterface& component_state_;
+  swss::ComponentStateHelperInterface& component_state_
+      ABSL_GUARDED_BY(server_state_lock_);
   swss::SystemStateHelperInterface& system_state_;
 
   // Some controllers may want to use port names that include the
@@ -372,6 +384,10 @@ private:
   // Utility to perform translations between CPU queue name and id.
   std::unique_ptr<QueueTranslator> cpu_queue_translator_
       ABSL_GUARDED_BY(server_state_lock_);
+  // Utility to perform translations between FRONT_PANEL queue name and id.
+  std::unique_ptr<QueueTranslator> front_panel_queue_translator_
+      ABSL_GUARDED_BY(server_state_lock_);
+
   // Performance statistics for P4RT Write().
   EventDataTracker<int> write_batch_requests_
       ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};

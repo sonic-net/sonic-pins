@@ -13,6 +13,7 @@
 #include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
 
 #include <memory>
+#include <sstream>
 #include <string>
 
 #include "absl/strings/string_view.h"
@@ -21,6 +22,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "p4rt_app/p4runtime/mock_p4runtime_impl.h"
+#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "swss/schema.h"
 
@@ -28,6 +30,7 @@ namespace p4rt_app {
 namespace {
 
 using ::gutil::StatusIs;
+using ::testing::_;
 
 MATCHER_P2(BidirectionallyMaps, name, id,
            absl::Substitute(".NameToId($0) = $1 and .IdToName($1) = $0", name,
@@ -59,11 +62,11 @@ MATCHER_P2(BidirectionallyMaps, name, id,
 TEST(ConfigDbQueueTableEventHandler, AddEventSetsP4RuntimeMap) {
   MockP4RuntimeImpl p4runtime;
   std::unique_ptr<QueueTranslator> translator;
-  EXPECT_CALL(p4runtime, SetQueueTranslator)
-      .WillOnce([&](std::unique_ptr<QueueTranslator> t, const std::string& k) {
+  EXPECT_CALL(p4runtime, AssignQueueTranslator)
+      .WillOnce([&](const QueueType q, std::unique_ptr<QueueTranslator> t) {
         translator = std::move(t);
       });
-  ConfigDbQueueTableEventHandler handler(&p4runtime, "CPU");
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
   ASSERT_OK(handler.HandleEvent(SET_COMMAND, "CPU",
                                 {
                                     {"BE", "1"},
@@ -84,10 +87,12 @@ TEST(ConfigDbQueueTableEventHandler, AddEventSetsP4RuntimeMap) {
 TEST(ConfigDbQueueTableEventHandler, DeleteEventClearsP4RuntimeMap) {
   MockP4RuntimeImpl p4runtime;
   std::unique_ptr<QueueTranslator> translator;
-  EXPECT_CALL(p4runtime, SetQueueTranslator)
-      .WillRepeatedly([&](std::unique_ptr<QueueTranslator> t,
-                          const std::string& k) { translator = std::move(t); });
-  ConfigDbQueueTableEventHandler handler(&p4runtime, "CPU");
+  EXPECT_CALL(p4runtime, AssignQueueTranslator)
+      .WillRepeatedly(
+          [&](const QueueType q, std::unique_ptr<QueueTranslator> t) {
+            translator = std::move(t);
+          });
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
   std::vector<std::pair<std::string, std::string>> db_values = {
       {"BE", "1"},  {"AF1", "2"}, {"AF2", "3"},
       {"AF3", "4"}, {"AF4", "5"}, {"NC1", "6"},
@@ -109,10 +114,12 @@ TEST(ConfigDbQueueTableEventHandler, DeleteEventClearsP4RuntimeMap) {
 TEST(ConfigDbQueueTableEventHandler, AddEventReplacesP4RuntimeMap) {
   MockP4RuntimeImpl p4runtime;
   std::unique_ptr<QueueTranslator> translator;
-  EXPECT_CALL(p4runtime, SetQueueTranslator)
-      .WillRepeatedly([&](std::unique_ptr<QueueTranslator> t,
-                          const std::string& k) { translator = std::move(t); });
-  ConfigDbQueueTableEventHandler handler(&p4runtime, "CPU");
+  EXPECT_CALL(p4runtime, AssignQueueTranslator)
+      .WillRepeatedly(
+          [&](const QueueType q, std::unique_ptr<QueueTranslator> t) {
+            translator = std::move(t);
+          });
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
   ASSERT_OK(handler.HandleEvent(SET_COMMAND, "CPU",
                                 {
                                     {"BE", "1"},
@@ -141,7 +148,7 @@ TEST(ConfigDbQueueTableEventHandler, AddEventReplacesP4RuntimeMap) {
 
 TEST(ConfigDbQueueTableEventHandler, ReturnsFailureToCreateTranslator) {
   MockP4RuntimeImpl p4runtime;
-  ConfigDbQueueTableEventHandler handler(&p4runtime, "CPU");
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
   EXPECT_THAT(
       handler.HandleEvent(SET_COMMAND, "CPU",
                           {
@@ -158,10 +165,12 @@ TEST(ConfigDbQueueTableEventHandler, ReturnsFailureToCreateTranslator) {
 TEST(ConfigDbQueueTableEventHandler, DoesNotReplaceWithFailedTranslator) {
   MockP4RuntimeImpl p4runtime;
   std::unique_ptr<QueueTranslator> translator;
-  EXPECT_CALL(p4runtime, SetQueueTranslator)
-      .WillRepeatedly([&](std::unique_ptr<QueueTranslator> t,
-                          const std::string& k) { translator = std::move(t); });
-  ConfigDbQueueTableEventHandler handler(&p4runtime, "CPU");
+  EXPECT_CALL(p4runtime, AssignQueueTranslator)
+      .WillRepeatedly(
+          [&](const QueueType q, std::unique_ptr<QueueTranslator> t) {
+            translator = std::move(t);
+          });
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
   ASSERT_OK(handler.HandleEvent(SET_COMMAND, "CPU",
                                 {
                                     {"AF1", "1"},
@@ -184,11 +193,11 @@ TEST(ConfigDbQueueTableEventHandler, DoesNotReplaceWithFailedTranslator) {
 TEST(ConfigDbQueueTableEventHandler, AddFrontPanelEventSetsP4RuntimeMap) {
   MockP4RuntimeImpl p4runtime;
   std::unique_ptr<QueueTranslator> translator;
-  EXPECT_CALL(p4runtime, SetQueueTranslator)
-      .WillOnce([&](std::unique_ptr<QueueTranslator> t, const std::string& k) {
+  EXPECT_CALL(p4runtime, AssignQueueTranslator)
+      .WillOnce([&](const QueueType q, std::unique_ptr<QueueTranslator> t) {
         translator = std::move(t);
       });
-  ConfigDbQueueTableEventHandler handler(&p4runtime, "FRONT_PANEL");
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
   ASSERT_OK(handler.HandleEvent(SET_COMMAND, "FRONT_PANEL",
                                 {
                                     {"AF1", "1"},
@@ -196,6 +205,40 @@ TEST(ConfigDbQueueTableEventHandler, AddFrontPanelEventSetsP4RuntimeMap) {
                                 }));
   EXPECT_THAT(*translator, BidirectionallyMaps("AF1", 1));
   EXPECT_THAT(*translator, BidirectionallyMaps("AF2", 2));
+}
+
+TEST(ConfigDbQueueTableEventHandler, AddCpuEventAssignsP4RuntimeCpuMap) {
+  MockP4RuntimeImpl p4runtime;
+  EXPECT_CALL(p4runtime, AssignQueueTranslator(QueueType::kCpu, _)).Times(1);
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
+  ASSERT_OK(handler.HandleEvent(SET_COMMAND, "CPU",
+                                {
+                                    {"AF1", "1"},
+                                    {"AF2", "2"},
+                                }));
+}
+
+TEST(ConfigDbQueueTableEventHandler,
+     AddFrontPanelEventAssignsP4RuntimeFrontPanelMap) {
+  MockP4RuntimeImpl p4runtime;
+  EXPECT_CALL(p4runtime, AssignQueueTranslator(QueueType::kFrontPanel, _))
+      .Times(1);
+  ConfigDbQueueTableEventHandler handler(&p4runtime);
+  ASSERT_OK(handler.HandleEvent(SET_COMMAND, "FRONT_PANEL",
+                                {
+                                    {"AF1", "1"},
+                                    {"AF2", "2"},
+                                }));
+}
+
+TEST(ConfigDbQueueTableEventHandler, QueueTypeNamesAsStrings) {
+  std::stringstream ss_cpu;
+  ss_cpu << QueueType::kCpu;
+  EXPECT_EQ(ss_cpu.str(), "CPU");
+
+  std::stringstream ss_fp;
+  ss_fp << QueueType::kFrontPanel;
+  EXPECT_EQ(ss_fp.str(), "FRONT_PANEL");
 }
 
 }  // namespace
