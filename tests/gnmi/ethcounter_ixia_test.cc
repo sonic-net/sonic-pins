@@ -43,10 +43,12 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
-#include "gutil/collections.h"
-#include "gutil/status.h"
-#include "gutil/status_matchers.h"
-#include "gutil/testing.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.h"
@@ -61,8 +63,6 @@
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 

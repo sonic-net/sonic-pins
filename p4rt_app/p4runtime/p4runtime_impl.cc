@@ -15,14 +15,13 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
 #include <thread>  // NOLINT
 #include <utility>
 #include <vector>
-#include <cstring>
-#include <string>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -48,10 +47,10 @@
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "grpcpp/support/sync_stream.h"
-#include "gutil/collections.h"
-#include "gutil/io.h"
-#include "gutil/proto.h"
-#include "gutil/status.h"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/io.h"
+#include "gutil/gutil/proto.h"
+#include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"

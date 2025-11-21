@@ -26,8 +26,8 @@
 #include "absl/strings/substitute.h"
 #include "boost/math/distributions/chi_squared.hpp"  // IWYU pragma: keep
 #include "glog/logging.h"
-#include "gutil/collections.h"
-#include "gutil/status.h"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/status.h"
 #include "tests/forwarding/group_programming_util.h"
 
 namespace pins_test {

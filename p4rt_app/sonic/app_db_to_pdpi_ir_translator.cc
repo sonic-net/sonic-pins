@@ -14,6 +14,7 @@
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 
 #include <iterator>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <unordered_map>
 
@@ -25,9 +26,8 @@
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
-#include "gutil/collections.h"
-#include "gutil/status.h"
-#include "include/nlohmann/json.hpp"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/utils/table_utility.h"

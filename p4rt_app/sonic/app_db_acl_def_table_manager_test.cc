@@ -14,14 +14,15 @@
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 
 #include <memory>
+#include <nlohmann/json.hpp>
 
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
-#include "gutil/status_matchers.h"
 #include "include/nlohmann/json.hpp"
+#include "gutil/gutil/status_matchers.h"
 #include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/redis_connections.h"

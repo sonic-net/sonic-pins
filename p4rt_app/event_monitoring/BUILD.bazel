@@ -34,7 +34,7 @@ cc_test(
     srcs = ["app_state_db_port_table_event_test.cc"],
     deps = [
         ":app_state_db_port_table_event",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
@@ -60,7 +60,7 @@ cc_test(
     srcs = ["app_state_db_send_to_ingress_port_table_event_test.cc"],
     deps = [
         ":app_state_db_send_to_ingress_port_table_event",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "//p4rt_app/p4runtime:packetio_helpers",
         "@com_google_absl//absl/status",
@@ -74,8 +74,8 @@ cc_library(
     srcs = ["state_event_monitor.cc"],
     hdrs = ["state_event_monitor.h"],
     deps = [
-        "//gutil:status",
         "@com_github_google_glog//:glog",
+        "//gutil/gutil:status",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -90,7 +90,7 @@ cc_library(
     srcs = ["state_verification_events.cc"],
     hdrs = ["state_verification_events.h"],
     deps = [
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",
@@ -109,8 +109,8 @@ cc_library(
     srcs = ["debug_data_dump_events.cc"],
     hdrs = ["debug_data_dump_events.h"],
     deps = [
-        "//gutil:io",
-        "//gutil:status",
+        "//gutil/gutil:io",
+        "//gutil/gutil:status",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:notification_producer_adapter",
@@ -130,7 +130,7 @@ cc_library(
     hdrs = ["config_db_queue_table_event.h"],
     deps = [
         ":state_event_monitor",
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4rt_app/p4runtime:p4runtime_impl",
 	"//p4rt_app/p4runtime:queue_translator",
         "@com_google_absl//absl/status",
@@ -143,7 +143,7 @@ cc_test(
     srcs = ["config_db_queue_table_event_test.cc"],
     deps = [
         ":config_db_queue_table_event",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/p4runtime:queue_translator",
@@ -173,7 +173,7 @@ cc_library(
     hdrs = ["config_db_port_table_event.h"],
     deps = [
         ":state_event_monitor",
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:table_adapter",
@@ -189,7 +189,7 @@ cc_test(
     srcs = ["config_db_port_table_event_test.cc"],
     deps = [
         ":config_db_port_table_event",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
@@ -201,7 +201,7 @@ cc_test(
     srcs = ["config_db_node_cfg_table_event_test.cc"],
     deps = [
         ":config_db_node_cfg_table_event",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
@@ -214,7 +214,7 @@ cc_test(
     srcs = ["state_verification_events_test.cc"],
     deps = [
         ":state_verification_events",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
@@ -230,8 +230,8 @@ cc_test(
     srcs = ["debug_data_dump_events_test.cc"],
     deps = [
         ":debug_data_dump_events",
-        "//gutil:io",
-        "//gutil:status_matchers",
+        "//gutil/gutil:io",
+        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",

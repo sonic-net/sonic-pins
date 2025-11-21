@@ -26,7 +26,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/app_db_manager.h"

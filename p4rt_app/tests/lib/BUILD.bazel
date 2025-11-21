@@ -44,7 +44,7 @@ cc_library(
     hdrs = ["p4runtime_component_test_fixture.h"],
     deps = [
         ":p4runtime_grpc_service",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -89,7 +89,7 @@ cc_library(
     srcs = ["p4runtime_request_helpers.cc"],
     hdrs = ["p4runtime_request_helpers.h"],
     deps = [
-        "//gutil:proto",
+        "//gutil/gutil:proto",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
