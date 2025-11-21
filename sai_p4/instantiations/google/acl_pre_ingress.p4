@@ -146,6 +146,8 @@ control acl_pre_ingress(in headers_t headers,
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
+    // Forbid match on ethertype if is_ip* is set.
+    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);

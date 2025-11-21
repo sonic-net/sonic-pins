@@ -41,6 +41,8 @@ control acl_egress(in headers_t headers,
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
+    // Forbid match on ethertype if is_ip* is set.
+    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 #endif
     // Only allow IP field matches for IP packets.
