@@ -19,6 +19,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
@@ -53,6 +54,18 @@ struct ActionProfileResourceCapacity {
   // Utilization can be based SumOfActions or SumOfWeights in the P4Info. Today
   // we always assume SumOfWeights.
   int64_t current_utilization = 0;
+
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink,
+                            const ActionProfileResourceCapacity& capacity) {
+    absl::Format(&sink, R"({
+  max_group_size = %d,
+  max_weight_for_all_groups = %d,
+  current_utilization = %d,
+})",
+                 capacity.max_group_size, capacity.max_weight_for_all_groups,
+                 capacity.current_utilization);
+  }
 };
 
 // Parses an IrActionProfileDefinition for resource capacity information.
