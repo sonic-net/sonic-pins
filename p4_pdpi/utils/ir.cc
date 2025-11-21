@@ -55,6 +55,7 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/translation_options.h"
+#include "utf8_validity.h"
 
 namespace pdpi {
 
@@ -215,6 +216,9 @@ absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
       return result;
     }
     case Format::STRING: {
+      if (!utf8_range::IsStructurallyValid(bytes)) {
+        return gutil::InvalidArgumentErrorBuilder() << "Invalid UTF-8 string: ";
+      }
       result.set_str(bytes);
       return result;
     }

@@ -2215,7 +2215,6 @@ actions {
     name: "ingress.acl_ingress.set_forwarding_queues"
     alias: "set_forwarding_queues"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
