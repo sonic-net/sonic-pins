@@ -91,6 +91,8 @@
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_512_DUPLICATE_WCMP_MEMBERS_IN_NATIVE \
   "3.1.5"
 
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_L2_MULTICAST "3.2.6"
+
 // Indicates that the switch supports unicast_set_port_and_src_mac action, which
 // at the SAI level translates to port type RIFs that do NOT program l3_admit
 // table (i.e. MyMac at SAI) under the hood.
@@ -104,7 +106,7 @@
 // Indicates that the switch uses "route_hit" instead of "ipmc_table_hit" as the
 // name for ACL keys with
 // `@sai_field(SAI_ACL_ENTRY_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)`.
-#define SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME "
+#define SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME "4.0.0"
 
 // Indicates that the switch supports unicast_set_port_and_src_mac_and_vlan_id
 // action, which at the SAI level translates to sub_port type RIFs that do NOT
@@ -115,6 +117,6 @@ ID_ACTION \
 
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_PRE_INGRESS_RECONCILE
+  SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME
 
 #endif // PINS_SAI_VERSIONS_H_
