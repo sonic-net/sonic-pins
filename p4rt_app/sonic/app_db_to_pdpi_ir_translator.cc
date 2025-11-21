@@ -17,6 +17,7 @@
 #include <optional>
 #include <unordered_map>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -24,7 +25,6 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
-#include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"

@@ -16,10 +16,10 @@
 #include <string>
 #include <type_traits>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/rpc/status.pb.h"
 #include "grpcpp/client_context.h"

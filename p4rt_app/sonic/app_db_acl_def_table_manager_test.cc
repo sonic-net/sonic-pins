@@ -15,8 +15,8 @@
 
 #include <memory>
 
+#include "absl/log/log.h"
 #include "absl/strings/substitute.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"

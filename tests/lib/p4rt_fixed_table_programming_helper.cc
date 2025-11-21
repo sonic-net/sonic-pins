@@ -20,6 +20,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -195,6 +196,52 @@ absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
+absl::StatusOr<p4::v1::Update> VlanTableUpdate(const pdpi::IrP4Info& ir_p4_info,
+                                               p4::v1::Update::Type type,
+                                               int32_t vlan) {
+  pdpi::IrUpdate ir_update;
+  ir_update.set_type(type);
+  pdpi::IrTableEntry* ir_table_entry =
+      ir_update.mutable_entity()->mutable_table_entry();
+  ir_table_entry->set_table_name("vlan_table");
+
+  auto* vlan_match = ir_table_entry->add_matches();
+  vlan_match->set_name("vlan_id");
+  vlan_match->mutable_exact()->set_hex_str(absl::StrFormat("0x%03x", vlan));
+
+  auto* action = ir_table_entry->mutable_action();
+  action->set_name("no_action");
+
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
+absl::StatusOr<p4::v1::Update> VlanMemberTableUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    int32_t port_id, int32_t vlan, bool tag) {
+  pdpi::IrUpdate ir_update;
+  ir_update.set_type(type);
+  pdpi::IrTableEntry* ir_table_entry =
+      ir_update.mutable_entity()->mutable_table_entry();
+  ir_table_entry->set_table_name("vlan_membership_table");
+
+  auto* vlan_match = ir_table_entry->add_matches();
+  vlan_match->set_name("vlan_id");
+  vlan_match->mutable_exact()->set_hex_str(absl::StrFormat("0x%03x", vlan));
+
+  auto* port_match = ir_table_entry->add_matches();
+  port_match->set_name("port");
+  port_match->mutable_exact()->set_str(absl::StrCat(port_id));
+
+  auto* action = ir_table_entry->mutable_action();
+  if (tag) {
+    action->set_name("make_tagged_member");
+  } else {
+    action->set_name("make_untagged_member");
+  }
+
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
 absl::StatusOr<p4::v1::Update> MulticastRouterInterfaceTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
     const MulticastReplica& replica) {
@@ -213,11 +260,20 @@ absl::StatusOr<p4::v1::Update> MulticastRouterInterfaceTableUpdate(
   instance_match->mutable_exact()->set_hex_str(
       absl::StrFormat("0x%04x", replica.instance));
 
-  auto* action = ir_table_entry->mutable_action();
-  action->set_name("set_multicast_src_mac");
-  auto* action_param = action->add_params();
-  action_param->set_name("src_mac");
-  *action_param->mutable_value()->mutable_mac() = replica.src_mac;
+  if (replica.is_ip_mcast) {
+    auto* action = ir_table_entry->mutable_action();
+    action->set_name("multicast_set_src_mac_and_vlan_id");
+    auto* action_param = action->add_params();
+    action_param->set_name("src_mac");
+    *action_param->mutable_value()->mutable_mac() = replica.src_mac;
+    action_param = action->add_params();
+    action_param->set_name("vlan_id");
+    *action_param->mutable_value()->mutable_hex_str() =
+        absl::StrFormat("0x%03x", replica.vlan);
+  } else {
+    auto* action = ir_table_entry->mutable_action();
+    action->set_name("l2_multicast_passthrough");
+  }
 
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
@@ -239,6 +295,52 @@ absl::StatusOr<p4::v1::Update> MulticastGroupUpdate(
     new_replica->set_port(replica.port);
     new_replica->set_instance(replica.instance);
   }
+
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
+absl::StatusOr<p4::v1::Update> Ipv4MulticastRouteUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    const std::string& vrf_id, const std::string& addr, int32_t group_id) {
+  pdpi::IrUpdate ir_update;
+  ir_update.set_type(type);
+  pdpi::IrTableEntry* ir_table_entry =
+      ir_update.mutable_entity()->mutable_table_entry();
+  ir_table_entry->set_table_name("ipv4_multicast_table");
+  auto* vrf_match = ir_table_entry->add_matches();
+  vrf_match->set_name("vrf_id");
+  vrf_match->mutable_exact()->set_str(vrf_id);
+  auto* dst_addr = ir_table_entry->add_matches();
+  dst_addr->set_name("ipv4_dst");
+  dst_addr->mutable_exact()->set_ipv4(addr);
+  auto* action = ir_table_entry->mutable_action();
+  action->set_name("set_multicast_group_id");
+  auto* param = action->add_params();
+  param->set_name("multicast_group_id");
+  param->mutable_value()->set_hex_str(absl::StrFormat("0x%04x", group_id));
+
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
+absl::StatusOr<p4::v1::Update> Ipv6MulticastRouteUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    const std::string& vrf_id, const std::string& addr, int32_t group_id) {
+  pdpi::IrUpdate ir_update;
+  ir_update.set_type(type);
+  pdpi::IrTableEntry* ir_table_entry =
+      ir_update.mutable_entity()->mutable_table_entry();
+  ir_table_entry->set_table_name("ipv6_multicast_table");
+  auto* vrf_match = ir_table_entry->add_matches();
+  vrf_match->set_name("vrf_id");
+  vrf_match->mutable_exact()->set_str(vrf_id);
+  auto* dst_addr = ir_table_entry->add_matches();
+  dst_addr->set_name("ipv6_dst");
+  dst_addr->mutable_exact()->set_ipv6(addr);
+  auto* action = ir_table_entry->mutable_action();
+  action->set_name("set_multicast_group_id");
+  auto* param = action->add_params();
+  param->set_name("multicast_group_id");
+  param->mutable_value()->set_hex_str(absl::StrFormat("0x%04x", group_id));
 
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
