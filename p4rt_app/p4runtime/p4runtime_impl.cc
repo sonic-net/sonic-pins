@@ -42,6 +42,7 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
+#include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
@@ -188,10 +189,9 @@ p4::v1::StreamMessageResponse GenerateErrorResponse(
   return response;
 }
 
-// Compares two P4Info protobufs and returns true if they represent the
-// same information. Differences are reported in the optional string.
-bool P4InfoEquals(const p4::config::v1::P4Info& left,
-                  const p4::config::v1::P4Info& right,
+// Compares two IrP4Info protobufs and returns true if they represent the same
+// information. Differences are reported in the optional string.
+bool IsEquivalent(const pdpi::IrP4Info& left, const pdpi::IrP4Info& right,
                   std::string* diff_report) {
   google::protobuf::util::MessageDifferencer differencer;
   differencer.set_repeated_field_comparison(
@@ -1505,12 +1505,18 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     return gutil::AbslStatusToGrpcStatus(config_info.status());
   }
 
+  std::string ir_p4info_diff;
+  if (ir_p4info_.has_value() &&
+      IsEquivalent(*ir_p4info_, config_info->ir_p4info, &ir_p4info_diff)) {
+    forwarding_pipeline_config_ = request.config();
+    LOG(INFO)
+        << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
+    return SavePipelineConfig(*forwarding_pipeline_config_);
+  }
+
   // We cannot reconcile any config today so if we see that the new forwarding
   // config is different from the current one we just return an error.
-  std::string diff_report;
-  if (forwarding_pipeline_config_.has_value() &&
-      !P4InfoEquals(forwarding_pipeline_config_->p4info(),
-                    request.config().p4info(), &diff_report)) {
+  if (ir_p4info_.has_value()) {
     LOG(WARNING) << "Cannot modify P4Info once it has been configured.";
     return grpc::Status(
         grpc::StatusCode::UNIMPLEMENTED,
@@ -1518,77 +1524,7 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
             "Modifying a configured forwarding pipeline is not currently "
             "supported. Please reboot the device. Configuration "
             "differences:\n",
-            diff_report));
-  }
-
-  // If the IrP4Info hasn't been set then we need to configure the lower layers.
-  if (!ir_p4info_.has_value()) {
-    // Collect any P4RT constraints from the P4Info.
-    auto constraint_info =
-        p4_constraints::P4ToConstraintInfo(request.config().p4info());
-    if (!constraint_info.ok()) {
-      LOG(WARNING) << "Could not get constraint info from P4Info: "
-                   << constraint_info.status();
-      return gutil::AbslStatusToGrpcStatus(
-          absl::Status(constraint_info.status().code(),
-                       absl::StrCat("[P4 Constraint] ",
-                                    constraint_info.status().message())));
-    }
-
-    // Convert the P4Info into an IrP4Info.
-    auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
-    if (!ir_p4info.ok()) {
-      LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
-                   << ir_p4info.status();
-      return gutil::AbslStatusToGrpcStatus(absl::Status(
-          ir_p4info.status().code(),
-          absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
-    }
-    // Remove `@unsupported` entities so their use in requests will be rejected.
-    pdpi::RemoveUnsupportedEntities(*ir_p4info);
-    TranslateIrP4InfoForOrchAgent(*ir_p4info);
-
-    // Apply ir_p4info to DB if we are committing to DB.
-    if (commit_to_hardware) {
-      // Apply a config if we don't currently have one.
-      absl::Status config_result = ConfigureAppDbTables(*ir_p4info);
-      if (!config_result.ok()) {
-        LOG(ERROR) << "Failed to apply ForwardingPipelineConfig: "
-                   << config_result;
-        // TODO: cleanup P4RT table definitions instead of going
-        // critical.
-        return grpc::Status(grpc::StatusCode::INTERNAL,
-                            config_result.ToString());
-      }
-    }
-
-    // Store resource utilization limits for any ActionProfiles.
-    for (const auto& [action_profile_name, action_profile_def] :
-         ir_p4info->action_profiles_by_name()) {
-      capacity_by_action_profile_name_[action_profile_name] =
-          GetActionProfileResourceCapacity(action_profile_def);
-      LOG(INFO) << "Adding action profile limits for '" << action_profile_name
-                << "': max_weights_for_all_groups="
-                << action_profile_def.action_profile().size();
-    }
-
-    // Update P4RuntimeImpl's state only if we succeed.
-    p4_constraint_info_ = *std::move(constraint_info);
-    ir_p4info_ = *std::move(ir_p4info);
-  }
-
-  // The ForwardingPipelineConfig is still updated in case the cookie value has
-  // been changed.
-  forwarding_pipeline_config_ = request.config();
-
-  // Save the ForwardingPipelineConfig if we are committing.
-  if (commit_to_hardware) {
-    grpc::Status saved = SavePipelineConfig(*forwarding_pipeline_config_);
-    if (!saved.ok()) {
-      LOG(ERROR) << "Successfully applied, but could not save the "
-                 << "ForwardingPipelineConfig: " << saved.error_message();
-      return saved;
-    }
+            ir_p4info_diff));
   }
 
   // Configure the lower layers.
