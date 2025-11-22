@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -20,6 +22,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -38,9 +42,12 @@
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/clos_stage.h"
@@ -51,6 +58,9 @@
 #include "gtest/gtest.h"
 //TODO(PINS): Add Component State Helper
 //#include "swss/component_state_helper_interface.h"
+#include "sai_p4/instantiations/google/test_tools/table_entry_generator.h"
+#include "sai_p4/instantiations/google/test_tools/table_entry_generator_helper.h"
+#include "sai_p4/tools/p4info_tools.h"
 
 namespace p4rt_app {
 namespace {
@@ -63,9 +73,11 @@ using ::p4::v1::GetForwardingPipelineConfigResponse;
 using ::p4::v1::SetForwardingPipelineConfigRequest;
 using ::testing::Contains;
 using ::testing::ExplainMatchResult;
+using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Key;
 using ::testing::Not;
+using ::testing::UnorderedElementsAreArray;
 
 MATCHER_P2(TimeIsBetween, start, end,
            absl::StrCat("Has a value between '", absl::FormatTime(start),
@@ -113,6 +125,105 @@ MATCHER_P2(ContainsConfigTimeBetween, start, end,
     return false;
   }
   return true;
+}
+
+template <typename T>
+void ExtractReferences(const T& annotations,
+                       absl::flat_hash_set<std::string>& refs) {
+  auto result = pdpi::GetAllAnnotationsAsArgList("refers_to", annotations);
+  if (result.ok()) {
+    for (const auto& arg_list : *result) {
+      refs.insert(std::make_move_iterator(arg_list.begin()),
+                  std::make_move_iterator(arg_list.end()));
+    }
+  }
+  result = pdpi::GetAllAnnotationsAsArgList("referenced_by", annotations);
+  if (result.ok()) {
+    for (const auto& arg_list : *result) {
+      refs.insert(std::make_move_iterator(arg_list.begin()),
+                  std::make_move_iterator(arg_list.end()));
+    }
+  }
+}
+
+const absl::flat_hash_set<std::string>& AliasesToKeep() {
+  static const auto* const kAliases = []() {
+    const p4::config::v1::P4Info& p4info = sai::GetUnionedP4Info();
+    auto* aliases = new absl::flat_hash_set<std::string>();
+    for (const auto& table : p4info.tables()) {
+      ExtractReferences(table.preamble().annotations(), *aliases);
+      for (const auto& match_field : table.match_fields()) {
+        ExtractReferences(match_field.annotations(), *aliases);
+      }
+    }
+    for (const auto& action : p4info.actions()) {
+      ExtractReferences(action.preamble().annotations(), *aliases);
+      for (const auto& param : action.params()) {
+        ExtractReferences(param.annotations(), *aliases);
+      }
+    }
+    for (const auto& action_profile : p4info.action_profiles()) {
+      ExtractReferences(action_profile.preamble().annotations(), *aliases);
+    }
+    return aliases;
+  }();
+  return *kAliases;
+}
+
+// Erase a member from a collection if its alias matches the designated value.
+// Returns true if a value was removed.
+template <typename T>
+bool EraseByAlias(T& collection, absl::string_view alias) {
+  for (auto action = collection.begin(); action != collection.end(); ++action) {
+    if (action->preamble().alias() == alias) {
+      collection.erase(action);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Erase a matching annotation from the annotation list.
+// Returns true if an annotation was removed.
+template <typename T>
+bool EraseAnnotation(T& annotations, absl::string_view label,
+                     absl::string_view value) {
+  for (auto annotation = annotations.begin(); annotation != annotations.end();
+       ++annotation) {
+    auto components = pdpi::ParseAnnotation(*annotation);
+    if (components.ok() && components->label == label &&
+        components->body == value) {
+      annotations.erase(annotation);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Remove the specified annotation from all actions in the p4info.
+// Returns the number of modified actions;
+int RemoveAnnotationFromAllActions(p4::config::v1::P4Info& p4info,
+                                   absl::string_view label,
+                                   absl::string_view value) {
+  int modified = 0;
+  for (auto& action : *p4info.mutable_actions()) {
+    if (EraseAnnotation(*action.mutable_preamble()->mutable_annotations(),
+                        label, value)) {
+      ++modified;
+    }
+  }
+  return modified;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, sonic::SonicDbEntryMap>>
+DbState(const sonic::FakeSonicDbTable& table) {
+  absl::flat_hash_map<std::string, sonic::SonicDbEntryMap> db_state;
+  auto keys = table.GetAllKeys();
+  for (const std::string& key : keys) {
+    ASSIGN_OR_RETURN(auto entry, table.ReadTableEntry(key));
+    db_state[key] = entry;
+  }
+  return db_state;
 }
 
 // Get a writeable directory where bazel tests can save output files to.
@@ -530,26 +641,6 @@ TEST_F(ReconcileAndCommitTest, SetDuplicateForwardingPipelineConfig) {
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 }
 
-TEST_F(ReconcileAndCommitTest, ModifiedConfigPushIsUnimplemented) {
-  auto request = GetBasicForwardingRequest();
-  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
-  *request.mutable_config()->mutable_p4info() =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-
-  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-
-  // Remove the IPv4 table from the P4Info, and try pushing again.
-  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
-  for (auto table = tables.begin(); table != tables.end(); ++table) {
-    if (table->preamble().alias() == "ipv4_table") {
-      tables.erase(table);
-      break;
-    }
-  }
-  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
-              StatusIs(absl::StatusCode::kUnimplemented));
-}
-
 using GetForwardingConfigTest = ForwardingPipelineConfigTest;
 
 TEST_F(GetForwardingConfigTest, ReturnsNothingIfConfigHasNotBeenSet) {
@@ -745,6 +836,128 @@ TEST_F(ForwardingPipelineConfigTest, InvalidP4ConstraintDoesNotGoCritical) {
           p4rt_session_.get(),
           SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info),
       StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(ForwardingPipelineConfigTest,
+       ReconcileFailsIfNewConfigDoesNotSupportCurrentFlows) {
+  // Push the baseline P4Info.
+  auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info));
+
+  // Add a table entry to the acl_ingress_table.
+  auto ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4_info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrTableEntry ir_entry = generator.generator(1);
+  ASSERT_GT(ir_entry.matches().size(), 0);
+
+  p4::v1::WriteRequest request;
+  auto& update = *request.add_updates();
+  update.set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
+                       pdpi::IrTableEntryToPi(ir_p4_info, ir_entry));
+
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  // Create a P4Info without the entry's match field.
+  for (auto& table : *p4_info.mutable_tables()) {
+    if (table.preamble().alias() != "acl_ingress_table") continue;
+    for (auto match_field = table.mutable_match_fields()->begin();
+         match_field != table.mutable_match_fields()->end(); ++match_field) {
+      if (match_field->name() == ir_entry.matches(0).name()) {
+        table.mutable_match_fields()->erase(match_field);
+        break;
+      }
+    }
+    break;
+  }
+}
+
+TEST_F(ForwardingPipelineConfigTest,
+       ReconcileFailsIfNewConfigDiffersForCurrentFlows) {
+  // Push the baseline P4Info.
+  auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info));
+
+  // Add a table entry to the acl_ingress_table.
+  auto ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4_info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrTableEntry ir_entry = generator.generator(1);
+  ASSERT_GT(ir_entry.matches().size(), 0);
+
+  p4::v1::WriteRequest request;
+  auto& update = *request.add_updates();
+  update.set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
+                       pdpi::IrTableEntryToPi(ir_p4_info, ir_entry));
+
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  // Modify the match field name to change the translation.
+  for (auto& table : *p4_info.mutable_tables()) {
+    if (table.preamble().alias() != "acl_ingress_table") continue;
+    for (auto& match_field : *table.mutable_match_fields()) {
+      if (match_field.name() == ir_entry.matches(0).name()) {
+        match_field.set_name("other_name");
+        break;
+      }
+    }
+    break;
+  }
+}
+
+TEST_F(ForwardingPipelineConfigTest,
+       ReconcileIsNotBlockedIfNewConfigSupportsCurrentFlows) {
+  // Push the baseline P4Info.
+  auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info));
+
+  // Add a table entry to the acl_ingress_table.
+  auto ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4_info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrTableEntry ir_entry = generator.generator(1);
+  ASSERT_GT(ir_entry.matches().size(), 0);
+
+  p4::v1::WriteRequest request;
+  auto& update = *request.add_updates();
+  update.set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
+                       pdpi::IrTableEntryToPi(ir_p4_info, ir_entry));
+
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  // Add a match field, which will not impact the translation.
+  for (auto& table : *p4_info.mutable_tables()) {
+    if (table.preamble().alias() != "acl_ingress_table") continue;
+    auto& match_field = *table.add_match_fields();
+    match_field.set_id(table.match_fields().size());
+    match_field.set_name("other_name");
+    match_field.set_match_type(p4::config::v1::MatchField::TERNARY);
+    match_field.add_annotations(
+        "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)");
+    match_field.set_bitwidth(4);
+    break;
+  }
+
+  ASSERT_THAT(
+      pdpi::SetMetadataAndSetForwardingPipelineConfig(
+          p4rt_session_.get(),
+          SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info),
+      Not(StatusIs(absl::StatusCode::kInvalidArgument)));
 }
 
 class PerConfigTest : public ForwardingPipelineConfigTest,

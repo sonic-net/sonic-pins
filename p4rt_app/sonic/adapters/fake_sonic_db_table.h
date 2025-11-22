@@ -22,6 +22,7 @@
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 
@@ -67,8 +68,8 @@ public:
   bool PushNotification(const std::string &key);
   bool PushNotification(const std::string &key, const std::string &op,
                         const SonicDbEntryMap &values);
-  void GetNextNotification(std::string &op, std::string &data,
-                           SonicDbEntryList &values);
+  absl::Status GetNextNotification(std::string& op, std::string& data,
+                                   SonicDbEntryList& values);
 
   absl::StatusOr<SonicDbEntryMap> ReadTableEntry(const std::string &key) const
       ABSL_LOCKS_EXCLUDED(entries_mutex_);

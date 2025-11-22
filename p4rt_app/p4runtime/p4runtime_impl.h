@@ -26,6 +26,7 @@
 
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -44,9 +45,11 @@
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
+#include "p4rt_app/p4runtime/p4info_reconcile.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
@@ -280,6 +283,13 @@ private:
   // tables. These configurations (e.g. ACLs, hashing, etc.) are needed before
   // we can start accepting write requests.
   absl::Status ConfigureAppDbTables(const pdpi::IrP4Info &ir_p4info)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  grpc::Status TransitionHashConfig(
+      const P4InfoReconcileTransition& transition,
+      const absl::btree_set<sonic::HashPacketFieldConfig>&
+          hash_packet_field_configs,
+      const sonic::HashParamConfigs& hash_param_configs)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Defines the callback lambda function to be invoked for receive packets
