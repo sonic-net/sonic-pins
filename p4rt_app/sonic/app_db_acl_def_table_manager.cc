@@ -518,7 +518,7 @@ StatusOr<swss::FieldValueTuple> MatchTuple(
   }
   if (!label_already_processed) {
     return InvalidArgumentErrorBuilder()
-           << kAnnotationCountError << ". None were provided";
+           << *kAnnotationCountError << ". None were provided";
   }
   return swss::FieldValueTuple(
       {absl::StrCat("match/", match_field.match_field().name()), json.dump()});
