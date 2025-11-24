@@ -129,6 +129,8 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_SET_QOS_QUEUE_AND_CANCEL_COPY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL, SAI_PACKET_COLOR_RED)
+  // TODO(PINS): unsupported to be removed when P4Orch support is added
+  @unsupported
   // TODO: Rename qos queue to cpu queue, as per action below.
   action set_qos_queue_and_cancel_copy_above_rate_limit(
       @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t qos_queue) {
@@ -142,6 +144,8 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
+  // TODO(PINS): unsupported to be removed when P4Orch support is added
+  @unsupported
   action set_cpu_queue_and_cancel_copy(
       @id(1) @sai_action_param(QOS_QUEUE) cpu_queue_t cpu_queue) {
     cancel_copy = true;
@@ -212,6 +216,8 @@ control acl_ingress(in headers_t headers,
   // Drops the packet at the end of the the pipeline and ensures that it is not
   // copied to the CPU. See `acl_drop` for more information on the mechanism of
   // the drop.
+  // TODO(PINS): unsupported to be removed when P4Orch support is added
+  @unsupported
   @id(ACL_INGRESS_DENY_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_DENY)
   action acl_deny() {
@@ -262,6 +268,8 @@ control acl_ingress(in headers_t headers,
   // TODO: Remove unsupported from ToR when we order ACL
   // insert/deletes during reconcile.
 #endif
+  @unsupported
+  // TODO(PINS): unsupported to be removed when P4Orch support is added
   action append_ingress_and_egress_timestamp(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_INSERT_INGRESS_TIMESTAMP)
     bit<8> append_ingress_timestamp,
@@ -592,6 +600,8 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_AND_SET_CPU_QUEUE_AND_CANCEL_COPY_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL)
+  // TODO(PINS): unsupported to be removed when P4Orch support is added
+  @unsupported
   @action_restriction("
     // Disallow 0 since it encodes 'no multicast' in V1Model.
     multicast_group_id != 0;
@@ -712,12 +722,17 @@ control acl_ingress(in headers_t headers,
         @id(5);
 
       local_metadata.vrf_id : optional
+        @unsupported
         @id(8) @name("vrf_id")
-        @refers_to(vrf_table, vrf_id)
+        // TODO(PINS): refers is not supported for optional fields. Use
+        // if the type is changed later
+        //@refers_to(vrf_table, vrf_id)
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
 #if defined(IP_MULTICAST_CAPABLE)
       local_metadata.route_hit : optional
         @id(9) @name("route_hit")
+        // TODO(PINS): unsupported to be removed when P4Orch support is added
+        @unsupported
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT);
 #endif
     }
