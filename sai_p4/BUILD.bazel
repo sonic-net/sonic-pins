@@ -1,0 +1,16 @@
+load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+proto_library(
+    name = "capabilities_proto",
+    srcs = ["capabilities.proto"],
+)
+
+cc_proto_library(
+    name = "capabilities_cc_proto",
+    deps = [":capabilities_proto"],
+)
