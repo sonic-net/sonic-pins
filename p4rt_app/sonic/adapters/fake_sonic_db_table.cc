@@ -101,12 +101,11 @@ bool FakeSonicDbTable::PushNotification(const std::string &key,
   return true;
 }
 
-void FakeSonicDbTable::GetNextNotification(std::string &op, std::string &data,
-                                           SonicDbEntryList &values) {
+absl::Status FakeSonicDbTable::GetNextNotification(std::string& op,
+                                                   std::string& data,
+                                                   SonicDbEntryList& values) {
   if (notifications_.empty()) {
-    // TODO: we probably want to return a timeout error if we never
-    // get a notification?
-    LOG(FATAL) << "Could not find a notification.";
+    return absl::DeadlineExceededError("No active notification to send");
   }
 
   VLOG(1) << absl::StreamFormat("'%s' get notification: %s", debug_table_name_,
@@ -124,6 +123,7 @@ void FakeSonicDbTable::GetNextNotification(std::string &op, std::string &data,
     op = "SWSS_RC_SUCCESS";
     values.push_back({"err_str", "SWSS_RC_SUCCESS"});
   }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
