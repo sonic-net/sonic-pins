@@ -1,12 +1,12 @@
 #include "tests/lib/common_ir_table_entries.h"
 
-#include "gutil/status_matchers.h" // IWYU pragma: keep
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins {
 namespace {
@@ -23,7 +23,7 @@ TEST_P(CommonIrTableEntriesTest, IsValidIrEntryForAllSaiInstantiations) {
 
 INSTANTIATE_TEST_SUITE_P(
     CommonIrTableEntriesSuite, CommonIrTableEntriesTest,
-    testing::Values(PuntAllPacketsToControllerIrTableEntry("0x1"), 
+    testing::Values(PuntAllPacketsToControllerIrTableEntry("0x1"),
                     SetVrfIdForAllPacketsIrTableEntry("vrf-1")));
 
 } // namespace

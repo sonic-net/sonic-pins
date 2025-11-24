@@ -13,7 +13,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "platforms/networking/gpins/testing/lib/test_util.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"

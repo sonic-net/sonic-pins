@@ -28,8 +28,8 @@ cc_library(
     copts = ["-fexceptions"],
     features = ["-use_header_modules"],  # Incompatible with -fexceptions.
     deps = [
-        "//gutil:status",
         "@com_github_google_glog//:glog",
+        "//gutil/gutil:status",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -46,7 +46,7 @@ cc_test(
     srcs = ["json_utils_test.cc"],
     deps = [
         ":json_utils",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -83,6 +83,7 @@ cc_library(
     srcs = ["generic_testbed_utils.cc"],
     hdrs = ["generic_testbed_utils.h"],
     deps = [
+        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
         "//thinkit:generic_testbed",
@@ -101,9 +102,9 @@ cc_test(
     srcs = ["generic_testbed_utils_test.cc"],
     deps = [
         ":generic_testbed_utils",
-        "//gutil:proto_matchers",
-        "//gutil:status_matchers",
-        "//gutil:testing",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
         "//thinkit:generic_testbed",
         "//thinkit:mock_control_device",
         "//thinkit:mock_generic_testbed",

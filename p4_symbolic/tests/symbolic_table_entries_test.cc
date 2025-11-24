@@ -24,10 +24,12 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "gutil/status.h"
-#include "gutil/status_matchers.h"
-#include "gutil/test_artifact_writer.h"
-#include "gutil/testing.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/test_artifact_writer.h"
+#include "gutil/gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
@@ -53,8 +55,6 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/packet_at_port.h"
 #include "z3++.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace p4_symbolic {
 namespace {

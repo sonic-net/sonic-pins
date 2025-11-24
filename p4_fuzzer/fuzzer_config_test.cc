@@ -5,7 +5,7 @@
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status_matchers.h"
+#include "gutil/gutil/status_matchers.h"
 #include "gutils/parse_text_proto.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"

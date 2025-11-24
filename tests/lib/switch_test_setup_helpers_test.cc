@@ -23,10 +23,12 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "gmock/gmock.h"
 #include "grpcpp/test/mock_stream.h"
-#include "gutil/proto_matchers.h"
-#include "gutil/status.h"
-#include "gutil/testing.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/proto_matchers.h"
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -42,8 +44,6 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mock_switch.h"
 #include "third_party/json/include/nlohmann/json_fwd.hpp"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {

@@ -7,7 +7,7 @@ cc_library(
     name = "network_address",
     hdrs = ["network_address.h"],
     deps = [
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4_pdpi/string_encodings:byte_string",
         "//p4_pdpi/string_encodings:hex_string",
         "@com_google_absl//absl/status:statusor",
@@ -21,7 +21,7 @@ cc_library(
     hdrs = ["ipv4_address.h"],
     deps = [
         ":network_address",
-        "//gutil:status",
+        "//gutil/gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -34,8 +34,8 @@ cc_test(
     deps = [
         ":ipv4_address",
         ":network_address",
-        "//gutil:status",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
         "//p4_pdpi/string_encodings:safe",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
@@ -49,7 +49,7 @@ cc_library(
     hdrs = ["ipv6_address.h"],
     deps = [
         ":network_address",
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4_pdpi/string_encodings:hex_string",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/numeric:int128",
@@ -65,8 +65,8 @@ cc_test(
     deps = [
         ":ipv6_address",
         ":network_address",
-        "//gutil:status",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
         "//p4_pdpi/string_encodings:safe",
         "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/strings",
@@ -81,7 +81,7 @@ cc_library(
     deps = [
         ":ipv6_address",
         ":network_address",
-        "//gutil:status",
+        "//gutil/gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -94,8 +94,8 @@ cc_test(
     deps = [
         ":mac_address",
         ":network_address",
-        "//gutil:status",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
         "//p4_pdpi/string_encodings:safe",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",

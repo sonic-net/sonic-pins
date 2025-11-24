@@ -23,7 +23,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/thinkit_util.h"

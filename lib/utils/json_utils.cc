@@ -27,7 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "include/nlohmann/json.hpp"
 
 namespace json_yang {

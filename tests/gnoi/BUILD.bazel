@@ -27,9 +27,9 @@ cc_library(
         "bert_tests.h",
     ],
     deps = [
-        "//gutil:status",
-        "//gutil:status_matchers",
-        "//gutil:testing",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
         "//tests:thinkit_gnmi_interface_util",
@@ -72,7 +72,7 @@ cc_library(
         "factory_reset_test.h",
     ],
     deps = [
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "//lib/validator:validator_lib",
         "//thinkit:ssh_client",
         "//thinkit:switch",

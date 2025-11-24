@@ -15,13 +15,14 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/proto_matchers.h"
-#include "gutil/status.h"
-#include "gutil/status_matchers.h"
+#include "gutil/gutil/proto_matchers.h"
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
