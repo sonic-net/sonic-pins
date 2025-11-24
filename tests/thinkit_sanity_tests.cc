@@ -30,6 +30,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/flags/flag.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/impl/codegen/client_context.h"
@@ -50,6 +51,9 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
+
+// Flag to bypass the gNMI call to get the boottime
+ABSL_FLAG(bool, gnmi_boottime_support, true, "gNMI get boot time supported");
 
 namespace pins_test {
 namespace {
@@ -278,6 +282,13 @@ void TestGnmiConfigBlobSet(thinkit::Switch& sut) {
 //  Returns last boot time of SUT.
 absl::StatusOr<uint64_t> GetGnmiSystemBootTime(
     thinkit::Switch& sut, gnmi::gNMI::StubInterface* sut_gnmi_stub) {
+
+  // If gNMI does not support get boot time, use this flag to return
+  // a dummy value
+  if (!absl::GetFlag(FLAGS_gnmi_boottime_support)) {
+    return 0x01;
+  }
+
   ASSIGN_OR_RETURN(
       gnmi::GetRequest request,
       BuildGnmiGetRequest("system/state/boot-time", gnmi::GetRequest::STATE));
