@@ -296,7 +296,8 @@ TEST_F(FixedL3TableTest, InvalidPortIdFails) {
 
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: FAILED_PRECONDITION")));
 }
 
 TEST_F(FixedL3TableTest, IncorrectlyFormatedRequestFailsConstraintCheck) {

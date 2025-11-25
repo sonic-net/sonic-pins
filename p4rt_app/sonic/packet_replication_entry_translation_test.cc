@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "google/rpc/code.pb.h"
@@ -27,8 +28,6 @@
 #include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/mock_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/rediscommand.h"
@@ -39,44 +38,30 @@ namespace {
 
 using ::google::protobuf::TextFormat;
 using ::gutil::EqualsProto;
-using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 using ::testing::ContainerEq;
 using ::testing::Eq;
 using ::testing::IsEmpty;
-using ::testing::Not;
 using ::testing::Return;
 using ::testing::UnorderedElementsAre;
 
 class PacketReplicationEntryTranslationTest : public ::testing::Test {
  protected:
   PacketReplicationEntryTranslationTest() {
-    auto pre_notification_producer =
-        std::make_unique<MockNotificationProducerAdapter>();
-    auto pre_producer_state =
-        std::make_unique<MockNotificationProducerAdapter>();
-    auto pre_notifier = std::make_unique<MockConsumerNotifierAdapter>();
     auto pre_app_db = std::make_unique<MockTableAdapter>();
     auto pre_counter_db = std::make_unique<MockTableAdapter>();
 
     // Save a pointer so we can test against the mocks.
-    mock_pre_notification_producer_ = pre_notification_producer.get();
-    mock_pre_producer_state_ = pre_producer_state.get();
-    mock_pre_notifier_ = pre_notifier.get();
     mock_pre_app_db_ = pre_app_db.get();
     mock_pre_counter_db_ = pre_counter_db.get();
 
     mock_p4rt_table_ = P4rtTable{
-        .notification_producer = std::move(pre_notification_producer),
-        .notification_consumer = std::move(pre_notifier),
         .app_db = std::move(pre_app_db),
         .counter_db = std::move(pre_counter_db),
     };
   }
 
-  MockNotificationProducerAdapter* mock_pre_notification_producer_;
-  MockNotificationProducerAdapter* mock_pre_producer_state_;
-  MockConsumerNotifierAdapter* mock_pre_notifier_;
   MockTableAdapter* mock_pre_app_db_;
   MockTableAdapter* mock_pre_counter_db_;
   P4rtTable mock_p4rt_table_;
@@ -106,14 +91,46 @@ TEST_F(PacketReplicationEntryTranslationTest, InsertPacketReplicationEntry) {
       std::make_pair("replicas", json_array),
   };
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected_key, "SET", kfv_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
-                  mock_p4rt_table_, p4::v1::Update::INSERT, pre_entry, kfvs),
-              IsOkAndHolds(expected_key));
-  EXPECT_THAT(expected_key_value, ContainerEq(kfvs));
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::INSERT,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
+}
+
+TEST_F(PacketReplicationEntryTranslationTest,
+       InsertPacketReplicationEntryWithMetadata) {
+  pdpi::IrPacketReplicationEngineEntry pre_entry;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(multicast_group_entry {
+             multicast_group_id: 1
+             replicas { port: "Ethernet1/1/1" instance: 1 }
+             replicas { port: "Ethernet3/1/1" instance: 1 }
+             replicas { port: "Ethernet5/1/1" instance: 1 }
+             metadata: "Happy Metadata!"
+           })pb",
+      &pre_entry));
+
+  // Expected RedisDB entry.
+  const std::string json_array =
+      R"j([{"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet3/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet5/1/1"}])j";
+
+  const std::vector<std::pair<std::string, std::string>> kfv_values = {
+      std::make_pair("replicas", json_array),
+      std::make_pair("controller_metadata", "Happy Metadata!")};
+  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
+
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::INSERT,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
@@ -137,14 +154,12 @@ TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
       std::make_pair("replicas", json_array),
   };
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected_key, "SET", kfv_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
-                  mock_p4rt_table_, p4::v1::Update::MODIFY, pre_entry, kfvs),
-              IsOkAndHolds(expected_key));
-  EXPECT_THAT(expected_key_value, ContainerEq(kfvs));
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::INSERT,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, DeletePacketReplicationEntry) {
@@ -160,15 +175,12 @@ TEST_F(PacketReplicationEntryTranslationTest, DeletePacketReplicationEntry) {
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> empty_values;
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x0001", "DEL",
-                      empty_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value = std::make_tuple(
+      "REPLICATION_IP_MULTICAST_TABLE:0x0001", "DEL", empty_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
-                  mock_p4rt_table_, p4::v1::Update::DELETE, pre_entry, kfvs),
-              IsOkAndHolds(expected_key));
-  EXPECT_THAT(expected_key_value, ContainerEq(kfvs));
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::DELETE,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, UnspecifiedOperationFails) {
@@ -182,15 +194,12 @@ TEST_F(PacketReplicationEntryTranslationTest, UnspecifiedOperationFails) {
 
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> empty_values;
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x0001", "SET",
-                      empty_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value = std::make_tuple(
+      "REPLICATION_IP_MULTICAST_TABLE:0x0001", "SET", empty_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  EXPECT_THAT(
-      CreatePacketReplicationTableUpdateForAppDb(
-          mock_p4rt_table_, p4::v1::Update::UNSPECIFIED, pre_entry, kfvs),
-      Not(IsOk()));
+  EXPECT_THAT(CreateAppDbPacketReplicationTableUpdate(
+                  p4::v1::Update::UNSPECIFIED, pre_entry),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest,
