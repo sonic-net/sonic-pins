@@ -18,6 +18,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/rediscommand.h"
@@ -26,15 +28,19 @@ namespace p4rt_app {
 namespace sonic {
 
 // Insert an ACL table definition entry into the AppDB ACL Table Definition
-// Table, returns the key that was used.
-absl::StatusOr<std::string>
-InsertAclTableDefinition(P4rtTable &p4rt_table,
-                         const pdpi::IrTableDefinition &ir_table);
+// Table.
+absl::Status InsertAclTableDefinition(P4rtTable& p4rt_table,
+                                      const pdpi::IrTableDefinition& ir_table);
 
 // Remove an ACL table definition entry from the AppDB ACL Table Definition
 // Table.
 absl::Status RemoveAclTableDefinition(P4rtTable &p4rt_table,
                                       const pdpi::IrTableDefinition &ir_table);
+
+// Remove an ACL table definition entry from the AppDB ACL Table Definition
+// Table.
+absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
+                                      absl::string_view table_name);
 
 // Create and return the AppDB representation of an ACL table definition.
 //
