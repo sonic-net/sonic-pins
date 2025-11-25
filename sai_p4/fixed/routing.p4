@@ -508,7 +508,9 @@ control routing_resolution(in headers_t headers,
 #if defined(TUNNEL_ENCAP_CAPABLE)
       @proto_id(2) set_p2p_tunnel_encap_nexthop;
 #endif
+#if defined (NEXTHOP_DISABLE_REWRITES_CAPABLE)
       @proto_id(3) set_ip_nexthop_and_disable_rewrites;
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;

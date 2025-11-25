@@ -44,7 +44,6 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
-#include "p4_pdpi/packetlib/bit_widths.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/ternary.h"
@@ -813,33 +812,6 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
   *entries_.add_entries() =
       MakeNexthopTableEntry(nexthop_id, kRifId, neighbor_id, rewrite_options);
 
-  return *this;
-}
-
-EntryBuilder& EntryBuilder::AddIngressAclEntry(const AclIngressEntry& params) {
-  sai::AclIngressTableEntry& entry =
-      *entries_.add_entries()->mutable_acl_ingress_table_entry();
-  if (params.is_ip.has_value()) {
-    entry.mutable_match()->mutable_is_ip()->set_value(
-        BoolToHexString(*params.is_ip));
-  }
-  if (!params.ip_protocol.IsWildcard()) {
-    *entry.mutable_match()->mutable_ip_protocol() =
-        BitSetTernaryToSai<packetlib::kIpProtocolBitwidth>(params.ip_protocol);
-  }
-  entry.set_priority(params.priority);
-
-  std::visit(gutil::Overload{
-                 [&](CopyAction action) {
-                   entry.mutable_action()->mutable_acl_copy()->set_qos_queue(
-                       action.cpu_queue);
-                 },
-                 [&](TrapAction action) {
-                   entry.mutable_action()->mutable_acl_trap()->set_qos_queue(
-                       action.cpu_queue);
-                 },
-             },
-             params.punt_action);
   return *this;
 }
 
