@@ -19,11 +19,13 @@
 #include <vector>
 
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/sonic/swss_utils.h"
@@ -194,6 +196,46 @@ absl::StatusOr<P4InfoReconcileTransition> CalculateTransition(
   RETURN_IF_ERROR(CalculateHashingDifference(from, to, transition));
   RETURN_IF_ERROR(CalculateAclDifference(from, to, transition));
   return transition;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, ActionProfileResourceCapacity>>
+GetUpdatedResourceCapacities(
+    const pdpi::IrP4Info& ir_p4info,
+    const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
+        original) {
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> capacity_map;
+  for (const auto& [action_profile_name, action_profile_def] :
+       ir_p4info.action_profiles_by_name()) {
+    ActionProfileResourceCapacity capacity =
+        GetActionProfileResourceCapacity(action_profile_def);
+    const ActionProfileResourceCapacity* original_capacity =
+        gutil::FindOrNull(original, action_profile_name);
+    capacity.current_utilization = original_capacity == nullptr
+                                       ? 0
+                                       : original_capacity->current_utilization;
+    if (capacity.current_utilization > capacity.max_weight_for_all_groups) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "The new ForwardingPipelineConfig capacity for action profile '"
+             << action_profile_name << "' ("
+             << capacity.max_weight_for_all_groups
+             << ") is less than the current usage ("
+             << capacity.current_utilization << ")";
+    }
+    // TODO: Check against the current usage.
+    if (capacity.current_utilization > 0 &&
+        capacity.max_group_size < original_capacity->max_group_size) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "The new ForwardingPipelineConfig max group size for action "
+             << "profile '" << action_profile_name << "' ("
+             << capacity.max_group_size
+             << ") is smaller than the original size ("
+             << original_capacity->max_group_size
+             << "). Shrinking the max group size is currently unsupported.";
+    }
+
+    capacity_map.insert_or_assign(action_profile_name, std::move(capacity));
+  }
+  return capacity_map;
 }
 
 }  // namespace p4rt_app
