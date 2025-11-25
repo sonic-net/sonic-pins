@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package p4.v1;
+package sai;
 
 // A switch can provide limitations of the WCMP groups that can be installed
 // on the switch. A switch may report a ResourceExhausted error, if:
