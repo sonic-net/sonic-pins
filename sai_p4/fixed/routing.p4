@@ -396,8 +396,6 @@ control routing_resolution(in headers_t headers,
   // Sets SAI_ROUTER_INTERFACE_ATTR_MY_MAC to a SAI_OBJECT_TYPE_MY_MAC, thus
   // preventing the implicit creation of a MY_MAC entry in SAI (l3_admit_table
   // at P4).
-  // TODO Remove unsupported when the switch supports this action.
-  @unsupported
   @id(UNICAST_SET_PORT_AND_SRC_MAC_ACTION_ID)
    @action_restriction("
     // Disallow invalid SRC MACs.
