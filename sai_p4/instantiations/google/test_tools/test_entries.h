@@ -251,7 +251,7 @@ struct Replica {
 // Match fields of an ingress mirror or redirect table entry.
 struct MirrorAndRedirectMatchFields {
   std::optional<absl::string_view> in_port;
-  std::optional<bool> ipmc_table_hit;
+  std::optional<bool> route_hit;
   std::optional<int> vlan_id;
   std::optional<bool> is_ipv4;
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
