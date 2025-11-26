@@ -87,6 +87,7 @@
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
+#include "swss/rediscommand.h"
 
 namespace p4rt_app {
 namespace {
@@ -1021,11 +1022,47 @@ absl::Status P4RuntimeImpl::TransitionAcls(
   return absl::OkStatus();
 }
 
+void P4RuntimeImpl::RecordTransitionTelemetry(
+    const P4InfoReconcileTransition& transition) {
+  std::vector<swss::FieldValueTuple> fvs;
+  // Hashing telemetry
+  // TODO: write hash table transition data once the removal of LAG
+  // hash configs is supported.
+
+  // ACL telemetry
+  fvs.emplace_back("added_tables",
+                   absl::StrJoin(transition.acl_tables_to_add, ","));
+  fvs.emplace_back("removed_tables",
+                   absl::StrJoin(transition.acl_tables_to_delete, ","));
+  fvs.emplace_back(
+      "modified_essential_tables",
+      absl::StrJoin(transition.essential_acl_tables_to_modify, ","));
+  fvs.emplace_back(
+      "modified_nonessential_tables",
+      absl::StrJoin(transition.nonessential_acl_tables_to_modify, ","));
+  p4rt_telemetry_table_.state_db->set("acl_recarving", fvs);
+}
+
+void P4RuntimeImpl::ResetTransitionTelemetry() {
+  std::vector<swss::FieldValueTuple> fvs;
+  // Hashing telemetry
+  // TODO: reset hash table transition data once the removal of LAG
+  // hash configs is supported.
+
+  // ACL telemetry
+  fvs.emplace_back("added_tables", "");
+  fvs.emplace_back("removed_tables", "");
+  fvs.emplace_back("modified_essential_tables", "");
+  fvs.emplace_back("modified_nonessential_tables", "");
+  p4rt_telemetry_table_.state_db->set("acl_recarving", fvs);
+}
+
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
     sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+    sonic::P4rtTelemetryTable p4rt_telemetry_table,
     std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
 //TODO(PINS): To add component_state, system_state and netdev_translator.
@@ -1041,6 +1078,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       switch_table_(std::move(switch_table)),
       port_table_(std::move(port_table)),
       host_stats_table_(std::move(host_stats_table)),
+      p4rt_telemetry_table_(std::move(p4rt_telemetry_table)),
       warm_boot_state_adapter_(std::move(warm_boot_state_adapter)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
@@ -1861,6 +1899,8 @@ grpc::Status P4RuntimeImpl::CommitPipelineConfig(
 grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request,
     bool commit_to_hardware) {
+  ResetTransitionTelemetry();
+
   auto config_info = PreprocessConfig(request);
   if (!config_info.ok()) {
     return gutil::AbslStatusToGrpcStatus(config_info.status());
@@ -1907,6 +1947,7 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
           "Failed to reconcile ACL tables in new ForwardingPipelineConfig: ",
           result.message()));
     }
+    RecordTransitionTelemetry(*transition);
 
     capacity_by_action_profile_name_ = std::move(*capacity);
   } else {

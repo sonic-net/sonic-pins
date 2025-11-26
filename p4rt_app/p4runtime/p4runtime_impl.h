@@ -104,6 +104,7 @@ public:
       sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
       sonic::HashTable hash_table, sonic::SwitchTable switch_table,
       sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+      sonic::P4rtTelemetryTable p4rt_telemetry_table,
       std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
       std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
       // TODO(PINS): To add component_state, system_state and netdev_translator.
@@ -313,6 +314,11 @@ private:
                               const pdpi::IrP4Info& new_ir_p4info)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
+  void RecordTransitionTelemetry(const P4InfoReconcileTransition& transition)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+  void ResetTransitionTelemetry()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
   // Defines the callback lambda function to be invoked for receive packets
   // and calls into the sonic::StartReceive to spawn the receiver thread.
   ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
@@ -335,6 +341,8 @@ private:
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::P4rtTelemetryTable p4rt_telemetry_table_
+      ABSL_GUARDED_BY(server_state_lock_);
   const std::unique_ptr<sonic::WarmBootStateAdapter>
       warm_boot_state_adapter_ ABSL_GUARDED_BY(server_state_lock_);
 

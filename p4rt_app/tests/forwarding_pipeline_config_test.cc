@@ -30,6 +30,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -127,6 +128,54 @@ MATCHER_P2(ContainsConfigTimeBetween, start, end,
     return false;
   }
   return true;
+}
+
+MATCHER_P2(
+    ContainsListofTables, tables_type, tables_matcher,
+    absl::StrCat(
+        "Contains a field=", tables_type,
+        " and the value is a list of table names matching the input matcher")) {
+  if (!ExplainMatchResult(Contains(Key(tables_type)), arg, result_listener)) {
+    *result_listener << " Table entry does not have field=" << tables_type;
+    return false;
+  }
+  std::vector<std::string> tables =
+      absl::StrSplit(arg.at(tables_type), ',', absl::SkipEmpty());
+  if (!ExplainMatchResult(tables_matcher, tables, result_listener)) {
+    *result_listener << " The list of " << tables_type << "('"
+                     << arg.at(tables_type)
+                     << "') does not match the expected matcher";
+    return false;
+  }
+  return true;
+}
+
+MATCHER_P4(MatchesAclTransitionStats, added_tables_matcher,
+           removed_tables_matcher, modified_essential_tables_matcher,
+           modified_nonessential_tables_matcher,
+           "Contains a table entry with key='acl_recarving' and the value of "
+           "added/removed/modified tables match the corresponding matcher") {
+  if (!ExplainMatchResult(Contains("acl_recarving"), arg.GetAllKeys(),
+                          result_listener)) {
+    *result_listener << " Table does not have key='acl_recarving'";
+    return false;
+  }
+  sonic::SonicDbEntryMap table_entry = *arg.ReadTableEntry("acl_recarving");
+
+  return ExplainMatchResult(
+             ContainsListofTables("added_tables", added_tables_matcher),
+             table_entry, result_listener) &&
+         ExplainMatchResult(
+             ContainsListofTables("removed_tables", removed_tables_matcher),
+             table_entry, result_listener) &&
+         ExplainMatchResult(
+             ContainsListofTables("modified_essential_tables",
+                                  modified_essential_tables_matcher),
+             table_entry, result_listener) &&
+         ExplainMatchResult(
+             ContainsListofTables("modified_nonessential_tables",
+                                  modified_nonessential_tables_matcher),
+             table_entry, result_listener);
 }
 
 template <typename T>
@@ -653,6 +702,10 @@ TEST_F(ReconcileAndCommitTest, SetDuplicateForwardingPipelineConfig) {
 
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  EXPECT_THAT(
+      p4rt_service_->GetP4rtTelemetryStateDbTable(),
+      MatchesAclTransitionStats(IsEmpty(), IsEmpty(), IsEmpty(), IsEmpty()));
 }
 
 using TableIterator =
@@ -695,7 +748,26 @@ bool RemoveTableByAlias(p4::config::v1::P4Info& p4info,
   return false;
 }
 
-TEST_F(ReconcileAndCommitTest, CanDeletEmptyTables) {
+bool IsAclTable(const pdpi::IrP4Info& ir_p4info,
+                const p4::config::v1::Table& table) {
+  int table_id = table.preamble().id();
+  if (!ir_p4info.tables_by_id().contains(table_id)) {
+    return false;
+  }
+  const auto& ir_table = ir_p4info.tables_by_id().at(table_id);
+  return *GetTableType(ir_table) == table::Type::kAcl;
+}
+
+bool IsEssentialTable(const p4::config::v1::Table& table) {
+  for (const auto& annotation : table.preamble().annotations()) {
+    if (absl::StartsWith(annotation, "@nonessential_for_upgrade")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+TEST_F(ReconcileAndCommitTest, CanDeleteEmptyTables) {
   auto request = GetBasicForwardingRequest();
   request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
   *request.mutable_config()->mutable_p4info() =
@@ -704,17 +776,28 @@ TEST_F(ReconcileAndCommitTest, CanDeletEmptyTables) {
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 
   p4::config::v1::P4Info& p4info = *request.mutable_config()->mutable_p4info();
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
   auto& tables = *p4info.mutable_tables();
+  std::vector<std::string> deleted_acl_tables;
   for (auto table = tables.begin(); table != tables.end();) {
     if (AliasesToKeep().contains(table->preamble().alias()) ||
         // TODO: Enable this transition when supported.
         table->preamble().alias() == "acl_pre_ingress_table") {
       ++table;
     } else {
+      if (IsAclTable(ir_p4info, *table)) {
+        deleted_acl_tables.push_back(table->preamble().alias());
+      }
       table = RemoveTable(p4info, table);
     }
   }
+
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  EXPECT_THAT(p4rt_service_->GetP4rtTelemetryStateDbTable(),
+              MatchesAclTransitionStats(
+                  IsEmpty(), UnorderedElementsAreArray(deleted_acl_tables),
+                  IsEmpty(), IsEmpty()));
 
   ASSERT_OK_AND_ASSIGN(auto reconciled_state,
                        DbState(p4rt_service_->GetP4rtAppDbTable()));
@@ -749,11 +832,16 @@ TEST_F(ReconcileAndCommitTest, CanAddTables) {
 
   // Apply config without non-acl tables.
   p4::config::v1::P4Info& p4info = *request.mutable_config()->mutable_p4info();
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
   auto& tables = *p4info.mutable_tables();
+  std::vector<std::string> added_acl_tables;
   for (auto table = tables.begin(); table != tables.end();) {
     if (AliasesToKeep().contains(table->preamble().alias())) {
       ++table;
     } else {
+      if (IsAclTable(ir_p4info, *table)) {
+        added_acl_tables.push_back(table->preamble().alias());
+      }
       table = RemoveTable(p4info, table);
     }
   }
@@ -763,6 +851,11 @@ TEST_F(ReconcileAndCommitTest, CanAddTables) {
   *request.mutable_config()->mutable_p4info() =
       sai::GetP4Info(sai::Instantiation::kMiddleblock);
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  EXPECT_THAT(
+      p4rt_service_->GetP4rtTelemetryStateDbTable(),
+      MatchesAclTransitionStats(UnorderedElementsAreArray(added_acl_tables),
+                                IsEmpty(), IsEmpty(), IsEmpty()));
 
   ASSERT_OK_AND_ASSIGN(auto reconciled_state,
                        DbState(p4rt_service_->GetP4rtAppDbTable()));
@@ -798,7 +891,11 @@ TEST_F(ReconcileAndCommitTest, CanModifyEmptyTables) {
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 
   // Remove some fixed table match fields.
-  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
+  p4::config::v1::P4Info& p4info = *request.mutable_config()->mutable_p4info();
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
+  auto& tables = *p4info.mutable_tables();
+  std::vector<std::string> modified_essential_acl_tables;
+  std::vector<std::string> modified_nonessential_acl_tables;
   for (auto& table : tables) {
     // TODO: Enable this transition when supported.
     if (table.preamble().alias() == "acl_pre_ingress_table") continue;
@@ -814,10 +911,22 @@ TEST_F(ReconcileAndCommitTest, CanModifyEmptyTables) {
         continue;
       }
       table.mutable_match_fields()->erase(match_field);
+      if (IsAclTable(ir_p4info, table)) {
+        if (IsEssentialTable(table)) {
+          modified_essential_acl_tables.push_back(table.preamble().alias());
+        } else {
+          modified_nonessential_acl_tables.push_back(table.preamble().alias());
+        }
+      }
       break;
     }
   }
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+  EXPECT_THAT(p4rt_service_->GetP4rtTelemetryStateDbTable(),
+              MatchesAclTransitionStats(
+                  IsEmpty(), IsEmpty(),
+                  UnorderedElementsAreArray(modified_essential_acl_tables),
+                  UnorderedElementsAreArray(modified_nonessential_acl_tables)));
 
   ASSERT_OK_AND_ASSIGN(auto reconciled_state,
                        DbState(p4rt_service_->GetP4rtAppDbTable()));
@@ -867,6 +976,8 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedAclTables) {
       &match_field));
 
   pdpi::IrWriteRequest ir_write_request;
+  std::vector<std::string> modified_essential_acl_tables;
+  std::vector<std::string> modified_nonessential_acl_tables;
   for (auto& table : tables) {
     // TODO: Enable this transition when supported.
     if (table.preamble().alias() == "acl_pre_ingress_table") continue;
@@ -889,6 +1000,11 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedAclTables) {
       }
     }
 
+    if (IsEssentialTable(table)) {
+      modified_essential_acl_tables.push_back(table.preamble().alias());
+    } else {
+      modified_nonessential_acl_tables.push_back(table.preamble().alias());
+    }
     *table.add_match_fields() = match_field;
   }
 
@@ -898,6 +1014,12 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedAclTables) {
                                                    write_request));
 
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  EXPECT_THAT(p4rt_service_->GetP4rtTelemetryStateDbTable(),
+              MatchesAclTransitionStats(
+                  IsEmpty(), IsEmpty(),
+                  UnorderedElementsAreArray(modified_essential_acl_tables),
+                  UnorderedElementsAreArray(modified_nonessential_acl_tables)));
 
   ASSERT_OK_AND_ASSIGN(auto reconciled_state,
                        DbState(p4rt_service_->GetP4rtAppDbTable()));
@@ -951,6 +1073,7 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedNonessentialAclTables) {
       &match_field));
 
   pdpi::IrWriteRequest ir_write_request;
+  std::vector<std::string> modified_nonessential_acl_tables;
   for (auto& table : tables) {
     // TODO: Enable this transition when supported.
     if (table.preamble().alias() == "acl_pre_ingress_table") continue;
@@ -962,14 +1085,7 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedNonessentialAclTables) {
     auto generator = sai::GetGenerator(ir_table);
     if (!generator.ok()) continue;
 
-    bool is_nonessential = false;
-    for (const auto& annotation : table.preamble().annotations()) {
-      if (absl::StartsWith(annotation, "@nonessential_for_upgrade")) {
-        is_nonessential = true;
-        break;
-      }
-    }
-    if (!is_nonessential) {
+    if (IsEssentialTable(table)) {
       table.mutable_preamble()->add_annotations("@nonessential_for_upgrade");
     }
 
@@ -984,6 +1100,7 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedNonessentialAclTables) {
       }
     }
 
+    modified_nonessential_acl_tables.push_back(table.preamble().alias());
     *table.add_match_fields() = match_field;
   }
 
@@ -993,6 +1110,11 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedNonessentialAclTables) {
                                                    write_request));
 
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  EXPECT_THAT(p4rt_service_->GetP4rtTelemetryStateDbTable(),
+              MatchesAclTransitionStats(
+                  IsEmpty(), IsEmpty(), IsEmpty(),
+                  UnorderedElementsAreArray(modified_nonessential_acl_tables)));
 
   ASSERT_OK_AND_ASSIGN(auto reconciled_state,
                        DbState(p4rt_service_->GetP4rtAppDbTable()));
@@ -1021,6 +1143,42 @@ TEST_F(ReconcileAndCommitTest, CanModifyPopulatedNonessentialAclTables) {
     EXPECT_THAT(reconciled_state[key],
                 UnorderedElementsAreArray(fresh_state[key]));
   }
+}
+
+TEST_F(ReconcileAndCommitTest, WritesEmptyAclTransitionOnNonAclTableModify) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Modify some non-ACL tables.
+  p4::config::v1::P4Info& p4info = *request.mutable_config()->mutable_p4info();
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
+  auto& tables = *p4info.mutable_tables();
+  for (auto& table : tables) {
+    if (IsAclTable(ir_p4info, table)) continue;
+
+    if (table.match_fields().size() < 2) continue;  // All tables need a match.
+    auto constraints = pdpi::GetAnnotationBody("entry_restriction",
+                                               table.preamble().annotations());
+    for (auto match_field = table.mutable_match_fields()->begin();
+         match_field != table.mutable_match_fields()->end(); ++match_field) {
+      if (AliasesToKeep().contains(match_field->name()) ||
+          (constraints.ok() &&
+           absl::StrContains(*constraints, match_field->name()))) {
+        continue;
+      }
+      table.mutable_match_fields()->erase(match_field);
+      break;
+    }
+  }
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+  EXPECT_THAT(
+      p4rt_service_->GetP4rtTelemetryStateDbTable(),
+      MatchesAclTransitionStats(IsEmpty(), IsEmpty(), IsEmpty(), IsEmpty()));
 }
 
 TEST_F(ReconcileAndCommitTest, CriticallyFailsIfAclTableRemovalFails) {

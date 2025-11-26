@@ -106,6 +106,12 @@ struct HostStatsTable {
   std::unique_ptr<TableAdapter> state_db;
 };
 
+// The P4RT app needs to:
+//   * Write P4RT_TELEMETRY entries into the StateDB.
+struct P4rtTelemetryTable {
+  std::unique_ptr<TableAdapter> state_db;
+};
+
 } // namespace sonic
 } // namespace p4rt_app
 
