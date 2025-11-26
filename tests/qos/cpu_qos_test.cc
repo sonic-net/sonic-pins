@@ -1388,7 +1388,7 @@ constexpr float kMeterCounterTolerance = 5.0;
 // 4. Maximum frame size.
 // 5. Minimum frame size.
 constexpr int kFramesPerSecond = 1000000;
-constexpr int kTotalFrames = 30000000;
+constexpr int kTotalFrames = 40000000;
 constexpr absl::Duration kTrafficDuration =
     absl::Seconds(kTotalFrames / kFramesPerSecond);
 constexpr int kDefaultFrameSize = 1514;
