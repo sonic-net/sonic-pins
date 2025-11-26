@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GUTIL_TESTING_H
-#define GUTIL_TESTING_H
+#ifndef PINS_GUTIL_TESTING_H
+#define PINS_GUTIL_TESTING_H
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -53,4 +53,4 @@ std::string SnakeCaseToCamelCase(absl::string_view input,
 
 }  // namespace gutil
 
-#endif  // GUTIL_TESTING_H
+#endif  // PINS_GUTIL_TESTING_H

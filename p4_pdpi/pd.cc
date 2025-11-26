@@ -385,7 +385,7 @@ std::vector<std::string> GetAllFieldNames(
   std::vector<std::string> field_names;
   field_names.reserve(fields.size());
   for (const auto *field : fields) {
-    field_names.push_back(field->name());
+    field_names.emplace_back(field->name());
   }
   return field_names;
 }
