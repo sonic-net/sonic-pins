@@ -15,12 +15,14 @@ limitations under the License.
 
 #include "gutil/gutil/test_artifact_writer.h"
 
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>  // NOLINT: open source code
 #include <fstream>
 #include <ios>
 #include <string>
 #include <system_error>  // NOLINT: open source code
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -36,8 +38,10 @@ limitations under the License.
 namespace gutil {
 namespace {
 
-// Gets a Bazel artifact directory based on the currently running test.
-absl::StatusOr<std::string> ArtifactDirectory() {
+// Gets a Bazel artifact directory based on the currently running test if `path`
+// is empty. Otherwise, create a new subdirectory `path` under Bazel artifact
+// directory and returns the full path.
+absl::StatusOr<std::string> ArtifactDirectory(absl::string_view path) {
   // Pick appropriate artifact directory using Bazel environment variables, see
   // https://docs.bazel.build/versions/main/test-encyclopedia.html#initial-conditions
   char* base_dir = std::getenv("TEST_UNDECLARED_OUTPUTS_DIR");
@@ -55,6 +59,9 @@ absl::StatusOr<std::string> ArtifactDirectory() {
     absl::StrAppend(&dir, "/", test_info->test_case_name(), "/",
                     test_info->name());
   }
+  if (!path.empty()) {
+    absl::StrAppend(&dir, "/", path);
+  }
 
   // Ensure the directory exists.
   std::error_code error;
@@ -67,17 +74,31 @@ absl::StatusOr<std::string> ArtifactDirectory() {
   return dir;
 }
 
-// Writes an artifact with `contents` to `filename` under an artifact directory
+// Splits a path into its directory and filename components.
+std::pair<std::string_view, std::string_view> SplitPath(
+    absl::string_view path) {
+  size_t last_slash_pos = path.find_last_of('/');
+  if (last_slash_pos == std::string::npos) {
+    return std::make_pair("", path);
+  }
+  return std::make_pair(path.substr(0, last_slash_pos),
+                        path.substr(last_slash_pos + 1));
+}
+
+// Writes an artifact with `contents` to a `path` under an artifact directory
 // determined by the currently running test. The mode to write the contents
 // under is determined by `mode` supporting e.g. `std::ios_base::trunc` or
 // `std::ios_base::app`.
 // `open_file_by_filepath` is used to continue to use the same file descriptor,
 // instead of creating a new one, when appending.
 absl::Status WriteToTestArtifact(
-    absl::string_view filename, absl::string_view contents,
+    absl::string_view path, absl::string_view contents,
     std::ios_base::openmode mode,
     absl::flat_hash_map<std::string, std::ofstream>& open_file_by_filepath) {
-  ASSIGN_OR_RETURN(std::string directory, ArtifactDirectory());
+  // Check if the filename contains any subdirectories.
+  auto [subdirectory, filename] = SplitPath(path);
+  ASSIGN_OR_RETURN(std::string directory, ArtifactDirectory(subdirectory));
+
   std::string filepath = absl::StrCat(directory, "/", filename);
   // Note that pointer-stability of values is not a concern here because the
   // reference is local and nothing is added to the map while the reference is
