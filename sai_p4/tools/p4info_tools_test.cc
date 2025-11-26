@@ -23,9 +23,6 @@
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/minimum_guaranteed_sizes.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace sai {
 namespace {
@@ -112,7 +109,7 @@ p4::config::v1::P4Info P4InfoWithActionProfile() {
   return gutil::ParseProtoOrDie<p4::config::v1::P4Info>(R"pb(
     action_profiles {
       preamble {
-        id: 1
+        id: 0x1
         name: "some_action_profile"
         alias: "some_action_profile"
       }
@@ -121,169 +118,118 @@ p4::config::v1::P4Info P4InfoWithActionProfile() {
     })pb");
 }
 
-TEST(SetSemanticsTest, SumOfMembersSemanticsCorrectlySetAndIsIdempotent) {
+TEST(OverrideWcmpCapacity, SetsSumOfMembersCapacity) {
   p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
-
-  // Check that the p4info is modified the first time and that the new fields
-  // are set correctly.
-  EXPECT_TRUE(ApplySumOfMembersSemanticsForActionProfiles(p4info));
-  EXPECT_EQ(p4info.action_profiles(0).sum_of_members().max_member_weight(),
-            WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT);
-  EXPECT_EQ(p4info.action_profiles(0).size(), WCMP_GROUP_SUM_OF_MEMBERS_SIZE);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE);
+  EXPECT_TRUE(OverrideWcmpCapacity(
+      p4info, SumOfMembersCapacity{.total_members = 1234,
+                                   .max_group_size = 123,
+                                   .max_member_weight = 12}));
+  EXPECT_EQ(p4info.action_profiles(0).size(), 1234);
+  EXPECT_EQ(p4info.action_profiles(0).max_group_size(), 123);
+  EXPECT_EQ(p4info.action_profiles(0).sum_of_members().max_member_weight(), 12);
 
   // Check that pre-existing fields are unmodified.
   EXPECT_THAT(p4info, Partially(EqualsProto(P4InfoWithActionProfile())));
-
-  // Check that the p4info is unmodified the second time and that this is
-  // reflected in the return value.
-  p4::config::v1::P4Info p4info_copy = p4info;
-  EXPECT_FALSE(ApplySumOfMembersSemanticsForActionProfiles(p4info_copy));
-  EXPECT_THAT(p4info, EqualsProto(p4info_copy));
 }
 
-TEST(SetSemanticsTest, SumOfWeightsSemanticsForTorCorrectlySetAndIsIdempotent) {
+TEST(OverrideWcmpCapacity, SetSumOfMembersIsConsistentlyApplied) {
   p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
+  constexpr SumOfMembersCapacity kReferenceCapacity{
+      .total_members = 1234, .max_group_size = 123, .max_member_weight = 12};
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  const auto reference_p4info = p4info;
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  EXPECT_THAT(p4info, EqualsProto(reference_p4info));
 
-  // Check that the p4info is modified the first time and that the new fields
-  // are set correctly.
-  EXPECT_TRUE(
-      ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kTor, p4info));
-  EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
-  EXPECT_EQ(p4info.action_profiles(0).size(),
-            WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR);
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, SumOfMembersCapacity{
+                                               .total_members = 1111,
+                                               .max_group_size = 111,
+                                               .max_member_weight = 11,
+                                           }));
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  EXPECT_THAT(p4info, EqualsProto(reference_p4info));
+
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, SumOfWeightsCapacity{
+                                               .total_weight = 1111,
+                                               .max_group_size = 111,
+                                           }));
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  EXPECT_THAT(p4info, EqualsProto(reference_p4info));
+}
+
+TEST(OverrideWcmpCapacity, SetsSumOfWeightsCapacity) {
+  p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, SumOfWeightsCapacity{
+                                               .total_weight = 1234,
+                                               .max_group_size = 123,
+                                           }));
+  EXPECT_EQ(p4info.action_profiles(0).size(), 1234);
+  EXPECT_EQ(p4info.action_profiles(0).max_group_size(), 123);
+  EXPECT_EQ(
+      p4info.action_profiles(0).selector_size_semantics_case(),
+      p4::config::v1::ActionProfile::SelectorSizeSemanticsCase::kSumOfWeights);
 
   // Check that pre-existing fields are unmodified.
   EXPECT_THAT(p4info, Partially(EqualsProto(P4InfoWithActionProfile())));
-
-  // Check that the p4info is unmodified the second time and that this is
-  // reflected in the return value.
-  p4::config::v1::P4Info p4info_copy = p4info;
-  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kTor,
-                                                           p4info_copy));
-  EXPECT_THAT(p4info, EqualsProto(p4info_copy));
 }
 
-TEST(SetSemanticsTest,
-     SumOfWeightsSemanticsForNonTorCorrectlySetAndIsIdempotent) {
+TEST(OverrideWcmpCapacity, SetSumOfWeightsIsConsistentlyApplied) {
   p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
+  constexpr SumOfWeightsCapacity kReferenceCapacity{.total_weight = 1234,
+                                                    .max_group_size = 123};
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  const auto reference_p4info = p4info;
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  EXPECT_THAT(p4info, EqualsProto(reference_p4info));
 
-  // Check that the p4info is modified the first time and that the new fields
-  // are set correctly.
-  EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(
-      Instantiation::kFabricBorderRouter, p4info));
-  EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
-  EXPECT_EQ(p4info.action_profiles(0).size(),
-            WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR);
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, SumOfMembersCapacity{
+                                               .total_members = 1111,
+                                               .max_group_size = 111,
+                                               .max_member_weight = 11,
+                                           }));
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  EXPECT_THAT(p4info, EqualsProto(reference_p4info));
 
-  // Check that the p4info is unmodified the second time and that this is
-  // reflected in the return value.
-  p4::config::v1::P4Info p4info_copy = p4info;
-  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(
-      Instantiation::kFabricBorderRouter, p4info_copy));
-  EXPECT_THAT(p4info, EqualsProto(p4info_copy));
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, SumOfWeightsCapacity{
+                                               .total_weight = 1111,
+                                               .max_group_size = 111,
+                                           }));
+  EXPECT_TRUE(OverrideWcmpCapacity(p4info, kReferenceCapacity));
+  EXPECT_THAT(p4info, EqualsProto(reference_p4info));
 }
 
-TEST(SetSemanticsTest, SemanticsChangeWorksAndIsReflectedInReturn) {
-  p4::config::v1::P4Info p4info = P4InfoWithActionProfile();
-
-  // Check that the p4info is modified the first time and that the new fields
-  // are set correctly.
-  EXPECT_TRUE(
-      ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kTor, p4info));
-  EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
-  EXPECT_EQ(p4info.action_profiles(0).size(),
-            WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_TOR);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_TOR);
-
-  // Check that the p4info is modified the second time and that the new fields
-  // are set correctly.
-  EXPECT_TRUE(ApplySumOfMembersSemanticsForActionProfiles(p4info));
-  EXPECT_EQ(p4info.action_profiles(0).sum_of_members().max_member_weight(),
-            WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT);
-  EXPECT_EQ(p4info.action_profiles(0).size(), WCMP_GROUP_SUM_OF_MEMBERS_SIZE);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE);
-
-  // Check that the p4info can be modified back, but to their non-tor versions.
-  EXPECT_TRUE(ApplySumOfWeightsSemanticsForActionProfiles(
-      Instantiation::kFabricBorderRouter, p4info));
-  EXPECT_TRUE(p4info.action_profiles(0).has_sum_of_weights());
-  EXPECT_EQ(p4info.action_profiles(0).size(),
-            WCMP_GROUP_SUM_OF_WEIGHTS_SIZE_NON_TOR);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_WEIGHTS_MAX_GROUP_SIZE_NON_TOR);
-}
-
-TEST(SetSemanticsTest, ProfileLessP4InfosAreUnchanged) {
+TEST(OverrideWcmpCapacity, DoesNotModifyP4InfosWithoutActionProfiles) {
   p4::config::v1::P4Info p4info = P4InfoWithHashSeed(/*hash_seed=*/1);
-  p4::config::v1::P4Info original_p4info = p4info;
+  const p4::config::v1::P4Info original_p4info = p4info;
 
-  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(
-      Instantiation::kTor, p4info));
-  EXPECT_THAT(original_p4info, EqualsProto(p4info));
+  EXPECT_FALSE(OverrideWcmpCapacity(
+      p4info,
+      SumOfWeightsCapacity{.total_weight = 1234, .max_group_size = 123}));
+  EXPECT_THAT(p4info, EqualsProto(original_p4info));
 
-  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(
-      Instantiation::kMiddleblock, p4info));
-  EXPECT_THAT(original_p4info, EqualsProto(p4info));
-
-  EXPECT_FALSE(ApplySumOfMembersSemanticsForActionProfiles(p4info));
-  EXPECT_THAT(original_p4info, EqualsProto(p4info));
-}
-
-TEST(SetSemanticsTest, WbbP4InfosAreUnchanged) {
-  p4::config::v1::P4Info p4info = P4InfoWithHashSeed(/*hash_seed=*/1);
-  p4::config::v1::P4Info original_p4info = p4info;
-
-  EXPECT_FALSE(
-      ApplySumOfWeightsSemanticsForActionProfiles(Instantiation::kWbb, p4info));
-  EXPECT_THAT(original_p4info, EqualsProto(p4info));
-}
-
-TEST(SetSemanticsTest, RestOfP4InfoIsUnchanged) {
-  p4::config::v1::P4Info p4info = P4InfoWithHashSeed(/*hash_seed=*/1);
-  *p4info.add_action_profiles() = P4InfoWithActionProfile().action_profiles(0);
-  p4::config::v1::P4Info original_p4info = p4info;
-
-  // Check that the p4info is modified and that the new fields are set
-  // correctly, but other fields are unchanged.
-  EXPECT_TRUE(ApplySumOfMembersSemanticsForActionProfiles(p4info));
-  EXPECT_EQ(p4info.action_profiles(0).sum_of_members().max_member_weight(),
-            WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_MEMBER_WEIGHT);
-  EXPECT_EQ(p4info.action_profiles(0).size(), WCMP_GROUP_SUM_OF_MEMBERS_SIZE);
-  EXPECT_EQ(p4info.action_profiles(0).max_group_size(),
-            WCMP_GROUP_SELECTOR_SUM_OF_MEMBERS_MAX_GROUP_SIZE);
-
-  // Check that pre-existing fields are unmodified.
-  EXPECT_THAT(p4info, Partially(EqualsProto(original_p4info)));
-}
-
-using TemporarySetSemanticsTest = ::testing::TestWithParam<sai::Instantiation>;
-
-// TODO: Delete when moving to SumOfMembers semantics in head after
-// rollout.
-TEST_P(TemporarySetSemanticsTest,
-       ConfirmThatCurrentP4InfosModifiedBySetSumOfWeightsAreUnchanged) {
-  p4::config::v1::P4Info p4info = sai::GetP4Info(GetParam());
-  p4::config::v1::P4Info original_p4info = p4info;
-
-  EXPECT_FALSE(ApplySumOfWeightsSemanticsForActionProfiles(GetParam(), p4info));
+  EXPECT_FALSE(OverrideWcmpCapacity(
+      p4info, SumOfMembersCapacity{.total_members = 1234,
+                                   .max_group_size = 123,
+                                   .max_member_weight = 12}));
   EXPECT_THAT(p4info, EqualsProto(original_p4info));
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    TemporarySetSemanticsTest, TemporarySetSemanticsTest,
-    testing::ValuesIn(sai::AllSaiInstantiations()),
-    [](const testing::TestParamInfo<sai::Instantiation>& info) {
-      return gutil::SnakeCaseToCamelCase(
-          sai::InstantiationToString(info.param));
-    });
+TEST(OverrideWcmpCapacity, DoesNotChangeTheRestOfTheP4Info) {
+  p4::config::v1::P4Info p4info = P4InfoWithHashSeed(/*hash_seed=*/1);
+  *p4info.add_action_profiles() = P4InfoWithActionProfile().action_profiles(0);
+  const p4::config::v1::P4Info original_p4info = p4info;
+
+  EXPECT_TRUE(OverrideWcmpCapacity(
+      p4info,
+      SumOfWeightsCapacity{.total_weight = 1234, .max_group_size = 123}));
+  EXPECT_THAT(p4info, Partially(EqualsProto(original_p4info)));
+
+  EXPECT_TRUE(OverrideWcmpCapacity(
+      p4info, SumOfMembersCapacity{.total_members = 1234,
+                                   .max_group_size = 123,
+                                   .max_member_weight = 12}));
+  EXPECT_THAT(p4info, Partially(EqualsProto(original_p4info)));
+}
 
 }  // namespace
 }  // namespace sai

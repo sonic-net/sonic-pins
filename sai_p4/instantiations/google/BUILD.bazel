@@ -394,6 +394,15 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "default_wcmp_capacities",
+    hdrs = ["default_wcmp_capacities.h"],
+    deps = [
+        ":minimum_guaranteed_sizes",
+        "//sai_p4/tools:p4info_tools",
+    ],
+)
+
 # Auxiliary target, see go/totw/128.
 cc_embed_data(
     name = "sai_nonstandard_platforms_embed",
