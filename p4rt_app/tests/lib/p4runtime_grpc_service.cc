@@ -27,11 +27,11 @@
 #include "grpcpp/server_builder.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_zmq_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 //TODO(PINS): Add Component/System state Translator
@@ -57,6 +57,7 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_),
       fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_),
       fake_host_stats_table_("StateDb:HOST"),
+      fake_p4rt_telemetry_table_("StateDb:P4RT_TELEMETRY"),
       fake_config_db_port_table_("ConfigDb:PORT"),
       fake_config_db_cpu_port_table_("ConfigDb:CPU_PORT"),
       fake_config_db_port_channel_table_("ConfigDb:PORTCHANNEL"),
@@ -108,6 +109,7 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
   const std::string kHashTableName = "HASH_TABLE";
   const std::string kSwitchTableName = "SWITCH_TABLE";
   const std::string kHostStatsTableName = "HOST_STATS_TABLE";
+  const std::string kP4rtTelemetryTableName = "P4RT_TELEMETRY";
 
   // Choose a random gRPC port. While not strictly necessary each test brings up
   // a new gRPC service, and randomly choosing a TCP port will minimize issues.
@@ -116,12 +118,8 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
 
   // Create interfaces to access P4RT_TABLE entries.
   sonic::P4rtTable p4rt_table{
-      .notification_producer =
-          std::make_unique<sonic::FakeNotificationProducerAdapter>(
-              &fake_p4rt_table_),
-      .notification_consumer =
-          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
-              &fake_p4rt_table_),
+      .producer = std::make_unique<sonic::FakeZmqProducerStateTableAdapter>(
+          &fake_p4rt_table_),
       .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_p4rt_table_,
                                                            kP4rtTableName),
       .counter_db = absl::make_unique<sonic::FakeTableAdapter>(
@@ -205,6 +203,11 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
           &fake_host_stats_table_, kHostStatsTableName),
   };
 
+  sonic::P4rtTelemetryTable p4rt_telemetry_table{
+      .state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_p4rt_telemetry_table_, kP4rtTelemetryTableName),
+  };
+
   // Create FakeWarmBootStateAdapter and save the pointer.
   auto fake_warm_boot_state_adapter =
       std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>();
@@ -225,7 +228,8 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
       std::move(p4rt_table), std::move(vrf_table), std::move(vlan_table),
       std::move(vlan_member_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
-      std::move(host_stats_table), std::move(fake_warm_boot_state_adapter),
+      std::move(host_stats_table),
+      std::move(p4rt_telemetry_table), std::move(fake_warm_boot_state_adapter),
       std::move(fake_packetio_interface),
      // TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
      // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
@@ -318,6 +322,10 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtStateDbTable() {
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
   return fake_host_stats_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtTelemetryStateDbTable() {
+  return fake_p4rt_telemetry_table_;
 }
 
 sonic::FakeWarmBootStateAdapter*

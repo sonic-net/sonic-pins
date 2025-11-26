@@ -65,9 +65,9 @@ TEST(PortTranslationTest, TranslatePortFailsWithMissingKey) {
   map.insert({"key0", "val0"});
   map.insert({"key1", "val1"});
   EXPECT_THAT(TranslatePort(TranslationDirection::kForController, map, "key2"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(TranslatePort(TranslationDirection::kForOrchAgent, map, "val2"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(PortIdTranslationTest, ActionParameterUpdatedToPortName) {
@@ -1378,19 +1378,88 @@ TEST(TranslatePacketReplication, FailsIfPacketReplicationHasDuplicateReplicas) {
                    .ok());
 }
 
+TEST(TranslatePacketReplication,
+     FailsIfPacketReplicationHasDuplicateReplicasInPrimaryAndBackups) {
+  p4::v1::Entity pi_entity;
+  // This packet replication entry is invalid, due to the duplicate replica.
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas {
+              port: "1"
+              instance: 0
+              backup_replicas { port: "1" instance: 0 }
+              backup_replicas { port: "2" instance: 0 }
+            }
+          }
+        }
+      )pb",
+      &pi_entity));
+
+  EXPECT_THAT(TranslatePiEntityForOrchAgent(
+                  pi_entity, GetIrP4Info(), /*translate_port_ids=*/true,
+                  /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+                  EmptyFrontPanelQueueTranslator(),
+                  /*translate_key_only=*/false),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("A primary replica and its backup replicas "
+                                 "must have unique ports")));
+}
+
+TEST(TranslatePacketReplication,
+     FailsIfPacketReplicationHasDuplicateReplicasInBackups) {
+  p4::v1::Entity pi_entity;
+  // This packet replication entry is invalid, due to the duplicate replica.
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas {
+              port: "1"
+              instance: 0
+              backup_replicas { port: "2" instance: 0 }
+              backup_replicas { port: "2" instance: 0 }
+            }
+          }
+        }
+      )pb",
+      &pi_entity));
+
+  EXPECT_THAT(
+      TranslatePiEntityForOrchAgent(
+          pi_entity, GetIrP4Info(), /*translate_port_ids=*/true,
+          /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+          EmptyFrontPanelQueueTranslator(),
+          /*translate_key_only=*/false),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          HasSubstr(
+              "Each backup replica must have a unique (port, instance)-pair")));
+}
+
 TEST(TranslatePacketReplication, TranslatePortInReplicaToOaSuccess) {
   pdpi::IrPacketReplicationEngineEntry entry;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(
         multicast_group_entry {
           multicast_group_id: 1
-          replicas { port: "1" instance: 0 }
+          replicas {
+            port: "1"
+            instance: 0
+            backup_replicas { port: "2" instance: 0 }
+            backup_replicas { port: "3" instance: 0 }
+          }
         }
       )pb",
       &entry));
 
   boost::bimap<std::string, std::string> port_translation_map;
   port_translation_map.insert({"Ethernet0", "1"});
+  port_translation_map.insert({"Ethernet1", "2"});
+  port_translation_map.insert({"Ethernet2", "3"});
   TranslateTableEntryOptions options = {
       .direction = TranslationDirection::kForOrchAgent,
       .ir_p4_info = GetIrP4Info(),
@@ -1402,6 +1471,14 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToOaSuccess) {
   pdpi::IrPacketReplicationEngineEntry updated = entry;
   updated.mutable_multicast_group_entry()->mutable_replicas(0)->set_port(
       "Ethernet0");
+  updated.mutable_multicast_group_entry()
+      ->mutable_replicas(0)
+      ->mutable_backup_replicas(0)
+      ->set_port("Ethernet1");
+  updated.mutable_multicast_group_entry()
+      ->mutable_replicas(0)
+      ->mutable_backup_replicas(1)
+      ->set_port("Ethernet2");
 
   EXPECT_OK(TranslatePacketReplicationEntry(options, entry));
   EXPECT_THAT(updated, EqualsProto(entry));
@@ -1413,8 +1490,17 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToControllerSuccess) {
       R"pb(
         multicast_group_entry {
           multicast_group_id: 1
-          replicas { port: "Ethernet0" instance: 0 }
-          replicas { port: "Ethernet1" instance: 0 }
+          replicas {
+            port: "Ethernet0"
+            instance: 0
+            backup_replicas { port: "Ethernet2" instance: 0 }
+            backup_replicas { port: "Ethernet3" instance: 0 }
+          }
+          replicas {
+            port: "Ethernet1"
+            instance: 0
+            backup_replicas { port: "Ethernet4" instance: 0 }
+          }
         }
       )pb",
       &entry));
@@ -1422,6 +1508,9 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToControllerSuccess) {
   boost::bimap<std::string, std::string> port_translation_map;
   port_translation_map.insert({"Ethernet0", "1"});
   port_translation_map.insert({"Ethernet1", "2"});
+  port_translation_map.insert({"Ethernet2", "3"});
+  port_translation_map.insert({"Ethernet3", "4"});
+  port_translation_map.insert({"Ethernet4", "5"});
   TranslateTableEntryOptions options = {
       .direction = TranslationDirection::kForController,
       .ir_p4_info = GetIrP4Info(),
@@ -1432,7 +1521,19 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToControllerSuccess) {
   };
   pdpi::IrPacketReplicationEngineEntry updated = entry;
   updated.mutable_multicast_group_entry()->mutable_replicas(0)->set_port("1");
+  updated.mutable_multicast_group_entry()
+      ->mutable_replicas(0)
+      ->mutable_backup_replicas(0)
+      ->set_port("3");
+  updated.mutable_multicast_group_entry()
+      ->mutable_replicas(0)
+      ->mutable_backup_replicas(1)
+      ->set_port("4");
   updated.mutable_multicast_group_entry()->mutable_replicas(1)->set_port("2");
+  updated.mutable_multicast_group_entry()
+      ->mutable_replicas(1)
+      ->mutable_backup_replicas(0)
+      ->set_port("5");
 
   EXPECT_OK(TranslatePacketReplicationEntry(options, entry));
   EXPECT_THAT(updated, EqualsProto(entry));
@@ -1460,7 +1561,36 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToOaMissingPort) {
       .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   EXPECT_THAT(TranslatePacketReplicationEntry(options, entry),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(TranslatePacketReplication, TranslatePortInBackupReplicaToOaMissingPort) {
+  pdpi::IrPacketReplicationEngineEntry entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        multicast_group_entry {
+          multicast_group_id: 1
+          replicas {
+            port: "1"
+            instance: 0
+            backup_replicas { port: "2" instance: 0 }
+          }
+        }
+      )pb",
+      &entry));
+
+  boost::bimap<std::string, std::string> port_translation_map;
+  port_translation_map.insert({"Ethernet0", "1"});
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = true,
+      .port_map = port_translation_map,
+      .cpu_queue_translator = EmptyCpuQueueTranslator(),
+      .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
+  };
+  EXPECT_THAT(TranslatePacketReplicationEntry(options, entry),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
@@ -1470,8 +1600,17 @@ TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
         packet_replication_engine_entry {
           multicast_group_entry {
             multicast_group_id: 7
-            replicas { port: "1" instance: 5 }
-            replicas { port: "2" instance: 6 }
+            replicas {
+              port: "1"
+              instance: 5
+              backup_replicas { port: "3" instance: 0 }
+            }
+            replicas {
+              port: "2"
+              instance: 6
+              backup_replicas { port: "4" instance: 0 }
+              backup_replicas { port: "5" instance: 0 }
+            }
           }
         }
       )pb",
@@ -1480,6 +1619,9 @@ TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
   boost::bimap<std::string, std::string> port_translation_map;
   port_translation_map.insert({"Ethernet0", "1"});
   port_translation_map.insert({"Ethernet1", "2"});
+  port_translation_map.insert({"Ethernet2", "3"});
+  port_translation_map.insert({"Ethernet3", "4"});
+  port_translation_map.insert({"Ethernet4", "5"});
   auto cpu_queue_translator = EmptyCpuQueueTranslator();
   auto front_panel_queue_translator = EmptyFrontPanelQueueTranslator();
 
@@ -1495,8 +1637,23 @@ TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
       ->set_port("Ethernet0");
   updated_entry.mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry()
+      ->mutable_replicas(0)
+      ->mutable_backup_replicas(0)
+      ->set_port("Ethernet2");
+  updated_entry.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
       ->mutable_replicas(1)
       ->set_port("Ethernet1");
+  updated_entry.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->mutable_replicas(1)
+      ->mutable_backup_replicas(0)
+      ->set_port("Ethernet3");
+  updated_entry.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->mutable_replicas(1)
+      ->mutable_backup_replicas(1)
+      ->set_port("Ethernet4");
   EXPECT_THAT(updated_entry, EqualsProto(entry));
 }
 

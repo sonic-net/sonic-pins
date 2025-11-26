@@ -26,6 +26,7 @@
 
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -44,9 +45,11 @@
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
+#include "p4rt_app/p4runtime/p4info_reconcile.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
@@ -101,6 +104,7 @@ public:
       sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
       sonic::HashTable hash_table, sonic::SwitchTable switch_table,
       sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+      sonic::P4rtTelemetryTable p4rt_telemetry_table,
       std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
       std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
       // TODO(PINS): To add component_state, system_state and netdev_translator.
@@ -282,6 +286,39 @@ private:
   absl::Status ConfigureAppDbTables(const pdpi::IrP4Info &ir_p4info)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
+  // Transitions the hash settings from the current config to the new config.
+  grpc::Status TransitionHashConfig(
+      const P4InfoReconcileTransition& transition,
+      const absl::btree_set<sonic::HashPacketFieldConfig>&
+          hash_packet_field_configs,
+      const sonic::HashParamConfigs& hash_param_configs)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  // Transitions the ACL tables from the current config to the new config.
+  absl::Status RemoveAclTableFromAppDb(
+      absl::string_view table_name, const std::vector<p4::v1::Entity>& entities)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  // Update AppDB by applying the provided operation for each entity.
+  absl::Status UpdateAppDbEntities(const std::vector<p4::v1::Entity>& entities,
+                                   const pdpi::IrP4Info& ir_p4info,
+                                   p4::v1::Update::Type update_type)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  absl::Status ReplaceTableInAppDb(absl::string_view table_name,
+                                   const std::vector<p4::v1::Entity>& entities,
+                                   const pdpi::IrP4Info& new_ir_p4info)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  absl::Status TransitionAcls(const P4InfoReconcileTransition& transition,
+                              const pdpi::IrP4Info& new_ir_p4info)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  void RecordTransitionTelemetry(const P4InfoReconcileTransition& transition)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+  void ResetTransitionTelemetry()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
   // Defines the callback lambda function to be invoked for receive packets
   // and calls into the sonic::StartReceive to spawn the receiver thread.
   ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
@@ -304,6 +341,8 @@ private:
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::P4rtTelemetryTable p4rt_telemetry_table_
+      ABSL_GUARDED_BY(server_state_lock_);
   const std::unique_ptr<sonic::WarmBootStateAdapter>
       warm_boot_state_adapter_ ABSL_GUARDED_BY(server_state_lock_);
 
