@@ -281,6 +281,8 @@ control acl_ingress(in headers_t headers,
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
+    // Forbid match on ethertype if is_ip* is set.
+    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;
     // Only allow IP field matches for IP packets.
     dst_ip::mask != 0 -> is_ipv4 == 1;
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
@@ -402,7 +404,9 @@ control acl_ingress(in headers_t headers,
 #if defined(ACL_REDIRECT_TO_NEXTHOP_CAPABLE)
       @proto_id(7) redirect_to_nexthop();
 #endif
+#if defined(TIMESTAMP_CAPABLE)
       @proto_id(8) append_ingress_and_egress_timestamp();
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -423,6 +427,8 @@ control acl_ingress(in headers_t headers,
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
+    // Forbid match on ethertype if is_ip* is set.
+    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;
     // Only allow IP field matches for IP packets.
     ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
@@ -512,9 +518,13 @@ control acl_ingress(in headers_t headers,
       @proto_id(3) acl_forward();
       @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
+#if defined(DSCP_REWRITE_CAPABLE)
       @proto_id(6) set_dscp_and_queues_and_deny_above_rate_limit();
+#endif
       @proto_id(7) set_forwarding_queues();
+#if defined(TIMESTAMP_CAPABLE)
       @proto_id(8) append_ingress_and_egress_timestamp();
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -760,6 +770,8 @@ control acl_ingress(in headers_t headers,
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
+    // Forbid match on ethertype if is_ip* is set.
+    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     // Only allow IP field matches for IP packets.
     dst_ip::mask != 0 -> is_ipv4 == 1;
