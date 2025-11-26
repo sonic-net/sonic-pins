@@ -11,8 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GUTIL_STATUS_H
-#define GUTIL_STATUS_H
+
+#ifndef PINS_GUTIL_GUTIL_STATUS_H_
+#define PINS_GUTIL_GUTIL_STATUS_H_
 
 #include <iostream>
 #include <sstream>
@@ -344,4 +345,4 @@ class StatusBuilderHolder {
   while (!(cond))       \
   return gutil::InternalErrorBuilder() << "(" << #cond << ") failed"
 
-#endif  // GUTIL_STATUS_H_
+#endif  // PINS_GUTIL_GUTIL_STATUS_H_

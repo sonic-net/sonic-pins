@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_GUTIL_TIMER_H_
-#define PINS_GUTIL_TIMER_H_
+#ifndef PINS_GUTIL_GUTIL_TIMER_H_
+#define PINS_GUTIL_GUTIL_TIMER_H_
 
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -44,4 +44,4 @@ class Timer {
 
 }  // namespace gutil
 
-#endif  // PINS_GUTIL_TIMER_H_
+#endif  // PINS_GUTIL_GUTIL_TIMER_H_

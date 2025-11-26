@@ -11,8 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_GUTIL_OVERLOADED_H_
-#define PINS_GUTIL_OVERLOADED_H_
+
+#ifndef PINS_GUTIL_GUTIL_OVERLOADED_H_
+#define PINS_GUTIL_GUTIL_OVERLOADED_H_
 
 #include <utility>
 
@@ -32,4 +33,4 @@ Overload(Ts...) -> Overload<Ts...>;
 
 }  // namespace gutil
 
-#endif  // PINS_GUTIL_OVERLOADED_H_
+#endif  // PINS_GUTIL_GUTIL_OVERLOADED_H_
