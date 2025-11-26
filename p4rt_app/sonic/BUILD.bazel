@@ -485,6 +485,7 @@ cc_test(
         "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googleapis//google/rpc:code_cc_proto",

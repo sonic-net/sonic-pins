@@ -203,6 +203,11 @@ absl::Status TranslatePortInReplica(const TranslateTableEntryOptions& options,
     ASSIGN_OR_RETURN(
         *replica.mutable_port(),
         TranslatePort(options.direction, options.port_map, replica.port()));
+    for (auto& backup : *replica.mutable_backup_replicas()) {
+      ASSIGN_OR_RETURN(
+          *backup.mutable_port(),
+          TranslatePort(options.direction, options.port_map, backup.port()));
+    }
   }
   return absl::OkStatus();
 }
