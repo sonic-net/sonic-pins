@@ -1,17 +1,15 @@
 #include "sai_p4/capabilities.h"
 
-#include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
 #include "sai_p4/capabilities.pb.h"
 
 namespace sai {
 namespace {
 
 using ::gutil::EqualsProto;
-using ::gutil::IsOkAndHolds;
 using ::p4::v1::CapabilitiesResponse;
 
 TEST(CapabilitiesTest, AddExperimentalResourceCapabilitiesWorks) {
@@ -43,12 +41,22 @@ TEST(CapabilitiesTest, GetExperimentalResourceCapabilitiesWorks) {
   ASSERT_OK(AddExperimentalResourceCapabilities(
       experimental_resource_capabilities, response));
   EXPECT_THAT(GetExperimentalResourceCapabilities(response),
-              IsOkAndHolds(EqualsProto(experimental_resource_capabilities)));
+              EqualsProto(experimental_resource_capabilities));
 }
 
-TEST(CapabilitiesTest, GetExperimentalResourceCapabilitiesFailsWhenMissing) {
+TEST(CapabilitiesTest,
+     GetExperimentalResourceCapabilitiesReturnsEmptyWhenMissing) {
   EXPECT_THAT(GetExperimentalResourceCapabilities(CapabilitiesResponse()),
-              gutil::StatusIs(absl::StatusCode::kNotFound));
+              EqualsProto(ExperimentalResourceCapabilities()));
+}
+
+TEST(CapabilitiesTest,
+     GetExperimentalResourceCapabilitiesReturnsEmptyWhenWrongType) {
+  CapabilitiesResponse response;
+  p4::v1::TableEntry entry;
+  ASSERT_TRUE(response.mutable_experimental()->PackFrom(entry));
+  EXPECT_THAT(GetExperimentalResourceCapabilities(response),
+              EqualsProto(ExperimentalResourceCapabilities()));
 }
 
 TEST(CapabilitiesTest, GetWcmpGroupLimitationsWorks) {
@@ -63,21 +71,29 @@ TEST(CapabilitiesTest, GetWcmpGroupLimitationsWorks) {
       experimental_resource_capabilities, response));
   EXPECT_THAT(
       GetWcmpGroupLimitations(response),
-      IsOkAndHolds(EqualsProto(
-          experimental_resource_capabilities.wcmp_group_limitations())));
+      EqualsProto(experimental_resource_capabilities.wcmp_group_limitations()));
 }
 
-TEST(CapabilitiesTest, GetWcmpGroupLimitationsWorksWithDefaultValues) {
+TEST(CapabilitiesTest, GetWcmpGroupLimitationsWorksWhenMissing) {
   CapabilitiesResponse response;
   ASSERT_OK(AddExperimentalResourceCapabilities(
       ExperimentalResourceCapabilities(), response));
   EXPECT_THAT(GetWcmpGroupLimitations(response),
-              IsOkAndHolds(EqualsProto(WcmpGroupLimitations())));
+              EqualsProto(WcmpGroupLimitations()));
 }
 
-TEST(CapabilitiesTest, GetWcmpGroupLimitationsFailsWhenParentMessageMissing) {
+TEST(CapabilitiesTest,
+     GetWcmpGroupLimitationsReturnsEmptyWhenParentWhenMissing) {
   EXPECT_THAT(GetWcmpGroupLimitations(CapabilitiesResponse()),
-              gutil::StatusIs(absl::StatusCode::kNotFound));
+              EqualsProto(WcmpGroupLimitations()));
+}
+
+TEST(CapabilitiesTest, GetWcmpGroupLimitationsReturnsEmptyWhenWrongType) {
+  CapabilitiesResponse response;
+  p4::v1::TableEntry entry;
+  ASSERT_TRUE(response.mutable_experimental()->PackFrom(entry));
+  EXPECT_THAT(GetWcmpGroupLimitations(response),
+              EqualsProto(WcmpGroupLimitations()));
 }
 
 }  // namespace

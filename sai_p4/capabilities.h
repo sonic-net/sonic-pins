@@ -2,7 +2,6 @@
 #define PINS_SAI_P4_CAPABILITIES_H_
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "sai_p4/capabilities.pb.h"
 
@@ -14,15 +13,14 @@ absl::Status AddExperimentalResourceCapabilities(
     ExperimentalResourceCapabilities capabilities,
     p4::v1::CapabilitiesResponse& response);
 
-// Returns the `ExperimentalResourceCapabilities` inside of `response`. Returns
-// an error if `response` does not contain `ExperimentalResourceCapabilities`.
-absl::StatusOr<ExperimentalResourceCapabilities>
-GetExperimentalResourceCapabilities(
+// If `response` contains a `ExperimentalResourceCapabilities`, returns it.
+// Otherwise, returns an empty `ExperimentalResourceCapabilities`.
+ExperimentalResourceCapabilities GetExperimentalResourceCapabilities(
     const p4::v1::CapabilitiesResponse& response);
 
-// Returns the `WcmpGroupLimitations` inside of `response`. Returns an error if
-// `response` does not contain a `ExperimentalResourceCapabilities`.
-absl::StatusOr<WcmpGroupLimitations> GetWcmpGroupLimitations(
+// If `response` contains a `WcmpGroupLimitations`, returns it.
+// Otherwise, returns an empty `WcmpGroupLimitations`.
+WcmpGroupLimitations GetWcmpGroupLimitations(
     const p4::v1::CapabilitiesResponse& response);
 
 }  // namespace sai
