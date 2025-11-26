@@ -65,9 +65,9 @@ TEST(PortTranslationTest, TranslatePortFailsWithMissingKey) {
   map.insert({"key0", "val0"});
   map.insert({"key1", "val1"});
   EXPECT_THAT(TranslatePort(TranslationDirection::kForController, map, "key2"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(TranslatePort(TranslationDirection::kForOrchAgent, map, "val2"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(PortIdTranslationTest, ActionParameterUpdatedToPortName) {
@@ -1460,7 +1460,7 @@ TEST(TranslatePacketReplication, TranslatePortInReplicaToOaMissingPort) {
       .front_panel_queue_translator = EmptyFrontPanelQueueTranslator(),
   };
   EXPECT_THAT(TranslatePacketReplicationEntry(options, entry),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
