@@ -23,8 +23,11 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
+#include "absl/log/vlog_is_on.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -39,7 +42,6 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
-#include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -52,6 +54,7 @@
 #include "gutil/gutil/io.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
@@ -61,6 +64,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/translation_options.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
+#include "p4rt_app/p4runtime/p4info_reconcile.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/p4runtime_read.h"
 #include "p4rt_app/p4runtime/packetio_helpers.h"
@@ -84,7 +88,6 @@
 /*#include "swss/component_state_helper_interface.h"
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
-#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace {
@@ -103,6 +106,8 @@ grpc::Status EnterCriticalState(const std::string& message) {
 struct ConfigInfo {
   pdpi::IrP4Info ir_p4info;
   p4_constraints::ConstraintInfo constraints;
+  absl::btree_set<sonic::HashPacketFieldConfig> hash_packet_field_configs;
+  sonic::HashParamConfigs hash_param_configs;
 };
 
 std::string GetKeyErrorMessage(pdpi::IrEntity entity,
@@ -365,6 +370,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
   sonic::AppDbUpdates ir_updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
 
+  response->mutable_statuses()->Reserve(request.updates().size());
   // Fail on first error.
   for (const p4::v1::Update& pi_update : request.updates()) {
     pdpi::IrUpdateStatus& entry_status = *response->add_statuses();
@@ -645,8 +651,29 @@ PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
   pdpi::RemoveUnsupportedEntities(*ir_p4info);
   TranslateIrP4InfoForOrchAgent(*ir_p4info);
 
-  return ConfigInfo{.ir_p4info = std::move(*ir_p4info),
-                    .constraints = std::move(*constraint_info)};
+  auto hash_packet_field_configs =
+      sonic::ExtractHashPacketFieldConfigs(*ir_p4info);
+  if (!hash_packet_field_configs.ok()) {
+    LOG(WARNING) << "Could not process hash packet field configs: "
+                 << hash_packet_field_configs.status();
+    return gutil::StatusBuilder(hash_packet_field_configs.status()).SetPrepend()
+           << "[P4RT/PDPI] ";
+  }
+
+  auto hash_param_configs = sonic::ExtractHashParamConfigs(*ir_p4info);
+  if (!hash_param_configs.ok()) {
+    LOG(WARNING) << "Could not process hash param configs: "
+                 << hash_param_configs.status();
+    return gutil::StatusBuilder(hash_param_configs.status()).SetPrepend()
+           << "[P4RT/PDPI] ";
+  }
+
+  return ConfigInfo{
+      .ir_p4info = std::move(*ir_p4info),
+      .constraints = std::move(*constraint_info),
+      .hash_packet_field_configs = std::move(*hash_packet_field_configs),
+      .hash_param_configs = std::move(*hash_param_configs),
+  };
 }
 
 }  // namespace
@@ -1634,6 +1661,44 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       sonic::ProgramSwitchTable(switch_table_, hash_values, hash_fields));
 
   return absl::OkStatus();
+}
+
+grpc::Status P4RuntimeImpl::TransitionHashConfig(
+    const P4InfoReconcileTransition& transition,
+    const absl::btree_set<sonic::HashPacketFieldConfig>&
+        hash_packet_field_configs,
+    const sonic::HashParamConfigs& hash_param_configs) {
+  if (!transition.hashing_packet_field_configs_to_delete.empty()) {
+    absl::Status status = sonic::RemoveFromHashFieldTable(
+        hash_table_, transition.hashing_packet_field_configs_to_delete);
+    if (!status.ok()) {
+      return EnterCriticalState(
+          absl::StrCat("Could not update hash settings. Failed to delete "
+                       "packet field configs: ",
+                       status.message()));
+    }
+  }
+  if (!transition.hashing_packet_field_configs_to_set.empty()) {
+    absl::Status status =
+        sonic::ProgramHashFieldTable(hash_table_, hash_packet_field_configs);
+    if (!status.ok()) {
+      return EnterCriticalState(
+          absl::StrCat("Could not update hash settings. Failed to set new "
+                       "packet field configs: ",
+                       status.message()));
+    }
+  }
+  if (transition.update_switch_table) {
+    absl::Status status = sonic::ProgramSwitchTable(
+        switch_table_, hash_param_configs, hash_packet_field_configs);
+    if (!status.ok()) {
+      return EnterCriticalState(
+          absl::StrCat("Could not update hash settings. Failed to program "
+                       "switch table: ",
+                       status.message()));
+    }
+  }
+  return gutil::AbslStatusToGrpcStatus(absl::OkStatus());
 }
 
 absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(

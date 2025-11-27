@@ -19,7 +19,7 @@
 #include <netlink/genl/family.h>
 #include <netlink/genl/genl.h>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "gutil/gutil/status.h"
 
 namespace packet_metadata {
@@ -161,9 +161,10 @@ absl::Status ProcessReceiveMessage(struct nl_msg* msg, void* arg) {
           if (name_or.ok()) {
             target_port_name = *name_or;
           } else {
-            LOG(WARNING) << "Unable to get target egress port from the packet "
-                            "metadata, error: "
-                         << name_or.status();
+            // This message is only logged once every minute to avoid spamming
+            LOG_EVERY_N_SEC(WARNING, 60) << "Unable to get target egress port "
+                                            "from the packet metadata, error: "
+                                         << name_or.status();
           }
           break;
         }
@@ -204,7 +205,7 @@ absl::Status ProcessReceiveMessage(struct nl_msg* msg, void* arg) {
 int ProcessReceiveMessageCallback(struct nl_msg* msg, void* arg) {
   auto status = ProcessReceiveMessage(msg, arg);
   if (!status.ok()) {
-    LOG_EVERY_T(WARNING, 5)
+    LOG_EVERY_N_SEC(WARNING, 5)
         << "Failed to process receive packet: " << status.ToString();
   }
   // Always return OK to move on to the next packet.

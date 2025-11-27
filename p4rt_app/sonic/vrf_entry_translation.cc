@@ -17,12 +17,12 @@
 #include <string>
 
 #include "absl/container/btree_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-#include "glog/logging.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/gutil/status.h"
 #include "p4_pdpi/ir.pb.h"

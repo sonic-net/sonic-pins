@@ -17,9 +17,9 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "swss/schema.h"
