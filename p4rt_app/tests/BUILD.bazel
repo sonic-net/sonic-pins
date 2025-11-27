@@ -491,6 +491,24 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "utf8_validity_test",
+    srcs = ["utf8_validity_test.cc"],
+    deps = [
+        "//gutil/gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:pd",
+        "//p4_pdpi/string_encodings:hex_string",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cmd_diff_test(
     name = "p4_constraints_test",
     actual_cmd =
