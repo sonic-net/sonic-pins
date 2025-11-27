@@ -177,13 +177,13 @@ CreateV1ModelAuxiliaryVlanMembershipTableEntries(
 absl::StatusOr<pdpi::IrEntities> CreateVlanMembershipTableEntriesForSubPortRifs(
     pdpi::IrEntities ir_entities) {
   // For each SUB_PORT RIF (i.e. entry in router_interface_table with action
-  // set_port_and_src_mac_and_vlan_id with port `p` and vlan `v`), add auxiliary
-  // entries to make `p` a tagged member of `v`.
+  // unicast_set_port_and_src_mac_and_vlan_id with port `p` and vlan `v`), add
+  // auxiliary entries to make `p` a tagged member of `v`.
   pdpi::IrEntities auxiliary_ir_entities;
   for (const auto& ir_entity : ir_entities.entities()) {
     if (!(ir_entity.table_entry().table_name() == "router_interface_table" &&
           ir_entity.table_entry().action().name() ==
-              "set_port_and_src_mac_and_vlan_id")) {
+	      "unicast_set_port_and_src_mac_and_vlan_id")) {
       continue;
     }
     std::optional<absl::string_view> vlan_id;

@@ -67,7 +67,8 @@ message RouterInterfaceTableEntry {
   message Action {
     oneof action {
       SetPortAndSrcMacAction set_port_and_src_mac = 1;
-      SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+      UnicastSetPortAndSrcMacAndVlanIdAction
+          unicast_set_port_and_src_mac_and_vlan_id = 2;
       UnicastSetPortAndSrcMacAction unicast_set_port_and_src_mac = 3;
     }
   }
@@ -969,7 +970,7 @@ message SetMulticastSrcMacAction {
 message DisableVlanChecksAction {}
 
 // CAUTION: This action is not (yet) supported.
-message SetPortAndSrcMacAndVlanIdAction {
+message UnicastSetPortAndSrcMacAndVlanIdAction {
   string port = 1;     // Format::STRING
   string src_mac = 2;  // Format::MAC
   string vlan_id = 3;  // Format::HEX_STRING / 12 bits
