@@ -19,10 +19,10 @@
 #include <thread> //NOLINT
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/packetio_port.h"

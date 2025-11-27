@@ -26,6 +26,8 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
+#include "absl/log/vlog_is_on.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -40,7 +42,6 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
-#include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -53,6 +54,7 @@
 #include "gutil/gutil/io.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
@@ -86,7 +88,6 @@
 /*#include "swss/component_state_helper_interface.h"
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
-#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace {
@@ -369,6 +370,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
   sonic::AppDbUpdates ir_updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
 
+  response->mutable_statuses()->Reserve(request.updates().size());
   // Fail on first error.
   for (const p4::v1::Update& pi_update : request.updates()) {
     pdpi::IrUpdateStatus& entry_status = *response->add_statuses();

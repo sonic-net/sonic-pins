@@ -33,7 +33,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status.h"

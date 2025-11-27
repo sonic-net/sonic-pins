@@ -16,7 +16,7 @@
 #include <memory>
 #include <utility>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "gmock/gmock.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/security/credentials.h"
