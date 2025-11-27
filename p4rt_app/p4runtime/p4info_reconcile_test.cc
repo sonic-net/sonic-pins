@@ -18,18 +18,17 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/utils/ir_builder.h"
 #include "p4rt_app/utils/table_utility.h"
 
@@ -37,32 +36,17 @@ namespace p4rt_app {
 namespace {
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::testing::Eq;
 using ::testing::ExplainMatchResult;
+using ::testing::Field;
 using ::testing::IsEmpty;
 using ::testing::Not;
+using ::testing::Pair;
+using ::testing::SizeIs;
 using ::testing::UnorderedElementsAreArray;
+using ::testing::UnorderedPointwise;
 
-std::string ToString(const P4InfoReconcileTransition& transition) {
-  return absl::Substitute(
-      R"({
-  hashing_packet_field_configs_to_delete = {$0}
-  hashing_packet_field_configs_to_set = {$1}
-  upate_switch_table = $2
-  acl_tables_to_delete = {$3}
-  acl_tables_to_add = {$4}
-  acl_tables_to_modify = {$5}
-})",
-
-      absl::StrJoin(transition.hashing_packet_field_configs_to_delete, ", "),
-      absl::StrJoin(transition.hashing_packet_field_configs_to_set, ", "),
-      (transition.update_switch_table ? "true" : "false"),
-      absl::StrJoin(transition.acl_tables_to_delete, ", "),
-      absl::StrJoin(transition.acl_tables_to_add, ", "),
-      absl::StrJoin(transition.acl_tables_to_modify, ", "));
-}
-
-MATCHER_P(TransitionIsImpl, expected,
-          absl::StrCat("matches ", ToString(expected))) {
+MATCHER_P(TransitionIsImpl, expected, "") {
   bool failed = false;
   *result_listener << "\n";
   if (!ExplainMatchResult(UnorderedElementsAreArray(
@@ -108,11 +92,46 @@ MATCHER_P(TransitionIsImpl, expected,
                      << "acl_tables_to_modify does not match\n";
     failed = true;
   }
-  *result_listener << "\nActual: " << ToString(arg);
   return !failed;
 }
 
 constexpr auto TransitionIs = TransitionIsImpl<P4InfoReconcileTransition>;
+
+MATCHER_P(CapacityIsImpl, expected, "") {
+  bool failed = false;
+  if (!ExplainMatchResult(Field("max_group_size",
+                                &ActionProfileResourceCapacity::max_group_size,
+                                Eq(expected.max_group_size)),
+                          arg, result_listener)) {
+    *result_listener << "\n";
+    failed = true;
+  }
+  if (!ExplainMatchResult(
+          Field("max_weight_for_all_groups",
+                &ActionProfileResourceCapacity::max_weight_for_all_groups,
+                Eq(expected.max_weight_for_all_groups)),
+          arg, result_listener)) {
+    *result_listener << "\n";
+    failed = true;
+  }
+  if (!ExplainMatchResult(
+          Field("current_utilization",
+                &ActionProfileResourceCapacity::current_utilization,
+                Eq(expected.current_utilization)),
+          arg, result_listener)) {
+    *result_listener << "\n";
+    failed = true;
+  }
+  return !failed;
+}
+
+constexpr auto CapacityIs = CapacityIsImpl<ActionProfileResourceCapacity>;
+
+MATCHER(CapacityEntryEq, "") {
+  return ExplainMatchResult(
+      Pair(Eq(std::get<1>(arg).first), CapacityIs(std::get<1>(arg).second)),
+      std::get<0>(arg), result_listener);
+}
 
 const pdpi::IrP4Info& GetIrP4Info() {
   static const auto* const kP4Info = new pdpi::IrP4Info(
@@ -276,8 +295,35 @@ const pdpi::IrP4Info& GetIrP4Info() {
                    annotations: "@sai_lag_hash(SAI_SWITCH_ATTR_LAG_HASH_IPV4)"
                    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_SRC_PORT)"
                    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_DST_PORT)"
-              )pb"))());
+              )pb"))
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .name("action_profile1")
+                  .wcmp_selector_size(/*size=*/20, /*max_group_size=*/5)())
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .name("action_profile2")
+                  .wcmp_selector_size(/*size=*/30, /*max_group_size=*/4)())
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .name("action_profile3")
+                  .wcmp_selector_size(/*size=*/40, /*max_group_size=*/3)())());
   return *kP4Info;
+}
+
+const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
+CapacityMapFromIrP4Info() {
+  static const auto* const kCapacityMap = []() {
+    auto* capacity_map =
+        new absl::flat_hash_map<std::string, ActionProfileResourceCapacity>();
+    for (const auto& [name, profile] :
+         GetIrP4Info().action_profiles_by_name()) {
+      capacity_map->insert({name, GetActionProfileResourceCapacity(profile)});
+    }
+    return capacity_map;
+  }();
+
+  return *kCapacityMap;
 }
 
 TEST(CalculateTransition, NoTransitionForSameIrP4Info) {
@@ -618,6 +664,147 @@ TEST(CalculateTransition, ReturnsInvalidArgumentForAclStageTransition) {
               StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(CalculateTransition(modified, original),
               StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetUpdatedResourceCapacities, ReturnsBasicCapacityWithNoOriginal) {
+  const pdpi::IrP4Info& p4_info = GetIrP4Info();
+  ASSERT_OK_AND_ASSIGN(auto updated_capacities,
+                       GetUpdatedResourceCapacities(p4_info, {}));
+  ASSERT_THAT(updated_capacities,
+              SizeIs(p4_info.action_profiles_by_id().size()));
+  std::vector<std::pair<std::string, ActionProfileResourceCapacity>>
+      raw_capacities;
+  for (const auto& [profile_name, profile_def] :
+       p4_info.action_profiles_by_name()) {
+    raw_capacities.push_back(
+        {profile_name, GetActionProfileResourceCapacity(profile_def)});
+  }
+  EXPECT_THAT(updated_capacities,
+              UnorderedPointwise(CapacityEntryEq(), raw_capacities));
+}
+
+TEST(GetUpdatedResourceCapacities, ReturnsEmptyWithNoActionProfiles) {
+  ASSERT_THAT(GetUpdatedResourceCapacities(pdpi::IrP4Info(), {}),
+              IsOkAndHolds(IsEmpty()));
+}
+
+TEST(GetUpdatedResourceCapacities, UpdatesCapacity) {
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original = {
+      {"action_profile1",
+       {.max_group_size = 1, .max_weight_for_all_groups = 10}},
+      {"action_profile2",
+       {.max_group_size = 2, .max_weight_for_all_groups = 20}},
+      {"action_profile3",
+       {.max_group_size = 3, .max_weight_for_all_groups = 30}},
+  };
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(),
+                                              CapacityMapFromIrP4Info())));
+}
+
+TEST(GetUpdatedResourceCapacities,
+     UpdatesCapacityAndMaintainsCurrentResourceCounts) {
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original = {
+      {"action_profile1",
+       {.max_group_size = 1,
+        .max_weight_for_all_groups = 10,
+        .current_utilization = 10}},
+      {"action_profile2",
+       {.max_group_size = 2,
+        .max_weight_for_all_groups = 20,
+        .current_utilization = 11}},
+      {"action_profile3",
+       {.max_group_size = 3,
+        .max_weight_for_all_groups = 30,
+        .current_utilization = 12}},
+  };
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> expected =
+      CapacityMapFromIrP4Info();
+  for (const auto& [name, capacity] : CapacityMapFromIrP4Info()) {
+    expected[name].current_utilization = original.at(name).current_utilization;
+  }
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(), expected)));
+}
+
+TEST(GetUpdatedResourceCapacities, DoesNotIncludeRemovedProfiles) {
+  auto original = CapacityMapFromIrP4Info();
+  original["removed_action_profile4"] = {.max_group_size = 4,
+                                         .max_weight_for_all_groups = 40};
+  original["removed_action_profile5"] = {.max_group_size = 5,
+                                         .max_weight_for_all_groups = 50};
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(),
+                                              CapacityMapFromIrP4Info())));
+}
+
+TEST(GetUpdatedResourceCapacities, UsesBaseCapacity0ForAddedProfiles) {
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original = {
+      {"action_profile1",
+       {.max_group_size = 1,
+        .max_weight_for_all_groups = 10,
+        .current_utilization = 10}},
+      {"action_profile3",
+       {.max_group_size = 3,
+        .max_weight_for_all_groups = 30,
+        .current_utilization = 12}},
+  };
+
+  auto expected = CapacityMapFromIrP4Info();
+  expected.at("action_profile1").current_utilization = 10;
+  expected.at("action_profile2").current_utilization = 0;
+  expected.at("action_profile3").current_utilization = 12;
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(), expected)));
+}
+
+TEST(GetUpdatedResourceCapacities,
+     DoesNotAllowShrinkingMaxGroupSizeForProfilesInUse) {
+  auto original = CapacityMapFromIrP4Info();
+  original.at("action_profile2").current_utilization = 1;
+  ++original.at("action_profile2").max_group_size;
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetUpdatedResourceCapacities,
+     AllowsShrinkingMaxGroupSizeForProfilesNotInUse) {
+  auto original = CapacityMapFromIrP4Info();
+  ++original.at("action_profile2").max_group_size;
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(),
+                                              CapacityMapFromIrP4Info())));
+}
+
+TEST(GetUpdatedResourceCapacities, DoesNotAllowShrinkingCapacityBelowUsage) {
+  auto original = CapacityMapFromIrP4Info();
+  original.at("action_profile2").current_utilization =
+      original.at("action_profile2").max_weight_for_all_groups + 1;
+  original.at("action_profile2").max_weight_for_all_groups += 2;
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetUpdatedResourceCapacities, DoesAllowsShrinkingCapacityToCurrentUsage) {
+  auto original = CapacityMapFromIrP4Info();
+  for (auto& [_, capacity] : original) {
+    capacity.current_utilization = capacity.max_weight_for_all_groups;
+    ++capacity.max_weight_for_all_groups;
+  }
+  auto expected = CapacityMapFromIrP4Info();
+  for (auto& [_, capacity] : expected) {
+    capacity.current_utilization = capacity.max_weight_for_all_groups;
+  }
+
+  EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
+              IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(), expected)));
 }
 
 }  // namespace
