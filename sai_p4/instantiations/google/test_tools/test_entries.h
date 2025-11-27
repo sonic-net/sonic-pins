@@ -294,6 +294,10 @@ struct AclPreIngressVlanTableMatchFields {
   std::optional<std::string> in_port;
 };
 
+struct AclIngressQosMatchFields {
+  pdpi::Ternary<netaddr::MacAddress> dst_mac;
+};
+
 struct AclIngressEntry {
   std::optional<bool> is_ip;
   pdpi::Ternary<std::bitset<packetlib::kIpProtocolBitwidth>> ip_protocol;
@@ -482,6 +486,8 @@ class EntryBuilder {
   EntryBuilder& AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
       AclQueueAssignments queue_assignments,
       AclMeterConfiguration meter_configuration);
+  EntryBuilder& AddAclIngressQosDropTableEntry(
+      const AclIngressQosMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddVlanEntry(absl::string_view vlan_id_hexstr);
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
