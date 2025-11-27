@@ -1207,7 +1207,6 @@ tables {
     alias: "vlan_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Disallow creating reserved VLANs to rule out vendor specific behavior.\n    vlan_id != 0 && vlan_id != 4095;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1232,7 +1231,6 @@ tables {
     name: "egress.egress_vlan_checks.vlan_membership_table"
     alias: "vlan_membership_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1724,7 +1722,6 @@ actions {
     name: "ingress.acl_ingress.set_forwarding_queues"
     alias: "set_forwarding_queues"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1

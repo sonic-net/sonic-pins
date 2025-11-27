@@ -18,8 +18,12 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/resource_utilization.h"
 
 namespace p4rt_app {
 
@@ -35,12 +39,40 @@ struct P4InfoReconcileTransition {
   std::vector<std::string> acl_tables_to_delete;
   std::vector<std::string> acl_tables_to_add;
   std::vector<std::string> acl_tables_to_modify;
+
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink,
+                            const P4InfoReconcileTransition& transition) {
+    absl::Format(
+        &sink,
+        R"({
+  hashing_packet_field_configs_to_delete = {%s},
+  hashing_packet_field_configs_to_set = {%s},
+  upate_switch_table = %s,
+  acl_tables_to_delete = {%s},
+  acl_tables_to_add = {%s},
+  acl_tables_to_modify = {%s},
+})",
+
+        absl::StrJoin(transition.hashing_packet_field_configs_to_delete, ", "),
+        absl::StrJoin(transition.hashing_packet_field_configs_to_set, ", "),
+        (transition.update_switch_table ? "true" : "false"),
+        absl::StrJoin(transition.acl_tables_to_delete, ", "),
+        absl::StrJoin(transition.acl_tables_to_add, ", "),
+        absl::StrJoin(transition.acl_tables_to_modify, ", "));
+  }
 };
 
 // Returns the transition steps for migrating to a new P4Info.
 // Returns an error if there is an unreconcilable difference.
 absl::StatusOr<P4InfoReconcileTransition> CalculateTransition(
     const pdpi::IrP4Info& from, const pdpi::IrP4Info& to);
+
+absl::StatusOr<absl::flat_hash_map<std::string, ActionProfileResourceCapacity>>
+GetUpdatedResourceCapacities(
+    const pdpi::IrP4Info& ir_p4info,
+    const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
+        original);
 
 }  // namespace p4rt_app
 

@@ -17,7 +17,7 @@
 
 #include <string>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 
 namespace p4rt_app {
@@ -35,6 +35,13 @@ bool FakeConsumerNotifierAdapter::WaitForNotificationAndPop(
     int64_t timeout_ms) {
   sonic_db_table_->GetNextNotification(op, data, values);
   return true;
+}
+
+void FakeConsumerNotifierAdapter::DrainNotifications() {
+  std::string op, data;
+  SonicDbEntryList values;
+  while (sonic_db_table_->GetNextNotification(op, data, values).ok()) {
+  }
 }
 
 }  // namespace sonic

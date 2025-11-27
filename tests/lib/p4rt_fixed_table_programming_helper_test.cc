@@ -141,8 +141,35 @@ TEST_P(L3RouteProgrammingTest, RouterInterfaceIdFailsWithInvalidMacAddress) {
                        HasSubstr("Invalid MAC address")));
 }
 
+TEST_P(L3RouteProgrammingTest, VlanEntry) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       VlanTableUpdate(sai::GetIrP4Info(GetParam()),
+                                       p4::v1::Update::INSERT, /*vlan=*/2));
+  EXPECT_THAT(pi_update, HasExactMatch("\002"));
+}
+
+TEST_P(L3RouteProgrammingTest, VlanMemberTagEntry) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       VlanMemberTableUpdate(
+                           sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                           /*port_id=*/1, /*vlan=*/2, /*tag=*/true));
+  EXPECT_THAT(pi_update, HasExactMatch("\002"));
+  EXPECT_THAT(pi_update, HasExactMatch("1"));
+}
+
+TEST_P(L3RouteProgrammingTest, VlanMemberUntagEntry) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       VlanMemberTableUpdate(
+                           sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                           /*port_id=*/1, /*vlan=*/2, /*tag=*/false));
+  EXPECT_THAT(pi_update, HasExactMatch("\002"));
+  EXPECT_THAT(pi_update, HasExactMatch("1"));
+}
+
 TEST_P(L3RouteProgrammingTest, MulticastRouterInterfaceEntry) {
-  MulticastReplica replica = MulticastReplica("1", 0x120, "00:01:02:03:04:05");
+  MulticastReplica replica = MulticastReplica(/*port=*/"1", /*instance=*/0x120,
+                                              /*src_mac=*/"00:01:02:03:04:05",
+                                              /*vlan=*/2, /*is_ip_mcast=*/true);
   ASSERT_OK_AND_ASSIGN(
       p4::v1::Update pi_update,
       MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
@@ -151,12 +178,28 @@ TEST_P(L3RouteProgrammingTest, MulticastRouterInterfaceEntry) {
   EXPECT_THAT(pi_update, HasExactMatch("1"));
   EXPECT_THAT(pi_update, HasExactMatch("\x01\x20"));
   EXPECT_THAT(pi_update, HasActionParam("\001\002\003\004\005"));
+  EXPECT_THAT(pi_update, HasActionParam("\002"));
+}
+
+TEST_P(L3RouteProgrammingTest, L2MulticastRouterInterfaceEntry) {
+  MulticastReplica replica =
+      MulticastReplica(/*port=*/"1", /*instance=*/0x120,
+                       /*src_mac=*/"00:01:02:03:04:05",
+                       /*vlan=*/2, /*is_ip_mcast=*/false);
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
+                                          p4::v1::Update::INSERT, replica));
+
+  EXPECT_THAT(pi_update, HasExactMatch("1"));
+  EXPECT_THAT(pi_update, HasExactMatch("\x01\x20"));
 }
 
 TEST_P(L3RouteProgrammingTest,
        MulticastRouterInterfaceEntryCreatedSuccessfullyWhenInstanceIsZero) {
-  MulticastReplica replica =
-      MulticastReplica("1", /*instance=*/0, "00:01:02:03:04:05");
+  MulticastReplica replica = MulticastReplica(/*port=*/"1", /*instance=*/0,
+                                              /*src_mac=*/"00:01:02:03:04:05",
+                                              /*vlan=*/2, /*is_ip_mcast=*/true);
   ASSERT_OK_AND_ASSIGN(
       p4::v1::Update pi_update,
       MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
@@ -165,11 +208,14 @@ TEST_P(L3RouteProgrammingTest,
   EXPECT_THAT(pi_update, HasExactMatch("1"));
   EXPECT_THAT(pi_update, HasExactMatch(std::string("\0", 1)));
   EXPECT_THAT(pi_update, HasActionParam("\001\002\003\004\005"));
+  EXPECT_THAT(pi_update, HasActionParam("\002"));
 }
 
 TEST_P(L3RouteProgrammingTest,
        MulticastRouterInterfaceEntryFailsWithInvalidMacAddress) {
-  MulticastReplica replica = MulticastReplica("1", 0x120, "invalid_format");
+  MulticastReplica replica = MulticastReplica(/*port=*/"1", /*instance=*/0x120,
+                                              /*src_mac=*/"invalid_format",
+                                              /*vlan=*/2, /*is_ip_mcast=*/true);
   EXPECT_THAT(MulticastRouterInterfaceTableUpdate(sai::GetIrP4Info(GetParam()),
                                                   p4::v1::Update::INSERT,
                                                   replica),
@@ -179,8 +225,12 @@ TEST_P(L3RouteProgrammingTest,
 
 TEST_P(L3RouteProgrammingTest, MulticastGroupEntry) {
   std::vector<MulticastReplica> replicas;
-  replicas.push_back(MulticastReplica("1", 4, "00:01:02:03:04:05"));
-  replicas.push_back(MulticastReplica("2", 3, "00:01:02:03:04:05"));
+  replicas.push_back(MulticastReplica(/*port=*/"1", /*instance=*/4,
+                                      /*src_mac=*/"00:01:02:03:04:05",
+                                      /*vlan=*/2, /*is_ip_mcast=*/true));
+  replicas.push_back(MulticastReplica(/*port=*/"2", /*instance=*/3,
+                                      /*src_mac=*/"00:01:02:03:04:05",
+                                      /*vlan=*/2, /*is_ip_mcast=*/true));
   absl::Span<MulticastReplica> replicas_span{replicas};
   ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
                        MulticastGroupUpdate(sai::GetIrP4Info(GetParam()),
@@ -189,6 +239,32 @@ TEST_P(L3RouteProgrammingTest, MulticastGroupEntry) {
   EXPECT_THAT(pi_update, HasGroupId(1));
   EXPECT_THAT(pi_update, HasReplica("1", 4));
   EXPECT_THAT(pi_update, HasReplica("2", 3));
+}
+
+TEST_P(L3RouteProgrammingTest, Ipv4MulticastRouteEntry) {
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      Ipv4MulticastRouteUpdate(sai::GetIrP4Info(GetParam()),
+                               p4::v1::Update::INSERT, "vrf-0", "10.1.1.1",
+                               /*group_id=*/1));
+
+  EXPECT_THAT(pi_update, HasExactMatch("vrf-0"));
+  EXPECT_THAT(pi_update, HasExactMatch("\n\001\001\001"));
+  EXPECT_THAT(pi_update, HasActionParam("\001"));
+}
+
+TEST_P(L3RouteProgrammingTest, Ipv6MulticastRouteEntry) {
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      Ipv6MulticastRouteUpdate(sai::GetIrP4Info(GetParam()),
+                               p4::v1::Update::INSERT, "vrf-0", "2000::",
+                               /*group_id=*/1));
+
+  EXPECT_THAT(pi_update, HasExactMatch("vrf-0"));
+  std::string ipv6_addr(
+      " \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000", 16);
+  EXPECT_THAT(pi_update, HasExactMatch(ipv6_addr));
+  EXPECT_THAT(pi_update, HasActionParam("\001"));
 }
 
 TEST_P(L3RouteProgrammingTest, NeighborId) {

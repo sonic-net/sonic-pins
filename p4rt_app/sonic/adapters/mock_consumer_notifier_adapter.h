@@ -32,6 +32,7 @@ public:
               (std::string & op, std::string &data,
                std::vector<swss::FieldValueTuple> &values, int64_t timeout_ms),
               (override));
+  MOCK_METHOD(void, DrainNotifications, (), (override));
 };
 
 } // namespace sonic
