@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "swss/dbconnector.h"
 #include "swss/notificationconsumer.h"
 #include "swss/select.h"
@@ -59,6 +59,14 @@ bool ConsumerNotifierAdapter::WaitForNotificationAndPop(
   }
   notification_consumer_->pop(op, data, values);
   return true;
+}
+
+void ConsumerNotifierAdapter::DrainNotifications() {
+  std::string op, data;
+  std::vector<swss::FieldValueTuple> values;
+  while (notification_consumer_->peek() > 0) {
+    notification_consumer_->pop(op, data, values);
+  }
 }
 
 }  // namespace sonic

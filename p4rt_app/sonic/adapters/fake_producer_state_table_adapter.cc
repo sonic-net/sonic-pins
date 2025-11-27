@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "swss/table.h"
 

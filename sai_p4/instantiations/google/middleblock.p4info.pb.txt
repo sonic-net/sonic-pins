@@ -1114,7 +1114,6 @@ tables {
     alias: "vlan_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Disallow creating reserved VLANs to rule out vendor specific behavior.\n    vlan_id != 0 && vlan_id != 4095;\n  \")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -1139,7 +1138,6 @@ tables {
     name: "egress.egress_vlan_checks.vlan_membership_table"
     alias: "vlan_membership_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1

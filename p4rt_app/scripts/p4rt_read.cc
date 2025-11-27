@@ -13,16 +13,19 @@
 // limitations under the License.
 #include <iostream>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/flags/flag.h"
+#include "absl/flags/parse.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "grpcpp/security/credentials.h"
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -32,15 +35,15 @@
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 
 // Flags to read table entries.
-DEFINE_bool(compact, true, "Prints each table entry on a single line.");
-DEFINE_string(format, "IR",
-              "Prints the table entries as: 'IR'=pdpi::IrTableEntry, "
-              "'PI'=p4::v1::TableEntry.");
+ABSL_FLAG(bool, compact, true, "Prints each table entry on a single line.");
+ABSL_FLAG(std::string, format, "IR",
+          "Prints the table entries as: 'IR'=pdpi::IrTableEntry, "
+          "'PI'=p4::v1::TableEntry.");
 
 // Flags to filter by specific table values.
-DEFINE_string(table_ids, "",
-              "Comma separated list of table IDs. The IDs will be used to "
-              "filter entries based on the PI table_id field.");
+ABSL_FLAG(std::string, table_ids, "",
+          "Comma separated list of table IDs. The IDs will be used to "
+          "filter entries based on the PI table_id field.");
 
 namespace p4rt_app {
 namespace {
@@ -53,7 +56,7 @@ absl::StatusOr<pdpi::IrP4Info> GetIrP4infoFromSwitch(
 }
 
 absl::flat_hash_set<uint32_t> GetTableIdFilers() {
-  std::string table_ids_flag = FLAGS_table_ids;
+  std::string table_ids_flag = absl::GetFlag(FLAGS_table_ids);
 
   // Go through the comma separated list of 'table_ids' values and add them to
   // the set.
@@ -89,7 +92,7 @@ void FilterByTableId(std::vector<p4::v1::TableEntry>& pi_table_entries) {
 absl::Status PrintAsIr(
     pdpi::IrP4Info ir_p4info,
     const std::vector<p4::v1::TableEntry>& pi_table_entries) {
-  bool compact_output = FLAGS_compact;
+  bool compact_output = absl::GetFlag(FLAGS_compact);
   for (const auto& pi_table_entry : pi_table_entries) {
     ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
                      pdpi::PiTableEntryToIr(ir_p4info, pi_table_entry));
@@ -104,7 +107,7 @@ absl::Status PrintAsIr(
 
 absl::Status PrintAsPi(
     const std::vector<p4::v1::TableEntry>& pi_table_entries) {
-  bool compact_output = FLAGS_compact;
+  bool compact_output = absl::GetFlag(FLAGS_compact);
   for (const auto& pi_table_entry : pi_table_entries) {
     if (compact_output) {
       Info(pi_table_entry.ShortDebugString());
@@ -125,7 +128,7 @@ absl::Status Main() {
   // Filter any entries based on PI values.
   FilterByTableId(pi_table_entries);
 
-  std::string format_as = FLAGS_format;
+  std::string format_as = absl::GetFlag(FLAGS_format);
   absl::AsciiStrToUpper(&format_as);
   if (format_as == "IR") {
     ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, GetIrP4infoFromSwitch(*session));
@@ -144,8 +147,8 @@ absl::Status Main() {
 }  // namespace p4rt_app
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  absl::InitializeLog();
+  absl::ParseCommandLine(argc, argv);
 
   absl::Status status = p4rt_app::Main();
   if (!status.ok()) {

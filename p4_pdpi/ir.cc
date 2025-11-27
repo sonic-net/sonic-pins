@@ -332,7 +332,8 @@ StatusOr<uint32_t> GetNumberInAnnotation(
 
 absl::flat_hash_set<std::string> GetMandatoryMatches(
     const IrTableDefinition &table) {
-  absl::flat_hash_set<std::string> mandatory_matches;
+  absl::flat_hash_set<std::string> mandatory_matches(
+      table.match_fields_by_name().size());
   for (const auto &iter : table.match_fields_by_name()) {
     if (iter.second.match_field().match_type() == MatchField::EXACT) {
       mandatory_matches.insert(iter.second.match_field().name());
@@ -446,32 +447,36 @@ absl::Status CheckMandatoryMatches(
     const absl::flat_hash_set<std::string> &actual_matches,
     const IrTableDefinition &table) {
   auto expected_matches = GetMandatoryMatches(table);
-  if (actual_matches.size() != expected_matches.size()) {
-    auto missing_matches = GetMissingFields(actual_matches, expected_matches);
-    return InvalidArgumentErrorBuilder()
-           << "Missing matches: "
-           << absl::StrCat("'", absl::StrJoin(missing_matches, "', '"), "'")
-           << ". Expected " << expected_matches.size()
-           << " mandatory match conditions, but found " << actual_matches.size()
-           << " instead.";
-  }
-  return absl::OkStatus();
+  int expected_matches_size = expected_matches.size();
+  int actual_matches_size = actual_matches.size();
+  if (actual_matches_size == expected_matches_size) return absl::OkStatus();
+
+  auto missing_matches =
+      GetMissingFields(actual_matches, std::move(expected_matches));
+  return InvalidArgumentErrorBuilder()
+         << "Missing matches: "
+         << absl::StrCat("'", absl::StrJoin(missing_matches, "', '"), "'")
+         << ". Expected " << expected_matches_size
+         << " mandatory match conditions, but found " << actual_matches_size
+         << " instead.";
 }
 absl::Status CheckParams(const absl::flat_hash_set<std::string> &actual_params,
                          const IrActionDefinition &action) {
-  absl::flat_hash_set<std::string> expected_params;
+  if (actual_params.size() == action.params_by_name().size()) {
+    return absl::OkStatus();
+  }
+  auto expected_params_size = action.params_by_name().size();
+  absl::flat_hash_set<std::string> expected_params(expected_params_size);
   for (const auto &[name, _] : action.params_by_name()) {
     expected_params.insert(name);
   }
-  if (actual_params.size() != expected_params.size()) {
-    auto missing_params = GetMissingFields(actual_params, expected_params);
-    return InvalidArgumentErrorBuilder()
-           << "Missing parameters: "
-           << absl::StrCat("'", absl::StrJoin(missing_params, "'. '"), "'")
-           << ". Expected " << expected_params.size()
-           << " parameters, but found " << actual_params.size() << " instead.";
-  }
-  return absl::OkStatus();
+  auto missing_params =
+      GetMissingFields(actual_params, std::move(expected_params));
+  return InvalidArgumentErrorBuilder()
+         << "Missing parameters: "
+         << absl::StrCat("'", absl::StrJoin(missing_params, "'. '"), "'")
+         << ". Expected " << expected_params_size << " parameters, but found "
+         << actual_params.size() << " instead.";
 }
 
 // Verifies the contents of the PI representation and translates to the IR
@@ -680,9 +685,9 @@ absl::Status PiActionToIr(
   }
 
   action_entry.set_name(ir_action_definition->preamble().alias());
-  absl::flat_hash_set<uint32_t> used_params;
+  absl::flat_hash_set<uint32_t> used_params(pi_action.params().size());
   std::vector<std::string> invalid_reasons;
-  absl::flat_hash_set<std::string> actual_params;
+  absl::flat_hash_set<std::string> actual_params(pi_action.params().size());
 
   if (ir_action_definition->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
@@ -718,7 +723,7 @@ absl::Status PiActionToIr(
       continue;
     }
     actual_params.insert(param_entry->name());
-    *param_entry->mutable_value() = *ir_value;
+    *param_entry->mutable_value() = std::move(*ir_value);
   }
   const auto &num_params_status =
       CheckParams(actual_params, *ir_action_definition);
@@ -780,7 +785,6 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
                            const I &packet, const TranslationOptions &options) {
   O result;
   result.set_payload(packet.payload());
-  absl::flat_hash_set<uint32_t> used_metadata_ids;
 
   const std::string &packet_description = absl::StrCat("'", kind, "' message");
   google::protobuf::Map<uint32_t, IrPacketIoMetadataDefinition> metadata_by_id;
@@ -795,6 +799,7 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
   }
 
   std::vector<std::string> invalid_reasons;
+  absl::flat_hash_set<uint32_t> used_metadata_ids(packet.metadata().size());
   for (const auto &metadata : packet.metadata()) {
     uint32_t id = metadata.metadata_id();
     const absl::Status &duplicate = gutil::InsertIfUnique(
@@ -1104,7 +1109,6 @@ absl::Status IrActionInvocationToPi(
   }
 
   action.set_action_id(ir_action_definition->preamble().id());
-  absl::flat_hash_set<std::string> used_params;
   std::vector<std::string> invalid_reasons;
 
   if (ir_action_definition->is_unsupported() && !options.allow_unsupported) {
@@ -1112,13 +1116,12 @@ absl::Status IrActionInvocationToPi(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
 
+  absl::flat_hash_set<std::string> used_params(ir_table_action.params().size());
   for (const auto &param : ir_table_action.params()) {
-    const absl::Status &duplicate = gutil::InsertIfUnique(
-        used_params, param.name(),
-        absl::StrCat("Duplicate parameter field found with name '",
-                     param.name(), "'."));
-    if (!duplicate.ok()) {
-      invalid_reasons.push_back(absl::StrCat(kNewBullet, duplicate.message()));
+    if (auto duplicate = used_params.insert(param.name()).second; !duplicate) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet, "Duplicate parameter field found with name '",
+          param.name(), "'."));
       continue;
     }
 
@@ -1174,6 +1177,7 @@ absl::Status IrActionSetToPi(
     const google::protobuf::RepeatedPtrField<IrActionReference> &valid_actions,
     p4::v1::ActionProfileActionSet &pi) {
   std::vector<std::string> invalid_reasons;
+  pi.mutable_action_profile_actions()->Reserve(ir_action_set.actions().size());
   for (const auto &ir_action : ir_action_set.actions()) {
     auto *pi_action = pi.add_action_profile_actions();
     absl::Status action_status =
@@ -1218,7 +1222,6 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
   I result;
   std::vector<std::string> invalid_reasons;
   result.set_payload(packet.payload());
-  absl::flat_hash_set<std::string> used_metadata_names;
   google::protobuf::Map<std::string, IrPacketIoMetadataDefinition>
       metadata_by_name;
   const std::string &packet_description = absl::StrCat("'", kind, "' message");
@@ -1232,6 +1235,8 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
         absl::StrCat(kNewBullet, "Invalid PacketIo type.")));
   }
 
+  absl::flat_hash_set<std::string> used_metadata_names(
+      packet.metadata().size());
   for (const auto &metadata : packet.metadata()) {
     const std::string &name = metadata.name();
     const absl::Status &duplicate = gutil::InsertIfUnique(
@@ -1850,8 +1855,8 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
   }
 
   // Validate and translate the matches
-  absl::flat_hash_set<uint32_t> used_field_ids;
-  absl::flat_hash_set<std::string> mandatory_matches;
+  absl::flat_hash_set<uint32_t> used_field_ids(pi.match_size());
+  absl::flat_hash_set<std::string> mandatory_matches(pi.match_size());
   for (const auto &pi_match : pi.match()) {
     const absl::Status &duplicate = gutil::InsertIfUnique(
         used_field_ids, pi_match.field_id(),
@@ -2501,7 +2506,8 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
   }
 
   // Validate and translate the matches
-  absl::flat_hash_set<std::string> used_field_names, mandatory_matches;
+  absl::flat_hash_set<std::string> used_field_names(ir.matches_size()),
+      mandatory_matches(ir.matches_size());
   for (const auto &ir_match : ir.matches()) {
     const absl::Status &duplicate = gutil::InsertIfUnique(
         used_field_names, ir_match.name(),

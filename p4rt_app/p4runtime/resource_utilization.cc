@@ -19,8 +19,8 @@
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
-#include "glog/logging.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"

@@ -18,14 +18,14 @@
 #include <string>
 
 #include "absl/container/btree_map.h"
+#include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "gutil/gutil/io.h"
 #include "gutil/gutil/proto.h"
@@ -35,12 +35,12 @@
 #include "p4rt_app/p4runtime/p4info_verification_schema.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.pb.h"
 
-DEFINE_string(p4info, "",
-              "The source p4info file. If not provided, the p4info will be "
-              "read from stdin.");
-DEFINE_string(output, "",
-              "The output file to store the schema. If not provided, the "
-              "schema will be written to stdout.");
+ABSL_FLAG(std::string, p4info, "",
+          "The source p4info file. If not provided, the p4info will be "
+          "read from stdin.");
+ABSL_FLAG(std::string, output, "",
+          "The output file to store the schema. If not provided, the "
+          "schema will be written to stdout.");
 
 namespace {
 constexpr int kTabWidth = 2;
@@ -52,7 +52,7 @@ std::string Prefix(int tab_depth) {
 // Produces the P4Info from the --p4info flag or from stdin. Logs an error and
 // returns false if the P4Info cannot be produces.
 bool GetP4Info(p4::config::v1::P4Info& p4info) {
-  const std::string& input_filename = FLAGS_p4info;
+  const std::string& input_filename = absl::GetFlag(FLAGS_p4info);
   if (input_filename.empty()) {
     std::string p4info_string;
     std::string line;
@@ -192,8 +192,8 @@ absl::StatusOr<std::string> BuildTextSchema(
 }  // namespace
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  absl::InitializeLog();
+  absl::ParseCommandLine(argc, argv);
 
   // Get the P4Info.
   p4::config::v1::P4Info p4info;
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  std::string outfile = FLAGS_output;
+  std::string outfile = absl::GetFlag(FLAGS_output);
   if (outfile.empty()) {
     std::cout << *schema_string;
   } else {
