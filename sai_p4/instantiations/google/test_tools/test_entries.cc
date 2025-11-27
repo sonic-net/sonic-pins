@@ -532,7 +532,7 @@ EntryBuilder& EntryBuilder::AddEntryTunnelTerminatingAllIpInIpv6Packets() {
     ipv6_tunnel_termination_table_entry {
       match {}  # Wildcard match
       action { tunnel_decap {} }
-      priority: 1
+      priority: 900
     }
   )pb");
   return *this;
@@ -1061,7 +1061,7 @@ EntryBuilder& EntryBuilder::AddIpv6TunnelTerminationEntry(
         params.src_ipv6->mask.ToString());
   }
   tunnel_entry.mutable_action()->mutable_tunnel_decap();
-  tunnel_entry.set_priority(1);
+  tunnel_entry.set_priority(900);
   *entries_.add_entries() = std::move(pd_entry);
   return *this;
 }

@@ -325,7 +325,7 @@ TableEntryGenerator Ipv6TunnelTerminationGenerator(
   TableEntryGenerator generator;
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(R"pb(
     table_name: "ipv6_tunnel_termination_table"
-    priority: 1
+    priority: 900
     matches {
       name: "src_ipv6"
       ternary {

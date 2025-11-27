@@ -278,6 +278,7 @@ tables {
     name: "ingress.tunnel_termination.ipv6_tunnel_termination_table"
     alias: "ipv6_tunnel_termination_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // TODO: Remove when switch supports priority as a key for\n    // this table.\n    // The switch does not support priority as a key. In order to avoid\n    // conflicts between entries where the only difference is the\n    // priority, we choose a fixed priority arbitrarily.\n    ::priority == 900;\n  \")"
   }
   match_fields {
     id: 1
