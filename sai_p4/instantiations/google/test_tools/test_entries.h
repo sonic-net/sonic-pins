@@ -413,6 +413,8 @@ class EntryBuilder {
   EntryBuilder& AddEntryPuntingPacketsWithDstMac(
       absl::string_view dst_mac, PuntAction action = PuntAction::kTrap,
       absl::string_view qos_queue = "0x0");
+  EntryBuilder& AddRouterInterfaceTableEntry(
+      const RouterInterfaceTableParams& params = {});
   EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
                                        absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
