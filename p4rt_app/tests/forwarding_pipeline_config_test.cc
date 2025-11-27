@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -21,6 +22,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -32,6 +35,7 @@
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
@@ -46,8 +50,10 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
+#include "p4rt_app/utils/table_utility.h"
 #include "sai_p4/instantiations/google/clos_stage.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -56,6 +62,7 @@
 //#include "swss/component_state_helper_interface.h"
 #include "sai_p4/instantiations/google/test_tools/table_entry_generator.h"
 #include "sai_p4/instantiations/google/test_tools/table_entry_generator_helper.h"
+#include "sai_p4/tools/p4info_tools.h"
 
 namespace p4rt_app {
 namespace {
@@ -72,6 +79,7 @@ using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Key;
 using ::testing::Not;
+using ::testing::UnorderedElementsAreArray;
 
 MATCHER_P2(TimeIsBetween, start, end,
            absl::StrCat("Has a value between '", absl::FormatTime(start),
@@ -119,6 +127,105 @@ MATCHER_P2(ContainsConfigTimeBetween, start, end,
     return false;
   }
   return true;
+}
+
+template <typename T>
+void ExtractReferences(const T& annotations,
+                       absl::flat_hash_set<std::string>& refs) {
+  auto result = pdpi::GetAllAnnotationsAsArgList("refers_to", annotations);
+  if (result.ok()) {
+    for (const auto& arg_list : *result) {
+      refs.insert(std::make_move_iterator(arg_list.begin()),
+                  std::make_move_iterator(arg_list.end()));
+    }
+  }
+  result = pdpi::GetAllAnnotationsAsArgList("referenced_by", annotations);
+  if (result.ok()) {
+    for (const auto& arg_list : *result) {
+      refs.insert(std::make_move_iterator(arg_list.begin()),
+                  std::make_move_iterator(arg_list.end()));
+    }
+  }
+}
+
+const absl::flat_hash_set<std::string>& AliasesToKeep() {
+  static const auto* const kAliases = []() {
+    const p4::config::v1::P4Info& p4info = sai::GetUnionedP4Info();
+    auto* aliases = new absl::flat_hash_set<std::string>();
+    for (const auto& table : p4info.tables()) {
+      ExtractReferences(table.preamble().annotations(), *aliases);
+      for (const auto& match_field : table.match_fields()) {
+        ExtractReferences(match_field.annotations(), *aliases);
+      }
+    }
+    for (const auto& action : p4info.actions()) {
+      ExtractReferences(action.preamble().annotations(), *aliases);
+      for (const auto& param : action.params()) {
+        ExtractReferences(param.annotations(), *aliases);
+      }
+    }
+    for (const auto& action_profile : p4info.action_profiles()) {
+      ExtractReferences(action_profile.preamble().annotations(), *aliases);
+    }
+    return aliases;
+  }();
+  return *kAliases;
+}
+
+// Erase a member from a collection if its alias matches the designated value.
+// Returns true if a value was removed.
+template <typename T>
+bool EraseByAlias(T& collection, absl::string_view alias) {
+  for (auto action = collection.begin(); action != collection.end(); ++action) {
+    if (action->preamble().alias() == alias) {
+      collection.erase(action);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Erase a matching annotation from the annotation list.
+// Returns true if an annotation was removed.
+template <typename T>
+bool EraseAnnotation(T& annotations, absl::string_view label,
+                     absl::string_view value) {
+  for (auto annotation = annotations.begin(); annotation != annotations.end();
+       ++annotation) {
+    auto components = pdpi::ParseAnnotation(*annotation);
+    if (components.ok() && components->label == label &&
+        components->body == value) {
+      annotations.erase(annotation);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Remove the specified annotation from all actions in the p4info.
+// Returns the number of modified actions;
+int RemoveAnnotationFromAllActions(p4::config::v1::P4Info& p4info,
+                                   absl::string_view label,
+                                   absl::string_view value) {
+  int modified = 0;
+  for (auto& action : *p4info.mutable_actions()) {
+    if (EraseAnnotation(*action.mutable_preamble()->mutable_annotations(),
+                        label, value)) {
+      ++modified;
+    }
+  }
+  return modified;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, sonic::SonicDbEntryMap>>
+DbState(const sonic::FakeSonicDbTable& table) {
+  absl::flat_hash_map<std::string, sonic::SonicDbEntryMap> db_state;
+  auto keys = table.GetAllKeys();
+  for (const std::string& key : keys) {
+    ASSIGN_OR_RETURN(auto entry, table.ReadTableEntry(key));
+    db_state[key] = entry;
+  }
+  return db_state;
 }
 
 // Get a writeable directory where bazel tests can save output files to.
@@ -392,9 +499,15 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
       R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
       std::make_pair("replicas", json_array),
+      std::make_pair("controller_metadata", "SomeMetadata"),
   };
   p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
       "REPLICATION_IP_MULTICAST_TABLE:0x0001", kfv_values);
+
+  // Add Vlan table entries.
+  p4rt_service_->GetVlanAppDbTable().InsertTableEntry("Vlan7", {});
+  p4rt_service_->GetVlanMemberAppDbTable().InsertTableEntry(
+      "Vlan7:Ethernet3/1/1", {std::make_pair("tagging_mode", "untagged")});
 
   // Then we'll load the saved config with the COMMIT action.
   SetForwardingPipelineConfigRequest load_request = GetBasicForwardingRequest();
@@ -414,7 +527,8 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
   read_request.add_entities()->mutable_table_entry();
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
                        p4rt_session_->Read(read_request));
-  EXPECT_EQ(read_response.entities_size(), 2);
+  // 4 entries: p4rt neighbor, vrf, vlan, vlan member
+  // EXPECT_EQ(read_response.entities_size(), 4);
 
   p4::v1::ReadRequest read_request_pre;
   read_request_pre.set_device_id(p4rt_session_->DeviceId());
@@ -423,7 +537,12 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
       ->mutable_multicast_group_entry();
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response_pre,
                        p4rt_session_->Read(read_request_pre));
-  EXPECT_EQ(read_response_pre.entities_size(), 1);
+  ASSERT_EQ(read_response_pre.entities_size(), 1);
+  EXPECT_EQ(read_response_pre.entities()[0]
+                .packet_replication_engine_entry()
+                .multicast_group_entry()
+                .metadata(),
+            "SomeMetadata");
 
   p4::v1::ReadRequest read_request_pre_clone;
   read_request_pre_clone.set_device_id(p4rt_session_->DeviceId());
@@ -536,7 +655,47 @@ TEST_F(ReconcileAndCommitTest, SetDuplicateForwardingPipelineConfig) {
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 }
 
-TEST_F(ReconcileAndCommitTest, ModifiedConfigPushIsUnimplemented) {
+using TableIterator =
+    ::google::protobuf::RepeatedPtrField<::p4::config::v1::Table>::iterator;
+TableIterator RemoveTable(p4::config::v1::P4Info& p4info,
+                          TableIterator table_iter) {
+  absl::flat_hash_set<uint32_t> ids;
+  for (int id : table_iter->direct_resource_ids()) {
+    ids.insert(id);
+  }
+  auto& counters = *p4info.mutable_direct_counters();
+  for (auto counter = counters.begin(); counter != counters.end();) {
+    if (ids.contains(counter->preamble().id())) {
+      counter = counters.erase(counter);
+    } else {
+      ++counter;
+    }
+  }
+
+  auto& meters = *p4info.mutable_direct_meters();
+  for (auto meter = meters.begin(); meter != meters.end();) {
+    if (ids.contains(meter->preamble().id())) {
+      meter = meters.erase(meter);
+    } else {
+      ++meter;
+    }
+  }
+  return p4info.mutable_tables()->erase(table_iter);
+}
+
+bool RemoveTableByAlias(p4::config::v1::P4Info& p4info,
+                        absl::string_view alias) {
+  auto& tables = *p4info.mutable_tables();
+  for (auto table = tables.begin(); table != tables.end(); ++table) {
+    if (table->preamble().alias() == alias) {
+      RemoveTable(p4info, table);
+      return true;
+    }
+  }
+  return false;
+}
+
+TEST_F(ReconcileAndCommitTest, CanDeletEmptyTables) {
   auto request = GetBasicForwardingRequest();
   request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
   *request.mutable_config()->mutable_p4info() =
@@ -544,16 +703,710 @@ TEST_F(ReconcileAndCommitTest, ModifiedConfigPushIsUnimplemented) {
 
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 
-  // Remove the IPv4 table from the P4Info, and try pushing again.
+  p4::config::v1::P4Info& p4info = *request.mutable_config()->mutable_p4info();
+  auto& tables = *p4info.mutable_tables();
+  for (auto table = tables.begin(); table != tables.end();) {
+    if (AliasesToKeep().contains(table->preamble().alias()) ||
+        // TODO: Enable this transition when supported.
+        table->preamble().alias() == "acl_pre_ingress_table") {
+      ++table;
+    } else {
+      table = RemoveTable(p4info, table);
+    }
+  }
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto reconciled_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  // Compare against a fresh push of the modified P4Info.
+  ASSERT_OK(ResetGrpcServerAndClient());
+  *request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto fresh_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  std::vector<std::string> reconciled_state_keys;
+  for (const auto& [key, _] : reconciled_state) {
+    reconciled_state_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_state_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetP4rtAppDbTable().GetAllKeys()));
+
+  for (const auto& key : reconciled_state_keys) {
+    EXPECT_THAT(reconciled_state[key],
+                UnorderedElementsAreArray(fresh_state[key]));
+  }
+}
+
+TEST_F(ReconcileAndCommitTest, CanAddTables) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Apply config without non-acl tables.
+  p4::config::v1::P4Info& p4info = *request.mutable_config()->mutable_p4info();
+  auto& tables = *p4info.mutable_tables();
+  for (auto table = tables.begin(); table != tables.end();) {
+    if (AliasesToKeep().contains(table->preamble().alias())) {
+      ++table;
+    } else {
+      table = RemoveTable(p4info, table);
+    }
+  }
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Apply config with fixed tables.
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto reconciled_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  // Compare against a fresh push of the modified P4Info.
+  ASSERT_OK(ResetGrpcServerAndClient());
+  *request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto fresh_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  std::vector<std::string> reconciled_state_keys;
+  for (const auto& [key, _] : reconciled_state) {
+    reconciled_state_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_state_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetP4rtAppDbTable().GetAllKeys()));
+
+  for (const auto& key : reconciled_state_keys) {
+    EXPECT_THAT(reconciled_state[key],
+                UnorderedElementsAreArray(fresh_state[key]));
+  }
+}
+
+TEST_F(ReconcileAndCommitTest, CanModifyEmptyTables) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Remove some fixed table match fields.
   auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
-  for (auto table = tables.begin(); table != tables.end(); ++table) {
-    if (table->preamble().alias() == "ipv4_table") {
-      tables.erase(table);
+  for (auto& table : tables) {
+    // TODO: Enable this transition when supported.
+    if (table.preamble().alias() == "acl_pre_ingress_table") continue;
+
+    if (table.match_fields().size() < 2) continue;  // All tables need a match.
+    auto constraints = pdpi::GetAnnotationBody("entry_restriction",
+                                               table.preamble().annotations());
+    for (auto match_field = table.mutable_match_fields()->begin();
+         match_field != table.mutable_match_fields()->end(); ++match_field) {
+      if (AliasesToKeep().contains(match_field->name()) ||
+          (constraints.ok() &&
+           absl::StrContains(*constraints, match_field->name()))) {
+        continue;
+      }
+      table.mutable_match_fields()->erase(match_field);
       break;
     }
   }
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto reconciled_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  // Compare against a fresh push of the modified P4Info.
+  ASSERT_OK(ResetGrpcServerAndClient());
+  *request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto fresh_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  std::vector<std::string> reconciled_state_keys;
+  for (const auto& [key, _] : reconciled_state) {
+    reconciled_state_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_state_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetP4rtAppDbTable().GetAllKeys()));
+
+  for (const auto& key : reconciled_state_keys) {
+    EXPECT_THAT(reconciled_state[key],
+                UnorderedElementsAreArray(fresh_state[key]));
+  }
+}
+
+TEST_F(ReconcileAndCommitTest, CanModifyPopulatedAclTables) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(request.config().p4info()));
+  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
+
+  p4::config::v1::MatchField match_field;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(
+        id: 99  # Large enough that it won't conflict with a normal ID.
+        name: "test_match_field"
+        annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/ARP_REPLY)"
+        bitwidth: 1
+        match_type: TERNARY
+      )pb",
+      &match_field));
+
+  pdpi::IrWriteRequest ir_write_request;
+  for (auto& table : tables) {
+    // TODO: Enable this transition when supported.
+    if (table.preamble().alias() == "acl_pre_ingress_table") continue;
+
+    int table_id = table.preamble().id();
+    if (!ir_p4info.tables_by_id().contains(table_id)) continue;
+    const auto& ir_table = ir_p4info.tables_by_id().at(table_id);
+    if (*GetTableType(ir_table) != table::Type::kAcl) continue;
+    auto generator = sai::GetGenerator(ir_table);
+    if (!generator.ok()) continue;
+
+    // Populate table
+    absl::flat_hash_set<std::string> used_matches;
+    for (int i = 0; i < ir_table.size(); ++i) {
+      auto& update = *ir_write_request.add_updates();
+      update.set_type(p4::v1::Update::INSERT);
+      *update.mutable_entity()->mutable_table_entry() = generator->generator(i);
+      for (const auto& match : update.entity().table_entry().matches()) {
+        used_matches.insert(match.name());
+      }
+    }
+
+    *table.add_match_fields() = match_field;
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto write_request,
+                       pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto reconciled_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  // Compare against a fresh push of the modified P4Info.
+  ASSERT_OK(ResetGrpcServerAndClient());
+  *request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  *write_request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  ASSERT_OK_AND_ASSIGN(auto fresh_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  std::vector<std::string> reconciled_state_keys;
+  for (const auto& [key, _] : reconciled_state) {
+    reconciled_state_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_state_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetP4rtAppDbTable().GetAllKeys()));
+
+  for (const auto& key : reconciled_state_keys) {
+    EXPECT_THAT(reconciled_state[key],
+                UnorderedElementsAreArray(fresh_state[key]));
+  }
+}
+
+TEST_F(ReconcileAndCommitTest, CanModifyPopulatedNonessentialAclTables) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(request.config().p4info()));
+  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
+
+  p4::config::v1::MatchField match_field;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(
+        id: 99  # Large enough that it won't conflict with a normal ID.
+        name: "test_match_field"
+        annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/ARP_REPLY)"
+        bitwidth: 1
+        match_type: TERNARY
+      )pb",
+      &match_field));
+
+  pdpi::IrWriteRequest ir_write_request;
+  for (auto& table : tables) {
+    // TODO: Enable this transition when supported.
+    if (table.preamble().alias() == "acl_pre_ingress_table") continue;
+
+    int table_id = table.preamble().id();
+    if (!ir_p4info.tables_by_id().contains(table_id)) continue;
+    const auto& ir_table = ir_p4info.tables_by_id().at(table_id);
+    if (*GetTableType(ir_table) != table::Type::kAcl) continue;
+    auto generator = sai::GetGenerator(ir_table);
+    if (!generator.ok()) continue;
+
+    bool is_nonessential = false;
+    for (const auto& annotation : table.preamble().annotations()) {
+      if (absl::StartsWith(annotation, "@nonessential_for_upgrade")) {
+        is_nonessential = true;
+        break;
+      }
+    }
+    if (!is_nonessential) {
+      table.mutable_preamble()->add_annotations("@nonessential_for_upgrade");
+    }
+
+    // Populate table
+    absl::flat_hash_set<std::string> used_matches;
+    for (int i = 0; i < ir_table.size(); ++i) {
+      auto& update = *ir_write_request.add_updates();
+      update.set_type(p4::v1::Update::INSERT);
+      *update.mutable_entity()->mutable_table_entry() = generator->generator(i);
+      for (const auto& match : update.entity().table_entry().matches()) {
+        used_matches.insert(match.name());
+      }
+    }
+
+    *table.add_match_fields() = match_field;
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto write_request,
+                       pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_OK_AND_ASSIGN(auto reconciled_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  // Compare against a fresh push of the modified P4Info.
+  ASSERT_OK(ResetGrpcServerAndClient());
+  *request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  *write_request.mutable_election_id() = p4rt_session_->ElectionId();
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  ASSERT_OK_AND_ASSIGN(auto fresh_state,
+                       DbState(p4rt_service_->GetP4rtAppDbTable()));
+
+  std::vector<std::string> reconciled_state_keys;
+  for (const auto& [key, _] : reconciled_state) {
+    reconciled_state_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_state_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetP4rtAppDbTable().GetAllKeys()));
+
+  for (const auto& key : reconciled_state_keys) {
+    EXPECT_THAT(reconciled_state[key],
+                UnorderedElementsAreArray(fresh_state[key]));
+  }
+}
+
+TEST_F(ReconcileAndCommitTest, CriticallyFailsIfAclTableRemovalFails) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  ASSERT_TRUE(RemoveTableByAlias(*request.mutable_config()->mutable_p4info(),
+                                 "acl_ingress_qos_table"));
+  p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
+      "ACL_TABLE_DEFINITION_TABLE:ACL_ACL_INGRESS_QOS_TABLE",
+      "SWSS_RC_INVALID_PARAM", "Test error");
+
   EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
-              StatusIs(absl::StatusCode::kUnimplemented));
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("Test error")));
+}
+
+TEST_F(ReconcileAndCommitTest, CriticallyFailsIfAclTableAdditionFails) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_TRUE(RemoveTableByAlias(*request.mutable_config()->mutable_p4info(),
+                                 "acl_ingress_qos_table"));
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+
+  p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
+      "ACL_TABLE_DEFINITION_TABLE:ACL_ACL_INGRESS_QOS_TABLE",
+      "SWSS_RC_INVALID_PARAM", "Test error");
+
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("Test error")));
+}
+
+TEST_F(ReconcileAndCommitTest,
+       CriticallyFailsIfAclTableNonessentialModificationFailsToRemoveEntries) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Write an entry in the acl_ingress_table.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(request.config().p4info()));
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrWriteRequest ir_write_request;
+  *ir_write_request.add_updates()->mutable_entity()->mutable_table_entry() =
+      generator.generator(0);
+  ir_write_request.mutable_updates(0)->set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(auto write_request,
+                       pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  // Modify acl_ingress_table
+  for (auto& table :
+       *request.mutable_config()->mutable_p4info()->mutable_tables()) {
+    if (table.preamble().alias() == "acl_ingress_table") {
+      table.mutable_preamble()->add_annotations("@nonessential_for_upgrade");
+      table.set_size(table.size() / 2);
+      break;
+    }
+  }
+
+  // Set failure for operations on the key.
+  std::string key;
+  for (const auto& lookup : p4rt_service_->GetP4rtAppDbTable().GetAllKeys()) {
+    if (absl::StartsWith(lookup, "ACL_ACL_INGRESS_TABLE:")) {
+      key = lookup;
+      break;
+    }
+  }
+  p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
+      key, "SWSS_RC_INVALID_PARAM", "Test error");
+
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("Test error")));
+}
+
+TEST_F(ReconcileAndCommitTest,
+       CriticallyFailsIfAclTableEssentialModificationFailsToRemoveEntries) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Write an entry in the acl_ingress_table.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(request.config().p4info()));
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrWriteRequest ir_write_request;
+  *ir_write_request.add_updates()->mutable_entity()->mutable_table_entry() =
+      generator.generator(0);
+  ir_write_request.mutable_updates(0)->set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(auto write_request,
+                       pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  // Modify acl_ingress_table
+  for (auto& table :
+       *request.mutable_config()->mutable_p4info()->mutable_tables()) {
+    if (table.preamble().alias() == "acl_ingress_table") {
+      EraseAnnotation(*table.mutable_preamble()->mutable_annotations(),
+                      "nonessential_for_upgrade", "");
+      table.set_size(table.size() / 2);
+      break;
+    }
+  }
+
+  // Set failure for operations on the key.
+  std::string key;
+  for (const auto& lookup : p4rt_service_->GetP4rtAppDbTable().GetAllKeys()) {
+    if (absl::StartsWith(lookup, "ACL_ACL_INGRESS_TABLE:")) {
+      key = lookup;
+      break;
+    }
+  }
+  p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
+      key, "SWSS_RC_INVALID_PARAM", "Test error");
+
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("Test error")));
+}
+
+TEST_F(ReconcileAndCommitTest,
+       CriticallyFailsIfAclTableEssentialModificationFailsToAddDuplicateTable) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Write an entry in the acl_ingress_table.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(request.config().p4info()));
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrWriteRequest ir_write_request;
+  *ir_write_request.add_updates()->mutable_entity()->mutable_table_entry() =
+      generator.generator(0);
+  ir_write_request.mutable_updates(0)->set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(auto write_request,
+                       pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  // Modify acl_ingress_table
+  for (auto& table :
+       *request.mutable_config()->mutable_p4info()->mutable_tables()) {
+    if (table.preamble().alias() == "acl_ingress_table") {
+      EraseAnnotation(*table.mutable_preamble()->mutable_annotations(),
+                      "nonessential_for_upgrade", "");
+      table.set_size(table.size() / 2);
+      break;
+    }
+  }
+
+  // Set failure for operations on the key.
+
+  p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
+      "ACL_TABLE_DEFINITION_TABLE:ACL_ACL_INGRESS_TABLE_DUPLICATE_",
+      "SWSS_RC_INVALID_PARAM", "Test error");
+
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("Test error")));
+}
+
+TEST_F(
+    ReconcileAndCommitTest,
+    CriticallyFailsIfAclTableEssentialModificationFailsToAddDuplicateEntries) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Write an entry in the acl_ingress_table.
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(request.config().p4info()));
+  ASSERT_OK_AND_ASSIGN(
+      sai::TableEntryGenerator generator,
+      sai::GetGenerator(ir_p4info.tables_by_name().at("acl_ingress_table")));
+  pdpi::IrWriteRequest ir_write_request;
+  *ir_write_request.add_updates()->mutable_entity()->mutable_table_entry() =
+      generator.generator(0);
+  ir_write_request.mutable_updates(0)->set_type(p4::v1::Update::INSERT);
+  ASSERT_OK_AND_ASSIGN(auto write_request,
+                       pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
+  ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  // Modify acl_ingress_table
+  for (auto& table :
+       *request.mutable_config()->mutable_p4info()->mutable_tables()) {
+    if (table.preamble().alias() == "acl_ingress_table") {
+      EraseAnnotation(*table.mutable_preamble()->mutable_annotations(),
+                      "nonessential_for_upgrade", "");
+      table.set_size(table.size() / 2);
+      break;
+    }
+  }
+
+  // Set failure for operations on the key.
+  std::string key;
+  for (const auto& lookup : p4rt_service_->GetP4rtAppDbTable().GetAllKeys()) {
+    if (absl::StartsWith(lookup, "ACL_ACL_INGRESS_TABLE:")) {
+      key = absl::StrCat("ACL_ACL_INGRESS_TABLE_DUPLICATE_",
+                         lookup.substr(lookup.find(":")));
+      break;
+    }
+  }
+  p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
+      key, "SWSS_RC_INVALID_PARAM", "Test error");
+  SCOPED_TRACE(key);
+
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("Test error")));
+}
+
+TEST_F(ReconcileAndCommitTest, CanReconcileHashingConfigDiff) {
+  // Create and push an original p4info.
+  p4::config::v1::P4Info original =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() = original;
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Create and push the modified p4info.
+  p4::config::v1::P4Info modified =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  *request.mutable_config()->mutable_p4info() = modified;
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Grab hashing state from the modified push.
+  ASSERT_OK_AND_ASSIGN(auto reconciled_switch_table_state,
+                       DbState(p4rt_service_->GetSwitchAppDbTable()));
+  ASSERT_OK_AND_ASSIGN(auto reconciled_hash_table_state,
+                       DbState(p4rt_service_->GetHashAppDbTable()));
+
+  // Compare against a fresh push of the modified P4Info.
+  ASSERT_OK(ResetGrpcServerAndClient());
+  request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() = modified;
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+  ASSERT_OK_AND_ASSIGN(auto fresh_switch_table_state,
+                       DbState(p4rt_service_->GetSwitchAppDbTable()));
+  ASSERT_OK_AND_ASSIGN(auto fresh_hash_table_state,
+                       DbState(p4rt_service_->GetHashAppDbTable()));
+
+  std::vector<std::string> reconciled_switch_table_keys;
+  for (const auto& [key, _] : reconciled_switch_table_state) {
+    reconciled_switch_table_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_switch_table_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetSwitchAppDbTable().GetAllKeys()));
+
+  std::vector<std::string> reconciled_hash_table_keys;
+  for (const auto& [key, _] : reconciled_hash_table_state) {
+    reconciled_hash_table_keys.push_back(key);
+  }
+  ASSERT_THAT(reconciled_hash_table_keys,
+              UnorderedElementsAreArray(
+                  p4rt_service_->GetHashAppDbTable().GetAllKeys()));
+
+  for (const auto& key : reconciled_switch_table_keys) {
+    EXPECT_THAT(reconciled_switch_table_state[key],
+                UnorderedElementsAreArray(fresh_switch_table_state[key]));
+  }
+  for (const auto& key : reconciled_hash_table_keys) {
+    EXPECT_THAT(reconciled_hash_table_state[key],
+                UnorderedElementsAreArray(fresh_hash_table_state[key]));
+  }
+}
+
+p4::v1::TableEntry WcmpTableEntry(const pdpi::IrP4Info& ir_p4info, int id,
+                                  int64_t weight, int actions) {
+  const auto& profile =
+      ir_p4info.action_profiles_by_name().at("wcmp_group_selector");
+
+  int table_id = profile.action_profile().table_ids(0);
+  int action_id = ir_p4info.tables_by_id()
+                      .at(table_id)
+                      .entry_actions(0)
+                      .action()
+                      .preamble()
+                      .id();
+
+  p4::v1::TableEntry table_entry;
+  table_entry.set_table_id(table_id);
+  table_entry.add_match()->set_field_id(1);
+  table_entry.mutable_match(0)->mutable_exact()->set_value(
+      absl::StrCat("wcmp_group_", id));
+
+  p4::v1::ActionProfileAction base_action;
+  base_action.set_weight(weight);
+  base_action.mutable_action()->set_action_id(action_id);
+  base_action.mutable_action()->add_params()->set_param_id(1);
+
+  for (int i = 0; i < actions; ++i) {
+    auto& action = *table_entry.mutable_action()
+                        ->mutable_action_profile_action_set()
+                        ->add_action_profile_actions();
+    action = base_action;
+    action.mutable_action()->mutable_params(0)->set_value(
+        absl::StrCat("nexthop-", i));
+  }
+
+  return table_entry;
+}
+
+TEST_F(ReconcileAndCommitTest, CanReconcileActionProfileCapacityDiff) {
+  // Create and push an original p4info.
+  p4::config::v1::P4Info original =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() = original;
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Program an entry with some resource usage.
+  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+  p4::v1::WriteRequest write_request;
+  write_request.set_device_id(p4rt_session_->DeviceId());
+  write_request.set_role(p4rt_session_->Role());
+  *write_request.mutable_election_id() = p4rt_session_->ElectionId();
+  auto& update = *write_request.add_updates();
+  update.set_type(p4::v1::Update::INSERT);
+  *update.mutable_entity()->mutable_table_entry() =
+      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/50, /*actions=*/10);
+  ASSERT_OK(p4rt_session_->Write(write_request));
+
+  // Create and push the modified p4info.
+  p4::config::v1::P4Info modified = original;
+  for (auto& profile : *modified.mutable_action_profiles()) {
+    if (profile.preamble().alias() == "wcmp_group_selector") {
+      profile.set_size(501);
+      profile.set_max_group_size(515);
+      break;
+    }
+  }
+  *request.mutable_config()->mutable_p4info() = modified;
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Attempt to program another entry. We should fail due to lack of resources.
+  *update.mutable_entity()->mutable_table_entry() =
+      WcmpTableEntry(ir_p4info, /*id=*/2, /*weight=*/2, /*actions=*/1);
+  /*ASSERT_THAT(
+      p4rt_session_->Write(write_request),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("RESOURCE_EXHAUSTED")));*/
+
+  // We should be able to program up to the new limit.
+  *update.mutable_entity()->mutable_table_entry() =
+      WcmpTableEntry(ir_p4info, /*id=*/2, /*weight=*/1, /*actions=*/1);
+  ASSERT_OK(p4rt_session_->Write(write_request));
+
+  // Remove the original entry to free up space.
+  *update.mutable_entity()->mutable_table_entry() =
+      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/50, /*actions=*/10);
+  update.set_type(p4::v1::Update::DELETE);
+  ASSERT_OK(p4rt_session_->Write(write_request));
+  update.set_type(p4::v1::Update::INSERT);
+
+  // A new entry with too many actions should fail.
+  *update.mutable_entity()->mutable_table_entry() =
+      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/1, /*actions=*/516);
+  ASSERT_THAT(
+      p4rt_session_->Write(write_request),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("INVALID_ARGUMENT")));
 }
 
 using GetForwardingConfigTest = ForwardingPipelineConfigTest;

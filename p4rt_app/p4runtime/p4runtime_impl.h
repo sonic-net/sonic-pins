@@ -26,6 +26,7 @@
 
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -44,9 +45,11 @@
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
+#include "p4rt_app/p4runtime/p4info_reconcile.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
@@ -222,6 +225,17 @@ public:
   grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // Rebuild software state after WarmBoot with APP DB
+  // entries and cached p4info file.
+  absl::Status RebuildSwStateAfterWarmboot(
+      const std::vector<std::pair<std::string, std::string>>& port_ids,
+      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+      const std::vector<std::pair<std::string, std::string>>&
+          front_panel_queue_ids,
+      const std::optional<uint64_t>& device_id,
+      const std::vector<std::string>& ports)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
 protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
@@ -280,6 +294,34 @@ private:
   // tables. These configurations (e.g. ACLs, hashing, etc.) are needed before
   // we can start accepting write requests.
   absl::Status ConfigureAppDbTables(const pdpi::IrP4Info &ir_p4info)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  // Transitions the hash settings from the current config to the new config.
+  grpc::Status TransitionHashConfig(
+      const P4InfoReconcileTransition& transition,
+      const absl::btree_set<sonic::HashPacketFieldConfig>&
+          hash_packet_field_configs,
+      const sonic::HashParamConfigs& hash_param_configs)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  // Transitions the ACL tables from the current config to the new config.
+  absl::Status RemoveAclTableFromAppDb(
+      absl::string_view table_name, const std::vector<p4::v1::Entity>& entities)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  // Update AppDB by applying the provided operation for each entity.
+  absl::Status UpdateAppDbEntities(const std::vector<p4::v1::Entity>& entities,
+                                   const pdpi::IrP4Info& ir_p4info,
+                                   p4::v1::Update::Type update_type)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  absl::Status ReplaceTableInAppDb(absl::string_view table_name,
+                                   const std::vector<p4::v1::Entity>& entities,
+                                   const pdpi::IrP4Info& new_ir_p4info)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  absl::Status TransitionAcls(const P4InfoReconcileTransition& transition,
+                              const pdpi::IrP4Info& new_ir_p4info)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Defines the callback lambda function to be invoked for receive packets
