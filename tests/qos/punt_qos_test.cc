@@ -236,6 +236,7 @@ struct PacketReceiveInfo {
 };
 
 TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
+  bool is_rate_mode_in_packets = GetParam().is_rate_mode_in_packets;
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
   const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
@@ -257,7 +258,8 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto cpu_queues, ExtractQueueInfoViaGnmiConfig(
-                                            /*port=*/"CPU", sut_gnmi_config_));
+                                            /*port=*/"CPU", sut_gnmi_config_,
+                                            is_rate_mode_in_packets));
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(const std::string kSutEgressPortP4rtId,
