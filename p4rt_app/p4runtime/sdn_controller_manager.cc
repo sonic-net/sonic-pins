@@ -16,12 +16,12 @@
 #include <cstdint>
 #include <optional>
 
+#include "absl/log/log.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
-#include "glog/logging.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -538,7 +538,7 @@ absl::Status SdnControllerManager::SendStreamMessageToPrimary(
   }
 
   if (!found_at_least_one_primary) {
-    LOG_EVERY_T(WARNING, 30)
+    LOG_EVERY_N_SEC(WARNING, 30)
         << "Cannot send stream message response because there is no "
         << "active primary connection: " << response.ShortDebugString();
     return gutil::FailedPreconditionErrorBuilder()

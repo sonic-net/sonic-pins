@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <chrono>  // NOLINT
+#include <cstdint>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -20,6 +22,9 @@
 #include <thread>  // NOLINT
 
 #include "absl/flags/parse.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log.h"
+#include "absl/flags/flag.h"
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -28,8 +33,8 @@
 #include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
+#include "grpc/grpc_crl_provider.h"
+#include "grpcpp/security/audit_logging.h"
 #include "grpcpp/security/authorization_policy_provider.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/security/tls_certificate_provider.h"
@@ -72,50 +77,53 @@ using ::grpc::ServerCredentials;
 // By default the P4RT App will run on TCP port 9559. Which is the IANA port
 // reserved for P4Runtime.
 // https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=9559
-DEFINE_int32(p4rt_grpc_port, 9559, "gRPC port for the P4Runtime Server");
+ABSL_FLAG(int32_t, p4rt_grpc_port, 9559, "gRPC port for the P4Runtime Server");
 
 // Optionally, the P4RT App can be run on a unix socket, but the connection will
 // be insecure.
-DEFINE_string(
-    p4rt_unix_socket, "",
+ABSL_FLAG(
+    std::string, p4rt_unix_socket, "",
     "Unix socket file for internal insecure connections. Disabled if empty.");
 
 // Runtime flags to configure any server credentials for secure conections.
-DEFINE_bool(use_insecure_server_credentials, false, "Insecure gRPC.");
-DEFINE_string(ca_certificate_file, "",
-              "CA root certificate file, in PEM format. If set, p4rt will "
-              "require and verify client certificate.");
-DEFINE_string(server_certificate_file, "",
-              "Server certificate file, in PEM format.");
-DEFINE_string(server_key_file, "", "Server key file, in PEM format.");
-DEFINE_bool(
-    authz_policy_enabled, false,
+ABSL_FLAG(bool, use_insecure_server_credentials, false, "Insecure gRPC.");
+ABSL_FLAG(std::string, ca_certificate_file, "",
+          "CA root certificate file, in PEM format. If set, p4rt will "
+          "require and verify client certificate.");
+ABSL_FLAG(std::string, server_certificate_file, "",
+          "Server certificate file, in PEM format.");
+ABSL_FLAG(std::string, server_key_file, "", "Server key file, in PEM format.");
+ABSL_FLAG(
+    bool, authz_policy_enabled, false,
     "Enable authz policy. Only take effect if use_insecure_server_credentials "
     "is false and mTLS is configured.");
-DEFINE_string(authorization_policy_file, "/keys/authorization_policy.json",
-              "File name of the JSON authorization policy file.");
-DEFINE_string(cert_crl_dir, "",
-              "Path to the CRL directory. CRL is disabled when empty.");
+ABSL_FLAG(std::string, authorization_policy_file,
+          "/keys/authorization_policy.json",
+          "File name of the JSON authorization policy file.");
+ABSL_FLAG(std::string, cert_crl_dir, "",
+          "Path to the CRL directory. CRL is disabled when empty.");
 
 // P4Runtime options:
-DEFINE_bool(use_genetlink, false,
-            "Enable Generic Netlink model for Packet Receive");
-DEFINE_bool(use_port_ids, false,
-            "Controller will use Port ID values configured over gNMI instead "
-            "of the SONiC interface names.");
-DEFINE_string(save_forwarding_config_file,
-              "/etc/sonic/p4rt_forwarding_config.pb.txt",
-              "Saves the forwarding pipeline config to a file so it can be "
-              "reloaded after reboot.");
+ABSL_FLAG(bool, use_genetlink, false,
+          "Enable Generic Netlink model for Packet Receive");
+ABSL_FLAG(bool, use_port_ids, false,
+          "Controller will use Port ID values configured over gNMI instead "
+          "of the SONiC interface names.");
+ABSL_FLAG(std::string, save_forwarding_config_file,
+          "/etc/sonic/p4rt_forwarding_config.pb.txt",
+          "Saves the forwarding pipeline config to a file so it can be "
+          "reloaded after reboot.");
 
 absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
   constexpr int kCertRefreshIntervalSec = 5;
+  constexpr int kCRLRefreshIntervalSec = 60;
   constexpr char kRootCertName[] = "root_cert";
   constexpr char kIdentityCertName[] = "switch_cert";
 
   std::shared_ptr<ServerCredentials> creds;
-  if (FLAGS_use_insecure_server_credentials || FLAGS_server_key_file.empty() ||
-      FLAGS_server_certificate_file.empty()) {
+  if (absl::GetFlag(FLAGS_use_insecure_server_credentials) ||
+      absl::GetFlag(FLAGS_server_key_file).empty() ||
+      absl::GetFlag(FLAGS_server_certificate_file).empty()) {
     creds = grpc::InsecureServerCredentials();
     if (creds == nullptr) {
       return gutil::InternalErrorBuilder()
@@ -123,10 +131,11 @@ absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
     }
   } else {
     // If CA certificate is not provided, client certificate is not required.
-    if (FLAGS_ca_certificate_file.empty()) {
+    if (absl::GetFlag(FLAGS_ca_certificate_file).empty()) {
       auto certificate_provider =
           std::make_shared<grpc::experimental::FileWatcherCertificateProvider>(
-              FLAGS_server_key_file, FLAGS_server_certificate_file,
+              absl::GetFlag(FLAGS_server_key_file),
+              absl::GetFlag(FLAGS_server_certificate_file),
               kCertRefreshIntervalSec);
       grpc::experimental::TlsServerCredentialsOptions opts(
           certificate_provider);
@@ -137,8 +146,10 @@ absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
     } else {
       auto certificate_provider =
           std::make_shared<grpc::experimental::FileWatcherCertificateProvider>(
-              FLAGS_server_key_file, FLAGS_server_certificate_file,
-              FLAGS_ca_certificate_file, kCertRefreshIntervalSec);
+              absl::GetFlag(FLAGS_server_key_file),
+              absl::GetFlag(FLAGS_server_certificate_file),
+              absl::GetFlag(FLAGS_ca_certificate_file),
+              kCertRefreshIntervalSec);
       grpc::experimental::TlsServerCredentialsOptions opts(
           certificate_provider);
       opts.watch_root_certs();
@@ -149,8 +160,20 @@ absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
           GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
 
       // Set CRL Directory if it's not empty
-      if (!FLAGS_cert_crl_dir.empty()) {
-        opts.set_crl_directory(FLAGS_cert_crl_dir);
+      if (!absl::GetFlag(FLAGS_cert_crl_dir).empty()) {
+        absl::StatusOr<std::shared_ptr<grpc_core::experimental::CrlProvider>>
+            provider =
+                grpc_core::experimental::CreateDirectoryReloaderCrlProvider(
+                    absl::GetFlag(FLAGS_cert_crl_dir),
+                    std::chrono::seconds(kCRLRefreshIntervalSec),
+                    [](absl::Status status) {
+                      LOG(ERROR) << "Failed to reload CRL: " << status;
+                    });
+        if (!provider.ok()) {
+          return gutil::InternalErrorBuilder()
+                 << "fail to create CRL provider: " << provider.status();
+        }
+        opts.set_crl_provider(*provider);
         LOG(INFO) << "CRL directory has been set";
       }
 
@@ -169,7 +192,7 @@ CreateAuthzPolicyProvider() {
   grpc::Status status;
   auto provider =
       grpc::experimental::FileWatcherAuthorizationPolicyProvider::Create(
-          FLAGS_authorization_policy_file,
+          absl::GetFlag(FLAGS_authorization_policy_file),
           /*refresh_interval_sec=*/5, &status);
   if (!status.ok()) {
     LOG(ERROR) << "Failed to create authorization provider: "
@@ -404,12 +427,11 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
 }  // namespace p4rt_app
 
 int main(int argc, char** argv) {
-  FLAGS_logtostderr = 1;
-  FLAGS_logbuflevel = -1;
   gutil::SyslogSink syslog_sink("p4rt");
-  google::InitGoogleLogging(argv[0]);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
   
+  absl::InitializeLog();
+  absl::ParseCommandLine(argc, argv);
+
   /*TODO(PINS): Get the P4RT component helper which can be used to put the switch into
   // critical state.
   swss::ComponentStateHelperInterface& component_state_singleton =
@@ -456,11 +478,12 @@ int main(int argc, char** argv) {
 
   // Configure the P4RT options.
   p4rt_app::P4RuntimeImplOptions p4rt_options{
-      .use_genetlink = FLAGS_use_genetlink,
-      .translate_port_ids = FLAGS_use_port_ids,
+      .use_genetlink = absl::GetFlag(FLAGS_use_genetlink),
+      .translate_port_ids = absl::GetFlag(FLAGS_use_port_ids),
   };
 
-  std::string save_forwarding_config_file = FLAGS_save_forwarding_config_file;
+  std::string save_forwarding_config_file =
+      absl::GetFlag(FLAGS_save_forwarding_config_file);
   if (!save_forwarding_config_file.empty()) {
     p4rt_options.forwarding_config_full_path = save_forwarding_config_file;
   }
@@ -488,7 +511,7 @@ int main(int argc, char** argv) {
 
   // Create a server to listen on the unix socket port.
   std::thread internal_server_thread;
-  std::string unix_socket = FLAGS_p4rt_unix_socket;
+  std::string unix_socket = absl::GetFlag(FLAGS_p4rt_unix_socket);
   if (!unix_socket.empty()) {
     internal_server_thread = std::thread(
         [unix_socket](p4rt_app::P4RuntimeImpl* p4rt_server) {
@@ -550,11 +573,13 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  std::string server_addr = absl::StrCat("[::]:", FLAGS_p4rt_grpc_port);
+  std::string server_addr =
+      absl::StrCat("[::]:", absl::GetFlag(FLAGS_p4rt_grpc_port));
   builder.AddListeningPort(server_addr, *server_cred);
 
   // Set authorization policy.
-  if (FLAGS_authz_policy_enabled && !FLAGS_ca_certificate_file.empty()) {
+  if (absl::GetFlag(FLAGS_authz_policy_enabled) &&
+      !absl::GetFlag(FLAGS_ca_certificate_file).empty()) {
     auto provider = CreateAuthzPolicyProvider();
     if (provider == nullptr) {
       LOG(ERROR) << "Error in creating authz policy provider";

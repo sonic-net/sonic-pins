@@ -16,10 +16,10 @@
 
 #include <iterator>
 #include <list>
-#include <nlohmann/json.hpp>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
@@ -29,8 +29,8 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/rediscommand.h"

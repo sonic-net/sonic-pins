@@ -11,14 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <cstdint>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_split.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "grpcpp/grpcpp.h"
 #include "gutil/gutil/io.h"
@@ -28,13 +33,14 @@
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
-DEFINE_bool(push_config, false, "Push P4 Info config file");
-DEFINE_bool(cleanup, false, "Clean the entries that were programmed");
-DEFINE_bool(cleanall, false, "Clean all the entries that exist in the switch");
-DEFINE_string(
-    input_file, "",
+ABSL_FLAG(bool, push_config, false, "Push P4 Info config file");
+ABSL_FLAG(bool, cleanup, false, "Clean the entries that were programmed");
+ABSL_FLAG(bool, cleanall, false,
+          "Clean all the entries that exist in the switch");
+ABSL_FLAG(
+    std::string, input_file, "",
     "Input file in SAI PD format(sai::Update proto), see go/p4rt-sample-entry");
-DEFINE_uint64(p4rt_device_id, 1, "P4RT device ID");
+ABSL_FLAG(uint64_t, p4rt_device_id, 1, "P4RT device ID");
 
 namespace {
 
@@ -126,14 +132,14 @@ class P4rtTableWriter {
 };
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  absl::InitializeLog();
+  absl::ParseCommandLine(argc, argv);
 
   // Create connection to P4RT server.
   auto stub = pdpi::CreateP4RuntimeStub(
       "unix:/sock/p4rt.sock", grpc::experimental::LocalCredentials(UDS));
-  auto p4rt_session_or =
-      pdpi::P4RuntimeSession::Create(std::move(stub), FLAGS_p4rt_device_id);
+  auto p4rt_session_or = pdpi::P4RuntimeSession::Create(
+      std::move(stub), absl::GetFlag(FLAGS_p4rt_device_id));
   if (!p4rt_session_or.ok()) {
     LOG(ERROR) << "Failed to create P4Runtime session, error : "
                << p4rt_session_or.status();
@@ -148,7 +154,7 @@ int main(int argc, char** argv) {
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
 
   // Push P4 Info Config file if specified.
-  if (FLAGS_push_config) {
+  if (absl::GetFlag(FLAGS_push_config)) {
     auto push_p4info_status = pdpi::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
@@ -160,7 +166,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  auto pd_entries_or = ConvertToPdEntries(FLAGS_input_file);
+  auto pd_entries_or = ConvertToPdEntries(absl::GetFlag(FLAGS_input_file));
   if (!pd_entries_or.ok()) {
     LOG(ERROR) << "Failed to convert input entries to SAI PD, error : "
                << pd_entries_or.status();
@@ -168,8 +174,8 @@ int main(int argc, char** argv) {
   }
   std::vector<sai::Update> pd_entries = std::move(*pd_entries_or);
 
-  P4rtTableWriter writer(std::move(p4rt_session), FLAGS_cleanup,
-                         FLAGS_cleanall);
+  P4rtTableWriter writer(std::move(p4rt_session), absl::GetFlag(FLAGS_cleanup),
+                         absl::GetFlag(FLAGS_cleanall));
   absl::Status status;
   // Convert to PI and program the entries on the switch.
   for (const auto& pd_entry : pd_entries) {

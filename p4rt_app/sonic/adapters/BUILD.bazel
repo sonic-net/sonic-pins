@@ -21,7 +21,7 @@ cc_library(
     srcs = ["consumer_notifier_adapter.cc"],
     hdrs = ["consumer_notifier_adapter.h"],
     deps = [
-        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -45,7 +45,7 @@ cc_library(
     deps = [
         ":consumer_notifier_adapter",
         ":fake_sonic_db_table",
-        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/log",
     ],
 )
 
@@ -84,7 +84,7 @@ cc_library(
     srcs = ["producer_state_table_adapter.cc"],
     hdrs = ["producer_state_table_adapter.h"],
     deps = [
-        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -108,7 +108,7 @@ cc_library(
     deps = [
         ":fake_sonic_db_table",
         ":producer_state_table_adapter",
-        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -158,7 +158,7 @@ cc_library(
     deps = [
         ":fake_sonic_db_table",
         ":table_adapter",
-        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@sonic_swss_common//:libswsscommon",
     ],
@@ -181,9 +181,9 @@ cc_library(
     srcs = ["fake_sonic_db_table.cc"],
     hdrs = ["fake_sonic_db_table.h"],
     deps = [
-        "@com_github_google_glog//:glog",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -219,7 +219,7 @@ cc_library(
     srcs = ["subscriber_state_table_adapter.cc"],
     hdrs = ["subscriber_state_table_adapter.h"],
     deps = [
-        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )

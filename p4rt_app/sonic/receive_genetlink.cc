@@ -19,7 +19,7 @@
 #include <netlink/genl/family.h>
 #include <netlink/genl/genl.h>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "gutil/gutil/status.h"
 
 namespace packet_metadata {
@@ -204,7 +204,7 @@ absl::Status ProcessReceiveMessage(struct nl_msg* msg, void* arg) {
 int ProcessReceiveMessageCallback(struct nl_msg* msg, void* arg) {
   auto status = ProcessReceiveMessage(msg, arg);
   if (!status.ok()) {
-    LOG_EVERY_T(WARNING, 5)
+    LOG_EVERY_N_SEC(WARNING, 5)
         << "Failed to process receive packet: " << status.ToString();
   }
   // Always return OK to move on to the next packet.
