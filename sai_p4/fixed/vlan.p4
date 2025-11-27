@@ -198,7 +198,6 @@ control egress_vlan_checks(inout headers_t headers,
     // Disallow creating reserved VLANs to rule out vendor specific behavior.
     vlan_id != 0 && vlan_id != 4095;
   ")
-  @unsupported
   table vlan_table {
     key = {
       local_metadata.vlan_id : exact
@@ -212,8 +211,6 @@ control egress_vlan_checks(inout headers_t headers,
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(VLAN_MEMBERSHIP_TABLE_ID)
-  // TODO: Remove @unsupported once the table is supported in SWSS.
-  @unsupported
   table vlan_membership_table {
     key = {
       local_metadata.vlan_id : exact

@@ -96,13 +96,18 @@ struct MulticastReplica {
   std::string port;
   int instance = 0;
   std::string src_mac;
+  int32_t vlan;
+  bool is_ip_mcast;
   const std::string key;
 
   MulticastReplica() = default;
-  MulticastReplica(std::string port, int instance, std::string src_mac)
+  MulticastReplica(std::string port, int instance, std::string src_mac,
+                   uint32_t vlan, bool is_ip_mcast)
       : port(std::move(port)),
         instance(instance),
         src_mac(std::move(src_mac)),
+        vlan(vlan),
+        is_ip_mcast(is_ip_mcast),
         key(absl::StrCat(this->port, "_", this->instance)) {}
 };
 
@@ -114,23 +119,30 @@ absl::StatusOr<p4::v1::Update>
 Ipv6TableUpdate(const pdpi::IrP4Info &ir_p4_info, p4::v1::Update::Type type,
                 const IpTableOptions &ip_options);
 
-absl::StatusOr<p4::v1::Update> MulticastGroupUpdate(
+absl::StatusOr<p4::v1::Update> VlanTableUpdate(const pdpi::IrP4Info& ir_p4_info,
+                                               p4::v1::Update::Type type,
+                                               int32_t vlan);
+
+absl::StatusOr<p4::v1::Update> VlanMemberTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
-    uint32_t group_id, absl::Span<MulticastReplica> replicas);
+    int32_t port_id, int32_t vlan, bool tag);
 
 absl::StatusOr<p4::v1::Update> MulticastRouterInterfaceTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
     const MulticastReplica& replica);
 
 absl::StatusOr<p4::v1::Update>
-MulticastRouterInterfaceTableUpdate(const pdpi::IrP4Info &ir_p4_info,
-                                    p4::v1::Update::Type type,
-                                    const MulticastReplica &replica);
-
-absl::StatusOr<p4::v1::Update>
 MulticastGroupUpdate(const pdpi::IrP4Info &ir_p4_info,
                      p4::v1::Update::Type type, uint32_t group_id,
                      absl::Span<MulticastReplica> replicas);
+
+absl::StatusOr<p4::v1::Update> Ipv4MulticastRouteUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    const std::string& vrf_id, const std::string& addr, int32_t group_id);
+
+absl::StatusOr<p4::v1::Update> Ipv6MulticastRouteUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    const std::string& vrf_id, const std::string& addr, int32_t group_id);
 
 // The L3 admit table can optionally admit packets based on the ingress port.
 struct L3AdmitOptions {
