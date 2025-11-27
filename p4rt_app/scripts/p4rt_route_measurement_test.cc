@@ -24,6 +24,10 @@
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/flags/flag.h"
+#include "absl/flags/parse.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log.h"
 #include "absl/numeric/int128.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
@@ -39,8 +43,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
@@ -68,19 +70,19 @@
 //
 // NOTE: if not using a socket then the server_address should be formatted as
 //       <IP_address>:9559.
-DEFINE_string(server_address, "unix:/sock/p4rt.sock",
-              "The address of the server to connect to");
+ABSL_FLAG(std::string, server_address, "unix:/sock/p4rt.sock",
+          "The address of the server to connect to");
 
-DEFINE_bool(insecure, true, "Use insecure connection");
-DEFINE_string(ca_cert, "/keys/ca_cert.lnk",
-              "CA bundle file. Used when insecure is false");
-DEFINE_string(cert, "/keys/pins_test_user.cert",
-              "Cert file. Used when insecure is false");
-DEFINE_string(key, "/keys/pins_test_user.key",
-              "Key file. Used when insecure is false");
-DEFINE_string(host_name, "",
-              "Host name of the switch for validating the switch cert. Used "
-              "when insecure is false");
+ABSL_FLAG(bool, insecure, true, "Use insecure connection");
+ABSL_FLAG(std::string, ca_cert, "/keys/ca_cert.lnk",
+          "CA bundle file. Used when insecure is false");
+ABSL_FLAG(std::string, cert, "/keys/pins_test_user.cert",
+          "Cert file. Used when insecure is false");
+ABSL_FLAG(std::string, key, "/keys/pins_test_user.key",
+          "Key file. Used when insecure is false");
+ABSL_FLAG(std::string, host_name, "",
+          "Host name of the switch for validating the switch cert. Used "
+          "when insecure is false");
 
 // P4RT connections require a device and election ID to program flows. By
 // default we use a time based election ID, and it shouldn't need to be set
@@ -89,60 +91,73 @@ DEFINE_string(host_name, "",
 //
 // Device ID can generally be found in redis using:
 //   $ redis-cli -n 4 hget "NODE_CFG|integrated_circuit0" "node-id"
-DEFINE_int64(election_id, -1, "Election id to be used");
-DEFINE_uint64(p4rt_device_id, 1, "P4RT device ID");
+ABSL_FLAG(int64_t, election_id, -1, "Election id to be used");
+ABSL_FLAG(uint64_t, p4rt_device_id, 1, "P4RT device ID");
 
 // The test will create and install a random set of route-related or
 // multicast-related entries (i.e. RIFs, VRFs, NextHops, Multicast groups
 // and/or multicast group members).  The time needed to install dependent
 // elements is not included in the reported latency.
-DEFINE_string(port_ids, "1", "A comma separated list of usable ports.");
-DEFINE_int32(vrfs, 64, "The number of VRFs to install.");
-DEFINE_int32(rifs, 64, "The number of router interfaces to install.");
-DEFINE_int32(next_hops, 512, "The number of next-hop entries to install.");
-DEFINE_int32(encaps, 512, "The number of tunnel encap entries to install.");
-DEFINE_int32(multicast_members_per_group, 8,
-             "The number of multicast group members per group.");
+ABSL_FLAG(std::string, port_ids, "1",
+          "A comma separated list of usable ports.");
+ABSL_FLAG(int32_t, vrfs, 64, "The number of VRFs to install.");
+ABSL_FLAG(int32_t, rifs, 64, "The number of router interfaces to install.");
+ABSL_FLAG(int32_t, next_hops, 512,
+          "The number of next-hop entries to install.");
+ABSL_FLAG(int32_t, encaps, 512,
+          "The number of tunnel encap entries to install.");
+ABSL_FLAG(int32_t, multicast_members_per_group, 8,
+          "The number of multicast group members per group.");
 
 // A run will automatically generate `number_batches` write requests each with
 // `batch_size` updates (i.e. number_batches x batch_size total flows). Runtime
 // only includes the P4RT Write() time, and not the generation.
-DEFINE_int32(number_batches, 10,
-             "Total number of gRPC write calls made to the switch.");
-DEFINE_int32(batch_size, 100,
-             "Total number of table entries in each gRPC write.");
-DEFINE_bool(cleanup, true, "Delete all programmed flows at end of test.");
+ABSL_FLAG(int32_t, number_batches, 10,
+          "Total number of gRPC write calls made to the switch.");
+ABSL_FLAG(int32_t, batch_size, 100,
+          "Total number of table entries in each gRPC write.");
+ABSL_FLAG(bool, cleanup, true, "Delete all programmed flows at end of test.");
 
 // Users should select the specific test they want to run.  Because the tested
 // tables don't overlap users can run multiple, and they will happen
 // sequentially. Users should be careful when running multiple tests since the
 // batch sizes are reused (i.e. 10k IPv4 flows may be reasonable, but 10k WCMP
 // groups may not be).
-DEFINE_bool(run_ipv4, false, "Run IPv4 route latency tests.");
-DEFINE_bool(run_ipv6, false, "Run IPv6 route latency tests.");
-DEFINE_bool(run_wcmp, false, "Run IPv4 route latency tests.");
-DEFINE_bool(run_encap, false, "Run Tunnel encap latency tests.");
-DEFINE_bool(run_ip_multicast, false, "Run IP multicast latency tests.");
-DEFINE_bool(run_l2_multicast, false, "Run L2 multicast latency tests.");
+ABSL_FLAG(bool, run_ipv4, false, "Run IPv4 route latency tests.");
+ABSL_FLAG(bool, run_ipv6, false, "Run IPv6 route latency tests.");
+ABSL_FLAG(bool, run_wcmp, false, "Run IPv4 route latency tests.");
+ABSL_FLAG(bool, run_encap, false, "Run Tunnel encap latency tests.");
+ABSL_FLAG(bool, run_vlan, false, "Run vlan latency tests.");
+ABSL_FLAG(bool, run_vlan_member, false, "Run vlan member latency tests.");
+ABSL_FLAG(bool, run_ip_mcast_ritf, false,
+          "Run IP multicast router interface latency tests.");
+ABSL_FLAG(bool, run_l2_mcast_ritf, false,
+          "Run L2 multicast router interface latency tests.");
+ABSL_FLAG(bool, run_ip_multicast, false, "Run IP multicast latency tests.");
+ABSL_FLAG(bool, run_l2_multicast, false, "Run L2 multicast latency tests.");
+ABSL_FLAG(bool, run_ipv4_mcast_routes, false,
+          "Run IPv4 multicast route latency tests.");
+ABSL_FLAG(bool, run_ipv6_mcast_routes, false,
+          "Run IPv6 multicast route latency tests.");
 
 // Extra configs that affect WCMP batch sizes and flows.
-DEFINE_int32(wcmp_members_per_group, 2,
-             "Number of members in each WCMP group.");
-DEFINE_int32(wcmp_total_group_weight, 2,
-             "Total accumulated weight for all members in a WCMP group.");
-DEFINE_bool(wcmp_update_weights_when_modifying, true,
-            "Change weight values when modifying WCMP groups.");
-DEFINE_bool(wcmp_update_nexthops_when_modifying, false,
-            "Change nexthop values when modifying WCMP groups.");
-DEFINE_bool(wcmp_increasing_weights, false,
-            "Force the weight of a member to be >= the weight of the member "
-            "that came before it.");
-DEFINE_bool(wcmp_set_watch_port, false,
-            "Use the port from the next hop as the WCMP watch port.");
+ABSL_FLAG(int32_t, wcmp_members_per_group, 2,
+          "Number of members in each WCMP group.");
+ABSL_FLAG(int32_t, wcmp_total_group_weight, 2,
+          "Total accumulated weight for all members in a WCMP group.");
+ABSL_FLAG(bool, wcmp_update_weights_when_modifying, true,
+          "Change weight values when modifying WCMP groups.");
+ABSL_FLAG(bool, wcmp_update_nexthops_when_modifying, false,
+          "Change nexthop values when modifying WCMP groups.");
+ABSL_FLAG(bool, wcmp_increasing_weights, false,
+          "Force the weight of a member to be >= the weight of the member "
+          "that came before it.");
+ABSL_FLAG(bool, wcmp_set_watch_port, false,
+          "Use the port from the next hop as the WCMP watch port.");
 
 // Pass a comma separated list of digits to reproduce a specific test.
-DEFINE_string(seed_seq, "",
-              "Force a specific seed_seq value to repeat a test.");
+ABSL_FLAG(std::string, seed_seq, "",
+          "Force a specific seed_seq value to repeat a test.");
 
 namespace p4rt_app {
 namespace {
@@ -150,10 +165,13 @@ namespace {
 // To make runs reproducible we intentionally use a absl::btree_map.
 using P4RTUpdateByNameMap = absl::btree_map<std::string, p4::v1::Update>;
 
+constexpr int kMaxVlans = 512;
+constexpr int kMaxIpMulticastGroups = 500;
+
 // Uses the seed sequence passed by the `--seed_seq` flag. If no sequence is set
 // then it will choose a random one.
 std::seed_seq GetSeedSeq() {
-  std::string forced_seq = FLAGS_seed_seq;
+  std::string forced_seq = absl::GetFlag(FLAGS_seed_seq);
   std::vector<int> seq;
   if (forced_seq.empty()) {
     absl::BitGen bitgen;
@@ -237,24 +255,25 @@ std::string ReadFileOrEmpty(const std::string& path) {
 }
 
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> OpenP4RuntimeSession() {
-  std::string server_address = FLAGS_server_address;
-  uint64_t device_id = FLAGS_p4rt_device_id;
-  int64_t election_id_high = FLAGS_election_id == -1
+  std::string server_address = absl::GetFlag(FLAGS_server_address);
+  uint64_t device_id = absl::GetFlag(FLAGS_p4rt_device_id);
+  int64_t election_id_high = absl::GetFlag(FLAGS_election_id) == -1
                                  ? absl::ToUnixSeconds(absl::Now())
-                                 : FLAGS_election_id;
+                                 : absl::GetFlag(FLAGS_election_id);
 
   LOG(INFO) << "Opening P4RT connection to: " << server_address;
   std::unique_ptr<p4::v1::P4Runtime::Stub> stub;
-  if (FLAGS_insecure) {
-    stub = pdpi::CreateP4RuntimeStub(FLAGS_server_address,
+  if (absl::GetFlag(FLAGS_insecure)) {
+    stub = pdpi::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
                                      grpc::InsecureChannelCredentials());
   } else {
     grpc::SslCredentialsOptions sslOpts;
-    sslOpts.pem_root_certs = ReadFileOrEmpty(FLAGS_ca_cert);
-    sslOpts.pem_private_key = ReadFileOrEmpty(FLAGS_key);
-    sslOpts.pem_cert_chain = ReadFileOrEmpty(FLAGS_cert);
-    stub = pdpi::CreateP4RuntimeStub(
-        FLAGS_server_address, grpc::SslCredentials(sslOpts), FLAGS_host_name);
+    sslOpts.pem_root_certs = ReadFileOrEmpty(absl::GetFlag(FLAGS_ca_cert));
+    sslOpts.pem_private_key = ReadFileOrEmpty(absl::GetFlag(FLAGS_key));
+    sslOpts.pem_cert_chain = ReadFileOrEmpty(absl::GetFlag(FLAGS_cert));
+    stub = pdpi::CreateP4RuntimeStub(absl::GetFlag(FLAGS_server_address),
+                                     grpc::SslCredentials(sslOpts),
+                                     absl::GetFlag(FLAGS_host_name));
   }
 
   return pdpi::P4RuntimeSession::Create(
@@ -390,14 +409,14 @@ class P4rtRouteTest : public testing::Test {
                              *p4rt_session_, sai::Instantiation::kMiddleblock));
 
     // Clear the current table entries, if any.
-    ASSERT_OK(pdpi::ClearTableEntries(p4rt_session_.get()));
+    ASSERT_OK(pdpi::ClearEntities(*p4rt_session_.get()));
   }
 
   void TearDown() override {
     // Remove table entries that were created.
     if (p4rt_session_ != nullptr) {
-      if (FLAGS_cleanup) {
-        ASSERT_OK(pdpi::ClearTableEntries(p4rt_session_.get()));
+      if (absl::GetFlag(FLAGS_cleanup)) {
+        ASSERT_OK(pdpi::ClearEntities(*p4rt_session_.get()));
       }
     }
   }
@@ -465,8 +484,13 @@ struct RouteEntryInfo {
 struct MulticastEntryInfo {
   std::vector<int32_t> port_ids;
   P4RTUpdateByNameMap rifs_by_name;
+  P4RTUpdateByNameMap vlans_by_name;
+  P4RTUpdateByNameMap vlan_members_by_name;
+  P4RTUpdateByNameMap mcast_groups_by_name;
 
   std::vector<pins::MulticastReplica> replicas;
+  std::vector<int32_t> vlans;
+  std::vector<int32_t> mcast_groups;
 };
 
 absl::StatusOr<std::vector<int32_t>> ParsePortIds(
@@ -566,10 +590,60 @@ absl::Status GenerateRandomNextHops(absl::BitGen& bitgen,
   return absl::OkStatus();
 }
 
+absl::Status GenerateRandomVlans(absl::BitGen& bitgen,
+                                 MulticastEntryInfo& entries,
+                                 const pdpi::IrP4Info& ir_p4info,
+                                 int32_t count) {
+  ASSIGN_OR_RETURN(auto vlans, RandomSetOfUniqueValues<int32_t>(
+                                   bitgen, /*min_value=*/2,
+                                   /*max_value=*/0x0FFF, count));
+
+  for (const auto& vlan : vlans) {
+    std::string vlan_name = absl::StrCat("vlan", vlan);
+    ASSIGN_OR_RETURN(
+        entries.vlans_by_name[vlan_name],
+        pins::VlanTableUpdate(ir_p4info, p4::v1::Update::INSERT, vlan));
+    entries.vlans.push_back(vlan);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status GenerateRandomVlansAndMembers(absl::BitGen& bitgen,
+                                           MulticastEntryInfo& entries,
+                                           const pdpi::IrP4Info& ir_p4info,
+                                           int32_t count) {
+  if (entries.port_ids.empty()) {
+    return absl::InvalidArgumentError(
+        "Port IDs need to be created before RIFs");
+  }
+
+  ASSIGN_OR_RETURN(auto vlans, RandomSetOfUniqueValues<int32_t>(
+                                   bitgen, /*min_value=*/2,
+                                   /*max_value=*/0x0FFF, count));
+
+  for (const auto& vlan : vlans) {
+    std::string vlan_name = absl::StrCat("vlan", vlan);
+    ASSIGN_OR_RETURN(
+        entries.vlans_by_name[vlan_name],
+        pins::VlanTableUpdate(ir_p4info, p4::v1::Update::INSERT, vlan));
+    for (const auto& port_id : entries.port_ids) {
+      bool tag = absl::Bernoulli(bitgen, 0.5);
+      std::string vlan_member_name =
+          absl::StrCat("port-", port_id, "-vlan", vlan);
+      ASSIGN_OR_RETURN(
+          entries.vlan_members_by_name[vlan_member_name],
+          pins::VlanMemberTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                      port_id, vlan, tag));
+    }
+    entries.vlans.push_back(vlan);
+  }
+  return absl::OkStatus();
+}
+
 absl::Status GenerateRandomMulticastRIFs(absl::BitGen& bitgen,
                                          MulticastEntryInfo& entries,
                                          const pdpi::IrP4Info& ir_p4info,
-                                         int32_t count) {
+                                         bool is_ip_mcast, int32_t count) {
   if (entries.port_ids.empty()) {
     return absl::InvalidArgumentError(
         "Port IDs need to be created before RIFs");
@@ -583,18 +657,70 @@ absl::Status GenerateRandomMulticastRIFs(absl::BitGen& bitgen,
                                        bitgen, /*min_value=*/0,
                                        /*max_value=*/0xffff, count));
 
+  absl::btree_set<int32_t> vlan_indexes;
+  if (is_ip_mcast) {
+    ASSIGN_OR_RETURN(vlan_indexes,
+                     RandomSetOfUniqueValues<int32_t>(
+                         bitgen, /*min_value=*/0,
+                         /*max_value=*/entries.vlans.size(), count));
+  }
+
   auto instances_it = instances.begin();
+  auto vlan_indexes_it = vlan_indexes.begin();
+  int port_idx = 0;
   for (const auto& address : addresses) {
     netaddr::MacAddress mac(0x10'00'00'00'00'00 + address);
     int instance = *instances_it++;
-    std::string port_name = absl::StrCat(entries.port_ids[absl::Uniform<size_t>(
-        bitgen, 0, entries.port_ids.size())]);
-    pins::MulticastReplica replica =
-        pins::MulticastReplica(port_name, instance, mac.ToString());
+    std::string port_name = absl::StrCat(entries.port_ids[port_idx]);
+    port_idx = (port_idx + 1) % entries.port_ids.size();
+    int32_t vlan = 0;
+    if (is_ip_mcast) {
+      vlan = entries.vlans[*vlan_indexes_it++];
+    }
+    pins::MulticastReplica replica = pins::MulticastReplica(
+        port_name, instance, mac.ToString(), vlan, is_ip_mcast);
     ASSIGN_OR_RETURN(entries.rifs_by_name[replica.key],
                      pins::MulticastRouterInterfaceTableUpdate(
                          ir_p4info, p4::v1::Update::INSERT, replica));
     entries.replicas.push_back(replica);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status GenerateRandomMulticastGroups(absl::BitGen& bitgen,
+                                           MulticastEntryInfo& entries,
+                                           const pdpi::IrP4Info& ir_p4info,
+                                           int32_t count) {
+  if (entries.replicas.empty()) {
+    return absl::InvalidArgumentError(
+        "Multicast ritfs need to be created before multicast groups.");
+  }
+
+  int32_t number_multicast_members_per_group =
+      absl::GetFlag(FLAGS_multicast_members_per_group);
+
+  ASSIGN_OR_RETURN(auto multicast_group_ids, RandomSetOfUniqueValues<uint16_t>(
+                                                 bitgen, /*min_value=*/1,
+                                                 /*max_value=*/0xFFFF, count));
+
+  for (const auto& multicast_group_id : multicast_group_ids) {
+    std::string multicast_group_name =
+        absl::StrCat("multicast-group-", multicast_group_id);
+    std::vector<pins::MulticastReplica> replicas_to_use;
+    ASSIGN_OR_RETURN(
+        auto replica_indexes,
+        RandomSetOfUniqueValues<int>(bitgen, /*min_value=*/0,
+                                     /*max_value=*/entries.replicas.size() - 1,
+                                     number_multicast_members_per_group));
+    for (const int replica_index : replica_indexes) {
+      replicas_to_use.push_back(entries.replicas[replica_index]);
+    }
+    absl::Span<pins::MulticastReplica> replicas_span{replicas_to_use};
+    ASSIGN_OR_RETURN(
+        entries.mcast_groups_by_name[multicast_group_name],
+        pins::MulticastGroupUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                   multicast_group_id, replicas_span));
+    entries.mcast_groups.push_back(multicast_group_id);
   }
   return absl::OkStatus();
 }
@@ -731,7 +857,7 @@ std::vector<int> RandmizeWeights(absl::BitGen& bitgen, int size,
   // Switches can preallocate weights as members are added. The worst case
   // is when weights get larger and larger with the members. Users can set a
   // flag to force this behavior (i.e. get worst case performance).
-  if (FLAGS_wcmp_increasing_weights) {
+  if (absl::GetFlag(FLAGS_wcmp_increasing_weights)) {
     std::sort(weights.begin(), weights.end());
   }
 
@@ -775,14 +901,16 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
     const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
     uint32_t batch_size, int members_per_group, bool randomize_weights,
     int total_group_weight) {
-  bool change_weights_on_modify = FLAGS_wcmp_update_weights_when_modifying;
-  bool change_nexthops_on_modify = FLAGS_wcmp_update_nexthops_when_modifying;
+  bool change_weights_on_modify =
+      absl::GetFlag(FLAGS_wcmp_update_weights_when_modifying);
+  bool change_nexthops_on_modify =
+      absl::GetFlag(FLAGS_wcmp_update_nexthops_when_modifying);
   if (!change_weights_on_modify && !change_nexthops_on_modify) {
     LOG(WARNING) << "We are not changing the weights or the nexthops on modify "
                     "so all requests will match the inserts.";
   }
 
-  bool set_watch_port = FLAGS_wcmp_set_watch_port;
+  bool set_watch_port = absl::GetFlag(FLAGS_wcmp_set_watch_port);
 
   // WCMP requests will reference next hops so they need to be created first.
   ASSIGN_OR_RETURN(std::vector<std::string> nexthops,
@@ -1021,12 +1149,156 @@ absl::StatusOr<P4WriteRequests> ComputeEncapWriteRequests(
   return requests;
 }
 
+absl::StatusOr<P4WriteRequests> ComputeVlanWriteRequests(
+    absl::BitGen& bitgen, const MulticastEntryInfo& entries,
+    const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
+    uint32_t batch_size) {
+  ASSIGN_OR_RETURN(auto vlans,
+                   RandomSetOfUniqueValues<int32_t>(
+                       bitgen, /*min_value=*/2,
+                       /*max_value=*/0x0FFF, number_batches * batch_size));
+
+  P4WriteRequests requests;
+  for (const auto& vlan : vlans) {
+    if (requests.inserts.empty() ||
+        requests.inserts.back().updates_size() == batch_size) {
+      requests.inserts.push_back(p4::v1::WriteRequest{});
+      requests.modifies.push_back(p4::v1::WriteRequest{});
+      requests.deletes.push_back(p4::v1::WriteRequest{});
+    }
+    ASSIGN_OR_RETURN(
+        *requests.inserts.back().add_updates(),
+        pins::VlanTableUpdate(ir_p4info, p4::v1::Update::INSERT, vlan));
+    ASSIGN_OR_RETURN(
+        *requests.deletes.back().add_updates(),
+        pins::VlanTableUpdate(ir_p4info, p4::v1::Update::DELETE, vlan));
+  }
+
+  RETURN_IF_ERROR(VerifyP4WriteRequestSizes(
+      requests, number_batches, batch_size, /*modify_supported=*/false));
+  return requests;
+}
+
+absl::StatusOr<P4WriteRequests> ComputeVlanMemberWriteRequests(
+    absl::BitGen& bitgen, const MulticastEntryInfo& entries,
+    const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
+    uint32_t batch_size) {
+  if (entries.port_ids.empty()) {
+    return absl::InvalidArgumentError(
+        "Port IDs need to be created before vlan members");
+  }
+
+  if ((number_batches * batch_size) >
+      entries.port_ids.size() * entries.vlans.size()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "The batch size * number of batches (", number_batches * batch_size,
+        ") must be less than the max vlan menbers allowed: ",
+        entries.port_ids.size() * entries.vlans.size()));
+  }
+
+  P4WriteRequests requests;
+  int count = 0;
+  for (const auto& vlan : entries.vlans) {
+    for (const auto& port_id : entries.port_ids) {
+      if (requests.inserts.empty() ||
+          requests.inserts.back().updates_size() == batch_size) {
+        requests.inserts.push_back(p4::v1::WriteRequest{});
+        requests.modifies.push_back(p4::v1::WriteRequest{});
+        requests.deletes.push_back(p4::v1::WriteRequest{});
+      }
+      bool tag = absl::Bernoulli(bitgen, 0.5);
+      ASSIGN_OR_RETURN(
+          *requests.inserts.back().add_updates(),
+          pins::VlanMemberTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                      port_id, vlan, tag));
+      ASSIGN_OR_RETURN(
+          *requests.deletes.back().add_updates(),
+          pins::VlanMemberTableUpdate(ir_p4info, p4::v1::Update::DELETE,
+                                      port_id, vlan, tag));
+      if (++count >= (number_batches * batch_size)) {
+        break;
+      }
+    }
+    if (count >= (number_batches * batch_size)) {
+      break;
+    }
+  }
+
+  RETURN_IF_ERROR(VerifyP4WriteRequestSizes(
+      requests, number_batches, batch_size, /*modify_supported=*/false));
+  return requests;
+}
+
+absl::StatusOr<P4WriteRequests> ComputeIpMulticastIntfWriteRequests(
+    absl::BitGen& bitgen, const MulticastEntryInfo& entries,
+    const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
+    uint32_t batch_size, bool is_ip_mcast) {
+  if (entries.port_ids.empty()) {
+    return absl::InvalidArgumentError(
+        "Port IDs need to be created before RIFs");
+  }
+  if (is_ip_mcast && entries.vlans.empty()) {
+    return absl::InvalidArgumentError("Vlan need to be created before RIFs");
+  }
+  if ((number_batches * batch_size) > kMaxVlans) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "The batch size * number of batches (", number_batches * batch_size,
+        ") must be less than the max vlan allowed: ", kMaxVlans));
+  }
+
+  ASSIGN_OR_RETURN(auto addresses, RandomSetOfUniqueValues<int64_t>(
+                                       bitgen, /*min_value=*/0,
+                                       /*max_value=*/0x00'FF'FF'FF'FF'FF,
+                                       number_batches * batch_size));
+  ASSIGN_OR_RETURN(auto instances,
+                   RandomSetOfUniqueValues<int32_t>(
+                       bitgen, /*min_value=*/0,
+                       /*max_value=*/0xffff, number_batches * batch_size));
+  absl::btree_set<int32_t> vlan_indexes;
+  if (is_ip_mcast) {
+    ASSIGN_OR_RETURN(vlan_indexes, RandomSetOfUniqueValues<int32_t>(
+                                       bitgen, /*min_value=*/0,
+                                       /*max_value=*/entries.vlans.size(),
+                                       number_batches * batch_size));
+  }
+
+  auto instances_it = instances.begin();
+  auto vlan_indexes_it = vlan_indexes.begin();
+  P4WriteRequests requests;
+  for (const auto& address : addresses) {
+    if (requests.inserts.empty() ||
+        requests.inserts.back().updates_size() == batch_size) {
+      requests.inserts.push_back(p4::v1::WriteRequest{});
+      requests.modifies.push_back(p4::v1::WriteRequest{});
+      requests.deletes.push_back(p4::v1::WriteRequest{});
+    }
+    netaddr::MacAddress mac(0x10'00'00'00'00'00 + address);
+    int instance = *instances_it++;
+    std::string port_name = absl::StrCat(entries.port_ids[absl::Uniform<size_t>(
+        bitgen, 0, entries.port_ids.size())]);
+    int32_t vlan = 2;
+    if (is_ip_mcast) {
+      vlan = entries.vlans[*vlan_indexes_it++];
+    }
+    pins::MulticastReplica replica = pins::MulticastReplica(
+        port_name, instance, mac.ToString(), vlan, is_ip_mcast);
+    ASSIGN_OR_RETURN(*requests.inserts.back().add_updates(),
+                     pins::MulticastRouterInterfaceTableUpdate(
+                         ir_p4info, p4::v1::Update::INSERT, replica));
+    ASSIGN_OR_RETURN(*requests.deletes.back().add_updates(),
+                     pins::MulticastRouterInterfaceTableUpdate(
+                         ir_p4info, p4::v1::Update::DELETE, replica));
+  }
+
+  RETURN_IF_ERROR(VerifyP4WriteRequestSizes(
+      requests, number_batches, batch_size, /*modify_supported=*/false));
+  return requests;
+}
+
 absl::StatusOr<P4WriteRequests> ComputeIpMulticastWriteRequests(
     absl::BitGen& bitgen, const MulticastEntryInfo& entries,
     const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
     uint32_t batch_size) {
-  // Maximum IP multicast groups supported by hardware.
-  constexpr int kMaxIpMulticastGroups = 512;
   if ((number_batches * batch_size) > kMaxIpMulticastGroups) {
     return absl::InvalidArgumentError(absl::StrCat(
         "The batch size * number of batches (", number_batches * batch_size,
@@ -1038,7 +1310,7 @@ absl::StatusOr<P4WriteRequests> ComputeIpMulticastWriteRequests(
                    _ << "RIFs need to be created before multicast groups");
 
   int32_t number_multicast_members_per_group =
-      FLAGS_multicast_members_per_group;
+      absl::GetFlag(FLAGS_multicast_members_per_group);
 
   if (number_multicast_members_per_group > entries.replicas.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
@@ -1108,37 +1380,180 @@ absl::StatusOr<P4WriteRequests> ComputeIpMulticastWriteRequests(
   return requests;
 }
 
+absl::StatusOr<P4WriteRequests> ComputeIv4MulticastRouteWriteRequests(
+    absl::BitGen& bitgen, const RouteEntryInfo& routes,
+    const MulticastEntryInfo& entries, const pdpi::IrP4Info& ir_p4info,
+    uint32_t number_batches, uint32_t batch_size) {
+  ASSIGN_OR_RETURN(std::vector<std::string> vrfs, GetKeys(routes.vrfs_by_name),
+                   _ << "VRFs need to be created before IPv4 multicast routes");
+  ASSIGN_OR_RETURN(auto addresses, RandomSetOfUniqueValues<int32_t>(
+                                       bitgen, /*min_value=*/0xE0'00'00'00,
+                                       /*max_value=*/0xEF'FF'FF'FF,
+                                       number_batches * batch_size));
+
+  P4WriteRequests requests;
+  for (const int32_t address : addresses) {
+    if (requests.inserts.empty() ||
+        requests.inserts.back().updates_size() == batch_size) {
+      requests.inserts.push_back(p4::v1::WriteRequest{});
+      requests.modifies.push_back(p4::v1::WriteRequest{});
+      requests.deletes.push_back(p4::v1::WriteRequest{});
+    }
+    std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
+    int32_t mcast_group_id = entries.mcast_groups[absl::Uniform<size_t>(
+        bitgen, 0, entries.mcast_groups.size())];
+    netaddr::Ipv4Address ip(address);
+    ASSIGN_OR_RETURN(
+        *requests.inserts.back().add_updates(),
+        pins::Ipv4MulticastRouteUpdate(ir_p4info, p4::v1::Update::INSERT, vrf,
+                                       ip.ToString(), mcast_group_id));
+
+    mcast_group_id = entries.mcast_groups[absl::Uniform<size_t>(
+        bitgen, 0, entries.mcast_groups.size())];
+    ASSIGN_OR_RETURN(
+        *requests.modifies.back().add_updates(),
+        pins::Ipv4MulticastRouteUpdate(ir_p4info, p4::v1::Update::MODIFY, vrf,
+                                       ip.ToString(), mcast_group_id));
+
+    ASSIGN_OR_RETURN(
+        *requests.deletes.back().add_updates(),
+        pins::Ipv4MulticastRouteUpdate(ir_p4info, p4::v1::Update::DELETE, vrf,
+                                       ip.ToString(), mcast_group_id));
+  }
+
+  RETURN_IF_ERROR(
+      VerifyP4WriteRequestSizes(requests, number_batches, batch_size));
+  return requests;
+}
+
+absl::StatusOr<P4WriteRequests> ComputeIv6MulticastRouteWriteRequests(
+    absl::BitGen& bitgen, const RouteEntryInfo& routes,
+    const MulticastEntryInfo& entries, const pdpi::IrP4Info& ir_p4info,
+    uint32_t number_batches, uint32_t batch_size) {
+  ASSIGN_OR_RETURN(std::vector<std::string> vrfs, GetKeys(routes.vrfs_by_name),
+                   _ << "VRFs need to be created before IPv6 multicast routes");
+  ASSIGN_OR_RETURN(
+      auto addresses,
+      RandomSetOfUniqueValues<int64_t>(
+          bitgen, /*min_value=*/0xFF00'0000'0000'0000,
+          /*max_value=*/0xFFFF'FFFF'FFFF'FFFF, number_batches * batch_size));
+
+  P4WriteRequests requests;
+  for (const int64_t address : addresses) {
+    if (requests.inserts.empty() ||
+        requests.inserts.back().updates_size() == batch_size) {
+      requests.inserts.push_back(p4::v1::WriteRequest{});
+      requests.modifies.push_back(p4::v1::WriteRequest{});
+      requests.deletes.push_back(p4::v1::WriteRequest{});
+    }
+    std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
+    int32_t mcast_group_id = entries.mcast_groups[absl::Uniform<size_t>(
+        bitgen, 0, entries.mcast_groups.size())];
+    netaddr::Ipv6Address ip(absl::MakeUint128(address, /*low=*/0));
+    ASSIGN_OR_RETURN(
+        *requests.inserts.back().add_updates(),
+        pins::Ipv6MulticastRouteUpdate(ir_p4info, p4::v1::Update::INSERT, vrf,
+                                       ip.ToString(), mcast_group_id));
+
+    mcast_group_id = entries.mcast_groups[absl::Uniform<size_t>(
+        bitgen, 0, entries.mcast_groups.size())];
+    ASSIGN_OR_RETURN(
+        *requests.modifies.back().add_updates(),
+        pins::Ipv6MulticastRouteUpdate(ir_p4info, p4::v1::Update::MODIFY, vrf,
+                                       ip.ToString(), mcast_group_id));
+
+    ASSIGN_OR_RETURN(
+        *requests.deletes.back().add_updates(),
+        pins::Ipv6MulticastRouteUpdate(ir_p4info, p4::v1::Update::DELETE, vrf,
+                                       ip.ToString(), mcast_group_id));
+  }
+
+  RETURN_IF_ERROR(
+      VerifyP4WriteRequestSizes(requests, number_batches, batch_size));
+  return requests;
+}
+
 TEST_F(P4rtRouteTest, MeasureWriteLatency) {
-  int32_t number_of_batches = FLAGS_number_batches;
-  int32_t requests_per_batch = FLAGS_batch_size;
-  std::string available_port_ids = FLAGS_port_ids;
-  int32_t number_of_vrfs = FLAGS_vrfs;
-  int32_t number_of_rifs = FLAGS_rifs;
-  int32_t number_of_nexthops = FLAGS_next_hops;
-  int32_t number_of_encaps = FLAGS_encaps;
+  int32_t number_of_batches = absl::GetFlag(FLAGS_number_batches);
+  int32_t requests_per_batch = absl::GetFlag(FLAGS_batch_size);
+  std::string available_port_ids = absl::GetFlag(FLAGS_port_ids);
+  int32_t number_of_vrfs = absl::GetFlag(FLAGS_vrfs);
+  int32_t number_of_rifs = absl::GetFlag(FLAGS_rifs);
+  int32_t number_of_nexthops = absl::GetFlag(FLAGS_next_hops);
+  int32_t number_of_encaps = absl::GetFlag(FLAGS_encaps);
 
   // Randomly generate the routes that will be used by these tests.
   absl::BitGen bitgen(GetSeedSeq());
   RouteEntryInfo routes;
   MulticastEntryInfo entries;
 
-  bool test_ip_multicast = FLAGS_run_ip_multicast;
-  bool test_l2_multicast = FLAGS_run_l2_multicast;
+  bool test_vlan = absl::GetFlag(FLAGS_run_vlan);
+  bool test_vlan_member = absl::GetFlag(FLAGS_run_vlan_member);
+  bool test_ip_mcast_ritf = absl::GetFlag(FLAGS_run_ip_mcast_ritf);
+  bool test_l2_mcast_ritf = absl::GetFlag(FLAGS_run_l2_mcast_ritf);
+  bool test_ip_multicast = absl::GetFlag(FLAGS_run_ip_multicast);
+  bool test_l2_multicast = absl::GetFlag(FLAGS_run_l2_multicast);
+  bool test_ipv4_multicast = absl::GetFlag(FLAGS_run_ipv4_mcast_routes);
+  bool test_ipv6_multicast = absl::GetFlag(FLAGS_run_ipv6_mcast_routes);
 
   ASSERT_OK_AND_ASSIGN(routes.port_ids, ParsePortIds(available_port_ids));
   entries.port_ids = routes.port_ids;
   std::vector<p4::v1::WriteRequest> premeasurement_requests;
 
-  if (test_ip_multicast || test_l2_multicast) {
+  if (test_vlan || test_l2_mcast_ritf) {
+    // No pre-measurement.
+  } else if (test_vlan_member) {
+    // Create vlans.
+    ASSERT_OK(GenerateRandomVlans(bitgen, entries, ir_p4info_, kMaxVlans));
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.vlans_by_name);
+
+  } else if (test_ip_mcast_ritf) {
+    // Create vlans and vlan members.
+    ASSERT_OK(
+        GenerateRandomVlansAndMembers(bitgen, entries, ir_p4info_, kMaxVlans));
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.vlans_by_name);
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.vlan_members_by_name);
+  } else if (test_ip_multicast || test_l2_multicast) {
+    if (test_ip_multicast) {
+      // Create vlans and vlan members.
+      ASSERT_OK(GenerateRandomVlansAndMembers(bitgen, entries, ir_p4info_,
+                                              kMaxVlans));
+      AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                  entries.vlans_by_name);
+      AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                  entries.vlan_members_by_name);
+    }
     ASSERT_OK(GenerateRandomMulticastRIFs(bitgen, entries, ir_p4info_,
-                                          number_of_rifs));
+                                          test_ip_multicast, number_of_rifs));
     AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
                                 entries.rifs_by_name);
+  } else if (test_ipv4_multicast || test_ipv6_multicast) {
+    ASSERT_OK(
+        GenerateRandomVlansAndMembers(bitgen, entries, ir_p4info_, kMaxVlans));
+    ASSERT_OK(GenerateRandomMulticastRIFs(bitgen, entries, ir_p4info_,
+                                          /*is_ip_mcast=*/true,
+                                          number_of_rifs));
+    ASSERT_OK(GenerateRandomMulticastGroups(bitgen, entries, ir_p4info_,
+                                            kMaxIpMulticastGroups));
+    ASSERT_OK(GenerateRandomVrfs(bitgen, routes, ir_p4info_, number_of_vrfs));
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.vlans_by_name);
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.vlan_members_by_name);
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.rifs_by_name);
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                entries.mcast_groups_by_name);
+    AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                                routes.vrfs_by_name);
   } else {
     ASSERT_OK(GenerateRandomRIFs(bitgen, routes, ir_p4info_, number_of_rifs));
     ASSERT_OK(GenerateRandomVrfs(bitgen, routes, ir_p4info_, number_of_vrfs));
     // Tunnel nexthops are created differently later.
-    if (!FLAGS_run_encap) {
+    if (!absl::GetFlag(FLAGS_run_encap)) {
       ASSERT_OK(GenerateRandomNextHops(bitgen, routes, ir_p4info_,
                                        number_of_nexthops));
     }
@@ -1158,7 +1573,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   ASSERT_OK_AND_ASSIGN(absl::Duration premeasurement_time,
                        SendBatchRequest(premeasurement_requests));
 
-  if (FLAGS_run_ipv4) {
+  if (absl::GetFlag(FLAGS_run_ipv4)) {
     // Pre-compute all the IPv4 requests so they can be sent as quickly as
     // possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
@@ -1179,7 +1594,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
         number_of_batches, total_entries,
         absl::ToInt64Milliseconds(insert_time),
         absl::ToInt64Milliseconds(modify_time));
-    if (FLAGS_cleanup) {
+    if (absl::GetFlag(FLAGS_cleanup)) {
       ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
                            SendBatchRequest(requests.deletes));
       std::cout << absl::StreamFormat("ipv4_delete_time=%lld(msecs) ",
@@ -1193,7 +1608,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
               << ToInt64Milliseconds(insert_time) << "(msecs)" << std::endl;
   }
 
-  if (FLAGS_run_ipv6) {
+  if (absl::GetFlag(FLAGS_run_ipv6)) {
     // Pre-compute all the IPv6 requests so they can be sent as quickly as
     // possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
@@ -1214,7 +1629,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
         number_of_batches, total_entries,
         absl::ToInt64Milliseconds(insert_time),
         absl::ToInt64Milliseconds(modify_time));
-    if (FLAGS_cleanup) {
+    if (absl::GetFlag(FLAGS_cleanup)) {
       ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
                            SendBatchRequest(requests.deletes));
       std::cout << absl::StreamFormat("ipv6_delete_time=%lld(msecs) ",
@@ -1223,9 +1638,9 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     std::cout << std::endl;
   }
 
-  int members_per_group = FLAGS_wcmp_members_per_group;
-  int total_group_weight = FLAGS_wcmp_total_group_weight;
-  if (FLAGS_run_wcmp) {
+  int members_per_group = absl::GetFlag(FLAGS_wcmp_members_per_group);
+  int total_group_weight = absl::GetFlag(FLAGS_wcmp_total_group_weight);
+  if (absl::GetFlag(FLAGS_run_wcmp)) {
     // Pre-compute all the WCMP requests so they can be sent as quickly as
     // possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
@@ -1250,7 +1665,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
         number_of_batches, total_groups, total_members, total_weight,
         absl::ToInt64Milliseconds(insert_time),
         absl::ToInt64Milliseconds(modify_time));
-    if (FLAGS_cleanup) {
+    if (absl::GetFlag(FLAGS_cleanup)) {
       ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
                            SendBatchRequest(requests.deletes));
       std::cout << absl::StreamFormat("wcmp_delete_time=%lld(msecs) ",
@@ -1262,7 +1677,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     std::cout << std::endl;
   }
 
-  if (FLAGS_run_encap) {
+  if (absl::GetFlag(FLAGS_run_encap)) {
     int total_tunnels =
         number_of_batches * requests_per_batch * members_per_group;
 
@@ -1301,7 +1716,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
         absl::ToInt64Milliseconds(encap_insert_time) +
             absl::ToInt64Milliseconds(encap_neighbor_insert_time),
         absl::ToInt64Milliseconds(wcmp_insert_time));
-    if (FLAGS_cleanup) {
+    if (absl::GetFlag(FLAGS_cleanup)) {
       ASSERT_OK_AND_ASSIGN(absl::Duration wcmp_delete_time,
                            SendBatchRequest(wcmp_requests.deletes));
 
@@ -1320,7 +1735,83 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     std::cout << std::endl;
   }
 
-  if (test_ip_multicast) {
+  if (test_vlan) {
+    ASSERT_OK_AND_ASSIGN(
+        P4WriteRequests requests,
+        ComputeVlanWriteRequests(bitgen, entries, ir_p4info_, number_of_batches,
+                                 requests_per_batch));
+    UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+
+    // Write the results to stdout so that the callers can parse the output.
+    int64_t total_entries = number_of_batches * requests_per_batch;
+    std::cout << absl::StreamFormat(
+        "vlan_requests=%d vlan_entry_total=%lld "
+        "vlan_insert_time=%lld(msecs) ",
+        number_of_batches, total_entries,
+        absl::ToInt64Milliseconds(insert_time));
+    if (absl::GetFlag(FLAGS_cleanup)) {
+      ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                           SendBatchRequest(requests.deletes));
+      std::cout << absl::StreamFormat("vlan_delete_time=%lld(msecs) ",
+                                      absl::ToInt64Milliseconds(delete_time));
+    }
+    std::cout << std::endl;
+  }
+
+  if (test_vlan_member) {
+    ASSERT_OK_AND_ASSIGN(
+        P4WriteRequests requests,
+        ComputeVlanMemberWriteRequests(bitgen, entries, ir_p4info_,
+                                       number_of_batches, requests_per_batch));
+    UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+
+    // Write the results to stdout so that the callers can parse the output.
+    int64_t total_entries = number_of_batches * requests_per_batch;
+    std::cout << absl::StreamFormat(
+        "vlan_member_requests=%d vlan_member_entry_total=%lld "
+        "vlan_member_insert_time=%lld(msecs) ",
+        number_of_batches, total_entries,
+        absl::ToInt64Milliseconds(insert_time));
+    if (absl::GetFlag(FLAGS_cleanup)) {
+      ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                           SendBatchRequest(requests.deletes));
+      std::cout << absl::StreamFormat("vlan_member_delete_time=%lld(msecs) ",
+                                      absl::ToInt64Milliseconds(delete_time));
+    }
+    std::cout << std::endl;
+  }
+
+  if (test_ip_mcast_ritf || test_l2_mcast_ritf) {
+    ASSERT_OK_AND_ASSIGN(P4WriteRequests requests,
+                         ComputeIpMulticastIntfWriteRequests(
+                             bitgen, entries, ir_p4info_, number_of_batches,
+                             requests_per_batch, test_ip_mcast_ritf));
+    UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+
+    // Write the results to stdout so that the callers can parse the output.
+    auto test_str = test_ip_mcast_ritf ? "ip_mcast_ritf" : "l2_mcast_ritf";
+    int64_t total_entries = number_of_batches * requests_per_batch;
+    std::cout << absl::StreamFormat(
+        "%s_requests=%d %s_entry_total=%lld "
+        "%s_insert_time=%lld(msecs) ",
+        test_str, number_of_batches, test_str, total_entries, test_str,
+        absl::ToInt64Milliseconds(insert_time));
+    if (absl::GetFlag(FLAGS_cleanup)) {
+      ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                           SendBatchRequest(requests.deletes));
+      std::cout << absl::StreamFormat("%s_delete_time=%lld(msecs) ", test_str,
+                                      absl::ToInt64Milliseconds(delete_time));
+    }
+    std::cout << std::endl;
+  }
+
+  if (test_ip_multicast || test_l2_multicast) {
     // Pre-compute all the multicast group requests so they can be sent as
     // quickly as possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
@@ -1335,18 +1826,82 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
 
     // Write the results to stdout so that the callers can parse the output.
     int64_t total_entries = number_of_batches * requests_per_batch;
+    std::string test_str = test_ip_multicast ? "ip_multicast" : "l2_multicast";
     std::cout << absl::StreamFormat(
-        "ip_multicast_requests=%d ip_multicat_entry_total=%lld "
-        "ip_multicast_insert_time=%lld(msecs) "
-        "ip_multicast_modify_time=%lld(msecs) ",
+        "%s_requests=%d %s_entry_total=%lld "
+        "%s_insert_time=%lld(msecs) "
+        "%s_modify_time=%lld(msecs) ",
+        test_str, number_of_batches, test_str, total_entries, test_str,
+        absl::ToInt64Milliseconds(insert_time), test_str,
+        absl::ToInt64Milliseconds(modify_time));
+    if (absl::GetFlag(FLAGS_cleanup)) {
+      ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                           SendBatchRequest(requests.deletes));
+      std::cout << absl::StreamFormat("%s_delete_time=%lld(msecs) ", test_str,
+                                      absl::ToInt64Milliseconds(delete_time));
+    }
+    std::cout << absl::StreamFormat(
+        "%s_init_time=%lld(msecs) ", test_str,
+        absl::ToInt64Milliseconds(premeasurement_time));
+    std::cout << std::endl;
+  }
+
+  if (test_ipv4_multicast) {
+    ASSERT_OK_AND_ASSIGN(P4WriteRequests requests,
+                         ComputeIv4MulticastRouteWriteRequests(
+                             bitgen, routes, entries, ir_p4info_,
+                             number_of_batches, requests_per_batch));
+    UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+    ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
+                         SendBatchRequest(requests.modifies));
+
+    // Write the results to stdout so that the callers can parse the output.
+    int64_t total_entries = number_of_batches * requests_per_batch;
+    std::cout << absl::StreamFormat(
+        "ipv4_mcast_route_requests=%d ipv4_mcast_route_entry_total=%lld "
+        "ipv4_mcast_route_insert_time=%lld(msecs) "
+        "ipv4_mcast_route_modify_time=%lld(msecs) ",
         number_of_batches, total_entries,
         absl::ToInt64Milliseconds(insert_time),
         absl::ToInt64Milliseconds(modify_time));
-    if (FLAGS_cleanup) {
+    if (absl::GetFlag(FLAGS_cleanup)) {
       ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
                            SendBatchRequest(requests.deletes));
-      std::cout << absl::StreamFormat("ip_multicast_delete_time=%lld(msecs) ",
-                                      absl::ToInt64Milliseconds(delete_time));
+      std::cout << absl::StreamFormat(
+          "ipv4_mcast_route_delete_time=%lld(msecs) ",
+          absl::ToInt64Milliseconds(delete_time));
+    }
+    std::cout << std::endl;
+  }
+
+  if (test_ipv6_multicast) {
+    ASSERT_OK_AND_ASSIGN(P4WriteRequests requests,
+                         ComputeIv6MulticastRouteWriteRequests(
+                             bitgen, routes, entries, ir_p4info_,
+                             number_of_batches, requests_per_batch));
+    UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+    ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
+                         SendBatchRequest(requests.modifies));
+
+    // Write the results to stdout so that the callers can parse the output.
+    int64_t total_entries = number_of_batches * requests_per_batch;
+    std::cout << absl::StreamFormat(
+        "ipv6_mcast_route_requests=%d ipv6_mcast_route_entry_total=%lld "
+        "ipv6_mcast_route_insert_time=%lld(msecs) "
+        "ipv6_mcast_route_modify_time=%lld(msecs) ",
+        number_of_batches, total_entries,
+        absl::ToInt64Milliseconds(insert_time),
+        absl::ToInt64Milliseconds(modify_time));
+    if (absl::GetFlag(FLAGS_cleanup)) {
+      ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                           SendBatchRequest(requests.deletes));
+      std::cout << absl::StreamFormat(
+          "ipv6_mcast_route_delete_time=%lld(msecs) ",
+          absl::ToInt64Milliseconds(delete_time));
     }
     std::cout << std::endl;
   }
@@ -1358,8 +1913,8 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
 // Temporary fix to have performance tests run nightly until we find a way to
 // bring p4rt_test_main.cc to p4rt_app specific tests alone.
 GTEST_API_ int main(int argc, char** argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-  google::InitGoogleLogging(argv[0]);
+  absl::ParseCommandLine(argc, argv);
+  absl::InitializeLog();
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
