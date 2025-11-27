@@ -801,6 +801,26 @@ TEST(EntryBuilder, AddMulticastGroupEntryPortOverloadAddsUniqueReplicas) {
   EXPECT_NE(replicas[1].instance(), replicas[2].instance());
 }
 
+TEST(EntryBuilder, AddRouterInterfaceTableEntryAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddRouterInterfaceTableEntry(RouterInterfaceTableParams{
+              .egress_port = "\1",
+              .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+              .vlan_id = std::nullopt,
+          })
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "router_interface_table"
+                  action { name: "unicast_set_port_and_src_mac" }
+                }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddMrifEntryRewritingSrcMacAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
