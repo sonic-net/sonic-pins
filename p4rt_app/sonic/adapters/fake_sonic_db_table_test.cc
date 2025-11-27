@@ -101,14 +101,13 @@ TEST(FakeSonicDbTest, DeleteEntry) {
   EXPECT_TRUE(table.GetAllKeys().empty());
 }
 
-TEST(FakeSonicDbDeathTest, GetNotificationDiesIfNoNotificationExists) {
+TEST(FakeSonicDbDeathTest, GetNotificationFailsIfNoNotificationExists) {
   FakeSonicDbTable table;
   std::string op;
   std::string data;
   SonicDbEntryList value;
 
-  EXPECT_DEATH(table.GetNextNotification(op, data, value),
-               "Could not find a notification");
+  EXPECT_FALSE(table.GetNextNotification(op, data, value).ok());
 }
 
 TEST(FakeSonicDbTest, DefaultNotificationResponseIsSuccess) {
