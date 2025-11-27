@@ -197,8 +197,6 @@ control acl_ingress(in headers_t headers,
   // packet color.
   @id(ACL_INGRESS_SET_FORWARDING_QUEUES_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
-  // TODO: Remove @unsupported annotation.
-  @unsupported
   action set_forwarding_queues(
       @id(1) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         multicast_queue_t green_multicast_queue,

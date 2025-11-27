@@ -29,6 +29,7 @@
 #include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
+#include "utf8_validity.h"
 
 namespace p4rt_app {
 namespace {
@@ -248,6 +249,9 @@ absl::StatusOr<std::string> TranslatePort(
     TranslationDirection direction,
     const boost::bimap<std::string, std::string>& port_map,
     const std::string& port_key) {
+  if (!utf8_range::IsStructurallyValid(port_key)) {
+    return gutil::InvalidArgumentErrorBuilder() << "Invalid UTF-8 string";
+  }
   switch (direction) {
     case TranslationDirection::kForController: {
       auto value = port_map.left.find(port_key);
