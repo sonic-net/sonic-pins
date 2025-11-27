@@ -64,6 +64,8 @@ struct ParamsForTestsWithoutIxia {
       absl::string_view gnmi_config,
       std::optional<sai::Instantiation> instantiation)>
       test_packet_generator_function;
+  bool is_rate_mode_in_packets = true;  // If true, the rate limit is in packets
+                                        // per second.
 };
 
 // Fixture of tests that do not require an Ixia. These test must be run on a
@@ -152,6 +154,8 @@ struct ParamsForTestsWithIxia {
   // Vector of actions to verify for Punt flow rate limit test.
   const std::vector<AclIngressTablePuntFlowRateLimitAction>
       acl_ingress_table_punt_flow_rate_limit_actions;
+  bool is_rate_mode_in_packets = true;
+
 };
 
 class CpuQosTestWithIxia

@@ -49,6 +49,7 @@ struct ParamsForTestsWithIxia {
   absl::string_view unicast_red_queue;
   absl::string_view multicast_green_queue;
   absl::string_view multicast_red_queue;
+  bool is_rate_mode_in_packets = true;
 };
 
 struct IxiaSutLink {
