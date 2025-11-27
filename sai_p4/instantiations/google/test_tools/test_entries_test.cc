@@ -1388,7 +1388,7 @@ TEST(AddNexthopRifNeighborEntriesTest, SetIpNexthopWithDefaultMacRewrite) {
                              table_name: "router_interface_table"
                              matches { name: "router_interface_id" }
                              action {
-                               name: "set_port_and_src_mac"
+                               name: "unicast_set_port_and_src_mac"
                                params {
                                  name: "port"
                                  value { str: "port-1" }
@@ -1443,7 +1443,7 @@ TEST(AddNexthopRifNeighborEntriesTest,
                         R"pb(table_entry {
                                table_name: "router_interface_table"
                                action {
-                                 name: "set_port_and_src_mac"
+                                 name: "unicast_set_port_and_src_mac"
                                  params {
                                    name: "src_mac"
                                    value { mac: "01:23:45:67:89:ab" }
@@ -1459,14 +1459,14 @@ TEST(AddNexthopRifNeighborEntriesTest,
                         )pb"))}));
 }
 
-TEST(AddNexthopRifNeighborEntriesTest, SkipMyMacProgramming) {
+TEST(AddNexthopRifNeighborEntriesTest, HasMyMacProgramming) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
           .AddNexthopRifNeighborEntries(
               "nexthop-1", "port-1",
-              NexthopRewriteOptions{.skip_my_mac_programming = true})
+	      NexthopRewriteOptions{.skip_my_mac_programming = false})
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info));
   EXPECT_THAT(entities.entities(),
@@ -1483,7 +1483,7 @@ TEST(AddNexthopRifNeighborEntriesTest, SkipMyMacProgramming) {
                   Partially(EqualsProto(
                       R"pb(table_entry {
                              table_name: "router_interface_table"
-                             action { name: "unicast_set_port_and_src_mac" }
+                             action { name: "set_port_and_src_mac" }
                            })pb"))));
 }
 
@@ -1533,7 +1533,7 @@ TEST(AddNexthopRifNeighborEntriesTest,
                     Partially(EqualsProto(
                         R"pb(table_entry {
                                table_name: "router_interface_table"
-                               action { name: "set_port_and_src_mac" }
+                               action { name: "unicast_set_port_and_src_mac" }
                              }
                         )pb")),
                     Partially(EqualsProto(

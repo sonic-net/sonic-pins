@@ -458,9 +458,6 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
 	  // TODO: Enable this table when it has been removed from
           // unsupported roles.
           "mirror_session_table",
-	  // TODO: Re-enable once the released version supports
-          // the action used in this table.
-          "acl_ingress_mirror_and_redirect_table",
 	  // TODO: Add support for these tables once the switch
           // supports it.
           "ipv4_multicast_table",
@@ -502,10 +499,8 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv6_table", Ipv6TableGenerator},
       {"ipv6_tunnel_termination_table", Ipv6TunnelTerminationGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
-      // TODO: Re-enable once the released version supports
-      // the action used in this table.
-      // {"acl_ingress_mirror_and_redirect_table",
-      //  AclIngressMirrorAndRedirectGenerator},
+      {"acl_ingress_mirror_and_redirect_table",
+       AclIngressMirrorAndRedirectGenerator},
       // TODO: Re-enable when once modeling is fixed.
       // {"multicast_router_interface_table",
       //  MulticastRouterInterfaceTableGenerator},

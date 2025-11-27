@@ -1686,7 +1686,6 @@ actions {
     id: 16777264
     name: "ingress.routing_resolution.unicast_set_port_and_src_mac"
     alias: "unicast_set_port_and_src_mac"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\")"
   }
   params {

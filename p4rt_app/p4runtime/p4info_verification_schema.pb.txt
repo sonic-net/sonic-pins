@@ -192,6 +192,11 @@ tables {
     parameters { name: "port" format: STRING }
     parameters { name: "src_mac" format: MAC }
   }
+   actions {
+    name: "unicast_set_port_and_src_mac"
+    parameters { name: "port" format: STRING }
+    parameters { name: "src_mac" format: MAC }
+  }
   actions {
     name: "unicast_set_port_and_src_mac"
     parameters { name: "port" format: STRING }

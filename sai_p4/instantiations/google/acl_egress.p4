@@ -147,6 +147,7 @@ control acl_egress(in headers_t headers,
     }
     actions = {
       @proto_id(1) acl_drop(local_metadata);
+      @proto_id(2) acl_egress_forward();
       @defaultonly NoAction;
     }
     const default_action = NoAction;

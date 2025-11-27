@@ -136,9 +136,10 @@ struct NexthopRewriteOptions {
   // may still be used based on above values (otherwise a `set_ip_nexthop`
   // action will be used), but `disable_vlan_rewrite` will be set false.
   bool disable_vlan_rewrite = false;
-  // When present, causes the RIF to use a `set_port_and_src_mac_and_vlan_id`
-  // action with `vlan_id = egress_rif_vlan`. When absent, the RIF will instead
-  // use the `set_port_and_src_mac` action.
+  // When present, causes the RIF to use an
+  // `unicast_set_port_and_src_mac_and_vlan_id` action with `vlan_id =
+  // egress_rif_vlan`. When absent, the RIF will instead use the
+  // `unicast_set_port_and_src_mac` action.
   std::optional<std::string> egress_rif_vlan = std::nullopt;
   // TODO: once the `unicast_set_port_and_src_mac` action is fully
   // rolled out, remove this option and, for tests that need the old action,
@@ -148,7 +149,7 @@ struct NexthopRewriteOptions {
   // skip creating new a entry in switch's My MAC table (otherwise the legacy
   // `set_port_and_src_mac` action is used). For RIF with vlan_id, this option
   // is ignored, since it always skips My MAC entry creation.
-  bool skip_my_mac_programming = false;
+  bool skip_my_mac_programming = true;
 };
 
 enum class IpVersion {
@@ -233,7 +234,7 @@ struct RouterInterfaceTableParams {
   std::string egress_port;
   netaddr::MacAddress src_mac;
   std::optional<std::string> vlan_id;
-  bool skip_my_mac_programming = false;
+  bool skip_my_mac_programming = true;
 };
 
 // Convenience struct corresponding to the protos `p4::v1::Replica` and

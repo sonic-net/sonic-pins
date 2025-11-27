@@ -1768,6 +1768,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777485
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -2366,7 +2370,6 @@ actions {
     id: 16777264
     name: "ingress.routing_resolution.unicast_set_port_and_src_mac"
     alias: "unicast_set_port_and_src_mac"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow invalid SRC MACs.\n    src_mac != 0;\")"
   }
   params {

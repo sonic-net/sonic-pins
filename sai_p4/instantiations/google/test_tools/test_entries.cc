@@ -198,17 +198,21 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
   ASSIGN_OR_RETURN(gutil::Version current_version,
                    gutil::ParseVersion(ir_p4info.pkg_info().version()));
   ASSIGN_OR_RETURN(
-      gutil::Version version_uses_route_hit_acl_qualifier_name,
+      gutil::Version kVersionUsesRouteHitAclQualifierName,
       gutil::ParseVersion(
           SAI_P4_PKGINFO_VERSION_USES_ROUTE_HIT_ACL_QUALIFIER_NAME));
   ASSIGN_OR_RETURN(
       gutil::Version kVersionUsesUnicastSetPortAndSrcMacAndVlanAction,
       gutil::ParseVersion(
-          SAI_P4_PKGINFO_VERSION_USES_UNICAST_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION));  // NOLINT
+	  SAI_P4_PKGINFO_VERSION_USES_UNICAST_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION));  // NOLINT(whitespace/line_length)
+  ASSIGN_OR_RETURN(
+      gutil::Version kVersionUsesUnicastSetPortAndSrcMacAction,
+      gutil::ParseVersion(
+          SAI_P4_PKGINFO_VERSION_SUPPORTS_UNICAST_SET_PORT_AND_SRC_MAC_ACTION));
 
   // TODO: Version-based workarounds. Use Babel in the future.
   for (auto& ir_entity : *ir_entities.mutable_entities()) {
-    if (current_version < version_uses_route_hit_acl_qualifier_name &&
+    if (current_version < kVersionUsesRouteHitAclQualifierName &&
         ir_entity.table_entry().table_name() ==
             "acl_ingress_mirror_and_redirect_table") {
       for (auto& match : *ir_entity.mutable_table_entry()->mutable_matches()) {
@@ -217,14 +221,21 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
         }
       }
     }
-
-    // NOTE: A table entry can have an action or action set, but this action is
-    // not used in action sets so no need to check entries with action sets.
     if (current_version < kVersionUsesUnicastSetPortAndSrcMacAndVlanAction &&
-        ir_entity.table_entry().action().name() ==
-            "unicast_set_port_and_src_mac_and_vlan_id") {
-      ir_entity.mutable_table_entry()->mutable_action()->set_name(
-          "set_port_and_src_mac_and_vlan_id");
+        ir_entity.table_entry().table_name() == "router_interface_table") {
+      if (ir_entity.table_entry().action().name() ==
+          "unicast_set_port_and_src_mac_and_vlan_id") {
+        *ir_entity.mutable_table_entry()->mutable_action()->mutable_name() =
+            "set_port_and_src_mac_and_vlan_id";
+      }
+    }
+    if (current_version < kVersionUsesUnicastSetPortAndSrcMacAction &&
+        ir_entity.table_entry().table_name() == "router_interface_table") {
+      if (ir_entity.table_entry().action().name() ==
+          "unicast_set_port_and_src_mac") {
+        *ir_entity.mutable_table_entry()->mutable_action()->mutable_name() =
+            "set_port_and_src_mac";
+      }
     }
   }
   return ir_entities;
@@ -784,7 +795,8 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
           .egress_port = std::string(egress_port),
           .src_mac = src_mac,
           .vlan_id = rewrite_options.egress_rif_vlan,
-          .skip_my_mac_programming = rewrite_options.skip_my_mac_programming});
+ 	  .skip_my_mac_programming = rewrite_options.skip_my_mac_programming,
+      });
 
   // If no DST is provided, DMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's DST rewrite, we choose

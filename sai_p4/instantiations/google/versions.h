@@ -86,11 +86,6 @@
 // Indicates the switch allows reconciliation of the acl_pre_ingress_table.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_ACL_PRE_INGRESS_RECONCILE "3.1.2"
 
-// Indicates the switch supports 512 duplicate WCMP members per group in native
-// mode.
-#define SAI_P4_PKGINFO_VERSION_SUPPORTS_512_DUPLICATE_WCMP_MEMBERS_IN_NATIVE \
-  "3.1.5"
-
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_L2_MULTICAST "3.2.6"
 
 // Indicates that the switch supports unicast_set_port_and_src_mac action, which
@@ -98,6 +93,11 @@
 // table (i.e. MyMac at SAI) under the hood.
 #define SAI_P4_PKGINFO_VERSION_SUPPORTS_UNICAST_SET_PORT_AND_SRC_MAC_ACTION \
   "3.2.0"
+
+// Indicates the switch supports 512 duplicate WCMP members per group in native
+// mode.
+#define SAI_P4_PKGINFO_VERSION_SUPPORTS_512_DUPLICATE_WCMP_MEMBERS_IN_NATIVE \
+  "3.2.5"
 
 // Indicates the switch executes batched updates in order, aborting every update
 // after the first failed one.
