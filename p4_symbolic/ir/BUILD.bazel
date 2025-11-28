@@ -283,7 +283,7 @@ ir_parsing_test(
 # partial definition of the ICMP header where the 32-bit `rest_of_header` field
 # is missing, the output IR will still contain the complete ICMP header.
 # TODO: We should remove this test and the corresponding test data
-# when GPINS' last tested version is updated with the complete ICMP definition.
+# when PINS' last tested version is updated with the complete ICMP definition.
 ir_parsing_test(
     name = "partial_icmp_test",
     golden_file = "expected/partial_icmp.txt",
