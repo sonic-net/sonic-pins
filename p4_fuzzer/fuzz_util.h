@@ -184,8 +184,8 @@ std::string FuzzRandomId(absl::BitGen *gen, int min_chars = 1,
 // Does not set the match field id. See "9.1.1. Match Format" in the P4Runtime
 // specification for details about which FieldMatch values are valid.
 // Guarantees not to be a wildcard match.
-absl::StatusOr<p4::v1::FieldMatch>
-FuzzTernaryFieldMatch(absl::BitGen *gen, const FuzzerConfig &config, int bits);
+absl::StatusOr<p4::v1::FieldMatch> FuzzTernaryFieldMatch(absl::BitGen* gen,
+                                                         int bits);
 
 // Randomly generates a field match that conforms to the given
 // match field info. See "9.1.1. Match Format" in the P4Runtime
