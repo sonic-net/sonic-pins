@@ -19,7 +19,9 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "dvaas/dvaas_detective.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
@@ -64,8 +66,22 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
           return outcome.test_result().has_failure();
         });
     if (it == test_outcomes_.outcomes().end()) return absl::OkStatus();
+
+    absl::StatusOr<std::string> explanation =
+        ExplainTestOutcomes(test_outcomes_);
+    std::string explanation_string;
+    if (explanation.ok()) {
+      explanation_string = *explanation;
+    } else {
+      explanation_string = absl::StrCat(
+          "NOTICE: Dvaas Detective failed to generate an explanation: ",
+          explanation.status().message());
+      LOG(ERROR) << explanation_string;
+    }
+
     return gutil::OutOfRangeErrorBuilder()
-           << ExplainTestVectorStats(test_vector_stats_)
+           << ExplainTestVectorStats(test_vector_stats_) << "\n"
+           << explanation_string
            << "\nShowing the first failure only. Refer to the test artifacts "
               "for the full list of errors.\n"
            << ExplainFailure(it->test_result().failure());
@@ -91,6 +107,10 @@ const ValidationResult& ValidationResult::LogStatistics() const {
 ValidationResult& ValidationResult::LogStatistics() {
   LOG(INFO) << ExplainTestVectorStats(test_vector_stats_);
   return *this;
+}
+
+void ValidationResult::RecordStatisticsAsGoogleTestProperties() const {
+  RecordStatsAsGoogleTestProperties(test_vector_stats_);
 }
 
 std::vector<std::string> ValidationResult::GetAllFailures() const {
