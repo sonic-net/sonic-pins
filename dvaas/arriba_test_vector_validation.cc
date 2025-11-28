@@ -45,8 +45,10 @@ namespace dvaas {
 
 absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
     const ArribaTestVector& arriba_test_vector,
-    const std::vector<pdpi::IrTableEntry>& used_entries_list,
     const pdpi::IrP4Info& ir_p4_info) {
+  std::vector<pdpi::IrTableEntry> used_entries_list(
+      arriba_test_vector.ir_table_entries().entries().begin(),
+      arriba_test_vector.ir_table_entries().entries().end());
   ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
                    pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
 
@@ -64,6 +66,11 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
+  // Store the test vector as a test artifact.
+  gutil::BazelTestArtifactWriter artifact_writer;
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "arriba_test_vector.txtpb", arriba_test_vector));
+
   // Prepare the control switch.
   LOG(INFO) << "Installing entires to punt all packets on the control switch";
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
@@ -94,21 +101,23 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   }
 
   PacketStatistics packet_statistics;
-  gutil::BazelTestArtifactWriter artifact_writer;
 
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
-                   SendTestPacketsAndCollectOutputs(
-                       sut, control_switch, test_vector_by_id,
-                       {
-                           .max_packets_to_send_per_second =
-                               params.max_packets_to_send_per_second,
-                           .is_expected_unsolicited_packet =
-                               params.is_expected_unsolicited_packet,
-                           .mirror_testbed_port_map =
-                               MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
-                       },
-                       packet_statistics));
+  ASSIGN_OR_RETURN(
+      PacketTestRuns test_runs,
+      SendTestPacketsAndCollectOutputs(
+          sut, control_switch, test_vector_by_id,
+          {
+              .max_packets_to_send_per_second =
+                  params.max_packets_to_send_per_second,
+              .is_expected_unsolicited_packet =
+                  params.is_expected_unsolicited_packet,
+              .mirror_testbed_port_map =
+                  params.mirror_testbed_port_map_override.has_value()
+                      ? *params.mirror_testbed_port_map_override
+                      : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+          },
+          packet_statistics));
 
   ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
                    pdpi::ReadIrTableEntries(sut));

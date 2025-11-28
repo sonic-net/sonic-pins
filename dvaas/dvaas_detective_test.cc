@@ -22,6 +22,7 @@
 #include "dvaas/dvaas_detective.h"
 
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -29,6 +30,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "dvaas/dvaas_detective.pb.h"
 #include "dvaas/test_vector.pb.h"
@@ -41,6 +43,7 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
+#include "yggdrasil_decision_forests/model/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
 
 namespace dvaas {
@@ -344,6 +347,224 @@ PacketTestOutcomes TestOutcomeToFeatureMapTestCases() {
   )pb");
 }
 
+// Parameters for creating a faux `PacketTestOutcome`.
+// - Every field corresponds to a feature returned by `TestOutcomeToFeatureMap`
+struct PacketTestOutcomeParams {
+  // Number of expected output packets (max across alternavtives if
+  // `acceptable_outputs` > 1).
+  int num_expected_output_packets = 0;
+  // Number of expected packet-ins (max across alternatives if
+  // `acceptable_outputs` > 1).
+  int num_expected_packet_ins = 0;
+  // Number of acceptable outputs (should always be at least 1)
+  int num_acceptable_outputs = 1;
+  // Whether the test result is a pass or fail.
+  bool is_pass = true;
+};
+
+// Creates a faux `PacketTestOutcome` with the given `params`.
+PacketTestOutcome MakeDummyOutcome(const PacketTestOutcomeParams& params) {
+  PacketTestOutcome outcome;
+  // There should always be at least one output.
+  CHECK_GT(params.num_acceptable_outputs, 0);
+  for (int i = 0; i < params.num_acceptable_outputs; ++i) {
+    outcome.mutable_test_run()->mutable_test_vector()->add_acceptable_outputs();
+  }
+  dvaas::SwitchOutput* first_output = outcome.mutable_test_run()
+                                          ->mutable_test_vector()
+                                          ->mutable_acceptable_outputs(0);
+  for (int i = 0; i < params.num_expected_output_packets; ++i) {
+    first_output->add_packets();
+  }
+  for (int i = 0; i < params.num_expected_packet_ins; ++i) {
+    first_output->add_packet_ins();
+  }
+  if (!params.is_pass) {
+    outcome.mutable_test_result()->mutable_failure();
+  }
+
+  return outcome;
+}
+
+PacketTestOutcomes MakeDummyOutcomes(
+    std::initializer_list<PacketTestOutcomeParams> params) {
+  PacketTestOutcomes outcomes;
+  for (const auto& param : params) {
+    *outcomes.add_outcomes() = MakeDummyOutcome(param);
+  }
+  return outcomes;
+}
+
+// A test case for `DvaasDetectiveTest`.
+struct ExplainTestOutcomesTestCase {
+  // Description of `test_outcomes`.
+  std::string description;
+  // PacketTestOutcomes explained by Dvaas Detective.
+  PacketTestOutcomes test_outcomes;
+};
+
+std::vector<ExplainTestOutcomesTestCase> ExplainTestOutcomesTestCases() {
+  return {
+      {
+          .description = "No PacketTestOutcomes",
+      },
+      {
+          .description = "1 passing unicast (i.e. All passing tests)",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+          }),
+      },
+      {
+          .description = "1 failing unicast (i.e. All failing tests)",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+          }),
+      },
+      {
+          .description = "1 passing unicast, 1 failing multicast",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 2,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+          }),
+      },
+      {
+          .description = "3 passing unicast, 1 failing unicast (i.e. Identical "
+                         "tests pass more often than they fail)",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+          }),
+      },
+      {
+          .description = "1 passing unicast, 3 failing unicast (i.e. Identical "
+                         "tests fail more often than they pass)",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+          }),
+      },
+      {
+          .description = "1 passing unicast, 1 failing unicast (i.e. Identical "
+                         "tests 50/50 pass and fail)",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+          }),
+      },
+      {
+          .description =
+              "1 passing unicast, 1 failing unicast+punt, 3 failing "
+              "multicast (i.e. Conjunction of features determines outcome)",
+          .test_outcomes = MakeDummyOutcomes({
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = true,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 1,
+                  .num_expected_packet_ins = 1,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 2,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 2,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+              PacketTestOutcomeParams{
+                  .num_expected_output_packets = 2,
+                  .num_expected_packet_ins = 0,
+                  .num_acceptable_outputs = 1,
+                  .is_pass = false,
+              },
+          }),
+      },
+  };
+}
+
 void TestOutcomeToFeatureMapTest(const PacketTestOutcome& test_outcome) {
   // Print header.
   std::cout << std::string(80, '=') << "\n"
@@ -371,6 +592,29 @@ void TestOutcomeToFeatureMapTest(const PacketTestOutcome& test_outcome) {
               << FeatureValueToString(feature_map.at(feature_name)) << "\n";
   }
   std::cout << "\n";
+}
+
+void ExplainTestOutcomesTest(const ExplainTestOutcomesTestCase& test) {
+  // Print header.
+  std::cout << std::string(80, '=') << "\n"
+            << "DVaaS Detective Explanation Test\n"
+            << std::string(80, '=') << "\n";
+
+  // Print input.
+  std::cout << "-- Input: PacketTestOutcomes (concise description) ---------\n";
+  std::cout << test.description << "\n";
+
+  std::cout << "-- Output: Explanation Proto -------------------------------\n";
+  absl::StatusOr<DetectiveExplanation> explanation =
+      CreateDetectiveExplanation(test.test_outcomes);
+  if (!explanation.ok()) {
+    std::cout << gutil::StableStatusToString(explanation.status()) << "\n";
+    return;
+  }
+  std::cout << gutil::PrintTextProto(*explanation);
+
+  std::cout << "-- Output: Explanation Pretty Print ------------------------\n";
+  std::cout << DetectiveExplanationToString(*explanation) << "\n";
 }
 
 void WriteCsvFileFromPacketTestOutcomesTest() {
@@ -417,6 +661,9 @@ TEST(DvaasDetectiveTest, GoldenTest) {
   ExtractExplanationFromModelTest();
 
   DetectiveExplanationToStringTest();
+  for (const auto& test : ExplainTestOutcomesTestCases()) {
+    ExplainTestOutcomesTest(test);
+  }
 }
 
 // Support for multiple trees is not implemented.
