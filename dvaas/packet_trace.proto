@@ -25,6 +25,7 @@ message MarkToDrop {
 
 message PacketReplication {
   int32 number_of_packets_replicated = 1;
+  pdpi.IrPacketReplicationEngineEntry packet_replication_engine_entry = 2;
 }
 
 message TableApply {

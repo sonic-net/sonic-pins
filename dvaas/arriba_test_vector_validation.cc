@@ -20,6 +20,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/log/log.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
@@ -43,15 +44,38 @@
 
 namespace dvaas {
 
+absl::StatusOr<ArribaTestVector> GetUpdatedArribaTestVector(
+    const ArribaTestVector& arriba_test_vector) {
+  if (arriba_test_vector.has_ir_entities()) {
+    if (arriba_test_vector.has_ir_table_entries())
+      return absl::InvalidArgumentError(
+          "ArribaTestVector has both ir_entities and ir_table_entries set.");
+    return arriba_test_vector;
+  }
+  ArribaTestVector updated_test_vector = arriba_test_vector;
+  for (const auto& table_entry :
+       arriba_test_vector.ir_table_entries().entries()) {
+    *updated_test_vector.mutable_ir_entities()
+         ->add_entities()
+         ->mutable_table_entry() = table_entry;
+  }
+  updated_test_vector.clear_ir_table_entries();
+  return updated_test_vector;
+}
+
 absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
     const ArribaTestVector& arriba_test_vector,
-    const std::vector<pdpi::IrTableEntry>& used_entries_list,
     const pdpi::IrP4Info& ir_p4_info) {
+  ASSIGN_OR_RETURN(ArribaTestVector updated_arriba_test_vector,
+                   GetUpdatedArribaTestVector(arriba_test_vector));
+  std::vector<pdpi::IrEntity> used_entities_list(
+      updated_arriba_test_vector.ir_entities().entities().begin(),
+      updated_arriba_test_vector.ir_entities().entities().end());
   ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
-                   pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
+                   pins_test::GetPortsUsed(ir_p4_info, used_entities_list));
 
   for (const auto& [_, packet_test_vector] :
-       arriba_test_vector.packet_test_vector_by_id()) {
+       updated_arriba_test_vector.packet_test_vector_by_id()) {
     ASSIGN_OR_RETURN(pins_test::P4rtPortId p4rt_port_id,
                      pins_test::P4rtPortId::MakeFromP4rtEncoding(
                          packet_test_vector.input().packet().port()));
@@ -64,6 +88,13 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
+  ASSIGN_OR_RETURN(ArribaTestVector updated_arriba_test_vector,
+                   GetUpdatedArribaTestVector(arriba_test_vector));
+  // Store the test vector as a test artifact.
+  gutil::BazelTestArtifactWriter artifact_writer;
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "arriba_test_vector.txtpb", updated_arriba_test_vector));
+
   // Prepare the control switch.
   LOG(INFO) << "Installing entires to punt all packets on the control switch";
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
@@ -82,33 +113,35 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   LOG(INFO) << "Installing entries from the given test vector on the SUT";
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&sut));
   RETURN_IF_ERROR(
-      pdpi::InstallIrTableEntries(sut, arriba_test_vector.ir_table_entries()));
+      pdpi::InstallIrEntities(sut, updated_arriba_test_vector.ir_entities()));
 
   // Prepare single packet test vectors.
   PacketTestVectorById test_vector_by_id;
   std::vector<PacketTestVector> packet_test_vectors;
   for (const auto& [id, packet_test_vector] :
-       arriba_test_vector.packet_test_vector_by_id()) {
+       updated_arriba_test_vector.packet_test_vector_by_id()) {
     test_vector_by_id[id] = packet_test_vector;
     packet_test_vectors.push_back(packet_test_vector);
   }
 
   PacketStatistics packet_statistics;
-  gutil::BazelTestArtifactWriter artifact_writer;
 
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
-                   SendTestPacketsAndCollectOutputs(
-                       sut, control_switch, test_vector_by_id,
-                       {
-                           .max_packets_to_send_per_second =
-                               params.max_packets_to_send_per_second,
-                           .is_expected_unsolicited_packet =
-                               params.is_expected_unsolicited_packet,
-                           .mirror_testbed_port_map =
-                               MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
-                       },
-                       packet_statistics));
+  ASSIGN_OR_RETURN(
+      PacketTestRuns test_runs,
+      SendTestPacketsAndCollectOutputs(
+          sut, control_switch, test_vector_by_id,
+          {
+              .max_packets_to_send_per_second =
+                  params.max_packets_to_send_per_second,
+              .is_expected_unsolicited_packet =
+                  params.is_expected_unsolicited_packet,
+              .mirror_testbed_port_map =
+                  params.mirror_testbed_port_map_override.has_value()
+                      ? *params.mirror_testbed_port_map_override
+                      : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+          },
+          packet_statistics));
 
   ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
                    pdpi::ReadIrTableEntries(sut));
