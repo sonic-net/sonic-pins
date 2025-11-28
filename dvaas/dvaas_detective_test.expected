@@ -376,3 +376,195 @@ DVaaS Detective: Found the following pattern(s) among failing test vectors:
   * accuracy: 60%, 30 out of 42 test vectors that match the conditions fail (remaining 12 pass instead)
   * coverage: 100%, accounting for 30 out of 30 failing test vectors
 * All failing test vectors accounted for
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+No PacketTestOutcomes
+-- Output: Explanation Proto -------------------------------
+INVALID_ARGUMENT: No PacketTestOutcomes provided.
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+1 passing unicast (i.e. All passing tests)
+-- Output: Explanation Proto -------------------------------
+clusters {
+  predicted_outcome_is_pass: true
+  passing_tests: 1
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* <no conditions> -> pass
+  * accuracy: 100%, 1 out of 1 test vectors that match the conditions pass (remaining 0 fail instead)
+  * coverage: 100%, accounting for 1 out of 1 passing test vectors
+* All passing test vectors accounted for
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* 0 failing test vectors unaccounted for (100%)
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+1 failing unicast (i.e. All failing tests)
+-- Output: Explanation Proto -------------------------------
+clusters {
+  failing_tests: 1
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* 0 passing test vectors unaccounted for (100%)
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* <no conditions> -> fail
+  * accuracy: 100%, 1 out of 1 test vectors that match the conditions fail (remaining 0 pass instead)
+  * coverage: 100%, accounting for 1 out of 1 failing test vectors
+* All failing test vectors accounted for
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+1 passing unicast, 1 failing multicast
+-- Output: Explanation Proto -------------------------------
+clusters {
+  defining_property: "# expected output packets >= 1.5"
+  failing_tests: 1
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 1
+}
+clusters {
+  defining_property: "# expected output packets < 1.5"
+  predicted_outcome_is_pass: true
+  passing_tests: 1
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* # expected output packets < 1.5 -> pass
+  * accuracy: 100%, 1 out of 1 test vectors that match the conditions pass (remaining 0 fail instead)
+  * coverage: 100%, accounting for 1 out of 1 passing test vectors
+* All passing test vectors accounted for
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* # expected output packets >= 1.5 -> fail
+  * accuracy: 100%, 1 out of 1 test vectors that match the conditions fail (remaining 0 pass instead)
+  * coverage: 100%, accounting for 1 out of 1 failing test vectors
+* All failing test vectors accounted for
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+3 passing unicast, 1 failing unicast (i.e. Identical tests pass more often than they fail)
+-- Output: Explanation Proto -------------------------------
+clusters {
+  predicted_outcome_is_pass: true
+  passing_tests: 3
+  failing_tests: 1
+  accuracy_of_predicted_outcome: 0.75
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* <no conditions> -> pass
+  * accuracy: 75%, 3 out of 4 test vectors that match the conditions pass (remaining 1 fail instead)
+  * coverage: 100%, accounting for 3 out of 3 passing test vectors
+* All passing test vectors accounted for
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* 1 failing test vectors unaccounted for (100%)
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+1 passing unicast, 3 failing unicast (i.e. Identical tests fail more often than they pass)
+-- Output: Explanation Proto -------------------------------
+clusters {
+  passing_tests: 1
+  failing_tests: 3
+  accuracy_of_predicted_outcome: 0.75
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* 1 passing test vectors unaccounted for (100%)
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* <no conditions> -> fail
+  * accuracy: 75%, 3 out of 4 test vectors that match the conditions fail (remaining 1 pass instead)
+  * coverage: 100%, accounting for 3 out of 3 failing test vectors
+* All failing test vectors accounted for
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+1 passing unicast, 1 failing unicast (i.e. Identical tests 50/50 pass and fail)
+-- Output: Explanation Proto -------------------------------
+clusters {
+  predicted_outcome_is_pass: true
+  passing_tests: 1
+  failing_tests: 1
+  accuracy_of_predicted_outcome: 0.5
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* <no conditions> -> pass
+  * accuracy: 50%, 1 out of 2 test vectors that match the conditions pass (remaining 1 fail instead)
+  * coverage: 100%, accounting for 1 out of 1 passing test vectors
+* All passing test vectors accounted for
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* 1 failing test vectors unaccounted for (100%)
+
+================================================================================
+DVaaS Detective Explanation Test
+================================================================================
+-- Input: PacketTestOutcomes (concise description) ---------
+1 passing unicast, 1 failing unicast+punt, 3 failing multicast (i.e. Conjunction of features determines outcome)
+-- Output: Explanation Proto -------------------------------
+clusters {
+  defining_property: "# expected output packets >= 1.5"
+  failing_tests: 3
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 0.75
+}
+clusters {
+  defining_property: "# expected output packets < 1.5 && # expected punted packets >= 0.5"
+  failing_tests: 1
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 0.25
+}
+clusters {
+  defining_property: "# expected output packets < 1.5 && # expected punted packets < 0.5"
+  predicted_outcome_is_pass: true
+  passing_tests: 1
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 1
+}
+-- Output: Explanation Pretty Print ------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* # expected output packets < 1.5 && # expected punted packets < 0.5 -> pass
+  * accuracy: 100%, 1 out of 1 test vectors that match the conditions pass (remaining 0 fail instead)
+  * coverage: 100%, accounting for 1 out of 1 passing test vectors
+* All passing test vectors accounted for
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* # expected output packets >= 1.5 -> fail
+  * accuracy: 100%, 3 out of 3 test vectors that match the conditions fail (remaining 0 pass instead)
+  * coverage: 75%, accounting for 3 out of 4 failing test vectors
+* # expected output packets < 1.5 && # expected punted packets >= 0.5 -> fail
+  * accuracy: 100%, 1 out of 1 test vectors that match the conditions fail (remaining 0 pass instead)
+  * coverage: 25%, accounting for 1 out of 4 failing test vectors
+* All failing test vectors accounted for
