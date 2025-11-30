@@ -23,7 +23,7 @@ import "p4_pdpi/ir.proto";
 
 message DvaasRegressionTestProto {
   PacketTestVector test_vector = 1;
-  pdpi.IrEntities minimal_set_of_entities = 2;
+  pdpi.IrEntities entities = 2;
   p4.config.v1.P4Info p4info = 3;
   bool currently_failing = 4;
   .google.protobuf.Any user_metadata = 5;
