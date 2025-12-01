@@ -387,8 +387,13 @@ absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
 // Checks that a read from `session` returns no entities.
 absl::Status CheckNoEntities(P4RuntimeSession& session);
 
-// Deletes all entities read from `session`.
-absl::Status ClearEntities(P4RuntimeSession& session);
+// Deletes all entities read from `session`. If `execute_on_failure` is
+// provided, it will be called with the entities that failed to be deleted.
+absl::Status ClearEntities(
+    P4RuntimeSession& session,
+    absl::AnyInvocable<absl::Status(
+        const std::vector<p4::v1::Entity>& entities_that_failed_to_be_deleted)>
+        execute_on_failure = nullptr);
 
 // Resets all counters in all `TableEntry`s to zero.
 // Applies to both `counter_data` and `meter_counter_data`.
