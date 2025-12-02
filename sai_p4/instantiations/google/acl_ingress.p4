@@ -652,6 +652,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
   @sai_acl_priority(15)
+  @nonessential_for_upgrade
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
