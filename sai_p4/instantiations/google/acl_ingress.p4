@@ -237,6 +237,10 @@ control acl_ingress(in headers_t headers,
     @sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)
     @refers_to(builtin::multicast_group_table, multicast_group_id)
     multicast_group_id_t multicast_group_id) {
+    // Mark that we are using ACLs to redirect the packet to an L2 multicast
+    // group.
+    local_metadata.acl_ingress_l2mc_redirect = true;
+
     standard_metadata.mcast_grp = multicast_group_id;
 
     // Cancel other forwarding decisions (if any).
