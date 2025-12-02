@@ -276,7 +276,10 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
         router_interface_table_entry {
           match { router_interface_id: "router-interface-1" }
           action {
-            set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
+            unicast_set_port_and_src_mac {
+              port: "1"
+              src_mac: "02:2a:10:00:00:03"
+            }
           }
         }
       )pb");
@@ -309,7 +312,10 @@ TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
         router_interface_table_entry {
           match { router_interface_id: "\x01\x33\x00\xff,\":'}(*{+-" }
           action {
-            set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
+            unicast_set_port_and_src_mac {
+              port: "1"
+              src_mac: "02:2a:10:00:00:03"
+            }
           }
         }
       )pb");
@@ -412,7 +418,10 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
         router_interface_table_entry {
           match { router_interface_id: "router-interface-1" }
           action {
-            set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
+            unicast_set_port_and_src_mac {
+              port: "1"
+              src_mac: "02:2a:10:00:00:03"
+            }
           }
         }
       )pb");
@@ -477,7 +486,10 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
         router_interface_table_entry {
           match { router_interface_id: "router-interface-1" }
           action {
-            set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
+            unicast_set_port_and_src_mac {
+              port: "1"
+              src_mac: "02:2a:10:00:00:03"
+            }
           }
         }
       )pb");
