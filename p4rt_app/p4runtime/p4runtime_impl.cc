@@ -1826,8 +1826,7 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
     const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
     const std::vector<std::pair<std::string, std::string>>&
         front_panel_queue_ids,
-    const std::optional<int>& device_id,
-    const std::vector<std::string>& ports) {
+    const std::optional<int>& device_id) {
   /**
    * controller_manager_, packetio_impl_, component_state_, system_state_,
    * netdev_translator_, forwarding_config_full_path_ are restored in
@@ -1903,10 +1902,6 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
   // Ignore if no valid device ID found in configDB.
   if (device_id.has_value()) {
     RETURN_IF_ERROR(UpdateDeviceId(device_id.value())).LogError();
-  }
-
-  for (const auto& port : ports) {
-    RETURN_IF_ERROR(AddPacketIoPort(port)).LogError();
   }
 
   /**
