@@ -65,6 +65,13 @@ control drop_martians(in headers_t headers,
           (local_metadata.acl_ingress_ipmc_redirect ||
           local_metadata.acl_ingress_nexthop_redirect);
 
+    // TODO: Remove the `acl_l3_redirect` check when the switch
+    // correctly handles martians during ACL redirection.
+    // Packets going through L2 multicast (and potentially other L2 forwarded
+    // packets) bypass the martian check.
+    bool bypass_martian_check =
+        acl_l3_redirect || local_metadata.acl_ingress_l2mc_redirect;
+
     // Drop the packet if:
     // - Packet is not redirected by ingress ACL; or
     // - Src IPv6 address is in multicast range; or
@@ -83,9 +90,7 @@ control drop_martians(in headers_t headers,
     //    "RFC 1122 [...] prohibits this as a destination address."
     // Src IPv4 all zeros drop: https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
     // Src IPv6 all zeros drop: https://www.rfc-editor.org/rfc/rfc4291#section-2.5.2
-    // Remove `acl_l3_redirect` check when switch correctly
-    // handles martians during ACL redirection.
-    if (!acl_l3_redirect &&
+    if (!bypass_martian_check &&
         ((headers.ipv6.isValid() &&
             (IS_MULTICAST_IPV6(headers.ipv6.src_addr) ||
              IS_LOOPBACK_IPV6(headers.ipv6.src_addr) ||
@@ -119,8 +124,9 @@ control drop_martians(in headers_t headers,
     // PINs switches drop packets with hop-by-hop options by choice, not by
     // necessity. All expected packets should be punted, so we mark them all to
     // drop by choice to get some deterministic behavior.
-    if (headers.hop_by_hop_options.isValid() ||
-        headers.inner_hop_by_hop_options.isValid()) {
+    if (!bypass_martian_check &&
+        (headers.hop_by_hop_options.isValid() ||
+        headers.inner_hop_by_hop_options.isValid())) {
         mark_to_drop(standard_metadata);
     }
 
