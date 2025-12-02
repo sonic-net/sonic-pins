@@ -273,7 +273,10 @@ ConstructEntriesToForwardAllTrafficToLoopbackPortAndCopyEcnPacketsToCPU(
           router_interface_table_entry {
             match { router_interface_id: "rif" }
             action {
-              set_port_and_src_mac { port: "$1" src_mac: "66:55:44:33:22:11" }
+              unicast_set_port_and_src_mac {
+                port: "$1"
+                src_mac: "66:55:44:33:22:11"
+              }
             }
           }
         }

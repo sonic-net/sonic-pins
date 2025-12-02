@@ -92,7 +92,9 @@ absl::Status ProgramRouterInterface(
               table_entry {
                 router_interface_table_entry {
                   match { router_interface_id: "traffic-router-interface-$0" }
-                  action { set_port_and_src_mac { port: "$0" src_mac: "$1" } }
+                  action {
+                    unicast_set_port_and_src_mac { port: "$0" src_mac: "$1" }
+                  }
                 }
               }
             }
