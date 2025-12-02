@@ -198,6 +198,13 @@ message VrfTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Table entry restrictions:
+// ## TODO: Remove when switch supports priority as a key for
+// ## this table.
+// ## The switch does not support priority as a key. In order to avoid
+// ## conflicts between entries where the only difference is the
+// ## priority, we choose a fixed priority arbitrarily.
+//   ::priority == 900;
 message Ipv6TunnelTerminationTableEntry {
   message Match {
     Ternary dst_ipv6 = 1;  // ternary match / Format::IPV6 / 128 bits
@@ -836,7 +843,18 @@ message AclIngressSecurityTableEntry {
 //   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
 // ## Forbid unsupported combinations of IP_TYPE fields.
 //   is_ipv4::mask != 0 -> (is_ipv4 == 1);
-//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);" "route_hit::mask != 0 -> (
+// ## Multicast IPv4.
+// ## I.e. 224.X.X.X - 239.X.X.X
+//   (dst_ip::mask >= 0xf0000000
+//   && dst_ip::value >= 0xe0000000
+//   && dst_ip::value < 0xf0000000)
+//   ||
+// ## Multicast IPv6.
+// ## I.e. FFXX:XXXX:...
+//   (dst_ipv6::mask >= 0xff00000000000000
+//   && dst_ipv6::value >= 0xff00000000000000)
+//   );
 message AclIngressMirrorAndRedirectTableEntry {
   message Match {
     Optional in_port = 1;      // optional match / Format::STRING

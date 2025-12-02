@@ -1715,5 +1715,30 @@ TEST(EntryBuilder,
               )pb"))));
 }
 
+TEST(EntryBuilder, AddAclIngressQosDropTableEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddAclIngressQosDropTableEntry(AclIngressQosMatchFields{
+              .dst_mac = pdpi::Ternary<netaddr::MacAddress>(
+                  netaddr::MacAddress(0x01, 0x23, 0x45, 0x67, 0x89, 0xab))})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_qos_table"
+                  matches {
+                    name: "dst_mac"
+                    ternary {
+                      value { mac: "01:23:45:67:89:ab" }
+                      mask { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                  action { name: "acl_drop" }
+                }
+              )pb"))));
+}
+
 }  // namespace
 }  // namespace sai

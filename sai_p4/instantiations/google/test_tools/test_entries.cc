@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -66,6 +67,17 @@ sai::Ternary BitSetTernaryToSai(
   sai::Ternary sai_ternary;
   sai_ternary.set_value(pdpi::BitsetToHexString(bitset_ternary.value));
   sai_ternary.set_mask(pdpi::BitsetToHexString(bitset_ternary.mask));
+  return sai_ternary;
+}
+
+template <typename T, typename = std::enable_if_t<std::disjunction_v<
+                          std::is_same<T, netaddr::Ipv4Address>,
+                          std::is_same<T, netaddr::Ipv6Address>,
+                          std::is_same<T, netaddr::MacAddress>>>>
+sai::Ternary NetaddrTernaryToSai(const pdpi::Ternary<T>& netaddr_ternary) {
+  sai::Ternary sai_ternary;
+  sai_ternary.set_value(netaddr_ternary.value.ToString());
+  sai_ternary.set_mask(netaddr_ternary.mask.ToString());
   return sai_ternary;
 }
 
@@ -533,7 +545,7 @@ EntryBuilder& EntryBuilder::AddEntryTunnelTerminatingAllIpInIpv6Packets() {
     ipv6_tunnel_termination_table_entry {
       match {}  # Wildcard match
       action { tunnel_decap {} }
-      priority: 1
+      priority: 900
     }
   )pb");
   return *this;
@@ -1089,7 +1101,7 @@ EntryBuilder& EntryBuilder::AddIpv6TunnelTerminationEntry(
         params.src_ipv6->mask.ToString());
   }
   tunnel_entry.mutable_action()->mutable_tunnel_decap();
-  tunnel_entry.set_priority(1);
+  tunnel_entry.set_priority(900);
   *entries_.add_entries() = std::move(pd_entry);
   return *this;
 }
@@ -1145,6 +1157,19 @@ EntryBuilder& EntryBuilder::AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
       queue_assignments.unicast_green_queue);
   queue_and_rate_limit_action.set_red_unicast_queue(
       queue_assignments.unicast_red_queue);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddAclIngressQosDropTableEntry(
+    const AclIngressQosMatchFields& match_fields, int priority) {
+  sai::AclIngressQosTableEntry& acl_entry =
+      *entries_.add_entries()->mutable_acl_ingress_qos_table_entry();
+  if (!match_fields.dst_mac.IsWildcard()) {
+    *acl_entry.mutable_match()->mutable_dst_mac() =
+        NetaddrTernaryToSai(match_fields.dst_mac);
+  }
+  acl_entry.mutable_action()->mutable_acl_drop();
+  acl_entry.set_priority(priority);
   return *this;
 }
 
