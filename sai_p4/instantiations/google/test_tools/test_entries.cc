@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -69,6 +70,17 @@ sai::Ternary BitSetTernaryToSai(
   return sai_ternary;
 }
 
+template <typename T, typename = std::enable_if_t<std::disjunction_v<
+                          std::is_same<T, netaddr::Ipv4Address>,
+                          std::is_same<T, netaddr::Ipv6Address>,
+                          std::is_same<T, netaddr::MacAddress>>>>
+sai::Ternary NetaddrTernaryToSai(const pdpi::Ternary<T>& netaddr_ternary) {
+  sai::Ternary sai_ternary;
+  sai_ternary.set_value(netaddr_ternary.value.ToString());
+  sai_ternary.set_mask(netaddr_ternary.mask.ToString());
+  return sai_ternary;
+}
+
 bool AnyRewriteOptionsDisabled(const NexthopRewriteOptions& rewrite_options) {
   return rewrite_options.disable_decrement_ttl ||
          !rewrite_options.src_mac_rewrite.has_value() ||
@@ -77,36 +89,6 @@ bool AnyRewriteOptionsDisabled(const NexthopRewriteOptions& rewrite_options) {
 }
 
 std::string BoolToHexString(bool value) { return value ? "0x1" : "0x0"; }
-
-sai::TableEntry MakeRouterInterfaceTableEntry(
-    const RouterInterfaceTableParams& params = {}) {
-  sai::TableEntry table_entry;
-  sai::RouterInterfaceTableEntry& rif_entry =
-      *table_entry.mutable_router_interface_table_entry();
-  rif_entry.mutable_match()->set_router_interface_id(
-      params.router_interface_id);
-  if (params.vlan_id.has_value()) {
-    sai::UnicastSetPortAndSrcMacAndVlanIdAction& action =
-        *rif_entry.mutable_action()
-             ->mutable_unicast_set_port_and_src_mac_and_vlan_id();
-    action.set_port(params.egress_port);
-    action.set_src_mac(params.src_mac.ToString());
-    action.set_vlan_id(params.vlan_id.value());
-  } else {
-    if (params.skip_my_mac_programming) {
-      sai::UnicastSetPortAndSrcMacAction& action =
-          *rif_entry.mutable_action()->mutable_unicast_set_port_and_src_mac();
-      action.set_port(params.egress_port);
-      action.set_src_mac(params.src_mac.ToString());
-    } else {
-      sai::SetPortAndSrcMacAction& action =
-          *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
-      action.set_port(params.egress_port);
-      action.set_src_mac(params.src_mac.ToString());
-    }
-  }
-  return table_entry;
-}
 
 sai::TableEntry MakeNeighborTableEntry(absl::string_view router_interface_id,
                                        const netaddr::Ipv6Address& neighbor_id,
@@ -533,7 +515,7 @@ EntryBuilder& EntryBuilder::AddEntryTunnelTerminatingAllIpInIpv6Packets() {
     ipv6_tunnel_termination_table_entry {
       match {}  # Wildcard match
       action { tunnel_decap {} }
-      priority: 1
+      priority: 900
     }
   )pb");
   return *this;
@@ -588,6 +570,35 @@ sai::MulticastRouterInterfaceTableEntry ActionlessMrifEntry(
   return pd_entry;
 }
 }  // namespace
+
+EntryBuilder& EntryBuilder::AddRouterInterfaceTableEntry(
+    const RouterInterfaceTableParams& params) {
+  sai::RouterInterfaceTableEntry& rif_entry =
+      *entries_.add_entries()->mutable_router_interface_table_entry();
+  rif_entry.mutable_match()->set_router_interface_id(
+      params.router_interface_id);
+  if (params.vlan_id.has_value()) {
+    sai::UnicastSetPortAndSrcMacAndVlanIdAction& action =
+        *rif_entry.mutable_action()
+             ->mutable_unicast_set_port_and_src_mac_and_vlan_id();
+    action.set_port(params.egress_port);
+    action.set_src_mac(params.src_mac.ToString());
+    action.set_vlan_id(params.vlan_id.value());
+  } else {
+    if (params.skip_my_mac_programming) {
+      sai::UnicastSetPortAndSrcMacAction& action =
+          *rif_entry.mutable_action()->mutable_unicast_set_port_and_src_mac();
+      action.set_port(params.egress_port);
+      action.set_src_mac(params.src_mac.ToString());
+    } else {
+      sai::SetPortAndSrcMacAction& action =
+          *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
+      action.set_port(params.egress_port);
+      action.set_src_mac(params.src_mac.ToString());
+    }
+  }
+  return *this;
+}
 
 EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMac(
     absl::string_view egress_port, int replica_instance,
@@ -789,14 +800,13 @@ EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
           .substr(0, 32);
 
   // Create router interface entry.
-  *entries_.add_entries() =
-      MakeRouterInterfaceTableEntry(RouterInterfaceTableParams{
-          .router_interface_id = kRifId,
-          .egress_port = std::string(egress_port),
-          .src_mac = src_mac,
-          .vlan_id = rewrite_options.egress_rif_vlan,
- 	  .skip_my_mac_programming = rewrite_options.skip_my_mac_programming,
-      });
+  AddRouterInterfaceTableEntry(RouterInterfaceTableParams{
+      .router_interface_id = kRifId,
+      .egress_port = std::string(egress_port),
+      .src_mac = src_mac,
+      .vlan_id = rewrite_options.egress_rif_vlan,
+      .skip_my_mac_programming = rewrite_options.skip_my_mac_programming,
+  });
 
   // If no DST is provided, DMAC rewrite will be disabled for nexthop. In that
   // case, we can use any valid value for RIF's DST rewrite, we choose
@@ -1089,7 +1099,7 @@ EntryBuilder& EntryBuilder::AddIpv6TunnelTerminationEntry(
         params.src_ipv6->mask.ToString());
   }
   tunnel_entry.mutable_action()->mutable_tunnel_decap();
-  tunnel_entry.set_priority(1);
+  tunnel_entry.set_priority(900);
   *entries_.add_entries() = std::move(pd_entry);
   return *this;
 }
@@ -1145,6 +1155,19 @@ EntryBuilder& EntryBuilder::AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
       queue_assignments.unicast_green_queue);
   queue_and_rate_limit_action.set_red_unicast_queue(
       queue_assignments.unicast_red_queue);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddAclIngressQosDropTableEntry(
+    const AclIngressQosMatchFields& match_fields, int priority) {
+  sai::AclIngressQosTableEntry& acl_entry =
+      *entries_.add_entries()->mutable_acl_ingress_qos_table_entry();
+  if (!match_fields.dst_mac.IsWildcard()) {
+    *acl_entry.mutable_match()->mutable_dst_mac() =
+        NetaddrTernaryToSai(match_fields.dst_mac);
+  }
+  acl_entry.mutable_action()->mutable_acl_drop();
+  acl_entry.set_priority(priority);
   return *this;
 }
 
