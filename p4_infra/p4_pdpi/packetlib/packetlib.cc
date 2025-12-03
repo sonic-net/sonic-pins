@@ -41,8 +41,8 @@
 #include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/packetlib/bit_widths.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace packetlib {
 
@@ -70,7 +70,8 @@ using NextHeader = absl::variant<
 
 absl::StatusOr<NextHeader> GetNextHeaderForEtherType(
     absl::string_view header_name, absl::string_view ethertype_hexstring) {
-  ASSIGN_OR_RETURN(int ethertype, pdpi::HexStringToInt(ethertype_hexstring),
+  ASSIGN_OR_RETURN(int ethertype,
+                   string_encodings::HexStringToInt(ethertype_hexstring),
                    _.SetCode(absl::StatusCode::kInternal).SetPrepend()
                        << "unable to parse ethertype: ");
   // See https://en.wikipedia.org/wiki/EtherType.
@@ -154,8 +155,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const HopByHopOptionsHeader& header) {
           header.next_header())};
 }
 absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
-  ASSIGN_OR_RETURN(auto dest_port,
-                   pdpi::HexStringToInt32(header.destination_port()));
+  ASSIGN_OR_RETURN(auto dest_port, string_encodings::HexStringToInt32(
+                                       header.destination_port()));
   if (dest_port == kIpfixUdpDestPort) return Header::kIpfixHeader;
   if (dest_port == 319) return Header::kPtpHeader;
   if (dest_port == 320) return Header::kPtpHeader;
@@ -188,7 +189,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const PspHeader& header) {
   }
   // Only parse the UDP header if we have enough unencrypted bits.
   ASSIGN_OR_RETURN(int crypt_offset,
-                   pdpi::HexStringToInt32(header.crypt_offset()));
+                   string_encodings::HexStringToInt32(header.crypt_offset()));
   if (header.next_header() == "0x11" && crypt_offset * 32 >= kUdpHeaderBitwidth)
     return Header::kUdpHeader;
   return Header::HEADER_NOT_SET;
@@ -236,7 +237,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
 // ---- Parsing ----------------------------------------------------------------
 
 // Parser helper functions.  Assumes that there are enough bits left in data.
-std::string ParseMacAddress(pdpi::BitString& data) {
+std::string ParseMacAddress(string_encodings::BitString& data) {
   if (auto mac = data.ConsumeMacAddress(); mac.ok()) {
     return mac->ToString();
   } else {
@@ -245,7 +246,7 @@ std::string ParseMacAddress(pdpi::BitString& data) {
     return "INTERNAL ERROR";
   }
 }
-std::string ParseIpv4Address(pdpi::BitString& data) {
+std::string ParseIpv4Address(string_encodings::BitString& data) {
   if (auto ip = data.ConsumeIpv4Address(); ip.ok()) {
     return ip->ToString();
   } else {
@@ -254,7 +255,7 @@ std::string ParseIpv4Address(pdpi::BitString& data) {
     return "INTERNAL ERROR";
   }
 }
-std::string ParseIpv6Address(pdpi::BitString& data) {
+std::string ParseIpv6Address(string_encodings::BitString& data) {
   if (auto ip = data.ConsumeIpv6Address(); ip.ok()) {
     return ip->ToString();
   } else {
@@ -263,7 +264,7 @@ std::string ParseIpv6Address(pdpi::BitString& data) {
     return "INTERNAL ERROR";
   }
 }
-std::string ParseBits(pdpi::BitString& data, int num_bits) {
+std::string ParseBits(string_encodings::BitString& data, int num_bits) {
   if (auto bits = data.ConsumeHexString(num_bits); bits.ok()) {
     return *bits;
   } else {
@@ -275,7 +276,8 @@ std::string ParseBits(pdpi::BitString& data, int num_bits) {
 
 // Parse and return an Ethernet header, or return error if the packet is too
 // small.
-absl::StatusOr<EthernetHeader> ParseEthernetHeader(pdpi::BitString& data) {
+absl::StatusOr<EthernetHeader> ParseEthernetHeader(
+    string_encodings::BitString& data) {
   if (data.size() < kEthernetHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an Ethernet header next. Only "
@@ -291,7 +293,7 @@ absl::StatusOr<EthernetHeader> ParseEthernetHeader(pdpi::BitString& data) {
 }
 
 // Parse and return an IPv4 header, or return error if the packet is too small.
-absl::StatusOr<Ipv4Header> ParseIpv4Header(pdpi::BitString& data) {
+absl::StatusOr<Ipv4Header> ParseIpv4Header(string_encodings::BitString& data) {
   if (data.size() < kStandardIpv4HeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an IPv4 header next. Only "
@@ -315,7 +317,7 @@ absl::StatusOr<Ipv4Header> ParseIpv4Header(pdpi::BitString& data) {
   header.set_ipv4_destination(ParseIpv4Address(data));
 
   // Parse suffix/options.
-  absl::StatusOr<int> ihl = pdpi::HexStringToInt(header.ihl());
+  absl::StatusOr<int> ihl = string_encodings::HexStringToInt(header.ihl());
   if (!ihl.ok()) {
     LOG(DFATAL) << "SHOULD NEVER HAPPEN: IHL badly formatted: " << ihl.status();
     // Don't return error status so parsing is lossless despite error.
@@ -335,7 +337,7 @@ absl::StatusOr<Ipv4Header> ParseIpv4Header(pdpi::BitString& data) {
 }
 
 // Parse and return an IPv6 header, or return error if the packet is too small.
-absl::StatusOr<Ipv6Header> ParseIpv6Header(pdpi::BitString& data) {
+absl::StatusOr<Ipv6Header> ParseIpv6Header(string_encodings::BitString& data) {
   if (data.size() < kIpv6HeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an IPv6 header next. Only "
@@ -359,7 +361,7 @@ absl::StatusOr<Ipv6Header> ParseIpv6Header(pdpi::BitString& data) {
 // Parse and return a hop-by-hop options header, or return error if the packet
 // is too small.
 absl::StatusOr<HopByHopOptionsHeader> ParseHopByHopOptionsHeader(
-    pdpi::BitString& data) {
+    string_encodings::BitString& data) {
   if (data.size() < kMinHopByHopOptionsHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a hop-by-hop options header next. "
@@ -378,7 +380,7 @@ absl::StatusOr<HopByHopOptionsHeader> ParseHopByHopOptionsHeader(
 }
 
 // Parse a UDP header, or return error if the packet is too small.
-absl::StatusOr<UdpHeader> ParseUdpHeader(pdpi::BitString& data) {
+absl::StatusOr<UdpHeader> ParseUdpHeader(string_encodings::BitString& data) {
   if (data.size() < kUdpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an UDP header next. Only "
@@ -395,7 +397,7 @@ absl::StatusOr<UdpHeader> ParseUdpHeader(pdpi::BitString& data) {
 }
 
 // Parse a TCP header prefix, or return error if the packet is too small.
-absl::StatusOr<TcpHeader> ParseTcpHeader(pdpi::BitString& data) {
+absl::StatusOr<TcpHeader> ParseTcpHeader(string_encodings::BitString& data) {
   if (data.size() < kStandardTcpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a TCP header next. Only "
@@ -413,7 +415,8 @@ absl::StatusOr<TcpHeader> ParseTcpHeader(pdpi::BitString& data) {
   header.set_rest_of_header(ParseBits(data, kTcpRestOfHeaderBitwidth));
 
   // Parse suffix/options.
-  absl::StatusOr<int> offset = pdpi::HexStringToInt(header.data_offset());
+  absl::StatusOr<int> offset =
+      string_encodings::HexStringToInt(header.data_offset());
   if (!offset.ok()) {
     LOG(DFATAL) << "SHOULD NEVER HAPPEN: data_offset badly formatted: "
                 << offset.status();
@@ -434,7 +437,7 @@ absl::StatusOr<TcpHeader> ParseTcpHeader(pdpi::BitString& data) {
 }
 
 // Parse an ARP header, or return error if the packet is too small.
-absl::StatusOr<ArpHeader> ParseArpHeader(pdpi::BitString& data) {
+absl::StatusOr<ArpHeader> ParseArpHeader(string_encodings::BitString& data) {
   if (data.size() < kArpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an ARP header next. Only "
@@ -456,7 +459,7 @@ absl::StatusOr<ArpHeader> ParseArpHeader(pdpi::BitString& data) {
 }
 
 // Parse an ICMP header, or return error if the packet is too small.
-absl::StatusOr<IcmpHeader> ParseIcmpHeader(pdpi::BitString& data) {
+absl::StatusOr<IcmpHeader> ParseIcmpHeader(string_encodings::BitString& data) {
   if (data.size() < kIcmpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an ICMP header next. Only "
@@ -473,7 +476,7 @@ absl::StatusOr<IcmpHeader> ParseIcmpHeader(pdpi::BitString& data) {
 }
 
 // Parse a VLAN header, or return error if the packet is too small.
-absl::StatusOr<VlanHeader> ParseVlanHeader(pdpi::BitString& data) {
+absl::StatusOr<VlanHeader> ParseVlanHeader(string_encodings::BitString& data) {
   if (data.size() < kVlanHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a VLAN header next. Only "
@@ -492,7 +495,7 @@ absl::StatusOr<VlanHeader> ParseVlanHeader(pdpi::BitString& data) {
 }
 
 // Parse a CSIG header, or return error if the packet is too small.
-absl::StatusOr<CsigHeader> ParseCsigHeader(pdpi::BitString& data) {
+absl::StatusOr<CsigHeader> ParseCsigHeader(string_encodings::BitString& data) {
   if (data.size() < kCsigHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a CSIG header next. Only "
@@ -510,7 +513,7 @@ absl::StatusOr<CsigHeader> ParseCsigHeader(pdpi::BitString& data) {
 }
 
 // Parse a GRE header, or return error if the packet is too small.
-absl::StatusOr<GreHeader> ParseGreHeader(pdpi::BitString& data) {
+absl::StatusOr<GreHeader> ParseGreHeader(string_encodings::BitString& data) {
   int size = kRfc2784GreHeaderWithoutOptionalsBitwidth;
 
   if (data.size() < size) {
@@ -554,7 +557,7 @@ absl::StatusOr<GreHeader> ParseGreHeader(pdpi::BitString& data) {
 // Parse a SAI P4 BMv2 packet_in header, or return error if the packet is too
 // small.
 absl::StatusOr<SaiP4BMv2PacketInHeader> ParseSaiP4BMv2PacketInHeader(
-    pdpi::BitString& data) {
+    string_encodings::BitString& data) {
   if (data.size() < kSaiP4BMv2PacketInHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a SAI P4 BMv2 packet_in header "
@@ -572,7 +575,8 @@ absl::StatusOr<SaiP4BMv2PacketInHeader> ParseSaiP4BMv2PacketInHeader(
   return header;
 }
 
-absl::StatusOr<IpfixHeader> ParseIpfixHeader(pdpi::BitString& data) {
+absl::StatusOr<IpfixHeader> ParseIpfixHeader(
+    string_encodings::BitString& data) {
   if (data.size() < kIpfixHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an IPFIX header next. Only "
@@ -590,7 +594,8 @@ absl::StatusOr<IpfixHeader> ParseIpfixHeader(pdpi::BitString& data) {
   return header;
 }
 
-absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
+absl::StatusOr<PsampHeader> ParsePsampHeader(
+    string_encodings::BitString& data) {
   if (data.size() < kPsampHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a PSAMP header next. Only "
@@ -615,7 +620,7 @@ absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
   return header;
 }
 
-absl::StatusOr<PtpHeader> ParsePtpHeader(pdpi::BitString& data) {
+absl::StatusOr<PtpHeader> ParsePtpHeader(string_encodings::BitString& data) {
   if (data.size() < kPtpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a PTP header next. Only "
@@ -643,7 +648,7 @@ absl::StatusOr<PtpHeader> ParsePtpHeader(pdpi::BitString& data) {
   return header;
 }
 
-absl::StatusOr<PspHeader> ParsePspHeader(pdpi::BitString& data) {
+absl::StatusOr<PspHeader> ParsePspHeader(string_encodings::BitString& data) {
   if (data.size() < kPspHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a PSP header next. Only "
@@ -671,7 +676,7 @@ absl::StatusOr<PspHeader> ParsePspHeader(pdpi::BitString& data) {
 }
 
 absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
-                                   pdpi::BitString& data) {
+                                   string_encodings::BitString& data) {
   Header result;
   switch (header_case) {
     case Header::kEthernetHeader: {
@@ -751,7 +756,8 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
 }  // namespace
 
 Packet ParsePacket(absl::string_view input, Header::HeaderCase first_header) {
-  pdpi::BitString data = pdpi::BitString::OfByteString(input);
+  string_encodings::BitString data =
+      string_encodings::BitString::OfByteString(input);
   Packet packet;
 
   // Parse headers.
@@ -850,7 +856,7 @@ void HopByHopOptionsInvalidOptionsAndPadding(
     absl::string_view options_and_padding, const std::string& error_prefix,
     std::vector<std::string>& output) {
   absl::StatusOr<std::string> byte_string =
-      pdpi::HexStringToByteString(options_and_padding);
+      string_encodings::HexStringToByteString(options_and_padding);
   if (!byte_string.ok()) {
     output.push_back(absl::StrCat(
         error_prefix, "invalid format: ", byte_string.status().message()));
@@ -903,7 +909,7 @@ bool HexStringInvalidReasons(absl::string_view hex_string,
     output.push_back(absl::StrCat(field, ": missing"));
     return true;
   }
-  if (auto parsed = pdpi::HexStringToBitset<num_bits>(hex_string);
+  if (auto parsed = string_encodings::HexStringToBitset<num_bits>(hex_string);
       !parsed.ok()) {
     output.push_back(
         absl::StrCat(field, ": invalid format: ", parsed.status().message()));

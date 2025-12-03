@@ -28,7 +28,6 @@
 #include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/netaddr/network_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 
 namespace netaddr {
 
