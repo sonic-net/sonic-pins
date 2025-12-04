@@ -21,6 +21,7 @@
 #include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/port_id_map.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
@@ -45,6 +46,13 @@ struct ArribaTestVectorValidationParams {
   // limites are disabled.
   std::optional<int> max_packets_to_send_per_second = 100;
 
+  // Optionally, can be used to override the default assumption that each SUT
+  // port is connected to a control switch port with the same OpenConfig
+  // interface name.
+  // NOTE: Not required for valid mirror testbeds. This is a workaround for
+  // non-standard testbeds only.
+  std::optional<MirrorTestbedP4rtPortIdMap> mirror_testbed_port_map_override;
+
   // Add the rate of packets expected to pass with the test. For new
   // implementations, this value may be less than 1, ie, not all the packets
   // pass. The value should be <= 1.0.
@@ -61,7 +69,6 @@ struct ArribaTestVectorValidationParams {
 // entries and test packet).
 absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
     const ArribaTestVector& arriba_test_vector,
-    const std::vector<pdpi::IrTableEntry>& used_entries_list,
     const pdpi::IrP4Info& ir_p4_info);
 
 // Validates the `sut` in the provided mirror testbed (`sut` and
