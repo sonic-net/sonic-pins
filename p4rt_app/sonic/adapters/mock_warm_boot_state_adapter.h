@@ -28,6 +28,8 @@ public:
   MOCK_METHOD(void, SetWarmBootState, (swss::WarmStart::WarmStartState state),
               (override));
   MOCK_METHOD(bool, IsWarmStart, (), (override));
+  MOCK_METHOD(swss::WarmStart::WarmStartState, GetOrchAgentWarmBootState, (),
+              (override));
 };
 
 } // namespace sonic

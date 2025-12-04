@@ -34,6 +34,7 @@
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
 //TODO(PINS): Add Component/System state Translator
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
@@ -91,6 +92,17 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   fake_cpu_port_table_adapter_ = fake_cpu_port_table_adapter.get();
   fake_port_channel_table_adapter_ = fake_port_channel_table_adapter.get();
   fake_cpu_queue_table_adapter_ = fake_cpu_queue_table_adapter.get();
+  auto fake_warm_boot_state_adapter_for_util =
+      std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>();
+  fake_warm_boot_state_adapter_for_util_only_ =
+      fake_warm_boot_state_adapter_for_util.get();
+
+  warm_restart_util_ = std::make_unique<WarmRestartUtil>(
+      std::move(fake_warm_boot_state_adapter_for_util),
+      std::move(fake_port_table_adapter),
+      std::move(fake_cpu_port_table_adapter),
+      std::move(fake_port_channel_table_adapter),
+      std::move(fake_cpu_queue_table_adapter));
 }
 
 P4RuntimeGrpcService::~P4RuntimeGrpcService() {
@@ -323,6 +335,15 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
 sonic::FakeWarmBootStateAdapter*
 P4RuntimeGrpcService::GetWarmBootStateAdapter() {
   return fake_warm_boot_state_adapter_;
+}
+
+sonic::FakeWarmBootStateAdapter*
+P4RuntimeGrpcService::GetWarmBootStateAdapterForUtilOnly() {
+  return fake_warm_boot_state_adapter_for_util_only_;
+}
+
+WarmRestartUtil& P4RuntimeGrpcService::GetWarmRestartUtil() {
+  return *warm_restart_util_;
 }
 
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
