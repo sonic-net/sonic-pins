@@ -193,6 +193,7 @@ tables {
     name: "ingress.tunnel_termination.ipv6_tunnel_termination_table"
     alias: "ipv6_tunnel_termination_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // TODO: Remove when switch supports priority as a key for\n    // this table.\n    // The switch does not support priority as a key. In order to avoid\n    // conflicts between entries where the only difference is the\n    // priority, we choose a fixed priority arbitrarily.\n    ::priority == 900;\n  \")"
   }
   match_fields {
     id: 1
@@ -597,6 +598,7 @@ tables {
     alias: "acl_ingress_mirror_and_redirect_table"
     annotations: "@sai_acl(INGRESS)"
     annotations: "@sai_acl_priority(15)"
+    annotations: "@nonessential_for_upgrade"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
