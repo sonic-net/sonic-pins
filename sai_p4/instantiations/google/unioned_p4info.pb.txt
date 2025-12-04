@@ -1,6 +1,6 @@
 pkg_info {
-  name: "Union of fabric_border_router.p4, middleblock.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 5.0.0, 5.0.0, 5.0.0, 5.0.0, 5.0.0"
+  name: "Union of fabric_border_router.p4, middleblock.p4, middleblock.p4, tor.p4, tor.p4, wbb.p4"
+  version: "Versions 5.0.0, 5.0.0, 5.0.0, 5.0.0, 5.0.0, 5.0.0"
   arch: "v1model"
   organization: "Google"
   platform_properties {
