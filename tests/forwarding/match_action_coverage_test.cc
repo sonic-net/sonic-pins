@@ -657,6 +657,8 @@ TEST_P(MatchActionCoverageTestFixture,
        InsertEntriesForEveryTableAndMatchConfiguration) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
+  ASSERT_OK(
+      testbed.Environment().StoreTestArtifact("p4info.txt", GetParam().p4info));
 
   // Initialize the connection and clear table entries for the SUT.
   ASSERT_OK_AND_ASSIGN(
