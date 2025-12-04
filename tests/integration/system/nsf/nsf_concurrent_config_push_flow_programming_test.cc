@@ -20,8 +20,10 @@
 #include <vector>
 
 #include "absl/log/log.h"
+#include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -47,15 +49,20 @@ using ::p4::v1::ReadResponse;
 constexpr int kIsolatedLacpSystemPriority = 512;
 
 // Here is the criteria for the NSF delay duration window:
-// 1. The flows used in the test takes ~5s to get programmed. Hence the minimum
-//    delay is set to 5s.
-// 2. Config push takes ~10s to complete. Hence the maximum delay is set to 15s.
+// 1. The flows used in the test takes ~3s to get programmed. Hence the minimum
+//    delay is set to 4s.
+// 2. Config push takes ~10s to complete. Hence the maximum delay is set to 14s.
 // In future, if the config or the flows are modified, consider calculating the
 // time needed for both and set the NSF delay duration window accordingly.
 
-constexpr int kMinNsfDelayDuration = 10;
-constexpr int kMaxNsfDelayDuration = 20;
-constexpr int kFlowProgrammingDuration = 4;
+constexpr int kFlowPrepDuration = 3;
+constexpr int kMinNsfDelayDuration = kFlowPrepDuration + 1;
+constexpr int kMaxNsfDelayDuration = kMinNsfDelayDuration + 10;
+// TODO: Remove the below constants once hsflowd changes are
+// rolled out to release.
+constexpr int kMinNsfDelayReleaseDuration = 10;
+constexpr int kMaxNsfDelayReleaseDuration = 20;
+
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 constexpr int kMaxGnmiGetClients = 15;
@@ -137,8 +144,19 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
           absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone())),
       sut, environment));
   absl::BitGen gen;
-  int nsf_delay_duration = absl::uniform_int_distribution<int>(
-      kMinNsfDelayDuration, kMaxNsfDelayDuration)(gen);
+  
+  // TODO - Remove the below code once hsflowd changes are
+  // rolled out to release.
+  bool is_release_image = true;
+
+  int nsf_delay_duration;
+  if (is_release_image) {
+    nsf_delay_duration = absl::uniform_int_distribution<int>(
+        kMinNsfDelayReleaseDuration, kMaxNsfDelayReleaseDuration)(gen);
+  } else {
+    nsf_delay_duration = absl::uniform_int_distribution<int>(
+        kMinNsfDelayDuration, kMaxNsfDelayDuration)(gen);
+  }
 
   // Config Push thread.
   absl::Status config_push_status = absl::UnknownError("Yet to push config");
@@ -156,12 +174,17 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // Flow Programming thread.
   absl::Status flow_programming_status =
       absl::UnknownError("Yet to program flows");
-  auto flow_programming_func = [&sut, &image_config_param]() -> absl::Status {
-    // Flows used in test takes `kFlowProgrammingDuration` to get programmed.
-    if (kMinNsfDelayDuration > kFlowProgrammingDuration) {
-      absl::SleepFor(
-          absl::Seconds(kMinNsfDelayDuration - kFlowProgrammingDuration));
+  auto flow_programming_func = [&sut, &image_config_param,
+                                &is_release_image]() -> absl::Status {
+    // TODO - Remove the below code once hsflowd changes are
+    // rolled out to release.
+    if (is_release_image) {
+      // Flows used in the test takes ~6s to get programmed.
+      if (kMinNsfDelayDuration > 6) {
+        absl::SleepFor(absl::Seconds(kMinNsfDelayDuration - 6));
+      }
     }
+
     LOG(INFO) << "Programming flows";
     RETURN_IF_ERROR(ProgramFlowsBasedOnTable(sut, image_config_param.p4_info,
                                              "ipv6_table"));
