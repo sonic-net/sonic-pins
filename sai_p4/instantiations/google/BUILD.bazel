@@ -42,6 +42,8 @@ SHARED_DEPS = [
 
 MIDDLEBLOCK_DEPS = SHARED_DEPS + ["middleblock.p4"]
 
+VISCOSE_MIDDLEBLOCK_DEPS = SHARED_DEPS + ["viscose_middleblock.p4"]
+
 FABRIC_BORDER_ROUTER_DEPS = SHARED_DEPS + [
     "fabric_border_router.p4",
 ]
@@ -64,6 +66,7 @@ INSTANTIATIONS = [
     # (<instantiation>, <dependencies>)
     ("fabric_border_router", FABRIC_BORDER_ROUTER_DEPS),
     ("middleblock", MIDDLEBLOCK_DEPS),
+    ("viscose_middleblock", VISCOSE_MIDDLEBLOCK_DEPS),
     ("tor", TOR_DEPS),
     ("wbb", WBB_DEPS),
 ]

@@ -10,6 +10,7 @@
 #define RIF_PROGRAMMING_MY_MAC_SUPPORTED
 #define TIMESTAMP_CAPABLE
 #define TUNNEL_ENCAP_CAPABLE
+#define VLAN_CAPABLE
 
 #include <v1model.p4>
 
@@ -91,3 +92,4 @@ control egress(inout headers_t headers,
 )
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;
+

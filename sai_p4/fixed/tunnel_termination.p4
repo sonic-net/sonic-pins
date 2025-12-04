@@ -37,6 +37,14 @@ control tunnel_termination(inout headers_t headers,
   // Currently, we only model IPv6 decap of IP-in-IP packets
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(IPV6_TUNNEL_TERMINATION_TABLE_ID)
+  @entry_restriction("
+    // TODO: Remove when switch supports priority as a key for
+    // this table.
+    // The switch does not support priority as a key. In order to avoid
+    // conflicts between entries where the only difference is the
+    // priority, we choose a fixed priority arbitrarily.
+    ::priority == 900;
+  ")
   table ipv6_tunnel_termination_table {
     key = {
       // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_DST_IP[_MASK]`.
