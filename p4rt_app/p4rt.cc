@@ -526,10 +526,8 @@ int main(int argc, char** argv) {
 
   if (is_warm_start) {
     // Set warm-start state to INITIALIZED if boot up in warm-start mode.
-    // TODO: Use warm_boot_state_adapter instead of
-    // setWarmStartState().
-    swss::WarmStart::setWarmStartState(
-        "p4rt", swss::WarmStart::WarmStartState::INITIALIZED);
+    p4runtime_server.GrabLockAndUpdateWarmBootState(
+        swss::WarmStart::WarmStartState::INITIALIZED);
     auto reconciliation_status = p4runtime_server.RebuildSwStateAfterWarmboot(
         warm_restart_util.GetPortIdsFromConfigDb(),
         warm_restart_util.GetCpuQueueIdsFromConfigDb(),
