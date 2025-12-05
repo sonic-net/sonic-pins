@@ -534,8 +534,7 @@ int main(int argc, char** argv) {
         warm_restart_util.GetPortIdsFromConfigDb(),
         warm_restart_util.GetCpuQueueIdsFromConfigDb(),
         warm_restart_util.GetFrontPanelQueueIdsFromConfigDb(),
-        warm_restart_util.GetDeviceIdFromConfigDb(),
-        warm_restart_util.GetPortsFromConfigDb());
+        warm_restart_util.GetDeviceIdFromConfigDb());
     if (reconciliation_status.ok()) {
       swss::WarmStart::setWarmStartState(
           "p4rt", swss::WarmStart::WarmStartState::RECONCILED);

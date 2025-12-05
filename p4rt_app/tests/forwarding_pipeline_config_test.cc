@@ -640,6 +640,79 @@ TEST_F(ReconcileAndCommitTest, SetDuplicateForwardingPipelineConfig) {
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 }
 
+TEST_F(ReconcileAndCommitTest, DeletingEmptyFixedTablesIsAllowed) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
+  for (auto table = tables.begin(); table != tables.end();) {
+    if (absl::StartsWith(table->preamble().alias(), "acl_") ||
+        AliasesToKeep().contains(table->preamble().alias())) {
+      ++table;
+    } else {
+      table = tables.erase(table);
+    }
+  }
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+}
+
+TEST_F(ReconcileAndCommitTest, AddingFixedTablesIsAllowed) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Apply config without non-acl tables.
+  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
+  for (auto table = tables.begin(); table != tables.end();) {
+    if (absl::StartsWith(table->preamble().alias(), "acl_") ||
+        AliasesToKeep().contains(table->preamble().alias())) {
+      ++table;
+    } else {
+      table = tables.erase(table);
+    }
+  }
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Apply config with fixed tables.
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+}
+
+TEST_F(ReconcileAndCommitTest, ModifyingEmptyFixedTablesIsAllowed) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+
+  // Remove some fixed table match fields.
+  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
+  for (auto& table : tables) {
+    if (absl::StartsWith(table.preamble().alias(), "acl")) continue;
+    if (table.match_fields().size() < 2) continue;  // All tables need a match.
+    auto constraints = pdpi::GetAnnotationBody("entry_restriction",
+                                               table.preamble().annotations());
+    for (auto match_field = table.mutable_match_fields()->begin();
+         match_field != table.mutable_match_fields()->end(); ++match_field) {
+      if (AliasesToKeep().contains(match_field->name()) ||
+          (constraints.ok() &&
+           absl::StrContains(*constraints, match_field->name()))) {
+        continue;
+      }
+      table.mutable_match_fields()->erase(match_field);
+      break;
+    }
+  }
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+}
+
 using GetForwardingConfigTest = ForwardingPipelineConfigTest;
 
 TEST_F(GetForwardingConfigTest, ReturnsNothingIfConfigHasNotBeenSet) {
