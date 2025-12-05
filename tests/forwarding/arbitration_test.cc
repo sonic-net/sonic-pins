@@ -58,7 +58,7 @@ constexpr char kWriteRequest[] = R"(
           }
           action {
             action {
-              action_id: 16777218
+              action_id: 16777264
               params {
                 param_id: 1
                 value: "7"

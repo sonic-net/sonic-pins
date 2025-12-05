@@ -1,4 +1,17 @@
-#define SAI_INSTANTIATION_MIDDLEBLOCK
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#define SAI_INSTANTIATION_TOR
 
 #define ACL_REDIRECT_TO_NEXTHOP_CAPABLE
 #define ACL_REDIRECT_TO_PORT_CAPABLE
@@ -10,8 +23,11 @@
 #define RIF_PROGRAMMING_MY_MAC_SUPPORTED
 #define TIMESTAMP_CAPABLE
 #define TUNNEL_ENCAP_CAPABLE
+#define VLAN_CAPABLE
 
 #include <v1model.p4>
+
+#define LAG_HASH_ALGORITHM SAI_HASH_ALGORITHM_CRC_XOR
 
 // These headers have to come first, to override their fixed counterparts.
 #include "roles.h"
@@ -29,7 +45,6 @@
 #include "../../fixed/vlan.p4"
 #include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
-#include "../../fixed/tunnel_termination.p4"
 #include "acl_egress.p4"
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
@@ -43,13 +58,20 @@ control ingress(inout headers_t headers,
   apply {
     packet_out_decap.apply(headers, local_metadata, standard_metadata);
     if (!local_metadata.bypass_ingress) {
+      // The PRE_INGRESS stage handles VRF, VLAN assignment and VLAN checks. We
+      // can also set the pre-ingress metadata for certain types of traffic we
+      // want to handle uniquely in later stages.
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
       ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
+
+      // Standard L3 pipeline for routing packets.
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
-      tunnel_termination.apply(headers, local_metadata);
       routing_lookup.apply(headers, local_metadata, standard_metadata);
+
+      // The INGRESS stage can redirect (e.g. drop, punt or copy) packets, apply
+      // rate-limits or modify header data.
       acl_ingress.apply(headers, local_metadata, standard_metadata);
       routing_resolution.apply(headers, local_metadata, standard_metadata);
       mirror_session_lookup.apply(headers, local_metadata, standard_metadata);
@@ -65,7 +87,7 @@ control egress(inout headers_t headers,
   apply {
     packet_in_encap.apply(headers, local_metadata, standard_metadata);
     // TODO: Remove if statement once exit is supported in
-    // p4-symbolic.
+    // p4 symbolic.
     if (!local_metadata.bypass_egress) {
       packet_rewrites.apply(headers, local_metadata, standard_metadata);
       mirror_encap.apply(headers, local_metadata, standard_metadata);
@@ -77,7 +99,7 @@ control egress(inout headers_t headers,
 }  // control egress
 
 #ifndef PKG_INFO_NAME
-#define PKG_INFO_NAME "middleblock.p4"
+#define PKG_INFO_NAME "tor.p4"
 #endif
 @pkginfo(
   name = PKG_INFO_NAME,
@@ -91,3 +113,4 @@ control egress(inout headers_t headers,
 )
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;
+

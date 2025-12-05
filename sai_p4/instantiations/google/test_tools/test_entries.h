@@ -294,6 +294,10 @@ struct AclPreIngressVlanTableMatchFields {
   std::optional<std::string> in_port;
 };
 
+struct AclIngressQosMatchFields {
+  pdpi::Ternary<netaddr::MacAddress> dst_mac;
+};
+
 struct AclIngressEntry {
   std::optional<bool> is_ip;
   pdpi::Ternary<std::bitset<packetlib::kIpProtocolBitwidth>> ip_protocol;
@@ -425,6 +429,8 @@ class EntryBuilder {
   EntryBuilder& AddEntryPuntingPacketsWithDstMac(
       absl::string_view dst_mac, PuntAction action = PuntAction::kTrap,
       absl::string_view qos_queue = "0x0");
+  EntryBuilder& AddRouterInterfaceTableEntry(
+      const RouterInterfaceTableParams& params = {});
   EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
                                        absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
@@ -482,6 +488,8 @@ class EntryBuilder {
   EntryBuilder& AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
       AclQueueAssignments queue_assignments,
       AclMeterConfiguration meter_configuration);
+  EntryBuilder& AddAclIngressQosDropTableEntry(
+      const AclIngressQosMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddVlanEntry(absl::string_view vlan_id_hexstr);
   EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
                                        absl::string_view port,
@@ -489,6 +497,8 @@ class EntryBuilder {
   EntryBuilder& AddWcmpGroupTableEntry(
       absl::string_view wcmp_group_id,
       absl::Span<const WcmpGroupAction> wcmp_group_actions);
+  EntryBuilder& AddAclIngressTableEntryToRedirectingToL2MulticastGroup(
+      int multicast_group_id);
 
   EntryBuilder& AddIngressQoSTimestampingAclEntry(std::string ingress_port);
 
