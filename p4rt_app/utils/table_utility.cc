@@ -20,6 +20,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "google/protobuf/map.h"
@@ -114,54 +115,91 @@ absl::StatusOr<table::Type> GetTableType(
   }
 }
 
-std::vector<pdpi::IrTableDefinition> OrderTablesBySize(
+namespace {
+// Estimate the bitwidth of a table's match fields.
+//
+// NOTE: Not all match fields in P4 will have a bitwidth (e.g. in_port), and
+// this logic will treat those fields as having a bitwidth of 0. So this is
+// not a perfect solution, but since most fields will have a bitwidth we
+// consider it "good enough".
+int EstimateBitwidth(const pdpi::IrTableDefinition& table) {
+  int bitwidth = 0;
+  for (const auto& [field_name, field_def] : table.match_fields_by_name()) {
+    bitwidth += field_def.match_field().bitwidth();
+  }
+  return bitwidth;
+}
+}  // namespace
+
+void OrderTablesBySize(std::vector<const pdpi::IrTableDefinition*>& tables) {
+  std::sort(tables.begin(), tables.end(),
+            [](const pdpi::IrTableDefinition* const& lhs,
+               const pdpi::IrTableDefinition* const& rhs) {
+              int lhs_bitwidth = EstimateBitwidth(*lhs);
+              int rhs_bitwidth = EstimateBitwidth(*rhs);
+              return lhs_bitwidth != rhs_bitwidth
+                         ? lhs_bitwidth > rhs_bitwidth
+                         : lhs->preamble().alias() > rhs->preamble().alias();
+            });
+}
+
+std::vector<const pdpi::IrTableDefinition*> OrderTablesBySize(
     const google::protobuf::Map<std::string, pdpi::IrTableDefinition>&
         tables_by_name) {
-  // Store the table definition, and any interesting fields for determining the
-  // order.
-  struct OrderingFields {
-    pdpi::IrTableDefinition table_def;
-    std::string table_name;
-    int bitwidth;
-  };
+  std::vector<const pdpi::IrTableDefinition*> tables;
+  tables.reserve(tables_by_name.size());
+  for (const auto& [_, table] : tables_by_name) {
+    tables.push_back(&table);
+  }
+  OrderTablesBySize(tables);
+  return tables;
+}
 
-  // Collect all the table definitions and sum the bitwidths of all the match
-  // fields.
-  //
-  // NOTE: Not all match fields in P4 will have a bitwidth (e.g. in_port), and
-  // this logic will treat those fields as having a bitwidth of 0. So this is
-  // not a perfect solution, but since most fields will have a bitwidth we
-  // consider it "good enough".
-  std::vector<OrderingFields> acl_tables;
-  acl_tables.reserve(tables_by_name.size());
-  for (const auto& [table_name, table_def] : tables_by_name) {
-    int bitwidth = 0;
-    for (const auto& [field_name, field_def] :
-         table_def.match_fields_by_name()) {
-      bitwidth += field_def.match_field().bitwidth();
+absl::StatusOr<std::string> DuplicateTable(pdpi::IrP4Info& ir_p4info,
+                                           absl::string_view table_name) {
+  auto lookup = ir_p4info.tables_by_name().find(table_name);
+  if (lookup == ir_p4info.tables_by_name().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Cannot duplicate table '" << table_name
+           << "': Table not found in IrP4Info.";
+  }
+  int largest_table_id = 0;
+  for (const auto& [id, _] : ir_p4info.tables_by_id()) {
+    if (id > largest_table_id) largest_table_id = id;
+  }
+  std::string dup_table_name = absl::StrCat(table_name, "_duplicate_");
+  int dup_table_id = largest_table_id + 1;
+
+  pdpi::IrTableDefinition dup_table_def = lookup->second;
+  int table_id = dup_table_def.preamble().id();
+
+  dup_table_def.mutable_preamble()->set_alias(dup_table_name);
+  absl::StrAppend(dup_table_def.mutable_preamble()->mutable_name(),
+                  "_duplicate_");
+  dup_table_def.mutable_preamble()->set_id(dup_table_id);
+
+  ir_p4info.mutable_tables_by_name()->insert(
+      std::make_pair(dup_table_name, dup_table_def));
+  ir_p4info.mutable_tables_by_id()->insert(
+      std::make_pair(dup_table_id, std::move(dup_table_def)));
+
+  // Update the action profile references.
+  for (auto& [_, action_profile_def] :
+       *ir_p4info.mutable_action_profiles_by_name()) {
+    auto& action_profile = *action_profile_def.mutable_action_profile();
+    for (int id : action_profile.table_ids()) {
+      if (id == table_id) {
+        action_profile.add_table_ids(dup_table_id);
+        ir_p4info.mutable_action_profiles_by_id()
+            ->at(action_profile.preamble().id())
+            .mutable_action_profile()
+            ->add_table_ids(dup_table_id);
+        break;
+      }
     }
-    acl_tables.push_back(OrderingFields{
-        .table_def = table_def,
-        .table_name = table_name,
-        .bitwidth = bitwidth,
-    });
   }
 
-  // Sort in descending bitwidth order.
-  std::sort(acl_tables.begin(), acl_tables.end(),
-            [](const OrderingFields& lhs, const OrderingFields& rhs) {
-              if (lhs.bitwidth != rhs.bitwidth) {
-                return lhs.bitwidth > rhs.bitwidth;
-              }
-              return lhs.table_name > rhs.table_name;
-            });
-
-  std::vector<pdpi::IrTableDefinition> result;
-  result.reserve(acl_tables.size());
-  for (const auto& table : acl_tables) {
-    result.push_back(std::move(table.table_def));
-  }
-  return result;
+  return dup_table_name;
 }
 
 }  // namespace p4rt_app
