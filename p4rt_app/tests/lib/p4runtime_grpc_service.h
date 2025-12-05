@@ -22,6 +22,7 @@
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
 // TODO(PINS):
 //  #include "swss/fakes/fake_component_state_helper.h"
 //  #include "swss/fakes/fake_system_state_helper.h"
@@ -64,6 +65,14 @@ class P4RuntimeGrpcService {
 
   // Accessor for WarmBootStateAdapter.
   sonic::FakeWarmBootStateAdapter *GetWarmBootStateAdapter();
+
+  // Accessor for WarmBootStateAdapter for WarmRestartUtil.
+  // This is only used for setting OA warm start state and wairForUnfreeze DB
+  // entry for WarmRestartUtil.
+  sonic::FakeWarmBootStateAdapter* GetWarmBootStateAdapterForUtilOnly();
+
+  // Accessor for WarmRestartUtil.
+  WarmRestartUtil& GetWarmRestartUtil();
 
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface &GetFakePacketIoInterface();
@@ -123,6 +132,10 @@ class P4RuntimeGrpcService {
   sonic::FakeTableAdapter* fake_port_channel_table_adapter_;
   // Fake CONFIG DB table adapters to query CPU queues.
   sonic::FakeTableAdapter* fake_cpu_queue_table_adapter_;
+  sonic::FakeWarmBootStateAdapter* fake_warm_boot_state_adapter_for_util_only_;
+
+  // Fake WarmRestartUntil to help P4RT server warm reboot.
+  std::unique_ptr<WarmRestartUtil> warm_restart_util_;
 
   // Faked warm-boot state.
   sonic::FakeWarmBootStateAdapter *fake_warm_boot_state_adapter_;

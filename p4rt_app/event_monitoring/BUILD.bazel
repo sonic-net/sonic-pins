@@ -138,6 +138,23 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "warm_boot_events",
+    srcs = ["warm_boot_events.cc"],
+    hdrs = ["warm_boot_events.h"],
+    deps = [
+        "//gutil/gutil:status",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
 cc_test(
     name = "config_db_queue_table_event_test",
     srcs = ["config_db_queue_table_event_test.cc"],
@@ -237,6 +254,21 @@ cc_test(
         "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "warm_boot_events_test",
+    srcs = ["warm_boot_events_test.cc"],
+    deps = [
+        ":warm_boot_events",
+        "//gutil/gutil:status_matchers",
+        "//p4rt_app/p4runtime:mock_p4runtime_impl",
+        "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",
         "@sonic_swss_common//:libswsscommon",

@@ -21,11 +21,11 @@
 #include <string>
 #include <thread>  // NOLINT
 
+#include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/functional/bind_front.h"
 #include "absl/log/initialize.h"
 #include "absl/log/log.h"
-#include "absl/flags/flag.h"
-#include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -52,6 +52,7 @@
 #include "p4rt_app/event_monitoring/debug_data_dump_events.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
 #include "p4rt_app/event_monitoring/state_verification_events.h"
+#include "p4rt_app/event_monitoring/warm_boot_events.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
@@ -60,10 +61,11 @@
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"
-//TODO(PINS):
-//#include "swss/component_state_helper.h"
-//#include "swss/component_state_helper_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
+// TODO(PINS):
+// #include "swss/component_state_helper.h"
+// #include "swss/component_state_helper_interface.h"
 #include "swss/dbconnector.h"
 #include "swss/schema.h"
 
@@ -449,6 +451,7 @@ int main(int argc, char** argv) {
   swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
   swss::DBConnector counters_db("COUNTERS_DB", /*timeout=*/0);
   swss::DBConnector state_db("STATE_DB", /*timeout=*/0);
+  swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
 
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
@@ -471,10 +474,11 @@ int main(int argc, char** argv) {
   // Create PacketIoImpl for Packet I/O.
   auto packetio_impl = std::make_unique<p4rt_app::sonic::PacketIoImpl>(
       std::make_unique<p4rt_app::sonic::SystemCallAdapter>(),
+      // std::make_unique<swss::IntfTranslator>(&config_db),
       p4rt_app::sonic::PacketIoOptions{});
 
   // TODO(PINS): Create a netdev translator for P4Runtime's PacketIo handling.
-  //  swss::IntfTranslator netdev_translator(&packetio_config_db);
+  //  swss::IntfTranslator netdev_translator(&config_db);
 
   // Configure the P4RT options.
   p4rt_app::P4RuntimeImplOptions p4rt_options{
@@ -488,8 +492,26 @@ int main(int argc, char** argv) {
     p4rt_options.forwarding_config_full_path = save_forwarding_config_file;
   }
 
-  bool is_warm_start = swss::WarmStart::isWarmStart();
+  auto warm_boot_state_adapter =
+      std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>();
+  bool is_warm_start = warm_boot_state_adapter->IsWarmStart();
   p4rt_options.is_freeze_mode = is_warm_start;
+
+  // Initialize WarmRestartUtil
+  auto port_table_config_db =
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "PORT");
+  auto cpu_port_table_config_db =
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "CPU_PORT");
+  auto port_channel_table_config_db =
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db,
+                                                      "PORTCHANNEL");
+  auto cpu_queue_config_db = std::make_unique<p4rt_app::sonic::TableAdapter>(
+      &config_db, "QUEUE_NAME_TO_ID_MAP");
+  p4rt_app::WarmRestartUtil warm_restart_util(
+      std::move(warm_boot_state_adapter), std::move(port_table_config_db),
+      std::move(cpu_port_table_config_db),
+      std::move(port_channel_table_config_db), std::move(cpu_queue_config_db));
+
   // Create the P4RT server. If boot up in warm start mode, set p4runtime_server
   // in freeze mode to reject requests until unfreeze.
   p4rt_app::P4RuntimeImpl p4runtime_server(
@@ -504,9 +526,16 @@ int main(int argc, char** argv) {
 
   if (is_warm_start) {
     // Set warm-start state to INITIALIZED if boot up in warm-start mode.
-    // TODO: Use warm boot state adaptor.
-    swss::WarmStart::setWarmStartState(
-        "p4rt", swss::WarmStart::WarmStartState::INITIALIZED);
+    p4runtime_server.GrabLockAndUpdateWarmBootState(
+        swss::WarmStart::WarmStartState::INITIALIZED);
+    auto reconciliation_status = p4runtime_server.RebuildSwStateAfterWarmboot(
+        warm_restart_util.GetPortIdsFromConfigDb(),
+        warm_restart_util.GetCpuQueueIdsFromConfigDb(),
+        warm_restart_util.GetFrontPanelQueueIdsFromConfigDb());
+    if (reconciliation_status.ok()) {
+      swss::WarmStart::setWarmStartState(
+          "p4rt", swss::WarmStart::WarmStartState::RECONCILED);
+    }
   }
 
   // Create a server to listen on the unix socket port.

@@ -22,6 +22,7 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "gmock/gmock.h"
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 
@@ -84,6 +85,7 @@ public:
    mock_component_state_helper_; swss::MockSystemStateHelper
    mock_system_state_helper_; */
   //  sonic::FakeIntfTranslator fake_intf_translator_{/*enabled=*/true};
+
 };
 
 } // namespace p4rt_app

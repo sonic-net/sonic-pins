@@ -15,6 +15,7 @@
 #define PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_WARM_BOOT_STATE_ADAPTER_H_
 
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 namespace sonic {

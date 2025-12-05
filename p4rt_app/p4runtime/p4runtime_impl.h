@@ -56,6 +56,7 @@
 // TODO(PINS):
 // #include "swss/component_state_helper_interface.h"
 // #include "swss/intf_translator.h"
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 
@@ -222,10 +223,21 @@ public:
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // Rebuild software state after WarmBoot with APP DB
+  // entries and cached p4info file.
+  absl::Status RebuildSwStateAfterWarmboot(
+      const std::vector<std::pair<std::string, std::string>>& port_ids,
+      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+      const std::vector<std::pair<std::string, std::string>>&
+          front_panel_queue_ids) ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
   grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-protected:
+  void GrabLockAndUpdateWarmBootState(swss::WarmStart::WarmStartState state)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+ protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
       : translate_port_ids_(translate_port_ids) {}
@@ -296,6 +308,10 @@ private:
   // and calls into the sonic::StartReceive to spawn the receiver thread.
   ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
   StartReceive(bool use_genetlink);
+
+  void UpdateWarmBootState(swss::WarmStart::WarmStartState state);
+
+  swss::WarmStart::WarmStartState GetWarmBootState();
 
   // Enter critical state and write component state to DB.
   // Caller should take server_state_lock_.

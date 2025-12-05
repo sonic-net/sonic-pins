@@ -34,6 +34,7 @@
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
 //TODO(PINS): Add Component/System state Translator
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
@@ -62,6 +63,11 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       fake_config_db_port_channel_table_("ConfigDb:PORTCHANNEL"),
       fake_config_db_cpu_queue_table_("ConfigDb:QUEUE_NAME_TO_ID_MAP") {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
+  // Choose a random gRPC port. While not strictly necessary each test brings up
+  // a new gRPC service, and randomly choosing a TCP port will minimize issues.
+  absl::BitGen gen;
+  grpc_port_ = absl::Uniform<int>(gen, 49152, 65535);
+
   p4runtime_server_ = BuildP4rtServer(options);
   // Component tests will use an insecure connection for the service.
   std::string server_address = absl::StrCat("localhost:", GrpcPort());
@@ -91,6 +97,17 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   fake_cpu_port_table_adapter_ = fake_cpu_port_table_adapter.get();
   fake_port_channel_table_adapter_ = fake_port_channel_table_adapter.get();
   fake_cpu_queue_table_adapter_ = fake_cpu_queue_table_adapter.get();
+  auto fake_warm_boot_state_adapter_for_util =
+      std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>();
+  fake_warm_boot_state_adapter_for_util_only_ =
+      fake_warm_boot_state_adapter_for_util.get();
+
+  warm_restart_util_ = std::make_unique<WarmRestartUtil>(
+      std::move(fake_warm_boot_state_adapter_for_util),
+      std::move(fake_port_table_adapter),
+      std::move(fake_cpu_port_table_adapter),
+      std::move(fake_port_channel_table_adapter),
+      std::move(fake_cpu_queue_table_adapter));
 }
 
 P4RuntimeGrpcService::~P4RuntimeGrpcService() {
@@ -108,11 +125,6 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
   const std::string kHashTableName = "HASH_TABLE";
   const std::string kSwitchTableName = "SWITCH_TABLE";
   const std::string kHostStatsTableName = "HOST_STATS_TABLE";
-
-  // Choose a random gRPC port. While not strictly necessary each test brings up
-  // a new gRPC service, and randomly choosing a TCP port will minimize issues.
-  absl::BitGen gen;
-  grpc_port_ = absl::Uniform<int>(gen, 49152, 65535);
 
   // Create interfaces to access P4RT_TABLE entries.
   sonic::P4rtTable p4rt_table{
@@ -323,6 +335,15 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
 sonic::FakeWarmBootStateAdapter*
 P4RuntimeGrpcService::GetWarmBootStateAdapter() {
   return fake_warm_boot_state_adapter_;
+}
+
+sonic::FakeWarmBootStateAdapter*
+P4RuntimeGrpcService::GetWarmBootStateAdapterForUtilOnly() {
+  return fake_warm_boot_state_adapter_for_util_only_;
+}
+
+WarmRestartUtil& P4RuntimeGrpcService::GetWarmRestartUtil() {
+  return *warm_restart_util_;
 }
 
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {

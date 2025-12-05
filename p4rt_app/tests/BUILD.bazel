@@ -447,6 +447,38 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "warm_restart_bootup_test",
+    srcs = ["warm_restart_bootup_test.cc"],
+    deps = [
+        "//gutil/gutil:proto",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/p4runtime:queue_translator",
+        "//p4rt_app/sonic:packetio_interface",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:common",
+    ],
+)
+
 # go/golden-test-with-coverage
 cc_test(
     name = "p4_constraints_test_runner",

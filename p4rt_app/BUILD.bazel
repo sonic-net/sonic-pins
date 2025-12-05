@@ -49,6 +49,7 @@ cc_binary(
         "//p4rt_app/event_monitoring:config_db_port_table_event",
 	"//p4rt_app/event_monitoring:config_db_queue_table_event",
         "//p4rt_app/event_monitoring:debug_data_dump_events",
+        "//p4rt_app/event_monitoring:warm_boot_events",
         "//p4rt_app/event_monitoring:state_event_monitor",
         "//p4rt_app/event_monitoring:state_verification_events",
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -60,6 +61,7 @@ cc_binary(
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",
         "//p4rt_app/sonic/adapters:warm_boot_state_adapter",
+        "//p4rt_app/utils:warm_restart_utility",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
