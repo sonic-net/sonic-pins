@@ -424,6 +424,18 @@ absl::Status AddConstraintsForAclIngressTable(symbolic::SolverState &state) {
         auto icmpv6_type,
         symbolic::GetSymbolicMatch(symbolic_entry, "icmpv6_type", *table,
                                    state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto psp_next_header,
+        symbolic::GetSymbolicMatch(symbolic_entry, "psp_next_header", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto psp_info,
+        symbolic::GetSymbolicMatch(symbolic_entry, "psp_info", *table,
+                                   state.program, *state.context.z3_context));
+    ASSIGN_OR_RETURN(
+        auto inner_psp_udp_dst,
+        symbolic::GetSymbolicMatch(symbolic_entry, "inner_psp_udp_dst", *table,
+                                   state.program, *state.context.z3_context));
 
     // Forbid using ether_type for IP packets (by convention, use is_ip*
     // instead).
@@ -473,6 +485,20 @@ absl::Status AddConstraintsForAclIngressTable(symbolic::SolverState &state) {
 
     // icmpv6_type::mask != 0 -> ip_protocol == 58;
     constraints.push_back(icmpv6_type.mask == 0 || ip_protocol.value == 58);
+
+    // psp_next_header::mask != 0 -> (ip_protocol == 17 && l4_dst_port == 1000);
+    constraints.push_back(
+        z3::implies(psp_next_header.mask != 0,
+                    (ip_protocol.value == 17 && l4_dst_port.value == 1000)));
+
+    // psp_info::mask != 0 -> (ip_protocol == 17 && l4_dst_port == 1000);
+    constraints.push_back(
+        z3::implies(psp_info.mask != 0,
+                    (ip_protocol.value == 17 && l4_dst_port.value == 1000)));
+
+    // inner_psp_udp_dst::mask != 0 -> (psp_next_header == 17);
+    constraints.push_back(
+        z3::implies(inner_psp_udp_dst.mask != 0, psp_next_header.value == 17));
 
     // Forbid illegal combinations of IP_TYPE fields.
     // is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
