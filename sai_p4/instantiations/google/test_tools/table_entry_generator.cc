@@ -469,6 +469,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // supports it.
           "vlan_table",
           "vlan_membership_table",
+          // TODO(PINS): Remove acl_ingress_qos_table once support for
+          // set_qos_queue_and_cancel_copy_above_rate_limit is added
+          "acl_ingress_qos_table",
       });
   return *kUnsupportedTables;
 }
@@ -486,7 +489,9 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"acl_pre_ingress_vlan_table", AclPreIngressVlanTableGenerator},
       {"acl_pre_ingress_metadata_table", AclPreIngressMetadataTableGenerator},
       {"acl_ingress_table", AclIngressTableGenerator},
-      {"acl_ingress_qos_table", AclIngressQosTableGenerator},
+      // TODO(PINS): Enable acl_ingress_qos_table once support for
+      // set_qos_queue_and_cancel_copy_above_rate_limit is added
+      // {"acl_ingress_qos_table", AclIngressQosTableGenerator},
       {"acl_ingress_security_table", AclIngressSecurityTableGenerator},
       {"acl_ingress_counting_table", AclIngressCountingTableGenerator},
       // TODO: Enable this table when it has been removed from

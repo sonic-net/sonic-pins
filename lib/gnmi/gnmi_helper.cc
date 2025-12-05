@@ -47,6 +47,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "absl/flags/flag.h"
 #include "github.com/openconfig/gnmi/proto/gnmi_ext/gnmi_ext.pb.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "google/protobuf/any.pb.h"
@@ -62,6 +63,14 @@
 #include "proto/gnmi/gnmi.pb.h"
 #include "re2/re2.h"
 #include "thinkit/switch.h"
+
+// It is assumed that getting the device id through gnmi and the gnmi
+// get type of CONFIG is supported by default. But they can be overriden
+// using these flags
+// TODO(PINS): To be removed when get device id and get config are supported
+ABSL_FLAG(bool, gnmi_deviceid_support, true, "gNMI supports GetDeviceId");
+ABSL_FLAG(bool, gnmi_get_config_support, true,
+              "gNMI supports config type in gnmi get request");
 
 namespace pins_test {
 namespace {
@@ -847,8 +856,15 @@ absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
 
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
                                           const absl::Duration& timeout) {
+  // Use CONFIG as the gnmi get type by default. Use ALL if the flag is
+  // is set to false in the command line
+  // TODO(PINS): To be removed when config is supported
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+                                ? gnmi::GetRequest::CONFIG
+                                : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(gnmi::GetRequest request,
-                   BuildGnmiGetRequest("interfaces", gnmi::GetRequest::CONFIG));
+                   BuildGnmiGetRequest("interfaces", request_type));
+
   ASSIGN_OR_RETURN(gnmi::GetResponse interface_response,
                    SendGnmiGetRequest(&stub, request, timeout));
   return WaitForGnmiPortIdConvergence(
@@ -1818,6 +1834,13 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
 }
 
 absl::StatusOr<uint64_t> GetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub) {
+
+  // If the gnmi does not support getting the node-id, return device id as 1
+  // TODO(PINS): To be removed when get device id is supported
+  if (!absl::GetFlag(FLAGS_gnmi_deviceid_support)) {
+    return (uint64_t) 1;
+  }
+
   ASSIGN_OR_RETURN(
       gnmi::GetRequest request,
       BuildGnmiGetRequest("components/component[name=integrated_circuit0]/"
