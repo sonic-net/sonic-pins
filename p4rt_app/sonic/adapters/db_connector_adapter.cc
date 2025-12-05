@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "swss/dbconnector.h"
 
 namespace p4rt_app {

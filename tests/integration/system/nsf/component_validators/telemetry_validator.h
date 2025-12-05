@@ -15,9 +15,9 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_TELEMETRY_VALIDATOR_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPONENT_VALIDATORS_TELEMETRY_VALIDATOR_H_
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/ssh_client.h"

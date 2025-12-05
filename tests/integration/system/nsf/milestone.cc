@@ -18,9 +18,9 @@
 #include <tuple>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 
 namespace pins_test {
 

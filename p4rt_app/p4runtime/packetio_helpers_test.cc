@@ -18,7 +18,6 @@
 
 #include "absl/strings/string_view.h"
 #include "boost/bimap.hpp"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"

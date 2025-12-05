@@ -20,10 +20,10 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/numeric/bits.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 

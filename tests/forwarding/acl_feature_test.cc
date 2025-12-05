@@ -20,12 +20,12 @@
 #include <vector>
 
 #include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/validation_result.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"

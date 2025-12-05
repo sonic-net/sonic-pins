@@ -19,9 +19,9 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/gutil/status.h"
