@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -28,6 +29,7 @@
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_infra/p4_pdpi/netaddr/network_address.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace netaddr {
 
@@ -101,7 +103,8 @@ absl::StatusOr<MacAddress> MacAddress::OfInterfaceId(
   uint64_t id = interface_id.to_ullong();
   if ((id & 0x0000'00FF'FF00'0000) != 0x0000'00FF'FE00'0000) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "invalid interface ID " << pdpi::BitsetToHexString(interface_id)
+           << "invalid interface ID "
+           << string_encodings::BitsetToHexString(interface_id)
            << ": the two middle bytes must be equal to FF FE.";
   }
   std::bitset<48> mac = ((id & 0xFFFF'FF00'0000'0000u) >> 16) |

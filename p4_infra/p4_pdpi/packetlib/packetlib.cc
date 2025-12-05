@@ -41,8 +41,8 @@
 #include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/packetlib/bit_widths.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace packetlib {
 
@@ -70,7 +70,8 @@ using NextHeader = absl::variant<
 
 absl::StatusOr<NextHeader> GetNextHeaderForEtherType(
     absl::string_view header_name, absl::string_view ethertype_hexstring) {
-  ASSIGN_OR_RETURN(int ethertype, pdpi::HexStringToInt(ethertype_hexstring),
+  ASSIGN_OR_RETURN(int ethertype,
+                   string_encodings::HexStringToInt(ethertype_hexstring),
                    _.SetCode(absl::StatusCode::kInternal).SetPrepend()
                        << "unable to parse ethertype: ");
   // See https://en.wikipedia.org/wiki/EtherType.
@@ -149,8 +150,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const HopByHopOptionsHeader& header) {
           header.next_header())};
 }
 absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
-  ASSIGN_OR_RETURN(auto dest_port,
-                   pdpi::HexStringToInt32(header.destination_port()));
+  ASSIGN_OR_RETURN(auto dest_port, string_encodings::HexStringToInt32(
+                                       header.destination_port()));
   if (dest_port == kIpfixUdpDestPort) return Header::kIpfixHeader;
   if (dest_port == 1000) return Header::kPspHeader;
   return Header::HEADER_NOT_SET;
@@ -178,7 +179,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const PspHeader& header) {
   }
   // Only parse the UDP header if we have enough unencrypted bits.
   ASSIGN_OR_RETURN(int crypt_offset,
-                   pdpi::HexStringToInt32(header.crypt_offset()));
+                   string_encodings::HexStringToInt32(header.crypt_offset()));
   if (header.next_header() == "0x11" && crypt_offset * 32 >= kUdpHeaderBitwidth)
     return Header::kUdpHeader;
   return Header::HEADER_NOT_SET;
@@ -222,7 +223,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
 // ---- Parsing ----------------------------------------------------------------
 
 // Parser helper functions.  Assumes that there are enough bits left in data.
-std::string ParseMacAddress(pdpi::BitString& data) {
+std::string ParseMacAddress(string_encodings::BitString& data) {
   if (auto mac = data.ConsumeMacAddress(); mac.ok()) {
     return mac->ToString();
   } else {
@@ -231,7 +232,7 @@ std::string ParseMacAddress(pdpi::BitString& data) {
     return "INTERNAL ERROR";
   }
 }
-std::string ParseIpv4Address(pdpi::BitString& data) {
+std::string ParseIpv4Address(string_encodings::BitString& data) {
   if (auto ip = data.ConsumeIpv4Address(); ip.ok()) {
     return ip->ToString();
   } else {
@@ -240,7 +241,7 @@ std::string ParseIpv4Address(pdpi::BitString& data) {
     return "INTERNAL ERROR";
   }
 }
-std::string ParseIpv6Address(pdpi::BitString& data) {
+std::string ParseIpv6Address(string_encodings::BitString& data) {
   if (auto ip = data.ConsumeIpv6Address(); ip.ok()) {
     return ip->ToString();
   } else {
@@ -249,7 +250,7 @@ std::string ParseIpv6Address(pdpi::BitString& data) {
     return "INTERNAL ERROR";
   }
 }
-std::string ParseBits(pdpi::BitString& data, int num_bits) {
+std::string ParseBits(string_encodings::BitString& data, int num_bits) {
   if (auto bits = data.ConsumeHexString(num_bits); bits.ok()) {
     return *bits;
   } else {
@@ -261,7 +262,8 @@ std::string ParseBits(pdpi::BitString& data, int num_bits) {
 
 // Parse and return an Ethernet header, or return error if the packet is too
 // small.
-absl::StatusOr<EthernetHeader> ParseEthernetHeader(pdpi::BitString& data) {
+absl::StatusOr<EthernetHeader> ParseEthernetHeader(
+    string_encodings::BitString& data) {
   if (data.size() < kEthernetHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an Ethernet header next. Only "
@@ -277,7 +279,7 @@ absl::StatusOr<EthernetHeader> ParseEthernetHeader(pdpi::BitString& data) {
 }
 
 // Parse and return an IPv4 header, or return error if the packet is too small.
-absl::StatusOr<Ipv4Header> ParseIpv4Header(pdpi::BitString& data) {
+absl::StatusOr<Ipv4Header> ParseIpv4Header(string_encodings::BitString& data) {
   if (data.size() < kStandardIpv4HeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an IPv4 header next. Only "
@@ -301,7 +303,7 @@ absl::StatusOr<Ipv4Header> ParseIpv4Header(pdpi::BitString& data) {
   header.set_ipv4_destination(ParseIpv4Address(data));
 
   // Parse suffix/options.
-  absl::StatusOr<int> ihl = pdpi::HexStringToInt(header.ihl());
+  absl::StatusOr<int> ihl = string_encodings::HexStringToInt(header.ihl());
   if (!ihl.ok()) {
     LOG(DFATAL) << "SHOULD NEVER HAPPEN: IHL badly formatted: " << ihl.status();
     // Don't return error status so parsing is lossless despite error.
@@ -321,7 +323,7 @@ absl::StatusOr<Ipv4Header> ParseIpv4Header(pdpi::BitString& data) {
 }
 
 // Parse and return an IPv6 header, or return error if the packet is too small.
-absl::StatusOr<Ipv6Header> ParseIpv6Header(pdpi::BitString& data) {
+absl::StatusOr<Ipv6Header> ParseIpv6Header(string_encodings::BitString& data) {
   if (data.size() < kIpv6HeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an IPv6 header next. Only "
@@ -345,7 +347,7 @@ absl::StatusOr<Ipv6Header> ParseIpv6Header(pdpi::BitString& data) {
 // Parse and return a hop-by-hop options header, or return error if the packet
 // is too small.
 absl::StatusOr<HopByHopOptionsHeader> ParseHopByHopOptionsHeader(
-    pdpi::BitString& data) {
+    string_encodings::BitString& data) {
   if (data.size() < kMinHopByHopOptionsHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a hop-by-hop options header next. "
@@ -364,7 +366,7 @@ absl::StatusOr<HopByHopOptionsHeader> ParseHopByHopOptionsHeader(
 }
 
 // Parse a UDP header, or return error if the packet is too small.
-absl::StatusOr<UdpHeader> ParseUdpHeader(pdpi::BitString& data) {
+absl::StatusOr<UdpHeader> ParseUdpHeader(string_encodings::BitString& data) {
   if (data.size() < kUdpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an UDP header next. Only "
@@ -381,7 +383,7 @@ absl::StatusOr<UdpHeader> ParseUdpHeader(pdpi::BitString& data) {
 }
 
 // Parse a TCP header prefix, or return error if the packet is too small.
-absl::StatusOr<TcpHeader> ParseTcpHeader(pdpi::BitString& data) {
+absl::StatusOr<TcpHeader> ParseTcpHeader(string_encodings::BitString& data) {
   if (data.size() < kStandardTcpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a TCP header next. Only "
@@ -399,7 +401,8 @@ absl::StatusOr<TcpHeader> ParseTcpHeader(pdpi::BitString& data) {
   header.set_rest_of_header(ParseBits(data, kTcpRestOfHeaderBitwidth));
 
   // Parse suffix/options.
-  absl::StatusOr<int> offset = pdpi::HexStringToInt(header.data_offset());
+  absl::StatusOr<int> offset =
+      string_encodings::HexStringToInt(header.data_offset());
   if (!offset.ok()) {
     LOG(DFATAL) << "SHOULD NEVER HAPPEN: data_offset badly formatted: "
                 << offset.status();
@@ -420,7 +423,7 @@ absl::StatusOr<TcpHeader> ParseTcpHeader(pdpi::BitString& data) {
 }
 
 // Parse an ARP header, or return error if the packet is too small.
-absl::StatusOr<ArpHeader> ParseArpHeader(pdpi::BitString& data) {
+absl::StatusOr<ArpHeader> ParseArpHeader(string_encodings::BitString& data) {
   if (data.size() < kArpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an ARP header next. Only "
@@ -442,7 +445,7 @@ absl::StatusOr<ArpHeader> ParseArpHeader(pdpi::BitString& data) {
 }
 
 // Parse an ICMP header, or return error if the packet is too small.
-absl::StatusOr<IcmpHeader> ParseIcmpHeader(pdpi::BitString& data) {
+absl::StatusOr<IcmpHeader> ParseIcmpHeader(string_encodings::BitString& data) {
   if (data.size() < kIcmpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an ICMP header next. Only "
@@ -459,7 +462,7 @@ absl::StatusOr<IcmpHeader> ParseIcmpHeader(pdpi::BitString& data) {
 }
 
 // Parse a VLAN header, or return error if the packet is too small.
-absl::StatusOr<VlanHeader> ParseVlanHeader(pdpi::BitString& data) {
+absl::StatusOr<VlanHeader> ParseVlanHeader(string_encodings::BitString& data) {
   if (data.size() < kVlanHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a VLAN header next. Only "
@@ -478,7 +481,7 @@ absl::StatusOr<VlanHeader> ParseVlanHeader(pdpi::BitString& data) {
 }
 
 // Parse a GRE header, or return error if the packet is too small.
-absl::StatusOr<GreHeader> ParseGreHeader(pdpi::BitString& data) {
+absl::StatusOr<GreHeader> ParseGreHeader(string_encodings::BitString& data) {
   int size = kRfc2784GreHeaderWithoutOptionalsBitwidth;
 
   if (data.size() < size) {
@@ -522,7 +525,7 @@ absl::StatusOr<GreHeader> ParseGreHeader(pdpi::BitString& data) {
 // Parse a SAI P4 BMv2 packet_in header, or return error if the packet is too
 // small.
 absl::StatusOr<SaiP4BMv2PacketInHeader> ParseSaiP4BMv2PacketInHeader(
-    pdpi::BitString& data) {
+    string_encodings::BitString& data) {
   if (data.size() < kSaiP4BMv2PacketInHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a SAI P4 BMv2 packet_in header "
@@ -540,7 +543,8 @@ absl::StatusOr<SaiP4BMv2PacketInHeader> ParseSaiP4BMv2PacketInHeader(
   return header;
 }
 
-absl::StatusOr<IpfixHeader> ParseIpfixHeader(pdpi::BitString& data) {
+absl::StatusOr<IpfixHeader> ParseIpfixHeader(
+    string_encodings::BitString& data) {
   if (data.size() < kIpfixHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse an IPFIX header next. Only "
@@ -558,7 +562,8 @@ absl::StatusOr<IpfixHeader> ParseIpfixHeader(pdpi::BitString& data) {
   return header;
 }
 
-absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
+absl::StatusOr<PsampHeader> ParsePsampHeader(
+    string_encodings::BitString& data) {
   if (data.size() < kPsampHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a PSAMP header next. Only "
@@ -583,7 +588,7 @@ absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
   return header;
 }
 
-absl::StatusOr<PspHeader> ParsePspHeader(pdpi::BitString& data) {
+absl::StatusOr<PspHeader> ParsePspHeader(string_encodings::BitString& data) {
   if (data.size() < kPspHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a PSP header next. Only "
@@ -611,7 +616,7 @@ absl::StatusOr<PspHeader> ParsePspHeader(pdpi::BitString& data) {
 }
 
 absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
-                                   pdpi::BitString& data) {
+                                   string_encodings::BitString& data) {
   Header result;
   switch (header_case) {
     case Header::kEthernetHeader: {
@@ -683,7 +688,8 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
 }  // namespace
 
 Packet ParsePacket(absl::string_view input, Header::HeaderCase first_header) {
-  pdpi::BitString data = pdpi::BitString::OfByteString(input);
+  string_encodings::BitString data =
+      string_encodings::BitString::OfByteString(input);
   Packet packet;
 
   // Parse headers.
@@ -781,7 +787,7 @@ void HopByHopOptionsInvalidOptionsAndPadding(
     absl::string_view options_and_padding, const std::string& error_prefix,
     std::vector<std::string>& output) {
   absl::StatusOr<std::string> byte_string =
-      pdpi::HexStringToByteString(options_and_padding);
+      string_encodings::HexStringToByteString(options_and_padding);
   if (!byte_string.ok()) {
     output.push_back(absl::StrCat(
         error_prefix, "invalid format: ", byte_string.status().message()));
@@ -803,7 +809,7 @@ void HopByHopOptionsInvalidOptionsAndPadding(
     }
     int option_data_length = static_cast<int>(byte_string->at(++i));
     // Option's data length exceeds the remaining bytes.
-    if (option_data_length >= byte_string->size() - i) {
+    if (option_data_length > byte_string->size() - i) {
       output.push_back(absl::StrCat(
           error_prefix, "expected data length exceeds the remaining bytes: ",
           option_data_length, " > ", byte_string->size() - i));
@@ -834,7 +840,7 @@ bool HexStringInvalidReasons(absl::string_view hex_string,
     output.push_back(absl::StrCat(field, ": missing"));
     return true;
   }
-  if (auto parsed = pdpi::HexStringToBitset<num_bits>(hex_string);
+  if (auto parsed = string_encodings::HexStringToBitset<num_bits>(hex_string);
       !parsed.ok()) {
     output.push_back(
         absl::StrCat(field, ": invalid format: ", parsed.status().message()));
@@ -847,7 +853,8 @@ bool Ipv4UninterpretedOptionsInvalidReasons(
     absl::string_view uninterpreted_options, const std::string& error_prefix,
     std::vector<std::string>& output) {
   if (uninterpreted_options.empty()) return false;
-  if (auto bytes = pdpi::HexStringToByteString(uninterpreted_options);
+  if (auto bytes =
+          string_encodings::HexStringToByteString(uninterpreted_options);
       !bytes.ok()) {
     output.push_back(absl::StrCat(
         error_prefix, "invalid format: ", bytes.status().message()));
@@ -864,7 +871,8 @@ bool TcpUninterpretedOptionsInvalidReasons(
     absl::string_view uninterpreted_options, const std::string& error_prefix,
     std::vector<std::string>& output) {
   if (uninterpreted_options.empty()) return false;
-  if (auto bytes = pdpi::HexStringToByteString(uninterpreted_options);
+  if (auto bytes =
+          string_encodings::HexStringToByteString(uninterpreted_options);
       !bytes.ok()) {
     output.push_back(absl::StrCat(
         error_prefix, "invalid format: ", bytes.status().message()));
@@ -887,7 +895,8 @@ bool GreOptionalFieldsInvalidReasons(const std::string& checksum,
   if (checksum.empty() && reserved1.empty()) return false;
 
   bool invalid = false;
-  if (auto bytes = pdpi::HexStringToByteString(checksum); !bytes.ok()) {
+  if (auto bytes = string_encodings::HexStringToByteString(checksum);
+      !bytes.ok()) {
     output.push_back(absl::StrCat(
         error_prefix, "invalid format: ", bytes.status().message()));
     invalid = true;
@@ -897,7 +906,8 @@ bool GreOptionalFieldsInvalidReasons(const std::string& checksum,
     invalid = true;
   }
 
-  if (auto bytes = pdpi::HexStringToByteString(reserved1); !bytes.ok()) {
+  if (auto bytes = string_encodings::HexStringToByteString(reserved1);
+      !bytes.ok()) {
     output.push_back(absl::StrCat(
         error_prefix, "invalid format: ", bytes.status().message()));
     invalid = true;
@@ -929,7 +939,8 @@ void EthernetHeaderInvalidReasons(const EthernetHeader& header,
     output.push_back(absl::StrCat(
         field_prefix,
         "couldn't compute payload size: ", size.status().ToString()));
-  } else if (auto ethertype = pdpi::HexStringToInt(header.ethertype());
+  } else if (auto ethertype =
+                 string_encodings::HexStringToInt(header.ethertype());
              !ethertype_invalid && !ethertype.ok()) {
     LOG(DFATAL) << field_prefix << "ethertype invalid despite previous check: "
                 << ethertype.status();
@@ -998,7 +1009,7 @@ void Ipv4HeaderInvalidReasons(const Ipv4Header& header,
       int options_bitwidth = options.empty() ? 0 : 4 * (options.size() - 2);
       int num_32bit_words = 5 + options_bitwidth / 32;
       std::string expected =
-          pdpi::BitsetToHexString<kIpIhlBitwidth>(num_32bit_words);
+          string_encodings::BitsetToHexString<kIpIhlBitwidth>(num_32bit_words);
       if (header.ihl() != expected) {
         output.push_back(absl::StrCat(field_prefix, "ihl: Must be ", expected,
                                       ", but was ", header.ihl(), " instead."));
@@ -1016,8 +1027,8 @@ void Ipv4HeaderInvalidReasons(const Ipv4Header& header,
           field_prefix, "total_length: Couldn't compute expected size: ",
           size.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kIpTotalLengthBitwidth>(*size));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kIpTotalLengthBitwidth>(*size));
       if (header.total_length() != expected) {
         output.push_back(absl::StrCat(field_prefix, "total_length: Must be ",
                                       expected, ", but was ",
@@ -1031,8 +1042,8 @@ void Ipv4HeaderInvalidReasons(const Ipv4Header& header,
           field_prefix, "checksum: Couldn't compute expected checksum: ",
           checksum.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kIpChecksumBitwidth>(*checksum));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kIpChecksumBitwidth>(*checksum));
       if (header.checksum() != expected) {
         output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
                                       expected, ", but was ", header.checksum(),
@@ -1081,8 +1092,8 @@ void Ipv6HeaderInvalidReasons(const Ipv6Header& header,
           field_prefix, "total_length: Couldn't compute expected size: ",
           size.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kIpPayloadLengthBitwidth>(*size));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kIpPayloadLengthBitwidth>(*size));
       if (header.payload_length() != expected) {
         output.push_back(absl::StrCat(field_prefix, "payload_length: Must be ",
                                       expected, ", but was ",
@@ -1132,8 +1143,8 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
                                     "length: Couldn't compute expected size: ",
                                     size.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kUdpLengthBitwidth>(*size));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kUdpLengthBitwidth>(*size));
       if (header.length() != expected) {
         output.push_back(absl::StrCat(field_prefix, "length: Must be ",
                                       expected, ", but was ", header.length(),
@@ -1141,6 +1152,7 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
       }
     }
   }
+
   // Check computed field: checksum.
   if (!checksum_invalid) {
     if (absl::StatusOr<std::optional<int>> checksum =
@@ -1153,7 +1165,7 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
       // We always allow the UDP checksum to be zero. In certain cases we also
       // allow the checksum to be anything (i.e. UdpHeaderChecksum returns
       // nullopt).
-    } else if (std::string expected = pdpi::BitsetToHexString(
+    } else if (std::string expected = string_encodings::BitsetToHexString(
                    std::bitset<kUdpChecksumBitwidth>(checksum->value()));
                header.checksum() != expected) {
       output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
@@ -1199,7 +1211,7 @@ void TcpHeaderInvalidReasons(const TcpHeader& header,
       int options_bitwidth = options.empty() ? 0 : 4 * (options.size() - 2);
       int num_32bit_words = 5 + options_bitwidth / 32;
       std::string expected =
-          pdpi::BitsetToHexString<kIpIhlBitwidth>(num_32bit_words);
+          string_encodings::BitsetToHexString<kIpIhlBitwidth>(num_32bit_words);
       if (header.data_offset() != expected) {
         output.push_back(absl::StrCat(field_prefix, "data_offset: Must be ",
                                       expected, ", but was ",
@@ -1318,8 +1330,8 @@ void IcmpHeaderInvalidReasons(const IcmpHeader& header,
         field_prefix, "checksum: Couldn't compute expected checksum: ",
         checksum.status().ToString()));
   } else {
-    std::string expected =
-        pdpi::BitsetToHexString(std::bitset<kIcmpChecksumBitwidth>(*checksum));
+    std::string expected = string_encodings::BitsetToHexString(
+        std::bitset<kIcmpChecksumBitwidth>(*checksum));
     if (header.checksum() != expected) {
       output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
                                     expected, ", but was ", header.checksum(),
@@ -1402,8 +1414,8 @@ void GreHeaderInvalidReasons(const GreHeader& header,
           field_prefix, "checksum: Couldn't compute expected checksum: ",
           checksum.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kGreChecksumBitwidth>(*checksum));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kGreChecksumBitwidth>(*checksum));
       if (header.checksum() != expected) {
         output.push_back(absl::StrCat(field_prefix, "checksum: Must be ",
                                       expected, ", but was ", header.checksum(),
@@ -1434,7 +1446,8 @@ void SaiP4BMv2PacketInHeaderInvalidReasons(
           output);
 
   if (!unused_pad_invalid) {
-    absl::StatusOr<int> unused_pad = pdpi::HexStringToInt(header.unused_pad());
+    absl::StatusOr<int> unused_pad =
+        string_encodings::HexStringToInt(header.unused_pad());
     if (!unused_pad.ok()) {
       LOG(DFATAL) << "SHOULD NEVER HAPPEN: unused_pad badly formatted: "
                   << unused_pad.status();
@@ -1471,8 +1484,8 @@ void IpfixHeaderInvalidReasons(const IpfixHeader& header,
                                     "length: Couldn't compute expected size: ",
                                     size.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kIpfixLengthBitwidth>(*size));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kIpfixLengthBitwidth>(*size));
       if (header.length() != expected) {
         output.push_back(absl::StrCat(field_prefix, "length: Must be ",
                                       expected, ", but was ", header.length(),
@@ -1514,7 +1527,8 @@ void PsampHeaderInvalidReasons(const PsampHeader& header,
           absl::StrCat(field_prefix, "variable_length"), output);
 
   if (!variable_length_invalid) {
-    if (auto variable_length = pdpi::HexStringToInt(header.variable_length());
+    if (auto variable_length =
+            string_encodings::HexStringToInt(header.variable_length());
         !variable_length.ok()) {
       output.push_back(absl::StrCat(field_prefix,
                                     "variable_length: Couldn't parse value: ",
@@ -1537,8 +1551,8 @@ void PsampHeaderInvalidReasons(const PsampHeader& header,
                                     "length: Couldn't compute expected size: ",
                                     size.status().ToString()));
     } else {
-      std::string expected =
-          pdpi::BitsetToHexString(std::bitset<kPsampLengthBitwidth>(*size));
+      std::string expected = string_encodings::BitsetToHexString(
+          std::bitset<kPsampLengthBitwidth>(*size));
       if (header.length() != expected) {
         output.push_back(absl::StrCat(field_prefix, "length: Must be ",
                                       expected, ", but was ", header.length(),
@@ -1558,7 +1572,7 @@ void PsampHeaderInvalidReasons(const PsampHeader& header,
                                     "length: Couldn't compute expected size: ",
                                     size.status().ToString()));
     } else {
-      std::string expected = pdpi::BitsetToHexString(
+      std::string expected = string_encodings::BitsetToHexString(
           std::bitset<kPsampPacketSampledLengthBitwidth>(*size));
       if (header.packet_sampled_length() != expected) {
         output.push_back(absl::StrCat(
@@ -1679,7 +1693,8 @@ absl::StatusOr<std::string> GetEthernetTrailer(const Packet& packet) {
     case Header::kIpv4Header: {
       ASSIGN_OR_RETURN(
           const int packet_size_starting_from_ipv4_according_to_ip_header,
-          pdpi::HexStringToInt(header.ipv4_header().total_length()));
+          string_encodings::HexStringToInt(
+              header.ipv4_header().total_length()));
       ASSIGN_OR_RETURN(int actual_packet_size_starting_from_ipv4,
                        PacketSizeInBytes(packet, header_index));
       int trailer_size = actual_packet_size_starting_from_ipv4 -
@@ -1695,7 +1710,8 @@ absl::StatusOr<std::string> GetEthernetTrailer(const Packet& packet) {
     case Header::kIpv6Header: {
       ASSIGN_OR_RETURN(
           const int packet_size_starting_after_ipv6_according_to_ip_header,
-          pdpi::HexStringToInt(header.ipv6_header().payload_length()));
+          string_encodings::HexStringToInt(
+              header.ipv6_header().payload_length()));
       ASSIGN_OR_RETURN(int actual_packet_size_starting_after_ipv6,
                        PacketSizeInBytes(packet, header_index + 1));
       int trailer_size = actual_packet_size_starting_after_ipv6 -
@@ -1859,33 +1875,34 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
 namespace {
 
 absl::Status SerializeMacAddress(absl::string_view address,
-                                 pdpi::BitString& output) {
+                                 string_encodings::BitString& output) {
   ASSIGN_OR_RETURN(MacAddress parsed_address, MacAddress::OfString(address));
   output.AppendBits(parsed_address.ToBitset());
   return absl::OkStatus();
 }
 absl::Status SerializeIpv4Address(absl::string_view address,
-                                  pdpi::BitString& output) {
+                                  string_encodings::BitString& output) {
   ASSIGN_OR_RETURN(Ipv4Address parsed_address, Ipv4Address::OfString(address));
   output.AppendBits(parsed_address.ToBitset());
   return absl::OkStatus();
 }
 absl::Status SerializeIpv6Address(absl::string_view address,
-                                  pdpi::BitString& output) {
+                                  string_encodings::BitString& output) {
   ASSIGN_OR_RETURN(Ipv6Address parsed_address, Ipv6Address::OfString(address));
   output.AppendBits(parsed_address.ToBitset());
   return absl::OkStatus();
 }
 template <size_t num_bits>
 absl::Status SerializeBits(absl::string_view hex_string,
-                           pdpi::BitString& output) {
-  ASSIGN_OR_RETURN(auto bitset, pdpi::HexStringToBitset<num_bits>(hex_string));
+                           string_encodings::BitString& output) {
+  ASSIGN_OR_RETURN(auto bitset,
+                   string_encodings::HexStringToBitset<num_bits>(hex_string));
   output.AppendBits(bitset);
   return absl::OkStatus();
 }
 
 absl::Status SerializeEthernetHeader(const EthernetHeader& header,
-                                     pdpi::BitString& output) {
+                                     string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeMacAddress(header.ethernet_destination(), output));
   RETURN_IF_ERROR(SerializeMacAddress(header.ethernet_source(), output));
   RETURN_IF_ERROR(
@@ -1894,7 +1911,7 @@ absl::Status SerializeEthernetHeader(const EthernetHeader& header,
 }
 
 absl::Status SerializeIpv4Header(const Ipv4Header& header,
-                                 pdpi::BitString& output) {
+                                 string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kIpVersionBitwidth>(header.version(), output));
   RETURN_IF_ERROR(SerializeBits<kIpIhlBitwidth>(header.ihl(), output));
   RETURN_IF_ERROR(SerializeBits<kIpDscpBitwidth>(header.dscp(), output));
@@ -1920,7 +1937,7 @@ absl::Status SerializeIpv4Header(const Ipv4Header& header,
 }
 
 absl::Status SerializeIpv6Header(const Ipv6Header& header,
-                                 pdpi::BitString& output) {
+                                 string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kIpVersionBitwidth>(header.version(), output));
   RETURN_IF_ERROR(SerializeBits<kIpDscpBitwidth>(header.dscp(), output));
   RETURN_IF_ERROR(SerializeBits<kIpEcnBitwidth>(header.ecn(), output));
@@ -1937,8 +1954,8 @@ absl::Status SerializeIpv6Header(const Ipv6Header& header,
   return absl::OkStatus();
 }
 
-absl::Status SerializeHopByHopOptionsHeader(const HopByHopOptionsHeader& header,
-                                            pdpi::BitString& output) {
+absl::Status SerializeHopByHopOptionsHeader(
+    const HopByHopOptionsHeader& header, string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kHopByHopNextHeaderBitwidth>(header.next_header(), output));
   RETURN_IF_ERROR(SerializeBits<kHopByHopHeaderExtensionLengthBitwidth>(
@@ -1949,7 +1966,7 @@ absl::Status SerializeHopByHopOptionsHeader(const HopByHopOptionsHeader& header,
 }
 
 absl::Status SerializeUdpHeader(const UdpHeader& header,
-                                pdpi::BitString& output) {
+                                string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kUdpPortBitwidth>(header.source_port(), output));
   RETURN_IF_ERROR(
@@ -1961,7 +1978,7 @@ absl::Status SerializeUdpHeader(const UdpHeader& header,
 }
 
 absl::Status SerializeTcpHeader(const TcpHeader& header,
-                                pdpi::BitString& output) {
+                                string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kTcpPortBitwidth>(header.source_port(), output));
   RETURN_IF_ERROR(
@@ -1981,7 +1998,7 @@ absl::Status SerializeTcpHeader(const TcpHeader& header,
 }
 
 absl::Status SerializeArpHeader(const ArpHeader& header,
-                                pdpi::BitString& output) {
+                                string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kArpTypeBitwidth>(header.hardware_type(), output));
   RETURN_IF_ERROR(
@@ -2004,7 +2021,7 @@ absl::Status SerializeArpHeader(const ArpHeader& header,
 }
 
 absl::Status SerializeIcmpHeader(const IcmpHeader& header,
-                                 pdpi::BitString& output) {
+                                 string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kIcmpTypeBitwidth>(header.type(), output));
   RETURN_IF_ERROR(SerializeBits<kIcmpCodeBitwidth>(header.code(), output));
   RETURN_IF_ERROR(
@@ -2015,7 +2032,7 @@ absl::Status SerializeIcmpHeader(const IcmpHeader& header,
 }
 
 absl::Status SerializeVlanHeader(const VlanHeader& header,
-                                 pdpi::BitString& output) {
+                                 string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kVlanPriorityCodePointBitwidth>(
       header.priority_code_point(), output));
   RETURN_IF_ERROR(SerializeBits<kVlanDropEligibilityIndicatorBitwidth>(
@@ -2028,7 +2045,7 @@ absl::Status SerializeVlanHeader(const VlanHeader& header,
 }
 
 absl::Status SerializeGreHeader(const GreHeader& header,
-                                pdpi::BitString& output) {
+                                string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kGreChecksumPresentBitwidth>(
       header.checksum_present(), output));
   RETURN_IF_ERROR(
@@ -2044,7 +2061,8 @@ absl::Status SerializeGreHeader(const GreHeader& header,
 }
 
 absl::Status SerializeSaiP4BMv2PacketInHeader(
-    const SaiP4BMv2PacketInHeader& header, pdpi::BitString& output) {
+    const SaiP4BMv2PacketInHeader& header,
+    string_encodings::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kSaiP4BMv2PacketInIngressPortBitwidth>(
       header.ingress_port(), output));
   RETURN_IF_ERROR(SerializeBits<kSaiP4BMv2PacketInTargetEgressPortBitwidth>(
@@ -2055,7 +2073,7 @@ absl::Status SerializeSaiP4BMv2PacketInHeader(
 }
 
 absl::Status SerializeIpfixHeader(const IpfixHeader& header,
-                                  pdpi::BitString& output) {
+                                  string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kIpfixVersionBitwidth>(header.version(), output));
   RETURN_IF_ERROR(SerializeBits<kIpfixLengthBitwidth>(header.length(), output));
@@ -2069,7 +2087,7 @@ absl::Status SerializeIpfixHeader(const IpfixHeader& header,
 }
 
 absl::Status SerializePsampHeader(const PsampHeader& header,
-                                  pdpi::BitString& output) {
+                                  string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kPsampTemplateIdBitwidth>(header.template_id(), output));
   RETURN_IF_ERROR(SerializeBits<kPsampLengthBitwidth>(header.length(), output));
@@ -2095,7 +2113,7 @@ absl::Status SerializePsampHeader(const PsampHeader& header,
 }
 
 absl::Status SerializePspHeader(const PspHeader& header,
-                                pdpi::BitString& output) {
+                                string_encodings::BitString& output) {
   RETURN_IF_ERROR(
       SerializeBits<kPspNextHeaderBitwidth>(header.next_header(), output));
   RETURN_IF_ERROR(SerializeBits<kPspHeaderExtLengthBitwidth>(
@@ -2119,7 +2137,8 @@ absl::Status SerializePspHeader(const PspHeader& header,
   return absl::OkStatus();
 }
 
-absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
+absl::Status SerializeHeader(const Header& header,
+                             string_encodings::BitString& output) {
   switch (header.header_case()) {
     case Header::kEthernetHeader:
       return SerializeEthernetHeader(header.ethernet_header(), output);
@@ -2160,7 +2179,7 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
 }  // namespace
 
 absl::Status RawSerializePacket(const Packet& packet, int start_header_index,
-                                pdpi::BitString& output) {
+                                string_encodings::BitString& output) {
   if (start_header_index > packet.headers_size() || start_header_index < 0) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Invalid header index " << start_header_index
@@ -2176,7 +2195,7 @@ absl::Status RawSerializePacket(const Packet& packet, int start_header_index,
 }
 
 absl::StatusOr<std::string> RawSerializePacket(const Packet& packet) {
-  pdpi::BitString bits;
+  string_encodings::BitString bits;
   RETURN_IF_ERROR(RawSerializePacket(packet, 0, bits));
   return bits.ToByteString();
 }
@@ -2216,8 +2235,8 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         // Read current ethertype.
         int ethertype = 0;
         if (!ethernet_header.ethertype().empty()) {
-          ASSIGN_OR_RETURN(ethertype,
-                           pdpi::HexStringToInt(ethernet_header.ethertype()));
+          ASSIGN_OR_RETURN(ethertype, string_encodings::HexStringToInt(
+                                          ethernet_header.ethertype()));
         }
         // If ethertype <= 1500, it must be equal to the payload size and we
         // thus consider it a computed field that we should update.
@@ -2255,8 +2274,9 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
                      (options.size() * 4) % 32 == 0) {
             // 4 bits per hex char.
             int num_32bit_words_in_options = (options.size() * 4) / 32;
-            ipv4_header.set_ihl(pdpi::BitsetToHexString<kIpIhlBitwidth>(
-                5 + num_32bit_words_in_options));
+            ipv4_header.set_ihl(
+                string_encodings::BitsetToHexString<kIpIhlBitwidth>(
+                    5 + num_32bit_words_in_options));
             changes = true;
           } else {
             return gutil::InvalidArgumentErrorBuilder()
@@ -2267,14 +2287,14 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         if (ipv4_header.total_length().empty() || overwrite) {
           ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
                            _.SetPrepend() << error_prefix << "total_length: ");
-          ipv4_header.set_total_length(pdpi::BitsetToHexString(
+          ipv4_header.set_total_length(string_encodings::BitsetToHexString(
               std::bitset<kIpTotalLengthBitwidth>(size)));
           changes = true;
         }
         if (ipv4_header.checksum().empty() || overwrite) {
           ASSIGN_OR_RETURN(int checksum, Ipv4HeaderChecksum(ipv4_header),
                            _.SetPrepend() << error_prefix << "checksum: ");
-          ipv4_header.set_checksum(pdpi::BitsetToHexString(
+          ipv4_header.set_checksum(string_encodings::BitsetToHexString(
               std::bitset<kIpChecksumBitwidth>(checksum)));
           changes = true;
         }
@@ -2291,7 +2311,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           ASSIGN_OR_RETURN(
               int size, PacketSizeInBytes(packet, header_index + 1),
               _.SetPrepend() << error_prefix << "payload_length: ");
-          ipv6_header.set_payload_length(pdpi::BitsetToHexString(
+          ipv6_header.set_payload_length(string_encodings::BitsetToHexString(
               std::bitset<kIpTotalLengthBitwidth>(size)));
           changes = true;
         }
@@ -2314,7 +2334,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           changes = true;
           break;
         }
-        // TODO: b/386218372 - Cleanup the computed field logic for hop-by-hop
+        // TODO: Cleanup the computed field logic for hop-by-hop
         // options to overwrite the options and padding to a more strict and
         // correct state.
         if (overwrite) {
@@ -2349,14 +2369,15 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         if (udp_header.length().empty() || overwrite) {
           ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
                            _.SetPrepend() << error_prefix << "length: ");
-          udp_header.set_length(
-              pdpi::BitsetToHexString(std::bitset<kUdpLengthBitwidth>(size)));
+          udp_header.set_length(string_encodings::BitsetToHexString(
+              std::bitset<kUdpLengthBitwidth>(size)));
           changes = true;
         }
         if (udp_header.checksum().empty() || overwrite) {
           ASSIGN_OR_RETURN(std::optional<int> checksum,
                            UdpHeaderChecksum(packet, header_index),
                            _.SetPrepend() << error_prefix << "checksum: ");
+
           // If UdpHeaderChecksum returns a value then we will always use that
           // expected value. If it did not return a value that means the
           // checksum can be anything. So we take into consideration the current
@@ -2364,7 +2385,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           //   * checksum was set then leave it as is.
           //   * checksum is empty then assign it 0.
           if (checksum.has_value()) {
-            udp_header.set_checksum(pdpi::BitsetToHexString(
+            udp_header.set_checksum(string_encodings::BitsetToHexString(
                 std::bitset<kUdpChecksumBitwidth>(*checksum)));
             changes = true;
           } else if (udp_header.checksum().empty()) {
@@ -2399,7 +2420,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         if (icmp_header.checksum().empty() || overwrite) {
           ASSIGN_OR_RETURN(int checksum,
                            IcmpHeaderChecksum(packet, header_index));
-          icmp_header.set_checksum(pdpi::BitsetToHexString(
+          icmp_header.set_checksum(string_encodings::BitsetToHexString(
               std::bitset<kIcmpChecksumBitwidth>(checksum)));
           changes = true;
         }
@@ -2429,7 +2450,8 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
                    << "uninterpreted_options is of invalid length";
           }
           tcp_header.set_data_offset(
-              pdpi::BitsetToHexString<kTcpDataOffsetBitwidth>(data_offset));
+              string_encodings::BitsetToHexString<kTcpDataOffsetBitwidth>(
+                  data_offset));
           changes = true;
         }
         break;
@@ -2440,7 +2462,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           if (gre_header.checksum().empty() || overwrite) {
             ASSIGN_OR_RETURN(int checksum,
                              GreHeaderChecksum(packet, header_index));
-            gre_header.set_checksum(pdpi::BitsetToHexString(
+            gre_header.set_checksum(string_encodings::BitsetToHexString(
                 std::bitset<kGreChecksumBitwidth>(checksum)));
             changes = true;
           }
@@ -2458,8 +2480,8 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         if (ipfix_header.length().empty() || overwrite) {
           ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
                            _.SetPrepend() << error_prefix << "length: ");
-          ipfix_header.set_length(
-              pdpi::BitsetToHexString(std::bitset<kIpfixLengthBitwidth>(size)));
+          ipfix_header.set_length(string_encodings::BitsetToHexString(
+              std::bitset<kIpfixLengthBitwidth>(size)));
           changes = true;
         }
         break;
@@ -2469,8 +2491,8 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         if (psamp_header.length().empty() || overwrite) {
           ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
                            _.SetPrepend() << error_prefix << "length: ");
-          psamp_header.set_length(
-              pdpi::BitsetToHexString(std::bitset<kPsampLengthBitwidth>(size)));
+          psamp_header.set_length(string_encodings::BitsetToHexString(
+              std::bitset<kPsampLengthBitwidth>(size)));
           changes = true;
         }
         if (psamp_header.variable_length().empty() || overwrite) {
@@ -2481,8 +2503,9 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
           ASSIGN_OR_RETURN(
               int size, PacketSizeInBytes(packet, header_index + 1),
               _.SetPrepend() << error_prefix << "packet_sampled_length: ");
-          psamp_header.set_packet_sampled_length(pdpi::BitsetToHexString(
-              std::bitset<kPsampPacketSampledLengthBitwidth>(size)));
+          psamp_header.set_packet_sampled_length(
+              string_encodings::BitsetToHexString(
+                  std::bitset<kPsampPacketSampledLengthBitwidth>(size)));
           changes = true;
         }
         break;
@@ -2592,7 +2615,7 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
         if (const auto& options = header->ipv4_header().uninterpreted_options();
             !options.empty()) {
           ASSIGN_OR_RETURN(
-              auto bytes, pdpi::HexStringToByteString(options),
+              auto bytes, string_encodings::HexStringToByteString(options),
               _.SetPrepend()
                   << "failed to parse uninterpreted_options in Ipv4Header: ");
           size += 8 * bytes.size();
@@ -2613,7 +2636,7 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
         if (const auto& options = header->tcp_header().uninterpreted_options();
             !options.empty()) {
           ASSIGN_OR_RETURN(
-              auto bytes, pdpi::HexStringToByteString(options),
+              auto bytes, string_encodings::HexStringToByteString(options),
               _.SetPrepend()
                   << "failed to parse uninterpreted_options in TcpHeader: ");
           size += 8 * bytes.size();
@@ -2659,7 +2682,8 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
 
 // Returns 16-bit ones' complement of the ones' complement sum of all 16-bit
 // words in the given BitString.
-static absl::StatusOr<int> OnesComplementChecksum(pdpi::BitString data) {
+static absl::StatusOr<int> OnesComplementChecksum(
+    string_encodings::BitString data) {
   // Pad string to be 16-bit multiple.
   while (data.size() % 16 != 0) data.AppendBit(0);
 
@@ -2689,7 +2713,7 @@ absl::StatusOr<int> Ipv4HeaderChecksum(Ipv4Header header) {
   // We compute the checksum by setting the checksum field to 0, serializing
   // the header, and then going over all 16-bit words.
   header.set_checksum("0x0000");
-  pdpi::BitString data;
+  string_encodings::BitString data;
   RETURN_IF_ERROR(SerializeIpv4Header(header, data));
   return OnesComplementChecksum(std::move(data));
 }
@@ -2723,7 +2747,7 @@ absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
 
   // Serialize "pseudo header" for checksum calculation, following
   // https://en.wikipedia.org/wiki/User_Datagram_Protocol#Checksum_computation.
-  pdpi::BitString data;
+  string_encodings::BitString data;
   switch (preceding_header.header_case()) {
     case Header::kIpv4Header: {
       udp_header.set_checksum("0x0000");
@@ -2792,7 +2816,7 @@ absl::StatusOr<int> IcmpHeaderChecksum(Packet packet, int icmp_header_index) {
 
   int ip_header_index = FindPrecedingIpHeader(packet, icmp_header_index);
   const Header& preceding_header = packet.headers(ip_header_index);
-  pdpi::BitString data;
+  string_encodings::BitString data;
   switch (preceding_header.header_case()) {
     case Header::kIpv6Header: {
       // Serialize "pseudo header" for checksum calculation, following
@@ -2847,7 +2871,7 @@ absl::StatusOr<int> GreHeaderChecksum(Packet packet, int gre_header_index) {
       *packet.mutable_headers(gre_header_index)->mutable_gre_header();
 
   gre_header.set_checksum("0x0000");
-  pdpi::BitString data;
+  string_encodings::BitString data;
 
   RETURN_IF_ERROR(RawSerializePacket(packet, gre_header_index, data));
 

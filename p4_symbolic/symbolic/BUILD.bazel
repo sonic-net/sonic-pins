@@ -45,7 +45,7 @@ cc_library(
     deps = [
         "//gutil/gutil:status",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi/string_encodings:bit_string",
+        "//p4_infra/string_encodings:bit_string",
         "//p4_infra/p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
         "@com_github_z3prover_z3//:api",
@@ -84,7 +84,7 @@ cc_library(
         "//gutil/gutil:status",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi/internal:ordered_map",
-        "//p4_infra/p4_pdpi/string_encodings:bit_string",
+        "//p4_infra/string_encodings:bit_string",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/ir",
         "//p4_symbolic/ir:ir_cc_proto",

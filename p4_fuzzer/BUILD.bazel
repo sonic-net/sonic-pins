@@ -152,7 +152,7 @@ cc_library(
         "//p4_infra/p4_pdpi:references",
         "//p4_infra/p4_pdpi/internal:ordered_map",
         "//p4_infra/p4_pdpi/netaddr:ipv6_address",
-        "//p4_infra/p4_pdpi/string_encodings:byte_string",
+        "//p4_infra/string_encodings:byte_string",
         "//p4_infra/p4_pdpi/utils:ir",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4_constraints//p4_constraints:ast",

@@ -27,21 +27,23 @@
 //    string representation" used by P4RT, see
 //    https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-bytestrings
 
-#ifndef PINS_P4_INFRA_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
-#define PINS_P4_INFRA_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
+#ifndef PINS_INFRA_P4_INFRA_STRING_ENCODINGS_BYTE_STRING_H_
+#define PINS_INFRA_P4_INFRA_STRING_ENCODINGS_BYTE_STRING_H_
 
 #include <algorithm>
 #include <bitset>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 // Reads bits from arbitrary-size, nonempty byte string.
 // Missing bits are assumed to be zero.
@@ -138,6 +140,6 @@ std::string BitsetToP4RuntimeByteString(std::bitset<num_bits> bits) {
   return ByteStringToP4runtimeByteString(BitsetToPaddedByteString(bits));
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings
 
-#endif  // PINS_P4_INFRA_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
+#endif  // PINS_INFRA_P4_INFRA_STRING_ENCODINGS_BYTE_STRING_H_

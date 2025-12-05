@@ -11,6 +11,7 @@ cc_library(
     hdrs = ["byte_string.h"],
     deps = [
         "//gutil/gutil:status",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -20,10 +21,10 @@ cc_test(
     name = "byte_string_test",
     srcs = ["byte_string_test.cc"],
     deps = [
-        ":byte_string",
-        ":safe",
         "//gutil/gutil:status",
         "//gutil/gutil:status_matchers",
+        ":byte_string",
+        ":safe",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
@@ -40,8 +41,8 @@ cc_library(
     srcs = ["bit_string.cc"],
     hdrs = ["bit_string.h"],
     deps = [
-        ":hex_string",
         "//gutil/gutil:status",
+        ":hex_string",
         "//p4_infra/p4_pdpi/netaddr:ipv4_address",
         "//p4_infra/p4_pdpi/netaddr:ipv6_address",
         "//p4_infra/p4_pdpi/netaddr:mac_address",
@@ -55,8 +56,8 @@ cc_test(
     name = "bit_string_test",
     srcs = ["bit_string_test.cc"],
     deps = [
-        ":bit_string",
         "//gutil/gutil:status_matchers",
+        ":bit_string",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
@@ -67,9 +68,9 @@ cc_library(
     srcs = ["readable_byte_string.cc"],
     hdrs = ["readable_byte_string.h"],
     deps = [
+        "//gutil/gutil:status",
         ":bit_string",
         ":hex_string",
-        "//gutil/gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -79,8 +80,8 @@ cc_test(
     name = "readable_byte_string_test",
     srcs = ["readable_byte_string_test.cc"],
     deps = [
-        ":readable_byte_string",
         "//gutil/gutil:status_matchers",
+        ":readable_byte_string",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -90,10 +91,9 @@ cc_library(
     srcs = ["hex_string.cc"],
     hdrs = ["hex_string.h"],
     deps = [
-        "//p4_infra/p4_pdpi/string_encodings:byte_string",
-        "//p4_infra/p4_pdpi/string_encodings:safe",
-        "@com_google_absl//absl/log",
+        ":safe",
         "//gutil/gutil:status",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

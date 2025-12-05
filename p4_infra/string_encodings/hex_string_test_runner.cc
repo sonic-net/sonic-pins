@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstdint>
 #include <iostream>
 #include <limits>
 
 #include "absl/status/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 #define TEST_PURE(function_call)                                       \
   do {                                                                 \
@@ -37,13 +38,13 @@
     std::cout << "\n\n";                                                       \
   } while (false)
 
-using ::pdpi::BitsetToHexString;
-using ::pdpi::HexStringToBitset;
-using ::pdpi::HexStringToInt;
-using ::pdpi::HexStringToInt32;
-using ::pdpi::HexStringToInt64;
-using ::pdpi::HexStringToUint32;
-using ::pdpi::HexStringToUint64;
+using ::string_encodings::BitsetToHexString;
+using ::string_encodings::HexStringToBitset;
+using ::string_encodings::HexStringToInt;
+using ::string_encodings::HexStringToInt32;
+using ::string_encodings::HexStringToInt64;
+using ::string_encodings::HexStringToUint32;
+using ::string_encodings::HexStringToUint64;
 
 int main() {
   // BitsetToHexString.

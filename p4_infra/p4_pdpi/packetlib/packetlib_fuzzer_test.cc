@@ -28,8 +28,8 @@
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/readable_byte_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/readable_byte_string.h"
 
 namespace packetlib {
 
@@ -76,12 +76,14 @@ std::string RandomPacket(absl::BitGen& gen,
     // Substitute '?' with a random hex character.
     for (char c : packet_template) {
       if (c == '?') {
-        readable_byte_string += pdpi::HexDigitToChar(absl::Uniform(gen, 0, 16));
+        readable_byte_string +=
+            string_encodings::HexDigitToChar(absl::Uniform(gen, 0, 16));
       } else {
         readable_byte_string += c;
       }
     }
-    auto prefix = pdpi::ReadableByteStringToByteString(readable_byte_string);
+    auto prefix =
+        string_encodings::ReadableByteStringToByteString(readable_byte_string);
     CHECK(prefix.status().ok())
         << "Invalid packet template: " << packet_template;
     result = *prefix;

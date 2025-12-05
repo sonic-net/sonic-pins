@@ -26,7 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace packetlib {
 
@@ -241,7 +241,7 @@ std::string ValidateAndConvertToHexString(uint64_t input) {
         << bit_limit << " but input has " << bit_width << " bits: " << input;
   }
 
-  return pdpi::BitsetToHexString(std::bitset<bit_limit>(input));
+  return string_encodings::BitsetToHexString(std::bitset<bit_limit>(input));
 }
 
 }  // namespace packetlib

@@ -40,7 +40,7 @@
 #include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"

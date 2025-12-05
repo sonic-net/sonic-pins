@@ -19,6 +19,7 @@ package(
     default_testonly = True,
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
+
 )
 
 cc_library(
@@ -51,7 +52,7 @@ cc_library(
         "//p4_infra/p4_pdpi:p4_runtime_session_extras",
         "//p4_infra/p4_pdpi:sequencing",
         "//p4_infra/p4_pdpi/packetlib:packetlib_cc_proto",
-        "//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "//p4_infra/string_encodings:hex_string",
         "//p4_symbolic/packet_synthesizer:coverage_goal_cc_proto",
         "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
         "//sai_p4/instantiations/google:p4_versions",
@@ -96,7 +97,6 @@ cc_library(
         "//p4_infra/p4_pdpi/netaddr:ipv6_address",
         "//p4_infra/p4_pdpi/netaddr:mac_address",
         "//p4_infra/p4_pdpi/packetlib:packetlib_cc_proto",
-        "//p4_infra/p4_pdpi/string_encodings:hex_string",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -352,7 +352,7 @@ cc_library(
         "//p4_infra/p4_pdpi/packetlib",
         "//p4_infra/p4_pdpi/packetlib:bit_widths",
         "//p4_infra/p4_pdpi/packetlib:packetlib_cc_proto",
-        "//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "//p4_infra/string_encodings:hex_string",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

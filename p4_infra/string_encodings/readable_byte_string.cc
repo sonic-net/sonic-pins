@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/string_encodings/readable_byte_string.h"
+#include "p4_infra/string_encodings/readable_byte_string.h"
 
 #include <string>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 absl::StatusOr<std::string> ReadableByteStringToByteString(
     absl::string_view readable_byte_string) {
@@ -86,4 +87,4 @@ absl::StatusOr<std::string> ReadableByteStringToByteString(
   return result.ToByteString();
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings

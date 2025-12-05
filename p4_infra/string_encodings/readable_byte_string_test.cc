@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/string_encodings/readable_byte_string.h"
+#include "p4_infra/string_encodings/readable_byte_string.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
@@ -75,4 +75,4 @@ TEST(ReadableByteStringTest, NoInvalidChars) {
               Not(IsOk()));
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings

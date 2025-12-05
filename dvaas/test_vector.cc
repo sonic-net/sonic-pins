@@ -28,7 +28,7 @@
 #include "p4_infra/p4_pdpi/packetlib/bit_widths.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "re2/re2.h"
 
 namespace dvaas {
@@ -82,8 +82,9 @@ absl::StatusOr<int> ExtractIdFromTaggedPacket(absl::string_view raw_packet) {
 
 absl::StatusOr<int> ExtractIdFromTaggedPacketInHex(
     absl::string_view packet_hex) {
-  ASSIGN_OR_RETURN(std::string raw_packet,
-                   pdpi::HexStringToByteString(absl::StrCat("0x", packet_hex)));
+  ASSIGN_OR_RETURN(
+      std::string raw_packet,
+      string_encodings::HexStringToByteString(absl::StrCat("0x", packet_hex)));
   return dvaas::ExtractIdFromTaggedPacket(raw_packet);
 }
 
