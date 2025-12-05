@@ -63,6 +63,7 @@ using ::testing::UnorderedElementsAreArray;
 using P4RuntimeStream =
     ::grpc::ClientReaderWriter<p4::v1::StreamMessageRequest,
                                p4::v1::StreamMessageResponse>;
+constexpr uint64_t kDeviceId = 100500;
 
 // Expects a DB to contain the provided port map.
 MATCHER_P2(
@@ -192,8 +193,6 @@ class WarmRestartTest : public testing::Test {
   }
 
   absl::Status ResetGrpcServerAndClient(bool is_freeze_mode) {
-    uint64_t device_id = 100500;
-
     // The P4RT service will wait for the client to close before stopping.
     // Therefore, we need to close the client connection first if it exists.
     if (p4rt_session_ != nullptr) RETURN_IF_ERROR(p4rt_session_->Finish());
@@ -217,15 +216,16 @@ class WarmRestartTest : public testing::Test {
           });
       SetUpControllerRpcStubs();
     }
-    RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
+    RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(kDeviceId));
 
     // Reset the P4RT client.
     std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
     LOG(INFO) << "Opening P4RT connection to " << address << ".";
     auto stub =
         pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                        std::move(stub), device_id));
+
+      ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+                                          std::move(stub), kDeviceId));
 
     return absl::OkStatus();
   }
@@ -303,8 +303,184 @@ TEST_F(WarmRestartTest, ReconciliationSucceeds) {
 
   // Reset P4RT server
   EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
+      {{"Ethernet0", "1"}, {"Ethernet4", "2"}},
+      {{"CONTROLLER_PRIORITY_1", "32"}, {"CONTROLLER_PRIORITY_2", "33"}},
+      {{"FRONT_PANEL_1", "1"}, {"FRONT_PANEL_2", "2"}}, kDeviceId));
   // State Verification
   EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  // Presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info was
+  // pushed before warm reboot and has been restored during warm bootup.
+  EXPECT_OK(p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"));
+
+  // Packet I/O ports are added async during reconciliation.
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet0"));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet4"));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("SEND_TO_INGRESS"));
+
+  // Verify that the ports are added by AddPacketIoPort during reconciliation.
+  EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
+      "Ethernet0", "test packet"));
+  EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
+      "Ethernet4", "test packet"));
+  EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
+      "SEND_TO_INGRESS", "test packet"));
+
+  // Verify that UpdateDeviceId() succeded during reconciliation.
+  const p4::v1::Uint128 election_id = ElectionId(11);
+  grpc::ClientContext primary_stream_context;
+  std::unique_ptr<P4RuntimeStream> primary_stream;
+  ASSERT_OK_AND_ASSIGN(
+      primary_stream,
+      CreatePrimaryConnection(primary_stream_context, kDeviceId, election_id));
+}
+
+
+TEST_F(WarmRestartTest, ReconciliationSucceedsWithAclEntries) {
+  // Set forwarding config and save P4Info file
+  SetForwardingPipelineConfigRequest pipeline_request =
+      GetBasicForwardingRequest();
+  pipeline_request.set_action(
+      SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *pipeline_request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(pipeline_request));
+  EXPECT_THAT(GetSavedConfig(),
+              IsOkAndHolds(EqualsProto(pipeline_request.config())));
+
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
+                       test_lib::PdWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: INSERT
+                               table_entry {
+                                 acl_pre_ingress_table_entry {
+                                   match { is_ip { value: "0x1" } }
+                                   priority: 10
+                                   action { set_vrf { vrf_id: "vrf-1" } }
+                                 }
+                               }
+                             }
+                           )pb",
+                           sai::GetIrP4Info(sai::Instantiation::kTor)));
+
+  // Expected P4RT AppDb entries.
+  auto acl_entry = test_lib::AppDbEntryBuilder{}
+                       .SetTableName("ACL_ACL_PRE_INGRESS_TABLE")
+                       .SetPriority(10)
+                       .AddMatchField("is_ip", "0x1")
+                       .SetAction("set_vrf")
+                       .AddActionParam("vrf_id", "vrf-1");
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_THAT(
+      p4rt_service_->GetP4rtAppDbTable().ReadTableEntry(acl_entry.GetKey()),
+      IsOkAndHolds(UnorderedElementsAreArray(acl_entry.GetValueMap())));
+
+  // Reset P4RT server
+  EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
+  // Perform reconciliation
+  EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
+      {{"Ethernet4", "2"}}, {}, {}, kDeviceId));
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  // Presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info was
+  // pushed before warm reboot and has been restored during warm bootup.
+  EXPECT_OK(p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"));
+}
+
+TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
+  // Set forwarding config and save P4Info file
+  SetForwardingPipelineConfigRequest pipeline_request =
+      GetBasicForwardingRequest();
+  pipeline_request.set_action(
+      SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *pipeline_request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(pipeline_request));
+  EXPECT_THAT(GetSavedConfig(),
+              IsOkAndHolds(EqualsProto(pipeline_request.config())));
+
+  ASSERT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet4", "2"));
+  // P4 write request for fixed l3 table
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
+                       test_lib::PdWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: INSERT
+                               table_entry {
+                                 router_interface_table_entry {
+                                   match { router_interface_id: "16" }
+                                   action {
+                                     set_port_and_src_mac {
+                                       port: "2"
+                                       src_mac: "00:02:03:04:05:06"
+                                     }
+                                   }
+                                 }
+                               }
+                             }
+                           )pb",
+                           sai::GetIrP4Info(sai::Instantiation::kTor)));
+
+  // Expected P4RT AppDb entry.
+  auto expected_entry = test_lib::AppDbEntryBuilder{}
+                            .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                            .AddMatchField("router_interface_id", "16")
+                            .SetAction("set_port_and_src_mac")
+                            .AddActionParam("port", "Ethernet4")
+                            .AddActionParam("src_mac", "00:02:03:04:05:06");
+
+
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_THAT(
+      p4rt_service_->GetP4rtAppDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
+      IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
+
+  // Reset P4RT server
+  EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
+  // Perform reconciliation
+  EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
+      {{"Ethernet4", "2"}}, {}, {}, kDeviceId));
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  // Presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info was
+  // pushed before warm reboot and has been restored during warm bootup.
+  EXPECT_OK(p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"));
+}
+
+TEST_F(WarmRestartTest, ReconciliationFailsP4infoNotFoundAndPushed) {
+  // The presence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info
+  // was pushed before warm reboot.
+  p4rt_service_->GetHostStatsStateDbTable().InsertTableEntry(
+      "CONFIG", {{"last-configuration-timestamp",
+                  absl::StrCat(absl::ToUnixNanos(absl::Now()))}});
+  // Reconciliation fails since P4Info is not saved in the file system.
+  EXPECT_THAT(
+      p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {}, {}, 1),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+  // Fails since P4Info file path is not set.
+  auto p4runtime_impl = p4rt_service_->BuildP4rtServer(P4RuntimeImplOptions{
+      .translate_port_ids = true,
+  });
+  EXPECT_THAT(
+      p4runtime_impl->RebuildSwStateAfterWarmboot({}, {}, {}, kDeviceId),
+      StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST_F(WarmRestartTest, ReconciliationSucceedsP4infoNotFoundAndNotPushed) {
+  // The absence of HOST_STATS|CONFIG entry in STATE DB indicates that P4Info
+  // wasn't pushed before warm reboot.
+  EXPECT_THAT(
+      p4rt_service_->GetHostStatsStateDbTable().ReadTableEntry("CONFIG"),
+      StatusIs(absl::StatusCode::kNotFound));
+  // P4Info reconciliation should succeed when P4Info wasn't pushed before warm
+  // reboot, and thus it isn't present after warm reboot.
+  EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
+      {{"Ethernet4", "2"}}, {}, {}, kDeviceId));
 }
 
 TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {

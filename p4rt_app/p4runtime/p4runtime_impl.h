@@ -229,7 +229,9 @@ public:
       const std::vector<std::pair<std::string, std::string>>& port_ids,
       const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
       const std::vector<std::pair<std::string, std::string>>&
-          front_panel_queue_ids) ABSL_LOCKS_EXCLUDED(server_state_lock_);
+          front_panel_queue_ids,
+      const std::optional<int>& device_id)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);

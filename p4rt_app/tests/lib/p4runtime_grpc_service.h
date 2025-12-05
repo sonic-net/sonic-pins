@@ -126,6 +126,8 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable fake_config_db_cpu_port_table_;
   sonic::FakeSonicDbTable fake_config_db_port_channel_table_;
   sonic::FakeSonicDbTable fake_config_db_cpu_queue_table_;
+  sonic::FakeSonicDbTable fake_config_db_node_cfg_table_;
+  sonic::FakeSonicDbTable fake_config_db_send_to_ingress_port_table_;
   // Fake CONFIG DB tables adapters to query (key, port_id) pairs.
   sonic::FakeTableAdapter* fake_port_table_adapter_;
   sonic::FakeTableAdapter* fake_cpu_port_table_adapter_;

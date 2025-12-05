@@ -13,15 +13,29 @@
 // limitations under the License.
 #include "p4rt_app/utils/warm_restart_utility.h"
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "glog/logging.h"
+#include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "swss/schema.h"
 #include "swss/warm_restart.h"
 
+#define SEND_TO_INGRESS_PORT_NAME            "SEND_TO_INGRESS"
+
 namespace p4rt_app {
+bool WarmRestartUtil::IsWarmStart() {
+  return warm_boot_state_adapter_->IsWarmStart();
+}
+
 bool WarmRestartUtil::IsOrchAgentWarmBootReconciled(absl::Duration timeout) {
   const absl::Time deadline = absl::Now() + timeout;
   swss::WarmStart::WarmStartState oa_wb_state =
@@ -63,6 +77,35 @@ WarmRestartUtil::GetCpuQueueIdsFromConfigDb() {
 std::vector<std::pair<std::string, std::string>>
 WarmRestartUtil::GetFrontPanelQueueIdsFromConfigDb() {
   return queue_config_db_->get("FRONT_PANEL");
+}
+
+std::optional<int> WarmRestartUtil::GetDeviceIdFromConfigDb() {
+  for (const auto& [field, value] :
+       node_cfg_config_db_->get("integrated_circuit0")) {
+    if (field == "node-id") {
+      int device_id;
+      if (absl::SimpleAtoi(value, &device_id)) {
+        return device_id;
+      }
+    }
+  }
+
+  LOG(WARNING) << "Failed to read 'node-id' from ConfigDB. ";
+  return std::nullopt;
+}
+
+std::vector<std::string> WarmRestartUtil::GetPortsFromConfigDb() {
+  std::vector<std::string> ports;
+
+  for (const std::string& key : port_table_config_db_->keys()) {
+    if (absl::StartsWith(key, "Ethernet")) ports.push_back(key);
+  }
+
+  for (const std::string& key : send_to_ingress_port_config_db_->keys()) {
+    if (absl::StartsWith(key, SEND_TO_INGRESS_PORT_NAME)) ports.push_back(key);
+  }
+
+  return ports;
 }
 
 }  // namespace p4rt_app
