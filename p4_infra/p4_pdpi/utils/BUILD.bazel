@@ -61,7 +61,7 @@ cc_library(
         "//p4_infra/p4_pdpi/netaddr:ipv4_address",
         "//p4_infra/p4_pdpi/netaddr:ipv6_address",
         "//p4_infra/p4_pdpi/netaddr:mac_address",
-        "//p4_infra/p4_pdpi/string_encodings:byte_string",
+        "//p4_infra/string_encodings:byte_string",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",

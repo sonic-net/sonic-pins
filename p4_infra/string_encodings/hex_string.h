@@ -16,8 +16,8 @@
 // as "0xf0a1" to ease working with PD protos.
 // See the documentation of HEX_STRING in ir.proto for details of the encoding.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_HEX_H_
-#define PINS_P4_INFRA_P4_PDPI_HEX_H_
+#ifndef PINS_INFRA_P4_INFRA_STRING_ENCODINGS_HEX_STRING_H_
+#define PINS_INFRA_P4_INFRA_STRING_ENCODINGS_HEX_STRING_H_
 
 #include <stddef.h>
 
@@ -28,12 +28,13 @@
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "gutil/gutil/status.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 // -- Conversions to Hex Strings -----------------------------------------------
 
@@ -154,6 +155,6 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
   return HexStringToAnyLargeEnoughBitset<num_bits>(hex_string);
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings
 
-#endif  // PINS_P4_INFRA_P4_PDPI_HEX_H_
+#endif  // PINS_INFRA_P4_INFRA_STRING_ENCODINGS_HEX_STRING_H_

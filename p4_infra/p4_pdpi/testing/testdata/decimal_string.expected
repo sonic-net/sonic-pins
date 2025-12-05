@@ -1,77 +1,77 @@
-$ pdpi::DecimalStringToInt("0123")
+$ string_encodings::DecimalStringToInt("0123")
 -> error: INVALID_ARGUMENT: invalid decimal string, 0123 starts with 0.
 
-$ pdpi::DecimalStringToInt("x123")
+$ string_encodings::DecimalStringToInt("x123")
 -> error: INVALID_ARGUMENT: invalid decimal string, x123 contains non-digit character: x.
 
-$ pdpi::DecimalStringToInt("-123")
+$ string_encodings::DecimalStringToInt("-123")
 -> error: INVALID_ARGUMENT: invalid decimal string, -123 contains non-digit character: -.
 
-$ pdpi::DecimalStringToInt("+123")
+$ string_encodings::DecimalStringToInt("+123")
 -> error: INVALID_ARGUMENT: invalid decimal string, +123 contains non-digit character: +.
 
-$ pdpi::DecimalStringToInt("2147483648")
+$ string_encodings::DecimalStringToInt("2147483648")
 -> error: INVALID_ARGUMENT: invalid decimal string, 2147483648 exceeds the numeric limit of 2147483647.
 
-$ pdpi::DecimalStringToInt("2147483650")
+$ string_encodings::DecimalStringToInt("2147483650")
 -> error: INVALID_ARGUMENT: invalid decimal string, 2147483650 exceeds the numeric limit of 2147483647.
 
-$ pdpi::DecimalStringToInt("0x1112323")
+$ string_encodings::DecimalStringToInt("0x1112323")
 -> error: INVALID_ARGUMENT: invalid decimal string, 0x1112323 starts with 0.
 
-$ pdpi::DecimalStringToInt("2147483647")
+$ string_encodings::DecimalStringToInt("2147483647")
 -> 2147483647
 
-$ pdpi::DecimalStringToInt("0")
+$ string_encodings::DecimalStringToInt("0")
 -> 0
 
-$ pdpi::DecimalStringToInt64("9223372036854775807")
+$ string_encodings::DecimalStringToInt64("9223372036854775807")
 -> 9223372036854775807
 
-$ pdpi::DecimalStringToInt64("9223372036854775808")
+$ string_encodings::DecimalStringToInt64("9223372036854775808")
 -> error: INVALID_ARGUMENT: invalid decimal string, 9223372036854775808 exceeds the numeric limit of 9223372036854775807.
 
-$ pdpi::DecimalStringToInt32("2147483648")
+$ string_encodings::DecimalStringToInt32("2147483648")
 -> error: INVALID_ARGUMENT: invalid decimal string, 2147483648 exceeds the numeric limit of 2147483647.
 
-$ pdpi::DecimalStringToInt32("2147483647")
+$ string_encodings::DecimalStringToInt32("2147483647")
 -> 2147483647
 
-$ pdpi::DecimalStringToUint32("4294967295")
+$ string_encodings::DecimalStringToUint32("4294967295")
 -> 4294967295
 
-$ pdpi::DecimalStringToUint32("4294967296")
+$ string_encodings::DecimalStringToUint32("4294967296")
 -> error: INVALID_ARGUMENT: invalid decimal string, 4294967296 exceeds the numeric limit of 4294967295.
 
-$ pdpi::DecimalStringToUint64("18446744073709551615")
+$ string_encodings::DecimalStringToUint64("18446744073709551615")
 -> 18446744073709551615
 
-$ pdpi::DecimalStringToUint64("18446744073709551616")
+$ string_encodings::DecimalStringToUint64("18446744073709551616")
 -> error: INVALID_ARGUMENT: invalid decimal string, 18446744073709551616 exceeds the numeric limit of 18446744073709551615.
 
-$ pdpi::IntToDecimalString(-1)
+$ string_encodings::IntToDecimalString(-1)
 -> error: INVALID_ARGUMENT: invalid decimal value, only positive value is allowed but input value is: -1.
 
-$ pdpi::IntToDecimalString(213)
+$ string_encodings::IntToDecimalString(213)
 -> 213
 
-$ pdpi::IntToDecimalString(2147483648)
+$ string_encodings::IntToDecimalString(2147483648)
 -> 2147483648
 
-$ pdpi::IntToDecimalString(4294967296)
+$ string_encodings::IntToDecimalString(4294967296)
 -> 4294967296
 
-$ pdpi::IntToDecimalString(4294967295U)
+$ string_encodings::IntToDecimalString(4294967295U)
 -> 4294967295
 
-$ pdpi::IntToDecimalString(9223372036854775807)
+$ string_encodings::IntToDecimalString(9223372036854775807)
 -> 9223372036854775807
 
-$ pdpi::IntToDecimalString(18446744073709551615U)
+$ string_encodings::IntToDecimalString(18446744073709551615U)
 -> 18446744073709551615
 
-$ pdpi::IntToDecimalString(0213)
+$ string_encodings::IntToDecimalString(0213)
 -> 139
 
-$ pdpi::IntToDecimalString(0x213)
+$ string_encodings::IntToDecimalString(0x213)
 -> 531

@@ -60,7 +60,7 @@
 #include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -470,9 +470,9 @@ absl::StatusOr<std::string> GetBmv2PacketHex(
       constexpr auto kSubmitToIngressSaiP4PacketOutHeader =
           std::bitset<16>(0b0000'0000'0100'0000);
       return absl::StrCat(
-          absl::StripPrefix(
-              pdpi::BitsetToHexString(kSubmitToIngressSaiP4PacketOutHeader),
-              "0x"),
+          absl::StripPrefix(string_encodings::BitsetToHexString(
+                                kSubmitToIngressSaiP4PacketOutHeader),
+                            "0x"),
           absl::StripPrefix(switch_input.packet().hex(), "0x"));
     }
     case SwitchInput::PACKET_OUT: {

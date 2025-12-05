@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
+#include "p4_infra/string_encodings/byte_string.h"
 
+#include <algorithm>
 #include <string>
 
-namespace pdpi {
+#include "absl/strings/string_view.h"
+
+namespace string_encodings {
 
 std::string ByteStringToP4runtimeByteString(std::string bytes) {
   // Remove leading zeros.
@@ -38,4 +41,4 @@ int GetBitwidthOfByteString(absl::string_view byte_string) {
   return byte_string.empty() ? 0 : 1;
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings

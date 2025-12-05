@@ -58,8 +58,8 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_infra/p4_pdpi/references.h"
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
 #include "p4_infra/p4_pdpi/utils/ir.h"
+#include "p4_infra/string_encodings/byte_string.h"
 
 namespace p4_fuzzer {
 
@@ -708,7 +708,8 @@ absl::StatusOr<Replica> FuzzReplica(absl::BitGen* gen,
   if (auto it = reference_map.find(instance_param); it != reference_map.end()) {
     ASSIGN_OR_RETURN(
         auto instance,
-        pdpi::ByteStringToBitset<kReplicaInstanceBitwidth>(it->second));
+        string_encodings::ByteStringToBitset<kReplicaInstanceBitwidth>(
+            it->second));
     replica.set_instance(instance.to_ullong());
   } else {
     replica.set_instance(FuzzUint64(gen, kReplicaInstanceBitwidth));

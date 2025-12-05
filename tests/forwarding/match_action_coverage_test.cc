@@ -40,7 +40,7 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/ir_properties.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/lib/switch_test_setup_helpers.h"
@@ -117,7 +117,7 @@ absl::StatusOr<std::optional<int>> ExtractRouteMetadataAsIntFromEntry(
         RET_CHECK(param.value().has_hex_str())
             << "Route metadata expected to be hex string, but got parameter: "
             << param.DebugString();
-        return pdpi::HexStringToInt(param.value().hex_str());
+        return string_encodings::HexStringToInt(param.value().hex_str());
       }
     }
   }

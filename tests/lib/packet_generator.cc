@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "absl/container/btree_set.h"
+#include "absl/log/log.h"
 #include "absl/numeric/int128.h"
 #include "absl/random/distributions.h"
 #include "absl/status/status.h"
@@ -33,7 +34,6 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"

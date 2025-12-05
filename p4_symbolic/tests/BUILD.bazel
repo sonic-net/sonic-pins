@@ -56,7 +56,7 @@ cc_test(
         "//p4_infra/p4_pdpi:pd",
         "//p4_infra/p4_pdpi/packetlib",
         "//p4_infra/p4_pdpi/packetlib:packetlib_cc_proto",
-        "//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "//p4_infra/string_encodings:hex_string",
         "//p4_symbolic:test_util",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/ir",

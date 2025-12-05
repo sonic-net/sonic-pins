@@ -208,7 +208,7 @@ absl::StatusOr<HeaderType> ExtractHeaderType(const bmv2::HeaderType &header) {
     output.add_ordered_fields_list(unparsed_field.values(0).string_value());
   }
 
-  // TODO: We should remove this if-clause when GPINS' last tested
+  // TODO: We should remove this if-clause when PINS' last tested
   // version is updated with the complete ICMP definition.
   if (header.name() == "icmp_t" && header.fields_size() < 4) {
     constexpr absl::string_view kIcmpRestOfHeaderFieldName = "rest_of_header";

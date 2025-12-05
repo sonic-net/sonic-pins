@@ -15,8 +15,8 @@
 // This file defines conversion functions to and from decimal strings with
 // positive value such as "10" to ease working with PD protos.
 
-#ifndef PINS_P4_INFRA_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
-#define PINS_P4_INFRA_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
+#ifndef PINS_INFRA_P4_INFRA_STRING_ENCODINGS_DECIMAL_STRING_H_
+#define PINS_INFRA_P4_INFRA_STRING_ENCODINGS_DECIMAL_STRING_H_
 
 #include <cstdint>
 #include <string>
@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 // Converts given decimal string to integer value, returns an error status if
 // the conversion fails.
@@ -44,6 +44,6 @@ absl::StatusOr<std::string> IntToDecimalString(int value);
 absl::StatusOr<std::string> IntToDecimalString(int64_t value);
 absl::StatusOr<std::string> IntToDecimalString(uint32_t value);
 absl::StatusOr<std::string> IntToDecimalString(uint64_t value);
-}  // namespace pdpi
+}  // namespace string_encodings
 
-#endif  // PINS_P4_INFRA_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
+#endif  // PINS_INFRA_P4_INFRA_STRING_ENCODINGS_DECIMAL_STRING_H_
