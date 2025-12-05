@@ -21,6 +21,7 @@
 #include "absl/container/btree_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -47,6 +48,17 @@ class MirrorTestbedConfigurator {
     // Must be true if `used_p4rt_port_ids` is non-nullopt. Existing control
     // switch table entries get wiped out during the process.
     bool mirror_sut_ports_ids_to_control_switch = false;
+
+    // Optionally, can be used to override the default assumption that each SUT
+    // port is connected to a control switch port with the same OpenConfig
+    // interface name.
+    // NOTE: Not required for valid mirror testbeds. This is a workaround for
+    // non-standard testbeds only.
+    std::optional<MirrorTestbedP4rtPortIdMap> original_port_map;
+
+
+    // If true, wait for all enabled ports to be up on SUT and control switch.
+    bool wait_for_all_enabled_interfaces_to_be_up = true;
   };
 
   // Creates and returns MirrorTestbedConfigurator object from the given
@@ -83,6 +95,10 @@ class MirrorTestbedConfigurator {
   // Invariant: All pointers in the returned SwitchApi are non-empty.
   SwitchApi &ControlSwitchApi() { return control_switch_api_; }
 
+  // The port mapping of the testbed after `ConfigureForForwardingTest` is
+  // called successfully. Returns an error if the testbed is not configured.
+  absl::StatusOr<MirrorTestbedP4rtPortIdMap> GetConfiguredPortMap();
+
   // Movable only. Can only be created through `Create`.
   MirrorTestbedConfigurator(MirrorTestbedConfigurator &&) = default;
   MirrorTestbedConfigurator &operator=(MirrorTestbedConfigurator &&) = default;
@@ -109,6 +125,12 @@ private:
   // `RestoreToOriginalConfiguration` resets them to nullopt.
   std::optional<pins_test::openconfig::Interfaces> original_sut_interfaces_;
   std::optional<pins_test::openconfig::Interfaces> original_control_interfaces_;
+
+  // The port mapping of the testbed after configuration. Successful call to
+  // `ConfigureForForwardingTest` with a non-nullopt `params.original_port_map`
+  // set its value. Successful call to `RestoreToOriginalConfiguration` resets
+  // its value.
+  std::optional<MirrorTestbedP4rtPortIdMap> configured_port_map_;
 };
 
 } // namespace dvaas
