@@ -51,6 +51,7 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
   sonic::SwitchTable dummy_switch_table;
   sonic::PortTable dummy_port_table;
   sonic::HostStatsTable dummy_host_stats_table;
+  sonic::SwitchCapabilityTable dummy_switch_capability_table;
 
   // Dummy PacketIO.
   auto packet_io = std::make_unique<sonic::FakePacketIoInterface>();
@@ -68,10 +69,12 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
       std::move(dummy_vlan_table), std::move(dummy_vlan_member_table),
       std::move(dummy_hash_table), std::move(dummy_switch_table),
       std::move(dummy_port_table), std::move(dummy_host_stats_table),
+      std::move(dummy_switch_capability_table),
       std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>(),
-      std::move(packet_io), 
-      //TODO(PINS): To add component_state_helper, system_state_helper and netdev_translator.
-      //component_state_helper, system_state_helper, netdev_translator,
+      std::move(packet_io),
+      // TODO(PINS): To add component_state_helper, system_state_helper and
+      // netdev_translator. component_state_helper, system_state_helper,
+      // netdev_translator,
       P4RuntimeImplOptions{});
 }
 
