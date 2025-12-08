@@ -1617,6 +1617,7 @@ actions {
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL , SAI_PACKET_COLOR_RED)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1795,6 +1796,7 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@unsupported"
   }
   params {
     id: 1

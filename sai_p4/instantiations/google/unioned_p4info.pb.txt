@@ -1510,7 +1510,7 @@ tables {
   match_fields {
     id: 8
     name: "vrf_id"
-    annotations: "@refers_to(vrf_table , vrf_id)"
+    annotations: "@unsupported"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)"
     match_type: OPTIONAL
     type_name {
@@ -1520,6 +1520,7 @@ tables {
   match_fields {
     id: 9
     name: "route_hit"
+    annotations: "@unsupported"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
@@ -2112,6 +2113,7 @@ actions {
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL , SAI_PACKET_COLOR_RED)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2290,6 +2292,7 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2687,6 +2690,7 @@ actions {
     name: "ingress.acl_ingress.set_cpu_queue_and_cancel_copy"
     alias: "set_cpu_queue_and_cancel_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
+    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2702,6 +2706,7 @@ actions {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
+    annotations: "@unsupported"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
   }
 }
@@ -2727,6 +2732,7 @@ actions {
     name: "ingress.acl_ingress.redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
     alias: "redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
+    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
