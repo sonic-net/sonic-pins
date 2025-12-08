@@ -52,6 +52,8 @@ TOR_DEPS = SHARED_DEPS + [
     "tor.p4",
 ]
 
+VISCOSE_TOR_DEPS = SHARED_DEPS + ["viscose_tor.p4"]
+
 WBB_DEPS = [
     "acl_wbb_ingress.p4",
     "ids.h",
@@ -68,6 +70,7 @@ INSTANTIATIONS = [
     ("middleblock", MIDDLEBLOCK_DEPS),
     ("viscose_middleblock", VISCOSE_MIDDLEBLOCK_DEPS),
     ("tor", TOR_DEPS),
+    ("viscose_tor", VISCOSE_TOR_DEPS),
     ("wbb", WBB_DEPS),
 ]
 
