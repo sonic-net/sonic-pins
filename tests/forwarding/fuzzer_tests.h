@@ -15,6 +15,7 @@
 #define PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -146,6 +147,8 @@ protected:
   void TearDown() override;
 
   ~FuzzerTestFixture() override { delete GetParam().mirror_testbed; }
+
+  std::unique_ptr<SwitchState> switch_state_;
 };
 
 bool AbslParseFlag(absl::string_view milestone_text, Milestone *milestone,
