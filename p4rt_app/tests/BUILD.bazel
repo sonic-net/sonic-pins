@@ -154,6 +154,8 @@ cc_test(
         "//gutil/gutil:proto_matchers",
         "//gutil/gutil:status",
         "//gutil/gutil:status_matchers",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/utils:annotation_parser",
         "//p4rt_app/p4runtime:p4runtime_impl",

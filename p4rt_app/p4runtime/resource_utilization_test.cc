@@ -33,7 +33,7 @@
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/p4runtime/entity_update.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
@@ -107,10 +107,10 @@ TEST_F(ResourceUtilizationTest, IgnoresTableEntriesWithoutActionProfiles) {
                                            action { name: "no_action" }
                                          )pb"));
 
-  ASSERT_OK_AND_ASSIGN(sonic::TableResources ir_resources,
+  ASSERT_OK_AND_ASSIGN(TableResources ir_resources,
                        GetResourceUsageForIrTableEntry(
                            ir_p4info_, table_entries.ir_table_entry));
-  ASSERT_OK_AND_ASSIGN(sonic::TableResources pi_resources,
+  ASSERT_OK_AND_ASSIGN(TableResources pi_resources,
                        GetResourceUsageForPiTableEntry(
                            ir_p4info_, table_entries.pi_table_entry));
 
@@ -150,10 +150,10 @@ TEST_F(ResourceUtilizationTest, CountsWcmpActionsAndWeights) {
                                              }
                                            })pb"));
 
-  ASSERT_OK_AND_ASSIGN(sonic::TableResources ir_resources,
+  ASSERT_OK_AND_ASSIGN(TableResources ir_resources,
                        GetResourceUsageForIrTableEntry(
                            ir_p4info_, table_entries.ir_table_entry));
-  ASSERT_OK_AND_ASSIGN(sonic::TableResources pi_resources,
+  ASSERT_OK_AND_ASSIGN(TableResources pi_resources,
                        GetResourceUsageForPiTableEntry(
                            ir_p4info_, table_entries.pi_table_entry));
 
@@ -245,21 +245,21 @@ TEST_F(ResourceUtilizationTest,
                HasSubstr("action profile definition for ID: 0")));
 }
 
-absl::StatusOr<sonic::AppDbEntry> GetAppDbEntry(
-    const pdpi::IrP4Info& ir_p4info, p4::v1::Update::Type update_type,
-    const std::string& ir_entity) {
-  sonic::AppDbEntry app_db_entry;
+absl::StatusOr<EntityUpdate> GetUpdate(const pdpi::IrP4Info& ir_p4info,
+                                       p4::v1::Update::Type update_type,
+                                       const std::string& ir_entity) {
+  EntityUpdate update;
   if (!google::protobuf::TextFormat::ParseFromString(ir_entity,
-                                                     &app_db_entry.entry)) {
+                                                     &update.entry)) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Could not translate string into IR entity.";
   }
-  ASSIGN_OR_RETURN(app_db_entry.pi_entity,
-                   pdpi::IrEntityToPi(ir_p4info, app_db_entry.entry));
-  ASSIGN_OR_RETURN(app_db_entry.entity_key,
-                   pdpi::EntityKey::MakeEntityKey(app_db_entry.pi_entity));
-  app_db_entry.update_type = update_type;
-  return app_db_entry;
+  ASSIGN_OR_RETURN(update.pi_entity,
+                   pdpi::IrEntityToPi(ir_p4info, update.entry));
+  ASSIGN_OR_RETURN(update.entity_key,
+                   pdpi::EntityKey::MakeEntityKey(update.pi_entity));
+  update.update_type = update_type;
+  return update;
 }
 
 class GetTableResourceChangeTest : public ResourceUtilizationTest {
@@ -279,44 +279,44 @@ class GetTableResourceChangeTest : public ResourceUtilizationTest {
 };
 
 TEST_F(GetTableResourceChangeTest, CanGetInsertResources) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::INSERT,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
-                                           }
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-2" }
-                                               }
-                                             }
-                                             weight: 2
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-2" }
+                                           }
+                                         }
+                                         weight: 2
+                                       }
+                                     }
+                                   })pb"));
 
   ASSERT_OK_AND_ASSIGN(
-      sonic::TableResources resources,
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_));
+      TableResources resources,
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_));
 
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
@@ -325,43 +325,43 @@ TEST_F(GetTableResourceChangeTest, CanGetInsertResources) {
 }
 
 TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::MODIFY,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
-                                           }
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-2" }
-                                               }
-                                             }
-                                             weight: 1
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::MODIFY,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-2" }
+                                           }
+                                         }
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
 
   // The "old" entry that we will be modifying should have 1 action with a
   // weight of 3.
   auto [cache_entry, table_entry_cache_success] =
-      entity_cache_.insert({app_db_entry.entity_key, app_db_entry.pi_entity});
+      entity_cache_.insert({update.entity_key, update.pi_entity});
   ASSERT_TRUE(table_entry_cache_success);
   cache_entry->second.mutable_table_entry()
       ->mutable_action()
@@ -375,10 +375,10 @@ TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
       ->RemoveLast();
 
   ASSERT_OK_AND_ASSIGN(
-      sonic::TableResources resources,
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_));
+      TableResources resources,
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_));
 
   // This modify is changing from 1 action and a weight of 3 to 2 actions with a
   // total weight of 2. So we gain 1 group, and lose 1 weight.
@@ -389,49 +389,49 @@ TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
 }
 
 TEST_F(GetTableResourceChangeTest, CanGetDeleteResources) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::DELETE,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 4
-                                           }
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-2" }
-                                               }
-                                             }
-                                             weight: 3
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::DELETE,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 4
+                                       }
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-2" }
+                                           }
+                                         }
+                                         weight: 3
+                                       }
+                                     }
+                                   })pb"));
 
   // Insert the entry into the cache so we can delete it.
   auto [cache_entry, table_entry_cache_success] =
-      entity_cache_.insert({app_db_entry.entity_key, app_db_entry.pi_entity});
+      entity_cache_.insert({update.entity_key, update.pi_entity});
   ASSERT_TRUE(table_entry_cache_success);
 
   ASSERT_OK_AND_ASSIGN(
-      sonic::TableResources resources,
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_));
+      TableResources resources,
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_));
 
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
@@ -440,134 +440,134 @@ TEST_F(GetTableResourceChangeTest, CanGetDeleteResources) {
 }
 
 TEST_F(GetTableResourceChangeTest, InvalidTableNameFails) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::INSERT,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
 
-  app_db_entry.entry.mutable_table_entry()->set_table_name("bad_table_name");
+  update.entry.mutable_table_entry()->set_table_name("bad_table_name");
 
   EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_),
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_),
       StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("Could not get table resources")));
 }
 
 TEST_F(GetTableResourceChangeTest, InvalidCacheEntryFails) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::DELETE,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::DELETE,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
 
   // Invalidate the cached table entry.
   auto [cache_entry, table_entry_cache_success] =
-      entity_cache_.insert({app_db_entry.entity_key, app_db_entry.pi_entity});
+      entity_cache_.insert({update.entity_key, update.pi_entity});
   ASSERT_TRUE(table_entry_cache_success);
   cache_entry->second.mutable_table_entry()->set_table_id(0);
 
   EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_),
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_),
       StatusIs(absl::StatusCode::kNotFound,
                HasSubstr("Could not get resources for cached table entry")));
 }
 
 TEST_F(GetTableResourceChangeTest, NoExistingResourceCapacityFails) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::INSERT,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
 
   capacity_by_action_profile_name_.clear();
 
   EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_),
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_),
       StatusIs(absl::StatusCode::kNotFound,
                HasSubstr("Could not get the current capacity data for")));
 }
 
 TEST_F(GetTableResourceChangeTest, ConsidersOtherRequestsIntheBatch) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::INSERT,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
 
   // Set the utilization for everything to full.
   for (auto& [name, capacity] : capacity_by_action_profile_name_) {
@@ -575,56 +575,56 @@ TEST_F(GetTableResourceChangeTest, ConsidersOtherRequestsIntheBatch) {
   }
 
   EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_),
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_),
       StatusIs(absl::StatusCode::kResourceExhausted,
                HasSubstr("not enough resources to fit in")));
 }
 
 TEST_F(GetTableResourceChangeTest, RejectsRequestsWithTooManyActions) {
-  ASSERT_OK_AND_ASSIGN(sonic::AppDbEntry app_db_entry,
-                       GetAppDbEntry(ir_p4info_, p4::v1::Update::INSERT,
-                                     R"pb(
-                                       table_entry {
-                                         table_name: "wcmp_group_table"
-                                         matches {
-                                           name: "wcmp_group_id"
-                                           exact { str: "group-1" }
-                                         }
-                                         action_set {
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-1" }
-                                               }
-                                             }
-                                             weight: 1
-                                           }
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-2" }
-                                               }
-                                             }
-                                             weight: 1
-                                           }
-                                           actions {
-                                             action {
-                                               name: "set_nexthop_id"
-                                               params {
-                                                 name: "nexthop_id"
-                                                 value { str: "nexthop-3" }
-                                               }
-                                             }
-                                             weight: 1
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-1" }
                                            }
                                          }
-                                       })pb"));
+                                         weight: 1
+                                       }
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-2" }
+                                           }
+                                         }
+                                         weight: 1
+                                       }
+                                       actions {
+                                         action {
+                                           name: "set_nexthop_id"
+                                           params {
+                                             name: "nexthop_id"
+                                             value { str: "nexthop-3" }
+                                           }
+                                         }
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
 
   // Set the max group size to 2.
   for (auto& [name, capacity] : capacity_by_action_profile_name_) {
@@ -632,31 +632,31 @@ TEST_F(GetTableResourceChangeTest, RejectsRequestsWithTooManyActions) {
   }
 
   EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_),
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_),
       StatusIs(absl::StatusCode::kResourceExhausted,
                HasSubstr("max allowed is 2, but got 3")));
 }
 
 TEST_F(GetTableResourceChangeTest, PacketReplicationEntriesIgnored) {
   ASSERT_OK_AND_ASSIGN(
-      sonic::AppDbEntry app_db_entry,
-      GetAppDbEntry(ir_p4info_, p4::v1::Update::INSERT,
-                    R"pb(
-                      packet_replication_engine_entry {
-                        multicast_group_entry {
-                          multicast_group_id: 1
-                          replicas { port: "Ethernet0" instance: 1 }
-                          replicas { port: "Ethernet0" instance: 2 }
-                        }
-                      })pb"));
+      EntityUpdate update,
+      GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
+                R"pb(
+                  packet_replication_engine_entry {
+                    multicast_group_entry {
+                      multicast_group_id: 1
+                      replicas { port: "Ethernet0" instance: 1 }
+                      replicas { port: "Ethernet0" instance: 2 }
+                    }
+                  })pb"));
 
   ASSERT_OK_AND_ASSIGN(
-      sonic::TableResources resources,
-      VerifyCapacityAndGetTableResourceChange(
-          ir_p4info_, app_db_entry, entity_cache_,
-          capacity_by_action_profile_name_, resources_in_current_batch_));
+      TableResources resources,
+      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
+                                              capacity_by_action_profile_name_,
+                                              resources_in_current_batch_));
 
   EXPECT_EQ(resources.name, "");
   EXPECT_EQ(resources.action_profile, std::nullopt);
