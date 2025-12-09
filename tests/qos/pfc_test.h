@@ -65,6 +65,8 @@ struct ParamsForPfcTestsWithIxia {
   absl::Duration deadlock_detection_time;
   // PFC deadlock restoration time.
   absl::Duration deadlock_restoration_time;
+  // PFC WD polling time.
+  absl::Duration pfc_wd_poll_time;
 };
 
 constexpr int kNumQueues = 8;
