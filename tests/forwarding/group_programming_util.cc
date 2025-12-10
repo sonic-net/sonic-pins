@@ -47,7 +47,9 @@ absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
             R"pb(
               router_interface_table_entry {
                 match { router_interface_id: "$0" }
-                action { set_port_and_src_mac { port: "$1" src_mac: "$2" } }
+                action {
+                  unicast_set_port_and_src_mac { port: "$1" src_mac: "$2" }
+                }
               })pb",
             absl::StrCat("rif-", member.port), member.port,
             "00:02:03:04:05:06"));
