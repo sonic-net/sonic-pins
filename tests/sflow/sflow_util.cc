@@ -27,6 +27,7 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
@@ -40,6 +41,7 @@
 #include "lib/validator/validator_lib.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "re2/re2.h"
 #include "thinkit/ssh_client.h"
 
@@ -80,6 +82,12 @@ constexpr absl::string_view kSflowGnmiStateCollectorAddressPath =
     "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/address";
 constexpr absl::string_view kSflowGnmiStateCollectorPortPath =
     "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/port";
+
+// --- Gnpsi gnmi state paths ---
+constexpr absl::string_view kGnpsiGnmiConfigEnablePath =
+    "/system/grpc-servers/grpc-server[name=gnpsi]/config/enable";
+constexpr absl::string_view kGnpsiGnmiStateEnablePath =
+    "/system/grpc-servers/grpc-server[name=gnpsi]/state/enable";
 
 // ToS is present in tcp dump like
 // ... (class 0x80, ....)
@@ -137,6 +145,18 @@ absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
 
   return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
                                      gnmi_stub, kSflowGnmiStateEnablePath,
+                                     ops_val, /*resp_parse_str=*/"");
+}
+
+absl::Status SetGnpsiConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
+                                   bool enabled, absl::Duration timeout) {
+  std::string ops_val = absl::StrCat(
+      "{\"openconfig-system-grpc:enable\":", (enabled ? "true" : "false"), "}");
+  RETURN_IF_ERROR(SetGnmiConfigPath(gnmi_stub, kGnpsiGnmiConfigEnablePath,
+                                    pins_test::GnmiSetType::kUpdate, ops_val));
+
+  return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
+                                     gnmi_stub, kGnpsiGnmiStateEnablePath,
                                      ops_val, /*resp_parse_str=*/"");
 }
 
@@ -248,6 +268,15 @@ absl::Status VerifySflowStatesConverged(
             R"({"openconfig-sampling-sflow:ingress-sampling-rate":$0})",
             sampling_rate)));
   }
+  return absl::OkStatus();
+}
+
+absl::Status VerifyGnpsiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
+                                       bool enable) {
+  RETURN_IF_ERROR(VerifyGnmiStateConverged(
+      gnmi_stub, kGnpsiGnmiStateEnablePath,
+      /*expected_value=*/
+      absl::StrFormat(R"({"openconfig-system-grpc:enable":%v})", enable)));
   return absl::OkStatus();
 }
 

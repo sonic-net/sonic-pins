@@ -40,6 +40,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/ir_properties.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -687,6 +688,11 @@ TEST_P(MatchActionCoverageTestFixture,
   config.SetMutateUpdateProbability(0);
 
   SwitchState state(config.GetIrP4Info());
+
+  // Install auxiliary entities required for bugs.
+  EXPECT_OK(pdpi::InstallPiEntities(
+      *p4rt_session, GetParam().initial_entities_to_prevent_bugs));
+  ASSERT_OK(state.SetEntities(GetParam().initial_entities_to_prevent_bugs));
 
   // Generates and installs entries that use every match field and action.
   EXPECT_OK(AddTableEntryForEachMatchAndEachAction(gen, *p4rt_session, config,
