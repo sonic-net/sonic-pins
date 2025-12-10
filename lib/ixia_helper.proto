@@ -43,4 +43,5 @@ message TrafficItemStats {
   int64 rx_bytes = 6;
   double first_time_stamp = 7;  // Seconds since arbitrary 0.
   double last_time_stamp = 8;   // Seconds since arbitrary 0.
+  double loss_rate = 9;
 }
