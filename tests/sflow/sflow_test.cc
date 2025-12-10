@@ -2284,6 +2284,7 @@ void SflowNsfTestFixture::TearDown() {
  
 TEST_P(SflowNsfTestFixture, VerifySflowAfterFreezeAndUnfreeze) {
   testbed_->Environment().SetTestCaseID("84fb9f90-0c7d-4dae-a068-bd4740035932");
+
   if (!GetParam().nsf_enabled) {
     GTEST_SKIP()
 << "NSF is not enabled, skip VerifySflowAfterFreezeAndUnfreeze test.";
