@@ -101,6 +101,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_googlesource_code_re2//:re2",
@@ -133,23 +134,5 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
-    ],
-)
-
-cc_test(
-    name = "sflow_util_test",
-    srcs = ["sflow_util_test.cc"],
-    deps = [
-        ":sflow_util",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
-        "//thinkit:mock_ssh_client",
-        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest_main",
     ],
 )

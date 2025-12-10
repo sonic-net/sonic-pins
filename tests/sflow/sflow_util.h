@@ -57,6 +57,12 @@ absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
                                    bool enabled,
                                    absl::Duration timeout = absl::Seconds(5));
 
+// Sets gNPSI config to `enabled` and checks if it's applied to state path in
+// `timeout`. Returns error if failed.
+absl::Status SetGnpsiConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
+                                   bool enabled,
+                                   absl::Duration timeout = absl::Seconds(5));
+
 // Sets sFlow ingress sampling rate of `interface` to `sampling_rate` and checks
 // if it's applied to corresponding state path in `timeout`. Returns error if
 // failed.
@@ -84,6 +90,11 @@ absl::Status VerifySflowStatesConverged(
     const int sampling_rate, const int sampling_header_size,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
     const absl::flat_hash_map<std::string, bool>& sflow_interfaces);
+
+// Verifies gNPSI-related config is consumed by switch by reading corresponding
+// gNMI state paths.
+absl::Status VerifyGnpsiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
+                                       bool enable);
 
 // Updates `gnmi_config` with sFlow-related config and returns modified config
 // if success. It would remove existing sFlow collector config and then append
