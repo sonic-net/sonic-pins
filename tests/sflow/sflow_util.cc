@@ -87,6 +87,8 @@ constexpr LazyRE2 kPacketTosMatchPattern{R"(class 0x([a-f0-9]+),)"};
 
 constexpr int kSonicMaxCollector = 2;
 
+constexpr absl::string_view kGnpsiServerName = "gnpsi";
+
 }  // namespace
 
 absl::StatusOr<bool> IsSflowConfigEnabled(absl::string_view gnmi_config) {
@@ -338,6 +340,20 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     sflow_interface_json["config"] = interface_config_json;
     interface_json_array.push_back(sflow_interface_json);
   }
+  return json_yang::DumpJson(gnmi_config_json);
+}
+
+absl::StatusOr<std::string> UpdateGnpsiConfig(absl::string_view gnmi_config,
+                                              bool enable) {
+  ASSIGN_OR_RETURN(nlohmann::json gnmi_config_json,
+                   json_yang::ParseJson(gnmi_config));
+  nlohmann::json gnpsi_server_config;
+  gnpsi_server_config["name"] = kGnpsiServerName;
+  gnpsi_server_config["config"]["name"] = kGnpsiServerName;
+  gnpsi_server_config["config"]["enable"] = enable;
+  gnmi_config_json["openconfig-system:system"]
+                  ["openconfig-system-grpc:grpc-servers"]["grpc-server"]
+                      .push_back(gnpsi_server_config);
   return json_yang::DumpJson(gnmi_config_json);
 }
 
