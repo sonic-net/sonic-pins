@@ -33,6 +33,15 @@ message TrafficStats {
   map<string, TrafficItemStats> stats_by_traffic_item = 1;
 }
 
+// Parsed representation of a "Flow Statistics" view. There can be multiple
+// flows for a single traffic item.
+message FlowStats {
+  message FlowStatsByTrafficItem {
+    repeated TrafficItemStats flow_stats = 1;
+  }
+  map<string, FlowStatsByTrafficItem> stats_by_traffic_item = 1;
+}
+
 // Parsed representation of a "Traffic Item Statistics" view.
 message TrafficItemStats {
   string tx_port = 1;

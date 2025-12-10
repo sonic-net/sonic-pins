@@ -405,12 +405,17 @@ GetTrafficItemStats(absl::string_view href, absl::string_view traffic_item_name,
                     thinkit::GenericTestbed &generic_testbed);
 
 // Returns statistics for all traffic items, keyed by traffic item name.
-// Takes in the href returned by IxiaConnect, and the `traffic_item_name` set
-// by `SetUpTrafficItem`. `view_name` is the name of the statistics view in the
-// GUI (e.g. Traffic Item Statistics).
+// Takes in the href returned by IxiaConnect. `view_name` is the name of the
+// statistics view in the GUI (e.g. Traffic Item Statistics).
 absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
     absl::string_view href, thinkit::GenericTestbed &generic_testbed,
     absl::string_view view_name = kFlowStatisticsView);
+
+// Returns statistics for all flows, keyed by traffic item name (there can be
+// multiple flows per traffic item). Takes in the href returned by
+// IxiaConnect.
+absl::StatusOr<FlowStats> GetAllFlowStats(
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed);
 
 // Computes average rate (bytes/s) at which traffic was received back by Ixia.
 inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
@@ -426,6 +431,11 @@ inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
 // returns parsed representation, keyed by traffic item name.
 // Return Unavailable error if the stats are not ready yet.
 absl::StatusOr<TrafficStats> ParseTrafficItemStats(absl::string_view raw_stats);
+
+// Takes unparsed flow statistics, as returned by `GetRawStatsView`, and
+// returns parsed representation, keyed by traffic item name.
+// Return Unavailable error if the stats are not ready yet.
+absl::StatusOr<FlowStats> ParseFlowStats(absl::string_view raw_stats);
 
 // Go over the connections and return vector of connections
 // whose links are up.
