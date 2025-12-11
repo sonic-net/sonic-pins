@@ -182,6 +182,7 @@ cc_library(
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
         "//tests/gnmi:util",
+        "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//tests/integration/system/nsf/interfaces:image_config_params",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//thinkit:generic_testbed",
