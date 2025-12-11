@@ -14,6 +14,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
@@ -683,6 +684,8 @@ TEST_P(MatchActionCoverageTestFixture,
   ASSERT_FALSE(config.GetPorts().empty())
       << "ports must be specified in the gNMI config pushed to the switch, but "
          "none were";
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "ports_used_by_fuzzer.txt", absl::StrJoin(config.GetPorts(), ",")));
 
   // For this test, mutations are undesirable.
   config.SetMutateUpdateProbability(0);

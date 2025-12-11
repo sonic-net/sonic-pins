@@ -59,9 +59,8 @@ constexpr int kMinNsfDelayDuration = kFlowPrepDuration + 1;
 constexpr int kMaxNsfDelayDuration = kMinNsfDelayDuration + 10;
 // TODO: Remove the below constants once hsflowd changes are
 // rolled out to release.
-constexpr int kMinNsfDelayReleaseDuration = 10;
-constexpr int kMaxNsfDelayReleaseDuration = 20;
-
+constexpr int kMinNsfDelayReleaseDuration = 15;
+constexpr int kMaxNsfDelayReleaseDuration = 25;
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 constexpr int kMaxGnmiGetClients = 15;
