@@ -33,6 +33,7 @@
 #include "gutil/gutil/testing.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/gnmi/util.h"
+#include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"

@@ -199,15 +199,6 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
   layer1->add_port_names(otg_src_port);
   layer1->add_port_names(otg_dst_port);
 
-  // Set speed dynamically to ensure maximum
-  // linerate.
-  // Set speed.
-  if (enable_linerate_) {
-    layer1->set_speed(otg::Layer1::Speed::speed_200_gbps);
-  } else {
-    layer1->set_speed(otg::Layer1::Speed::speed_1_gbps);
-  }
-
   // Set MTU.
   layer1->set_mtu(kDefaultMtu);
 
