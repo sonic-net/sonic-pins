@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -107,25 +108,33 @@ absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
       .LogPdEntries()
       .InstallDedupedEntities(p4_session);
 }
+struct ReplicaPorts {
+  std::vector<std::string> replica_ports;
+  std::vector<std::string> control_replica_ports;
+};
 
-// Gets replica ports from the controller port ids.
-absl::StatusOr<std::vector<std::string>> GetReplicaPorts(
-    int size, absl::Span<const pins_test::P4rtPortId> controller_port_ids_) {
-  if (size + 2 > controller_port_ids_.size()) {
+// Gets replica ports from the sut port ids.
+absl::StatusOr<ReplicaPorts> GetReplicaPorts(
+    int size, absl::Span<const pins_test::P4rtPortId> port_ids,
+    const absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>&
+        sut_to_control_port_id_map) {
+  if (size + 2 > port_ids.size()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Not enough ports: ", controller_port_ids_.size(),
+        absl::StrCat("Not enough ports: ", port_ids.size(),
                      " to reserve an input port and a default replica port and "
                      "create the replica ports with size: ",
                      size));
   }
   std::vector<std::string> replica_ports;
-  for (int i = 0;
-       i < controller_port_ids_.size() && replica_ports.size() < size; i++) {
+  std::vector<std::string> control_replica_ports;
+  for (int i = 0; i < port_ids.size() && replica_ports.size() < size; i++) {
     if (i != kDefaultInputPortIndex && i != kDefaultReplicaPortIndex) {
-      replica_ports.push_back(controller_port_ids_[i].GetP4rtEncoding());
+      replica_ports.push_back(port_ids[i].GetP4rtEncoding());
+      control_replica_ports.push_back(
+          sut_to_control_port_id_map.at(port_ids[i]).GetP4rtEncoding());
     }
   }
-  return replica_ports;
+  return ReplicaPorts{replica_ports, control_replica_ports};
 }
 
 // Program L3 Admit table for the given mac-address.
@@ -310,11 +319,11 @@ absl::Status MulticastFallbackGroupTestFixture::SetUpSut(
 
   std::vector<std::string> replica_ports_with_default_port = replica_ports_;
   replica_ports_with_default_port.push_back(
-      controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding());
+      sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding());
   std::vector<std::string> replica_ports_with_default_and_input_port =
       replica_ports_with_default_port;
   replica_ports_with_default_port.push_back(
-      controller_port_ids_[kDefaultInputPortIndex].GetP4rtEncoding());
+      sut_port_ids_[kDefaultInputPortIndex].GetP4rtEncoding());
 
   // Programs the required vlan, vlan members, and multicast ritfs.
   RETURN_IF_ERROR(InstallVlanMembership(
@@ -325,7 +334,7 @@ absl::Status MulticastFallbackGroupTestFixture::SetUpSut(
   // Programs the multicast group.
   RETURN_IF_ERROR(InstallMulticastGroup(
       *sut_p4_session_,
-      controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding(),
+      sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding(),
       replica_ports_));
 
   // Programs L3 admit.
@@ -348,48 +357,56 @@ void MulticastFallbackGroupTestFixture::SetUp() {
   thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
 
   ASSERT_OK(testbed.Environment().StoreTestArtifact(
-      "p4info.pb.txt", GetParam().p4_info.DebugString()));
+      "sut_p4info.pb.txt", GetParam().sut_p4_info.DebugString()));
+
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "control_p4info.pb.txt", GetParam().control_p4_info.DebugString()));
 
   // Setup SUT & control switch.
   ASSERT_OK_AND_ASSIGN(
       sut_p4_session_,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed.Sut(), GetParam().gnmi_config, GetParam().p4_info));
-  ASSERT_OK_AND_ASSIGN(
-      control_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed.ControlSwitch(), GetParam().gnmi_config, GetParam().p4_info));
+          testbed.Sut(), GetParam().sut_config, GetParam().sut_p4_info));
+
+  ASSERT_OK_AND_ASSIGN(control_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed.ControlSwitch(), GetParam().control_config,
+                           GetParam().control_p4_info));
 
   // Create GNMI stub for admin operations.
   ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(control_gnmi_stub_,
                        testbed.ControlSwitch().CreateGnmiStub());
 
-  // Store the original control switch gNMI interface config before changing it.
-  ASSERT_OK_AND_ASSIGN(original_control_interfaces_,
-                       pins_test::GetInterfacesAsProto(
-                           *control_gnmi_stub_, gnmi::GetRequest::CONFIG));
-
-  // Ensures that the SUT and Control Switch are set up with the same
-  // P4rtPortIds for the connected interfaces.
-  ASSERT_OK(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(
-      GetParam().testbed->GetMirrorTestbed()));
-
   // Store GNMI config for debugging.
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
                        pins_test::GetGnmiConfig(*sut_gnmi_stub_));
   ASSERT_OK(testbed.Environment().StoreTestArtifact("sut_gnmi_config.txt",
                                                     sut_gnmi_config));
-
-  ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(GetParam().p4_info));
-
+  control_to_sut_port_name_map_ = GetParam().control_to_sut_port_name_map;
+  auto control_to_sut_port_id_map = GetParam().control_to_sut_port_id_map;
+  for (const auto& [control_port_id, sut_port_id] :
+       control_to_sut_port_id_map) {
+    sut_to_control_port_id_map_[sut_port_id] = control_port_id;
+  }
+  ASSERT_OK_AND_ASSIGN(ir_p4info_,
+                       pdpi::CreateIrP4Info(GetParam().sut_p4_info));
   ASSERT_OK_AND_ASSIGN(
-      controller_port_ids_,
+      sut_port_ids_,
       pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
                                         pins_test::IsEnabledEthernetInterface));
-  ASSERT_OK_AND_ASSIGN(replica_ports_, GetReplicaPorts(kNumReplicaPortsForTest,
-                                                       controller_port_ids_));
+  for (const auto& port_id : sut_port_ids_) {
+    control_port_ids_.push_back(sut_to_control_port_id_map_[port_id]);
+  }
+  ASSERT_OK_AND_ASSIGN(ReplicaPorts replica_ports,
+                       GetReplicaPorts(kNumReplicaPortsForTest, sut_port_ids_,
+                                       sut_to_control_port_id_map_));
+  replica_ports_ = replica_ports.replica_ports;
+  control_replica_ports_ = replica_ports.control_replica_ports;
 
+  LOG(INFO) << "Sut replica_ports: " << absl::StrJoin(replica_ports_, ",");
+  LOG(INFO) << "Control replica_ports: "
+            << absl::StrJoin(control_replica_ports_, ",");
   ASSERT_OK(SetUpSut(ir_p4info_));
   ASSERT_OK(SetUpControlSwitch(*control_p4_session_));
 
@@ -417,9 +434,6 @@ void MulticastFallbackGroupTestFixture::TearDown() {
       EXPECT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_, name,
                                                     /*enabled=*/true));
     }
-    // Restore the original control switch gNMI interface config's P4RT IDs.
-    ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_gnmi_stub_,
-                                             original_control_interfaces_));
   }
 
   // Clear SUT table entries.
@@ -467,7 +481,7 @@ TEST_P(MulticastFallbackGroupTestFixture, MeasureMulticastFallbackDuration) {
   // the packets are being sent to the SUT while the port changes state.
   std::thread send_packets_thread([&]() {
     ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForMulticastFallback,
-                                controller_port_ids_, ir_p4info_,
+                                control_port_ids_, ir_p4info_,
                                 *control_p4_session_, kPacketRateInSeconds));
   });
 
@@ -569,7 +583,7 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyMulticastRestoreAction) {
   // the packets are being sent to the SUT while the port changes state.
   std::thread send_packets_thread([&]() {
     ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForMulticastFallback,
-                                controller_port_ids_, ir_p4info_,
+                                control_port_ids_, ir_p4info_,
                                 *control_p4_session_, kPacketRateInSeconds));
   });
 
@@ -631,10 +645,10 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
   // Get port_name for the primary and secondary replica.
   ASSERT_OK_AND_ASSIGN(
       const auto& primary_replica_port_name,
-      gutil::FindOrStatus(port_name_per_port_id, replica_ports_[0]));
+      gutil::FindOrStatus(port_name_per_port_id, control_replica_ports_[0]));
   ASSERT_OK_AND_ASSIGN(
       const auto& secondary_replica_port_name,
-      gutil::FindOrStatus(port_name_per_port_id, replica_ports_[1]));
+      gutil::FindOrStatus(port_name_per_port_id, control_replica_ports_[1]));
 
   struct port_state {
     std::string name;
@@ -652,8 +666,8 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
               {primary_replica_port_name, pins_test::OperStatus::kDown},
               {secondary_replica_port_name, pins_test::OperStatus::kUp}},
           std::vector<std::string>{
-              replica_ports_[1],
-              controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
+              control_replica_ports_[1],
+              control_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
       },
       // Bring down both the primary replica and the first backup replica.
       // Expect the traffic is sent to the second backup replica.
@@ -662,8 +676,8 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
               {primary_replica_port_name, pins_test::OperStatus::kDown},
               {secondary_replica_port_name, pins_test::OperStatus::kDown}},
           std::vector<std::string>{
-              replica_ports_[2],
-              controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
+              control_replica_ports_[2],
+              control_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
       },
       // Bring down the first backup replica. Expect the traffic is sent to the
       // primary replica.
@@ -672,8 +686,8 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
               {primary_replica_port_name, pins_test::OperStatus::kUp},
               {secondary_replica_port_name, pins_test::OperStatus::kDown}},
           std::vector<std::string>{
-              replica_ports_[0],
-              controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
+              control_replica_ports_[0],
+              control_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
       },
   };
 
@@ -682,13 +696,16 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
       ASSERT_OK(pins_test::SetInterfaceEnabledState(
           *control_gnmi_stub_, port_state.name,
           port_state.state == pins_test::OperStatus::kUp));
+      ASSERT_OK_AND_ASSIGN(
+          auto dut_port_name,
+          gutil::FindOrStatus(control_to_sut_port_name_map_, port_state.name));
       ASSERT_OK(pins_test::VerifyInterfaceOperState(
-          *sut_gnmi_stub_, port_state.name, port_state.state));
+          *sut_gnmi_stub_, dut_port_name, port_state.state));
     }
     absl::SleepFor(absl::Seconds(1));
     test_data_.ClearReceivedPackets();
     ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForMulticastFallback,
-                                controller_port_ids_, ir_p4info_,
+                                control_port_ids_, ir_p4info_,
                                 *control_p4_session_, kPacketRateInSeconds));
     test_data_.total_packets_sent = kNumTestPacketsForMulticastFallback;
     ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
@@ -717,12 +734,20 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
   // Restore the port state to UP.
   ASSERT_OK(pins_test::SetInterfaceEnabledState(
       *control_gnmi_stub_, primary_replica_port_name, /*enabled=*/true));
-  ASSERT_OK(pins_test::VerifyInterfaceOperState(
-      *sut_gnmi_stub_, primary_replica_port_name, pins_test::OperStatus::kUp));
+  ASSERT_OK_AND_ASSIGN(auto dut_primary_replica_port_name,
+                       gutil::FindOrStatus(control_to_sut_port_name_map_,
+                                           primary_replica_port_name));
+  ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                                dut_primary_replica_port_name,
+                                                pins_test::OperStatus::kUp));
+
   ASSERT_OK(pins_test::SetInterfaceEnabledState(
       *control_gnmi_stub_, secondary_replica_port_name, /*enabled=*/true));
+  ASSERT_OK_AND_ASSIGN(auto dut_secondary_replica_port_name,
+                       gutil::FindOrStatus(control_to_sut_port_name_map_,
+                                           secondary_replica_port_name));
   ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                                secondary_replica_port_name,
+                                                dut_secondary_replica_port_name,
                                                 pins_test::OperStatus::kUp));
 }
 
