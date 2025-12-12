@@ -38,15 +38,12 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/test_vector.pb.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
@@ -57,7 +54,6 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
-#include "re2/re2.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/group_programming_util.h"
@@ -70,6 +66,8 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 // Tests for the watchport functionality in Action Profile Group operation.
 namespace pins {
@@ -81,18 +79,6 @@ using ::testing::UnorderedPointwise;
 MATCHER(KeyEq, "") {
   return ::testing::get<0>(arg).first == ::testing::get<1>(arg);
 }
-
-// Admin down/up state used for interfaces.
-enum class InterfaceState {
-  kDown,
-  kUp,
-};
-
-// Admin status path (partial match) string in the form of "admin-status":"UP".
-constexpr LazyRE2 kAdminStatusPathMatch = {R"("admin-status":\"(\w+)\")"};
-
-// Oper status path (partial match) string in the form of "oper-status":"UP".
-constexpr LazyRE2 kOperStatusPathMatch = {R"("oper-status":\"(\w+)\")"};
 
 // Group id used in this test.
 constexpr absl::string_view kGroupId = "group-1";
@@ -363,122 +349,6 @@ void PrettyPrintDistribution(
             << test_data.total_invalid_packets_received;
 }
 
-// Creates the port_names_per_port_id map from GNMI config.
-absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetPortNamePerPortId(gnmi::gNMI::StubInterface& gnmi_stub) {
-  absl::flat_hash_map<std::string, std::string> port_name_per_port_id;
-  ASSIGN_OR_RETURN(auto port_id_per_port_name,
-                   pins_test::GetAllInterfaceNameToPortId(gnmi_stub));
-  for (const auto& [name, port_id] : port_id_per_port_name) {
-    port_name_per_port_id[port_id] = name;
-  }
-  return port_name_per_port_id;
-}
-
-// Returns the current admin state of the interface.
-absl::StatusOr<InterfaceState> GetInterfaceState(
-    gnmi::gNMI::StubInterface& gnmi_stub, const LazyRE2& state_path_match,
-    absl::string_view if_name) {
-  const std::string if_state_path =
-      absl::StrCat("interfaces/interface[name=", if_name, "]/state");
-  ASSIGN_OR_RETURN(const std::string state_path_response,
-                   pins_test::GetGnmiStatePathInfo(
-                       &gnmi_stub, if_state_path,
-                       /*resp_parse_str=*/"openconfig-interfaces:state"));
-
-  // Status is part of the overall interface state path response.
-  // Extract out the admin or oper status, for example, "admin-status":"UP"
-  // tuple.
-  std::string status_str;
-  if (RE2::PartialMatch(state_path_response, *state_path_match, &status_str)) {
-    if (status_str == "UP") {
-      return InterfaceState::kUp;
-    } else if (status_str == "DOWN") {
-      return InterfaceState::kDown;
-    }
-  }
-  return absl::UnknownError(absl::Substitute(
-      "Unable to get the status path: $0 for interface: $1, state path "
-      "response: $2",
-      state_path_match->pattern(), if_name, state_path_response));
-}
-
-// Verifies the admin or oper status of the interface is the same as
-// "desired_state" in the state verification path.
-absl::Status VerifyInterfaceState(gnmi::gNMI::StubInterface& gnmi_stub,
-                                  absl::string_view if_name,
-                                  const LazyRE2& state_path_match,
-                                  InterfaceState desired_state) {
-  // Poll with a delay for the oper state to take effect.
-  absl::Time timeout = absl::Now() + absl::Seconds(15);
-  InterfaceState current_state;
-  do {
-    if (absl::Now() > timeout) {
-      return absl::DeadlineExceededError(absl::Substitute(
-          "Unable to validate interface: $0 to state: $1", if_name,
-          desired_state == InterfaceState::kDown ? "DOWN" : "UP"));
-    }
-    absl::SleepFor(absl::Seconds(1));
-    ASSIGN_OR_RETURN(current_state,
-                     GetInterfaceState(gnmi_stub, state_path_match, if_name));
-  } while (current_state != desired_state);
-  return absl::OkStatus();
-}
-
-// Verifies the given interface's desired admin status is reflected in the
-// state path.
-absl::Status VerifyInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
-                                       absl::string_view if_name,
-                                       InterfaceState desired_state) {
-  return VerifyInterfaceState(gnmi_stub, if_name, kAdminStatusPathMatch,
-                              desired_state);
-}
-
-// Verifies the given interface's desired oper status is reflected in the
-// state path and collects port debug data for failed UP state.
-absl::Status VerifyInterfaceOperState(gnmi::gNMI::StubInterface& gnmi_stub,
-                                      thinkit::MirrorTestbed& testbed,
-                                      absl::string_view if_name,
-                                      InterfaceState desired_state) {
-  absl::Status oper_status = VerifyInterfaceState(
-      gnmi_stub, if_name, kOperStatusPathMatch, desired_state);
-  // Collect port debug data if interface did not come UP.
-  if (!oper_status.ok() && desired_state == InterfaceState::kUp) {
-    const std::vector<std::string> interface = {std::string(if_name)};
-    absl::Status sut_port_up = pins_test::PortsUp(testbed.Sut(), interface);
-    LOG_IF(WARNING, !sut_port_up.ok()) << sut_port_up;
-    absl::Status control_port_up =
-        pins_test::PortsUp(testbed.ControlSwitch(), interface);
-    LOG_IF(WARNING, !control_port_up.ok()) << control_port_up;
-  }
-  return oper_status;
-}
-
-// Sets the admin state of the interface to UP/DOWN using GNMI config path.
-// Queries the  state path to verify if the desired state is achieved or not.
-absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
-                                    absl::string_view if_name,
-                                    InterfaceState admin_state) {
-  ASSIGN_OR_RETURN(
-      InterfaceState current_admin_state,
-      GetInterfaceState(gnmi_stub, kAdminStatusPathMatch, if_name));
-  if (current_admin_state == admin_state) {
-    return absl::OkStatus();
-  }
-
-  const std::string config_value =
-      admin_state == InterfaceState::kDown ? "false" : "true";
-  const std::string if_admin_config_path =
-      absl::StrCat("interfaces/interface[name=", if_name, "]/config/enabled");
-  const std::string if_status =
-      admin_state == InterfaceState::kDown ? "DOWN" : "UP";
-  LOG(INFO) << "Setting interface " << if_name << " to admin " << if_status;
-  RETURN_IF_ERROR(SetGnmiConfigPath(
-      &gnmi_stub, if_admin_config_path, pins_test::GnmiSetType::kUpdate,
-      absl::Substitute("{\"enabled\":$0}", config_value)));
-  return VerifyInterfaceAdminState(gnmi_stub, if_name, admin_state);
-}
-
 // Checks if the switch is in critical state.
 bool IsSwitchInCriticalState(gnmi::gNMI::StubInterface& gnmi_stub) {
   auto alarms = pins_test::GetAlarms(gnmi_stub);
@@ -578,11 +448,11 @@ void WatchPortTestFixture::TearDown() {
   }
   if (control_gnmi_stub_) {
     ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                         GetPortNamePerPortId(*control_gnmi_stub_));
+                         pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
     // Restore the admin state to UP.
     for (const auto& [port_id, name] : port_name_per_port_id) {
-      EXPECT_OK(SetInterfaceAdminState(*control_gnmi_stub_, name,
-                                       InterfaceState::kUp));
+      EXPECT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_, name,
+                                                    /*enabled=*/true));
     }
     // Restore the original control switch gNMI interface config's P4RT IDs.
     ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_gnmi_stub_,
@@ -613,11 +483,11 @@ void WatchPortTestFixture::TearDown() {
   }
   if (control_gnmi_stub_) {
     ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                         GetPortNamePerPortId(*control_gnmi_stub_));
+                         pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
     // Restore the admin state to UP.
     for (const auto& [port_id, name] : port_name_per_port_id) {
-      EXPECT_OK(SetInterfaceAdminState(*control_gnmi_stub_, name,
-                                       InterfaceState::kUp));
+      EXPECT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_, name,
+                                                    /*enabled=*/true));
     }
   }
 
@@ -694,12 +564,12 @@ TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
   const int selected_port_id = members[random_member_index].port;
   // Get port_name to port id mapping for the control switch.
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                       GetPortNamePerPortId(*control_gnmi_stub_));
+                       pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
   // Get port_name for the selected port.
   ASSERT_OK_AND_ASSIGN(const auto& port_name,
                        gutil::FindOrStatus(port_name_per_port_id,
                                            absl::StrCat(selected_port_id)));
-  InterfaceState current_port_state = InterfaceState::kUp;
+  pins_test::OperStatus current_port_state = pins_test::OperStatus::kUp;
 
   int64_t total_packets_sent;
   int64_t total_packets_received;
@@ -708,15 +578,14 @@ TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
   absl::flat_hash_map<absl::string_view, absl::Duration>
       port_state_to_pruning_duration;
 
-  for (auto port_desired_state : {InterfaceState::kDown, InterfaceState::kUp}) {
+  for (auto port_desired_state :
+       {pins_test::OperStatus::kDown, pins_test::OperStatus::kUp}) {
     absl::string_view port_final_state =
-        port_desired_state == InterfaceState::kDown ? "DOWN" : "UP";
+        port_desired_state == pins_test::OperStatus::kDown ? "DOWN" : "UP";
 
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                       GetParam().testbed->GetMirrorTestbed(),
-                                       port_name, current_port_state));
-
+    ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_, port_name,
+                                                  current_port_state));
     // Start a new thread to send packets to the SUT. This is to ensure that
     // the packets are being sent to the SUT while the port changes state.
     std::thread send_packets_thread([&]() {
@@ -733,15 +602,15 @@ TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
               << " seconds to change the port state to: " << port_final_state;
     absl::SleepFor(absl::Seconds(delay_before_watchport_pruning));
     // Set the selected port to new state.
-    ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
-                                     port_desired_state));
+    ASSERT_OK(pins_test::SetInterfaceEnabledState(
+        *control_gnmi_stub_, port_name,
+        port_desired_state == pins_test::OperStatus::kUp));
     // Verify the oper status is reflected on the SUT.
     LOG(INFO) << "Setting port " << port_name
               << " to state: " << port_final_state;
     current_port_state = port_desired_state;
-    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                       GetParam().testbed->GetMirrorTestbed(),
-                                       port_name, current_port_state));
+    ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_, port_name,
+                                                  current_port_state));
     // Join the thread to ensure that all packets are sent to the SUT after the
     // port is changed to new state.
     send_packets_thread.join();
@@ -956,19 +825,18 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
       absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, members.size());
   const int selected_port_id = members[random_member_index].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                       GetPortNamePerPortId(*control_gnmi_stub_));
-  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {
+                       pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
+  for (auto operation :
+       {pins_test::OperStatus::kDown, pins_test::OperStatus::kUp}) {
     ASSERT_OK_AND_ASSIGN(const auto& port_name,
                          gutil::FindOrStatus(port_name_per_port_id,
                                              absl::StrCat(selected_port_id)));
-    ASSERT_OK(
-        SetInterfaceAdminState(*control_gnmi_stub_, port_name, operation));
-
+    ASSERT_OK(pins_test::SetInterfaceEnabledState(
+        *control_gnmi_stub_, port_name,
+        operation == pins_test::OperStatus::kUp));
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                       GetParam().testbed->GetMirrorTestbed(),
-                                       port_name, operation));
-
+    ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_, port_name,
+                                                  operation));
     // Wait for the membership changes to be processed.
     absl::SleepFor(kDurationToWaitForMembershipUpdates);
 
@@ -1005,7 +873,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
 
       // Add/remove the selected member from expected_member_ports for admin
       // up/down case.
-      if (operation == InterfaceState::kDown) {
+      if (operation == pins_test::OperStatus::kDown) {
         expected_member_ports.erase(selected_port_id);
       } else {
         expected_member_ports.insert(selected_port_id);
@@ -1090,7 +958,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
       absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, members.size());
   const int selected_port_id = members[random_member_index].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                       GetPortNamePerPortId(*control_gnmi_stub_));
+                       pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
   ASSERT_OK_AND_ASSIGN(const std::string port_name,
                        gutil::FindOrStatus(port_name_per_port_id,
                                            absl::StrCat(selected_port_id)));
@@ -1101,13 +969,12 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
 
   // Set admin down from control switch side (since sut is in critical state and
   // write operations are disabled) and verify watch port action kicks in.
-  ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
-                                   InterfaceState::kDown));
+  ASSERT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_, port_name,
+                                                /*enabled=*/false));
 
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                     GetParam().testbed->GetMirrorTestbed(),
-                                     port_name, InterfaceState::kDown));
+  ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_, port_name,
+                                                pins_test::OperStatus::kDown));
 
   // Wait for the membership changes to be processed.
   absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -1224,19 +1091,20 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
       << "Unexpected member size for single member group";
   const int single_member_port_id = members[0].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                       GetPortNamePerPortId(*control_gnmi_stub_));
-  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {
+                       pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
+  for (auto operation :
+       {pins_test::OperStatus::kDown, pins_test::OperStatus::kUp}) {
     ASSERT_OK_AND_ASSIGN(
         const auto& port_name,
         gutil::FindOrStatus(port_name_per_port_id,
                             absl::StrCat(single_member_port_id)));
-    ASSERT_OK(
-        SetInterfaceAdminState(*control_gnmi_stub_, port_name, operation));
+    ASSERT_OK(pins_test::SetInterfaceEnabledState(
+        *control_gnmi_stub_, port_name,
+        operation == pins_test::OperStatus::kUp));
 
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                       GetParam().testbed->GetMirrorTestbed(),
-                                       port_name, operation));
+    ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_, port_name,
+                                                  operation));
 
     // Wait for the membership changes to be processed.
     absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -1265,7 +1133,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
       absl::MutexLock lock(&test_data_.mutex);
       TestInputOutput& test =
           test_data_.input_output_per_packet[test_config_key];
-      if (operation == InterfaceState::kDown) {
+      if (operation == pins_test::OperStatus::kDown) {
         // Expect all packets to be lost for single member group watch port down
         // action.
         EXPECT_EQ(test.output.size(), 0)
@@ -1359,17 +1227,17 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
       absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, members.size());
   const int selected_port_id = members[random_member_index].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                       GetPortNamePerPortId(*control_gnmi_stub_));
+                       pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
   ASSERT_OK_AND_ASSIGN(const auto& selected_port_name,
                        gutil::FindOrStatus(port_name_per_port_id,
                                            absl::StrCat(selected_port_id)));
-  ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                   InterfaceState::kDown));
+  ASSERT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_,
+                                                selected_port_name,
+                                                /*enabled=*/false));
 
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceOperState(
-      *sut_gnmi_stub_, GetParam().testbed->GetMirrorTestbed(),
-      selected_port_name, InterfaceState::kDown));
+  ASSERT_OK(pins_test::VerifyInterfaceOperState(
+      *sut_gnmi_stub_, selected_port_name, pins_test::OperStatus::kDown));
 
   // Send Modify request to remove the down member from the group.
   members.erase(members.begin() + random_member_index);
@@ -1377,12 +1245,12 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
                                            ir_p4info, kGroupId, members,
                                            p4::v1::Update::MODIFY));
   // Bring the down member watch port up.
-  ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                   InterfaceState::kUp));
+  ASSERT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_,
+                                                selected_port_name,
+                                                /*enabled=*/true));
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                     GetParam().testbed->GetMirrorTestbed(),
-                                     selected_port_name, InterfaceState::kUp));
+  ASSERT_OK(pins_test::VerifyInterfaceOperState(
+      *sut_gnmi_stub_, selected_port_name, pins_test::OperStatus::kUp));
 
   // Wait for the membership changes to be processed.
   absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -1455,18 +1323,18 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
       absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, members.size());
   const int selected_port_id = members[random_member_index].port;
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
-                       GetPortNamePerPortId(*control_gnmi_stub_));
+                       pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
   ASSERT_OK_AND_ASSIGN(const auto& selected_port_name,
                        gutil::FindOrStatus(port_name_per_port_id,
                                            absl::StrCat(selected_port_id)));
   // Bring the port down before the group and members are created.
-  ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                   InterfaceState::kDown));
+  ASSERT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_,
+                                                selected_port_name,
+                                                /*enabled=*/false));
 
   // Verify the oper status is reflected on the SUT.
-  ASSERT_OK(VerifyInterfaceOperState(
-      *sut_gnmi_stub_, GetParam().testbed->GetMirrorTestbed(),
-      selected_port_name, InterfaceState::kDown));
+  ASSERT_OK(pins_test::VerifyInterfaceOperState(
+      *sut_gnmi_stub_, selected_port_name, pins_test::OperStatus::kDown));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
@@ -1510,14 +1378,15 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
     };
   }
 
-  for (auto operation : {InterfaceState::kDown, InterfaceState::kUp}) {
+  for (auto operation :
+       {pins_test::OperStatus::kDown, pins_test::OperStatus::kUp}) {
     // Down operation is a no-op here since the port is already down.
-    ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
-                                     operation));
+    ASSERT_OK(pins_test::SetInterfaceEnabledState(
+        *control_gnmi_stub_, selected_port_name,
+        operation == pins_test::OperStatus::kUp));
     // Verify the oper status is reflected on the SUT.
-    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                       GetParam().testbed->GetMirrorTestbed(),
-                                       selected_port_name, operation));
+    ASSERT_OK(pins_test::VerifyInterfaceOperState(
+        *sut_gnmi_stub_, selected_port_name, operation));
 
     // Wait for the membership changes to be processed.
     absl::SleepFor(kDurationToWaitForMembershipUpdates);
@@ -1554,7 +1423,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
           CreateExpectedMemberPorts(members);
       // Remove the selected member from expected_member_ports for admin
       // down case.
-      if (operation == InterfaceState::kDown) {
+      if (operation == pins_test::OperStatus::kDown) {
         expected_member_ports.erase(selected_port_id);
       }
       ASSERT_OK_AND_ASSIGN(auto num_packets_per_port,
