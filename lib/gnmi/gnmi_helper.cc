@@ -547,6 +547,18 @@ absl::StatusOr<nlohmann::json> ParseGnmiNotificationAsJson(
   }
 }
 
+absl::StatusOr<json> GetBlackholePortCountersJson(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/state/pins-interfaces:blackhole");
+  const std::string ops_parse_str = "pins-interfaces:blackhole";
+  ASSIGN_OR_RETURN(
+      std::string port_counters_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
+  return json_yang::ParseJson(port_counters_info);
+}
+
 }  // namespace
 
 void StripSymbolFromString(std::string& str, char symbol) {
@@ -2264,21 +2276,18 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
   return counters;
 }
 
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(json port_counters_json,
+                   GetBlackholePortCountersJson(interface_name, gnmi_stub));
+  return ParseJsonValueAsUint(port_counters_json, {"bad-intervals"});
+}
+
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
-  const std::string ops_state_path =
-      absl::StrCat("interfaces/interface[name=", interface_name,
-                   "]/state/pins-interfaces:blackhole");
-  const std::string ops_parse_str = "pins-interfaces:blackhole";
-  ASSIGN_OR_RETURN(
-      std::string port_counters_info,
-      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
-
   ASSIGN_OR_RETURN(json port_counters_json,
-                   json_yang::ParseJson(port_counters_info));
-  ASSIGN_OR_RETURN(BlackholePortCounters port_counters,
-                   ParseBlackholePortCounters(port_counters_json));
-  return port_counters;
+                   GetBlackholePortCountersJson(interface_name, gnmi_stub));
+  return ParseBlackholePortCounters(port_counters_json);
 }
 
 absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
