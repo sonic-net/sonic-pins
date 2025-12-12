@@ -17,12 +17,25 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "lib/ssh/linux_ssh_helper.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {
+
+// Represents options for retrieving a file from a switch.
+//
+// Members:
+//   read_file_command: The command-line command used to read the content.
+//   file_name: The desired name for the file when saved.
+struct GetFileOption {
+  std::string read_file_command;
+  std::string file_name;
+};
 
 inline constexpr absl::Duration kSshTimeout = absl::Seconds(20);
 
@@ -37,6 +50,10 @@ absl::StatusOr<std::string> PowerCycle(thinkit::SSHClient* ssh_client,
 absl::StatusOr<std::string> SetTimezoneToPst(
     thinkit::SSHClient* ssh_client, std::string_view sut,
     absl::Duration timeout = kSshTimeout);
+
+absl::StatusOr<std::vector<thinkit::GetFileResult>> GetFileResults(
+    std::string_view sut, thinkit::SSHClient* ssh_client,
+    absl::Span<const GetFileOption> get_file_options, absl::Duration timeout);
 
 }  // namespace pins_test
 

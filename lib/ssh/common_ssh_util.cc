@@ -16,9 +16,13 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "lib/ssh/linux_ssh_helper.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {
@@ -47,6 +51,24 @@ absl::StatusOr<std::string> SetTimezoneToPst(thinkit::SSHClient* ssh_client,
                                              std::string_view sut,
                                              absl::Duration timeout) {
   return ssh_client->RunCommand(sut, kSetTimezoneCommand, timeout);
+}
+
+absl::StatusOr<std::vector<thinkit::GetFileResult>> GetFileResults(
+    std::string_view sut, thinkit::SSHClient* ssh_client,
+    absl::Span<const GetFileOption> get_file_options, absl::Duration timeout) {
+  std::vector<thinkit::GetFileResult> get_file_results;
+  for (const auto& get_file_option : get_file_options) {
+    absl::StatusOr<std::string> output =
+        ssh_client->RunCommand(sut, get_file_option.read_file_command, timeout);
+    if (!output.ok()) {
+      LOG(WARNING) << "Failed to get " << get_file_option.file_name << ": "
+                   << output.status();
+      continue;
+    }
+    get_file_results.push_back(thinkit::GetFileResult{
+        .file_name = get_file_option.file_name, .file_content = *output});
+  }
+  return get_file_results;
 }
 
 }  // namespace pins_test
