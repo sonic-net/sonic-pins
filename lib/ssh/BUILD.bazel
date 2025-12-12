@@ -22,6 +22,7 @@ cc_library(
     hdrs = ["linux_ssh_helper.h"],
     deps = [
         "//thinkit:ssh_client",
+	"@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
@@ -35,6 +36,7 @@ cc_library(
     deps = [
         ":linux_ssh_helper",
         "//thinkit:ssh_client",
+	"@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
@@ -74,8 +76,11 @@ cc_library(
     srcs = ["common_ssh_util.cc"],
     hdrs = ["common_ssh_util.h"],
     deps = [
+	":linux_ssh_helper",
         "//thinkit:ssh_client",
+	"@com_google_absl//absl/log",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
+	"@com_google_absl//absl/types:span",
     ],
 )

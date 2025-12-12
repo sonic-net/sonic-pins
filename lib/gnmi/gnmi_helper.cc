@@ -215,7 +215,7 @@ absl::StatusOr<json> GetBreakoutConfigWithIndex(const json& json_array,
 
 absl::Status IsBreakoutModeMatch(const BreakoutMode& breakout,
                                  const json& json_array) {
-  // convert the json array of groupts to a vector of breakout speed.
+  // Convert the JSON array of groups to a vector of breakout speed.
   std::vector<std::string> json_breakout;
   for (int index = 0; index < json_array.size(); ++index) {
     ASSIGN_OR_RETURN(const auto& breakout_config,

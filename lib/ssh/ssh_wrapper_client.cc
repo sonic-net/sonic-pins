@@ -15,6 +15,7 @@
 #include "lib/ssh/ssh_wrapper_client.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -56,6 +57,32 @@ absl::StatusOr<std::string> SshWrapperClient::SetTimezoneToPst(
     absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
   return ssh_helper->SetTimezoneToPst(sut, ssh_client, timeout);
+}
+
+absl::StatusOr<std::string> SshWrapperClient::GetpinsVersion(
+    absl::string_view sut, thinkit::SSHClient* ssh_client,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->GetpinsVersion(sut, ssh_client, timeout);
+}
+
+absl::StatusOr<std::string> SshWrapperClient::GetDebugArtifactFileName(
+    absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->GetDebugArtifactFileName(sut, ssh_client, timeout);
+}
+
+absl::Status SshWrapperClient::ClearpinsLogs(absl::string_view sut,
+                                              SSHClient* ssh_client,
+                                              absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->ClearpinsLogs(sut, ssh_client, timeout);
+}
+
+absl::StatusOr<std::vector<GetFileResult>> SshWrapperClient::SavepinsLog(
+    absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->SavepinsLog(sut, ssh_client, timeout);
 }
 
 }  // namespace thinkit
