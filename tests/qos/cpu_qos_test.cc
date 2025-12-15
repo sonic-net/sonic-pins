@@ -1455,7 +1455,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   ASSERT_GT(GetParam().control_plane_bandwidth_bytes_per_second, 0);
 
   thinkit::Switch &sut = generic_testbed->Sut();
-
+  bool is_rate_mode_in_packets = GetParam().is_rate_mode_in_packets;
   // Configure SUT.
   EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
       "p4info.textproto", GetParam().p4info));
@@ -1485,6 +1485,18 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   std::string ixia_interface = ready_links[0].ixia_interface;
   std::string sut_interface = ready_links[0].sut_interface;
+  // Disable sFlow since it would interfere with the test results.
+  ASSERT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), /*enabled=*/false));
+
+  absl::Cleanup cleanup([&] {
+    // Restore sflow enable config.
+    ASSERT_OK_AND_ASSIGN(bool sflow_enabled,
+                         pins::IsSflowConfigEnabled(sut_gnmi_config));
+    EXPECT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), sflow_enabled))
+        << "failed to restore sflow configuration -- switch config may be "
+           "corrupted, causing subsequent test to fail";
+  });
+
 
   // Set up Ixia traffic.
   // Send Ixia traffic.
@@ -1531,7 +1543,8 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
-                                        /*port=*/"CPU", sut_gnmi_config));
+                                        /*port=*/"CPU", sut_gnmi_config,
+                                        is_rate_mode_in_packets));
 
   constexpr absl::string_view kPuntOnlyTest = "punt_only_test";
   constexpr absl::string_view kLoopbackPuntTest = "to_loopback_punt_test";
@@ -1590,22 +1603,26 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
                       queue_info.gnmi_queue_name));
       }
 
-      // Set frame size based on supported control plane bandwidth.
-      int frame_size = GetParam().control_plane_bandwidth_bytes_per_second /
-                       queue_info.rate_packets_per_second;
-      // Framesize lesser than 64 bytes is not a viable frame, hence we will
-      // skip end to end rate check.
-      if (frame_size < kMinFrameSize) {
-        LOG(INFO)
-            << "Skipping, as queue rate " << queue_info.rate_packets_per_second
-            << "(pps) is infeasible to test with control plane bandwidth of "
-            << GetParam().control_plane_bandwidth_bytes_per_second
-            << " bytes per second.";
-        continue;
-      }
+      int frame_size = kMaxFrameSize;
+      if (is_rate_mode_in_packets) {
+        // Set frame size based on supported control plane bandwidth.
+        frame_size = GetParam().control_plane_bandwidth_bytes_per_second /
+                     queue_info.rate_packets_per_second;
+        // Framesize lesser than 64 bytes is not a viable frame, hence we will
+        // skip end to end rate check.
+        if (frame_size < kMinFrameSize) {
+          LOG(INFO)
+              << "Skipping, as queue rate "
+              << queue_info.rate_packets_per_second
+              << "(pps) is infeasible to test with control plane bandwidth of "
+              << GetParam().control_plane_bandwidth_bytes_per_second
+              << " bytes per second.";
+          continue;
+        }
 
       if (frame_size > kMaxFrameSize) {
-        frame_size = kMaxFrameSize;
+          frame_size = kMaxFrameSize;
+        }
       }
 
       ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, frame_size,
@@ -1733,6 +1750,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   ASSERT_GT(GetParam().control_plane_bandwidth_bytes_per_second, 0);
 
   thinkit::Switch &sut = generic_testbed->Sut();
+  bool is_rate_mode_in_packets = GetParam().is_rate_mode_in_packets;
 
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
@@ -1837,7 +1855,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
-                                        /*port=*/"CPU", sut_gnmi_config));
+                                        /*port=*/"CPU", sut_gnmi_config,
+                                        is_rate_mode_in_packets));
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> entities,
@@ -2198,7 +2217,7 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
   ASSERT_GT(GetParam().control_plane_bandwidth_bytes_per_second, 0);
 
   thinkit::Switch &sut = generic_testbed->Sut();
-
+  bool is_rate_mode_in_packets = GetParam().is_rate_mode_in_packets;
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
                        pins_test::GetGnmiConfig(*gnmi_stub));
@@ -2306,7 +2325,9 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
-                                        /*port=*/"CPU", sut_gnmi_config));
+                                        /*port=*/"CPU", sut_gnmi_config,
+                                        is_rate_mode_in_packets));
+
   int queue_index = 0;
   for (auto &[queue_name, queue_info] : queues) {
     if (!IsValidCpuQueue(queue_info.p4_queue_name)) continue;
