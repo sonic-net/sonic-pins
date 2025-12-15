@@ -15,7 +15,9 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_NSF_LINK_FLAP_TEST_H_
 #include <functional>
 #include <memory>
+#include <vector>
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
@@ -24,6 +26,7 @@ namespace pins_test {
 struct NsfLinkFlapTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
   std::shared_ptr<thinkit::SSHClient> ssh_client;
+  std::vector<pins_test::ImageConfigParams> image_config_params;
 };
 
 class NsfLinkFlapTestFixture
