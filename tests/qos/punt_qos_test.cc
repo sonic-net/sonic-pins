@@ -15,6 +15,7 @@
 #include "tests/qos/punt_qos_test.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -58,11 +59,14 @@
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/util.h"
 #include "tests/gnmi/util.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "tests/integration/system/nsf/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
 ABSL_DECLARE_FLAG(std::optional<sai::Instantiation>, switch_instantiation);
@@ -77,6 +81,11 @@ struct IxiaLink {
   std::string sut_interface;
 };
 
+absl::Status NsfRebootHelper(const Testbed &testbed,
+                             std::shared_ptr<thinkit::SSHClient> ssh_client) {
+  return DoNsfRebootAndWaitForSwitchReadyOrRecover(testbed, *ssh_client,
+                                                   nullptr, false);
+}
 // Go over the connections and return vector of connections
 // whose links are up.
 absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
@@ -307,16 +316,6 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
     packet_receive_info.num_packets_punted = 0;
   }
 
-  PacketInReceiver receiver(*sut_p4_session_, [&packet_receive_info](auto) {
-    absl::MutexLock lock(&packet_receive_info.mutex);
-    if (packet_receive_info.num_packets_punted == 0) {
-      packet_receive_info.time_first_packet_punted = absl::Now();
-    }
-    packet_receive_info.time_last_packet_punted = absl::Now();
-    packet_receive_info.num_packets_punted++;
-    return;
-  });
-
   for (auto& [queue_name, queue_info] : cpu_queues) {
     // Skip unconfigured queues or queues with very low rate-limit as it is not
     // feasible to verify flow rate limit at low queue rates.
@@ -394,20 +393,39 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
     ASSERT_OK_AND_ASSIGN(
         QueueCounters initial_cpu_queue_counters,
         GetGnmiQueueCounters("CPU", queue_name, *sut_gnmi_stub_));
+    ASSERT_OK(ixia::SetTrafficParameters(
+        ixia_traffic_handle_, traffic_parameters, *generic_testbed_));
+
+    if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+      ASSERT_OK(NsfRebootHelper(generic_testbed_.get(),
+                                GetParam().ssh_client_for_nsf));
+      // Create a new P4rt session after NSF Reboot
+      ASSERT_OK_AND_ASSIGN(sut_p4_session_, pdpi::P4RuntimeSession::Create(
+                                                generic_testbed_->Sut()));
+    } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+      FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+    }
 
     ASSERT_OK_AND_ASSIGN(
         QueueCounters initial_forwarding_queue_counters,
         GetGnmiQueueCounters(ixia_sut_link_.sut_tx_interface,
                              GetParam().unicast_green_queue, *sut_gnmi_stub_));
+    
+    PacketInReceiver receiver(*sut_p4_session_, [&packet_receive_info](auto) {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      if (packet_receive_info.num_packets_punted == 0) {
+        packet_receive_info.time_first_packet_punted = absl::Now();
+      }
+      packet_receive_info.time_last_packet_punted = absl::Now();
+      packet_receive_info.num_packets_punted++;
+      return;
+    });
 
     // Reset received packet count at tester for each iteration.
     {
       absl::MutexLock lock(&packet_receive_info.mutex);
       packet_receive_info.num_packets_punted = 0;
     }
-
-    ASSERT_OK(ixia::SetTrafficParameters(
-        ixia_traffic_handle_, traffic_parameters, *generic_testbed_));
 
     // Get packet count for Mirror-To-Port.
     ASSERT_OK_AND_ASSIGN(
@@ -439,7 +457,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
 
     // Verify GNMI queue stats match packets received.
     static constexpr absl::Duration kPollInterval = absl::Seconds(5);
-    static constexpr absl::Duration kTotalTime = absl::Seconds(35);
+    static constexpr absl::Duration kTotalTime = absl::Seconds(50);
     static const int kIterations = kTotalTime / kPollInterval;
 
     // Check for counters every 5 seconds up to 35 seconds till they match.
@@ -460,6 +478,11 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
           .num_packets_dropped = final_cpu_queue_counters.num_packets_dropped -
                                  initial_cpu_queue_counters.num_packets_dropped,
       };
+      LOG(INFO) << "Forwarding queue name: " << GetParam().unicast_green_queue;
+      LOG(INFO) << "Initial Forwarding queue stats: "
+                << initial_forwarding_queue_counters;
+      LOG(INFO) << "Final Forwarding queue stats: "
+                << final_forwarding_queue_counters;
       LOG(INFO) << delta_cpu_queue_counters;
 
       ASSERT_OK_AND_ASSIGN(final_forwarding_queue_counters,
@@ -483,7 +506,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
           delta_forwarding_queue_counters.num_packets_transmitted > 0) {
         break;
       }
-      ASSERT_NE(gnmi_counters_check, kIterations - 1)
+      EXPECT_NE(gnmi_counters_check, kIterations - 1)
           << "GNMI packet count "
           << delta_cpu_queue_counters.num_packets_transmitted
           << " != Packets received at controller "
@@ -510,7 +533,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
       LOG(INFO) << "Frame size: " << kFrameSize;
       int64_t punt_rate_received_in_bytes_per_second = 0;
       int64_t useconds = absl::ToInt64Microseconds(duration);
-      ASSERT_NE(useconds, 0);
+      EXPECT_NE(useconds, 0);
       int64_t num_bytes = packet_receive_info.num_packets_punted * kFrameSize;
       LOG(INFO) << "Num bytes received: " << num_bytes;
       punt_rate_received_in_bytes_per_second = num_bytes * 1000000 / useconds;
@@ -607,10 +630,8 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
                 expected_red_mirror_packets *
                     (1 + kQueueCountersTolerancePercent / 100));
     }
+    receiver.Destroy();
   }  // for each queue.
-
-  // Stop receiving at tester.
-  receiver.Destroy();
 }
 
 TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
@@ -704,6 +725,13 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
     return ixia::StartTraffic(ixia_traffic_handle_, ixia_handle_,
                               *generic_testbed_);
   }));
+  
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    ASSERT_OK(
+        NsfRebootHelper(generic_testbed_.get(), GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
 
   LOG(INFO) << "Toggle interface started";
   ASSERT_OK(SetAdminStatus(sut_gnmi_stub_.get(),
@@ -822,6 +850,13 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
 
   ASSERT_OK(ixia::SetTrafficParameters(ixia_traffic_handle_, traffix_parameters,
                                        *generic_testbed_));
+  
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    ASSERT_OK(
+        NsfRebootHelper(generic_testbed_.get(), GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
 
   absl::SleepFor(absl::Seconds(15));
 

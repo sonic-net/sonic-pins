@@ -160,6 +160,10 @@ constexpr double kTolerance = 0.20;
 
 // Thredshold percentage of packets punted to CPU to be considered passing
 constexpr int kPassingPercentageCpuPunted = 80;
+// Thredshold percentage of packets received out of total packets sent
+constexpr int kPassingPercentagePktRecv = 99;
+// Thredshold percentage of packets punted out of total packets sent
+constexpr int kPassingPercentagePktPunt = 99;
 
 // Vrf prefix used in the test.
 constexpr absl::string_view kVrfIdPrefix = "vrf-";
@@ -652,8 +656,9 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
     // Display the difference in the counters for now (during test dev)
     LOG(INFO) << "\nIngress Deltas (" << ixia_links[i].sut_interface << "):\n";
     ShowCounters(delta);
-    EXPECT_EQ(delta.in_pkts, pkt_count)
-        << "Received packets count is not equal to sent packets count: "
+    EXPECT_GE(delta.in_pkts, pkt_count / 100 * kPassingPercentagePktRecv)
+        << "Received packets count is fewer than " << kPassingPercentagePktRecv
+        << "% of sent packets count: "
         << ". Interface: " << ixia_links[i].sut_interface << ". Sent "
         << pkt_count << ". Received " << delta.in_pkts << ".";
   }
@@ -1587,6 +1592,9 @@ void SflowTestFixture::SetUp() {
   ASSERT_OK_AND_ASSIGN(
       testbed_,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+  
+  CollectSflowDebugs(ssh_client_, testbed_->Sut().ChassisName(),
+                     /*prefix=*/"preconfig_", testbed_->Environment());
 
   std::vector<std::pair<std::string, int>> collector_address_and_port;
   const std::string& gnmi_config = GetParam().gnmi_config;
@@ -2010,9 +2018,12 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
                    << packet_in.DebugString();
     }
   }
-  EXPECT_EQ(num_packets_punted, packets_num) << absl::StreamFormat(
-      "Expected punted packets: %d. Actually punted packets: %d.", packets_num,
-      num_packets_punted);
+  // TODO: Remove the percentage check when optics clean are
+  // scheduled regularly.
+  EXPECT_GE(num_packets_punted, packets_num / 100 * kPassingPercentagePktPunt)
+      << absl::StreamFormat(
+             "Expected punted packets: %d. Actually punted packets: %d.",
+             packets_num, num_packets_punted);
 
   // Verify sflowtool result. Since we use port id to generate packets, we use
   // port id to filter sFlow packets.

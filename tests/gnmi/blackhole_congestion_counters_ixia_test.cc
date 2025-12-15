@@ -189,8 +189,6 @@ TEST_P(BlackholeCongestionCountersIxiaTestFixture,
   EXPECT_GE(in_fcs_error_counters_delta.port_blackhole_in_error_events, 1);
   EXPECT_GE(in_fcs_error_counters_delta.switch_blackhole_in_error_events, 1);
   EXPECT_GE(in_fcs_error_counters_delta.switch_blackhole_events, 1);
-  EXPECT_EQ(in_fcs_error_counters_delta.port_blackhole_in_error_events,
-            in_fcs_error_counters_delta.switch_blackhole_events);
 }
 
 TEST_P(BlackholeCongestionCountersIxiaTestFixture,

@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
@@ -351,6 +352,9 @@ TEST(PacketGenerator, NonVariableGeneratorHasRangeOfOne) {
                        PacketGenerator::Create(Ipv4PacketOptions()));
   EXPECT_EQ(generator.NumPossiblePackets(), 1);
 }
+
+// The following two tests verify the general value skipping logic but are not
+// meant to test all skipped values.
 
 class PacketGeneratorOptions : public testing::TestWithParam<Options> {};
 
