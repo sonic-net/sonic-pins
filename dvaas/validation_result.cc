@@ -93,6 +93,10 @@ ValidationResult& ValidationResult::LogStatistics() {
   return *this;
 }
 
+void ValidationResult::RecordStatisticsAsGoogleTestProperties() const {
+  RecordStatsAsGoogleTestProperties(test_vector_stats_);
+}
+
 std::vector<std::string> ValidationResult::GetAllFailures() const {
   std::vector<std::string> failures;
   failures.reserve(test_vector_stats_.num_vectors -

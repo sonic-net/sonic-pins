@@ -2,6 +2,7 @@
 #define PINS_TESTS_FORWARDING_MATCH_ACTION_COVERAGE_TEST_H_
 
 #include <string>
+#include <vector>
 
 #include "p4_fuzzer/fuzzer_config.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -12,6 +13,9 @@ struct MatchActionCoverageTestParams {
   thinkit::MirrorTestbedInterface* testbed_interface;
   p4::config::v1::P4Info p4info;
   FuzzerConfig config;
+  // Entities that are installed on the switch before the test starts. These
+  // entities are required to mask known bugs.
+  std::vector<p4::v1::Entity> initial_entities_to_prevent_bugs;
 };
 
 // This test installs at least one table entry using (or not using if possible)
