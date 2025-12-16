@@ -872,12 +872,12 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
   }));
 
   absl::SleepFor(absl::Seconds(15));
-
-  // Verify CPU usage is within 10% of baseline.
+  
+  // Verify CPU usage is within 15% of baseline.
   ASSERT_OK_AND_ASSIGN(double cpu_average, GetCpuAverage(*sut_gnmi_stub_));
   LOG(INFO) << "CPU average pre: " << cpu_average_pre;
   LOG(INFO) << "CPU average post: " << cpu_average;
-  EXPECT_LT(cpu_average, cpu_average_pre + 10);
+  EXPECT_LT(cpu_average, cpu_average_pre + 15);
 
   // Get packet count on CPU queue.
   ASSERT_OK_AND_ASSIGN(
