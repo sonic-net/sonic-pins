@@ -27,6 +27,7 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
@@ -36,6 +37,9 @@ struct PacketCaptureTestWithoutIxiaParams {
   // copyable.
   std::shared_ptr<thinkit::MirrorTestbedInterface> testbed_interface;
   packetlib::Packet test_packet;
+  bool nsf_reboot;
+  std::shared_ptr<thinkit::SSHClient> ssh_client_for_nsf;
+  std::vector<std::string> nsf_control_interfaces_to_verify;
 };
 
 // These tests must be run on a mirror testbed.
@@ -91,6 +95,9 @@ struct ControllerPacketCaptureTestWithoutIxiaParams {
   std::string test_name;
   std::shared_ptr<dvaas::DataplaneValidator> validator;
   dvaas::DataplaneValidationParams validation_params;
+  bool nsf_reboot;
+  std::shared_ptr<thinkit::SSHClient> ssh_client_for_nsf;
+  std::vector<std::string> nsf_control_interfaces_to_verify;
 };
 
 // These tests must be run on a testbed where the SUT is connected

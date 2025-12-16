@@ -60,10 +60,13 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/util.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "tests/integration/system/nsf/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/packet_capture/packet_capture_test_util.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
 ABSL_DECLARE_FLAG(std::optional<sai::Instantiation>, switch_instantiation);
@@ -73,6 +76,17 @@ namespace {
 
 using ::p4::config::v1::P4Info;
 using pctutil::SutToControlLinks;
+
+absl::Status NsfRebootHelper(
+    const Testbed& testbed, std::shared_ptr<thinkit::SSHClient> ssh_client,
+    std::vector<std::string> control_interfaces_to_verify) {
+  return DoNsfRebootAndWaitForSwitchReadyOrRecover(
+      testbed, *ssh_client,
+      /*image_config_param=*/nullptr,
+      /*check_interfaces_up=*/true,
+      /*sut_interfaces=*/{},
+      /*control_switch_interfaces=*/control_interfaces_to_verify);
+}
 
 // Returns a set of table entries that will cause a switch to mirror all packets
 // on an incoming port to a mirror-to-port using PSAMP encapsulation and
@@ -133,11 +147,12 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("sut_gnmi_config.json",
                                                       sut_gnmi_config));
 
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
-                       sai::EntryBuilder()
-                           .AddEntryPuntingAllPackets(sai::PuntAction::kCopy)
-                           .GetDedupedPiEntities(ir_control_p4info));
-
+  const std::string mirror_encap_dst_mac = "00:00:00:44:44:44";
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddEntryPuntingPacketsWithDstMac(mirror_encap_dst_mac)
+          .GetDedupedPiEntities(ir_control_p4info));
   ASSERT_OK(pdpi::InstallPiEntities(control_p4rt_session.get(),
                                     ir_control_p4info, pi_entities));
 
@@ -172,7 +187,7 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
       .monitor_port = kSutEgressPortP4rtId,
       .monitor_backup_port = kSutEgressPortP4rtId,
       .mirror_encap_src_mac = "00:00:00:22:22:22",
-      .mirror_encap_dst_mac = "00:00:00:44:44:44",
+      .mirror_encap_dst_mac = mirror_encap_dst_mac,
       .mirror_encap_vlan_id = "0x0fe",
       .mirror_encap_src_ip = "2222:2222:2222:2222:2222:2222:2222:2222",
       .mirror_encap_dst_ip = "4444:4444:4444:4444:4444:4444:4444:4444",
@@ -185,6 +200,13 @@ TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
                                          mirror_session_params));
   ASSERT_OK(
       pdpi::InstallPiEntities(sut_p4rt_session.get(), ir_p4info, entries));
+  
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf,
+                              GetParam().nsf_control_interfaces_to_verify));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
 
   LOG(INFO) << "injecting test packet: "
             << GetParam().test_packet.DebugString();
@@ -1047,6 +1069,13 @@ TEST_P(ControllerPacketCaptureTestWithoutIxia,
   }
   dvaas_params.switch_output_diff_params.ignored_packetlib_fields.push_back(
       payload_descriptor);
+  
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf,
+                              GetParam().nsf_control_interfaces_to_verify));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
 
   // Send test packets.
   LOG(INFO) << "Sending test packets.";
