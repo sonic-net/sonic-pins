@@ -53,7 +53,7 @@ struct TaggedPacketIn {
 using IsExpectedUnsolicitedPacketFunctionType =
     std::function<bool(const packetlib::Packet &packet)>;
 
-// Unsolicited packets that, for the time being, are acceptable in a GPINS
+// Unsolicited packets that, for the time being, are acceptable in a PINS
 // testbeds.
 inline bool
 DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet &packet) {
@@ -99,6 +99,10 @@ struct PacketInjectionParams {
   // TODO: Replace with parameter to tolerate SUT disconnections
   // rather than ignoring all packet-ins.
   bool enable_sut_packet_in_collection = true;
+  // Maximum time expected it takes to receive output packets either from SUT
+  // or control switch in response to an injected input packet. Beyond that,
+  // the input packet might be considered dropped.
+  absl::Duration max_expected_packet_in_flight_duration = absl::Seconds(3);
 };
 
 // Injects a packet to the control switch egress with a packet injection delay
