@@ -2,7 +2,7 @@
 # proto-message: p4.config.v1.P4Info
 
 pkg_info {
-  name: "tor.p4"
+  name: "middleblock.p4"
   version: "5.0.0"
   arch: "v1model"
   organization: "Google"
@@ -126,162 +126,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767361
-  size: 125
-}
-tables {
-  preamble {
-    id: 33554693
-    name: "ingress.acl_pre_ingress.acl_pre_ingress_vlan_table"
-    alias: "acl_pre_ingress_vlan_table"
-    annotations: "@sai_acl(PRE_INGRESS)"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@sai_acl_priority(1)"
-    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Forbid match on ethertype if is_ip* is set.\n    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n    // Disallow match on reserved VLAN IDs to rule out vendor specific behavior.\n    vlan_id::mask != 0 -> (vlan_id != 4095);\n    // TODO: Disallow setting to reserved VLAN IDs when supported.\n  \")"
-  }
-  match_fields {
-    id: 1
-    name: "is_ip"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 2
-    name: "is_ipv4"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 3
-    name: "is_ipv6"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 4
-    name: "ether_type"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
-    bitwidth: 16
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 5
-    name: "vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
-    match_type: TERNARY
-  }
-  action_refs {
-    id: 16777482
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 16777496
-    annotations: "@proto_id(2)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  direct_resource_ids: 318767366
-  size: 125
-}
-tables {
-  preamble {
-    id: 33554694
-    name: "ingress.acl_pre_ingress.acl_pre_ingress_metadata_table"
-    alias: "acl_pre_ingress_metadata_table"
-    annotations: "@sai_acl(PRE_INGRESS)"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@sai_acl_priority(5)"
-    annotations: "@nonessential_for_upgrade"
-    annotations: "@entry_restriction(\"\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n\n    // DSCP is only allowed on IP traffic.\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow icmp_type matches for ICMP packets\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n\n\n\n\n  \")"
-  }
-  match_fields {
-    id: 1
-    name: "is_ip"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 2
-    name: "is_ipv4"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 3
-    name: "is_ipv6"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 4
-    name: "ip_protocol"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 11
-    name: "l4_dst_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT)"
-    bitwidth: 16
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 5
-    name: "icmpv6_type"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 6
-    name: "dscp"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP)"
-    bitwidth: 6
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 7
-    name: "ecn"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN)"
-    bitwidth: 2
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 8
-    name: "in_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  action_refs {
-    id: 16777483
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 16777482
-    annotations: "@proto_id(2)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  direct_resource_ids: 318767365
-  size: 127
+  size: 254
 }
 tables {
   preamble {
@@ -341,6 +186,39 @@ tables {
   }
   const_default_action_id: 21257015
   size: 64
+}
+tables {
+  preamble {
+    id: 33554507
+    name: "ingress.tunnel_termination.ipv6_tunnel_termination_table"
+    alias: "ipv6_tunnel_termination_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // TODO: Remove when switch supports priority as a key for\n    // this table.\n    // The switch does not support priority as a key. In order to avoid\n    // conflicts between entries where the only difference is the\n    // priority, we choose a fixed priority arbitrarily.\n    ::priority == 900;\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "dst_ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 2
+    name: "src_ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777238
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 126
 }
 tables {
   preamble {
@@ -544,7 +422,7 @@ tables {
     annotations: "@sai_acl(INGRESS)"
     annotations: "@sai_acl_priority(5)"
     annotations: "@nonessential_for_upgrade"
-    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Forbid match on ethertype if is_ip* is set.\n    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n\n\n\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    src_ipv6::mask != 0 -> is_ipv6 == 1;\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n\n\n\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.\n    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n\n\n    // Only allow icmp_type matches for ICMP packets\n    icmp_type::mask != 0 -> ip_protocol == 1;\n\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Forbid match on ethertype if is_ip* is set.\n    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n\n    src_ip::mask != 0 -> is_ipv4 == 1;\n\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    src_ipv6::mask != 0 -> is_ipv6 == 1;\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.\n    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n\n\n\n\n\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
     id: 1
@@ -622,16 +500,23 @@ tables {
     match_type: TERNARY
   }
   match_fields {
-    id: 13
-    name: "ip_protocol"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
-    bitwidth: 8
+    id: 11
+    name: "dscp"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP)"
+    bitwidth: 6
     match_type: TERNARY
   }
   match_fields {
-    id: 19
-    name: "icmp_type"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE)"
+    id: 12
+    name: "ecn"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN)"
+    bitwidth: 2
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 13
+    name: "ip_protocol"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
     bitwidth: 8
     match_type: TERNARY
   }
@@ -662,36 +547,6 @@ tables {
     annotations: "@composite_field(@ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 24 , length = 2 ) , @ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 26 , length = 2 ))"
     annotations: "@format(IPV4_ADDRESS)"
     bitwidth: 32
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 17
-    name: "in_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  match_fields {
-    id: 18
-    name: "route_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
-    bitwidth: 6
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 21
-    name: "acl_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 22
-    name: "vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
     match_type: TERNARY
   }
   action_refs {
@@ -733,161 +588,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767362
-  size: 255
-}
-tables {
-  preamble {
-    id: 33554695
-    name: "ingress.acl_ingress.acl_ingress_qos_table"
-    alias: "acl_ingress_qos_table"
-    annotations: "@sai_acl(INGRESS)"
-    annotations: "@sai_acl_priority(10)"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@nonessential_for_upgrade"
-    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Forbid match on ethertype if is_ip* is set.\n    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;\n    // Only allow IP field matches for IP packets.\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n    // Only allow icmp_type matches for ICMP packets\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n\n\n\n\n\n\n\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n\n  \")"
-  }
-  match_fields {
-    id: 1
-    name: "is_ip"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 2
-    name: "is_ipv4"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 3
-    name: "is_ipv6"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 4
-    name: "ether_type"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
-    bitwidth: 16
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 7
-    name: "ttl"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 8
-    name: "ip_protocol"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 9
-    name: "icmpv6_type"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 10
-    name: "l4_dst_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT)"
-    bitwidth: 16
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 13
-    name: "acl_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 15
-    name: "route_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
-    bitwidth: 6
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 5
-    name: "dst_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 6
-    name: "arp_tpa"
-    annotations: "@composite_field(@ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 24 , length = 2 ) , @ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 26 , length = 2 ))"
-    annotations: "@format(IPV4_ADDRESS)"
-    bitwidth: 32
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 11
-    name: "in_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  match_fields {
-    id: 16
-    name: "vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
-    match_type: TERNARY
-  }
-  action_refs {
-    id: 16777484
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 16777486
-    annotations: "@proto_id(2)"
-  }
-  action_refs {
-    id: 16777475
-    annotations: "@proto_id(3)"
-  }
-  action_refs {
-    id: 16777481
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
-    id: 16777488
-    annotations: "@proto_id(5)"
-  }
-  action_refs {
-    id: 16777489
-    annotations: "@proto_id(6)"
-  }
-  action_refs {
-    id: 16777493
-    annotations: "@proto_id(7)"
-  }
-  action_refs {
-    id: 16777497
-    annotations: "@proto_id(8)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  direct_resource_ids: 318767367
-  direct_resource_ids: 352321794
+  direct_resource_ids: 352321792
   size: 255
 }
 tables {
@@ -964,7 +665,7 @@ tables {
   match_fields {
     id: 8
     name: "vrf_id"
-    annotations: "@unsupported"
+    annotations: "@refers_to(vrf_table , vrf_id)"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)"
     match_type: OPTIONAL
     type_name {
@@ -974,7 +675,6 @@ tables {
   match_fields {
     id: 9
     name: "route_hit"
-    annotations: "@unsupported"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
@@ -1017,7 +717,90 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 511
+  size: 255
+}
+tables {
+  preamble {
+    id: 33554698
+    name: "ingress.acl_ingress.acl_ingress_security_table"
+    alias: "acl_ingress_security_table"
+    annotations: "@sai_acl(INGRESS)"
+    annotations: "@sai_acl_priority(20)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Forbid match on ethertype if is_ip* is set.\n    (is_ip::mask != 0 || is_ipv4::mask != 0 || is_ipv6::mask != 0) -> ether_type::mask == 0;\n\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    src_ip::mask != 0 -> is_ipv4 == 1;\n    src_ipv6::mask != 0 -> is_ipv6 == 1;\n\n  // TODO: This comment is required for the preprocessor to not\n  // spit out nonsense.\n\n\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 2
+    name: "is_ipv4"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 3
+    name: "is_ipv6"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 4
+    name: "ether_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 5
+    name: "src_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_IP)"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 6
+    name: "dst_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "src_ipv6"
+    annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD2 ))"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 64
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777475
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777481
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777487
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767370
+  size: 255
 }
 tables {
   preamble {
@@ -1178,7 +961,7 @@ tables {
   }
   const_default_action_id: 21257015
   implementation_id: 299650760
-  size: 960
+  size: 3968
 }
 tables {
   preamble {
@@ -1396,7 +1179,7 @@ tables {
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@sai_acl(EGRESS)"
     annotations: "@nonessential_for_upgrade"
-    annotations: "@entry_restriction(\"\n\n\n\n\n\n\n\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+    annotations: "@entry_restriction(\"\n\n\n\n\n\n\n\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
     id: 2
@@ -1435,21 +1218,9 @@ tables {
     bitwidth: 1
     match_type: OPTIONAL
   }
-  match_fields {
-    id: 9
-    name: "dst_ipv6"
-    annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2 ))"
-    annotations: "@format(IPV6_ADDRESS)"
-    bitwidth: 64
-    match_type: TERNARY
-  }
   action_refs {
     id: 16777481
     annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 16777485
-    annotations: "@proto_id(2)"
   }
   action_refs {
     id: 21257015
@@ -1459,77 +1230,6 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767364
   size: 127
-}
-tables {
-  preamble {
-    id: 33554696
-    name: "egress.acl_egress.acl_egress_dhcp_to_host_table"
-    alias: "acl_egress_dhcp_to_host_table"
-    annotations: "@sai_acl(EGRESS)"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@nonessential_for_upgrade"
-    annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
-  }
-  match_fields {
-    id: 1
-    name: "is_ip"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 2
-    name: "is_ipv4"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 3
-    name: "is_ipv6"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
-    bitwidth: 1
-    match_type: OPTIONAL
-  }
-  match_fields {
-    id: 5
-    name: "ip_protocol"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 6
-    name: "l4_dst_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT)"
-    bitwidth: 16
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 7
-    name: "out_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  action_refs {
-    id: 16777481
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 16777485
-    annotations: "@proto_id(2)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  direct_resource_ids: 318767368
-  size: 255
 }
 actions {
   preamble {
@@ -1595,54 +1295,6 @@ actions {
 }
 actions {
   preamble {
-    id: 16777482
-    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
-    alias: "set_outer_vlan_id"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "vlan_id"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
-    bitwidth: 12
-  }
-}
-actions {
-  preamble {
-    id: 16777483
-    name: "ingress.acl_pre_ingress.set_acl_metadata"
-    alias: "set_acl_metadata"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "acl_metadata"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)"
-    bitwidth: 8
-  }
-}
-actions {
-  preamble {
-    id: 16777496
-    name: "ingress.acl_pre_ingress.set_outer_vlan_id_and_acl_metadata"
-    alias: "set_outer_vlan_id_and_acl_metadata"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "vlan_id"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
-    bitwidth: 12
-  }
-  params {
-    id: 2
-    name: "acl_metadata"
-    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)"
-    bitwidth: 8
-  }
-}
-actions {
-  preamble {
     id: 16777256
     name: "ingress.ingress_vlan_checks.disable_ingress_vlan_checks"
     alias: "disable_ingress_vlan_checks"
@@ -1653,6 +1305,13 @@ actions {
     id: 16777224
     name: "ingress.l3_admit.admit_to_l3"
     alias: "admit_to_l3"
+  }
+}
+actions {
+  preamble {
+    id: 16777238
+    name: "ingress.tunnel_termination.tunnel_decap"
+    alias: "tunnel_decap"
   }
 }
 actions {
@@ -1748,7 +1407,8 @@ actions {
     id: 16777473
     name: "ingress.acl_ingress.acl_copy"
     alias: "acl_copy"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
   }
   params {
     id: 1
@@ -1764,7 +1424,8 @@ actions {
     id: 16777474
     name: "ingress.acl_ingress.acl_trap"
     alias: "acl_trap"
-    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
   params {
     id: 1
@@ -1780,7 +1441,8 @@ actions {
     id: 16777475
     name: "ingress.acl_ingress.acl_forward"
     alias: "acl_forward"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
 }
 actions {
@@ -1802,29 +1464,10 @@ actions {
 }
 actions {
   preamble {
-    id: 16777484
-    name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
-    alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL , SAI_PACKET_COLOR_RED)"
-    annotations: "@unsupported"
-  }
-  params {
-    id: 1
-    name: "qos_queue"
-    annotations: "@sai_action_param(QOS_QUEUE)"
-    type_name {
-      name: "cpu_queue_t"
-    }
-  }
-}
-actions {
-  preamble {
     id: 16777499
     name: "ingress.acl_ingress.set_cpu_queue_and_cancel_copy"
     alias: "set_cpu_queue_and_cancel_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1837,131 +1480,10 @@ actions {
 }
 actions {
   preamble {
-    id: 16777489
-    name: "ingress.acl_ingress.set_dscp_and_queues_and_deny_above_rate_limit"
-    alias: "set_dscp_and_queues_and_deny_above_rate_limit"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
-    annotations: "@unsupported"
-  }
-  params {
-    id: 1
-    name: "dscp"
-    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP)"
-    bitwidth: 6
-  }
-  params {
-    id: 2
-    name: "cpu_queue"
-    annotations: "@sai_action_param(QOS_QUEUE)"
-    type_name {
-      name: "cpu_queue_t"
-    }
-  }
-  params {
-    id: 3
-    name: "green_multicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
-    type_name {
-      name: "multicast_queue_t"
-    }
-  }
-  params {
-    id: 4
-    name: "red_multicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
-    type_name {
-      name: "multicast_queue_t"
-    }
-  }
-  params {
-    id: 5
-    name: "green_unicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
-    type_name {
-      name: "unicast_queue_t"
-    }
-  }
-  params {
-    id: 6
-    name: "red_unicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
-    type_name {
-      name: "unicast_queue_t"
-    }
-  }
-}
-actions {
-  preamble {
-    id: 16777486
-    name: "ingress.acl_ingress.set_cpu_queue_and_deny_above_rate_limit"
-    alias: "set_cpu_queue_and_deny_above_rate_limit"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
-  }
-  params {
-    id: 1
-    name: "cpu_queue"
-    annotations: "@sai_action_param(QOS_QUEUE)"
-    type_name {
-      name: "cpu_queue_t"
-    }
-  }
-}
-actions {
-  preamble {
-    id: 16777488
-    name: "ingress.acl_ingress.set_cpu_queue"
-    alias: "set_cpu_queue"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "cpu_queue"
-    annotations: "@sai_action_param(QOS_QUEUE)"
-    type_name {
-      name: "cpu_queue_t"
-    }
-  }
-}
-actions {
-  preamble {
-    id: 16777493
-    name: "ingress.acl_ingress.set_forwarding_queues"
-    alias: "set_forwarding_queues"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-  params {
-    id: 1
-    name: "green_multicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
-    type_name {
-      name: "multicast_queue_t"
-    }
-  }
-  params {
-    id: 2
-    name: "red_multicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
-    type_name {
-      name: "multicast_queue_t"
-    }
-  }
-  params {
-    id: 3
-    name: "green_unicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
-    type_name {
-      name: "unicast_queue_t"
-    }
-  }
-  params {
-    id: 4
-    name: "red_unicast_queue"
-    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
-    type_name {
-      name: "unicast_queue_t"
-    }
+    id: 16777487
+    name: "ingress.acl_ingress.acl_deny"
+    alias: "acl_deny"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
   }
 }
 actions {
@@ -2003,7 +1525,6 @@ actions {
     name: "ingress.acl_ingress.append_ingress_and_egress_timestamp"
     alias: "append_ingress_and_egress_timestamp"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -2040,7 +1561,6 @@ actions {
     name: "ingress.acl_ingress.redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
     alias: "redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL)"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
@@ -2479,14 +1999,6 @@ actions {
     alias: "make_untagged_member"
   }
 }
-actions {
-  preamble {
-    id: 16777485
-    name: "egress.acl_egress.acl_egress_forward"
-    alias: "acl_egress_forward"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
-  }
-}
 action_profiles {
   preamble {
     id: 299650760
@@ -2495,8 +2007,8 @@ action_profiles {
   }
   table_ids: 33554499
   with_selector: true
-  size: 31296
-  max_group_size: 256
+  size: 49152
+  max_group_size: 512
   sum_of_weights {
   }
 }
@@ -2513,28 +2025,6 @@ direct_counters {
 }
 direct_counters {
   preamble {
-    id: 318767366
-    name: "ingress.acl_pre_ingress.acl_pre_ingress_vlan_counter"
-    alias: "acl_pre_ingress_vlan_counter"
-  }
-  spec {
-    unit: BOTH
-  }
-  direct_table_id: 33554693
-}
-direct_counters {
-  preamble {
-    id: 318767365
-    name: "ingress.acl_pre_ingress.acl_pre_ingress_metadata_counter"
-    alias: "acl_pre_ingress_metadata_counter"
-  }
-  spec {
-    unit: BOTH
-  }
-  direct_table_id: 33554694
-}
-direct_counters {
-  preamble {
     id: 318767362
     name: "ingress.acl_ingress.acl_ingress_counter"
     alias: "acl_ingress_counter"
@@ -2546,14 +2036,14 @@ direct_counters {
 }
 direct_counters {
   preamble {
-    id: 318767367
-    name: "ingress.acl_ingress.acl_ingress_qos_counter"
-    alias: "acl_ingress_qos_counter"
+    id: 318767370
+    name: "ingress.acl_ingress.acl_ingress_security_counter"
+    alias: "acl_ingress_security_counter"
   }
   spec {
     unit: BOTH
   }
-  direct_table_id: 33554695
+  direct_table_id: 33554698
 }
 direct_counters {
   preamble {
@@ -2566,28 +2056,17 @@ direct_counters {
   }
   direct_table_id: 33554692
 }
-direct_counters {
-  preamble {
-    id: 318767368
-    name: "egress.acl_egress.acl_egress_dhcp_to_host_counter"
-    alias: "acl_egress_dhcp_to_host_counter"
-  }
-  spec {
-    unit: BOTH
-  }
-  direct_table_id: 33554696
-}
 direct_meters {
   preamble {
-    id: 352321794
-    name: "ingress.acl_ingress.acl_ingress_qos_meter"
-    alias: "acl_ingress_qos_meter"
+    id: 352321792
+    name: "ingress.acl_ingress.acl_ingress_meter"
+    alias: "acl_ingress_meter"
     annotations: "@mode(single_rate_two_color)"
   }
   spec {
     unit: BYTES
   }
-  direct_table_id: 33554695
+  direct_table_id: 33554688
 }
 controller_packet_metadata {
   preamble {
@@ -2657,15 +2136,6 @@ type_info {
     }
   }
   new_types {
-    key: "multicast_queue_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
     key: "nexthop_id_t"
     value {
       translated_type {
@@ -2694,15 +2164,6 @@ type_info {
   }
   new_types {
     key: "tunnel_id_t"
-    value {
-      translated_type {
-        sdn_string {
-        }
-      }
-    }
-  }
-  new_types {
-    key: "unicast_queue_t"
     value {
       translated_type {
         sdn_string {
