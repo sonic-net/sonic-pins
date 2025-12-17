@@ -73,6 +73,11 @@ class SshWrapperClient : public LinuxSshHelper {
       absl::string_view sut, SSHClient* ssh_client,
       absl::Duration timeout) override;
 
+  // Returns list of the PINs DB state file names and their contents.
+  absl::StatusOr<std::vector<GetFileResult>> SavepinsDbState(
+      absl::string_view sut, SSHClient* ssh_client,
+      absl::Duration timeout) override;
+
  private:
   // Returns a LinuxSshHelper instance for the given SUT.
   absl::StatusOr<LinuxSshHelper*> GetSshHelper(absl::string_view sut);

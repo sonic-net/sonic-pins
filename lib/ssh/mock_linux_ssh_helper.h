@@ -58,6 +58,10 @@ class MockLinuxSshHelper : public LinuxSshHelper {
               (absl::string_view sut, SSHClient* ssh_client,
                absl::Duration timeout),
               (override));
+  MOCK_METHOD(absl::StatusOr<std::vector<GetFileResult>>, SavepinsDbState,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
 };
 
 }  // namespace thinkit
