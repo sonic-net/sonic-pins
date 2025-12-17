@@ -137,3 +137,46 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "config_validator",
+    srcs = ["config_validator.cc"],
+    hdrs = ["config_validator.h"],
+    deps = [
+        "//lib/gnmi:gnmi_helper",
+        "//lib/utils:json_utils",
+        "//thinkit:switch",
+        "//thinkit:test_environment",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "config_validator_test",
+    srcs = ["config_validator_test.cc"],
+    deps = [
+        ":config_validator",
+        "//thinkit:mock_switch",
+        "//thinkit:mock_test_environment",
+	"//gutil/gutil:proto_matchers",
+	"//gutil/gutil:status_matchers",
+	"//gutil/gutil:testing",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
