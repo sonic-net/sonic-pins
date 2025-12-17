@@ -68,6 +68,10 @@ class SshWrapperClient : public LinuxSshHelper {
   absl::Status ClearpinsLogs(absl::string_view sut, SSHClient* ssh_client,
                               absl::Duration timeout) override;
 
+  // Removes the config db on the switch.
+  absl::Status RemoveConfigDb(absl::string_view sut, SSHClient* ssh_client,
+                              absl::Duration timeout) override;
+
   // Returns list of PINs logs file names and their contents.
   absl::StatusOr<std::vector<GetFileResult>> SavepinsLog(
       absl::string_view sut, SSHClient* ssh_client,
@@ -92,6 +96,15 @@ class SshWrapperClient : public LinuxSshHelper {
       absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
       thinkit::Container docker, absl::string_view command,
       absl::Duration timeout) override;
+
+  // Fetches the cert file name from the switch.
+  absl::StatusOr<std::string_view> FetchCertFileName(
+      absl::string_view chassis_name, thinkit::CertFile cert_file) override;
+
+  // Checks and restore Bootinstall on the switch.
+  absl::Status CheckAndRestoreBootinstall(absl::string_view chassis_name,
+                                          thinkit::SSHClient* ssh_client,
+                                          absl::Duration timeout) override;
 
  private:
   // Returns a LinuxSshHelper instance for the given SUT.

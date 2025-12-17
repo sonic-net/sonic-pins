@@ -48,6 +48,26 @@ enum class Container {
   kTeamd
 };
 
+enum class CertFile {
+  kSshCaBundle,
+  kSshServerKey,
+  kSshServerCert,
+  kGrpcAuthzPolicy,
+  kGnmiAuthzPolicy,
+  kGrpcAuthnPolicy,
+  kCrlFile,
+  kCrlFlushFile,
+  kGrpcVersionFile,
+  kGnoiCaBundle,
+  kGnoiServerKey,
+  kGnoiServerCert,
+  kShadowFile,
+  kSshAuthKeys,
+  kSshAuthUsers,
+  kDefaultSshCaPubKeyPath,
+  kMountedConfigSshCaPubKeyPath,
+};
+
 // LinuxSshHelper is an interface for common operations on the switches
 // regardless of the switch OS.
 class LinuxSshHelper {
@@ -80,6 +100,11 @@ class LinuxSshHelper {
   virtual absl::Status ClearpinsLogs(absl::string_view sut,
                                       SSHClient* ssh_client,
                                       absl::Duration timeout) = 0;
+  // Removes the config db on the switch.
+  virtual absl::Status RemoveConfigDb(absl::string_view sut,
+                                      SSHClient* ssh_client,
+                                      absl::Duration timeout) = 0;
+
   // Returns list of PINs logs file names and their contents.
   virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsLog(
       absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
@@ -100,6 +125,15 @@ class LinuxSshHelper {
   virtual absl::StatusOr<std::string> ExecuteCommandInContainer(
       absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
       thinkit::Container container, absl::string_view command,
+      absl::Duration timeout) = 0;
+
+  // Fetches the cert file name from the switch.
+  virtual absl::StatusOr<std::string_view> FetchCertFileName(
+      absl::string_view chassis_name, thinkit::CertFile cert_file) = 0;
+
+  // Checks and restore Boot install on the switch.
+  virtual absl::Status CheckAndRestoreBootinstall(
+      absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
       absl::Duration timeout) = 0;
 };
 
