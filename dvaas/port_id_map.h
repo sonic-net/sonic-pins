@@ -18,7 +18,9 @@
 #include <optional>
 #include <utility>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "gutil/gutil/test_artifact_writer.h"
@@ -72,7 +74,17 @@ public:
   absl::StatusOr<pins_test::P4rtPortId> GetControlSwitchPortConnectedToSutPort(
       const pins_test::P4rtPortId &sut_port) const;
 
-private:
+  // Returns the set of P4RT port IDs of the SUT interfaces mapped to a control
+  // switch port. Returns an error if the port mapping is implicit.
+  absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetMappedSutPorts()
+      const;
+
+  // Returns true if no explicit port mapping is provided. In that case, the
+  // object implicitly assumes that any port ID in SUT is mapped to the same
+  // port ID on the control switch.
+  bool IsImplicitIdentityMap() const;
+
+ private:
   MirrorTestbedP4rtPortIdMap(
       absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>
           control_to_sut_port_map)
