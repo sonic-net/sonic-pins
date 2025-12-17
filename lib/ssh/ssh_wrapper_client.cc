@@ -85,5 +85,11 @@ absl::StatusOr<std::vector<GetFileResult>> SshWrapperClient::SavepinsLog(
   return ssh_helper->SavepinsLog(sut, ssh_client, timeout);
 }
 
+absl::StatusOr<std::vector<GetFileResult>> SshWrapperClient::SavepinsDbState(
+    absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->SavepinsDbState(sut, ssh_client, timeout);
+}
+
 }  // namespace thinkit
 

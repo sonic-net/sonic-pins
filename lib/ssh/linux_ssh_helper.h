@@ -71,6 +71,10 @@ class LinuxSshHelper {
   // Returns list of PINs logs file names and their contents.
   virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsLog(
       absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
+
+  // Returns list of the PINs DB state file names and their contents.
+  virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsDbState(
+      absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
 };
 
 }  // namespace thinkit
