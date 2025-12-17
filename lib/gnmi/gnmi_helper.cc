@@ -15,6 +15,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <functional>
