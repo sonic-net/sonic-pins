@@ -59,8 +59,12 @@ absl::StatusOr<std::vector<thinkit::GetFileResult>> GetFileResults(
 absl::Span<const GetFileOption> GetSavepinsDbStateFileOptions(
     absl::string_view container_cmd_prefix);
 
+// Returns the file options for saving the PINS Redis records.
+// The `redis_dump_cmd_template` is expected to be a string with a single
+// substitution point for the Redis record name. The redis record file is
+// usually found at `/var/log/swss/<redis_record_name>`.
 absl::Span<const GetFileOption> GetSavepinsRedisRecordFileOptions(
-    absl::string_view redis_dump_cmd_prefix);
+    absl::string_view redis_dump_cmd_template);
 
 }  // namespace pins_test
 
