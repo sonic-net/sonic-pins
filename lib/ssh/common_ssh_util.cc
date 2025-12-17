@@ -103,4 +103,20 @@ absl::Span<const GetFileOption> GetSavepinsDbStateFileOptions(
   return *file_options;
 }
 
+absl::Span<const GetFileOption> GetSavepinsRedisRecordFileOptions(
+    absl::string_view redis_dump_cmd_prefix) {
+  static const absl::NoDestructor<std::vector<pins_test::GetFileOption>>
+      file_options({
+          {.read_file_command = absl::StrCat(redis_dump_cmd_prefix, "swss.rec"),
+           .file_name = "swss.rec.txt"},
+          {.read_file_command =
+               absl::StrCat(redis_dump_cmd_prefix, "sairedis.rec"),
+           .file_name = "sairedis.rec.txt"},
+          {.read_file_command =
+               absl::StrCat(redis_dump_cmd_prefix, "responsepublisher.rec"),
+           .file_name = "responsepublisher.rec.txt"},
+      });
+  return *file_options;
+}
+
 }  // namespace pins_test
