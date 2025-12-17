@@ -430,13 +430,17 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
   // Copy the blackhole port counters only if all the blackhole port counters
   // are available.
   absl::StatusOr<uint64_t> in_discard_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "in-discard-events"});
+      interface_json,
+      {"state", "pins-interfaces:blackhole", "in-discard-events"});
   absl::StatusOr<uint64_t> out_discard_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "out-discard-events"});
+      interface_json,
+      {"state", "pins-interfaces:blackhole", "out-discard-events"});
   absl::StatusOr<uint64_t> in_error_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "in-error-events"});
+      interface_json,
+      {"state", "pins-interfaces:blackhole", "in-error-events"});
   absl::StatusOr<uint64_t> fec_not_correctable_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "fec-not-correctable-events"});
+      interface_json, {"state", "pins-interfaces:blackhole",
+                       "fec-not-correctable-events"});
   if (in_discard_events.ok() && out_discard_events.ok() &&
       in_error_events.ok() && fec_not_correctable_events.ok()) {
     counters.blackhole_counters = BlackholePortCounters{
