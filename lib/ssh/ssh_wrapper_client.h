@@ -78,6 +78,21 @@ class SshWrapperClient : public LinuxSshHelper {
       absl::string_view sut, SSHClient* ssh_client,
       absl::Duration timeout) override;
 
+  // Returns list of the PINs Redis record file names and their contents.
+  absl::StatusOr<std::vector<GetFileResult>> SavepinsRedisRecord(
+      absl::string_view sut, SSHClient* ssh_client,
+      absl::Duration timeout) override;
+
+  // Translates the logical container enum to the switch-specific string name.
+  absl::StatusOr<std::string> GetContainerName(
+      absl::string_view chassis_name, thinkit::Container container) override;
+
+  // Executes a command inside a container on the switch.
+  absl::StatusOr<std::string> ExecuteCommandInContainer(
+      absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
+      thinkit::Container container, absl::string_view command,
+      absl::Duration timeout) override;
+
  private:
   // Returns a LinuxSshHelper instance for the given SUT.
   absl::StatusOr<LinuxSshHelper*> GetSshHelper(absl::string_view sut);
