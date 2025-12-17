@@ -595,7 +595,7 @@ absl::Status InstallRebootPushConfig(
 
 absl::Status ValidateTestbedState(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
+    const ImageConfigParams*  image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
     absl::Span<const std::string> control_switch_interfaces) { 
   // TODO: Add validation for SUT stack image label.
@@ -675,7 +675,7 @@ absl::Status WaitForReboot(const Testbed& testbed,
 
 absl::Status
 WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
-                 absl::Nullable<const ImageConfigParams *> image_config_param,
+                 const ImageConfigParams*  image_config_param,
                  bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
                  bool collect_debug_logs_for_nsf_success,
                  absl::Span<const std::string> control_switch_interfaces) {
@@ -721,7 +721,7 @@ WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
 
 absl::Status DoNsfRebootAndWaitForSwitchReady(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
+    const ImageConfigParams*  image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
     absl::Span<const std::string> control_switch_interfaces) {
   thinkit::Switch& sut = GetSut(testbed);
@@ -747,7 +747,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 
 absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     const Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param,
+    const ImageConfigParams*  image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
     absl::Span<const std::string> control_switch_interfaces) {
   thinkit::Switch& sut = GetSut(testbed);

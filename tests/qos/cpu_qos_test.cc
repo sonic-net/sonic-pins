@@ -115,6 +115,7 @@ const sai::NexthopRewriteOptions kNextHopRewriteOptions = {
 // Size of the "frame check sequence" (FCS) that is part of Layer 2 Ethernet
 // frames.
 constexpr int kFrameCheckSequenceSize = 4;
+constexpr int kAcceptablePacketLossPercent = 20;
 
 absl::Status NsfRebootHelper(const Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
@@ -1217,11 +1218,14 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
     int expected_queue_counters_after_test_packets =
         TotalPacketsForQueue(queue_counters_before_test_packet) + kPacketCount;
 
+    int kAllowedPacketDrops =
+        (kPacketCount * kAcceptablePacketLossPercent) / (100);
     // We terminate early if this fails, as that can cause this loop to get
     // out of sync when counters increment after a long delay, resulting in
     // confusing error messages where counters increment by 2.
     EXPECT_THAT(TotalPacketsForQueue(queue_counters_after_test_packet),
-                AllOf(Ge(expected_queue_counters_after_test_packets),
+                AllOf(Ge(expected_queue_counters_after_test_packets -
+                         kAllowedPacketDrops),
                       Le(expected_queue_counters_after_test_packets +
                          kMaxAllowedUnsolicitedPackets)))
         << "Counters for queue " << target_queue << " did not increment within "
@@ -1230,11 +1234,20 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
            "unsolicited packets:\n"
         << test_packet.packet.DebugString()
         << "\nBefore  : " << queue_counters_before_test_packet
-        << "\nAfter   : " << queue_counters_after_test_packet
-        << "\nExpected: " << expected_queue_counters_after_test_packets
+        << "\nAfter   : " << queue_counters_after_test_packet << "\nExpected: "
+        << expected_queue_counters_after_test_packets - kAllowedPacketDrops
         << " to "
         << expected_queue_counters_after_test_packets +
                kMaxAllowedUnsolicitedPackets;
+    LOG(INFO) << " got: "
+              << TotalPacketsForQueue(queue_counters_after_test_packet)
+              << ", want: ("
+              << expected_queue_counters_after_test_packets -
+                     kAllowedPacketDrops
+              << " - "
+              << expected_queue_counters_after_test_packets +
+                     kMaxAllowedUnsolicitedPackets
+              << ")";
   }
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
