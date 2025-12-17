@@ -158,15 +158,6 @@ absl::StatusOr<json> GetField(const json& object,
   return absl::StatusOr<json>(*std::move(field));
 }
 
-absl::StatusOr<json> AccessJsonValue(const json& json_value,
-                                     absl::Span<const absl::string_view> path) {
-  json json_result = json_value;
-  for (const auto& current_path : path) {
-    ASSIGN_OR_RETURN(json_result, GetField(json_result, current_path));
-  }
-  return json_result;
-}
-
 absl::StatusOr<uint64_t> ParseJsonValueAsUint(
     const json& json_value, absl::Span<const absl::string_view> path) {
   ASSIGN_OR_RETURN(json value, AccessJsonValue(json_value, path));
@@ -286,24 +277,6 @@ FindInterfacesNameFromInterfaceJsonArray(int port_number,
     }
   }
   return interfaces_name;
-}
-
-absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
-    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
-    std::optional<absl::Duration> timeout) {
-  VLOG(1) << "Sending GET request: " << request.ShortDebugString();
-  gnmi::GetResponse response;
-  grpc::ClientContext context;
-  if (timeout.has_value()) {
-    context.set_deadline(absl::ToChronoTime(absl::Now() + *timeout));
-  }
-  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
-                      gnmi_stub->Get(&context, request, &response)))
-          .LogError()
-          .SetPrepend()
-      << "GET request failed with error: ";
-  VLOG(1) << "Received GET response: " << response.ShortDebugString();
-  return response;
 }
 
 // Deletes a single interface's P4RT id.
@@ -564,6 +537,34 @@ absl::StatusOr<json> GetBlackholePortCountersJson(
 }
 
 }  // namespace
+
+absl::StatusOr<::nlohmann::json> AccessJsonValue(
+    const ::nlohmann::json& json_value,
+    absl::Span<const absl::string_view> path) {
+  ::nlohmann::json json_result = json_value;
+  for (const auto& current_path : path) {
+    ASSIGN_OR_RETURN(json_result, GetField(json_result, current_path));
+  }
+  return json_result;
+}
+
+absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
+    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
+    std::optional<absl::Duration> timeout) {
+  VLOG(1) << "Sending GET request: " << request.ShortDebugString();
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  if (timeout.has_value()) {
+    context.set_deadline(absl::ToChronoTime(absl::Now() + *timeout));
+  }
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+                      gnmi_stub->Get(&context, request, &response)))
+          .LogError()
+          .SetPrepend()
+      << "GET request failed with error: ";
+  VLOG(1) << "Received GET response: " << response.ShortDebugString();
+  return response;
+}
 
 void StripSymbolFromString(std::string& str, char symbol) {
   str.erase(std::remove(str.begin(), str.end(), symbol), str.end());
