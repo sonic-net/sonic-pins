@@ -1,0 +1,8284 @@
+=========================================================================
+empty PI
+=========================================================================
+
+--- PI (Input):
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Entity is invalid: Oneof field "entity" is not set
+
+=========================================================================
+empty table PI
+=========================================================================
+
+--- PI (Input):
+table_entry {
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table ID 0 does not exist in the P4Info.
+
+=========================================================================
+invalid table id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 431
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table ID 431 does not exist in the P4Info.
+
+=========================================================================
+missing matches
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect exact
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\""
+      prefix_len: 24
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an exact match type.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect lpm
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    ternary {
+      value: "\377\""
+      mask: "\323T\022"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Must be an LPM match type.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect ternary
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Must be a ternary match type.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect optional
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\""
+      prefix_len: 24
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an optional match type.
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match field id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 11
+    exact {
+      value: "\377\""
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 11 does not exist in table 'id_test_table'.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid bytestring value
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 2
+    exact {
+      value: "\377\"CE2"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: cannot fit given byte string of 40 bits into 32 bits: 'ff22434532'
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+empty bytestring in match field
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 3
+    optional {
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'str' is invalid: Bytestrings must have non-zero length.
+
+=========================================================================
+empty bytestring in action parameter
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 3
+    optional {
+      value: "hello"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+      }
+      params {
+        param_id: 2
+      }
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Param 'arg2': Bytestrings must have non-zero length.
+    - Param 'arg1': Bytestrings must have non-zero length.
+    - Missing parameters: 'arg1'. 'arg2'. Expected 2 parameters, but found 0 instead.
+
+=========================================================================
+invalid prefix length
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\""
+      prefix_len: 40
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Prefix length 40 cannot be greater than bitwidth 32.
+  - Action is required.
+
+=========================================================================
+duplicate match field id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 1
+    exact {
+      value: "\020$2R"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Duplicate match field found with ID 1.
+  - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
+  - Action is required.
+
+=========================================================================
+lpm value - masked bits set
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\020C#\022"
+      prefix_len: 24
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Lpm value has masked bits that are set. Value: '\020C#\022' Prefix Length: 24
+  - Action is required.
+
+=========================================================================
+ternary value too long
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "B\022"
+      mask: "\377"
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Bytestring of length 15 bits does not fit in 10 bits.
+  - Action is required.
+
+=========================================================================
+ternary IPv6 64-bit value too long
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 6
+    ternary {
+      value: "\001\000\000\000\000\000\000\000\000"
+      mask: "\001\377\377\377\377\377\377\377\377"
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6_upper_64_bits' is invalid: Bytestring of length 65 bits does not fit in 64 bits.
+  - Action is required.
+
+=========================================================================
+ternary IPv6 63-bit value too long
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 7
+    ternary {
+      value: "\200\000\000\000\000\000\000\000"
+      mask: "\377\377\377\377\377\377\377\377"
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6_upper_63_bits' is invalid: Bytestring of length 64 bits does not fit in 63 bits.
+  - Action is required.
+
+=========================================================================
+ternary value and mask too long
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "B\022"
+      mask: "\377\377"
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Bytestring of length 15 bits does not fit in 10 bits.
+  - Action is required.
+
+=========================================================================
+ternary value - masked bits set
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\001\000"
+      mask: "\000\377"
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Ternary value has masked bits that are set. Value: \001\000 Mask: \000\377
+  - Action is required.
+
+=========================================================================
+missing action
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action is required.
+
+=========================================================================
+invalid action
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action_profile_member_id: 12
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Unsupported action type: 2
+
+=========================================================================
+action set in table with action
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\000\000\000\010"
+          }
+          params {
+            param_id: 2
+            value: "\000\000\000\t"
+          }
+        }
+        weight: 1
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Table requires an action since it does not use oneshot. Got action set instead.
+
+=========================================================================
+action in table with action set
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554438
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\000\000\000\010"
+      }
+      params {
+        param_id: 2
+        value: "\000\000\000\t"
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table requires an action set since it uses oneshot. Got action instead.
+
+=========================================================================
+missing action id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 1
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: - Action ID 1 does not exist in the P4Info.
+
+=========================================================================
+invalid action id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action ID 16777219 is invalid: It is not a valid action for this table.
+
+=========================================================================
+missing action params
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "T"
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+duplicate action param id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 1
+        value: "e"
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Duplicate param field with ID 1.
+    - Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+invalid action param id
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 67
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "#"
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Unable to find param ID 67.
+    - Missing parameters: 'arg2'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+zero lpm prefix length
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\0202A\005"
+    }
+  }
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid for the following reasons:
+    - A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
+    - Lpm value has masked bits that are set. Value: '\0202A\005' Prefix Length: 0
+
+=========================================================================
+zero ternary mask
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\001\000"
+      mask: "\000"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "#"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'normal' is invalid: A wild-card ternary match (i.e., mask of 0) must be represented by omitting the match altogether.
+
+=========================================================================
+zero priority
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\001\000"
+      mask: "\001\377"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "#"
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+
+=========================================================================
+negative priority
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\001\000"
+      mask: "\001\377"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "#"
+      }
+    }
+  }
+  priority: -32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got -32 instead.
+
+=========================================================================
+absent priority
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\001\000"
+      mask: "\001\377"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "#"
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+
+=========================================================================
+unexpected priority
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\0202A\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Table entries with no ternary or optional matches cannot have a priority. Got 32 instead.
+
+=========================================================================
+action set with negative weight
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554438
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\000\000\000\010"
+          }
+          params {
+            param_id: 2
+            value: "\000\000\000\t"
+          }
+        }
+        weight: -1
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Action Set is invalid: Expected positive action set weight, but got -1 instead.
+
+=========================================================================
+action set with invalid action
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554438
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777218
+          params {
+            param_id: 1
+            value: "\000\000\000\010"
+          }
+          params {
+            param_id: 2
+            value: "\000\000\000\t"
+          }
+        }
+        weight: 1
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Action Set is invalid: Action ID 16777218 is invalid: It is not a valid action for this table.
+
+=========================================================================
+counter in a table with no counters
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554438
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\000\000\000\010"
+          }
+          params {
+            param_id: 2
+            value: "\000\000\000\t"
+          }
+        }
+        weight: 24
+      }
+    }
+  }
+  counter_data {
+    byte_count: 4213
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table does not have a counter, but table entry contained counter data.
+
+=========================================================================
+action in a table with no actions defined
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554445
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action_profile_member_id: 12
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
+
+=========================================================================
+unsupported table used
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554447
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  match {
+    field_id: 3
+    exact {
+      value: "\021\"3DUf"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported action used
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\320"
+      mask: "\000\377"
+    }
+  }
+  action {
+    action {
+      action_id: 16777223
+      params {
+        param_id: 1
+        value: "\320"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported match field used
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "\320"
+      mask: "\000\377"
+    }
+  }
+  match {
+    field_id: 5
+    ternary {
+      value: "0"
+    }
+  }
+  priority: 32
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'unsupported_field' is invalid for the following reasons:
+    - Match field has @unsupported annotation.
+    - Bytestring of length 6 bits does not fit in 1 bits.
+  - Action is required.
+
+=========================================================================
+meter counter data but missing meter config
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: Pi entry does not have a meter config, but table entry contained a meter counter.
+
+=========================================================================
+meter counter data in a table with no meters
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp2_table' is invalid for the following reasons:
+  - Table requires an action set since it uses oneshot. Got action instead.
+  - Table does not have a meter, but table entry contained a meter config.
+  - Table does not support meters, but table entry contained a meter counter.
+  - Table does not have a counter, but table entry contained counter data.
+
+=========================================================================
+simple valid table translation
+=========================================================================
+
+--- PI (Input):
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\010"
+      }
+      params {
+        param_id: 2
+        value: "\t"
+      }
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x00000008"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x00000009"
+      }
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with deprecated egress_port set
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      egress_port: 3
+      instance: 1
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: expected `port` field to be set in Replica, but found < egress_port: 3 instance: 1 >
+
+=========================================================================
+multicast group entry with duplicate replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_port', 1).
+
+=========================================================================
+valid multicast group entry
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry without explicit instance
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with backup replicas
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with a backup replica that has the same port as the primary replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: A primary replica and its backup replicas must have unique ports. Replica and its backups contained duplicates of port 'some_port'.
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another primary replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      instance: 2
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another backup replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      instance: 1
+      port: "third_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each backup replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+valid clone session group entry
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+clone session group entry with duplicate replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+valid clone session entry without explicit instance
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+empty IR (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Entity is invalid: Oneof field "entity" is not set
+
+=========================================================================
+empty IR (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Entity is invalid: Oneof field "entity" is not set
+
+=========================================================================
+empty table IR (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for '' does not exist in the P4Info.
+
+=========================================================================
+empty table IR (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for '' is invalid: It does not exist in the P4Info. The PD proto and P4Info file are out of sync
+
+=========================================================================
+invalid table name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "invalid"
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'invalid' does not exist in the P4Info.
+
+=========================================================================
+invalid table name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "invalid"
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'invalid' is invalid: It does not exist in the P4Info. The PD proto and P4Info file are out of sync
+
+=========================================================================
+missing matches (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect exact (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    lpm {
+      value {
+        ipv6: "::ff22"
+      }
+      prefix_length: 96
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an exact match type.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect optional (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "optional_table"
+  matches {
+    name: "ipv6"
+    lpm {
+      value {
+        ipv6: "::ff22"
+      }
+      prefix_length: 96
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid for the following reasons:
+    - Must be an optional match type.
+    - Oneof field "format" is not set
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect lpm (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "lpm2_table"
+  matches {
+    name: "ipv6"
+    ternary {
+      value {
+        ipv6: "::ff22"
+      }
+      mask {
+        ipv6: "::00d3:5412"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an LPM match type.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect ternary (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be a ternary match type.
+  - Action is required.
+
+=========================================================================
+invalid value - address not in bounds for upper 64 bits of ipv6 (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "ipv6_upper_64_bits"
+    ternary {
+      value {
+        ipv6: "::ff22"
+      }
+      mask {
+        ipv6: "::ffff"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6_upper_64_bits' is invalid: IPv6 address '::ff22' does not fit within the required prefix length '64' (defined by bitwidth).
+  - Action is required.
+
+=========================================================================
+invalid value - address not in bounds for upper 63 bits of ipv6 (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "ipv6_upper_63_bits"
+    ternary {
+      value {
+        ipv6: "ff::"
+      }
+      mask {
+        ipv6: "ffff:ffff:ffff:ffff::"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6_upper_63_bits' is invalid: IPv6 address 'ffff:ffff:ffff:ffff::' does not fit within the required prefix length '63' (defined by bitwidth).
+  - Action is required.
+
+=========================================================================
+invalid match field name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "invalid"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match Field 'invalid' does not exist in table.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid IR value (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Expected format 'IPV4', but got 'IPV6' instead.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid prefix length (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.32.14.2"
+      }
+      prefix_length: 40
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Prefix length 40 is greater than bitwidth 32 in LPM.
+  - Action is required.
+
+=========================================================================
+duplicate match field name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv6"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Duplicate match field found with name 'ipv6'.
+  - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
+  - Action is required.
+
+=========================================================================
+lpm value - masked bits set (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.43.23.12"
+      }
+      prefix_length: 24
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid for the following reasons:
+    - Lpm value has masked bits that are set. Value: ipv4: "10.43.23.12"
+    Prefix Length: 24
+  - Action is required.
+
+=========================================================================
+ternary value too long (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x4212"
+      }
+      mask {
+        hex_str: "0x00ff"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: IR Value '0x4212' has the wrong number of characters. Has 6 characters, but expected 5 instead.
+  - Action is required.
+
+=========================================================================
+ternary value and mask too long (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x4212"
+      }
+      mask {
+        hex_str: "0x0fff"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: IR Value '0x4212' has the wrong number of characters. Has 6 characters, but expected 5 instead.
+  - Action is required.
+
+=========================================================================
+ternary value - masked bits set (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "ipv6"
+    ternary {
+      value {
+        ipv6: "::0100"
+      }
+      mask {
+        ipv6: "::00ff"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid for the following reasons:
+    - Ternary value has masked bits that are set. Value: ipv6: "::0100"
+    Mask: ipv6: "::00ff"
+    
+  - Action is required.
+
+=========================================================================
+Invalid match field format (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "ipv6"
+    ternary {
+      value {
+        ipv4: "127.0.0.0"
+      }
+      mask {
+        ipv4: "127.0.0.0"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Expected format 'IPV6', but got 'IPV4' instead.
+  - Action is required.
+
+=========================================================================
+missing action (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action is required.
+
+=========================================================================
+missing action name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action '' does not exist in the P4Info.
+
+=========================================================================
+missing action name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action '' is invalid: It does not exist in the P4Info.
+
+=========================================================================
+invalid action name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "invalid"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'invalid' does not exist in the P4Info.
+
+=========================================================================
+invalid action name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "invalid"
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'invalid' is invalid: It does not exist in the P4Info.
+
+=========================================================================
+missing action params (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+duplicate action param name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Duplicate parameter field found with name 'arg2'.
+    - Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+bad action param format (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg1"
+      value {
+        ipv6: "ffff::"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        str: "0x01234567"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Param 'arg1': Expected format 'HEX_STRING', but got 'IPV6' instead.
+    - Param 'arg2': Expected format 'HEX_STRING', but got 'STR' instead.
+
+=========================================================================
+invalid action param name (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Unable to find parameter 'arg'.
+
+=========================================================================
+invalid action param name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Param 'arg': Field arg missing in pdpi.DoThing1Action
+
+=========================================================================
+action set in table with action (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
+        }
+      }
+      weight: 1
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Table requires an action since it does not use onseshot. Got action set instead.
+
+=========================================================================
+action in table with action set (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "34.234.42.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table requires an action set since it uses onseshot. Got action instead.
+
+=========================================================================
+zero lpm prefix length (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.32.41.5"
+      }
+    }
+  }
+  action {
+    name: "NoAction"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Match field 'ipv4' is invalid: A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
+
+=========================================================================
+zero ternary mask (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x000"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: A wild-card ternary match (i.e., mask of 0) must be represented by omitting the match altogether.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+zero ternary mask (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x000"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+empty bytestring in match field (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "optional_table"
+  matches {
+    name: "str"
+    optional {
+      value {
+        str: ""
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'str' is invalid: Bytestrings must have non-zero length.
+
+=========================================================================
+empty bytestring in action parameter (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
+  }
+  action {
+    name: "do_thing_2"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x054"
+      }
+    }
+    params {
+      name: "ipv4"
+      value {
+        ipv4: "10.43.12.5"
+      }
+    }
+    params {
+      name: "ipv6"
+      value {
+        ipv6: "3242::fee2"
+      }
+    }
+    params {
+      name: "mac"
+      value {
+        mac: "00:11:22:33:44:55"
+      }
+    }
+    params {
+      name: "str"
+      value {
+        str: ""
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Param 'str': Bytestrings must have non-zero length.
+
+=========================================================================
+zero priority (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x1ff"
+      }
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+zero priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x1ff"
+      }
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+negative priority (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x1ff"
+      }
+    }
+  }
+  priority: -32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got -32 instead.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+negative priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x1ff"
+      }
+    }
+  }
+  priority: -32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+absent priority (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x1ff"
+      }
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+absent priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x100"
+      }
+      mask {
+        hex_str: "0x1ff"
+      }
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+unexpected priority (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.32.41.0"
+      }
+      prefix_length: 24
+    }
+  }
+  priority: 32
+  action {
+    name: "NoAction"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Table entries with no ternary or optional matches require a zero priority. Got 32 instead.
+
+=========================================================================
+unexpected priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.32.41.0"
+      }
+      prefix_length: 24
+    }
+  }
+  priority: 32
+  action {
+    name: "NoAction"
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Field priority missing in pdpi.Lpm1TableEntry
+
+=========================================================================
+action set with negative weight (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x00000008"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x00000009"
+          }
+        }
+      }
+      weight: -1
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
+
+=========================================================================
+action set with invalid action (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "invalid_do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x00000008"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x00000009"
+          }
+        }
+      }
+      weight: -1
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Action 'invalid_do_thing_1' does not exist in the P4Info.
+
+=========================================================================
+action set with invalid action (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "invalid_do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x00000008"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x00000009"
+          }
+        }
+      }
+      weight: -1
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Action 'invalid_do_thing_1' is invalid: It does not exist in the P4Info.
+
+=========================================================================
+counter in a table with no counters (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x00000008"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x00000009"
+          }
+        }
+      }
+      weight: 24
+    }
+  }
+  counter_data {
+    byte_count: 4213
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table does not have a counter, but table entry contained counter data.
+
+=========================================================================
+action in a table with no actions defined (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "no_action_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
+
+=========================================================================
+action in a table with no actions defined (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "no_action_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.24.32.52"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.NoActionTableEntry.Action
+
+=========================================================================
+unsupported table used (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "unsupported_table"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.10.10.10"
+    }
+  }
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
+
+=========================================================================
+unsupported table used (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "unsupported_table"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.10.10.10"
+    }
+  }
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported action used (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x00"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "unsupported_action"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x012"
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Oneof field "format" is not set
+  - Action 'unsupported_action' is invalid: Action has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported action used (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x00"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "unsupported_action"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x012"
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported match field used (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "unsupported_field"
+    ternary {
+      value {
+        hex_str: "0x00"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'unsupported_field' is invalid for the following reasons:
+    - Match field has @unsupported annotation.
+    - Oneof field "format" is not set
+  - Action is required.
+
+=========================================================================
+ternary table - unsupported match field used (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "unsupported_field"
+    ternary {
+      value {
+        hex_str: "0x00"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'unsupported_field' is invalid: Match field has @unsupported annotation.
+
+=========================================================================
+meter counter data in a table with no counters (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x00000008"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x00000009"
+          }
+        }
+      }
+      weight: 24
+    }
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid for the following reasons:
+  - Table does not support meters but IR entry contained a meter counter.
+  - IR entry does not have a meter config but contained a meter counter.
+
+=========================================================================
+meter counter data but missing meter config (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: IR entry does not have a meter config but contained a meter counter.
+
+=========================================================================
+valid table translation with INPUT_IS_VALID set (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x00000008"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x00000009"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\010"
+      }
+      params {
+        param_id: 2
+        value: "\t"
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid table translation with INPUT_IS_VALID set (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
+  }
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x00000008"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x00000009"
+      }
+    }
+  }
+}
+
+--- PD:
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x00000008"
+      arg1: "0x00000009"
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with duplicate replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_port', 1).
+
+=========================================================================
+multicast group entry with duplicate replica (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_port', 1).
+
+=========================================================================
+valid multicast group entry (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+--- PD:
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry without explicit instance (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry without explicit instance (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PD:
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0000"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0000"
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with backup replicas (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with backup replicas (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 1
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- PD:
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+        backup_replicas {
+          port: "some_other_port"
+          instance: "0x0002"
+        }
+        backup_replicas {
+          port: "third_port"
+          instance: "0x0001"
+        }
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+        backup_replicas {
+          port: "some_port"
+          instance: "0x0002"
+        }
+        backup_replicas {
+          port: "third_port"
+          instance: "0x0002"
+        }
+      }
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with a backup replica that has the same port as the primary replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "some_other_port"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: A primary replica and its backup replicas must have unique ports. Replica and its backups contained duplicates of port 'some_port'.
+
+=========================================================================
+multicast group entry with a backup replica that has the same port as the primary replica (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_port"
+        instance: 2
+      }
+      backup_replicas {
+        port: "some_other_port"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: A primary replica and its backup replicas must have unique ports. Replica and its backups contained duplicates of port 'some_port'.
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another primary replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 2
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another primary replica (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 2
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another backup replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      port: "third_port"
+      instance: 3
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each backup replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another backup replica (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+    replicas {
+      port: "third_port"
+      instance: 3
+      backup_replicas {
+        port: "some_other_port"
+        instance: 2
+      }
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each backup replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+
+=========================================================================
+clone session entry with duplicate replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+valid clone session group entry (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+valid clone session entry without explicit instance (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+empty PD
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table is invalid: Oneof field "entry" is not set
+=========================================================================
+missing matches
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: invalid IPv6 address: ''
+  - Match field 'ipv4' is invalid: Invalid IPv4 address: ''
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+=========================================================================
+missing action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid: Action is required.
+=========================================================================
+exact match missing
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+  }
+  action {
+    do_thing_2 {
+      normal: "0x054"
+      ipv4: "10.43.12.5"
+      ipv6: "3242::fee2"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Invalid IPv4 address: ''
+  - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
+=========================================================================
+negative prefix length
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: -4
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: Prefix length -4 is out of bounds.
+=========================================================================
+prefix length too large
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 132
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: Prefix length 132 is out of bounds.
+=========================================================================
+zero prefix length
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
+=========================================================================
+ternary entry with zero mask
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x000"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x23"
+      arg2: "0x0251"
+    }
+  }
+  priority: 32
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: A wild-card ternary match (i.e., mask of 0) must be represented by omitting the match altogether.
+  - Action 'do_thing_3' is invalid for the following reasons:
+    - Param 'arg1': IR Value '0x23' has the wrong number of characters. Has 4 characters, but expected 10 instead.
+    - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
+=========================================================================
+lpm value - masked bits set
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:aabb"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'lpm2_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid for the following reasons:
+    - Lpm value has masked bits that are set. Value: ipv6: "ffff::abcd:0:aabb"
+    Prefix Length: 96
+=========================================================================
+ternary value - masked bits set
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x001"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x23"
+      arg2: "0x0251"
+    }
+  }
+  priority: 32
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid for the following reasons:
+    - Ternary value has masked bits that are set. Value: hex_str: "0x052"
+    Mask: hex_str: "0x001"
+    
+  - Action 'do_thing_3' is invalid for the following reasons:
+    - Param 'arg1': IR Value '0x23' has the wrong number of characters. Has 4 characters, but expected 10 instead.
+    - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
+=========================================================================
+action with missing arguments
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_2 {
+      normal: "0x054"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Missing parameters: 'ipv4'. 'ipv6'. Expected 5 parameters, but found 3 instead.
+=========================================================================
+action with wrong argument format
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_2 {
+      normal: "10.23.43.1"
+      ipv4: "10.43.12.5"
+      ipv6: "3242::fee2"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Param 'normal': IR Value '10.23.43.1' with hex string format does not start with 0x.
+=========================================================================
+ternary table with zero priority
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x23"
+      arg2: "0x0251"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action 'do_thing_3' is invalid for the following reasons:
+    - Param 'arg1': IR Value '0x23' has the wrong number of characters. Has 4 characters, but expected 10 instead.
+    - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
+=========================================================================
+ternary table with negative priority
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: -43
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got -43 instead.
+=========================================================================
+ternary table with priority absent
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+=========================================================================
+wcmp table with negative weight
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+wcmp_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: -1
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
+=========================================================================
+value with empty string for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'exact_table' is invalid for the following reasons:
+  - Match field 'str' is invalid: Bytestrings must have non-zero length.
+  - Missing matches: 'str'. Expected 5 mandatory match conditions, but found 4 instead.
+=========================================================================
+valid wcmp table with choice of action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+wcmp2_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "wcmp2_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
+        }
+      }
+      weight: 1
+    }
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid wcmp table with watch_port
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+wcmp2_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+    watch_port: "abc"
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "wcmp2_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
+        }
+      }
+      weight: 1
+      watch_port: "abc"
+    }
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+        watch_port: "abc"
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid wcmp table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+wcmp_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
+        }
+      }
+      weight: 1
+    }
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554438
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+exact matches of all formats
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+    str: "hello"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "exact_table"
+  matches {
+    name: "normal"
+    exact {
+      hex_str: "0x054"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.43.12.5"
+    }
+  }
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "3242::fee2"
+    }
+  }
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+  matches {
+    name: "str"
+    exact {
+      str: "hello"
+    }
+  }
+  action {
+    name: "NoAction"
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554434
+  match {
+    field_id: 1
+    exact {
+      value: "T"
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\n+\014\005"
+    }
+  }
+  match {
+    field_id: 3
+    exact {
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
+  }
+  match {
+    field_id: 4
+    exact {
+      value: "\021\"3DU"
+    }
+  }
+  match {
+    field_id: 5
+    exact {
+      value: "hello"
+    }
+  }
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+}
+
+
+=========================================================================
+valid optional table missing a match
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+optional_table_entry {
+  match {
+    ipv6 {
+      value: "3242::fee2"
+    }
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x01234567"
+      arg1: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "optional_table"
+  matches {
+    name: "ipv6"
+    optional {
+      value {
+        ipv6: "3242::fee2"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 1
+    optional {
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+ternary with wildcard
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+metadata
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+  controller_metadata: "abc"
+}
+
+--- IR:
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+  controller_metadata: "abc"
+}
+
+--- PI:
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
+    }
+  }
+  priority: 32
+  metadata: "abc"
+}
+
+
+=========================================================================
+ternary table for all formats
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+    ipv6_upper_64_bits {
+      value: "0:1fff:ee66:aabb::"
+      mask: "0:ffff:ffff:ffff::"
+    }
+    ipv6_upper_63_bits {
+      value: "0:1fff:ee66:aafe::"
+      mask: "0:ffff:ffff:fffe::"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
+    }
+  }
+  matches {
+    name: "ipv4"
+    ternary {
+      value {
+        ipv4: "10.43.12.4"
+      }
+      mask {
+        ipv4: "10.43.12.5"
+      }
+    }
+  }
+  matches {
+    name: "ipv6"
+    ternary {
+      value {
+        ipv6: "::ee66"
+      }
+      mask {
+        ipv6: "::ff77"
+      }
+    }
+  }
+  matches {
+    name: "mac"
+    ternary {
+      value {
+        mac: "11:22:33:44:55:66"
+      }
+      mask {
+        mac: "33:66:77:66:77:77"
+      }
+    }
+  }
+  matches {
+    name: "ipv6_upper_64_bits"
+    ternary {
+      value {
+        ipv6: "0:1fff:ee66:aabb::"
+      }
+      mask {
+        ipv6: "0:ffff:ffff:ffff::"
+      }
+    }
+  }
+  matches {
+    name: "ipv6_upper_63_bits"
+    ternary {
+      value {
+        ipv6: "0:1fff:ee66:aafe::"
+      }
+      mask {
+        ipv6: "0:ffff:ffff:fffe::"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
+  }
+  match {
+    field_id: 2
+    ternary {
+      value: "\n+\014\004"
+      mask: "\n+\014\005"
+    }
+  }
+  match {
+    field_id: 3
+    ternary {
+      value: "\356f"
+      mask: "\377w"
+    }
+  }
+  match {
+    field_id: 4
+    ternary {
+      value: "\021\"3DUf"
+      mask: "3fwfww"
+    }
+  }
+  match {
+    field_id: 6
+    ternary {
+      value: "\037\377\356f\252\273"
+      mask: "\377\377\377\377\377\377"
+    }
+  }
+  match {
+    field_id: 7
+    ternary {
+      value: "\017\377\3673U\177"
+      mask: "\177\377\377\377\377\377"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+ipv4 LPM table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm1_table_entry {
+  match {
+    ipv4 {
+      value: "10.43.12.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.43.12.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "NoAction"
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\n+\014\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+}
+
+
+=========================================================================
+ipv6 LPM table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "lpm2_table"
+  matches {
+    name: "ipv6"
+    lpm {
+      value {
+        ipv6: "ffff::abcd:0:0"
+      }
+      prefix_length: 96
+    }
+  }
+  action {
+    name: "NoAction"
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554437
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\377\000\000\000\000\000\000\000\000\253\315\000\000\000\000"
+      prefix_len: 96
+    }
+  }
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+}
+
+
+=========================================================================
+action with all formats as arguments
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_2 {
+      normal: "0x054"
+      ipv4: "10.43.12.5"
+      ipv6: "3242::fee2"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "id_test_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
+  }
+  action {
+    name: "do_thing_2"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x054"
+      }
+    }
+    params {
+      name: "ipv4"
+      value {
+        ipv4: "10.43.12.5"
+      }
+    }
+    params {
+      name: "ipv6"
+      value {
+        ipv6: "3242::fee2"
+      }
+    }
+    params {
+      name: "mac"
+      value {
+        mac: "00:11:22:33:44:55"
+      }
+    }
+    params {
+      name: "str"
+      value {
+        str: "hello"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+  action {
+    action {
+      action_id: 16777218
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "\n+\014\005"
+      }
+      params {
+        param_id: 3
+        value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+      }
+      params {
+        param_id: 4
+        value: "\021\"3DU"
+      }
+      params {
+        param_id: 5
+        value: "hello"
+      }
+    }
+  }
+}
+
+
+=========================================================================
+table entry without counters and meters
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+}
+
+
+=========================================================================
+table entry with a meter
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+}
+
+
+=========================================================================
+table entry with a byte counter
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    byte_count: 567
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  counter_data {
+    byte_count: 567
+  }
+}
+
+
+=========================================================================
+table entry with a packet counter
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    packet_count: 789
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    packet_count: 789
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  counter_data {
+    packet_count: 789
+  }
+}
+
+
+=========================================================================
+table entry with a counter (both units)
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+
+=========================================================================
+table entry with counters and meters
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+
+=========================================================================
+ipv4 LPM table with /0
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm1_table_entry {
+  match {
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "lpm1_table"
+  action {
+    name: "NoAction"
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554436
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+}
+
+
+=========================================================================
+exact match with string containing null characters for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+    str: "\0001u"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "exact_table"
+  matches {
+    name: "normal"
+    exact {
+      hex_str: "0x054"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.43.12.5"
+    }
+  }
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "3242::fee2"
+    }
+  }
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+  matches {
+    name: "str"
+    exact {
+      str: "\0001u"
+    }
+  }
+  action {
+    name: "NoAction"
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554434
+  match {
+    field_id: 1
+    exact {
+      value: "T"
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\n+\014\005"
+    }
+  }
+  match {
+    field_id: 3
+    exact {
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
+  }
+  match {
+    field_id: 4
+    exact {
+      value: "\021\"3DU"
+    }
+  }
+  match {
+    field_id: 5
+    exact {
+      value: "\0001u"
+    }
+  }
+  action {
+    action {
+      action_id: 21257015
+    }
+  }
+}
+
+
+=========================================================================
+optional match with string containing null characters for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+optional_table_entry {
+  match {
+    str {
+      value: "\000324"
+    }
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x01234567"
+      arg1: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "optional_table"
+  matches {
+    name: "str"
+    optional {
+      value {
+        str: "\000324"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 3
+    optional {
+      value: "\000324"
+    }
+  }
+  action {
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+valid wcmp table with watch_port containing null characters for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+wcmp2_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+    watch_port: "\000abc"
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "wcmp2_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action_set {
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
+        }
+      }
+      weight: 1
+      watch_port: "\000abc"
+    }
+    actions {
+      action {
+        name: "do_thing_1"
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
+        }
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+        watch_port: "\000abc"
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
+    }
+  }
+}
+
+
+=========================================================================
+valid no action table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+no_action_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "no_action_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554445
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
+  }
+}
+
+
+=========================================================================
+unsupported field in pd
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+optional_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.82"
+    }
+    mac {
+      value: "00:11:22:33:44:55"
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'mac' is invalid: Match field does not exist in the P4Info.
+=========================================================================
+table entry with a meter counter data (packet counter)
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+packet_count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    packet_count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      packet_count: 790
+    }
+    yellow {
+      packet_count: 791
+    }
+    red {
+      packet_count: 792
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "packet_count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "packet_count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      packet_count: 790
+    }
+    yellow {
+      packet_count: 791
+    }
+    red {
+      packet_count: 792
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554451
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777234
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      packet_count: 790
+    }
+    yellow {
+      packet_count: 791
+    }
+    red {
+      packet_count: 792
+    }
+  }
+}
+
+
+=========================================================================
+table entry with a meter counter data (byte counter)
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+byte_count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    byte_count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+    }
+    yellow {
+      byte_count: 569
+    }
+    red {
+      byte_count: 570
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "byte_count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "byte_count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+    }
+    yellow {
+      byte_count: 569
+    }
+    red {
+      byte_count: 570
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554455
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777238
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+    }
+    yellow {
+      byte_count: 569
+    }
+    red {
+      byte_count: 570
+    }
+  }
+}
+
+
+=========================================================================
+table entry with counters, meters and meter counter data
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+
+=========================================================================
+table entry with counters, meter counter data but no meter config
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'count_and_meter_table' is invalid: IR entry does not have a meter config but contained a meter counter.
+=========================================================================
+table entry with meter counter data but no color counters
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+  }
+}
+
+
+=========================================================================
+table entry with meter counter data but missing some colors
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
+    }
+  }
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with missing match field
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'match' field is missing.
+=========================================================================
+multicast group entry with empty match field 
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'multicast_group_id' field is missing in 'match'.
+=========================================================================
+multicast group entry with invalid multicast_group_id format
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "not_a_hexstring"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: missing '0x'-prefix in hexadecimal string: 'not_a_hexstring'
+=========================================================================
+multicast group entry with missing action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'action' field is missing.
+=========================================================================
+multicast group entry with empty action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'replicate' field is missing in 'action'.
+=========================================================================
+multicast group entry with invalid instance format
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "not_a_hexstring"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Error translating replica { port: "some_port" instance: "not_a_hexstring" }: missing '0x'-prefix in hexadecimal string: 'not_a_hexstring'
+=========================================================================
+multicast group entry with duplicate replica
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_port', 1).
+=========================================================================
+valid multicast group entry
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with instance set to 0
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0000"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0000"
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with empty replicate action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with metadata
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0001"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0000"
+      }
+    }
+  }
+  metadata: "my_metadata"
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 1
+    replicas {
+      port: "some_port"
+    }
+    metadata: "my_metadata"
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 1
+    replicas {
+      port: "some_port"
+    }
+    metadata: "my_metadata"
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with backup replicas
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+        backup_replicas {
+          port: "some_other_port"
+          instance: "0x0001"
+        }
+        backup_replicas {
+          port: "third_port"
+          instance: "0x0003"
+        }
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0002"
+        backup_replicas {
+          port: "some_port"
+          instance: "0x0001"
+        }
+      }
+    }
+  }
+  metadata: "my_metadata"
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 2
+      backup_replicas {
+        port: "some_other_port"
+        instance: 1
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 3
+      }
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 2
+      backup_replicas {
+        port: "some_port"
+        instance: 1
+      }
+    }
+    metadata: "my_metadata"
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 2
+      port: "some_port"
+      backup_replicas {
+        port: "some_other_port"
+        instance: 1
+      }
+      backup_replicas {
+        port: "third_port"
+        instance: 3
+      }
+    }
+    replicas {
+      instance: 2
+      port: "some_other_port"
+      backup_replicas {
+        port: "some_port"
+        instance: 1
+      }
+    }
+    metadata: "my_metadata"
+  }
+}
+
+
+=========================================================================
+multicast group entry with a backup replica that has the same port as the primary replica
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+        backup_replicas {
+          port: "some_port"
+          instance: "0x0002"
+        }
+      }
+    }
+  }
+  metadata: "my_metadata"
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: A primary replica and its backup replicas must have unique ports. Replica and its backups contained duplicates of port 'some_port'.
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another primary replica
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+        backup_replicas {
+          port: "some_other_port"
+          instance: "0x0002"
+        }
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0002"
+      }
+    }
+  }
+  metadata: "my_metadata"
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+=========================================================================
+multicast group entry with a backup replica that has the same port instance pair as another backup replica
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+        backup_replicas {
+          port: "some_other_port"
+          instance: "0x0002"
+        }
+      }
+      replicas {
+        port: "third_port"
+        instance: "0x0001"
+        backup_replicas {
+          port: "some_other_port"
+          instance: "0x0002"
+        }
+      }
+    }
+  }
+  metadata: "my_metadata"
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each backup replica must have a unique (port, instance)-pair, but found multiple primary/backup replicas with pair ('some_other_port', 2).
+=========================================================================
+missing matches with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: invalid IPv6 address: ''
+  - Match field 'ipv4' is invalid: Invalid IPv4 address: ''
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+=========================================================================
+ternary table with priority absent with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+=========================================================================
+unsupported table used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+unsupported_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "10.10.10.10"
+    mac: "11:22:33:44:55:66"
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
+=========================================================================
+unsupported table used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = true}
+=========================================================================
+
+--- PD (Input):
+unsupported_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "10.10.10.10"
+    mac: "11:22:33:44:55:66"
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "unsupported_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.10.10.10"
+    }
+  }
+  matches {
+    name: "mac"
+    exact {
+      mac: "11:22:33:44:55:66"
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554447
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
+  }
+  match {
+    field_id: 2
+    exact {
+      value: "\n\n\n\n"
+    }
+  }
+  match {
+    field_id: 3
+    exact {
+      value: "\021\"3DUf"
+    }
+  }
+}
+
+
+=========================================================================
+ternary table - unsupported action used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    unsupported_action {
+      normal: "0x054"
+    }
+  }
+  priority: 32
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
+=========================================================================
+ternary table - unsupported action used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = true}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    unsupported_action {
+      normal: "0x054"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "unsupported_action"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x054"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
+  }
+  action {
+    action {
+      action_id: 16777223
+      params {
+        param_id: 1
+        value: "T"
+      }
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+ternary table - unsupported match field used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    unsupported_field {
+      value: "0x1"
+      mask: "0x1"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x12345678"
+      arg2: "0x87654321"
+    }
+  }
+  priority: 32
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'unsupported_field' is invalid: Match field has @unsupported annotation.
+=========================================================================
+ternary table - unsupported match field used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = true}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    unsupported_field {
+      value: "0x1"
+      mask: "0x1"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x12345678"
+      arg2: "0x87654321"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "unsupported_field"
+    ternary {
+      value {
+        hex_str: "0x1"
+      }
+      mask {
+        hex_str: "0x1"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x12345678"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x87654321"
+      }
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 5
+    ternary {
+      value: "\001"
+      mask: "\001"
+    }
+  }
+  action {
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\0224Vx"
+      }
+      params {
+        param_id: 2
+        value: "\207eC!"
+      }
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+ipv4 LPM table with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+lpm1_table_entry {
+  match {
+    ipv4 {
+      value: "10.43.12.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.43.12.0"
+      }
+      prefix_length: 24
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\n+\014\000"
+      prefix_len: 24
+    }
+  }
+}
+
+
+=========================================================================
+ternary match with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
+    }
+  }
+  priority: 32
+}
+
+--- PI:
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+multicast group entry with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+
+=========================================================================
+table entry with unallowed meter config
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: Table does not have a meter, but table entry contained a meter config.
+=========================================================================
+table entry with unallowed counter data
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: Table does not have a counter, but table entry contained counter data.
+=========================================================================
+table entry with unallowed meter config and counter data
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid for the following reasons:
+  - Table does not have a meter, but table entry contained a meter config.
+  - Table does not have a counter, but table entry contained counter data.
