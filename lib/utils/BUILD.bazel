@@ -121,3 +121,29 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "merging_status_bundle",
+    srcs = ["merging_status_bundle.cc"],
+    hdrs = ["merging_status_bundle.h"],
+    deps = [
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "merging_status_bundle_test",
+    srcs = ["merging_status_bundle_test.cc"],
+    deps = [
+        ":merging_status_bundle",
+	"//gutil/gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
