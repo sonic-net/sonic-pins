@@ -262,7 +262,8 @@ absl::Status UpdateAndVerifyGnmiConfigLeaf(
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
-    absl::string_view resp_parse_str = {});
+    absl::string_view resp_parse_str = {},
+    std::optional<absl::Duration> timeout = std::nullopt);
 
 // Return the string value of a gNMI state leaf.
 absl::StatusOr<std::string> GetGnmiStateLeafValue(
@@ -277,10 +278,10 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
     absl::string_view resp_parse_str);
 
-absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
-                                         absl::string_view path,
-                                         gnmi::GetRequest::DataType req_type,
-                                         absl::string_view resp_parse_str = {});
+absl::StatusOr<std::string> ReadGnmiPath(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
+    gnmi::GetRequest::DataType req_type, absl::string_view resp_parse_str = {},
+    std::optional<absl::Duration> timeout = std::nullopt);
 
 template <class T>
 std::string ConstructGnmiConfigSetString(std::string field, T value) {

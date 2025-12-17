@@ -1009,23 +1009,22 @@ absl::Status CheckInterfaceOperStateOverGnmi(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
-                                         absl::string_view path,
-                                         gnmi::GetRequest::DataType req_type,
-                                         absl::string_view resp_parse_str) {
+absl::StatusOr<std::string> ReadGnmiPath(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
+    gnmi::GetRequest::DataType req_type, absl::string_view resp_parse_str,
+    std::optional<absl::Duration> timeout) {
   ASSIGN_OR_RETURN(gnmi::GetRequest request,
                    BuildGnmiGetRequest(path, req_type));
-  ASSIGN_OR_RETURN(
-      gnmi::GetResponse response,
-      SendGnmiGetRequest(gnmi_stub, request, /*timeout=*/std::nullopt));
+  ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                   SendGnmiGetRequest(gnmi_stub, request, timeout));
   return ParseGnmiGetResponse(response, resp_parse_str);
 }
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
-    absl::string_view resp_parse_str) {
+    absl::string_view resp_parse_str, std::optional<absl::Duration> timeout) {
   return ReadGnmiPath(gnmi_stub, state_path, gnmi::GetRequest::STATE,
-                      resp_parse_str);
+                      resp_parse_str, kVerifyOperStateDefaultTimeout);
 }
 
 absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
