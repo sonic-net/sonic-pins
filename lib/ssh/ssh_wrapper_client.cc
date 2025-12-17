@@ -91,5 +91,29 @@ absl::StatusOr<std::vector<GetFileResult>> SshWrapperClient::SavepinsDbState(
   return ssh_helper->SavepinsDbState(sut, ssh_client, timeout);
 }
 
+absl::StatusOr<std::vector<GetFileResult>>
+SshWrapperClient::SavepinsRedisRecord(absl::string_view sut,
+                                       SSHClient* ssh_client,
+                                       absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->SavepinsRedisRecord(sut, ssh_client, timeout);
+}
+
+absl::StatusOr<std::string> SshWrapperClient::GetContainerName(
+    absl::string_view chassis_name, thinkit::Container container) {
+  ASSIGN_OR_RETURN(auto* ssh_helper,
+                   SshWrapperClient::GetSshHelper(chassis_name));
+  return ssh_helper->GetContainerName(chassis_name, container);
+}
+
+absl::StatusOr<std::string> SshWrapperClient::ExecuteCommandInContainer(
+    absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
+    thinkit::Container container_name, absl::string_view command,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper,
+                   SshWrapperClient::GetSshHelper(chassis_name));
+  return ssh_helper->ExecuteCommandInContainer(
+      chassis_name, ssh_client, container_name, command, timeout);
+}
 }  // namespace thinkit
 
