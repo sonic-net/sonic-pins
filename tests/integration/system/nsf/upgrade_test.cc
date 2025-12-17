@@ -605,9 +605,11 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   // mainline config params that we will configure the Control Switch with. This
   // is because we configure the Control Switch only once throughout the NSF
   // Upgrade iterations.
+  ImageConfigParams cs_image_config_param = image_config_params.back();
+  
   ASSERT_OK(InstallRebootPushConfig(testbed_, *ssh_client_,
                                     image_config_params.front(),
-                                    image_config_params.back()));
+                                    cs_image_config_param));
 
   bool continue_on_failure;
   std::vector<std::string> error_msgs;

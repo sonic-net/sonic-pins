@@ -113,6 +113,11 @@ void FuzzerTestFixture::SetUp() {
 void FuzzerTestFixture::TearDown() {
   auto& sut = GetParam().mirror_testbed->GetMirrorTestbed().Sut();
 
+  if (HasFailure()) {
+    LOG(INFO) << "Switch state on failure:\n"
+              << switch_state_->SwitchStateSummary();
+  }
+
   // Save the logs before reset clearing to help with debug in case of failure.
   if (HasFatalFailure()) {
     LOG(INFO) << "Saving failure state.";
@@ -172,12 +177,6 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
       gutil::Version current_version,
       gutil::ParseVersion(GetParam().p4info.pkg_info().version()));
 
-  // TODO: Remove version check when the P4Info version in release
-  // is equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST.
-  ASSERT_OK_AND_ASSIGN(
-      gutil::Version first_version_with_fail_on_first,
-      gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST));
-
   // Record gNMI config and P4Info that we plan to push for debugging purposes.
   if (GetParam().gnmi_config.has_value()) {
     ASSERT_OK(environment.StoreTestArtifact("gnmi_config.txt",
@@ -222,6 +221,9 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
                   GetParam().ignore_constraints_on_tables,
               .IsBuggyUpdateThatShouldBeSkipped =
                   GetParam().IsBuggyUpdateThatShouldBeSkipped,
+              .ModifyFuzzedTableEntry = GetParam().ModifyFuzzedTableEntry,
+              .ModifyFuzzedMulticastGroupEntry =
+                  GetParam().ModifyFuzzedMulticastGroupEntry,
           }));
 
   // Remove once switch state transitions to entities. This
@@ -258,7 +260,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
   int num_ok_with_mutations = 0;
   int max_batch_size_seen = 0;
   std::set<std::string> error_messages;
-  SwitchState state(config.GetIrP4Info());
+  switch_state_ = std::make_unique<SwitchState>(config.GetIrP4Info());
   const std::optional<int> num_iterations =
       absl::GetFlag(FLAGS_fuzzer_iterations);
   int iteration = 0;
@@ -275,8 +277,8 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
     if (iteration % 100 == 1) LOG(INFO) << "Starting iteration " << iteration;
 
     // Generated fuzzed request.
-    AnnotatedWriteRequest annotated_request =
-        FuzzWriteRequest(&gen, config, state, GetParam().max_batch_size);
+    AnnotatedWriteRequest annotated_request = FuzzWriteRequest(
+        &gen, config, *switch_state_, GetParam().max_batch_size);
     WriteRequest request = RemoveAnnotations(annotated_request);
     num_updates += request.updates_size();
     max_batch_size_seen = std::max(max_batch_size_seen, request.updates_size());
@@ -317,8 +319,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
 
     // Ensure that the responses from the switch correctly use fail-on-first
     // ordering.
-    if (!GetParam().do_not_enforce_fail_on_first_switch_ordering &&
-        current_version >= first_version_with_fail_on_first) {
+    if (!GetParam().do_not_enforce_fail_on_first_switch_ordering) {
       bool encountered_first_error = false;
       for (const pdpi::IrUpdateStatus& status :
            response.rpc_response().statuses()) {
@@ -361,9 +362,9 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
         // exhaustion is allowed.
         if (!IsMaskedResource(table.preamble().alias(), current_version)) {
           // Check that table is allowed to have exhausted resources.
-          ASSERT_OK(state.ResourceExhaustedIsAllowed(update))
+          ASSERT_OK(switch_state_->ResourceExhaustedIsAllowed(update))
               << "\nUpdate = " << update.DebugString()
-              << "\nState = " << state.SwitchStateSummary();
+              << "\nState = " << switch_state_->SwitchStateSummary();
         }
       }
       // Collect error messages and update state.
@@ -371,7 +372,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
         error_messages.insert(absl::StrCat(
             google::rpc::Code_Name(status.code()), ": ", status.message()));
       } else {
-        ASSERT_OK(state.ApplyUpdate(update));
+        ASSERT_OK(switch_state_->ApplyUpdate(update));
         num_ok_statuses += 1;
       }
 
@@ -413,10 +414,10 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
       ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> table_entries,
                            pdpi::ReadPiTableEntries(session.get()));
       if (mask_known_failures) {
-        ASSERT_OK(state.AssertEntriesAreEqualToState(
+        ASSERT_OK(switch_state_->AssertEntriesAreEqualToState(
             table_entries, config.GetTreatAsEqualDuringReadDueToKnownBug()));
       } else {
-        ASSERT_OK(state.AssertEntriesAreEqualToState(table_entries));
+        ASSERT_OK(switch_state_->AssertEntriesAreEqualToState(table_entries));
       }
     }
 
@@ -437,7 +438,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
 
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> table_entries,
                        pdpi::ReadPiTableEntries(session.get()));
-  EXPECT_OK(state.AssertEntriesAreEqualToState(
+  EXPECT_OK(switch_state_->AssertEntriesAreEqualToState(
       table_entries, config.GetTreatAsEqualDuringReadDueToKnownBug()));
 
   LOG(INFO) << "Finished " << iteration << " iterations.";
@@ -465,11 +466,10 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
   LOG(INFO) << "Longest Iteration: " << longest_iteration;
   LOG(INFO) << "Longest Iteration Duration: " << longest_iteration_duration;
 
-  LOG(INFO) << "Final state:";
-  LOG(INFO) << state.SwitchStateSummary();
+  LOG(INFO) << "Final state:\n" << switch_state_->SwitchStateSummary();
 
   EXPECT_OK(environment.StoreTestArtifact("final_switch_state.txt",
-                                          state.SwitchStateSummary()));
+                                          switch_state_->SwitchStateSummary()));
 
   EXPECT_OK(environment.StoreTestArtifact("error_messages.txt",
                                           absl::StrJoin(error_messages, "\n")));
@@ -514,10 +514,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
     for (const p4::v1::Update& update : pi_updates) {
       // If the switch doesn't support fail-on-first, batch requests based on
       // rank AND number of updates.
-      // TODO: Remove version check when the P4Info version in
-      // release is equal or higher than
-      // SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST.
-      if (current_version < first_version_with_fail_on_first) {
+      if (!GetParam().do_not_enforce_fail_on_first_switch_ordering) {
         ASSERT_OK_AND_ASSIGN(
             std::string table_name,
             pdpi::EntityToTableName(config.GetIrP4Info(), update.entity()));
