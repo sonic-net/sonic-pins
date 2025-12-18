@@ -518,6 +518,10 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
 }
 
 TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
+  if (!pins::TableHasMatchField(ir_p4info_, "l3_admit_table", "in_port")) {
+    GTEST_SKIP() << "Skipping because l3_admit table in p4info does not "
+                    "support match on in_port.";
+  }
 
   // Get SUT and control ports to test on.
   ASSERT_OK_AND_ASSIGN(
@@ -607,6 +611,15 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
 }
 
 TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
+  
+  // Only run this test if set_port_and_src_mac is used, which at SAI level
+  // results in RIFs that also program MyMac table - see
+  // go/rif-without-mystation for details.
+  if (!ir_p4info_.actions_by_name().contains("set_port_and_src_mac")) {
+    GTEST_SKIP()
+        << "Skipping because p4info does not support router_interfaces table "
+           "entries that program l3_admit table.";
+  }
 
   // Only use 1 port because for the router interface L3 admit behavior to work
   // the incomming packet needs to match the outgoing port.
