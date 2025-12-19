@@ -1359,9 +1359,9 @@ TEST(PortIndexTest, SshCommandFailCheckFail) {
       .WillByDefault(Return(absl::InternalError("No ssh client")));
   const std::vector<std::string> port_names = {"Ethernet1/1/1",
                                                "Ethernet1/1/2"};
-  EXPECT_THAT(
-      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
-      StatusIs(absl::StatusCode::kInternal));
+  EXPECT_THAT(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                               "/usr/tools/bin/", port_names),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(PortIndexTest, SshCommandNoNilCheckSuccess) {
@@ -1375,7 +1375,7 @@ PORT_INDEX_TABLE|Ethernet1/13/1)"));
   const std::vector<std::string> port_names = {
       "Ethernet1/10/1", "Ethernet1/31/1", "Ethernet1/13/1"};
   EXPECT_OK(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
-                                             port_names));
+                                             "/usr/tools/bin/", port_names));
 }
 
 TEST(PortIndexTest, SshCommandNilCheckFail) {
@@ -1383,9 +1383,9 @@ TEST(PortIndexTest, SshCommandNilCheckFail) {
   ON_CALL(mock_ssh_client, RunCommand).WillByDefault(Return("nil"));
   const std::vector<std::string> port_names = {"Ethernet1/1/1",
                                                "Ethernet1/1/2"};
-  EXPECT_THAT(
-      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
-      StatusIs(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                               "/usr/tools/bin/", port_names),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(PortIndexTest, SshCommandEmptyCheckFail) {
@@ -1394,7 +1394,8 @@ TEST(PortIndexTest, SshCommandEmptyCheckFail) {
   const std::vector<std::string> port_names = {"Ethernet1/1/1",
                                                "Ethernet1/1/2"};
   EXPECT_THAT(
-      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                       "/usr/tools/bin/", port_names),
       StatusIs(absl::StatusCode::kFailedPrecondition,
                AllOf(HasSubstr("Ethernet1/1/1"), HasSubstr("Ethernet1/1/2"))));
 }
