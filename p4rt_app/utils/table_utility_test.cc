@@ -20,9 +20,9 @@
 #include "google/protobuf/map.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"  // NOLINT
+#include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"  // NOLINT
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4rt_app {

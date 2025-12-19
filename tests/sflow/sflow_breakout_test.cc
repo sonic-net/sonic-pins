@@ -15,7 +15,7 @@
 #include "absl/time/time.h"
 #include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
