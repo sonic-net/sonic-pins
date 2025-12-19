@@ -6,8 +6,7 @@
 #include "absl/status/status.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_vector.pb.h"
-#include "gutil/gutil/test_artifact_writer.h"
-
+#include "gutil/test_artifact_writer.h"
 namespace dvaas {
 
 // Returns a copy of the packet trace with all the redundant information (bmv2

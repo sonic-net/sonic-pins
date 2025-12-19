@@ -28,9 +28,9 @@
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
-#include "gutil/gutil/testing.h"
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/testing.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/gnmi/util.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"

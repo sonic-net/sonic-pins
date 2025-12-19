@@ -10,8 +10,8 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "tests/qos/gnmi_parsers.h"
 

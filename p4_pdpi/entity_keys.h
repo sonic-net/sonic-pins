@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 
 namespace pdpi {

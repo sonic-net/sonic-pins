@@ -25,7 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "artifacts/otg.pb.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
 #include "thinkit/generic_testbed.h"

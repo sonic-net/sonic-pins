@@ -15,7 +15,7 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
-load("//gutil/gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("@com_google_gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")
 load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
@@ -146,7 +146,7 @@ cc_test(
     deps = [
         ":sai_pd_cc_proto",
         ":sai_pd_util",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:testing",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_googlesource_code_re2//:re2",
@@ -213,9 +213,9 @@ cc_test(
     deps = [
         ":instantiations",
         ":sai_p4info_cc",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:version",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:version",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/strings",
@@ -252,8 +252,8 @@ cc_test(
         ":clos_stage",
         ":instantiations",
         ":sai_p4info_fetcher_cc",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
@@ -382,8 +382,8 @@ cc_test(
     deps = [
         ":clos_stage",
         ":instantiations",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -429,7 +429,7 @@ cc_test(
     deps = [
 	":instantiations",
         ":sai_nonstandard_platforms_cc",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -442,7 +442,7 @@ cc_binary(
     deps = [
         ":instantiations",
         ":sai_nonstandard_platforms_cc",
-        "//gutil/gutil:proto",
+        "@com_google_gutil//gutil:proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
