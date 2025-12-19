@@ -50,6 +50,21 @@ namespace {
 // Minimum number of TTL / HopLimit allowed for a generated packet. Any fewer
 // may cause the packet to not return back to the control switch.
 constexpr int kMinHops = 3;
+// Return the Nth value of a sequence, skipping the specified values.
+int SkipValues(int value, const absl::btree_set<int>& skip) {
+  for (auto iter = skip.begin(); iter != skip.end() && *iter <= value; ++iter) {
+    ++value;
+  }
+  return value;
+}
+
+const absl::btree_set<int>& ReservedFlowLabelsLower16() {
+  static const auto* const kPorts = new absl::btree_set<int>({
+      0x7103,
+      0x7104,
+  });
+  return *kPorts;
+}
 
 template <typename Proto>
 Proto ParseTextProtoOrDie(absl::string_view text) {
@@ -362,7 +377,8 @@ void SetFieldValue(Field field, int value, packetlib::Packet& packet) {
                    << Ipv6Header(packet).flow_label();
       }
       flow_label = field == Field::kFlowLabelLower16
-                       ? (flow_label & ~0xffff) + value
+                       ? (flow_label & ~0xffff) +
+                             SkipValues(value, ReservedFlowLabelsLower16())
                        : (flow_label & 0xffff) + (value << 16);
       Ipv6Header(packet).set_flow_label(packetlib::IpFlowLabel(flow_label));
     } break;
@@ -403,13 +419,11 @@ void SetFieldValue(Field field, int value, packetlib::Packet& packet) {
           packetlib::IpFlowLabel(flow_label));
     } break;
     case Field::kL4SrcPort:
-      // TODO: Re-allow PTP ports when traffic forwards.
-      if (value > 318) value += 2;  // Skip PTP ports 319 & 320.
+      if (value > 318) value += 2;
       UdpHeader(packet).set_source_port(packetlib::UdpPort(value));
       break;
     case Field::kL4DstPort:
-      // TODO: Re-allow PTP ports when traffic forwards.
-      if (value > 318) value += 2;  // Skip PTP ports 319 & 320.
+      if (value > 318) value += 2;
       // TODO: Reserved ports in packetlib will generate invalid
       // packets.
       if (value > 999) value += 1;   // Skip PSP port 1000.
@@ -623,8 +637,6 @@ int Range(Field field, IpType ip_type) {
       return BitwidthToInt(4);
     case Field::kL4SrcPort:
     case Field::kL4DstPort:
-      // TODO: Re-allow PTP ports when traffic forwards.
-      // Reserve PTP ports 319 & 320.
       // TODO: Re-allow PSP (1000) and IpFix (4739) when this
       // library generates packets below L4.
       return BitwidthToInt(packetlib::kUdpPortBitwidth) - 4;

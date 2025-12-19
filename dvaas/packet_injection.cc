@@ -197,7 +197,11 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   LOG(INFO) << "Finished injecting test packets";
 
   // Check the output of the control switch.
-  const absl::Duration kCollectionDuration = absl::Seconds(3);
+  LOG(INFO) << "Waiting for "
+            << parameters.max_expected_packet_in_flight_duration
+            << " before collecting packets to account for in-flight packets";
+  const absl::Duration kCollectionDuration =
+      parameters.max_expected_packet_in_flight_duration;
   absl::StatusOr<std::vector<TaggedPacketIn>> control_packet_ins =
       CollectStreamMessageResponsesAndReturnTaggedPacketIns(
           control_switch, kCollectionDuration,
