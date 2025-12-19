@@ -18,6 +18,7 @@ package pins_test.openconfig;
 message Config {
   Interfaces interfaces = 1 [json_name = "openconfig-interfaces:interfaces"];
   Qos qos = 3 [json_name = "openconfig-qos:qos"];
+  Ptp ptp = 4 [json_name = "openconfig-ptp:ptp"];
 }
 
 // Mirrors `container interfaces` in `openconfig-interfaces.yang`.
@@ -212,6 +213,64 @@ message Qos {
       message Config {
         optional string buffer_allocation_profile = 1
             [json_name = "buffer-allocation-profile"];
+      }
+    }
+  }
+}
+
+// Mirrors `openconfig-ptp:ptp`.
+// All leaves are `optional`, since JSON differentiates between absence vs
+// presence with default value.
+message Ptp {
+  Instances instances = 1 [json_name = "instances"];
+  message Instances {
+    repeated Instance instance = 1;
+  }
+  message Instance {
+    optional int32 id = 1 [json_name = "id"];
+    optional Config config = 2;
+    message Config {
+      optional int32 id = 1 [json_name = "id"];
+    }
+    optional State state = 3;
+    message State {
+      optional int32 id = 1 [json_name = "id"];
+    }
+    DefaultDs default_ds = 4 [json_name = "default-ds"];
+    message DefaultDs {
+      optional Config config = 1 [json_name = "config"];
+      message Config {
+        optional string clock_type = 1 [json_name = "clock-type"];
+        optional int32 domain_number = 2 [json_name = "domain-number"];
+        repeated string master_ip = 3 [json_name = "master-ip"];
+        optional int32 sdoid = 4 [json_name = "sdoid"];
+      }
+      optional State state = 2 [json_name = "state"];
+      message State {
+        optional string clock_type = 1 [json_name = "clock-type"];
+        optional int32 domain_number = 2 [json_name = "domain-number"];
+        repeated string master_ip = 3 [json_name = "master-ip"];
+      }
+    }
+    optional PortDsList port_ds_list = 5 [json_name = "port-ds-list"];
+    message PortDsList {
+      repeated PortDs port_ds = 1 [json_name = "port-ds"];
+    }
+    message PortDs {
+      optional Config config = 1 [json_name = "config"];
+      message Config {
+        optional string delay_mechanism = 1 [json_name = "delay-mechanism"];
+        optional int32 port_number = 2 [json_name = "port-number"];
+        optional string underlying_interface = 3
+            [json_name = "underlying-interface"];
+      }
+      optional int32 port_number = 2 [json_name = "port-number"];
+      optional State state = 3 [json_name = "state"];
+      message State {
+        optional string delay_mechanism = 1 [json_name = "delay-mechanism"];
+        optional int32 port_number = 2 [json_name = "port-number"];
+        optional string underlying_interface = 3
+            [json_name = "underlying-interface"];
       }
     }
   }

@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <tuple>
@@ -38,6 +39,7 @@
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
+#include "lib/utils/json_utils.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -631,6 +633,10 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Gets bad intervals counter for an interface.
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Gets blackhole counters for the switch.
 absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
     gnmi::gNMI::StubInterface& gnmi_stub);
@@ -688,5 +694,16 @@ absl::Status VerifyInterfaceOperState(
     gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view if_name,
     OperStatus desired_state,
     absl::Duration timeout = kVerifyOperStateDefaultTimeout);
+
+// Returns the value of the given path in the given JSON object.
+absl::StatusOr<::nlohmann::json> AccessJsonValue(
+    const ::nlohmann::json& json_value,
+    absl::Span<const absl::string_view> path);
+
+// Sends a gNMI Get request to the switch.
+absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
+    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
+    std::optional<absl::Duration> timeout);
+
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_
