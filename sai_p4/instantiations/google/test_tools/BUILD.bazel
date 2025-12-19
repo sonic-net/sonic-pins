@@ -38,7 +38,6 @@ cc_library(
         "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
-	"//p4_pdpi/packetlib:bit_widths",
         "//p4_pdpi/string_encodings:hex_string",
 	"//sai_p4/instantiations/google:p4_versions",
         "//sai_p4/instantiations/google:sai_p4info_cc",
