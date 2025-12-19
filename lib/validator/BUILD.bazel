@@ -69,7 +69,7 @@ cc_test(
     srcs = ["validator_backend_test.cc"],
     deps = [
         ":validator_backend",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -103,7 +103,6 @@ cc_library(
     srcs = ["validator_lib.cc"],
     hdrs = ["validator_lib.h"],
     deps = [
-        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnoi:gnoi_helper",
         "//thinkit:ssh_client",
@@ -120,6 +119,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -128,12 +128,12 @@ cc_test(
     srcs = ["validator_lib_test.cc"],
     deps = [
         ":validator_lib",
-        "//gutil/gutil:status_matchers",
         "//thinkit:switch",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )

@@ -31,7 +31,7 @@
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
 #include "grpcpp/client_context.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
