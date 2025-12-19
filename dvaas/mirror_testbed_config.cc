@@ -14,14 +14,28 @@
 
 #include "dvaas/mirror_testbed_config.h"
 
+#include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
+#include "absl/algorithm/container.h"
+#include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/test_artifact_writer.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
+#include "dvaas/port_id_map.h"
+#include "dvaas/switch_api.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
+#include "gutil/test_artifact_writer.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"

@@ -2,7 +2,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"

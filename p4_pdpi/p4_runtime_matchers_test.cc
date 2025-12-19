@@ -16,8 +16,8 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 
