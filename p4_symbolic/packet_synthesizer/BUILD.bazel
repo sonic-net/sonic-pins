@@ -24,7 +24,6 @@ cc_library(
     srcs = ["util.cc"],
     hdrs = ["util.h"],
     deps = [
-        "//gutil/gutil:status",
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/string_encodings:decimal_string",
         "//p4_pdpi/utils:ir",
@@ -37,6 +36,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -85,7 +85,7 @@ cc_library(
     hdrs = ["packet_synthesis_criteria.h"],
     deps = [
         ":packet_synthesis_criteria_cc_proto",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -100,9 +100,9 @@ cc_test(
     deps = [
         ":packet_synthesis_criteria",
         ":packet_synthesis_criteria_cc_proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
@@ -118,8 +118,6 @@ cc_library(
         ":packet_synthesizer_cc_proto",
         ":util",
         ":z3_model_to_packet",
-        "//gutil/gutil:status",
-        "//gutil/gutil:timer",
         "//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
@@ -134,6 +132,8 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:timer",
     ],
 )
 
@@ -145,7 +145,6 @@ cc_library(
         ":coverage_goal_cc_proto",
         ":packet_synthesis_criteria",
         ":packet_synthesis_criteria_cc_proto",
-        "//gutil/gutil:proto",
         "//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
@@ -154,6 +153,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:proto",
     ],
 )
 

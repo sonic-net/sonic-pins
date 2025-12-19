@@ -24,7 +24,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "google/rpc/code.pb.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"

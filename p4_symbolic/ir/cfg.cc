@@ -22,7 +22,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_symbolic/ir/ir.h"
 
 namespace p4_symbolic::ir {

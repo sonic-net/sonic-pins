@@ -11,7 +11,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
