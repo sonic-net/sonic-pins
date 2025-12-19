@@ -84,7 +84,7 @@
 #define DISABLE_INGRESS_VLAN_CHECKS_ACTION_ID 0x01000028   // 16777256
 #define DISABLE_EGRESS_VLAN_CHECKS_ACTION_ID 0x01000029    // 16777257
 #define UNICAST_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000030  // 16777264
-// Next available action id: 0x01000033 (16777261)
+// Next available action id: 0x01000031 (16777259)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
