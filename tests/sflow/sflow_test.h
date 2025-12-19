@@ -36,6 +36,9 @@ namespace pins {
 struct NosParameters {
   std::string kRedisExecPrefix;
   std::string kSflowContainerExecPrefix;
+  std::string kSudoCmdPrefix;
+  std::string kCpuQueueName;
+  std::string kRedisCliPath;
   bool kIsSonicDebianLinux;
 };
 
@@ -86,6 +89,8 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   // first collector config port. If config does not have any collector config,
   // it would be set to 6343.
   int collector_port_;
+
+  NosParameters nos_param_;
 };
 
 class SampleSizeTest : public SflowTestFixture {};
@@ -153,6 +158,8 @@ class SflowMirrorTestFixture
   // first collector config port. If config does not have any collector config,
   // it would be set to 6343.
   int collector_port_;
+
+  NosParameters nos_param_;
 };
 
 class SflowRebootTestFixture : public SflowMirrorTestFixture {};
