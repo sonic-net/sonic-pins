@@ -49,6 +49,7 @@
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/ternary.h"
 #include "p4_pdpi/translation_options.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -1188,6 +1189,20 @@ EntryBuilder& EntryBuilder::AddWcmpGroupTableEntry(
       wcmp_action.set_watch_port(wcmp_group_action.watch_port.value());
     }
   }
+  return *this;
+}
+
+EntryBuilder&
+EntryBuilder::AddAclIngressTableEntryToRedirectingToL2MulticastGroup(
+    int multicast_group_id) {
+  sai::AclIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_ingress_table_entry();
+  entry.mutable_action()
+      ->mutable_redirect_to_l2mc_group()
+      ->set_multicast_group_id(
+          pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+              multicast_group_id));
+  entry.set_priority(1);
   return *this;
 }
 

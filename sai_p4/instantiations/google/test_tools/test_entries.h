@@ -480,6 +480,8 @@ class EntryBuilder {
   EntryBuilder& AddWcmpGroupTableEntry(
       absl::string_view wcmp_group_id,
       absl::Span<const WcmpGroupAction> wcmp_group_actions);
+  EntryBuilder& AddAclIngressTableEntryToRedirectingToL2MulticastGroup(
+      int multicast_group_id);
 
   EntryBuilder& AddIngressQoSTimestampingAclEntry(std::string ingress_port);
 
