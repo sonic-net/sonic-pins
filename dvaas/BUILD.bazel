@@ -381,6 +381,7 @@ cc_library(
         ":test_vector_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest",
     ],
 )
 
