@@ -7,8 +7,8 @@
 #include "gmock/gmock.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"
 
 namespace pins_test::otg_helper {
 namespace {

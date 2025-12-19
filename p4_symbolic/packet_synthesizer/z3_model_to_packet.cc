@@ -23,7 +23,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/context.h"

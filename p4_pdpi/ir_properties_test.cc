@@ -15,7 +15,7 @@
 #include "p4_pdpi/ir_properties.h"
 
 #include "gtest/gtest.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace pdpi {

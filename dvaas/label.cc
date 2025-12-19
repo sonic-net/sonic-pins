@@ -10,7 +10,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "dvaas/test_vector.pb.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace dvaas {
 

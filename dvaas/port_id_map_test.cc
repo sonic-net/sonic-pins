@@ -18,7 +18,7 @@
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "lib/p4rt/p4rt_port.h"
 
 namespace dvaas {

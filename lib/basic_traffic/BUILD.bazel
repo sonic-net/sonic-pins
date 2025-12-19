@@ -25,7 +25,6 @@ cc_library(
     srcs = ["basic_p4rt_util.cc"],
     hdrs = ["basic_p4rt_util.h"],
     deps = [
-        "//gutil/gutil:proto",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
@@ -39,6 +38,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_gutil//gutil:proto",
     ],
 )
 
@@ -47,14 +47,14 @@ cc_test(
     srcs = ["basic_p4rt_util_test.cc"],
     deps = [
         ":basic_p4rt_util",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -65,7 +65,6 @@ cc_library(
     hdrs = ["basic_traffic.h"],
     deps = [
         ":basic_p4rt_util",
-        "//gutil/gutil:collections",
         "//lib/gnmi:gnmi_helper",
         "//lib/p4rt:p4rt_programming_context",
         "//lib/utils:generic_testbed_utils",
@@ -86,6 +85,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_gutil//gutil:collections",
     ],
 )
 
@@ -94,9 +94,6 @@ cc_test(
     srcs = ["basic_traffic_test.cc"],
     deps = [
         ":basic_traffic",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
@@ -120,5 +117,8 @@ cc_test(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )

@@ -34,11 +34,11 @@
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"  // IWYU pragma: keep to avoid ClangTidy complaining about this.
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep to avoid ClangTidy complaining about this.
-#include "gutil/gutil/testing.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"  // IWYU pragma: keep to avoid ClangTidy complaining about this.
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep to avoid ClangTidy complaining about this.
+#include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"

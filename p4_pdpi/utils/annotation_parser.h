@@ -24,7 +24,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 // This header file defines libraries for parsing P4 annotations.
 //

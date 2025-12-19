@@ -25,7 +25,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/proto.h"
+#include "gutil/proto.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/p4info_union_lib.h"
 

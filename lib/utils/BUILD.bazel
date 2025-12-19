@@ -28,7 +28,7 @@ cc_library(
     copts = ["-fexceptions"],
     features = ["-use_header_modules"],  # Incompatible with -fexceptions.
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -46,7 +46,7 @@ cc_test(
     srcs = ["json_utils_test.cc"],
     deps = [
         ":json_utils",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -83,7 +83,6 @@ cc_library(
     srcs = ["generic_testbed_utils.cc"],
     hdrs = ["generic_testbed_utils.h"],
     deps = [
-        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
         "//thinkit:generic_testbed",
@@ -94,6 +93,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -114,9 +114,6 @@ cc_test(
     srcs = ["generic_testbed_utils_test.cc"],
     deps = [
         ":generic_testbed_utils",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//thinkit:generic_testbed",
         "//thinkit:mock_control_device",
         "//thinkit:mock_generic_testbed",
@@ -131,6 +128,9 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -166,10 +166,10 @@ cc_test(
     srcs = ["merging_status_bundle_test.cc"],
     deps = [
         ":merging_status_bundle",
-	"//gutil/gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",
+	"@com_google_gutil//gutil:status_matchers"
     ],
 )
 

@@ -27,11 +27,11 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"  // IWYU pragma: keep
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
-#include "gutil/gutil/testing.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"  // IWYU pragma: keep
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/ast.pb.h"

@@ -17,7 +17,7 @@
 #include <net/ethernet.h>
 
 #include "absl/strings/str_format.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai_pd {

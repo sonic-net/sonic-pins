@@ -5,7 +5,7 @@
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
-#include "gutil/gutil/proto.h"
+#include "gutil/proto.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"

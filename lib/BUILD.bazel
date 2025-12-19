@@ -25,8 +25,6 @@ cc_library(
     srcs = ["pins_control_device.cc"],
     hdrs = ["pins_control_device.h"],
     deps = [
-        "//gutil/gutil:status",
-        "//gutil/gutil:testing",
         "//lib/gnmi:gnmi_helper",
         "//lib/p4rt:p4rt_programming_context",
         "//lib/p4rt:packet_listener",
@@ -62,6 +60,8 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -103,7 +103,7 @@ cc_test(
     srcs = ["basic_switch_test.cc"],
     deps = [
         ":basic_switch",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnoi//cert:cert_cc_grpc_proto",
         "@com_github_gnoi//diag:diag_cc_grpc_proto",
@@ -123,10 +123,6 @@ cc_library(
     hdrs = ["ixia_helper.h"],
     deps = [
         ":ixia_helper_cc_proto",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:overload",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/utils:json_utils",
         "//p4_pdpi/netaddr:ipv4_address",
@@ -146,6 +142,10 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:overload",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -155,9 +155,6 @@ cc_test(
     deps = [
         ":ixia_helper",
         ":ixia_helper_cc_proto",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//lib/utils:json_test_utils",
         "//lib/utils:json_utils",
         "//thinkit:generic_testbed",
@@ -168,6 +165,9 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -189,11 +189,11 @@ cc_library(
     hdrs = ["lacp_ixia_helper.h"],
     deps = [
         ":ixia_helper",
-        "//gutil/gutil:overload",
         "//thinkit:generic_testbed",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:overload",
     ],
 )
 
@@ -203,12 +203,12 @@ cc_test(
     deps = [
         ":ixia_helper",
         ":lacp_ixia_helper",
-        "//gutil/gutil:status_matchers",
         "//lib/utils:json_test_utils",
         "//thinkit:generic_testbed",
         "//thinkit:mock_generic_testbed",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -232,11 +232,11 @@ cc_test(
     srcs = ["ixia_protocol_helper_test.cc"],
     deps = [
         ":ixia_protocol_helper",
-        "//gutil/gutil:status_matchers",
         "//lib/utils:json_test_utils",
         "//thinkit:generic_testbed",
         "//thinkit:mock_generic_testbed",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -246,13 +246,13 @@ cc_library(
     srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
     deps = [
-        "//gutil/gutil:status",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -261,13 +261,13 @@ cc_test(
     srcs = ["otg_helper_test.cc"],
     deps = [
         ":otg_helper",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )

@@ -8,8 +8,6 @@ cc_test(
     timeout = "long",
     srcs = ["sai_p4_integration_test.cc"],
     deps = [
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
@@ -34,6 +32,8 @@ cc_test(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -46,10 +46,6 @@ cc_test(
         "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
     ],
     deps = [
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:test_artifact_writer",
-        "//gutil/gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -80,5 +76,9 @@ cc_test(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:test_artifact_writer",
+        "@com_google_gutil//gutil:testing",
     ],
 )

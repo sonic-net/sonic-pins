@@ -20,7 +20,7 @@
 #include "gtest/gtest.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/event_monitoring/config_db_queue_table_event.h"
-#include "gutil/gutil/io.h"
+#include "gutil/io.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"

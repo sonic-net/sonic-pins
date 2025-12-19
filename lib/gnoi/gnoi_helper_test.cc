@@ -15,8 +15,8 @@
 #include "lib/gnoi/gnoi_helper.h"
 
 #include "gmock/gmock.h"
-#include "gutil/gutil/status_matchers.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 
 namespace pins_test {
 namespace {

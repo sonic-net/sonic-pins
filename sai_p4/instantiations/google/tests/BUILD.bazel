@@ -19,8 +19,6 @@ cc_test(
     srcs = ["p4_constraints_integration_test.cc"],
     shard_count = 5,
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
@@ -30,6 +28,8 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -38,10 +38,6 @@ cc_test(
     size = "large",
     srcs = ["p4_fuzzer_integration_test.cc"],
     deps = [
-        "//gutil/gutil:collections",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//lib/p4rt:p4rt_port",
         "//p4_fuzzer:fuzzer_config",
         "//p4_fuzzer:mutation_and_fuzz_util",
@@ -59,6 +55,10 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 

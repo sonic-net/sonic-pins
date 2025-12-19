@@ -36,9 +36,9 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "grpcpp/create_channel.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/version.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"
+#include "gutil/version.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
@@ -48,7 +48,7 @@
 #include "p4_pdpi/sequencing.h"
 // TODO: A temporary dependence on SAI to mask a bug. Safe to remove
 // in April 2024.
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "thinkit/switch.h"
 

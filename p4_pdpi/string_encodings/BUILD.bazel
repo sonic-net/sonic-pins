@@ -10,7 +10,7 @@ cc_library(
     srcs = ["byte_string.cc"],
     hdrs = ["byte_string.h"],
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -22,8 +22,8 @@ cc_test(
     deps = [
         ":byte_string",
         ":safe",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
@@ -41,13 +41,13 @@ cc_library(
     hdrs = ["bit_string.h"],
     deps = [
         ":hex_string",
-        "//gutil/gutil:status",
         "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -56,7 +56,7 @@ cc_test(
     srcs = ["bit_string_test.cc"],
     deps = [
         ":bit_string",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
@@ -69,7 +69,7 @@ cc_library(
     deps = [
         ":bit_string",
         ":hex_string",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -80,7 +80,7 @@ cc_test(
     srcs = ["readable_byte_string_test.cc"],
     deps = [
         ":readable_byte_string",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -90,10 +90,10 @@ cc_library(
     srcs = ["hex_string.cc"],
     hdrs = ["hex_string.h"],
     deps = [
-        ":byte_string",
+	":byte_string",
         ":safe",
-        "//gutil/gutil:status",
-        "@com_google_absl//absl/log",
+	"@com_google_absl//absl/log",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -125,7 +125,7 @@ cc_library(
     srcs = ["decimal_string.cc"],
     hdrs = ["decimal_string.h"],
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

@@ -25,7 +25,6 @@ cc_library(
     srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
     deps = [
-        "//gutil/gutil:status",
         "//lib/utils:generic_testbed_utils",
         "//lib/validator:validator_lib",
         "//tests/integration/system/nsf/interfaces:testbed",
@@ -39,5 +38,6 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_gutil//gutil:status",
     ],
 )

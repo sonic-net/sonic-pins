@@ -15,8 +15,8 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"

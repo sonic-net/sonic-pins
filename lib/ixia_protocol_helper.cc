@@ -9,7 +9,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/ixia_helper.h"
 #include "thinkit/generic_testbed.h"
 

@@ -19,7 +19,7 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto_matchers.h"
+#include "gutil/proto_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"

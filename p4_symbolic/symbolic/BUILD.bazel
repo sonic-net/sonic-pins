@@ -29,7 +29,7 @@ cc_library(
     srcs = ["operators.cc"],
     hdrs = ["operators.h"],
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -43,7 +43,6 @@ cc_library(
     srcs = ["values.cc"],
     hdrs = ["values.h"],
     deps = [
-        "//gutil/gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/string_encodings:bit_string",
         "//p4_pdpi/utils:ir",
@@ -56,6 +55,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -80,8 +80,6 @@ cc_library(
     deps = [
         ":operators",
         ":values",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/string_encodings:bit_string",
@@ -104,6 +102,8 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -133,8 +133,6 @@ cc_library(
         ":solver_state",
         ":v1model_intrinsics",
         ":values",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
         "//p4_pdpi:built_ins",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/internal:ordered_map",
@@ -161,6 +159,8 @@ cc_library(
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -206,8 +206,6 @@ cc_test(
     srcs = ["values_test.cc"],
     deps = [
         ":values",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_symbolic:z3_util",
         "@com_github_z3prover_z3//:api",
@@ -215,6 +213,8 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -223,8 +223,6 @@ cc_test(
     srcs = ["parser_test.cc"],
     deps = [
         ":symbolic",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status_matchers",
         "//p4_symbolic/ir",
         "//p4_symbolic/ir:ir_cc_proto",
         "@com_github_z3prover_z3//:api",
@@ -232,6 +230,8 @@ cc_test(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -240,11 +240,11 @@ cc_test(
     srcs = ["util_test.cc"],
     deps = [
         ":solver_state",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_symbolic/ir:ir_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -261,7 +261,6 @@ cc_test(
     deps = [
         ":solver_state",
         ":symbolic",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_symbolic:test_util",
@@ -271,6 +270,7 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -285,9 +285,6 @@ cc_test(
     deps = [
         ":solver_state",
         ":symbolic",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_symbolic:test_util",
         "//p4_symbolic/ir",
@@ -301,5 +298,8 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
