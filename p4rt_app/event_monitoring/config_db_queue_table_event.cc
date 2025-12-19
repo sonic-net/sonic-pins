@@ -20,7 +20,7 @@
 
 #include "absl/status/status.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "swss/schema.h"
 

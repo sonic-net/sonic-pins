@@ -47,8 +47,8 @@ cc_library(
     ],
     deps = [
         ":bmv2_cc_proto",
-        "//gutil/gutil:io",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:io",
+        "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -58,9 +58,9 @@ cc_binary(
     srcs = ["test.cc"],
     deps = [
         ":bmv2",
-        "//gutil/gutil:io",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:io",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",

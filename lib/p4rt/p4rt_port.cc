@@ -25,7 +25,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "p4_pdpi/string_encodings/hex_string.h"

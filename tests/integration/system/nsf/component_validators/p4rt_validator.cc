@@ -26,7 +26,7 @@
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/ssh_client.h"

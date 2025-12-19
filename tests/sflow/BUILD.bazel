@@ -25,9 +25,6 @@ cc_library(
     deps = [
         ":sflow_breakout_test",
         ":sflow_util",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//lib:ixia_helper",
         "//lib/gnmi:gnmi_helper",
         "//lib/utils:json_utils",
@@ -76,6 +73,9 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
     alwayslink = True,
 )
@@ -115,7 +115,6 @@ cc_library(
     hdrs = ["sflow_breakout_test.h"],
     deps = [
         ":sflow_util",
-        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
         "//tests:thinkit_gnmi_interface_util",
@@ -134,5 +133,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:status",
     ],
 )
+

@@ -9,10 +9,10 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_replace.h"
 #include "dvaas/test_vector.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/test_artifact_writer.h"
 #include "p4_pdpi/ir.pb.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
+#include "gutil/test_artifact_writer.h"
 
 namespace dvaas {
 
