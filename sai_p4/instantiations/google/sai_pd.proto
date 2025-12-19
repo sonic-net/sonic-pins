@@ -198,6 +198,13 @@ message VrfTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Table entry restrictions:
+// ## TODO: Remove when switch supports priority as a key for
+// ## this table.
+// ## The switch does not support priority as a key. In order to avoid
+// ## conflicts between entries where the only difference is the
+// ## priority, we choose a fixed priority arbitrarily.
+//   ::priority == 900;
 message Ipv6TunnelTerminationTableEntry {
   message Match {
     Ternary dst_ipv6 = 1;  // ternary match / Format::IPV6 / 128 bits

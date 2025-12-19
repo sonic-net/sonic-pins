@@ -669,9 +669,6 @@ control acl_ingress(in headers_t headers,
   @sai_acl(INGRESS)
   @sai_acl_priority(15)
   @nonessential_for_upgrade
-#if defined(SAI_INSTANTIATION_TOR)
-  @reinstall_during_upgrade
-#endif
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
