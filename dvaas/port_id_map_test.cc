@@ -165,5 +165,51 @@ TEST(MirrorTestbedP4rtPortIdMap, ReturnsCorrectPortWithImplicitIdentityMap) {
               IsOkAndHolds(Eq(port_2)));
 }
 
+TEST(MirrorTestbedP4rtPortIdMap, IsImplicitIdentityMapReturnsCorrectValue) {
+  {
+    const auto identity_map = MirrorTestbedP4rtPortIdMap::CreateIdentityMap();
+    ASSERT_TRUE(identity_map.IsImplicitIdentityMap());
+  }
+
+  {
+    ASSERT_OK_AND_ASSIGN(const auto port_1,
+                         P4rtPortId::MakeFromP4rtEncoding("1"));
+    ASSERT_OK_AND_ASSIGN(const auto port_2,
+                         P4rtPortId::MakeFromP4rtEncoding("2"));
+    ASSERT_OK_AND_ASSIGN(
+        const auto port_id_map,
+        MirrorTestbedP4rtPortIdMap::CreateFromSutToControlSwitchPortMap({
+            {port_1, port_2},
+        }));
+    ASSERT_FALSE(port_id_map.IsImplicitIdentityMap());
+  }
+}
+
+TEST(MirrorTestbedP4rtPortIdMap, GetMappedSutPortsReturnsErrorForImplicitMap) {
+  const auto identity_map = MirrorTestbedP4rtPortIdMap::CreateIdentityMap();
+  ASSERT_THAT(identity_map.GetMappedSutPorts(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(MirrorTestbedP4rtPortIdMap, GetMappedSutPortsReturnsCorrectValue) {
+  ASSERT_OK_AND_ASSIGN(const auto port_1,
+                       P4rtPortId::MakeFromP4rtEncoding("1"));
+  ASSERT_OK_AND_ASSIGN(const auto port_2,
+                       P4rtPortId::MakeFromP4rtEncoding("2"));
+  ASSERT_OK_AND_ASSIGN(const auto port_3,
+                       P4rtPortId::MakeFromP4rtEncoding("3"));
+  ASSERT_OK_AND_ASSIGN(const auto port_4,
+                       P4rtPortId::MakeFromP4rtEncoding("4"));
+
+  ASSERT_OK_AND_ASSIGN(
+      const auto port_id_map,
+      MirrorTestbedP4rtPortIdMap::CreateFromSutToControlSwitchPortMap({
+          {port_1, port_2},
+          {port_3, port_4},
+      }));
+  ASSERT_THAT(port_id_map.GetMappedSutPorts(),
+              IsOkAndHolds(testing::UnorderedElementsAre(port_1, port_3)));
+}
+
 }  // namespace
 }  // namespace dvaas

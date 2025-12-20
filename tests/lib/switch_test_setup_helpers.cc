@@ -28,6 +28,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -39,6 +40,7 @@
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -354,6 +356,55 @@ absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
     }
   }
 
+  return ports;
+}
+
+// Gets every P4Runtime port used in `entries`.
+absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
+    const pdpi::IrP4Info& info, std::vector<pdpi::IrEntity> entities) {
+  absl::btree_set<P4rtPortId> ports;
+  std::vector<pdpi::IrTableEntry> table_entries;
+  for (pdpi::IrEntity& entity : entities) {
+    switch (entity.entity_case()) {
+      case pdpi::IrEntity::kTableEntry: {
+        table_entries.push_back(entity.table_entry());
+        break;
+      }
+      case pdpi::IrEntity::kPacketReplicationEngineEntry: {
+        auto process_replicas =
+            [&](const google::protobuf::RepeatedPtrField<pdpi::IrReplica>&
+                    replicas) -> absl::Status {
+          for (const auto& replica : replicas) {
+            ASSIGN_OR_RETURN(P4rtPortId port,
+                             P4rtPortId::MakeFromP4rtEncoding(replica.port()));
+            ports.insert(port);
+          }
+          return absl::OkStatus();
+        };
+
+        if (entity.packet_replication_engine_entry()
+                .has_multicast_group_entry()) {
+          RETURN_IF_ERROR(
+              process_replicas(entity.packet_replication_engine_entry()
+                                   .multicast_group_entry()
+                                   .replicas()));
+        } else if (entity.packet_replication_engine_entry()
+                       .has_clone_session_entry()) {
+          RETURN_IF_ERROR(
+              process_replicas(entity.packet_replication_engine_entry()
+                                   .clone_session_entry()
+                                   .replicas()));
+        }
+        break;
+      }
+      default:
+        return absl::UnimplementedError(absl::StrCat(
+            "Unsupported entity: ", gutil::PrintTextProto(entity)));
+    }
+  }
+  ASSIGN_OR_RETURN(absl::btree_set<P4rtPortId> table_entry_ports,
+                   GetPortsUsed(info, table_entries));
+  ports.merge(table_entry_ports);
   return ports;
 }
 

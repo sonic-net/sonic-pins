@@ -42,6 +42,9 @@ TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes &test_outcomes);
 
 std::string ExplainTestVectorStats(const TestVectorStats &stats);
 
-} // namespace dvaas
+// Records the statistics into Test properties.
+void RecordStatsAsTestProperties(const TestVectorStats& stats);
+
+}  // namespace dvaas
 
 #endif // PINS_DVAAS_TEST_VECTOR_STATS_H_

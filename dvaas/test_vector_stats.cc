@@ -19,6 +19,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/strings/str_format.h"
 #include "dvaas/test_vector.pb.h"
+#include "gtest/gtest.h"
 
 namespace dvaas {
 
@@ -145,6 +146,32 @@ std::string ExplainTestVectorStats(const TestVectorStats& stats) {
       stats.num_packets_forwarded, stats.num_packets_punted);
   ExplainReproducibilityRate(stats, result);
   return result;
+}
+
+void RecordStatsAsTestProperties(const TestVectorStats& stats) {
+  using ::testing::Test;
+  Test::RecordProperty("tag_num_vectors", stats.num_vectors);
+  Test::RecordProperty("tag_num_vectors_passed", stats.num_vectors_passed);
+  Test::RecordProperty(
+      "tag_pass_percentage",
+      ExplainPercent(stats.num_vectors_passed, stats.num_vectors));
+  Test::RecordProperty(
+      "tag_num_vectors_where_sut_produced_correct_number_of_outputs",
+      stats.num_vectors_where_sut_produced_correct_number_of_outputs);
+  Test::RecordProperty(
+      "tag_num_vectors_where_sut_forwarded_at_least_one_packet",
+      stats.num_vectors_where_sut_forwarded_at_least_one_packet);
+  Test::RecordProperty("tag_num_vectors_where_sut_punted_at_least_one_packet",
+                       stats.num_vectors_where_sut_punted_at_least_one_packet);
+  Test::RecordProperty("tag_num_vectors_where_sut_produced_no_output",
+                       stats.num_vectors_where_sut_produced_no_output);
+  Test::RecordProperty("tag_num_packets_forwarded",
+                       stats.num_packets_forwarded);
+  Test::RecordProperty("tag_num_packets_punted", stats.num_packets_punted);
+  Test::RecordProperty("tag_num_deterministic_failures",
+                       stats.num_deterministic_failures);
+  Test::RecordProperty("tag_num_vectors_with_reproducibility_rate",
+                       stats.num_vectors_with_reproducibility_rate);
 }
 
 }  // namespace dvaas
