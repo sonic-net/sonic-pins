@@ -52,9 +52,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   // `ConfigureForForwardingTest`.
   std::vector<pdpi::IrTableEntry> used_entries_list;
   for (const pdpi::IrEntity& ir_entity :
-       GetParam()
-           .dvaas_regression_test_proto.minimal_set_of_entities()
-           .entities()) {
+       GetParam().dvaas_regression_test_proto.entities().entities()) {
     if (ir_entity.has_table_entry()) {
       used_entries_list.push_back(ir_entity.table_entry());
     }
@@ -74,7 +72,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   // Install the entities on the switch.
   ASSERT_OK(pdpi::InstallIrEntities(
       *configured_testbed.SutApi().p4rt,
-      GetParam().dvaas_regression_test_proto.minimal_set_of_entities()));
+      GetParam().dvaas_regression_test_proto.entities()));
   dvaas::DataplaneValidationParams params = GetParam().dvaas_params;
   params.packet_test_vector_override = {
       GetParam().dvaas_regression_test_proto.test_vector(),
