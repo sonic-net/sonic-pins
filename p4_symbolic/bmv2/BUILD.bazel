@@ -73,7 +73,6 @@ cc_binary(
 py_binary(
     name = "test_sdiff",
     srcs = ["test_sdiff.py"],
-    python_version = "PY3",
 )
 
 # Test rules: one per program in //p4-samples

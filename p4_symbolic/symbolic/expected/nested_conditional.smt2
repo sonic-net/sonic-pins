@@ -126,6 +126,6 @@
  (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x85)))
 (assert
  (let (($x88 (or (or false (= (_ bv0 9) (_ bv0 9))) (= (_ bv0 9) (_ bv1 9)))))
- (let (($x78 (= (_ bv0 9) (_ bv511 9))))
- (or $x78 $x88))))
+(let (($x78 (= (_ bv0 9) (_ bv511 9))))
+(or $x78 $x88))))
 (check-sat)

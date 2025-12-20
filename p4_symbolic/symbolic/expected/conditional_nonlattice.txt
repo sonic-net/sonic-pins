@@ -1,7 +1,7 @@
 ================================================================================
 Finding packet for table MyIngress.t_1 and row -1
 ================================================================================
-ingress_port = #b000010001
+ingress_port = #b000010010
 egress_port = #b000000001
 trace:
 dropped = 0
@@ -33,7 +33,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000010001
+standard_metadata.ingress_port = #b000010010
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -63,7 +63,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000010001
+standard_metadata.ingress_port = #b000010010
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -93,7 +93,7 @@ standard_metadata.egress_spec = #b000000001
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000010001
+standard_metadata.ingress_port = #b000010010
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -104,7 +104,7 @@ ________________________________________________________________________________
 ================================================================================
 Finding packet for table MyIngress.t_2 and row -1
 ================================================================================
-ingress_port = #b000000001
+ingress_port = #b000000000
 egress_port = #b000000001
 trace:
 dropped = 0
@@ -136,7 +136,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000001
+standard_metadata.ingress_port = #b000000000
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -166,7 +166,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000001
+standard_metadata.ingress_port = #b000000000
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -196,7 +196,7 @@ standard_metadata.egress_spec = #b000000001
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000001
+standard_metadata.ingress_port = #b000000000
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -213,7 +213,7 @@ ________________________________________________________________________________
 ================================================================================
 Finding packet for table MyIngress.t_3 and row 0
 ================================================================================
-ingress_port = #b000000001
+ingress_port = #b000000000
 egress_port = #b000000001
 trace:
 dropped = 0
@@ -245,7 +245,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000001
+standard_metadata.ingress_port = #b000000000
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -275,7 +275,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000001
+standard_metadata.ingress_port = #b000000000
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -305,7 +305,7 @@ standard_metadata.egress_spec = #b000000001
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000001
+standard_metadata.ingress_port = #b000000000
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
