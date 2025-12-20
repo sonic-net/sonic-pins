@@ -236,7 +236,7 @@ TEST(BasicTraffic, SendTraffic) {
                                 }
                                 action {
                                   action {
-                                    action_id: 16777218
+                                    action_id: 16777264
                                     params { param_id: 1 value: "$0" }
                                     params { param_id: 2 value: "\00$0" }
                                   }
@@ -555,7 +555,7 @@ TEST(BasicTraffic, SendTraffic) {
                                 }
                                 action {
                                   action {
-                                    action_id: 16777218
+                                    action_id: 16777264
                                     params { param_id: 1 value: "$0" }
                                     params { param_id: 2 value: "\00$0" }
                                   }

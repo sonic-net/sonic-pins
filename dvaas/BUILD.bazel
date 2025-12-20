@@ -286,13 +286,17 @@ cc_library(
     srcs = ["mirror_testbed_config.cc"],
     hdrs = ["mirror_testbed_config.h"],
     deps = [
+        ":port_id_map",
         ":switch_api",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:test_artifact_writer",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnmi:openconfig_cc_proto",
         "//lib/p4rt:p4rt_port",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:p4_runtime_session_extras",
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
@@ -380,6 +384,7 @@ cc_library(
         ":test_vector_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest",
     ],
 )
 
@@ -493,6 +498,7 @@ cc_library(
         ":test_vector_cc_proto",
         "//gutil/gutil:proto",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",

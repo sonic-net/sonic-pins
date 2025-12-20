@@ -801,6 +801,26 @@ TEST(EntryBuilder, AddMulticastGroupEntryPortOverloadAddsUniqueReplicas) {
   EXPECT_NE(replicas[1].instance(), replicas[2].instance());
 }
 
+TEST(EntryBuilder, AddRouterInterfaceTableEntryAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddRouterInterfaceTableEntry(RouterInterfaceTableParams{
+              .egress_port = "\1",
+              .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+              .vlan_id = std::nullopt,
+          })
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "router_interface_table"
+                  action { name: "unicast_set_port_and_src_mac" }
+                }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddMrifEntryRewritingSrcMacAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
@@ -1711,6 +1731,31 @@ TEST(EntryBuilder,
                       value { hex_str: "0x01" }
                     }
                   }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddAclIngressQosDropTableEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddAclIngressQosDropTableEntry(AclIngressQosMatchFields{
+              .dst_mac = pdpi::Ternary<netaddr::MacAddress>(
+                  netaddr::MacAddress(0x01, 0x23, 0x45, 0x67, 0x89, 0xab))})
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "acl_ingress_qos_table"
+                  matches {
+                    name: "dst_mac"
+                    ternary {
+                      value { mac: "01:23:45:67:89:ab" }
+                      mask { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                  action { name: "acl_drop" }
                 }
               )pb"))));
 }

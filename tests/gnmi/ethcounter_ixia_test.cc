@@ -166,7 +166,10 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
         router_interface_table_entry {
           match { router_interface_id: "$0" }
           action {
-            set_port_and_src_mac { port: "$1" src_mac: "66:55:44:33:22:11" }
+            unicast_set_port_and_src_mac {
+              port: "$1"
+              src_mac: "66:55:44:33:22:11"
+            }
           }
         }
       )pb",
@@ -1375,18 +1378,20 @@ absl::Status SetUpForwarding(absl::string_view out_port,
                          })pb",
                        kVrfId)));
   
-  ASSIGN_OR_RETURN(
-      pd_entries.emplace_back(),
-      gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
-          R"pb(
-            router_interface_table_entry {
-              match { router_interface_id: "$0" }
-              action {
-                set_port_and_src_mac { port: "$1" src_mac: "66:55:44:33:22:11" }
-              }
-            }
-          )pb",
-          kRifOutId, out_port)));
+  ASSIGN_OR_RETURN(pd_entries.emplace_back(),
+                   gutil::ParseTextProto<sai::TableEntry>(absl::Substitute(
+                       R"pb(
+                         router_interface_table_entry {
+                           match { router_interface_id: "$0" }
+                           action {
+                             unicast_set_port_and_src_mac {
+                               port: "$1"
+                               src_mac: "66:55:44:33:22:11"
+                             }
+                           }
+                         }
+                       )pb",
+                       kRifOutId, out_port)));
 
   ASSIGN_OR_RETURN(
       pd_entries.emplace_back(),

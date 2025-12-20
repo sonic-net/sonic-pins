@@ -106,7 +106,10 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
             router_interface_table_entry {
               match { router_interface_id: "router-interface-1" }
               action {
-                set_port_and_src_mac { port: "$0" src_mac: "02:2a:10:00:00:03" }
+                unicast_set_port_and_src_mac {
+                  port: "$0"
+                  src_mac: "02:2a:10:00:00:03"
+                }
               }
             }
           )pb",

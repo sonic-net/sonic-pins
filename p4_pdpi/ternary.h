@@ -103,6 +103,8 @@ struct Ternary<netaddr::MacAddress> {
   // Binary constructor: arbitrary ternary match.
   Ternary(netaddr::MacAddress value, netaddr::MacAddress mask)
       : value{value}, mask{mask} {}
+
+  bool IsWildcard() const { return mask == netaddr::MacAddress::AllZeros(); }
 };
 
 template <>

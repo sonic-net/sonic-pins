@@ -22,7 +22,9 @@ control l3_admit(in headers_t headers,
     key = {
       headers.ethernet.dst_addr : ternary @name("dst_mac") @id(1)
                                           @format(MAC_ADDRESS);
+#if defined(L3_ADMIT_SUPPORTS_IN_PORT)
       local_metadata.ingress_port : optional @name("in_port") @id(2);
+#endif
     }
     actions = {
       @proto_id(1) admit_to_l3;

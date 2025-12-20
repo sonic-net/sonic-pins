@@ -351,24 +351,43 @@ absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
     const pins_test::TunnelMatchType tunnel_type) {
   std::vector<p4::v1::Entity> pi_entities;
   LOG(INFO) << "Installing Tunnel term table";
-  sai::Ipv6TunnelTerminationParams params{
-      .src_ipv6_value = tunnel_src_ipv6,
-      .src_ipv6_mask = exact_match_mask,
-      .dst_ipv6_value = tunnel_dst_ipv6,
-      .dst_ipv6_mask = exact_match_mask,
-  };
-
+  sai::Ipv6TunnelTerminationParams params;
   switch (tunnel_type) {
-    case pins_test::TunnelMatchType::kTernaryMatchSrcIp:
-      params.src_ipv6_value = tunnel_src_ipv6_wildcard;
-      params.src_ipv6_mask = ternary_match_mask;
+      case pins_test::TunnelMatchType::kTernaryMatchSrcIp: {
+      params.src_ipv6 = sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = tunnel_src_ipv6_wildcard,
+          .mask = ternary_match_mask,
+      };
+      params.dst_ipv6 = sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = tunnel_dst_ipv6,
+          .mask = exact_match_mask,
+      };
       break;
-    case pins_test::TunnelMatchType::kTernaryMatchDstIp:
-      params.dst_ipv6_value = tunnel_dst_ipv6_wildcard;
-      params.dst_ipv6_mask = ternary_match_mask;
+      }
+
+    case pins_test::TunnelMatchType::kTernaryMatchDstIp: {
+      params.src_ipv6 = sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = tunnel_src_ipv6,
+          .mask = exact_match_mask,
+      };
+      params.dst_ipv6 = sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = tunnel_dst_ipv6_wildcard,
+          .mask = ternary_match_mask,
+      };
       break;
-    case pins_test::TunnelMatchType::kExactMatch:
+      }
+
+    case pins_test::TunnelMatchType::kExactMatch: {
+      params.src_ipv6 = sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = tunnel_src_ipv6,
+          .mask = exact_match_mask,
+      };
+      params.dst_ipv6 = sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+          .value = tunnel_dst_ipv6,
+          .mask = exact_match_mask,
+      };
       break;
+    }
   }
 
   sai::EntryBuilder entry_builder =
