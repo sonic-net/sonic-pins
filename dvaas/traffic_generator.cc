@@ -21,6 +21,8 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
@@ -38,7 +40,6 @@
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
-#include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/test_artifact_writer.h"
@@ -50,9 +51,6 @@
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "tests/forwarding/util.h"
 #include "thinkit/mirror_testbed.h"
-
-// Crash if `status` is not okay. Only use in tests.
-#define CHECK_OK(val) CHECK_EQ(::absl::OkStatus(), (val))  // Crash OK.
 
 namespace dvaas {
 
@@ -154,7 +152,7 @@ void SimpleTrafficGenerator::InjectTraffic() {
   int iterations = 0;
   while (GetState() == kTrafficFlowing) {
     ++iterations;
-    LOG_EVERY_T(INFO, 10) << "Traffic injection iteration #" << iterations;
+    LOG_EVERY_N_SEC(INFO, 10) << "Traffic injection iteration #" << iterations;
 
     // Inject and collect.
     PacketStatistics statistics;
@@ -421,13 +419,13 @@ absl::Status TrafficGeneratorWithGuaranteedRate::InjectInputTraffic() {
   int total_packets_injected = 0;
   while (GetState() == kTrafficInjectionAndCollection) {
     ++iterations;
-    LOG_EVERY_T(INFO, 10) << "Traffic injection iteration #" << iterations;
+    LOG_EVERY_N_SEC(INFO, 10) << "Traffic injection iteration #" << iterations;
 
     // Send the packets.
     for (auto [_, packet_test_vector] : packet_test_vector_by_id) {
       int new_tag = packet_tag_id_;
       packet_tag_id_++;
-      LOG_EVERY_T(INFO, 10) << "Injecting test packet #" << new_tag;
+      LOG_EVERY_N_SEC(INFO, 10) << "Injecting test packet #" << new_tag;
 
       if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
         // Update tag.
@@ -491,7 +489,7 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
   while (GetState() == kTrafficInjectionAndCollection ||
          GetState() == kTrafficCollection) {
     ++iterations;
-    LOG_EVERY_T(INFO, 10) << "Traffic collection iteration #" << iterations;
+    LOG_EVERY_N_SEC(INFO, 10) << "Traffic collection iteration #" << iterations;
 
     ASSIGN_OR_RETURN(std::vector<TaggedPacketIn> control_packet_ins,
                      CollectStreamMessageResponsesAndReturnTaggedPacketIns(
@@ -551,9 +549,9 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
 
     total_packets_forwarded += control_packet_ins.size();
     total_packets_punted += sut_packet_ins->size();
-    LOG_EVERY_T(INFO, 10) << "Total control switch packets: "
-                          << total_packets_forwarded
-                          << ", Total SUT packets: " << total_packets_punted;
+    LOG_EVERY_N_SEC(INFO, 10)
+        << "Total control switch packets: " << total_packets_forwarded
+        << ", Total SUT packets: " << total_packets_punted;
   }
   LOG(INFO) << "Stopped traffic collection";
 

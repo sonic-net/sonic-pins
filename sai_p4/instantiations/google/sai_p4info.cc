@@ -1,8 +1,9 @@
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
+#include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"

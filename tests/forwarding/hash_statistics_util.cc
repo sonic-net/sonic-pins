@@ -19,13 +19,13 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
 #include "boost/math/distributions/chi_squared.hpp"  // IWYU pragma: keep
-#include "glog/logging.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "tests/forwarding/group_programming_util.h"

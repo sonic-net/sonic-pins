@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -30,7 +31,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/support/status.h"
 #include "gutil/gutil/status.h"

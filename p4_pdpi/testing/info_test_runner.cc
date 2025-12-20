@@ -23,7 +23,6 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-#include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/testing.h"

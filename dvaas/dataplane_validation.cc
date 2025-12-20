@@ -25,6 +25,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/btree_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -44,7 +45,6 @@
 #include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/user_provided_packet_test_vector.h"
 #include "dvaas/validation_result.h"
-#include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/proto_ordering.h"
 #include "gutil/gutil/status.h"
@@ -194,7 +194,7 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
   int reinstall_attempts = 0;
   int iterations = 0;
   for (int i = result.entities_size() - 1; i >= 0; --i && ++iterations) {
-    LOG_EVERY_T(INFO, kSecsBetweenLogs)
+    LOG_EVERY_N(INFO, kSecsBetweenLogs)
         << "Loop has run " << iterations << " iterations, there are " << i
         << " remaining entities out of " << pi_entities.size()
         << " original ones and we have reinstalled " << reinstall_attempts

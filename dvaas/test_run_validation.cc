@@ -33,7 +33,6 @@
 #include "absl/types/optional.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"

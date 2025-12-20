@@ -18,8 +18,8 @@
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "glog/logging.h"
 #include "lib/p4rt/p4rt_programming_context.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
