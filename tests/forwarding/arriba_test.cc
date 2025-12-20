@@ -53,44 +53,46 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
             << " P4RT port IDs used in the test vector: "
             << absl::StrJoin(used_p4rt_port_ids, ", ");
 
-  dvaas::MirrorTestbedConfigurator::Params testbed_config_params;
-  if (GetParam()
-          .validation_params.mirror_testbed_port_map_override.has_value()) {
-    LOG(INFO)
-        << "Using user-provided SUT<->CS P4RT port ID connection map override, "
-           "assuming the arriba test vector uses a subset of SUT ports in the "
-           "map";
-    // TODO: Add a check instead of assuming.
-    // The following is not strictly necessary because default parameter values
-    // achieve the same thing. Making this explicit for ease of reading.
-    testbed_config_params = {
-        .p4rt_port_ids_to_configure = std::nullopt,
-        .mirror_sut_ports_ids_to_control_switch = false,
-    };
+  // Check for explicit port map.
+  const bool explicit_port_map =
+      GetParam().validation_params.mirror_testbed_port_map_override.has_value();
+  if (explicit_port_map) {
+    LOG(INFO) << "Using the explicitly provided SUT<->CS port ID map to infer "
+                 "connectivity.";
   } else {
-    LOG(INFO) << "Configuring P4RT port IDs on SUT and mirroring to control "
-                 "switch to match port IDs used in the test vector, assuming "
-                 "ports with the same OpenConfig interface name are connected "
-                 "to each other";
-    testbed_config_params = {
-        .p4rt_port_ids_to_configure = used_p4rt_port_ids,
-        .mirror_sut_ports_ids_to_control_switch = true,
-    };
+    LOG(INFO) << "Assuming ports with the same OpenConfig interface names on "
+                 "SUT and CS are connected to each other as no explicit port "
+                 "map is provided.";
   }
 
-  ASSERT_OK(
-      configured_testbed.ConfigureForForwardingTest(testbed_config_params));
+  // Configure the testbed.
+  ASSERT_OK(configured_testbed.ConfigureForForwardingTest({
+      .p4rt_port_ids_to_configure = used_p4rt_port_ids,
+      .mirror_sut_ports_ids_to_control_switch = !explicit_port_map,
+      .original_port_map =
+          GetParam().validation_params.mirror_testbed_port_map_override,
+  }));
 
-  ASSERT_OK_AND_ASSIGN(
-      dvaas::ValidationResult validation_result,
-      dvaas::ValidateAgainstArribaTestVector(
-          *configured_testbed.SutApi().p4rt,
-          *configured_testbed.ControlSwitchApi().p4rt,
-          GetParam().arriba_test_vector, GetParam().validation_params));
+  dvaas::ArribaTestVectorValidationParams validation_params =
+      GetParam().validation_params;
+  // Update the port ID map in the validation params (if explicit).
+  if (explicit_port_map) {
+    ASSERT_OK_AND_ASSIGN(validation_params.mirror_testbed_port_map_override,
+                         configured_testbed.GetConfiguredPortMap());
+  }
+
+  // Run the validation.
+  ASSERT_OK_AND_ASSIGN(dvaas::ValidationResult validation_result,
+                       dvaas::ValidateAgainstArribaTestVector(
+                           *configured_testbed.SutApi().p4rt,
+                           *configured_testbed.ControlSwitchApi().p4rt,
+                           GetParam().arriba_test_vector, validation_params));
+  validation_result.RecordStatisticsAsTestProperties();
 
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(
-      GetParam().validation_params.expected_minimum_success_rate));
+      validation_params.expected_minimum_success_rate));
 
+  // Restore testbed configuration.
   ASSERT_OK(configured_testbed.RestoreToOriginalConfiguration());
 }
 
