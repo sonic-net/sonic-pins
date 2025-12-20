@@ -62,6 +62,7 @@ class P4RuntimeGrpcService {
   // Accessors for StateDb tables.
   sonic::FakeSonicDbTable &GetP4rtStateDbTable();
   sonic::FakeSonicDbTable &GetHostStatsStateDbTable();
+  sonic::FakeSonicDbTable& GetSwitchCapabilityStateDbTable();
 
   // Accessor for WarmBootStateAdapter.
   sonic::FakeWarmBootStateAdapter *GetWarmBootStateAdapter();
@@ -120,6 +121,7 @@ class P4RuntimeGrpcService {
 
   // Faked StateDb tables.
   sonic::FakeSonicDbTable fake_host_stats_table_;
+  sonic::FakeSonicDbTable fake_switch_capability_table_;
 
   // Fake ConfigDb tables.
   sonic::FakeSonicDbTable fake_config_db_port_table_;

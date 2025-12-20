@@ -100,149 +100,150 @@ struct FlowProgrammingStatistics {
 
 class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 public:
-  P4RuntimeImpl(
-      sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
-      sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
-      sonic::HashTable hash_table, sonic::SwitchTable switch_table,
-      sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
-      std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
-      std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
-      // TODO(PINS): To add component_state, system_state and netdev_translator.
-      /* swss::ComponentStateHelperInterface& component_state,
-      swss::SystemStateHelperInterface& system_state,
-      swss::IntfTranslator& netdev_translator, */
-      const P4RuntimeImplOptions &p4rt_options);
-  ~P4RuntimeImpl() override = default;
+ P4RuntimeImpl(
+     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+     sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
+     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
+     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+     sonic::SwitchCapabilityTable switch_capability_table,
+     std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
+     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
+     // TODO(PINS): To add component_state, system_state and netdev_translator.
+     /* swss::ComponentStateHelperInterface& component_state,
+     swss::SystemStateHelperInterface& system_state,
+     swss::IntfTranslator& netdev_translator, */
+     const P4RuntimeImplOptions& p4rt_options);
+ ~P4RuntimeImpl() override = default;
 
-  // Determines the type of write request (e.g. table entry, direct counter
-  // entry, etc.) then passes work off to a helper method. Requests will be
-  // rejected if:
-  //  * Request is not from the primary connection.
-  //  * No config has been applied.
-  //  * The last saved config has not been applied.
-  //  * The switch is in a critical state.
-  grpc::Status Write(grpc::ServerContext *context,
-                     const p4::v1::WriteRequest *request,
-                     p4::v1::WriteResponse *response) override
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Determines the type of write request (e.g. table entry, direct counter
+ // entry, etc.) then passes work off to a helper method. Requests will be
+ // rejected if:
+ //  * Request is not from the primary connection.
+ //  * No config has been applied.
+ //  * The last saved config has not been applied.
+ //  * The switch is in a critical state.
+ grpc::Status Write(grpc::ServerContext* context,
+                    const p4::v1::WriteRequest* request,
+                    p4::v1::WriteResponse* response) override
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  grpc::Status
-  Read(grpc::ServerContext *context, const p4::v1::ReadRequest *request,
-       grpc::ServerWriter<p4::v1::ReadResponse> *response_writer) override
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ grpc::Status Read(
+     grpc::ServerContext* context, const p4::v1::ReadRequest* request,
+     grpc::ServerWriter<p4::v1::ReadResponse>* response_writer) override
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  grpc::Status SetForwardingPipelineConfig(
-      grpc::ServerContext *context,
-      const p4::v1::SetForwardingPipelineConfigRequest *request,
-      p4::v1::SetForwardingPipelineConfigResponse *response) override
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ grpc::Status SetForwardingPipelineConfig(
+     grpc::ServerContext* context,
+     const p4::v1::SetForwardingPipelineConfigRequest* request,
+     p4::v1::SetForwardingPipelineConfigResponse* response) override
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  grpc::Status GetForwardingPipelineConfig(
-      grpc::ServerContext *context,
-      const p4::v1::GetForwardingPipelineConfigRequest *request,
-      p4::v1::GetForwardingPipelineConfigResponse *response) override
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ grpc::Status GetForwardingPipelineConfig(
+     grpc::ServerContext* context,
+     const p4::v1::GetForwardingPipelineConfigRequest* request,
+     p4::v1::GetForwardingPipelineConfigResponse* response) override
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  grpc::Status StreamChannel(
-      grpc::ServerContext *context,
-      grpc::ServerReaderWriter<p4::v1::StreamMessageResponse,
-                               p4::v1::StreamMessageRequest> *stream) override
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ grpc::Status StreamChannel(
+     grpc::ServerContext* context,
+     grpc::ServerReaderWriter<p4::v1::StreamMessageResponse,
+                              p4::v1::StreamMessageRequest>* stream) override
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Updates the Device ID for the P4Runtime service if there is no active
-  // connections.
-  virtual absl::Status UpdateDeviceId(uint64_t device_id)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Updates the Device ID for the P4Runtime service if there is no active
+ // connections.
+ virtual absl::Status UpdateDeviceId(uint64_t device_id)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Adds or removes a port from PacketIO.
-  virtual absl::Status AddPacketIoPort(const std::string &port_name)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
-  virtual absl::Status RemovePacketIoPort(const std::string &port_name)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Adds or removes a port from PacketIO.
+ virtual absl::Status AddPacketIoPort(const std::string& port_name)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ virtual absl::Status RemovePacketIoPort(const std::string& port_name)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Responds with one of the following actions to port translation:
-  // * Add the new port translation for unknown name & ID
-  // * Update an existing {name, id} translation to the new ID
-  // * No-Op if the {name, id} pairing already exists
-  // * Reject if the ID is already in-use or if any input is empty ("").
-  //
-  // Consider existing port mappings: {"A", "1"}, {"B", "2"}
-  // The result map is:
-  // Port | <-----  Port ID  ------> |
-  // Name |   "1"  |   "2"  |   "3"  |
-  // =====|========|========|========|
-  //  "A" | No-Op  | Reject | Update |
-  // -----|--------|--------|--------|
-  //  "B" | Reject | No-Op  | Update |
-  // -----|--------|--------|--------|
-  //  "C" | Reject | Reject |  Add   |
-  // -----|--------|--------|--------|
-  virtual absl::Status AddPortTranslation(const std::string& port_name,
-                                          const std::string& port_id,
-                                          bool update_dbs = true)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Responds with one of the following actions to port translation:
+ // * Add the new port translation for unknown name & ID
+ // * Update an existing {name, id} translation to the new ID
+ // * No-Op if the {name, id} pairing already exists
+ // * Reject if the ID is already in-use or if any input is empty ("").
+ //
+ // Consider existing port mappings: {"A", "1"}, {"B", "2"}
+ // The result map is:
+ // Port | <-----  Port ID  ------> |
+ // Name |   "1"  |   "2"  |   "3"  |
+ // =====|========|========|========|
+ //  "A" | No-Op  | Reject | Update |
+ // -----|--------|--------|--------|
+ //  "B" | Reject | No-Op  | Update |
+ // -----|--------|--------|--------|
+ //  "C" | Reject | Reject |  Add   |
+ // -----|--------|--------|--------|
+ virtual absl::Status AddPortTranslation(const std::string& port_name,
+                                         const std::string& port_id,
+                                         bool update_dbs = true)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Removes a port translation. Returns an error for an empty port name.
-  // Triggers AppDb and AppStateDb updates even if the port translation does not
-  // currently exist.
-  virtual absl::Status RemovePortTranslation(const std::string &port_name)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Removes a port translation. Returns an error for an empty port name.
+ // Triggers AppDb and AppStateDb updates even if the port translation does not
+ // currently exist.
+ virtual absl::Status RemovePortTranslation(const std::string& port_name)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Verifies state for the P4RT App. These are checks like:
-  //  * Do VRF_TABLE entries match in AppStateDb and AppDb.
-  //  * Do HASH_TABLE entries match in AppStateDb and AppDb.
-  //  * Do SWITCH_TABLE entries match in AppStateDb and AppDb.
-  //
-  // NOTE: We do not verify ownership of table entries today. Therefore, shared
-  // tables (e.g. VRF_TABLE) could cause false positives.
-  virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Verifies state for the P4RT App. These are checks like:
+ //  * Do VRF_TABLE entries match in AppStateDb and AppDb.
+ //  * Do HASH_TABLE entries match in AppStateDb and AppDb.
+ //  * Do SWITCH_TABLE entries match in AppStateDb and AppDb.
+ //
+ // NOTE: We do not verify ownership of table entries today. Therefore, shared
+ // tables (e.g. VRF_TABLE) could cause false positives.
+ virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  std::string DumpPortTranslationDebugData();
-  std::string DumpEntityCache();
+ std::string DumpPortTranslationDebugData();
+ std::string DumpEntityCache();
 
-  // Dump various debug data for the P4RT App, including:
-  // * PacketIO counters.
-  // * Port translation map.
-  // * Queue translations maps.
-  // * Internal cache.
-  virtual absl::Status DumpDebugData(const std::string& path,
-                                     const std::string& log_level)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Dump various debug data for the P4RT App, including:
+ // * PacketIO counters.
+ // * Port translation map.
+ // * Queue translations maps.
+ // * Internal cache.
+ virtual absl::Status DumpDebugData(const std::string& path,
+                                    const std::string& log_level)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Returns performance statistics relating to the P4Runtime flow programming
-  // API. Data will be reset to zero on reading(i.e. results are not
-  // cumulative).
-  absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Returns performance statistics relating to the P4Runtime flow programming
+ // API. Data will be reset to zero on reading(i.e. results are not
+ // cumulative).
+ absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Assigns the CPU or FRONT_PANEL queue translator.
-  virtual void AssignQueueTranslator(
-      const QueueType queue_type, std::unique_ptr<QueueTranslator> translator)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Assigns the CPU or FRONT_PANEL queue translator.
+ virtual void AssignQueueTranslator(const QueueType queue_type,
+                                    std::unique_ptr<QueueTranslator> translator)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  sonic::PacketIoCounters GetPacketIoCounters()
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ sonic::PacketIoCounters GetPacketIoCounters()
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Rebuild software state after WarmBoot with APP DB
-  // entries and cached p4info file.
-  absl::Status RebuildSwStateAfterWarmboot(
-      const std::vector<std::pair<std::string, std::string>>& port_ids,
-      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
-      const std::vector<std::pair<std::string, std::string>>&
-          front_panel_queue_ids,
-      const std::optional<int>& device_id)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ // Rebuild software state after WarmBoot with APP DB
+ // entries and cached p4info file.
+ absl::Status RebuildSwStateAfterWarmboot(
+     const std::vector<std::pair<std::string, std::string>>& port_ids,
+     const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+     const std::vector<std::pair<std::string, std::string>>&
+         front_panel_queue_ids,
+     const std::optional<int>& device_id)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  void GrabLockAndUpdateWarmBootState(swss::WarmStart::WarmStartState state)
-      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+ void GrabLockAndUpdateWarmBootState(swss::WarmStart::WarmStartState state)
+     ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
- protected:
-  // Simple constructor that should only be used for testing purposes.
-  P4RuntimeImpl(bool translate_port_ids)
-      : translate_port_ids_(translate_port_ids) {}
+protected:
+ // Simple constructor that should only be used for testing purposes.
+ P4RuntimeImpl(bool translate_port_ids)
+     : translate_port_ids_(translate_port_ids) {}
 
 private:
   P4RuntimeImpl(const P4RuntimeImpl &) = delete;
@@ -306,6 +307,11 @@ private:
       const sonic::HashParamConfigs& hash_param_configs)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
+  // Checks whether ther P4Info transition is supported or not.
+  absl::Status IsSupportedTransition(
+      const P4InfoReconcileTransition& transition)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
   // Defines the callback lambda function to be invoked for receive packets
   // and calls into the sonic::StartReceive to spawn the receiver thread.
   ABSL_MUST_USE_RESULT absl::StatusOr<std::thread>
@@ -332,6 +338,8 @@ private:
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::SwitchCapabilityTable switch_capability_table_
+      ABSL_GUARDED_BY(server_state_lock_);
   const std::unique_ptr<sonic::WarmBootStateAdapter>
       warm_boot_state_adapter_ ABSL_GUARDED_BY(server_state_lock_);
 

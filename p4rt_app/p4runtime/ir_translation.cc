@@ -71,14 +71,8 @@ absl::Status OptionallyTranslateQueue(TranslationDirection direction,
   }
   switch (direction) {
     case TranslationDirection::kForController: {
-      int queue_id;
-      if (!absl::SimpleHexAtoi(value.str(), &queue_id)) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Expected AppDB queue as hex string. Got '" << value.str()
-               << "'.";
-      }
-      auto queue_name = translator.IdToName(queue_id);
-      if (queue_name.ok()) value.set_str(*queue_name);
+      ASSIGN_OR_RETURN(*value.mutable_str(),
+                       translator.OptionallyTranslateIdToName(value.str()));
       return absl::OkStatus();
     }
     case TranslationDirection::kForOrchAgent: {

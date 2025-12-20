@@ -693,12 +693,13 @@ P4RuntimeImpl::P4RuntimeImpl(
     sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+    sonic::SwitchCapabilityTable switch_capability_table,
     std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
-//TODO(PINS): To add component_state, system_state and netdev_translator.
-/*  swss::ComponentStateHelperInterface& component_state,
-    swss::SystemStateHelperInterface& system_state,
-    swss::IntfTranslator& netdev_translator,*/
+    // TODO(PINS): To add component_state, system_state and netdev_translator.
+    /*  swss::ComponentStateHelperInterface& component_state,
+        swss::SystemStateHelperInterface& system_state,
+        swss::IntfTranslator& netdev_translator,*/
     const P4RuntimeImplOptions& p4rt_options)
     : p4rt_table_(std::move(p4rt_table)),
       vrf_table_(std::move(vrf_table)),
@@ -708,13 +709,14 @@ P4RuntimeImpl::P4RuntimeImpl(
       switch_table_(std::move(switch_table)),
       port_table_(std::move(port_table)),
       host_stats_table_(std::move(host_stats_table)),
+      switch_capability_table_(std::move(switch_capability_table)),
       warm_boot_state_adapter_(std::move(warm_boot_state_adapter)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
-//TODO(PINS): To add component_state, system_state and netdev_translator.
-/*      component_state_(component_state),
-      system_state_(system_state),
-      netdev_translator_(netdev_translator), */
+      // TODO(PINS): To add component_state, system_state and netdev_translator.
+      /*      component_state_(component_state),
+            system_state_(system_state),
+            netdev_translator_(netdev_translator), */
       translate_port_ids_(p4rt_options.translate_port_ids),
       cpu_queue_translator_(QueueTranslator::Empty()),
       front_panel_queue_translator_(QueueTranslator::Empty()),

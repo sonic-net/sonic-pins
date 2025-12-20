@@ -107,6 +107,12 @@ struct HostStatsTable {
   std::unique_ptr<TableAdapter> state_db;
 };
 
+// The P4RT app needs to:
+//   * Read SWITCH_CAPABILITY entries from the StateDB.
+struct SwitchCapabilityTable {
+  std::unique_ptr<TableAdapter> state_db;
+};
+
 } // namespace sonic
 } // namespace p4rt_app
 

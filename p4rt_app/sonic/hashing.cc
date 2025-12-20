@@ -311,6 +311,9 @@ absl::Status ProgramSwitchTable(
   }
   if (hash_tuples.empty()) return absl::OkStatus();
 
+  // Drain the notification consumer of any pending notifications.
+  switch_table.notification_consumer->DrainNotifications();
+
   LOG(INFO) << "Applying hash config: \n  "
             << absl::StrJoin(hash_tuples, "\n  ", absl::PairFormatter(": "));
 
