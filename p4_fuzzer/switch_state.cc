@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
@@ -306,78 +307,146 @@ absl::Status SwitchState::ResourceExhaustedIsAllowed(
            << "DELETEs should never trigger resource exhaustion."
            << gutil::PrintTextProto(pi_update);
   }
-
-  // Now that we have multicast platform properties, check
-  // for invalid multicast resource exhaustion.
-  if (!pi_update.entity().has_table_entry()) {
-    return gutil::UnimplementedErrorBuilder()
-           << "ResourceExhaustedIsAllowed only supports table entries.";
-  }
-
   std::vector<std::string> results;
   results.reserve(2);
 
-  const TableEntry& pi_table_entry = pi_update.entity().table_entry();
-  uint32_t table_id = pi_table_entry.table_id();
-  ASSIGN_OR_RETURN(const pdpi::IrTableDefinition* table_def,
-                   FindPtrOrStatus(ir_p4info_.tables_by_id(), table_id));
-  ASSIGN_OR_RETURN(const UnorderedTableEntries* table,
-                   FindPtrOrStatus(unordered_tables_, table_id));
+  if (pi_update.entity().has_table_entry()) {
+    const TableEntry& pi_table_entry = pi_update.entity().table_entry();
+    uint32_t table_id = pi_table_entry.table_id();
+    ASSIGN_OR_RETURN(const pdpi::IrTableDefinition* table_def,
+                     FindPtrOrStatus(ir_p4info_.tables_by_id(), table_id));
+    ASSIGN_OR_RETURN(const UnorderedTableEntries* table,
+                     FindPtrOrStatus(unordered_tables_, table_id));
 
-  // If adding this entry would push the table size beyond what is defined then
-  // ResourceExhausted is allowed.
-  if (pi_update.type() == Update::INSERT &&
-      table->size() + 1 > table_def->size()) {
-    return absl::OkStatus();
-  }
-
-  std::string table_size_result =
-      absl::StrFormat("The table is holding %d entries and  has space for %d.",
-                      table->size(), table_def->size());
-  if (pi_update.type() == Update::MODIFY) {
-    absl::StrAppend(&table_size_result,
-                    " The update is a MODIFY and replaces an existing entry.");
-  }
-  results.push_back(table_size_result);
-
-  // If the table uses an action profile then we also need to verify that the
-  // profile itself has enough space.
-  if (table_def->implementation_id_case() ==
-      pdpi::IrTableDefinition::kActionProfileId) {
-    ASSIGN_OR_RETURN(const pdpi::IrActionProfileDefinition* action_profile_def,
-                     FindPtrOrStatus(ir_p4info_.action_profiles_by_id(),
-                                     table_def->action_profile_id()));
-    const p4::config::v1::ActionProfile& action_profile =
-        action_profile_def->action_profile();
-
-    // Check if we have exhausted our action profile resources.
-    absl::StatusOr<std::string> action_profile_has_space =
-        ReasonActionProfileCanAccommodateTableEntry(action_profile, *table,
-                                                    pi_update);
-
-    if (!action_profile_has_space.ok()) {
-      // If we've exhausted our action profile resources then ResourceExhausted
-      // is allowed, but if we have a different error then something else is
-      // wrong and needs to be reported.
-      return (action_profile_has_space.status().code() ==
-              absl::StatusCode::kResourceExhausted)
-                 ? absl::OkStatus()
-                 : action_profile_has_space.status();
+    // If adding this entry would push the table size beyond what is defined
+    // then ResourceExhausted is allowed.
+    if (pi_update.type() == Update::INSERT &&
+        table->size() + 1 > table_def->size()) {
+      return absl::OkStatus();
     }
-    results.push_back(*action_profile_has_space);
+
+    std::string table_size_result =
+        absl::StrFormat("The table is holding %d entries and has space for %d.",
+                        table->size(), table_def->size());
+    if (pi_update.type() == Update::MODIFY) {
+      absl::StrAppend(
+          &table_size_result,
+          " The update is a MODIFY and replaces an existing entry.");
+    }
+    results.push_back(table_size_result);
+
+    // If the table uses an action profile then we also need to verify that the
+    // profile itself has enough space.
+    if (table_def->implementation_id_case() ==
+        pdpi::IrTableDefinition::kActionProfileId) {
+      ASSIGN_OR_RETURN(
+          const pdpi::IrActionProfileDefinition* action_profile_def,
+          FindPtrOrStatus(ir_p4info_.action_profiles_by_id(),
+                          table_def->action_profile_id()));
+      const p4::config::v1::ActionProfile& action_profile =
+          action_profile_def->action_profile();
+
+      // Check if we have exhausted our action profile resources.
+      absl::StatusOr<std::string> action_profile_has_space =
+          ReasonActionProfileCanAccommodateTableEntry(action_profile, *table,
+                                                      pi_update);
+
+      if (!action_profile_has_space.ok()) {
+        // If we've exhausted our action profile resources then
+        // ResourceExhausted is allowed, but if we have a different error then
+        // something else is wrong and needs to be reported.
+        return (action_profile_has_space.status().code() ==
+                absl::StatusCode::kResourceExhausted)
+                   ? absl::OkStatus()
+                   : action_profile_has_space.status();
+      }
+      results.push_back(*action_profile_has_space);
+    }
+
+    return absl::FailedPreconditionError(absl::StrFormat(
+        "Table '%s' must accept the entry because: %s",
+        table_def->preamble().alias(), absl::StrJoin(results, " ")));
   }
 
-  return absl::FailedPreconditionError(absl::StrFormat(
-      "Table '%s' must accept the entry because: %s",
-      table_def->preamble().alias(), absl::StrJoin(results, " ")));
+  if (pi_update.entity()
+          .packet_replication_engine_entry()
+          .has_multicast_group_entry()) {
+    const MulticastGroupEntry& multicast_group_entry =
+        pi_update.entity()
+            .packet_replication_engine_entry()
+            .multicast_group_entry();
+
+    int removed_multicast_replicas = 0;
+    int removed_multicast_entries = 0;
+    if (pi_update.type() == Update::MODIFY) {
+      std::optional<p4::v1::MulticastGroupEntry>
+          existing_multicast_group_entry =
+              GetMulticastGroupEntry(multicast_group_entry);
+      if (!existing_multicast_group_entry.has_value()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << " Cannot MODIFY a multicast group entry that does not exist. "
+               << gutil::PrintTextProto(pi_update);
+      }
+      removed_multicast_replicas =
+          existing_multicast_group_entry->replicas_size();
+      removed_multicast_entries = 1;
+    }
+
+    // Get the resource limits for multicast group entries from the P4info.
+    const p4::config::v1::PlatformProperties& platform_properties =
+        ir_p4info_.pkg_info().platform_properties();
+
+    std::string result;
+    if (current_multicast_resource_statistics_.total_members +
+            multicast_group_entry.replicas_size() -
+            removed_multicast_replicas <=
+        platform_properties.multicast_group_table_total_replicas()) {
+      result = absl::StrFormat(
+          "The multicast group table has %d total replicas with a maximum "
+          "limit of %d, the new entry needs %d, and %d replicas were removed.",
+          current_multicast_resource_statistics_.total_members,
+          platform_properties.multicast_group_table_total_replicas(),
+          multicast_group_entry.replicas_size(), removed_multicast_replicas);
+    } else {
+      return absl::OkStatus();
+    }
+
+    if (current_multicast_resource_statistics_.entries + 1 -
+            removed_multicast_entries <=
+        platform_properties.multicast_group_table_size()) {
+      result = absl::StrFormat(
+          "The current multicast_group_table size is %d, and the max size "
+          "allowed is %d.",
+          current_multicast_resource_statistics_.entries,
+          platform_properties.multicast_group_table_size());
+    } else {
+      return absl::OkStatus();
+    }
+
+    if (multicast_group_entry.replicas_size() <=
+        platform_properties.multicast_group_table_max_replicas_per_entry()) {
+      result = absl::StrFormat(
+          "The current multicast_group_table_entry has %d replicas and the max "
+          "allowed number of replicas per entry is %d.",
+          multicast_group_entry.replicas_size(),
+          platform_properties.multicast_group_table_max_replicas_per_entry());
+    } else {
+      return absl::OkStatus();
+    }
+
+    return absl::InvalidArgumentError(result);
+  }
+
+  return gutil::UnimplementedErrorBuilder()
+         << "ResourceExhaustedIsAllowed does not support "
+         << pi_update.entity().GetTypeName();
 }
 
-const std::vector<uint32_t> SwitchState::AllTableIds() const {
+std::vector<uint32_t> SwitchState::AllTableIds() const {
   std::vector<uint32_t> table_ids;
   for (auto& [key, table] : ir_p4info_.tables_by_id()) {
     table_ids.push_back(key);
   }
-  // absl::c_sort(table_ids);
 
   return table_ids;
 }

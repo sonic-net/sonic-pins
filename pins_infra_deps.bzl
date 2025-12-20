@@ -31,12 +31,11 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/v1.61.0.zip",
-            strip_prefix = "grpc-1.61.0",
-            sha256 = "ba6c53c3924a1d01c663352010e0f73736bad3d99d72108e0f2b1a6466f9be20",
+            url = "https://github.com/grpc/grpc/archive/v1.63.0.zip",
+            strip_prefix = "grpc-1.63.0",
+            sha256 = "daa1b06a19b5f7e4603e1f8980eeab43cf69b6e89bee3b2547f275fa5af7f480",
             patch_args = ["-p1"],
             patches = [
-                "//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
                 "//:bazel/patches/grpc-003-fix_go_gazelle_register_toolchain.patch",
             ],
         )
@@ -141,9 +140,9 @@ def pins_infra_deps():
         http_archive(
             name = "com_github_nlohmann_json",
             # JSON for Modern C++
-            url = "https://github.com/nlohmann/json/archive/v3.8.0.zip",
-            strip_prefix = "json-3.8.0",
-            sha256 = "83947cb78d50990b4b931b8dbc8632781bc601baa45b75ece0899c7b98d86c0b",
+            url = "https://github.com/nlohmann/json/archive/v3.11.3.zip",
+            strip_prefix = "json-3.11.3",
+            sha256 = "04022b05d806eb5ff73023c280b68697d12b93e1b7267a0b22a1a39ec7578069",
             build_file_content = """cc_library(name = "nlohmann_json",
                                                visibility = ["//visibility:public"],
                                                hdrs = glob([
