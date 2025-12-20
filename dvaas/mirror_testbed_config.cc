@@ -448,7 +448,6 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
       control_switch_api_, absl::StrCat(kArtifactPrefix, "configured.cs."),
       kStoreConfiguredSwitchStateParams));
 
-  return absl::OkStatus();
 }
 
 absl::Status MirrorTestbedConfigurator::RestoreToOriginalConfiguration() {
