@@ -494,6 +494,7 @@ cc_library(
         ":test_vector_cc_proto",
         "//gutil/gutil:proto",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
