@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 namespace sai {
 

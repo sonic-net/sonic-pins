@@ -22,6 +22,8 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
@@ -31,7 +33,6 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
@@ -105,7 +106,10 @@ void BreakoutDuringPortInUse(thinkit::Switch &sut,
             router_interface_table_entry {
               match { router_interface_id: "router-interface-1" }
               action {
-                set_port_and_src_mac { port: "$0" src_mac: "02:2a:10:00:00:03" }
+                unicast_set_port_and_src_mac {
+                  port: "$0"
+                  src_mac: "02:2a:10:00:00:03"
+                }
               }
             }
           )pb",

@@ -3,23 +3,27 @@
 #include <sys/syscall.h>
 #include <sys/syslog.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <array>
+#include <ctime>
+#include <string>
 
-#include "glog/logging.h"
+#include "absl/log/log_entry.h"
+#include "absl/log/log_sink_registry.h"
 
 namespace gutil {
 namespace {
 
-// GLOG severity uses integers in the range [0-3]:
-//   https://github.com/google/glog/blob/master/src/glog/log_severity.h
-constexpr std::array<int, 4> kGlogSeverityToSyslog = {
+// Abseil log severity uses integers in the range [0-3]:
+//   https://github.com/abseil/abseil-cpp/blob/master/absl/base/log_severity.h
+constexpr std::array<int, 4> kLogSeverityToSyslog = {
     LOG_INFO,
     LOG_WARNING,
     LOG_ERR,
     LOG_EMERG,
 };
-constexpr std::array<char, 4> kGlogSeverityLetter = {
+constexpr std::array<char, 4> kLogSeverityLetter = {
     'I',
     'W',
     'E',
@@ -30,19 +34,16 @@ constexpr std::array<char, 4> kGlogSeverityLetter = {
 
 SyslogSink::SyslogSink(const char* process_name) {
   openlog(process_name, LOG_NDELAY, LOG_USER);
-  google::AddLogSink(this);
+  absl::AddLogSink(this);
 }
 
 SyslogSink::~SyslogSink() {
-  google::RemoveLogSink(this);
+  absl::RemoveLogSink(this);
   closelog();
 }
 
-void SyslogSink::send(google::LogSeverity severity, const char* full_filename,
-                      const char* base_filename, int line,
-                      const google::LogMessageTime& logmsgtime,
-                      const char* message, size_t message_len) {
-  // Create a timestamp with micosecond resolution.
+void SyslogSink::Send(const absl::LogEntry& entry) {
+  // Create a timestamp with microsecond resolution.
   struct timeval tv;
   struct timezone tz;
   struct tm time;
@@ -51,12 +52,14 @@ void SyslogSink::send(google::LogSeverity severity, const char* full_filename,
 
   // Output format:
   //   I0104 23:00:59.123456    71 filename.cc:100] Your Message Here!
-  syslog(kGlogSeverityToSyslog[severity],
+  int severity = static_cast<int>(entry.log_severity());
+  syslog(kLogSeverityToSyslog[severity],
          "%c%02d%02d %02d:%02d:%02d.%06ld %5ld %s:%d] %.*s",
-         kGlogSeverityLetter[severity], 1 + time.tm_mon, time.tm_mday,
+         kLogSeverityLetter[severity], 1 + time.tm_mon, time.tm_mday,
          time.tm_hour, time.tm_min, time.tm_sec, static_cast<long>(tv.tv_usec),
-         syscall(SYS_gettid), base_filename, line,
-         static_cast<int>(message_len), message);
+         syscall(SYS_gettid), std::string(entry.source_basename()).c_str(),
+         entry.source_line(), static_cast<int>(entry.text_message().size()),
+         entry.text_message().data());
 }
 
 }  // namespace gutil

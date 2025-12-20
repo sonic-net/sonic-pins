@@ -14,8 +14,9 @@
 #include "tests/lib/packet_in_helper.h"
 
 #include "absl/status/status.h"
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include "absl/synchronization/mutex.h"
-#include "glog/logging.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 

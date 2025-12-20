@@ -18,12 +18,12 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 
 namespace dvaas {
@@ -91,6 +91,10 @@ const ValidationResult& ValidationResult::LogStatistics() const {
 ValidationResult& ValidationResult::LogStatistics() {
   LOG(INFO) << ExplainTestVectorStats(test_vector_stats_);
   return *this;
+}
+
+void ValidationResult::RecordStatisticsAsTestProperties() const {
+  RecordStatsAsTestProperties(test_vector_stats_);
 }
 
 std::vector<std::string> ValidationResult::GetAllFailures() const {

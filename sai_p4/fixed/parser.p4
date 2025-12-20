@@ -47,6 +47,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.wcmp_group_id_valid = false;
     local_metadata.wcmp_group_id_value = 0;
     local_metadata.nexthop_id_valid = false;
+    local_metadata.acl_ingress_l2mc_redirect = false;
     local_metadata.nexthop_id_value = 0;
     local_metadata.route_hit = false;
     local_metadata.acl_drop = false;

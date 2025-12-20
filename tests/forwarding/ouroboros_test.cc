@@ -20,6 +20,7 @@
 #include <tuple>
 #include <utility>
 
+#include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -31,7 +32,6 @@
 #include "dvaas/packet_injection.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/validation_result.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"  // IWYU pragma: keep

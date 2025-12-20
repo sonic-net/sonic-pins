@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"

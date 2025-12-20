@@ -5,11 +5,11 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
-#include "glog/logging.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"  // IWYU pragma: keep

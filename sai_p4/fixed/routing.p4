@@ -414,9 +414,11 @@ control routing_resolution(in headers_t headers,
       router_interface_id_value : exact @id(1)
                                         @name("router_interface_id");
     }
-    // TODO: Remove once no longer in use on our switches.
     actions = {
+#if defined(RIF_PROGRAMMING_MY_MAC_SUPPORTED)
+      // TODO: Remove once no longer in use on our switches.
       @proto_id(1) set_port_and_src_mac;
+#endif
       @proto_id(2) unicast_set_port_and_src_mac_and_vlan_id;
       @proto_id(3) unicast_set_port_and_src_mac;
       @defaultonly NoAction;
@@ -508,7 +510,9 @@ control routing_resolution(in headers_t headers,
 #if defined(TUNNEL_ENCAP_CAPABLE)
       @proto_id(2) set_p2p_tunnel_encap_nexthop;
 #endif
+#if defined (NEXTHOP_DISABLE_REWRITES_CAPABLE)
       @proto_id(3) set_ip_nexthop_and_disable_rewrites;
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;

@@ -23,10 +23,10 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/testing.h"
@@ -325,7 +325,7 @@ TableEntryGenerator Ipv6TunnelTerminationGenerator(
   TableEntryGenerator generator;
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(R"pb(
     table_name: "ipv6_tunnel_termination_table"
-    priority: 1
+    priority: 900
     matches {
       name: "src_ipv6"
       ternary {

@@ -237,6 +237,10 @@ control acl_ingress(in headers_t headers,
     @sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)
     @refers_to(builtin::multicast_group_table, multicast_group_id)
     multicast_group_id_t multicast_group_id) {
+    // Mark that we are using ACLs to redirect the packet to an L2 multicast
+    // group.
+    local_metadata.acl_ingress_l2mc_redirect = true;
+
     standard_metadata.mcast_grp = multicast_group_id;
 
     // Cancel other forwarding decisions (if any).
@@ -284,6 +288,9 @@ control acl_ingress(in headers_t headers,
   @sai_acl(INGRESS)
   @sai_acl_priority(5)
   @nonessential_for_upgrade
+#if defined(SAI_INSTANTIATION_TOR)
+  @reinstall_during_upgrade
+#endif
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -430,6 +437,9 @@ control acl_ingress(in headers_t headers,
   @sai_acl_priority(10)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @nonessential_for_upgrade
+#if defined(SAI_INSTANTIATION_TOR)
+  @reinstall_during_upgrade
+#endif
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -662,6 +672,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
   @sai_acl_priority(15)
+  @nonessential_for_upgrade
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
