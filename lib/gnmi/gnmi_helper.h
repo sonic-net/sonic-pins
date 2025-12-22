@@ -15,6 +15,7 @@
 #ifndef PINS_LIB_GNMI_GNMI_HELPER_H_
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <ostream>
@@ -192,6 +193,17 @@ struct BlackholeSwitchCounters {
 struct HstCounters {
   std::vector<float> abwc_digests;
   std::vector<float> abwc_digests_cumulative;
+};
+
+struct DelayMaps {
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_configured_ingress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_configured_egress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_applied_ingress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_applied_egress_delay_map;
 };
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
@@ -629,6 +641,10 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for an interface.
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Gets bad intervals counter for an interface.
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for the switch.
