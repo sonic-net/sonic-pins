@@ -305,6 +305,199 @@ TEST(ParseTrafficItemStats, ParsesExampleCorrectly) {
               )pb")));
 }
 
+TEST(ParseTrafficItemStats, ParsesTrafficItemStats) {
+  static constexpr absl::string_view kExample = R"json({
+      "rowCount": 2,
+      "rowValues": {
+        "arg1": [
+          [
+            "Unicast Traffic",
+            "115052349",
+            "115052349",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "174189256386",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "1088",
+            "1081",
+            "6314",
+            "00:00:00.175",
+            "00:00:08.885"
+          ]
+        ],
+        "arg2": [
+          [
+            "Unicast Traffic #1",
+            "105",
+            "105",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "158970",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "3711",
+            "1093",
+            "6306",
+            "00:00:00.175",
+            "00:00:00.175"
+          ]
+        ]
+      },
+      "egressMode": "conditional",
+      "currentPage": 1,
+      "timestamp": 360000,
+      "isReady": true,
+      "allowPaging": true,
+      "totalPages": 1,
+      "totalRows": 2,
+      "pageSize": 50,
+      "columnCaptions": [
+        "Traffic Item",
+        "Tx Frames",
+        "Rx Frames",
+        "Frames Delta",
+        "Loss %",
+        "Tx Frame Rate",
+        "Rx Frame Rate",
+        "Tx L1 Rate (bps)",
+        "Rx L1 Rate (bps)",
+        "Rx Bytes",
+        "Tx Rate (Bps)",
+        "Rx Rate (Bps)",
+        "Tx Rate (bps)",
+        "Rx Rate (bps)",
+        "Tx Rate (Kbps)",
+        "Rx Rate (Kbps)",
+        "Tx Rate (Mbps)",
+        "Rx Rate (Mbps)",
+        "Store-Forward Avg Latency (ns)",
+        "Store-Forward Min Latency (ns)",
+        "Store-Forward Max Latency (ns)",
+        "First TimeStamp",
+        "Last TimeStamp"
+      ],
+      "pageValues": [
+        [
+          [
+            "Unicast Traffic",
+            "115052349",
+            "115052349",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "174189256386",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "1088",
+            "1081",
+            "6314",
+            "00:00:00.175",
+            "00:00:08.885"
+          ]
+        ],
+        [
+          [
+            "Unicast Traffic #1",
+            "105",
+            "105",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "158970",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "3711",
+            "1093",
+            "6306",
+            "00:00:00.175",
+            "00:00:00.175"
+          ]
+        ]
+      ],
+      "columnCount": 26,
+      "isBlocked": false,
+      "egressPageSize": "This operation is not supported as this is not an ingress/egress view",
+      "links": [
+        {
+          "rel": "self",
+          "method": "GET",
+          "href": "/api/v1/sessions/1239/ixnetwork/statistics/view/14/data"
+        },
+        {
+          "rel": "meta",
+          "method": "OPTIONS",
+          "href": "/api/v1/sessions/1239/ixnetwork/statistics/view/14/data"
+        }
+      ]
+    })json";
+
+  EXPECT_THAT(ParseTrafficItemStats(kExample), IsOkAndHolds(EqualsProto(R"pb(
+                stats_by_traffic_item {
+                  key: "Unicast Traffic"
+                  value: {
+                    traffic_item_name: "Unicast Traffic"
+                    num_tx_frames: 115052349
+                    num_rx_frames: 115052349
+                    rx_bytes: 174189256386
+                    first_time_stamp: 0.175
+                    last_time_stamp: 8.885
+
+                  }
+                }
+
+                stats_by_traffic_item {
+                  key: "Unicast Traffic #1"
+                  value: {
+                    traffic_item_name: "Unicast Traffic #1"
+                    num_tx_frames: 105
+                    num_rx_frames: 105
+                    rx_bytes: 158970
+                    first_time_stamp: 0.175
+                    last_time_stamp: 0.175
+                  }
+                }
+              )pb")));
+}
+
 TEST(IxiaHelper, ParseMissingTimestamps) {
   static constexpr absl::string_view kExample = R"json({
       "rowCount": 2,

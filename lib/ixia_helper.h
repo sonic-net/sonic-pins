@@ -42,6 +42,10 @@ inline constexpr int kEthernetStackIndex = 1;
 inline constexpr std::string_view kEthernetWithoutFcsName =
     "Ethernet II without FCS";
 
+inline constexpr std::string_view kFlowStatisticsView = "Flow Statistics";
+inline constexpr std::string_view kTrafficItemStatisticsView =
+    "Traffic Item Statistics";
+
 // An Ixia port is defined by IP address of chassis, card number and
 // port number.
 // This structure holds these attributes which define an Ixia port.
@@ -402,10 +406,11 @@ GetTrafficItemStats(absl::string_view href, absl::string_view traffic_item_name,
 
 // Returns statistics for all traffic items, keyed by traffic item name.
 // Takes in the href returned by IxiaConnect, and the `traffic_item_name` set
-// by `SetUpTrafficItem`.
-absl::StatusOr<TrafficStats>
-GetAllTrafficItemStats(absl::string_view href,
-                       thinkit::GenericTestbed &generic_testbed);
+// by `SetUpTrafficItem`. `view_name` is the name of the statistics view in the
+// GUI (e.g. Traffic Item Statistics).
+absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed,
+    absl::string_view view_name = kFlowStatisticsView);
 
 // Computes average rate (bytes/s) at which traffic was received back by Ixia.
 inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
