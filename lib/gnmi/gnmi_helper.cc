@@ -215,7 +215,7 @@ absl::StatusOr<json> GetBreakoutConfigWithIndex(const json& json_array,
 
 absl::Status IsBreakoutModeMatch(const BreakoutMode& breakout,
                                  const json& json_array) {
-  // convert the json array of groupts to a vector of breakout speed.
+  // Convert the JSON array of groups to a vector of breakout speed.
   std::vector<std::string> json_breakout;
   for (int index = 0; index < json_array.size(); ++index) {
     ASSIGN_OR_RETURN(const auto& breakout_config,
@@ -430,13 +430,17 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
   // Copy the blackhole port counters only if all the blackhole port counters
   // are available.
   absl::StatusOr<uint64_t> in_discard_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "in-discard-events"});
+      interface_json,
+      {"state", "pins-interfaces:blackhole", "in-discard-events"});
   absl::StatusOr<uint64_t> out_discard_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "out-discard-events"});
+      interface_json,
+      {"state", "pins-interfaces:blackhole", "out-discard-events"});
   absl::StatusOr<uint64_t> in_error_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "in-error-events"});
+      interface_json,
+      {"state", "pins-interfaces:blackhole", "in-error-events"});
   absl::StatusOr<uint64_t> fec_not_correctable_events = ParseJsonValueAsUint(
-      interface_json, {"state", "blackhole", "fec-not-correctable-events"});
+      interface_json, {"state", "pins-interfaces:blackhole",
+                       "fec-not-correctable-events"});
   if (in_discard_events.ok() && out_discard_events.ok() &&
       in_error_events.ok() && fec_not_correctable_events.ok()) {
     counters.blackhole_counters = BlackholePortCounters{
@@ -545,6 +549,18 @@ absl::StatusOr<nlohmann::json> ParseGnmiNotificationAsJson(
              << "Unexpected data type: "
              << notification.update(0).val().value_case();
   }
+}
+
+absl::StatusOr<json> GetBlackholePortCountersJson(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/state/pins-interfaces:blackhole");
+  const std::string ops_parse_str = "pins-interfaces:blackhole";
+  ASSIGN_OR_RETURN(
+      std::string port_counters_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
+  return json_yang::ParseJson(port_counters_info);
 }
 
 }  // namespace
@@ -2264,21 +2280,18 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
   return counters;
 }
 
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(json port_counters_json,
+                   GetBlackholePortCountersJson(interface_name, gnmi_stub));
+  return ParseJsonValueAsUint(port_counters_json, {"bad-intervals"});
+}
+
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
-  const std::string ops_state_path =
-      absl::StrCat("interfaces/interface[name=", interface_name,
-                   "]/state/pins-interfaces:blackhole");
-  const std::string ops_parse_str = "pins-interfaces:blackhole";
-  ASSIGN_OR_RETURN(
-      std::string port_counters_info,
-      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
-
   ASSIGN_OR_RETURN(json port_counters_json,
-                   json_yang::ParseJson(port_counters_info));
-  ASSIGN_OR_RETURN(BlackholePortCounters port_counters,
-                   ParseBlackholePortCounters(port_counters_json));
-  return port_counters;
+                   GetBlackholePortCountersJson(interface_name, gnmi_stub));
+  return ParseBlackholePortCounters(port_counters_json);
 }
 
 absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
