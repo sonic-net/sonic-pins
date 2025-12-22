@@ -61,6 +61,7 @@ cc_library(
     deps = [
 	":mirror_blackbox_test_fixture",
         ":test_data",
+        "//gutil/gutil:status",
         "//gutil/gutil:proto_matchers",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
@@ -80,12 +81,13 @@ cc_library(
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
         "//thinkit:test_environment",
+        "@com_github_grpc_grpc//:grpc++_unsecure",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
 	"@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
-        "@com_google_protobuf//:protobuf",
     ],
     alwayslink = True,
 )
