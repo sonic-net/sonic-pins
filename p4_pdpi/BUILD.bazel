@@ -96,7 +96,6 @@ cc_library(
     deps = [
         ":built_ins",
         ":ir_cc_proto",
-        "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/utils:annotation_parser",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:btree",
@@ -107,6 +106,7 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_protobuf//:protobuf",
         "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:status",
     ],
 )
@@ -205,7 +205,6 @@ cc_library(
         ":ir",
         ":ir_cc_proto",
         ":translation_options",
-        "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/string_encodings:hex_string",
         "//p4_pdpi/utils:ir",
         "@com_github_grpc_grpc//:grpc++",
@@ -221,6 +220,7 @@ cc_library(
         "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_protobuf//:protobuf",
         "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
     ],
@@ -254,12 +254,12 @@ cc_library(
     deps = [
         ":ir_cc_proto",
         ":pd",
-        "//p4_pdpi/internal:ordered_map",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:status",
     ],
 )
