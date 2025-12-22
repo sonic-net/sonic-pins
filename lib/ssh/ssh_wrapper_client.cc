@@ -140,5 +140,12 @@ absl::Status SshWrapperClient::CheckAndRestoreBootinstall(
                                                 timeout);
 }
 
+absl::Status SshWrapperClient::CheckContainersUp(
+    absl::string_view chassis_name, thinkit::SSHClient& ssh_client) {
+  ASSIGN_OR_RETURN(auto* ssh_helper,
+                   SshWrapperClient::GetSshHelper(chassis_name));
+  return ssh_helper->CheckContainersUp(chassis_name, ssh_client);
+}
+
 }  // namespace thinkit
 

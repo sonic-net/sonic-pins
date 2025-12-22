@@ -85,6 +85,9 @@ class MockLinuxSshHelper : public LinuxSshHelper {
               (absl::string_view chassis_name, SSHClient* ssh_client,
                absl::Duration timeout),
               (override));
+  MOCK_METHOD(absl::Status, CheckContainersUp,
+              (absl::string_view chassis_name, SSHClient& ssh_client),
+              (override));
 };
 
 }  // namespace thinkit

@@ -106,6 +106,11 @@ class SshWrapperClient : public LinuxSshHelper {
                                           thinkit::SSHClient* ssh_client,
                                           absl::Duration timeout) override;
 
+  // Checks the status of all containers and returns an error if not all of them
+  // are running.
+  absl::Status CheckContainersUp(absl::string_view chassis_name,
+                                 thinkit::SSHClient& ssh_client) override;
+
  private:
   // Returns a LinuxSshHelper instance for the given SUT.
   absl::StatusOr<LinuxSshHelper*> GetSshHelper(absl::string_view sut);

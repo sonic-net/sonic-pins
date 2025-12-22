@@ -3170,16 +3170,16 @@ TEST(InterfaceToSpeed, WorksProperly) {
 }
 
 TEST(InterfaceSupportsBert, WorksProperly) {
+  constexpr int k10G = 10'000'000;
   constexpr int k25G = 25'000'000;
   constexpr int k50G = 50'000'000;
   constexpr int k100G = 100'000'000;
 
   const absl::flat_hash_map<std::string, int> kInterfaceToLaneSpeed = {
-      {"Ethernet1/1/1", k50G},
-      {"Ethernet1/2/1", k25G},
-      {"Ethernet1/3/1", k100G},
-      {"Ethernet1/4/1", k25G},
-      {"Ethernet1/5/1", k50G}};
+      {"Ethernet1/1/1", k50G},  {"Ethernet1/2/1", k25G},
+      {"Ethernet1/3/1", k100G}, {"Ethernet1/4/1", k25G},
+      {"Ethernet1/5/1", k50G},  {"Ethernet1/33", k10G},
+      {"Ethernet1/34", k10G}};
 
   // BERT is supported cases.
   EXPECT_TRUE(InterfaceSupportsBert("Ethernet1/2/1", kInterfaceToLaneSpeed));
@@ -3189,6 +3189,8 @@ TEST(InterfaceSupportsBert, WorksProperly) {
   EXPECT_FALSE(InterfaceSupportsBert("Ethernet1/1/1", kInterfaceToLaneSpeed));
   EXPECT_FALSE(InterfaceSupportsBert("Ethernet1/3/1", kInterfaceToLaneSpeed));
   EXPECT_FALSE(InterfaceSupportsBert("Ethernet1/5/1", kInterfaceToLaneSpeed));
+  EXPECT_FALSE(InterfaceSupportsBert("Ethernet1/33", kInterfaceToLaneSpeed));
+  EXPECT_FALSE(InterfaceSupportsBert("Ethernet1/34", kInterfaceToLaneSpeed));
 
   // Interface not found in interface to lane speed map.
   EXPECT_FALSE(InterfaceSupportsBert("Ethernet1/7/1", kInterfaceToLaneSpeed));
