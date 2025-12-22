@@ -22,7 +22,7 @@
 
 #include "dvaas/dataplane_validation.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/mirror_testbed.h"

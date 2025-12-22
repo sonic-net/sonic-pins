@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/pd.h"

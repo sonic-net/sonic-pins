@@ -21,7 +21,7 @@
 
 #include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 
 namespace pins_test {

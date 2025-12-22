@@ -45,11 +45,11 @@
 #include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/io.h"
-#include "gutil/gutil/status.h"  // IWYU pragma: keep
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/collections.h"
+#include "gutil/io.h"
+#include "gutil/status.h"  // IWYU pragma: keep
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
