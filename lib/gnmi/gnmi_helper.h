@@ -15,6 +15,7 @@
 #ifndef PINS_LIB_GNMI_GNMI_HELPER_H_
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <ostream>
@@ -629,6 +630,10 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for an interface.
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Gets bad intervals counter for an interface.
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for the switch.

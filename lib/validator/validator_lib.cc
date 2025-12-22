@@ -15,6 +15,7 @@
 #include "lib/validator/validator_lib.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
