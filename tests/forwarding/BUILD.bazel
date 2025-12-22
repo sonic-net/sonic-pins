@@ -47,6 +47,7 @@ cc_library(
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:mirror_testbed_fixture",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
