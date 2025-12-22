@@ -40,6 +40,7 @@
 #include "google/protobuf/repeated_field.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
+#include "gutil/ordered_map.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -53,7 +54,6 @@
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/entity_keys.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/references.h"
@@ -65,6 +65,7 @@ namespace p4_fuzzer {
 using ::absl::gntohll;
 
 using ::absl::Uniform;
+using ::gutil::AsOrderedView;
 using ::p4::v1::Action;
 using ::p4::v1::Entity;
 using ::p4::v1::FieldMatch;
@@ -566,7 +567,7 @@ std::vector<uint32_t> GetMandatoryMatchTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
   for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
-    for (auto& [match_id, match] : Ordered(table.match_fields_by_id())) {
+    for (auto& [match_id, match] : AsOrderedView(table.match_fields_by_id())) {
       if (match.match_field().match_type() ==
           p4::config::v1::MatchField::EXACT) {
         table_ids.push_back(table.preamble().id());
@@ -582,7 +583,7 @@ std::vector<uint32_t> GetMandatoryMatchTableIds(const FuzzerConfig& config) {
 std::vector<uint32_t> GetDifferentRoleTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (auto& [key, table] : Ordered(config.GetIrP4Info().tables_by_id())) {
+  for (auto& [key, table] : AsOrderedView(config.GetIrP4Info().tables_by_id())) {
     if (table.role() == config.GetRole()) continue;
     table_ids.push_back(key);
   }
@@ -1016,7 +1017,7 @@ struct VariableWithReferences {
 absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
     const pdpi::IrP4Info& ir_info, int table_id) {
   for (const auto& [id, action_profile_definition] :
-       Ordered(ir_info.action_profiles_by_id())) {
+       AsOrderedView(ir_info.action_profiles_by_id())) {
     if (action_profile_definition.has_action_profile()) {
       // Does the action profile apply to the given table?
       auto& action_profile = action_profile_definition.action_profile();
@@ -1034,7 +1035,7 @@ const std::vector<IrTableDefinition> AllValidTablesForP4RtRole(
     const FuzzerConfig& config) {
   std::vector<IrTableDefinition> tables;
 
-  for (auto& [key, table] : Ordered(config.GetIrP4Info().tables_by_id())) {
+  for (auto& [key, table] : AsOrderedView(config.GetIrP4Info().tables_by_id())) {
     // Tables with the wrong role can't be modified by the controller.
     if (table.role() != config.GetRole()) continue;
     // Tables without actions cannot have valid table entries.
@@ -1070,7 +1071,7 @@ const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
   std::vector<pdpi::IrMatchFieldDefinition> match_fields;
 
   for (const auto& [_, match_field_info] :
-       Ordered(table.match_fields_by_id())) {
+       AsOrderedView(table.match_fields_by_id())) {
     // Skip deprecated, unused, and disallowed fields.
     const absl::StatusOr<std::string> fully_qualified_match_field =
         GetFullyQualifiedMatchFieldName(table, match_field_info);
@@ -1366,7 +1367,7 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
   action.set_action_id(ir_action_info.preamble().id());
 
   for (auto& [param_name, ir_param] :
-       Ordered(ir_action_info.params_by_name())) {
+       AsOrderedView(ir_action_info.params_by_name())) {
     p4::v1::Action::Param* param = action.add_params();
     param->set_param_id(ir_param.param().id());
     ASSIGN_OR_RETURN(
