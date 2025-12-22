@@ -15,6 +15,7 @@
 #ifndef PINS_LIB_GNMI_GNMI_HELPER_H_
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <ostream>
@@ -194,6 +195,17 @@ struct HstCounters {
   std::vector<float> abwc_digests_cumulative;
 };
 
+struct DelayMaps {
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_configured_ingress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_configured_egress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_applied_ingress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_applied_egress_delay_map;
+};
+
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
 
 // Generates an OpenConfig JSON string using the given list of `interfaces` to
@@ -250,7 +262,8 @@ absl::Status UpdateAndVerifyGnmiConfigLeaf(
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
-    absl::string_view resp_parse_str = {});
+    absl::string_view resp_parse_str = {},
+    std::optional<absl::Duration> timeout = std::nullopt);
 
 // Return the string value of a gNMI state leaf.
 absl::StatusOr<std::string> GetGnmiStateLeafValue(
@@ -265,10 +278,10 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
     absl::string_view resp_parse_str);
 
-absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
-                                         absl::string_view path,
-                                         gnmi::GetRequest::DataType req_type,
-                                         absl::string_view resp_parse_str = {});
+absl::StatusOr<std::string> ReadGnmiPath(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
+    gnmi::GetRequest::DataType req_type, absl::string_view resp_parse_str = {},
+    std::optional<absl::Duration> timeout = std::nullopt);
 
 template <class T>
 std::string ConstructGnmiConfigSetString(std::string field, T value) {
@@ -629,6 +642,10 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for an interface.
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Gets bad intervals counter for an interface.
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for the switch.
