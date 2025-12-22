@@ -1121,16 +1121,17 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
         pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
 
     // Ensure that all enabled ports are up for control switch.
-    RETURN_IF_ERROR(
-        pins_test::WaitForEnabledInterfacesToBeUp(testbed.ControlSwitch()))
+    RETURN_IF_ERROR(pins_test::WaitForEnabledEthernetInterfacesToBeUp(
+                        testbed.ControlSwitch()))
             .SetPrepend()
-        << "expected enabled interfaces on control switch to be up: ";
+        << "expected enabled ethernet interfaces on control switch to be up: ";
   }
 
   // Ensure that all enabled ports are up for SUT.
-  RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed.Sut()))
+  RETURN_IF_ERROR(
+      pins_test::WaitForEnabledEthernetInterfacesToBeUp(testbed.Sut()))
           .SetPrepend()
-      << "expected enabled interfaces on SUT to be up: ";
+      << "expected enabled ethernet interfaces on SUT to be up: ";
 
   // Do not return on error in order to restore the original control switch
   // gNMI interface config's P4RT IDs.
