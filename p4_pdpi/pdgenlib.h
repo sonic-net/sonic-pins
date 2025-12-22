@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace pdpi {

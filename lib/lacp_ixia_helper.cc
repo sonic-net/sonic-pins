@@ -20,8 +20,8 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "gutil/gutil/overload.h"
-#include "gutil/gutil/status.h"
+#include "gutil/overload.h"
+#include "gutil/status.h"
 #include "lib/ixia_helper.h"
 #include "thinkit/generic_testbed.h"
 

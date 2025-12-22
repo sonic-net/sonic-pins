@@ -11,9 +11,9 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "google/protobuf/repeated_ptr_field.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"  // IWYU pragma: keep
-#include "gutil/gutil/status.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"  // IWYU pragma: keep
+#include "gutil/status.h"
 #include "p4_constraints/ast.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.h"

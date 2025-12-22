@@ -24,13 +24,13 @@ cc_library(
     testonly = True,
     hdrs = ["testbed.h"],
     deps = [
-        "//gutil/gutil:overload",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_gutil//gutil:overload",
     ],
 )
 

@@ -31,10 +31,10 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "google/protobuf/message_lite.h"
-#include "gutil/gutil/io.h"
-#include "gutil/gutil/status.h"
+#include "gutil/io.h"
+#include "gutil/ordered_map.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/test_util.h"
@@ -61,7 +61,7 @@ absl::StatusOr<std::string> GetConcretePacketsCoveringAllTableEntries(
   // Loop over tables in a deterministic order for output consistency
   // (important for CI tests).
   for (const auto &[table_name, table] :
-       Ordered(solver_state.program.tables())) {
+       gutil::AsOrderedView(solver_state.program.tables())) {
     int row_count = 0;
     if (solver_state.context.table_entries.count(table_name) > 0) {
       row_count = static_cast<int>(

@@ -17,8 +17,8 @@
 #include <string>
 
 #include "google/protobuf/util/json_util.h"
-#include "gutil/gutil/io.h"
-#include "gutil/gutil/status.h"
+#include "gutil/io.h"
+#include "gutil/status.h"
 
 namespace p4_symbolic {
 namespace bmv2 {

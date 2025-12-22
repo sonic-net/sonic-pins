@@ -27,9 +27,6 @@ cc_library(
         "bert_tests.h",
     ],
     deps = [
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
         "//tests:thinkit_gnmi_interface_util",
@@ -58,6 +55,9 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
     alwayslink = True,
 )
@@ -72,7 +72,6 @@ cc_library(
         "factory_reset_test.h",
     ],
     deps = [
-        "//gutil/gutil:status_matchers",
         "//lib/validator:validator_lib",
         "//thinkit:ssh_client",
         "//thinkit:switch",
@@ -85,6 +84,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:status_matchers",
     ],
     alwayslink = True,
 )
