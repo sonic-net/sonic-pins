@@ -91,10 +91,10 @@ def pins_infra_deps():
     if not native.existing_rule("com_google_gutil"):
         http_archive(
             name = "com_google_gutil",
-            # Newest commit on main as of 2025-02-21.
-            url = "https://github.com/google/gutil/archive/9c1f8fdf5b626014c41aad98a3289ef67cf47ab9.zip",
-            strip_prefix = "gutil-9c1f8fdf5b626014c41aad98a3289ef67cf47ab9",
-            sha256 = "e804da2534d5de5d68497222027cdbf39d4cb6880dbe67aa8d20f69b8bc7d4f1",
+            # Newest commit on main as of 2025-05-14.
+            url = "https://github.com/google/gutil/archive/d2f1bdd819287c3951adaba5ea6e5426d2eefff1.zip",
+            strip_prefix = "gutil-d2f1bdd819287c3951adaba5ea6e5426d2eefff1",
+            sha256 = "033bcab2835a0aea0427d38503f5ae2bd478af134ab8f3e75b65d2cd444ac8ca",
         )
     if not native.existing_rule("com_github_otg_models"):
         http_archive(

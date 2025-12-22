@@ -56,7 +56,6 @@
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"

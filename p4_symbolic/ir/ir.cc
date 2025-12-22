@@ -30,10 +30,10 @@
 #include "absl/strings/strip.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/struct.pb.h"
+#include "gutil/ordered_map.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/names.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
@@ -1466,7 +1466,7 @@ absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
   pdpi::IrMatch *lpm_match = nullptr;
 
   for (const auto &[match_name, match_definition] :
-       Ordered(table.table_definition().match_fields_by_name())) {
+       gutil::AsOrderedView(table.table_definition().match_fields_by_name())) {
     // Set match name.
     pdpi::IrMatch &ir_match = *result.mutable_sketch()->add_matches();
     ir_match.set_name(match_name);

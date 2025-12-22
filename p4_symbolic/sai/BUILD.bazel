@@ -23,7 +23,6 @@ cc_library(
     hdrs = ["sai.h"],
     deps = [
         "//p4_pdpi:ir_cc_proto",
-        "//p4_pdpi/internal:ordered_map",
         "//p4_symbolic/ir",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic:operators",
@@ -37,6 +36,7 @@ cc_library(
         "@com_google_absl//absl/strings",
 	"@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:status",
     ],
 )

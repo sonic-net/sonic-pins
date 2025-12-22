@@ -26,8 +26,8 @@
 #include "absl/strings/string_view.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
+#include "gutil/ordered_map.h"
 #include "gutil/status.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -449,7 +449,7 @@ absl::Status EvaluateSymbolicAction(const ir::Action &action,
 
   // Add the symbolic action parameters to scope.
   for (const auto &[param_name, _] :
-       Ordered(action.action_definition().params_by_name())) {
+       gutil::AsOrderedView(action.action_definition().params_by_name())) {
     ASSIGN_OR_RETURN(z3::expr param_value, GetSymbolicActionParameter(
                                                entry, param_name, action, table,
                                                *state.context.z3_context));

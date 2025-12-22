@@ -47,6 +47,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
+#include "gutil/ordered_map.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -57,7 +58,6 @@
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
@@ -82,6 +82,7 @@
 
 namespace pins_test {
 
+using ::gutil::AsOrderedView;
 using ::gutil::IsOkAndHolds;
 using ::json_yang::FormatJsonBestEffort;
 using ::testing::Contains;
@@ -1283,7 +1284,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   SCOPED_TRACE(absl::StrCat("Final port counters: ", final_port_counters));
   absl::flat_hash_map<std::string, int64_t> num_rx_frames_by_queue;
   for (auto &[traffic_item_name, stats] :
-       Ordered(kTrafficStats.stats_by_traffic_item())) {
+       AsOrderedView(kTrafficStats.stats_by_traffic_item())) {
     if (traffic_item_name == kAuxiliaryTrafficName) continue;
     ASSERT_OK_AND_ASSIGN(
         std::string queue,
@@ -2622,7 +2623,7 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
     absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
     for (auto &[traffic_item_name, stats] :
-         Ordered(kTrafficStats.stats_by_traffic_item())) {
+         AsOrderedView(kTrafficStats.stats_by_traffic_item())) {
       ASSERT_OK_AND_ASSIGN(
           int config, gutil::FindOrStatus(buffer_config_by_traffic_item_name,
                                           traffic_item_name));
@@ -2634,7 +2635,8 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
 
     int64_t lower_config_num_rx_frames = -1;
     int lower_config = -1;
-    for (auto &[config, num_rx_frames] : Ordered(rx_frames_by_buffer_config)) {
+    for (auto &[config, num_rx_frames] : 
+		    AsOrderedView(rx_frames_by_buffer_config)) {
       LOG(INFO) << "Config: " << absl::StrFormat("%2d", config)
                 << " Num rx frames: " << num_rx_frames;
       EXPECT_GT(num_rx_frames, lower_config_num_rx_frames);

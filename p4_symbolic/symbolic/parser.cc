@@ -24,8 +24,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
+#include "gutil/ordered_map.h"
 #include "gutil/status.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
@@ -67,7 +67,8 @@ absl::Status EvaluateExtractParserOperation(
                               z3_context.bool_val(true), guard));
 
   // Verify if all fields of the header are single, free bit-vector variables.
-  for (const auto &[field_name, ir_field] : Ordered(it->second.fields())) {
+  for (const auto &[field_name, ir_field] : 
+		  gutil::AsOrderedView(it->second.fields())) {
     std::string field_full_name =
         absl::StrFormat("%s.%s", header_name, field_name);
     ASSIGN_OR_RETURN(const z3::expr &field, headers.Get(field_full_name));

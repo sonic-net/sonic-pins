@@ -13,18 +13,27 @@
 // limitations under the License.
 #include "p4_fuzzer/mutation.h"
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
 #include "absl/algorithm/container.h"
+#include "absl/log/log.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "gutil/collections.h"
+#include "gutil/ordered_map.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
-#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_fuzzer/switch_state.h"
 
 namespace p4_fuzzer {
 
 using ::absl::BitGen;
 using ::absl::Uniform;
+using ::gutil::AsOrderedView;
 using ::p4::v1::TableEntry;
 
 namespace {
@@ -45,7 +54,7 @@ const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
   for (auto& [table_id, table_def] :
-       Ordered(config.GetIrP4Info().tables_by_id())) {
+       AsOrderedView(config.GetIrP4Info().tables_by_id())) {
     table_ids.push_back(table_id);
   }
 
@@ -57,7 +66,7 @@ const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config) {
   std::vector<uint32_t> action_ids;
 
   for (auto& [action_id, action_def] :
-       Ordered(config.GetIrP4Info().actions_by_id())) {
+       AsOrderedView(config.GetIrP4Info().actions_by_id())) {
     action_ids.push_back(action_id);
   }
 
@@ -71,7 +80,7 @@ const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
   std::vector<uint32_t> match_ids;
 
   for (auto& [match_id, match_def] :
-       Ordered(gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), table_id)
+       AsOrderedView(gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), table_id)
                    .match_fields_by_id())) {
     match_ids.push_back(match_id);
   }
