@@ -40,6 +40,7 @@
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
+#include "dvaas/test_insights.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
@@ -941,12 +942,23 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   RETURN_IF_ERROR(
       AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
 
-  // Store the packet trace for all failed test outcomes.
-  ASSIGN_OR_RETURN(P4Specification p4_spec,
-                   InferP4Specification(params, *backend_, sut));
+  // Store test insights.
   ASSIGN_OR_RETURN(p4::config::v1::P4Info sut_p4info,
                    pdpi::GetP4Info(*sut.p4rt));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(sut_p4info));
+
+  absl::StatusOr<const std::string> insights_csv =
+      GetTestInsightsTableAsCsv(test_outcomes, ir_p4info);
+  if (insights_csv.ok()) {
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "test_insights.csv", *insights_csv));
+  } else {
+    LOG(ERROR) << "Failed to get test insights: " << insights_csv.status();
+  }
+
+  // Store the packet trace for all failed test outcomes.
+  ASSIGN_OR_RETURN(P4Specification p4_spec,
+                   InferP4Specification(params, *backend_, sut));
   std::vector<SwitchInput> failed_switch_inputs;
   for (const dvaas::PacketTestOutcome& test_outcome :
        test_outcomes.outcomes()) {
