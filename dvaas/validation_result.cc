@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
@@ -73,6 +74,50 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
   return absl::OkStatus();
 }
 
+absl::Status ValidationResult::HasSuccessRateOfAtLeastForGivenLabels(
+    double expected_success_rate,
+    absl::flat_hash_set<std::string>& included_labels) const {
+  PacketTestOutcomes filtered_test_outcomes;
+  // Filter test outcomes based on the included labels.
+  for (const auto& outcome : test_outcomes_.outcomes()) {
+    for (const auto& outcome_label : outcome.test_run().labels().labels()) {
+      if (included_labels.contains(outcome_label)) {
+        *filtered_test_outcomes.add_outcomes() = outcome;
+        break;
+      }
+    }
+  }
+
+  ValidationResult filtered_validation_result(filtered_test_outcomes,
+                                              packet_synthesis_result_);
+  return filtered_validation_result.HasSuccessRateOfAtLeast(
+      expected_success_rate);
+}
+
+absl::Status ValidationResult::HasSuccessRateOfAtLeastWithoutGivenLabels(
+    double expected_success_rate,
+    absl::flat_hash_set<std::string>& excluded_labels) const {
+  // Filter test outcomes based on the excluded labels.
+  PacketTestOutcomes filtered_test_outcomes;
+  for (const auto& outcome : test_outcomes_.outcomes()) {
+    bool has_excluded_label = false;
+    for (const auto& outcome_label : outcome.test_run().labels().labels()) {
+      if (excluded_labels.contains(outcome_label)) {
+        has_excluded_label = true;
+        break;
+      }
+    }
+    if (!has_excluded_label) {
+      *filtered_test_outcomes.add_outcomes() = outcome;
+    }
+  }
+
+  ValidationResult filtered_validation_result(filtered_test_outcomes,
+                                              packet_synthesis_result_);
+  return filtered_validation_result.HasSuccessRateOfAtLeast(
+      expected_success_rate);
+}
+
 double ValidationResult::GetSuccessRate() const {
   // Avoid division by 0.
   if (test_vector_stats_.num_vectors == 0) return 1.0;
@@ -107,6 +152,10 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
     }
   }
   return failures;
+}
+
+PacketTestOutcomes ValidationResult::GetRawPacketTestOutcomes() const {
+  return test_outcomes_;
 }
 
 bool ValidationResult::PacketSynthesizerTimedOut() const {

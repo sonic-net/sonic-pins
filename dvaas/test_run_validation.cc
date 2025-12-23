@@ -35,6 +35,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
+#include "google/protobuf/message.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
@@ -93,6 +94,18 @@ absl::Status IgnoreField(MessageDifferencer& differ,
   return absl::OkStatus();
 }
 
+void RemoveIgnoredMetadataFromPacketIns(
+    const std::string_view ignored_metadata,
+    google::protobuf::RepeatedPtrField<::dvaas::PacketIn>* packet_ins) {
+  for (dvaas::PacketIn& packet_in : *packet_ins) {
+    for (auto& metadata : *packet_in.mutable_metadata()) {
+      if (metadata.name() == ignored_metadata) {
+        metadata.Clear();
+      }
+    }
+  }
+}
+
 bool CompareSwitchOutputs(SwitchOutput actual_output,
                           SwitchOutput expected_output,
                           const SwitchOutputDiffParams& params,
@@ -113,6 +126,15 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     }
   }
 
+  for (const std::string& ignored_field : params.ignored_packet_in_metadata) {
+    RemoveIgnoredMetadataFromPacketIns(ignored_field,
+                                       actual_output.mutable_packet_ins());
+    RemoveIgnoredMetadataFromPacketIns(ignored_field,
+                                       expected_output.mutable_packet_ins());
+  }
+
+  // TODO: Clear other ignored fields in addition to
+  // `ignored_packet_in_metadata` before sorting.
   gutil::InefficientProtoSort(*actual_output.mutable_packets());
   gutil::InefficientProtoSort(*expected_output.mutable_packets());
   gutil::InefficientProtoSort(*actual_output.mutable_packet_ins());
@@ -250,12 +272,11 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
 // `packet_test_vector`, returning `absl::nullopt` if the actual output
 // is acceptable, or an explanation of why it is not otherwise.
 absl::optional<std::string> CompareSwitchOutputs(
-    const PacketTestVector packet_test_vector,
+    const std::vector<SwitchOutput>& expected_outputs,
     const SwitchOutput& actual_output, const SwitchOutputDiffParams& params) {
   testing::StringMatchResultListener listener;
-  for (int i = 0; i < packet_test_vector.acceptable_outputs_size(); ++i) {
-    const SwitchOutput& expected_output =
-        packet_test_vector.acceptable_outputs(i);
+  for (int i = 0; i < expected_outputs.size(); ++i) {
+    const SwitchOutput& expected_output = expected_outputs[i];
     listener << "- acceptable output #" << (i + 1) << " ";
     if (CompareSwitchOutputs(actual_output, expected_output, params,
                              &listener)) {
@@ -431,20 +452,26 @@ GetAllFieldDescriptorsOfHeaders(
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
     PacketTestRun test_run, const SwitchOutputDiffParams& diff_params,
     absl::Nullable<SwitchApi*> sut) {
-  if (diff_params.ModifyExpectedOutputPreDiffing) {
+  std::vector<SwitchOutput> expected_outputs(
+      test_run.test_vector().acceptable_outputs().begin(),
+      test_run.test_vector().acceptable_outputs().end());
+
+  if (diff_params.GetModifiedExpectedOutputPreDiffing) {
     if (sut == nullptr) {
       return absl::InvalidArgumentError(
           "sut is nullptr but required to be non-null because "
           "ModifyTestRunPreDiffing is set.");
     }
-    RETURN_IF_ERROR(diff_params.ModifyExpectedOutputPreDiffing(
-        test_run.test_vector().input(), test_run.actual_output(), *sut,
-        *test_run.mutable_test_vector()->mutable_acceptable_outputs()));
+    LOG(INFO) << "Modifying expected output pre-diffing based on user provided "
+                 "function.";
+    ASSIGN_OR_RETURN(
+        expected_outputs,
+        diff_params.GetModifiedExpectedOutputPreDiffing(test_run, *sut));
   }
 
   PacketTestValidationResult result;
   const absl::optional<std::string> diff = CompareSwitchOutputs(
-      test_run.test_vector(), test_run.actual_output(), diff_params);
+      expected_outputs, test_run.actual_output(), diff_params);
   if (!diff.has_value()) return result;
 
   // To make the diff more digestible, we first give an abstract

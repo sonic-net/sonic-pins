@@ -15,6 +15,7 @@
 #include "dvaas/packet_injection.h"
 
 #include <optional>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -149,118 +150,145 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
         absl::Milliseconds(1e3 / *parameters.max_packets_to_send_per_second);
   }
 
-  // Send packets.
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info control_ir_p4info,
-                   GetIrP4Info(control_switch));
-  absl::flat_hash_map<int, absl::Time> packet_injection_time_by_id;
+  std::queue<int> test_vectors_id_queue;
   for (const auto& [test_id, packet_test_vector] : packet_test_vector_by_id) {
-    const Packet& packet = packet_test_vector.input().packet();
-    if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
-
-      // Get corresponding control switch port for the packet's ingress port.
-      ASSIGN_OR_RETURN(const P4rtPortId sut_ingress_port,
-                       P4rtPortId::MakeFromP4rtEncoding(packet.port()));
-      ASSIGN_OR_RETURN(
-          const P4rtPortId control_switch_port,
-          parameters.mirror_testbed_port_map
-              .GetControlSwitchPortConnectedToSutPort(sut_ingress_port));
-
-      // Inject to egress of control switch.
-      RETURN_IF_ERROR(pins::InjectEgressPacket(
-          control_switch_port.GetP4rtEncoding(),
-          absl::HexStringToBytes(packet.hex()), control_ir_p4info,
-          &control_switch, injection_delay));
-    } else if (packet_test_vector.input().type() ==
-               SwitchInput::SUBMIT_TO_INGRESS) {
-      // Inject to SUT ingress port.
-      ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
-      std::string raw_packet = absl::HexStringToBytes(packet.hex());
-      RETURN_IF_ERROR(
-          pins::InjectIngressPacket(raw_packet, sut_ir_p4info, &sut));
-    } else if (packet_test_vector.input().type() == SwitchInput::PACKET_OUT) {
-      ASSIGN_OR_RETURN(const P4rtPortId sut_egress_port,
-                       P4rtPortId::MakeFromP4rtEncoding(packet.port()));
-      // Inject to SUT egress port.
-      ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
-      RETURN_IF_ERROR(
-          pins::InjectEgressPacket(sut_egress_port.GetP4rtEncoding(),
-                                    absl::HexStringToBytes(packet.hex()),
-                                    sut_ir_p4info, &sut, injection_delay));
-    } else {
-      // TODO: Add support for other input types.
-      return absl::UnimplementedError(
-          absl::StrCat("Test vector input type not supported\n",
-                       packet_test_vector.input().DebugString()));
-    }
-    packet_injection_time_by_id[test_id] = absl::Now();
+    test_vectors_id_queue.push(test_id);
   }
-  LOG(INFO) << "Finished injecting test packets";
 
-  // Check the output of the control switch.
-  const absl::Duration kCollectionDuration = absl::Seconds(3);
-  absl::StatusOr<std::vector<TaggedPacketIn>> control_packet_ins =
-      CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-          control_switch, kCollectionDuration,
-          parameters.is_expected_unsolicited_packet);
-  RETURN_IF_ERROR(control_packet_ins.status())
-      << "while collecting the output of control_switch";
-  LOG(INFO) << "Collected " << control_packet_ins->size()
-            << " forwarded packets (from control switch)";
-  statistics.total_packets_forwarded += control_packet_ins->size();
+  // Batches the packets, which are injected and collected according to the
+  // `max_in_flight_packets` parameter. If not specified, the batch size is
+  // equal to the number of test vectors (all of them are injected as one
+  // batch).
+  int max_in_flight_packets = parameters.max_in_flight_packets.value_or(
+      packet_test_vector_by_id.size());
+  if (parameters.max_in_flight_packets.has_value()) {
+    LOG(INFO) << "Packet injection is split into batches of size "
+              << max_in_flight_packets;
+  }
 
   absl::btree_map<int, SwitchOutput> switch_output_by_id;
-  // Processing the output of the control switch.
-  for (const TaggedPacketIn& packet_in : *control_packet_ins) {
-    // Add to (forwarded) switch output for ID.
-    Packet& forwarded_output =
-        *switch_output_by_id[packet_in.tag].add_packets();
+  absl::flat_hash_map<int, absl::Time> packet_injection_time_by_id;
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info control_ir_p4info,
+                   GetIrP4Info(control_switch));
+  while (!test_vectors_id_queue.empty()) {
+    int num_in_flight_packets = 0;
+    // Sends the packets that are ready to be sent according to the given batch
+    // size.
+    while (!test_vectors_id_queue.empty() &&
+           num_in_flight_packets < max_in_flight_packets) {
+      int test_id = test_vectors_id_queue.front();
+      test_vectors_id_queue.pop();
+      const PacketTestVector& packet_test_vector =
+          packet_test_vector_by_id.at(test_id);
+      num_in_flight_packets++;
 
-    // Set hex and parsed packet.
-    forwarded_output.set_hex(
-        absl::BytesToHexString(packet_in.packet_in.payload()));
-    *forwarded_output.mutable_parsed() = packet_in.parsed_inner_packet;
+      const Packet& packet = packet_test_vector.input().packet();
+      if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
+        // Get corresponding control switch port for the packet's ingress port.
+        ASSIGN_OR_RETURN(const P4rtPortId sut_ingress_port,
+                         P4rtPortId::MakeFromP4rtEncoding(packet.port()));
+        ASSIGN_OR_RETURN(
+            const P4rtPortId control_switch_port,
+            parameters.mirror_testbed_port_map
+                .GetControlSwitchPortConnectedToSutPort(sut_ingress_port));
 
-    // Set port.
-    ASSIGN_OR_RETURN(
-        pdpi::IrPacketIn ir_packet_in,
-        pdpi::PiPacketInToIr(control_ir_p4info, packet_in.packet_in));
-    ASSIGN_OR_RETURN(const P4rtPortId sut_egress_port,
-                     GetSutEgressPortFromControlSwitchPacketIn(
-                         ir_packet_in, parameters.mirror_testbed_port_map));
-    *forwarded_output.mutable_port() = sut_egress_port.GetP4rtEncoding();
-  }
+        // Inject to egress of control switch.
+        RETURN_IF_ERROR(pins::InjectEgressPacket(
+            control_switch_port.GetP4rtEncoding(),
+            absl::HexStringToBytes(packet.hex()), control_ir_p4info,
+            &control_switch, injection_delay));
+      } else if (packet_test_vector.input().type() ==
+                 SwitchInput::SUBMIT_TO_INGRESS) {
+        // Inject to SUT ingress port.
+        ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
+        std::string raw_packet = absl::HexStringToBytes(packet.hex());
+        RETURN_IF_ERROR(
+            pins::InjectIngressPacket(raw_packet, sut_ir_p4info, &sut));
+      } else if (packet_test_vector.input().type() == SwitchInput::PACKET_OUT) {
+        ASSIGN_OR_RETURN(const P4rtPortId sut_egress_port,
+                         P4rtPortId::MakeFromP4rtEncoding(packet.port()));
+        // Inject to SUT egress port.
+        ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
+        RETURN_IF_ERROR(
+            pins::InjectEgressPacket(sut_egress_port.GetP4rtEncoding(),
+                                      absl::HexStringToBytes(packet.hex()),
+                                      sut_ir_p4info, &sut, injection_delay));
+      } else {
+        // TODO: Add support for other input types.
+        return absl::UnimplementedError(
+            absl::StrCat("Test vector input type not supported\n",
+                         packet_test_vector.input().DebugString()));
+      }
+      packet_injection_time_by_id[test_id] = absl::Now();
+    }
 
-  if (parameters.enable_sut_packet_in_collection) {
-    // Check the output of SUT.
-    absl::StatusOr<std::vector<TaggedPacketIn>> sut_packet_ins =
+    // Check the output of the control switch.
+    LOG(INFO) << "Waiting for "
+              << parameters.max_expected_packet_in_flight_duration
+              << " before collecting packets to account for in-flight packets";
+    absl::StatusOr<std::vector<TaggedPacketIn>> control_packet_ins =
         CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-            sut, kCollectionDuration,
+            control_switch, parameters.max_expected_packet_in_flight_duration,
             parameters.is_expected_unsolicited_packet);
-    RETURN_IF_ERROR(sut_packet_ins.status())
-        << "while collecting the output of SUT";
-    LOG(INFO) << "Collected " << sut_packet_ins->size()
-              << " punted packets (from SUT)";
-    statistics.total_packets_punted += sut_packet_ins->size();
+    RETURN_IF_ERROR(control_packet_ins.status())
+        << "while collecting the output of control_switch";
+    LOG(INFO) << "Collected " << control_packet_ins->size()
+              << " forwarded packets (from control switch)";
+    statistics.total_packets_forwarded += control_packet_ins->size();
 
-    // Processing the output of SUT.
-    ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
-    for (const TaggedPacketIn& packet_in : *sut_packet_ins) {
-      // Add to (punted) switch output for ID.
-      PacketIn& punted_output =
-          *switch_output_by_id[packet_in.tag].add_packet_ins();
+    // Processing the output of the control switch.
+    for (const TaggedPacketIn& packet_in : *control_packet_ins) {
+      // Add to (forwarded) switch output for ID.
+      Packet& forwarded_output =
+          *switch_output_by_id[packet_in.tag].add_packets();
 
       // Set hex and parsed packet.
-      punted_output.set_hex(
+      forwarded_output.set_hex(
           absl::BytesToHexString(packet_in.packet_in.payload()));
-      *punted_output.mutable_parsed() = packet_in.parsed_inner_packet;
+      *forwarded_output.mutable_parsed() = packet_in.parsed_inner_packet;
 
-      // Set metadata.
+      // Set port.
       ASSIGN_OR_RETURN(
           pdpi::IrPacketIn ir_packet_in,
-          pdpi::PiPacketInToIr(sut_ir_p4info, packet_in.packet_in));
-      *punted_output.mutable_metadata() = ir_packet_in.metadata();
+          pdpi::PiPacketInToIr(control_ir_p4info, packet_in.packet_in));
+      ASSIGN_OR_RETURN(const P4rtPortId sut_egress_port,
+                       GetSutEgressPortFromControlSwitchPacketIn(
+                           ir_packet_in, parameters.mirror_testbed_port_map));
+      *forwarded_output.mutable_port() = sut_egress_port.GetP4rtEncoding();
+    }
+
+    if (parameters.enable_sut_packet_in_collection) {
+      // Check the output of SUT.
+      absl::StatusOr<std::vector<TaggedPacketIn>> sut_packet_ins =
+          CollectStreamMessageResponsesAndReturnTaggedPacketIns(
+              sut, parameters.max_expected_packet_in_flight_duration,
+              parameters.is_expected_unsolicited_packet);
+      RETURN_IF_ERROR(sut_packet_ins.status())
+          << "while collecting the output of SUT";
+      LOG(INFO) << "Collected " << sut_packet_ins->size()
+                << " punted packets (from SUT)";
+      statistics.total_packets_punted += sut_packet_ins->size();
+      // Processing the output of SUT.
+      ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
+      for (const TaggedPacketIn& packet_in : *sut_packet_ins) {
+        // Add to (punted) switch output for ID.
+        PacketIn& punted_output =
+            *switch_output_by_id[packet_in.tag].add_packet_ins();
+
+        // Set hex and parsed packet.
+        punted_output.set_hex(
+            absl::BytesToHexString(packet_in.packet_in.payload()));
+        *punted_output.mutable_parsed() = packet_in.parsed_inner_packet;
+
+        // Set metadata.
+        ASSIGN_OR_RETURN(
+            pdpi::IrPacketIn ir_packet_in,
+            pdpi::PiPacketInToIr(sut_ir_p4info, packet_in.packet_in));
+        *punted_output.mutable_metadata() = ir_packet_in.metadata();
+      }
     }
   }
+  LOG(INFO) << "Finished injecting and collecting test packets";
 
   // Create PacketTestRuns.
   PacketTestRuns result;
