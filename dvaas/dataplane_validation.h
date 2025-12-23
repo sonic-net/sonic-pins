@@ -80,6 +80,8 @@ struct FailureEnhancementOptions {
   bool collect_packet_trace = true;
   // Minimize the set of test vectors that caused the first
   // `max_number_of_failures_to_minimize` failures.
+  // TODO: Currently, the algorithm terminates if the set of
+  // entities from packet trace is not sufficient to reproduce the failure.
   int max_number_of_failures_to_minimize = 1;
   // Ensures that any minimized failure maintains the original expectation and
   // switch output.
