@@ -74,6 +74,16 @@ public:
   // as it includes additional information to ease debugging.
   std::vector<std::string> GetAllFailures() const;
 
+  // Returns the raw validation result stored in the object, which contains
+  // information about each individual packet test run, including the test
+  // vector (input, expected output), actual output, result of comparison,
+  // packet traces, etc. See `PacketTestOutcomes`'s proto definition for
+  // details.
+  // Note: It is best to use the higher-level functions like
+  // `HasSuccessRateOfAtLeast` and `GetAllFailures` to analyze the validation
+  // result and only use the raw data for advanced use cases.
+  PacketTestOutcomes GetRawPacketTestOutcomes() const;
+
   // Constructs a `ValidationResult` from the given `test_outcomes` and
   // `packet_synthesis_result`.
   ValidationResult(const PacketTestOutcomes& test_outcomes,

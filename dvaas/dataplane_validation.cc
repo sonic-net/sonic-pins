@@ -375,7 +375,14 @@ absl::StatusOr<std::string> GetPacketTraceSummary(
         absl::StrAppend(
             &summarized_packet_trace, "Packet replication: ",
             event.packet_replication().number_of_packets_replicated(),
-            " replicas\n\n");
+            " replicas");
+        if (event.packet_replication().has_packet_replication_engine_entry()) {
+          absl::StrAppend(&summarized_packet_trace, " from hit:\n  ",
+                          indent(gutil::PrintTextProto(
+                              event.packet_replication()
+                                  .packet_replication_engine_entry())));
+        }
+        absl::StrAppend(&summarized_packet_trace, "\n");
         break;
       }
       default: {
