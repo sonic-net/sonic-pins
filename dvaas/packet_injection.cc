@@ -82,7 +82,8 @@ bool IsPsampEncapedPacket(const packetlib::Packet& packet) {
 
 bool IsArpPacket(const packetlib::Packet& packet) {
   return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
-    return header.ethernet_header().ethertype() == "0x0806";
+    return header.ethernet_header().ethertype() == "0x0806" ||
+           header.vlan_header().ethertype() == "0x0806";
   });
 }
 
