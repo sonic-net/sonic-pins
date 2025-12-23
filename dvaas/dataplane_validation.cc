@@ -40,6 +40,7 @@
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
+#include "dvaas/test_insights.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
@@ -503,7 +504,7 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
       backend.SynthesizePackets(
           ir_p4info, entities, p4_spec.p4_symbolic_config, ports,
           [&](absl::string_view stats) {
-	    return writer.AppendToTestArtifact(
+            return writer.AppendToTestArtifact(
                 "auto_generated_test_packet_stats.txt", stats);
           },
           params.coverage_goals_override, params.packet_synthesis_time_limit));
@@ -608,10 +609,10 @@ absl::Status AttachPacketTrace(
 }
 
 absl::Status StorePacketTestVectorAsArribaTestVector(
-    const PacketTestVector &packet_test_vector,
-    const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>
-        &packet_traces,
-    gutil::TestArtifactWriter &dvaas_test_artifact_writer) {
+    const PacketTestVector& packet_test_vector,
+    const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
+        packet_traces,
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
   ArribaTestVector arriba_test_vector;
   std::vector<pdpi::IrTableEntry> ir_table_entries;
 
@@ -628,30 +629,30 @@ absl::Status StorePacketTestVectorAsArribaTestVector(
   for (const auto& packet_trace : packet_traces.at(bmv2_packet_hex)) {
     // In case of non-deterministic output (e.g. WCMP), find the union of all
     // entries that could be hit.
-    for (const dvaas::Event &event : packet_trace.events()) {
+    for (const dvaas::Event& event : packet_trace.events()) {
       switch (event.event_case()) {
-      case Event::kTableApply: {
-        if (event.table_apply().hit().has_table_entry() &&
-            // Ignore v1model specific table entries.
-            event.table_apply().hit().table_entry().table_name() !=
-                "egress_port_loopback_table" &&
-            event.table_apply().hit().table_entry().table_name() !=
-                "v1model_auxiliary_vlan_membership_table") {
-          ir_table_entries.push_back(event.table_apply().hit().table_entry());
+        case Event::kTableApply: {
+          if (event.table_apply().hit().has_table_entry() &&
+              // Ignore v1model specific table entries.
+              event.table_apply().hit().table_entry().table_name() !=
+                  "egress_port_loopback_table" &&
+              event.table_apply().hit().table_entry().table_name() !=
+                  "v1model_auxiliary_vlan_membership_table") {
+            ir_table_entries.push_back(event.table_apply().hit().table_entry());
+          }
+          break;
         }
-        break;
-      }
-      case Event::kMarkToDrop:
-      case Event::kPacketReplication:
-      case Event::EVENT_NOT_SET:
-        break;
+        case Event::kMarkToDrop:
+        case Event::kPacketReplication:
+        case Event::EVENT_NOT_SET:
+          break;
       }
     }
   }
 
   // Dedupe table entries.
   gutil::InefficientProtoSortAndDedup(ir_table_entries);
-  for (const pdpi::IrTableEntry &ir_table_entry : ir_table_entries) {
+  for (const pdpi::IrTableEntry& ir_table_entry : ir_table_entries) {
     *arriba_test_vector.mutable_ir_table_entries()->add_entries() =
         ir_table_entry;
   }
@@ -923,11 +924,11 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   };
 
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
-                   SendTestPacketsAndCollectOutputs(
-                       *sut.p4rt.get(), *control_switch.p4rt.get(),
-                       test_vectors, packet_injection_params,
-                       packet_statistics_));
+  ASSIGN_OR_RETURN(
+      PacketTestRuns test_runs,
+      SendTestPacketsAndCollectOutputs(
+          *sut.p4rt.get(), *control_switch.p4rt.get(), test_vectors,
+          packet_injection_params, packet_statistics_));
   const absl::Time kTimeLastPacketInjected = absl::Now();
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
@@ -941,12 +942,23 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   RETURN_IF_ERROR(
       AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
 
-  // Store the packet trace for all failed test outcomes.
-  ASSIGN_OR_RETURN(P4Specification p4_spec,
-                   InferP4Specification(params, *backend_, sut));
+  // Store test insights.
   ASSIGN_OR_RETURN(p4::config::v1::P4Info sut_p4info,
                    pdpi::GetP4Info(*sut.p4rt));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(sut_p4info));
+
+  absl::StatusOr<const std::string> insights_csv =
+      GetTestInsightsTableAsCsv(test_outcomes, ir_p4info);
+  if (insights_csv.ok()) {
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "test_insights.csv", *insights_csv));
+  } else {
+    LOG(ERROR) << "Failed to get test insights: " << insights_csv.status();
+  }
+
+  // Store the packet trace for all failed test outcomes.
+  ASSIGN_OR_RETURN(P4Specification p4_spec,
+                   InferP4Specification(params, *backend_, sut));
   std::vector<SwitchInput> failed_switch_inputs;
   for (const dvaas::PacketTestOutcome& test_outcome :
        test_outcomes.outcomes()) {
