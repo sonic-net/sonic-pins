@@ -250,7 +250,6 @@ cc_library(
         "//thinkit:switch",
         "//thinkit:test_environment",
         "@com_google_absl//absl/log",
-        "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
