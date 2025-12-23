@@ -30,6 +30,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -41,6 +42,7 @@
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "google/protobuf/repeated_ptr_field.h"
+#include "gutil/gutil/test_artifact_writer.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -83,7 +85,16 @@ absl::Status TryClearingEntities(
     return absl::OkStatus();
   }
 
-  RETURN_IF_ERROR(pdpi::ClearEntities(**session));
+  auto store_entities_upon_failure =
+      [&thinkit_switch](const std::vector<p4::v1::Entity>&
+                            entities_that_failed_to_be_deleted) {
+        gutil::BazelTestArtifactWriter artifact_writer;
+        return artifact_writer.StoreTestArtifact(
+            absl::StrCat("entities_that_failed_to_be_deleted_",
+                         thinkit_switch.ChassisName(), ".txt"),
+            absl::StrJoin(entities_that_failed_to_be_deleted, "\n"));
+      };
+  RETURN_IF_ERROR(pdpi::ClearEntities(**session, store_entities_upon_failure));
   RETURN_IF_ERROR(session.value()->Finish());
   return absl::OkStatus();
 }

@@ -2343,16 +2343,19 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
 
 
 void SflowNsfTestFixture::TearDown() {
-  // Cold reboot and restore after NSF test.
-  ASSERT_OK(pins_test::Reboot(::gnoi::system::RebootMethod::COLD,
-                              testbed_->Sut(), testbed_->Environment()));
-  ASSERT_OK(pins_test::WaitForReboot(testbed_.get(), *ssh_client_,
-                                     /*check_interfaces_up=*/false));
-  // Restore P4 session after cold reboot.
-  ASSERT_OK_AND_ASSIGN(
-      sut_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed_->Sut(), gnmi_config_with_sflow_, GetP4Info()));
+  if (GetParam().nsf_enabled) {
+    // Cold reboot and restore after NSF test.
+    ASSERT_OK(pins_test::Reboot(::gnoi::system::RebootMethod::COLD,
+                                testbed_->Sut(), testbed_->Environment()));
+    ASSERT_OK(pins_test::WaitForReboot(testbed_.get(), *ssh_client_,
+                                       /*check_interfaces_up=*/false));
+
+    // Restore P4 session after cold reboot.
+    ASSERT_OK_AND_ASSIGN(
+        sut_p4_session_,
+        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+            testbed_->Sut(), gnmi_config_with_sflow_, GetP4Info()));
+  }
   SflowTestFixture::TearDown();
 }
  

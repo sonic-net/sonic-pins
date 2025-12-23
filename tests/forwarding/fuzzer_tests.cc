@@ -91,13 +91,6 @@ namespace {
 // Buffer time to wind down testing after the test iterations are complete.
 constexpr absl::Duration kEndOfTestBuffer = absl::Minutes(10);
 
-// Returns true if the given table should be masked with `current_version`.
-bool IsMaskedResource(absl::string_view table_name,
-                      gutil::Version current_version) {
-  absl::flat_hash_set<std::string> masked_tables = {};
-  return masked_tables.contains(table_name);
-}
-
 }  // namespace
 
 // FuzzerTestFixture class functions
@@ -171,11 +164,6 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            sut, GetParam().gnmi_config, GetParam().p4info));
-
-  // Current switch version.
-  ASSERT_OK_AND_ASSIGN(
-      gutil::Version current_version,
-      gutil::ParseVersion(GetParam().p4info.pkg_info().version()));
 
   // Record gNMI config and P4Info that we plan to push for debugging purposes.
   if (GetParam().gnmi_config.has_value()) {
@@ -360,7 +348,8 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
 
         // If this isn't a specifically masked resource, then check if resource
         // exhaustion is allowed.
-        if (!IsMaskedResource(table.preamble().alias(), current_version)) {
+        if (!config.GetIgnoreResourceExhaustionForTable()(
+                table.preamble().alias())) {
           // Check that table is allowed to have exhausted resources.
           ASSERT_OK(switch_state_->ResourceExhaustedIsAllowed(update))
               << "\nUpdate = " << update.DebugString()

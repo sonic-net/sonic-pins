@@ -128,20 +128,22 @@ absl::Status SetAdminStatus(gnmi::gNMI::StubInterface* gnmi_stub,
 absl::Status FlapLink(gnmi::gNMI::StubInterface &gnmi_stub,
                       thinkit::GenericTestbed &generic_testbed,
                       absl::string_view sut_interface,
-                      const thinkit::InterfaceInfo &host_interface_info) {
+                      const thinkit::InterfaceInfo& host_interface_info,
+                      bool is_ixia_testbed) {
   // Check if both SUT and Peer interfaces are up.
   LOG(INFO) << "Validate SUT interface " << sut_interface
             << " state before bringing down the SUT interface";
   RETURN_IF_ERROR(
       CheckSutInterfaceOperStatus(gnmi_stub, sut_interface, OperStatus::kUp));
 
-  LOG(INFO) << "Validate Peer interface "
-            << host_interface_info.peer_interface_name
-            << " state before bringing down the SUT interface";
-  RETURN_IF_ERROR(CheckControlDeviceInterfaceLinkState(
-      generic_testbed, host_interface_info.peer_interface_name,
-      /*is_link_up=*/true, host_interface_info.peer_device_index));
-
+  if (!is_ixia_testbed) {
+    LOG(INFO) << "Validate Peer interface "
+              << host_interface_info.peer_interface_name
+              << " state before bringing down the SUT interface";
+    RETURN_IF_ERROR(CheckControlDeviceInterfaceLinkState(
+        generic_testbed, host_interface_info.peer_interface_name,
+        /*is_link_up=*/true, host_interface_info.peer_device_index));
+  }
   // Sets admin-status Down through gNMI.
   LOG(INFO) << "Set SUT interface: " << sut_interface
             << " admin link state down.";
@@ -158,6 +160,11 @@ absl::Status FlapLink(gnmi::gNMI::StubInterface &gnmi_stub,
             << " state after bringing up the SUT interface";
   RETURN_IF_ERROR(
       CheckSutInterfaceOperStatus(gnmi_stub, sut_interface, OperStatus::kUp));
+
+  // Return early for IXIA testbed as we cannot flap/validate the link on
+  // the IXIA end.
+  if (is_ixia_testbed) return absl::OkStatus();
+
   LOG(INFO) << "Validate Peer interface: "
             << host_interface_info.peer_interface_name
             << " state after bringing up the SUT interface";

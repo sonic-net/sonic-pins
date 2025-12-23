@@ -27,6 +27,7 @@ struct NsfLinkFlapTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
   std::shared_ptr<thinkit::SSHClient> ssh_client;
   std::vector<pins_test::ImageConfigParams> image_config_params;
+  bool is_ixia_testbed;
 };
 
 class NsfLinkFlapTestFixture
