@@ -140,6 +140,9 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                   params.mirror_testbed_port_map_override.has_value()
                       ? *params.mirror_testbed_port_map_override
                       : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+              .max_expected_packet_in_flight_duration =
+                  params.max_expected_packet_in_flight_duration,
+              .max_in_flight_packets = params.max_in_flight_packets,
           },
           packet_statistics));
 
