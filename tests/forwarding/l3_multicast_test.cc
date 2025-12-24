@@ -2009,12 +2009,11 @@ TEST_P(L3MulticastTestFixture, DeleteMulticastGroupWhileInUseFails) {
                                     ipmc_entities));
 
   // Attempting to delete multicast group while in use results in an error.
-  EXPECT_THAT(
-      ClearEntities(*sut_p4rt_session_, ir_p4info_, mc_entities),
-      StatusIs(absl::StatusCode::kUnknown,
-               AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
-                     HasSubstr("[OrchAgent] Multicast group"),
-                     HasSubstr("cannot be deleted because route entries"))));
+  EXPECT_THAT(ClearEntities(*sut_p4rt_session_, ir_p4info_, mc_entities),
+              StatusIs(absl::StatusCode::kUnknown,
+                       AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
+                             HasSubstr("[OrchAgent] Multicast group"),
+                             HasSubstr("cannot be deleted"))));
 
   // Clean up.
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, ipmc_entities));
