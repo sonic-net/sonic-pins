@@ -24,6 +24,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
+#include "dvaas/labeler.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_run_validation.h"
@@ -86,7 +87,7 @@ struct ArribaTestVectorValidationParams {
   // characteristics such as packet injection time, tables hit, punted, dropped,
   // etc.
   std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
-      labelers;
+      labelers = DefaultPacketTestRunLabelers();
 
   // A set of labels that exclude test vectors from validation if there is a
   // matching label. If this value is empty, then all test vectors are

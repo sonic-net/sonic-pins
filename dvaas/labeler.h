@@ -4,16 +4,14 @@
 #include "absl/status/statusor.h"
 #include "dvaas/test_vector.pb.h"
 
+#include <functional>
+#include <vector>
+
 namespace dvaas {
 
-// Returns the 'vlan_tagged_input' label if the input packet is VLAN tagged.
-absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run);
-
-// Returns the 'unicast_dst_mac_multicast_dst_ip_input' label if the input
-// packet has a unicast destination MAC address and a IPv4/IPv6 multicast
-// destination IP address.
-absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
-    const PacketTestRun& test_run);
+// List of default labelers.
+std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+DefaultPacketTestRunLabelers();
 
 }  // namespace dvaas
 
