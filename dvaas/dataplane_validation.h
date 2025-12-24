@@ -34,6 +34,7 @@ limitations under the License.
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
+#include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_run_validation.h"
@@ -86,6 +87,9 @@ struct FailureEnhancementOptions {
   // Ensures that any minimized failure maintains the original expectation and
   // switch output.
   bool maintain_original_failure_during_minimization = true;
+
+  std::function<absl::Status(DvaasRegressionTestProto&)>
+      attach_user_metadata_to_dvaas_regression_proto;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that

@@ -93,6 +93,9 @@ struct ArribaTestVectorValidationParams {
   // matching label. If this value is empty, then all test vectors are
   // validated.
   absl::flat_hash_set<std::string> excluded_labels;
+
+  // If false, does not collect packet-ins from SUT.
+  bool enable_sut_packet_in_collection = true;
 };
 
 // Retrieves the set of P4RT ports used in the given `arriba_test_vector` (table
