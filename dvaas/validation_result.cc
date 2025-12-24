@@ -23,6 +23,8 @@
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "dvaas/packet_trace.h"
+#include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
@@ -45,16 +47,45 @@ absl::StatusOr<ValidationResult> ValidationResult::Create(
   return ValidationResult(packet_synthesis_result, test_outcomes);
 }
 
-std::string ExplainFailure(const PacketTestValidationResult::Failure& failure) {
+std::string ExplainFailure(const PacketTestOutcome& test_outcome) {
+  const PacketTestValidationResult::Failure& failure =
+      test_outcome.test_result().failure();
+  std::string failure_message;
   if (failure.has_minimization_analysis()) {
-    return absl::StrFormat(
+    failure_message = absl::StrFormat(
         "Sending the same input packet reproduces this error %.2f%% of the "
         "time\n%s",
         failure.minimization_analysis().reproducibility_rate() * 100,
         failure.description());
   } else {
-    return failure.description();
+    failure_message = absl::StrCat(failure.description());
   }
+  std::string trace_summary;
+  const auto& acceptable_outputs =
+      test_outcome.test_run().test_vector().acceptable_outputs();
+  auto packet_trace_it = absl::c_find_if(
+      acceptable_outputs,
+      [](const auto& output) { return output.has_packet_trace(); });
+  if (packet_trace_it != acceptable_outputs.end()) {
+    std::string trace =
+        dvaas::GetPacketTraceSummary(packet_trace_it->packet_trace());
+    if (!trace.empty()) {
+      trace_summary = absl::StrCat(
+          "DISCLAIMER: The following trace is produced from a simulation based "
+          "on the P4 model of the switch. Its sole purpose is to explain why "
+          "the test expects the output it expects. It does NOT necessarily "
+          "represent the behavior of the actual hardware under test. ",
+          "Moreover, this is a summary of the full trace and does not contain "
+          "all details. The full trace can be found in artifacts.\n\n",
+          trace);
+    }
+  } else {
+    trace_summary = "No packet trace found.\n";
+  }
+  return absl::StrCat(failure_message,
+                      "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
+                      " =========================\n",
+                      trace_summary);
 }
 
 absl::Status ValidationResult::HasSuccessRateOfAtLeast(
@@ -70,7 +101,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
            << ExplainTestVectorStats(test_vector_stats_)
            << "\nShowing the first failure only. Refer to the test artifacts "
               "for the full list of errors.\n"
-           << ExplainFailure(it->test_result().failure());
+           << ExplainFailure(*it);
   }
   return absl::OkStatus();
 }
@@ -149,7 +180,7 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
                    test_vector_stats_.num_vectors_passed);
   for (const auto& outcome : test_outcomes_.outcomes()) {
     if (outcome.test_result().has_failure()) {
-      failures.push_back(ExplainFailure(outcome.test_result().failure()));
+      failures.push_back(ExplainFailure(outcome));
     }
   }
   return failures;

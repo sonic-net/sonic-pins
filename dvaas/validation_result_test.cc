@@ -1,7 +1,5 @@
 #include "dvaas/validation_result.h"
 
-#include <string>
-
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "dvaas/test_vector.pb.h"
@@ -14,6 +12,7 @@
 namespace dvaas {
 namespace {
 
+using ::testing::HasSubstr;
 using ::testing::Not;
 
 PacketTestOutcomes GetPacketTestOutcomes() {
@@ -25,6 +24,10 @@ PacketTestOutcomes GetPacketTestOutcomes() {
             packets {
               port: "1"
               parsed { payload: "" }
+            }
+            packet_trace {
+              bmv2_textual_log: "bmv2_textual_log"
+              events { mark_to_drop { source_location: "source_location" } }
             }
           }
         }
@@ -96,19 +99,27 @@ PacketTestOutcomes GetPacketTestOutcomes() {
   )pb");
 }
 
-TEST(ValidationResultTest, HasSuccessRateOfAtLeast100PercentWithLabels) {
+TEST(ValidationResultTest, CheckTraceDetails) {
   auto packet_test_outcomes = GetPacketTestOutcomes();
   PacketSynthesisResult packet_synthesis_result;
   ValidationResult validation_result(packet_test_outcomes,
                                      packet_synthesis_result);
 
-
-  EXPECT_THAT(validation_result.HasSuccessRateOfAtLeast(0.76),
-              Not(absl::OkStatus()));
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeastForGivenLabels(
       1.0, {"passing"}));
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeastWithoutGivenLabels(
       1.0, {"failing"}));
+}
+
+TEST(ValidationResultTest, CheckTraceIsPartOfFailureMessage) {
+  auto packet_test_outcomes = GetPacketTestOutcomes();
+  PacketSynthesisResult packet_synthesis_result;
+  ValidationResult validation_result(packet_test_outcomes,
+                                     packet_synthesis_result);
+  absl::Status status = validation_result.HasSuccessRateOfAtLeast(0.76);
+  EXPECT_THAT(status, Not(absl::OkStatus()));
+  EXPECT_THAT(status.message(),
+              HasSubstr("Primitive: 'mark_to_drop' (source_location)"));
 }
 
 }  // namespace
