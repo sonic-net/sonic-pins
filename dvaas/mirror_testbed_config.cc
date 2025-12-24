@@ -26,8 +26,8 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/strings/match.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -426,13 +426,14 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
         /*target_sut_ports=*/params.p4rt_port_ids_to_configure));
   }
 
- // Ensure that all enabled ports are up.
+  // Ensure that all enabled ports are up.
   if (params.wait_for_all_enabled_interfaces_to_be_up) {
-    RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed_.Sut()))
+    RETURN_IF_ERROR(
+        pins_test::WaitForEnabledEthernetInterfacesToBeUp(testbed_.Sut()))
             .SetPrepend()
         << "expected enabled interfaces on SUT to be up: ";
-    RETURN_IF_ERROR(
-        pins_test::WaitForEnabledInterfacesToBeUp(testbed_.ControlSwitch()))
+    RETURN_IF_ERROR(pins_test::WaitForEnabledEthernetInterfacesToBeUp(
+                        testbed_.ControlSwitch()))
             .SetPrepend()
         << "expected enabled interfaces on control switch to be up: ";
   }
@@ -447,7 +448,6 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
   RETURN_IF_ERROR(StoreSwitchStateAsArtifacts(
       control_switch_api_, absl::StrCat(kArtifactPrefix, "configured.cs."),
       kStoreConfiguredSwitchStateParams));
-
 }
 
 absl::Status MirrorTestbedConfigurator::RestoreToOriginalConfiguration() {

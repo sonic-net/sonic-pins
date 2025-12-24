@@ -490,8 +490,12 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult(
   }
 
   // Use labelers to add labels to test outcomes.
-  RETURN_IF_ERROR(AugmentTestOutcomesWithLabels(
-      new_test_outcomes, params_.validation_params.labelers));
+  auto status = AugmentTestOutcomesWithLabels(
+      new_test_outcomes, params_.validation_params.labelers);
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to augment test outcomes with labels: "
+               << status.message();
+  }
 
   // Append new test outcomes to the test artifact.
   gutil::BazelTestArtifactWriter dvaas_test_artifact_writer;
