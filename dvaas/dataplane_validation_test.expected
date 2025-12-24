@@ -1,4 +1,3 @@
-
 == INPUT: dvaas::PacketTrace proto ====================
 bmv2_textual_log: "BMv2 textual log"
 events {
