@@ -219,7 +219,7 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
                    test_and_validate_callback(synthesized_packet,
                                               entities_from_packet_trace));
   if (new_test_outcome.test_result().has_failure() &&
-      (maintain_original_failure &&
+      (!maintain_original_failure ||
        HasSameFailure(test_outcome, new_test_outcome))) {
     testing::Test::RecordProperty("tag_packet_trace_minimization_success",
                                   "true");
@@ -442,6 +442,19 @@ absl::StatusOr<std::string> GetPacketTraceSummary(
         absl::StrAppend(&summarized_packet_trace, "\n");
         break;
       }
+      case Event::kDrop: {
+        absl::StrAppend(&summarized_packet_trace,
+                        "Dropping packet at the end of ",
+                        event.drop().pipeline(), "\n");
+        break;
+      }
+      case Event::kTransmit: {
+        absl::StrAppend(&summarized_packet_trace,
+                        "Transmitting packet of size ",
+                        event.transmit().packet_size(), " out of port ",
+                        event.transmit().port(), "\n");
+        break;
+      }
       default: {
         LOG(WARNING) << "Event " << event.ShortDebugString()
                      << " not supported.";
@@ -640,6 +653,8 @@ absl::Status StorePacketTestVectorAsArribaTestVector(
         }
         case Event::kMarkToDrop:
         case Event::kPacketReplication:
+        case Event::kDrop:
+        case Event::kTransmit:
         case Event::EVENT_NOT_SET:
           break;
       }
@@ -933,8 +948,11 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                        test_runs, params.switch_output_diff_params, &sut));
 
   // Use labelers to add labels to test outcomes.
-  RETURN_IF_ERROR(
-      AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
+  auto status = AugmentTestOutcomesWithLabels(test_outcomes, params.labelers);
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to augment test outcomes with labels: "
+               << status.message();
+  }
 
   // Store test insights.
   ASSIGN_OR_RETURN(p4::config::v1::P4Info sut_p4info,

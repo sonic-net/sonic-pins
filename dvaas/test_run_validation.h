@@ -40,7 +40,7 @@ struct SwitchOutputDiffParams {
   // different behavior, which we don't want to test. All FieldDescriptors
   // should belong to packetlib::Packet. The ignored fields are ignored both in
   // normal (i.e. front-panel) packets and in packet-ins.
-  std::vector<const google::protobuf::FieldDescriptor *>
+  std::vector<const google::protobuf::FieldDescriptor*>
       ignored_packetlib_fields;
 
   // Used to skip packet-in metadata where model and switch are known to have
@@ -85,13 +85,13 @@ struct SwitchOutputDiffParams {
 // invalid argument error if `sut` is required but null.
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
     PacketTestRun test_run, const SwitchOutputDiffParams& diff_params = {},
-    absl::Nullable<SwitchApi*> sut = nullptr);
+    SwitchApi* sut = nullptr);
 
 // Like `ValidateTestRun`, but for a collection of `test_runs`.
 absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
     const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
-    absl::Nullable<SwitchApi*> sut = nullptr);
+    SwitchApi* sut = nullptr);
 
-} // namespace dvaas
+}  // namespace dvaas
 
-#endif // PINS_test_run_validation_H_
+#endif  // PINS_test_run_validation_H_
