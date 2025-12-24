@@ -30,6 +30,7 @@ cc_library(
         ":labeler",
         ":output_writer",
         ":packet_injection",
+        ":packet_trace",
         ":packet_trace_cc_proto",
         ":port_id_map",
         ":switch_api",
@@ -150,14 +151,10 @@ cc_test(
     srcs = ["dataplane_validation_test.cc"],
     linkstatic = True,
     deps = [
-        ":dataplane_validation",
+        ":packet_trace",
         ":packet_trace_cc_proto",
         "//gutil/gutil:proto",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:test_artifact_writer",
         "//gutil/gutil:testing",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
     ],
@@ -180,6 +177,8 @@ cc_library(
     srcs = ["validation_result.cc"],
     hdrs = ["validation_result.h"],
     deps = [
+        ":packet_trace",
+        ":packet_trace_cc_proto",
         ":test_run_validation",
         ":test_vector_cc_proto",
         ":test_vector_stats",
@@ -482,6 +481,7 @@ cc_library(
         ":label",
         ":mirror_testbed_config",
         ":packet_injection",
+        ":packet_trace",
         ":port_id_map",
         ":switch_api",
         ":test_insights",
@@ -499,6 +499,7 @@ cc_library(
         "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
         "//tests/forwarding:util",
         "//thinkit:mirror_testbed",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
@@ -543,6 +544,29 @@ cc_library(
     hdrs = ["packet_trace.h"],
     deps = [
         ":packet_trace_cc_proto",
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:test_artifact_writer",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "packet_trace_test",
+    srcs = ["packet_trace_test.cc"],
+    deps = [
+        ":packet_trace",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:test_artifact_writer",
+        "//gutil/gutil:testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
