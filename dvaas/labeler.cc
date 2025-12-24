@@ -134,15 +134,15 @@ absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
     const PacketTestRun& test_run) {
   Labels labels;
   bool has_ttl_0_or_1 = false;
-  bool hit_l3_admit = false;
+  bool hit_l3_route = false;
   bool hit_ingress_or_egress_acl = false;
   for (const auto& header :
        test_run.test_vector().input().packet().parsed().headers()) {
     if ((header.has_ipv4_header() && (header.ipv4_header().ttl() == "0x00" ||
                                       header.ipv4_header().ttl() == "0x01")) ||
         (header.has_ipv6_header() &&
-         (header.ipv6_header().hop_limit() == "0x000" ||
-          header.ipv6_header().hop_limit() == "0x001"))) {
+         (header.ipv6_header().hop_limit() == "0x00" ||
+          header.ipv6_header().hop_limit() == "0x01"))) {
       has_ttl_0_or_1 = true;
     }
     // For IP-in-IP packets, we only check the outer IP header so we can
@@ -161,7 +161,7 @@ absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
       // Packet hits an L3 route (ipv4_table or ipv6_table).
       if (ir_table_entry.table_name() == "ipv4_table" ||
           ir_table_entry.table_name() == "ipv6_table") {
-        hit_l3_admit = true;
+        hit_l3_route = true;
       }
 
       // Packet hits any ingress/egress ACL.
@@ -171,7 +171,7 @@ absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
       }
     }
   }
-  if (has_ttl_0_or_1 && hit_l3_admit && !hit_ingress_or_egress_acl) {
+  if (has_ttl_0_or_1 && hit_l3_route && !hit_ingress_or_egress_acl) {
     labels.add_labels("ttl_01_input_forward");
   }
   return labels;

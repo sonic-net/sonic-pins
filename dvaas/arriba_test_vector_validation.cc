@@ -116,6 +116,8 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   RETURN_IF_ERROR(
       pdpi::InstallIrEntities(sut, updated_arriba_test_vector.ir_entities()));
 
+  LOG(INFO) << "Installed entries successfully";
+
   // Prepare single packet test vectors.
   PacketTestVectorById test_vector_by_id;
   std::vector<PacketTestVector> packet_test_vectors;
@@ -141,6 +143,8 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                   params.mirror_testbed_port_map_override.has_value()
                       ? *params.mirror_testbed_port_map_override
                       : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+              .enable_sut_packet_in_collection =
+                  params.enable_sut_packet_in_collection,
               .max_expected_packet_in_flight_duration =
                   params.max_expected_packet_in_flight_duration,
               .max_in_flight_packets = params.max_in_flight_packets,
