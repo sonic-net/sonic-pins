@@ -27,6 +27,7 @@ cc_library(
     hdrs = ["dataplane_validation.h"],
     deps = [
         ":label",
+        ":labeler",
         ":output_writer",
         ":packet_injection",
         ":packet_trace_cc_proto",
@@ -155,7 +156,6 @@ cc_test(
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:test_artifact_writer",
         "//gutil/gutil:testing",
-        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -278,6 +278,7 @@ cc_library(
     hdrs = ["arriba_test_vector_validation.h"],
     deps = [
         ":label",
+        ":labeler",
         ":packet_injection",
         ":port_id_map",
         ":test_insights",

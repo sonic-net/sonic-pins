@@ -439,7 +439,7 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult(
   }
   residual_collected_traffic_by_id_.clear();
 
-  std::vector<SwitchInput> failed_switch_inputs;
+  std::vector<PacketTestVector> failed_test_vectors;
   PacketTestOutcomes new_test_outcomes;
   new_test_outcomes.mutable_outcomes()->Reserve(injected_traffic_vector.size());
   SwitchOutputDiffParams diff_params =
@@ -476,8 +476,7 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult(
                           /*diff_params=*/
                           diff_params, &testbed_configurator_->SutApi()));
       if (test_outcome->test_result().has_failure()) {
-        failed_switch_inputs.push_back(
-            test_outcome->test_run().test_vector().input());
+        failed_test_vectors.push_back(test_outcome->test_run().test_vector());
       }
     } else {
       residual_injected_traffic_.push_back(injected_traffic);
@@ -509,28 +508,42 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult(
     LOG(ERROR) << "Failed to get test insights: " << insights_csv.status();
   }
 
-  if (!failed_switch_inputs.empty() &&
+  if (!failed_test_vectors.empty() &&
       params_.validation_params.failure_enhancement_options
           .collect_packet_trace &&
       packet_trace_count_ <
           generate_test_vectors_result_.packet_test_vector_by_id.size()) {
-    LOG(INFO) << "Storing packet traces for failed test packets";
-
-    ASSIGN_OR_RETURN(auto packet_traces,
-                     backend_->GetPacketTraces(
-                         sut_p4_spec_.bmv2_config, sut_ir_p4info_,
-                         sut_augmented_entities_, failed_switch_inputs));
-
+    LOG(INFO) << "Retrieving full packet traces for failed test packets";
+    // Retrieving full packet traces for all failed test outcomes.
+    RETURN_IF_ERROR(backend_->AugmentPacketTestVectorsWithPacketTraces(
+        failed_test_vectors, sut_ir_p4info_, sut_augmented_entities_,
+        sut_p4_spec_.bmv2_config,
+        /*use_compact_traces=*/false));
+    int current_failures_count = 0;
     for (dvaas::PacketTestOutcome& test_outcome :
          *new_test_outcomes.mutable_outcomes()) {
+      dvaas::PacketTestOutcome test_outcome_with_full_packet_trace =
+          test_outcome;
       if (test_outcome.test_result().has_failure()) {
-        RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
+        if (current_failures_count >= failed_test_vectors.size()) {
+          LOG(ERROR) << "Current failures count " << current_failures_count
+                     << " is greater than or equal to the size of "
+                        "failed_test_vectors "
+                     << failed_test_vectors.size();
+          continue;
+        }
+        *test_outcome_with_full_packet_trace.mutable_test_run()
+             ->mutable_test_vector() =
+            failed_test_vectors[current_failures_count];
+        current_failures_count++;
+      }
+      if (test_outcome.test_result().has_failure()) {
+        RETURN_IF_ERROR(AttachPacketTrace(test_outcome_with_full_packet_trace,
                                           dvaas_test_artifact_writer));
 
         // Output an Arriba test vector to test artifacts.
         RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
-            test_outcome.test_run().test_vector(), packet_traces,
-            dvaas_test_artifact_writer));
+            test_outcome.test_run().test_vector(), dvaas_test_artifact_writer));
 
         packet_trace_count_++;
       }
