@@ -18,3 +18,8 @@ For 4 test vectors SUT produced at least one forwarded packet
 For 3 test vectors SUT produced at least one punted packet
 For 1 test vectors SUT produced no output packets
 Overall, SUT produced 6 forwarded packets and 3 punted packets
+-- ExplainPerLabelStats test ------------------------------
+Test outcome success rate per label
+- label_1: 2 (100.00%) of 2
+- label_2: 1 (50.00%) of 2
+- ~unlabeled~: 1 (100.00%) of 1

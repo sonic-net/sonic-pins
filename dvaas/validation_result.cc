@@ -36,7 +36,7 @@ ValidationResult::ValidationResult(
     const PacketTestOutcomes& test_outcomes,
     const PacketSynthesisResult& packet_synthesis_result)
     : test_outcomes_(test_outcomes),
-      test_vector_stats_(ComputeTestVectorStats(test_outcomes)),
+      overall_test_vector_stats_(ComputeTestVectorStats(test_outcomes)),
       packet_synthesis_result_(packet_synthesis_result) {}
 
 absl::StatusOr<ValidationResult> ValidationResult::Create(
@@ -98,7 +98,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
         });
     if (it == test_outcomes_.outcomes().end()) return absl::OkStatus();
     return gutil::OutOfRangeErrorBuilder()
-           << ExplainTestVectorStats(test_vector_stats_)
+           << ExplainTestVectorStats(overall_test_vector_stats_) << "\n"
            << "\nShowing the first failure only. Refer to the test artifacts "
               "for the full list of errors.\n"
            << ExplainFailure(*it);
@@ -152,32 +152,35 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeastWithoutGivenLabels(
 
 double ValidationResult::GetSuccessRate() const {
   // Avoid division by 0.
-  if (test_vector_stats_.num_vectors == 0) return 1.0;
-  return static_cast<double>(test_vector_stats_.num_vectors_passed) /
-         static_cast<double>(test_vector_stats_.num_vectors);
+  if (overall_test_vector_stats_.num_vectors == 0) return 1.0;
+  return static_cast<double>(overall_test_vector_stats_.num_vectors_passed) /
+         static_cast<double>(overall_test_vector_stats_.num_vectors);
 }
 
 bool ValidationResult::HasFailure() const {
-  return test_vector_stats_.num_vectors_passed < test_vector_stats_.num_vectors;
+  return overall_test_vector_stats_.num_vectors_passed <
+         overall_test_vector_stats_.num_vectors;
 }
 
 const ValidationResult& ValidationResult::LogStatistics() const {
-  LOG(INFO) << ExplainTestVectorStats(test_vector_stats_);
+  LOG(INFO) << ExplainTestVectorStats(overall_test_vector_stats_);
+  LOG(INFO) << ExplainPerLabelStats(label_to_test_vector_stats_);
   return *this;
 }
 ValidationResult& ValidationResult::LogStatistics() {
-  LOG(INFO) << ExplainTestVectorStats(test_vector_stats_);
+  LOG(INFO) << ExplainTestVectorStats(overall_test_vector_stats_);
+  LOG(INFO) << ExplainPerLabelStats(label_to_test_vector_stats_);
   return *this;
 }
 
 void ValidationResult::RecordStatisticsAsTestProperties() const {
-  RecordStatsAsTestProperties(test_vector_stats_);
+  RecordStatsAsTestProperties(overall_test_vector_stats_);
 }
 
 std::vector<std::string> ValidationResult::GetAllFailures() const {
   std::vector<std::string> failures;
-  failures.reserve(test_vector_stats_.num_vectors -
-                   test_vector_stats_.num_vectors_passed);
+  failures.reserve(overall_test_vector_stats_.num_vectors -
+                   overall_test_vector_stats_.num_vectors_passed);
   for (const auto& outcome : test_outcomes_.outcomes()) {
     if (outcome.test_result().has_failure()) {
       failures.push_back(ExplainFailure(outcome));
