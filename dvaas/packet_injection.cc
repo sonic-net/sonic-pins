@@ -87,6 +87,14 @@ bool IsArpPacket(const packetlib::Packet& packet) {
   });
 }
 
+bool IsRsyslogPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.has_ipv6_header() &&
+           (header.ipv6_header().ipv6_destination() == "2001:4860:f802::c0" ||
+            header.ipv6_header().ipv6_destination() == "2001:4860:f802::bf");
+  });
+}
+
 }  // namespace
 
 bool DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet& packet) {
@@ -108,9 +116,17 @@ bool DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet& packet) {
   if (IsPsampEncapedPacket(packet)) {
     return true;
   }
-  // TODO: Remove once Alpine disables unsolicited ARP packets.
-  if (IsArpPacket(packet) && std::getenv("pins_alpine_env") != nullptr) {
-    return true;
+  if (std::getenv("gpins_alpine_env") != nullptr) {
+    // TODO: Remove once Alpine disables unsolicited ARP packets.
+    if (IsArpPacket(packet)) {
+      LOG(INFO) << "ALPINE: Ignoring ARP packet";
+      return true;
+    }
+    // TODO: Remove once rsyslog packets are disabled on Alpine.
+    if (IsRsyslogPacket(packet)) {
+      LOG(INFO) << "ALPINE: Ignoring rsyslog packet";
+      return true;
+    }
   }
   return false;
 }
