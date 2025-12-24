@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -121,12 +122,15 @@ public:
   ValidationResult(const PacketSynthesisResult& packet_synthesis_result,
                    const PacketTestOutcomes& test_outcomes)
       : test_outcomes_(test_outcomes),
-        test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
-        packet_synthesis_result_(packet_synthesis_result) {}
+	overall_test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
+        packet_synthesis_result_(packet_synthesis_result),
+        label_to_test_vector_stats_(
+            ComputeTestVectorStatsPerLabel(test_outcomes_)) {}
 
   PacketTestOutcomes test_outcomes_;
-  TestVectorStats test_vector_stats_;
+  TestVectorStats overall_test_vector_stats_;
   PacketSynthesisResult packet_synthesis_result_;
+  absl::btree_map<std::string, TestVectorStats> label_to_test_vector_stats_;
 };
 
 } // namespace dvaas

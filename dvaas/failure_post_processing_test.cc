@@ -145,5 +145,91 @@ TEST(EntityMinimizationLoopTest, EveryOtherEntityCanBeRemoved) {
               )pb")));
 }
 
+TEST(EntityMinimizationLoopTest, HasSameFailureWorks) {
+  PacketTestOutcome original_test_outcome = gutil::ParseProtoOrDie<
+      PacketTestOutcome>(R"pb(
+    test_result { failure { description: "Test failed" } }
+    test_run {
+      labels { labels: "label1" }
+      input_packet_injection_time: "1"
+      test_vector {
+        input {
+          type: DATAPLANE
+          packet {
+            port: "29"
+            parsed { payload: "test packet #1: Dummy payload" }
+            hex: "021a0ad0628b3647086f88a186dd668000000025112020000000000000000000000000000000280003f0c20008000000000000002000000003ea0025371274657374207061636b65742023313a2044756d6d79207061796c6f6164"
+          }
+        }
+        acceptable_outputs {
+          packets { port: "1" }
+          packets { port: "2" }
+          packet_ins { hex: "1" }
+          packet_ins { hex: "2" }
+        }
+        acceptable_outputs {
+          packet_trace {
+            events { packet_replication { number_of_packets_replicated: 1 } }
+          }
+        }
+      }
+    }
+  )pb");
+  PacketTestOutcome new_test_outcome = original_test_outcome;
+  // Reset/clear the values of ignored fields.
+  new_test_outcome.mutable_test_run()->mutable_labels()->set_labels(0,
+                                                                    "label2");
+  new_test_outcome.mutable_test_run()->set_input_packet_injection_time("2");
+  new_test_outcome.mutable_test_run()
+      ->mutable_test_vector()
+      ->mutable_acceptable_outputs(1)
+      ->clear_packet_trace();
+
+  // Swap the first and second packet.
+  dvaas::Packet packet =
+      new_test_outcome.test_run().test_vector().acceptable_outputs(0).packets(
+          0);
+  *new_test_outcome.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packets(0) =
+      new_test_outcome.test_run().test_vector().acceptable_outputs(0).packets(
+          1);
+  *new_test_outcome.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packets(1) = packet;
+
+  // Swap the first and second packet_ins.
+  dvaas::PacketIn packet_in = new_test_outcome.test_run()
+                                  .test_vector()
+                                  .acceptable_outputs(0)
+                                  .packet_ins(0);
+  *new_test_outcome.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packet_ins(0) = new_test_outcome.test_run()
+                                     .test_vector()
+                                     .acceptable_outputs(0)
+                                     .packet_ins(1);
+  *new_test_outcome.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packet_ins(1) = packet_in;
+
+  // Swap the first and second acceptable_outputs.
+  dvaas::SwitchOutput acceptable_output =
+      new_test_outcome.test_run().test_vector().acceptable_outputs(0);
+  *new_test_outcome.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0) =
+      new_test_outcome.test_run().test_vector().acceptable_outputs(1);
+  *new_test_outcome.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(1) = acceptable_output;
+
+  EXPECT_TRUE(HasSameFailure(original_test_outcome, new_test_outcome));
+}
+
 }  // namespace
 }  // namespace dvaas
