@@ -665,5 +665,93 @@ TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
   EXPECT_OK(pdpi::InstallIrEntities(*sut_p4rt_session, read_entities));
 }
 
+// Check that unicast routes with a multicast destination range are accepted by
+// the switch.
+TEST_P(SmokeTestFixture, CanInstallIpv4TableEntriesWithMulticastDstIp) {
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
+  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+    entries {
+      ipv4_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv4_dst { value: "224.0.0.0" prefix_length: 8 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv4_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv4_dst { value: "224.2.3.4" prefix_length: 32 }
+        }
+        action { drop {} }
+      }
+    }
+  )pb"));
+}
+
+// Check that unicast routes with a multicast destination range are accepted by
+// the switch.
+TEST_P(SmokeTestFixture, CanInstallIpv6TableEntriesWithMulticastDstIp) {
+  // Skip test for unsupported platforms.
+  if (GetParam().does_not_support_ipv6_entries_multicast_dest_ip) {
+    GTEST_SKIP() << "Skipping test since it is not supported on this platform.";
+  }
+
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
+  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  // TODO: Use `sai::EntryBuilder` instead of hard-coding the entries
+  // here.
+  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00::" prefix_length: 8 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00:1234:5678:9012::" prefix_length: 64 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00::1234" prefix_length: 128 }
+        }
+        action { drop {} }
+      }
+    }
+  )pb"));
+}
+
 }  // namespace
 }  // namespace pins
