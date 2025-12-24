@@ -53,27 +53,9 @@ struct TaggedPacketIn {
 using IsExpectedUnsolicitedPacketFunctionType =
     std::function<bool(const packetlib::Packet &packet)>;
 
-// Unsolicited packets that, for the time being, are acceptable in a PINS
+// Unsolicited packets that, for the time being, are acceptable on the current
 // testbeds.
-inline bool
-DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet &packet) {
-  // TODO Switch generates router solicitation packets.
-  if (packet.headers().size() == 3 &&
-      packet.headers(2).icmp_header().type() == "0x85") {
-    return true;
-  }
-  // TODO Switch generates IPV6 hop_by_hop packets.
-  if (packet.headers().size() == 2 &&
-      packet.headers(1).ipv6_header().next_header() == "0x00") {
-    return true;
-  }
-  // Switch generates LACP packets if LAGs are present.
-  if (packet.headers().size() == 1 &&
-      packet.headers(0).ethernet_header().ethertype() == "0x8809") {
-    return true;
-  }
-  return false;
-}
+bool DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet& packet);
 
 // Gets 'ingress_port' value from metadata in `packet_in`. Returns
 // InvalidArgumentError if 'ingress_port' metadata is missing.
@@ -99,6 +81,17 @@ struct PacketInjectionParams {
   // TODO: Replace with parameter to tolerate SUT disconnections
   // rather than ignoring all packet-ins.
   bool enable_sut_packet_in_collection = true;
+  // Maximum time expected it takes to receive output packets either from SUT
+  // or control switch in response to an injected input packet. Beyond that,
+  // the input packet might be considered dropped.
+  absl::Duration max_expected_packet_in_flight_duration = absl::Seconds(3);
+  // Maximum number of packets that are in flight at any given time. Packet
+  // injection and collection are done in batches of this size. If not
+  // specified, the batch size is equal to the number of test vectors (all of
+  // them are injected as one batch). Note that the assumptions about the
+  // number of in-flight packets is based on the value of
+  // `max_expected_packet_in_flight_duration`.
+  std::optional<int> max_in_flight_packets = std::nullopt;
 };
 
 // Injects a packet to the control switch egress with a packet injection delay
