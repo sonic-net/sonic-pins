@@ -5,6 +5,7 @@
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/gutil/status.h"
@@ -20,29 +21,24 @@ using ::google::protobuf::util::MessageDifferencer;
 // TODO: Come up with a better way to compare failures.
 bool HasSameFailure(const dvaas::PacketTestOutcome& original_test_outcome,
                     const dvaas::PacketTestOutcome& new_test_outcome) {
-  if (original_test_outcome.test_run()
-          .test_vector()
-          .acceptable_outputs_size() !=
-      new_test_outcome.test_run().test_vector().acceptable_outputs_size()) {
-    return false;
-  }
-  for (int i = 0;
-       i <
-       original_test_outcome.test_run().test_vector().acceptable_outputs_size();
-       ++i) {
-    if (!MessageDifferencer::Equals(
-            original_test_outcome.test_run().test_vector().acceptable_outputs(
-                i),
-            new_test_outcome.test_run().test_vector().acceptable_outputs(i))) {
-      return false;
-    }
-  }
-  if (!MessageDifferencer::Equals(
-          original_test_outcome.test_run().actual_output(),
-          new_test_outcome.test_run().actual_output())) {
-    return false;
-  }
-  return true;
+  MessageDifferencer differencer;
+  // Ignore ordering of repeated fields.
+  differencer.TreatAsSet(
+      PacketTestVector::descriptor()->FindFieldByName("acceptable_outputs"));
+  differencer.TreatAsSet(
+      SwitchOutput::descriptor()->FindFieldByName("packets"));
+  differencer.TreatAsSet(
+      SwitchOutput::descriptor()->FindFieldByName("packet_ins"));
+
+  // Ignore irrelevant fields.
+  differencer.IgnoreField(
+      SwitchOutput::descriptor()->FindFieldByName("packet_trace"));
+  differencer.IgnoreField(PacketTestRun::descriptor()->FindFieldByName(
+      "input_packet_injection_time"));
+  differencer.IgnoreField(
+      PacketTestRun::descriptor()->FindFieldByName("labels"));
+  return differencer.Compare(original_test_outcome.test_run(),
+                             new_test_outcome.test_run());
 }
 
 absl::Status EntityMinimizationLoop(

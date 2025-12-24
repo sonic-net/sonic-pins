@@ -23,6 +23,12 @@ absl::Status EntityMinimizationLoop(
         test_if_entity_can_be_removed,
     pdpi::IrEntities& entities_to_minimize);
 
+// Compares the two test outcomes and returns true if they have the same
+// failure, while treating repeated fields as sets and ignoring the
+// `packet_trace`, `input_packet_injection_time`, and `labels` fields.
+bool HasSameFailure(const dvaas::PacketTestOutcome& original_test_outcome,
+                    const dvaas::PacketTestOutcome& new_test_outcome);
+
 }  // namespace dvaas
 
 #endif  // PINS_DVAAS_FAILURE_POST_PROCESSING_H_

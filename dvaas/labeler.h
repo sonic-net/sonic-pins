@@ -16,6 +16,11 @@ DefaultPacketTestRunLabelers();
 // Returns the 'vlan_tagged_input' label if the input packet is VLAN tagged.
 absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run);
 
+// Returns the 'multicast_src_mac_input' label if the input
+// packet has a multicast source MAC address.
+absl::StatusOr<Labels> MulticastSrcMacInputLabeler(
+    const PacketTestRun& test_run);
+
 // Returns the 'unicast_dst_mac_multicast_dst_ip_input' label if the input
 // packet has a unicast destination MAC address and a IPv4/IPv6 multicast
 // destination IP address.

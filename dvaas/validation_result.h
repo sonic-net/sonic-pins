@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -43,7 +44,7 @@ struct PacketSynthesisResult {
 
 // The result of dataplane validation, as returned to DVaaS users.
 class [[nodiscard]] ValidationResult {
-public:
+ public:
   // Asserts that at least an `expected_success_rate` fraction of test vectors
   // succeeded, returning either:
   // * an `Ok` status if that is the case, or
@@ -121,14 +122,17 @@ public:
   ValidationResult(const PacketSynthesisResult& packet_synthesis_result,
                    const PacketTestOutcomes& test_outcomes)
       : test_outcomes_(test_outcomes),
-        test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
-        packet_synthesis_result_(packet_synthesis_result) {}
+        overall_test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
+        packet_synthesis_result_(packet_synthesis_result),
+        label_to_test_vector_stats_(
+            ComputeTestVectorStatsPerLabel(test_outcomes_)) {}
 
   PacketTestOutcomes test_outcomes_;
-  TestVectorStats test_vector_stats_;
+  TestVectorStats overall_test_vector_stats_;
   PacketSynthesisResult packet_synthesis_result_;
+  absl::btree_map<std::string, TestVectorStats> label_to_test_vector_stats_;
 };
 
-} // namespace dvaas
+}  // namespace dvaas
 
-#endif // PINS_DVAAS_VALIDATION_RESULT_H_
+#endif  // PINS_DVAAS_VALIDATION_RESULT_H_
