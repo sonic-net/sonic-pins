@@ -30,13 +30,13 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
-#include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/packet_trace.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
@@ -399,72 +399,6 @@ absl::StatusOr<P4Specification> InferP4Specification(
   return p4_spec;
 }
 
-absl::StatusOr<std::string> GetPacketTraceSummary(
-    dvaas::PacketTrace& packet_trace) {
-  std::string summarized_packet_trace;
-
-  auto indent = [](std::string_view text) {
-    return absl::StrReplaceAll(text, {{"\n", "\n  "}});
-  };
-
-  for (const dvaas::Event& event : packet_trace.events()) {
-    switch (event.event_case()) {
-      case Event::kTableApply: {
-        if (event.table_apply().hit().has_table_entry()) {
-          absl::StrAppend(&summarized_packet_trace, "Table '",
-                          event.table_apply().table_name(), "': hit\n  ",
-                          indent(gutil::PrintTextProto(
-                              event.table_apply().hit().table_entry())),
-                          "\n");
-        } else {
-          absl::StrAppend(&summarized_packet_trace,
-                          indent(event.table_apply().hit_or_miss_textual_log()),
-                          "\n\n");
-        }
-        break;
-      }
-      case Event::kMarkToDrop: {
-        absl::StrAppend(&summarized_packet_trace, "Primitive: 'mark_to_drop' (",
-                        event.mark_to_drop().source_location(), ")\n\n");
-        break;
-      }
-      case Event::kPacketReplication: {
-        absl::StrAppend(
-            &summarized_packet_trace, "Packet replication: ",
-            event.packet_replication().number_of_packets_replicated(),
-            " replicas");
-        if (event.packet_replication().has_packet_replication_engine_entry()) {
-          absl::StrAppend(&summarized_packet_trace, " from hit:\n  ",
-                          indent(gutil::PrintTextProto(
-                              event.packet_replication()
-                                  .packet_replication_engine_entry())));
-        }
-        absl::StrAppend(&summarized_packet_trace, "\n");
-        break;
-      }
-      case Event::kDrop: {
-        absl::StrAppend(&summarized_packet_trace,
-                        "Dropping packet at the end of ",
-                        event.drop().pipeline(), "\n");
-        break;
-      }
-      case Event::kTransmit: {
-        absl::StrAppend(&summarized_packet_trace,
-                        "Transmitting packet of size ",
-                        event.transmit().packet_size(), " out of port ",
-                        event.transmit().port(), "\n");
-        break;
-      }
-      default: {
-        LOG(WARNING) << "Event " << event.ShortDebugString()
-                     << " not supported.";
-        break;
-      }
-    }
-  }
-  return summarized_packet_trace;
-}
-
 // Generates and returns test vectors using the backend functions
 // `SynthesizePackets` and `GeneratePacketTestVectors`. Reads the table entries,
 // P4Info, and relevant P4RT port IDs from the switch.
@@ -573,48 +507,6 @@ absl::StatusOr<std::string> GetBmv2PacketHex(
   }
 }
 
-absl::Status AttachPacketTrace(
-    dvaas::PacketTestOutcome& failed_packet_test,
-    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
-  // Store the full BMv2 textual log as test artifact.
-  ASSIGN_OR_RETURN(
-      int test_id,
-      dvaas::ExtractIdFromTaggedPacketInHex(
-          failed_packet_test.test_run().test_vector().input().packet().hex()));
-  const std::string filename =
-      "traces/packet_" + std::to_string(test_id) + ".trace.txt";
-
-  const auto& acceptable_outputs =
-      failed_packet_test.test_run().test_vector().acceptable_outputs();
-
-  auto packet_trace_it = absl::c_find_if(
-      acceptable_outputs,
-      [](const auto& output) { return output.has_packet_trace(); });
-  if (packet_trace_it == acceptable_outputs.end()) {
-    return absl::InvalidArgumentError("Acceptable outputs is empty.");
-  }
-  dvaas::PacketTrace packet_trace = packet_trace_it->packet_trace();
-  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-      filename, packet_trace.bmv2_textual_log()));
-
-  // Augment failure description with packet trace summary.
-  ASSIGN_OR_RETURN(std::string summarized_packet_trace,
-                   GetPacketTraceSummary(packet_trace));
-  failed_packet_test.mutable_test_result()->mutable_failure()->set_description(
-      absl::StrCat(
-          failed_packet_test.test_result().failure().description(),
-          "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
-          " =========================\n",
-          "DISCLAIMER: The following trace is produced from a simulation based "
-          "on the P4 model of the switch. Its sole purpose is to explain why "
-          "the test expects the output it expects. It does NOT necessarily "
-          "represent the behavior of the actual hardware under test. ",
-          "Moreover, this is a summary of the full trace and does not contain "
-          "all details. The full trace can be found in '",
-          filename, "'.\n\n", summarized_packet_trace));
-  return absl::OkStatus();
-}
-
 absl::Status StorePacketTestVectorAsArribaTestVector(
     const PacketTestVector& packet_test_vector,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
@@ -710,6 +602,8 @@ absl::Status PostProcessTestVectorFailure(
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
+  RETURN_IF_ERROR(StorePacketTraceTextualBmv2LogAsTestArtifact(
+      test_outcome, dvaas_test_artifact_writer));
   ASSIGN_OR_RETURN(pdpi::IrEntities best_known_set_of_entities,
                    pdpi::ReadIrEntities(*sut_api.p4rt));
   // Duplicate packet that caused test failure.
@@ -760,13 +654,6 @@ absl::Status PostProcessTestVectorFailure(
     // Output an Arriba test vector to test artifacts.
     RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
         test_outcome.test_run().test_vector(), dvaas_test_artifact_writer));
-    absl::Time start = absl::Now();
-    RETURN_IF_ERROR(
-        AttachPacketTrace(test_outcome, dvaas_test_artifact_writer));
-
-    LOG(INFO) << "Packet traces took "
-              << absl::ToInt64Milliseconds(absl::Now() - start)
-              << " milliseconds";
   }
   return absl::OkStatus();
 }
@@ -999,7 +886,8 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
           p4_spec.bmv2_config,
           /*use_compact_traces=*/false));
     } else {
-      LOG(INFO) << "Skipping packet trace collection for failed test packets";
+      LOG(INFO)
+          << "Skipping full packet trace collection for failed test packets";
     }
 
     int current_failures_count = 0;
@@ -1013,6 +901,29 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         *test_outcome_with_full_packet_trace.mutable_test_run()
              ->mutable_test_vector() =
             failed_test_vectors[current_failures_count];
+
+        // We use the recently extracted packet trace (from
+        // `test_outcome_with_full_packet_trace`) to store the full trace as a
+        // test artifact. If the original test vector (from `test_outcome`)
+        // already has a trace (this is the case for auto-generated test
+        // vectors), the recently extracted trace gets discarded at the end.
+        // Otherwise (this is usually the case for user-provided test vectors),
+        // we augment the test vector with a compact version of the recent
+        // trace.
+        const auto& acceptable_outputs =
+            test_outcome.mutable_test_run()->test_vector().acceptable_outputs();
+        if (absl::c_find_if(acceptable_outputs, [](const auto& output) {
+              return output.has_packet_trace();
+            }) == acceptable_outputs.end()) {
+          *test_outcome.mutable_test_run()
+               ->mutable_test_vector()
+               ->mutable_acceptable_outputs(0)
+               ->mutable_packet_trace() = dvaas::MakeCompactPacketTrace(
+              test_outcome_with_full_packet_trace.test_run()
+                  .test_vector()
+                  .acceptable_outputs(0)
+                  .packet_trace());
+        }
 
         // Tolerate failures.
         // Remove once packet trace, replication, and

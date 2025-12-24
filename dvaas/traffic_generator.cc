@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -37,6 +38,7 @@
 #include "dvaas/label.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/packet_trace.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_insights.h"
@@ -539,11 +541,27 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult(
         *test_outcome_with_full_packet_trace.mutable_test_run()
              ->mutable_test_vector() =
             failed_test_vectors[current_failures_count];
+
+        // Check if any of the acceptable outputs have a packet trace. If not,
+        // attach a compact trace to the first acceptable output.
+        const auto& acceptable_outputs =
+            test_outcome.test_run().test_vector().acceptable_outputs();
+        if (absl::c_find_if(acceptable_outputs, [](const auto& output) {
+              return output.has_packet_trace();
+            }) == acceptable_outputs.end()) {
+          *test_outcome.mutable_test_run()
+               ->mutable_test_vector()
+               ->mutable_acceptable_outputs(0)
+               ->mutable_packet_trace() = dvaas::MakeCompactPacketTrace(
+              test_outcome_with_full_packet_trace.test_run()
+                  .test_vector()
+                  .acceptable_outputs(0)
+                  .packet_trace());
+        }
+
+        RETURN_IF_ERROR(StorePacketTraceTextualBmv2LogAsTestArtifact(
+            test_outcome_with_full_packet_trace, dvaas_test_artifact_writer));
         current_failures_count++;
-      }
-      if (test_outcome.test_result().has_failure()) {
-        RETURN_IF_ERROR(AttachPacketTrace(test_outcome_with_full_packet_trace,
-                                          dvaas_test_artifact_writer));
 
         // Output an Arriba test vector to test artifacts.
         RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
