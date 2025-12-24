@@ -174,8 +174,11 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
   // Use labelers to add labels to test outcomes.
-  RETURN_IF_ERROR(
-      AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
+  auto status = AugmentTestOutcomesWithLabels(test_outcomes, params.labelers);
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to augment test outcomes with labels: "
+               << status.message();
+  }
 
   // Store test insights.
   ASSIGN_OR_RETURN(const std::string insights_csv,
