@@ -34,6 +34,7 @@
 #include "absl/strings/strip.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "dvaas/failure_post_processing.h"
 #include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.h"
@@ -261,44 +262,36 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
 
   // Iterate backwards through the entities, remove the current entity from the
   // switch, and reinstall the entity on the switch if no failure occurs.
-  constexpr int kSecsBetweenLogs = 30;
-  int reinstall_attempts = 0;
-  int iterations = 0;
-  for (int i = result.entities_size() - 1; i >= 0; --i && ++iterations) {
-    LOG_EVERY_N_SEC(INFO, kSecsBetweenLogs)
-        << "Loop has run " << iterations << " iterations, there are " << i
-        << " remaining entities out of " << pi_entities.size()
-        << " original ones and we have reinstalled " << reinstall_attempts
-        << " of them.";
 
-    // Store the `pi_entity` in case we need to reinstall it on the switch if no
-    // failure occurs.
-    pdpi::IrEntity ir_entity = result.entities().at(i);
+  RETURN_IF_ERROR(dvaas::EntityMinimizationLoop(
+      /*test_if_entity_can_be_removed=*/
+      [&sut_api, maintain_original_failure, &test_and_validate_callback,
+       &test_outcome, &synthesized_packet](
+          const pdpi::IrEntity& entity_to_remove,
+          const pdpi::IrEntities& current_entities) -> absl::StatusOr<bool> {
+        // Uninstall the entity from the switch.
+        if (!DeleteIrEntity(*sut_api.p4rt, entity_to_remove).ok()) {
+          return false;
+        }
+        ASSIGN_OR_RETURN(
+            PacketTestOutcome new_test_outcome,
+            test_and_validate_callback(synthesized_packet, current_entities));
 
-    // Remove the entity from the result.
-    result.mutable_entities()->DeleteSubrange(i, 1);
+        if (!new_test_outcome.test_result().has_failure() ||
+            (maintain_original_failure &&
+             !HasSameFailure(test_outcome, new_test_outcome))) {
+          // If there is no failure, reinstall the entity on the switch and add
+          // the entity back to the result.
+          RETURN_IF_ERROR(
+              pdpi::InstallIrEntity(*sut_api.p4rt, entity_to_remove))
+              << "Failed to reinstall entity that we just deleted from switch:"
+              << gutil::PrintTextProto(entity_to_remove);
+          return false;
+        }
+        return true;
+      },
+      result));
 
-    // Uninstall the entity from the switch.
-    if (!DeleteIrEntity(*sut_api.p4rt, ir_entity).ok()) {
-      continue;
-    }
-
-    // Validate test runs to create test outcomes.
-    ASSIGN_OR_RETURN(PacketTestOutcome new_test_outcome,
-                     test_and_validate_callback(synthesized_packet, result));
-
-    if (!new_test_outcome.test_result().has_failure() ||
-        (maintain_original_failure &&
-         !HasSameFailure(test_outcome, new_test_outcome))) {
-      // If there is no failure, reinstall the entity on the switch and add
-      // the entity back to the result.
-      reinstall_attempts++;
-      RETURN_IF_ERROR(pdpi::InstallIrEntity(*sut_api.p4rt, ir_entity))
-          << "Failed to reinstall entity that we just deleted from switch:"
-          << gutil::PrintTextProto(ir_entity);
-      *result.add_entities() = ir_entity;
-    }
-  }
   LOG(INFO) << "The initial number of entities is " << pi_entities.size()
             << ".\n";
   LOG(INFO) << "The final number of entities is " << result.entities_size()
