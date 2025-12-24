@@ -49,6 +49,12 @@ absl::StatusOr<bool> IsUnicast(const netaddr::MacAddress& mac) {
   return !mac.IsAllZeros() && !mac.ToBitset().test(40);
 }
 
+absl::StatusOr<bool> IsMulticast(const netaddr::MacAddress& mac) {
+  // The least significant bit of the first byte (40) of the destination MAC
+  // address must be set to 1 for multicast packets.
+  return mac.ToBitset().test(40);
+}
+
 absl::StatusOr<bool> IsMulticast(const netaddr::Ipv4Address& ipv4) {
   std::bitset<8> ipv4_top_8_bits = (ipv4.ToBitset() >> 24).to_ulong();
   // IPv4 multicast address ranges from 224.0.0.0/4 to 239.255.255.255/4.
@@ -76,6 +82,7 @@ std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
 DefaultPacketTestRunLabelers() {
   return {
       VlanTaggedInputLabeler,
+      MulticastSrcMacInputLabeler,
       UnicastDstMacMulticastDstIpInputLabeler,
       Ttl01InputForwardingLabeler,
   };
@@ -86,6 +93,31 @@ absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run) {
   if (IsVlanTagged(test_run.test_vector().input().packet().parsed())) {
     labels.add_labels("vlan_tagged_input");
   }
+  return labels;
+}
+
+absl::StatusOr<Labels> MulticastSrcMacInputLabeler(
+    const PacketTestRun& test_run) {
+  Labels labels;
+  bool is_src_mac_multicast = false;
+  const auto& headers =
+      test_run.test_vector().input().packet().parsed().headers();
+  for (const auto& header : headers) {
+    if (header.has_ethernet_header()) {
+      ASSIGN_OR_RETURN(netaddr::MacAddress mac_address,
+                       netaddr::MacAddress::OfString(
+                           header.ethernet_header().ethernet_source()));
+      ASSIGN_OR_RETURN(is_src_mac_multicast, IsMulticast(mac_address));
+      // For IPFIX encap, packets can have nested ethernet headers. We only
+      // check the outer ethernet header so we can break early.
+      break;
+    }
+  }
+
+  if (is_src_mac_multicast) {
+    labels.add_labels("multicast_src_mac_input");
+  }
+
   return labels;
 }
 
