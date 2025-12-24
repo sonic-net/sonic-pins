@@ -43,6 +43,7 @@ cc_library(
         ":validation_result",
         "//dvaas/thinkit_tests:dvaas_regression_cc_proto",
         "//gutil/gutil:proto",
+        "//gutil/gutil:timer",
         "//gutil/gutil:proto_ordering",
         "//gutil/gutil:status",
         "//gutil/gutil:test_artifact_writer",

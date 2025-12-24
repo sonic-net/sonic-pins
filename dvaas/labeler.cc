@@ -69,11 +69,11 @@ absl::StatusOr<bool> IsMulticast(const netaddr::Ipv6Address& ipv6) {
 }
 
 bool IsAclTableInIngressStage(absl::string_view table_name) {
-  return RE2::PartialMatch(table_name, "acl_ingress_*");
+  return RE2::FullMatch(table_name, "acl_ingress(_.+)?_table");
 }
 
 bool IsAclTableInEgressStage(absl::string_view table_name) {
-  return RE2::PartialMatch(table_name, "acl_egress_*");
+  return RE2::FullMatch(table_name, "acl_egress(_.+)?_table");
 }
 
 }  // namespace
