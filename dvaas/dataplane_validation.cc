@@ -157,12 +157,17 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
+  std::string packet_trace_minimization_success = "false";
+
   // Get the `pi_entities` from the SUT.
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
                    pdpi::ReadPiEntities(sut_api.p4rt.get()));
 
-  // Clear and reinstall table entries on the SUT.
-  absl::Cleanup cleanup = [&pi_entities, &sut_api]() {
+  // Record test property, clear and reinstall table entries on the SUT.
+  absl::Cleanup cleanup = [&pi_entities, &sut_api,
+                           &packet_trace_minimization_success]() {
+    testing::Test::RecordProperty("tag_packet_trace_minimization_success",
+                                  packet_trace_minimization_success);
     auto status = pdpi::ClearEntities(*sut_api.p4rt);
     if (!status.ok()) {
       LOG(WARNING) << "Failed to clear entities on the switch: "
@@ -218,17 +223,26 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
   ASSIGN_OR_RETURN(PacketTestOutcome new_test_outcome,
                    test_and_validate_callback(synthesized_packet,
                                               entities_from_packet_trace));
-  if (new_test_outcome.test_result().has_failure() &&
-      (!maintain_original_failure ||
-       HasSameFailure(test_outcome, new_test_outcome))) {
-    testing::Test::RecordProperty("tag_packet_trace_minimization_success",
-                                  "true");
-    LOG(INFO) << "Minimization with packet trace succeeded.";
-    return entities_from_packet_trace;
+  if (new_test_outcome.test_result().has_failure()) {
+    if (HasSameFailure(test_outcome, new_test_outcome)) {
+      // Same failure.
+      testing::Test::RecordProperty(
+          "tag_packet_trace_minimization_failure_status", "same");
+      return entities_from_packet_trace;
+    } else {
+      // Any failure.
+      testing::Test::RecordProperty(
+          "tag_packet_trace_minimization_failure_status", "any");
+      if (maintain_original_failure) {
+        return std::nullopt;
+      }
+      packet_trace_minimization_success = "true";
+      return entities_from_packet_trace;
+    }
   } else {
-    testing::Test::RecordProperty("tag_packet_trace_minimization_success",
-                                  "false");
-    LOG(INFO) << "Minimization with packet trace failed.";
+    // No failure.
+    testing::Test::RecordProperty(
+        "tag_packet_trace_minimization_failure_status", "none");
     return std::nullopt;
   }
   // TODO: Remove once a longer-term minimization solution is
@@ -566,6 +580,7 @@ absl::Status StorePacketTestVectorAsArribaTestVector(
 }
 
 absl::Status StoreDvaasRegressionTestProto(
+    const FailureEnhancementOptions& failure_enhancement_options,
     const PacketTestVector& packet_test_vector,
     const pdpi::IrEntities& ir_entities, const p4::config::v1::P4Info& p4info,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
@@ -574,6 +589,13 @@ absl::Status StoreDvaasRegressionTestProto(
   *dvaas_regression_test_proto.mutable_entities() = ir_entities;
   dvaas_regression_test_proto.set_currently_failing(true);
   *dvaas_regression_test_proto.mutable_p4info() = p4info;
+
+  if (failure_enhancement_options
+          .attach_user_metadata_to_dvaas_regression_proto) {
+    RETURN_IF_ERROR(failure_enhancement_options
+                        .attach_user_metadata_to_dvaas_regression_proto(
+                            dvaas_regression_test_proto));
+  }
 
   ASSIGN_OR_RETURN(int test_id, dvaas::ExtractIdFromTaggedPacketInHex(
                                     packet_test_vector.input().packet().hex()));
@@ -646,8 +668,8 @@ absl::Status PostProcessTestVectorFailure(
   }
   // Output dvaas_regression_test_proto.
   RETURN_IF_ERROR(StoreDvaasRegressionTestProto(
-      test_outcome.test_run().test_vector(), best_known_set_of_entities,
-      sut_p4info, dvaas_test_artifact_writer));
+      params.failure_enhancement_options, test_outcome.test_run().test_vector(),
+      best_known_set_of_entities, sut_p4info, dvaas_test_artifact_writer));
 
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
