@@ -2,6 +2,7 @@
 
 #include <bitset>
 #include <functional>
+#include <string>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -167,7 +168,7 @@ absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
   Labels labels;
   bool has_ttl_0_or_1 = false;
   bool hit_l3_route = false;
-  bool hit_ingress_or_egress_acl = false;
+  bool acl_prevents_forwarding = false;
   for (const auto& header :
        test_run.test_vector().input().packet().parsed().headers()) {
     if ((header.has_ipv4_header() && (header.ipv4_header().ttl() == "0x00" ||
@@ -196,14 +197,19 @@ absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
         hit_l3_route = true;
       }
 
-      // Packet hits any ingress/egress ACL.
+      // Packet hits any ingress/egress ACL and the ACL action is drop, deny,
+      // or trap.
       if (IsAclTableInIngressStage(ir_table_entry.table_name()) ||
           IsAclTableInEgressStage(ir_table_entry.table_name())) {
-        hit_ingress_or_egress_acl = true;
+	const std::string& action_name = ir_table_entry.action().name();
+        if (action_name == "acl_deny" || action_name == "acl_drop" ||
+            action_name == "acl_trap") {
+          acl_prevents_forwarding = true;
+        }
       }
     }
   }
-  if (has_ttl_0_or_1 && hit_l3_route && !hit_ingress_or_egress_acl) {
+  if (has_ttl_0_or_1 && hit_l3_route && !acl_prevents_forwarding) {
     labels.add_labels("ttl_01_input_forward");
   }
   return labels;

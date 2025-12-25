@@ -216,7 +216,12 @@ TEST(LabelerTest, TestVectorWithNoLabelsUsingTtl01InputForwardingLabeler) {
                   events {
                     table_apply {
                       table_name: "acl_ingress_table"
-                      hit { table_entry { table_name: "acl_ingress_table" } }
+                      hit {
+                        table_entry {
+                          table_name: "acl_ingress_table"
+                          action { name: "acl_drop" }
+                        }
+                      }
                     }
                   }
                 }

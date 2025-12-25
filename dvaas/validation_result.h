@@ -72,6 +72,10 @@ class [[nodiscard]] ValidationResult {
       double expected_success_rate,
       const absl::flat_hash_set<std::string>& excluded_labels) const;
 
+  // Returns a new `ValidationResult` with the given labels excluded.
+  ValidationResult ExcludingLabels(
+      const absl::flat_hash_set<std::string>& excluded_labels) const;
+
   // Returns the fraction of test vectors that passed.
   double GetSuccessRate() const;
 
@@ -119,14 +123,6 @@ class [[nodiscard]] ValidationResult {
   bool PacketSynthesizerTimedOut() const;
 
  private:
-  ValidationResult(const PacketSynthesisResult& packet_synthesis_result,
-                   const PacketTestOutcomes& test_outcomes)
-      : test_outcomes_(test_outcomes),
-        overall_test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
-        packet_synthesis_result_(packet_synthesis_result),
-        label_to_test_vector_stats_(
-            ComputeTestVectorStatsPerLabel(test_outcomes_)) {}
-
   PacketTestOutcomes test_outcomes_;
   TestVectorStats overall_test_vector_stats_;
   PacketSynthesisResult packet_synthesis_result_;

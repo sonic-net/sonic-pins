@@ -202,6 +202,8 @@ cc_test(
     deps = [
         ":test_vector_cc_proto",
         ":validation_result",
+	"//gutil/gutil:proto",
+	"//gutil/gutil:proto_matchers",
         "//gutil/gutil:status",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
