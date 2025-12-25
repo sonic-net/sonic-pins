@@ -174,8 +174,6 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   ASSIGN_OR_RETURN(
       PacketTestOutcomes test_outcomes,
       ValidateTestRuns(test_runs, params.switch_output_diff_params));
-  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
-      "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
   // Use labelers to add labels to test outcomes.
   auto status = AugmentTestOutcomesWithLabels(test_outcomes, params.labelers);
@@ -183,6 +181,10 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     LOG(ERROR) << "Failed to augment test outcomes with labels: "
                << status.message();
   }
+
+  // Store test outcomes.
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
   // Store test insights.
   ASSIGN_OR_RETURN(const std::string insights_csv,
