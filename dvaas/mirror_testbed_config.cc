@@ -14,12 +14,26 @@
 
 #include "dvaas/mirror_testbed_config.h"
 
+#include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
+#include "absl/algorithm/container.h"
+#include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
+#include "dvaas/port_id_map.h"
+#include "dvaas/switch_api.h"
+#include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/test_artifact_writer.h"
 #include "lib/gnmi/gnmi_helper.h"
@@ -414,11 +428,12 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
 
  // Ensure that all enabled ports are up.
   if (params.wait_for_all_enabled_interfaces_to_be_up) {
-    RETURN_IF_ERROR(pins_test::WaitForEnabledInterfacesToBeUp(testbed_.Sut()))
+    RETURN_IF_ERROR(
+        pins_test::WaitForEnabledEthernetInterfacesToBeUp(testbed_.Sut()))
             .SetPrepend()
         << "expected enabled interfaces on SUT to be up: ";
-    RETURN_IF_ERROR(
-        pins_test::WaitForEnabledInterfacesToBeUp(testbed_.ControlSwitch()))
+    RETURN_IF_ERROR(pins_test::WaitForEnabledEthernetInterfacesToBeUp(
+                        testbed_.ControlSwitch()))
             .SetPrepend()
         << "expected enabled interfaces on control switch to be up: ";
   }

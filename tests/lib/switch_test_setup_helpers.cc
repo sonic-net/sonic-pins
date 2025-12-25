@@ -326,6 +326,34 @@ absl::Status WaitForEnabledInterfacesToBeUp(
                                      /*with_healthz=*/false);
 }
 
+absl::Status WaitForEnabledEthernetInterfacesToBeUp(
+    thinkit::Switch& thinkit_switch, absl::Duration timeout) {
+  absl::Time start = absl::Now();
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
+                   thinkit_switch.CreateGnmiStub());
+
+  // Get all enabled, Ethernet interfaces from the config.
+  ASSIGN_OR_RETURN(
+      const pins_test::openconfig::Interfaces enabled_ethernet_interfaces,
+      pins_test::GetMatchingInterfacesAsProto(
+          *gnmi_stub, gnmi::GetRequest::CONFIG,
+          /*predicate=*/pins_test::IsEnabledEthernetInterface, timeout));
+
+  std::vector<std::string> enabled_ethernet_interface_names;
+  enabled_ethernet_interface_names.reserve(
+      enabled_ethernet_interfaces.interfaces_size());
+  for (const auto& interface : enabled_ethernet_interfaces.interfaces()) {
+    enabled_ethernet_interface_names.push_back(interface.name());
+  }
+
+  // Wait for all enabled, Ethernet interfaces to be up.
+  timeout = timeout - (absl::Now() - start);
+  return pins_test::WaitForCondition(pins_test::PortsUp, timeout,
+                                     thinkit_switch,
+                                     enabled_ethernet_interface_names,
+                                     /*with_healthz=*/false);
+}
+
 // Gets every P4runtime port used in `entries`.
 absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
     const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry> entries) {
