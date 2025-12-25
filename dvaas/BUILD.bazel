@@ -543,6 +543,35 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "test_insights_test",
+    srcs = ["test_insights_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":test_insights",
+        ":test_vector_cc_proto",
+        "//p4_pdpi:ir_cc_proto",
+	"//gutil/gutil:proto",
+	"//gutil/gutil:status_matchers",
+	"//gutil/gutil:testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "test_insights_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :test_insights_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "test_insights_test.expected",
+    tools = [":test_insights_test"],
+)
+
 cc_library(
     name = "label",
     srcs = ["label.cc"],
