@@ -4,6 +4,7 @@
 #include "absl/status/status.h"
 #include "dvaas/test_vector.pb.h"
 #include "gmock/gmock.h"
+#include "gutil/gutil/proto_matchers.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
@@ -12,6 +13,8 @@
 namespace dvaas {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::Partially;
 using ::testing::HasSubstr;
 using ::testing::Not;
 
@@ -120,6 +123,22 @@ TEST(ValidationResultTest, CheckTraceIsPartOfFailureMessage) {
   EXPECT_THAT(status, Not(absl::OkStatus()));
   EXPECT_THAT(status.message(),
               HasSubstr("Primitive: 'mark_to_drop' (source_location)"));
+}
+
+TEST(ValidationResultTest, CheckReturnedResultExcludingLabels) {
+  auto packet_test_outcomes = GetPacketTestOutcomes();
+  PacketSynthesisResult packet_synthesis_result;
+  ValidationResult validation_result(packet_test_outcomes,
+                                     packet_synthesis_result);
+  // The first outcome is failing, so should be excluded.
+  // The second outcome has the passing label, so should be included.
+  // The third and fourth outcomes have no labels, so should be included.
+  EXPECT_THAT(
+      validation_result.ExcludingLabels({"failing"}).GetRawPacketTestOutcomes(),
+      Partially(EqualsProto(
+          R"pb(outcomes { test_run { labels { labels: "passing" } } }
+               outcomes {}
+               outcomes {})pb")));
 }
 
 }  // namespace

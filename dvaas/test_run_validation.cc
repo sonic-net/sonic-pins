@@ -547,7 +547,7 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
     absl::StrAppend(&failure, "- ", label, "\n");
   }
   if (test_run.labels().labels().empty()) {
-    absl::StrAppend(&failure, "- <no labels>\n");
+    absl::StrAppend(&failure, "<no labels>\n");
   }
 
   return result;
