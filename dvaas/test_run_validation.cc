@@ -29,6 +29,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "dvaas/switch_api.h"
@@ -391,6 +392,9 @@ static constexpr absl::string_view kActualBanner =
 static constexpr absl::string_view kExpectationBanner =
     "== EXPECTED OUTPUT "
     "=============================================================";
+static constexpr absl::string_view kLabelBanner =
+    "== LABELS "
+    "======================================================================";
 }  // namespace
 
 absl::StatusOr<std::vector<const google::protobuf::FieldDescriptor*>>
@@ -535,6 +539,15 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
                             "-- Acceptable output: Alternative #%d --\n%s",
                             (i + 1), PrintTextProto(printable_output));
     }
+  }
+
+  // Dump labels, if any.
+  absl::StrAppend(&failure, kLabelBanner, "\n");
+  for (const auto& label : test_run.labels().labels()) {
+    absl::StrAppend(&failure, "- ", label, "\n");
+  }
+  if (test_run.labels().labels().empty()) {
+    absl::StrAppend(&failure, "- <no labels>\n");
   }
 
   return result;
