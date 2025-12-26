@@ -48,6 +48,49 @@ TEST(LabelerTest, TestVectorLabeledWithVlanTaggedInput) {
   EXPECT_THAT(labels.labels(), ElementsAre("vlan_tagged_input"));
 }
 
+TEST(LabelerTest, TestVectorLabeledWithSubmitToIngressVlanTaggedInput) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::SubmitToIngressVlanTaggedInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                type: SUBMIT_TO_INGRESS
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers { vlan_header {} }
+                    payload: "VLAN tagged submit-to-ingress packet."
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(),
+              ElementsAre("submit_to_ingress_vlan_tagged_input"));
+}
+
+TEST(LabelerTest, TestVectorLabeledWithSubmitToIngressVlanTaggedInputMissing) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::SubmitToIngressVlanTaggedInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                type: DATAPLANE
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers { vlan_header {} }
+                    payload: "VLAN tagged, but not submit-to-ingress packet."
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), IsEmpty());
+}
+
 TEST(LabelerTest, TestVectorLabeledWithMulticastSrcMacInput) {
   ASSERT_OK_AND_ASSIGN(
       Labels labels,
