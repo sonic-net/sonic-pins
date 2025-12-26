@@ -328,5 +328,43 @@ TEST(LabelerTest, TestVectorWithNoLabelsUsingTtl01InputForwardingLabeler) {
   EXPECT_THAT(labels.labels(), IsEmpty());
 }
 
+TEST(LabelerTest, TestVectorLabeledWithIcmpInputForwarding) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::IcmpInputForwardingLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed { headers { icmp_header {} } }
+                }
+              }
+              # Acceptable output is required for the labeler to add the label.
+              acceptable_outputs { packets {} }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), ElementsAre("icmp_input_forward"));
+}
+
+TEST(LabelerTest, TestVectorLabeledWithIcmpInputNotForwarding) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::IcmpInputForwardingLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed { headers { icmp_header {} } }
+                }
+              }
+              # Acceptable output is required for the labeler to add the label.
+              acceptable_outputs { packet_trace {} }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), IsEmpty());
+}
+
 }  // namespace
 }  // namespace dvaas
