@@ -1062,6 +1062,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_vector_failures.txt",
       absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
+  validation_result.RecordPerLabelStatsAsTestProperties();
 
   // We read and store all table entries at the very end of the test. This is
   // useful, e.g., for checking per-entry ACL counters when debugging.

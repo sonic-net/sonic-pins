@@ -199,6 +199,7 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
 
   validation_result.LogStatistics();
+  validation_result.RecordPerLabelStatsAsTestProperties();
   return validation_result;
 }
 }  // namespace dvaas
