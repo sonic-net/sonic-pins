@@ -42,6 +42,12 @@ bool IsVlanTagged(const packetlib::Packet& packet) {
   });
 }
 
+bool IsIcmpTagged(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const auto& header) {
+    return header.has_icmp_header();
+  });
+}
+
 absl::StatusOr<bool> IsUnicast(const netaddr::MacAddress& mac) {
   // The least significant bit of the first byte (40) of the destination MAC
   // address must be set to 0 for unicast packets.
@@ -88,6 +94,7 @@ DefaultPacketTestRunLabelers() {
       UnicastDstMacMulticastDstIpInputLabeler,
       SubmitToIngressMulticastDstIpInputLabeler,
       Ttl01InputForwardingLabeler,
+      IcmpInputForwardingLabeler,
   };
 }
 
@@ -261,6 +268,31 @@ absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
   }
   if (has_ttl_0_or_1 && hit_l3_route && !acl_prevents_forwarding) {
     labels.add_labels("ttl_01_input_forward");
+  }
+  return labels;
+}
+
+absl::StatusOr<Labels> IcmpInputForwardingLabeler(
+    const PacketTestRun& test_run) {
+  Labels labels;
+  // If the input packet is not ICMP tagged, then we can skip this labeler.
+  if (!IsIcmpTagged(test_run.test_vector().input().packet().parsed())) {
+    return labels;
+  }
+
+  // Checking if packet is expected to be forwarded.
+  // Even though there are multiple acceptable outcomes (corresponding to the
+  // non-determinism caused by WCMP members), we only check one of the
+  // acceptable outcomes. Although not guaranteed in general, in practical use
+  // cases, all outcomes typically have the same type of output (e.g. drop, put,
+  // forwards, etc.) despite the content of the packets (e.g. egress port, smac)
+  // varying in different acceptable outcomes. Given that we only check
+  // the output packet fate and not the content, checking one acceptable outcome
+  // here is enough (and is more consistent with checking only one packet
+  // trace).
+  if (!test_run.test_vector().acceptable_outputs().empty() &&
+      !test_run.test_vector().acceptable_outputs(0).packets().empty()) {
+    labels.add_labels("icmp_input_forward");
   }
   return labels;
 }
