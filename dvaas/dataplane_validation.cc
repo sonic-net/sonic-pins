@@ -159,7 +159,8 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
         const SynthesizedPacket& synthesized_packet,
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
-        test_and_validate_callback) {
+	test_and_validate_callback,
+    bool reset_entities_on_switch) {
   std::string packet_trace_minimization_success = "false";
 
   // Get the `pi_entities` from the SUT.
@@ -168,9 +169,11 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
 
   // Record test property, clear and reinstall table entries on the SUT.
   absl::Cleanup cleanup = [&pi_entities, &sut_api,
-                           &packet_trace_minimization_success]() {
+		           &packet_trace_minimization_success,
+                           reset_entities_on_switch]() {
     testing::Test::RecordProperty("tag_packet_trace_minimization_success",
-                                  packet_trace_minimization_success);
+                                  packet_trace_minimization_success);	  
+    if (!reset_entities_on_switch) return;
     auto status = pdpi::ClearEntities(*sut_api.p4rt);
     if (!status.ok()) {
       LOG(WARNING) << "Failed to clear entities on the switch: "
@@ -653,13 +656,15 @@ absl::Status PostProcessTestVectorFailure(
       failure_count < params.failure_enhancement_options
                           .max_number_of_failures_to_minimize) {
     gutil::Timer minimization_timer;
-    ASSIGN_OR_RETURN(std::optional<pdpi::IrEntities> minimal_entities,
-                     MinimizePacketTestVectors(
-                         sut_api, test_outcome,
-                         params.failure_enhancement_options
-                             .maintain_original_failure_during_minimization,
-                         test_and_validate_callback),
-                     _.SetPrepend() << "When minimizing failure: ");
+    ASSIGN_OR_RETURN(
+        std::optional<pdpi::IrEntities> minimal_entities,
+        MinimizePacketTestVectors(
+            sut_api, test_outcome,
+            params.failure_enhancement_options
+                .maintain_original_failure_during_minimization,
+            test_and_validate_callback,
+            params.failure_enhancement_options.reset_entities_on_switch),
+        _.SetPrepend() << "When minimizing failure: ");
     accumulate_duration("minimization", minimization_timer.GetDuration());
     if (minimal_entities.has_value()) {
       RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(

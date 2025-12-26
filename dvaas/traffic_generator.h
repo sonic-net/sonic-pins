@@ -34,6 +34,7 @@
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
@@ -147,6 +148,31 @@ class TrafficGenerator {
       const std::optional<SwitchOutputDiffParams>& diff_params_override =
           std::nullopt) = 0;
 
+  // Returns the TrafficGenerator's P4RT sessions to SUT or error if the session
+  // is not established. Note that the session is only available after a
+  // successful call to Init and is a primary connection. The session object
+  // gets destroyed on destruction of the object. Client is responsible for
+  // handling the risk of dangling pointers.
+  // Also note that P4RuntimeSession class is not explicitly stating that it is
+  // threadsafe for all of its function, but from the implementation it seems it
+  // is indeed threadsafe.
+  // TODO: Further investigate whether P4RuntimeSession object is
+  // threadsafe or create another wrapper that is explicitly thread safe.
+  virtual absl::StatusOr<pdpi::P4RuntimeSession*> SutP4rtSession() = 0;
+
+  // Returns the TrafficGenerator's P4RT sessions to Control Switch or error if
+  // the session is not established. Note that the session is only available
+  // after a successful call to Init and is a primary connection. The session
+  // object gets destroyed on destruction of the object. Client is responsible
+  // for handling the risk of dangling pointers.
+  // Also note that P4RuntimeSession class is not explicitly stating that it is
+  // threadsafe for all of its function, but from the implementation it seems it
+  // is indeed threadsafe.
+  // TODO: Further investigate whether P4RuntimeSession object is
+  // threadsafe or create another wrapper that is explicitly thread safe.
+  virtual absl::StatusOr<pdpi::P4RuntimeSession*>
+  ControlSwitchP4rtSession() = 0;
+
   virtual ~TrafficGenerator() = default;
 };
 
@@ -178,6 +204,23 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
       const std::optional<SwitchOutputDiffParams>& diff_params_override =
           std::nullopt) override;
   ~TrafficGeneratorWithGuaranteedRate();
+
+  absl::StatusOr<pdpi::P4RuntimeSession*> SutP4rtSession() override {
+    if (testbed_configurator_ != nullptr) {
+      return testbed_configurator_->SutApi().p4rt.get();
+    }
+    return absl::FailedPreconditionError(
+        "Testbed configurator is not initialized.");
+  }
+
+  absl::StatusOr<pdpi::P4RuntimeSession*> ControlSwitchP4rtSession()
+      override {
+    if (testbed_configurator_ != nullptr) {
+      return testbed_configurator_->ControlSwitchApi().p4rt.get();
+    }
+    return absl::FailedPreconditionError(
+        "Testbed configurator is not initialized.");
+  }
 
  private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
