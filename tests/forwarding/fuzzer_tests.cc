@@ -28,6 +28,7 @@
 #include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -90,12 +91,21 @@ namespace {
 
 // Buffer time to wind down testing after the test iterations are complete.
 constexpr absl::Duration kEndOfTestBuffer = absl::Minutes(10);
+constexpr absl::string_view kResourceLimitFuzzerTestcase =
+    "P4rtWriteAndCheckNoInternalErrors";
 
 }  // namespace
 
 // FuzzerTestFixture class functions
 
 void FuzzerTestFixture::SetUp() {
+  const testing::TestInfo* const test_info =
+      testing::UnitTest::GetInstance()->current_test_info();
+  // Expect link flaps only for the resource limit fuzzer test case as P4 table
+  // size is changed in the test which reboots the switch.
+  if (absl::StrContains(test_info->name(), kResourceLimitFuzzerTestcase)) {
+    GetParam().mirror_testbed->ExpectLinkFlaps();
+  }
   GetParam().mirror_testbed->SetUp();
   if (auto& id = GetParam().test_case_id; id.has_value()) {
     GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
