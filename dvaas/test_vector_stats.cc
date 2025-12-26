@@ -197,9 +197,12 @@ void RecordStatsAsTestProperties(const TestVectorStats& stats) {
 
 std::string ExplainPerLabelStats(
     const absl::btree_map<std::string, TestVectorStats>&
-        label_to_test_vector_stats) {
+	label_to_test_vector_stats,
+    bool include_title) {
   std::string result;
-  absl::StrAppend(&result, "Test outcome success rate per label\n");
+  if (include_title) {
+    absl::StrAppend(&result, "Test outcome success rate per label\n");
+  }
   for (const auto& [label, test_vector_stats] : label_to_test_vector_stats) {
     absl::StrAppendFormat(&result, "- %s: %s\n", label,
                           ExplainFraction(test_vector_stats.num_vectors_passed,

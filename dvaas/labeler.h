@@ -32,6 +32,12 @@ absl::StatusOr<Labels> MulticastSrcMacInputLabeler(
 absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
     const PacketTestRun& test_run);
 
+// Returns the 'submit_to_ingress_multicast_dst_ip_input' label if the input
+// packet has a IPv4/IPv6 multicast destination IP address and is also a
+// submit-to-ingress packet.
+absl::StatusOr<Labels> SubmitToIngressMulticastDstIpInputLabeler(
+    const PacketTestRun& test_run);
+
 // Returns the 'ttl_01_input_forward' label if the input packet has TTL 0 or 1
 // and hits `ipv4_table` or `ipv6_table`, but does not hit any ingress/egress
 // ACLs.
