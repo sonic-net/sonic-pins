@@ -44,6 +44,16 @@ absl::StatusOr<Labels> SubmitToIngressMulticastDstIpInputLabeler(
 absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
     const PacketTestRun& test_run);
 
+// Returns the 'icmp_input_forward' label if the input packet is ICMP tagged and
+// the packet is forwarded by the switch.
+absl::StatusOr<Labels> IcmpInputForwardingLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'icmp_input_forward' label if the input packet is ICMP tagged and
+// the packet is forwarded by the switch.
+absl::StatusOr<Labels> IcmpInputForwardingLabeler(
+    const PacketTestRun& test_run);
+
 }  // namespace dvaas
 
 #endif  // PINS_DVAAS_LABELER_H_

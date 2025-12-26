@@ -185,7 +185,7 @@ void ValidationResult::RecordStatisticsAsTestProperties() const {
 
 void ValidationResult::RecordPerLabelStatsAsTestProperties() const {
   testing::Test::RecordProperty(
-      "dvaas__success_rate_per_label",
+      "dvaas_success_rate_per_label",
       ExplainPerLabelStats(label_to_test_vector_stats_,
                            /*include_title=*/false));
 }
