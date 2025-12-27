@@ -17,7 +17,10 @@
 #include <string>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/btree_map.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/test_vector.pb.h"
 #include "gtest/gtest.h"
 
@@ -76,6 +79,24 @@ TestVectorStats ComputeTestVectorStats(
     AddTestVectorStats(outcome, stats);
   }
   return stats;
+}
+
+absl::btree_map<std::string, TestVectorStats> ComputeTestVectorStatsPerLabel(
+    const PacketTestOutcomes& test_outcomes) {
+  // All test vectors that don't have any labels are grouped under this label.
+  // This key uses the tilde prefix and postfix to ensure that it sorts last and
+  // is likely not used by users.
+  constexpr absl::string_view kUnlabeledLabel = "~unlabeled~";
+  absl::btree_map<std::string, TestVectorStats> label_to_stats;
+  for (const auto& outcome : test_outcomes.outcomes()) {
+    for (const auto& label : outcome.test_run().labels().labels()) {
+      AddTestVectorStats(outcome, label_to_stats[label]);
+    }
+    if (outcome.test_run().labels().labels().empty()) {
+      AddTestVectorStats(outcome, label_to_stats[kUnlabeledLabel]);
+    }
+  }
+  return label_to_stats;
 }
 
 namespace {
@@ -172,6 +193,19 @@ void RecordStatsAsTestProperties(const TestVectorStats& stats) {
                        stats.num_deterministic_failures);
   Test::RecordProperty("tag_num_vectors_with_reproducibility_rate",
                        stats.num_vectors_with_reproducibility_rate);
+}
+
+std::string ExplainPerLabelStats(
+    const absl::btree_map<std::string, TestVectorStats>&
+        label_to_test_vector_stats) {
+  std::string result;
+  absl::StrAppend(&result, "Test outcome success rate per label\n");
+  for (const auto& [label, test_vector_stats] : label_to_test_vector_stats) {
+    absl::StrAppendFormat(&result, "- %s: %s\n", label,
+                          ExplainFraction(test_vector_stats.num_vectors_passed,
+                                          test_vector_stats.num_vectors));
+  }
+  return result;
 }
 
 }  // namespace dvaas

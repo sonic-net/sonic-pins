@@ -208,5 +208,80 @@ TEST(TestVectorStatsGoldenTest, ReproducibilityRateScenarios) {
   std::cout << ExplainTestVectorStats(stats);
 }
 
+TEST(TestVectorStatsGoldenTest,
+     ComputeTestVectorStatsPerLabelAndExplainPerLabelStats) {
+  auto outcomes = gutil::ParseProtoOrDie<PacketTestOutcomes>(R"pb(
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packet_ins: []
+          }
+        }
+        actual_output {
+          packets {}
+          packet_ins: []
+        }
+        labels { labels: "label_1" }
+      }
+      test_result {}
+    }
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packet_ins: []
+          }
+        }
+        actual_output {
+          packets {}
+          packet_ins: []
+        }
+        labels { labels: "label_1" labels: "label_2" }
+      }
+      test_result {}
+    }
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packet_ins: []
+          }
+        }
+        actual_output {
+          packets {}
+          packet_ins: []
+        }
+        labels { labels: "label_2" }
+      }
+      test_result { failure {} }
+    }
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packet_ins: []
+          }
+        }
+        actual_output {
+          packets {}
+          packet_ins: []
+        }
+      }
+    }
+  )pb");
+  std::cout << "-- ExplainPerLabelStats test ------------------------------\n"
+            << ExplainPerLabelStats(ComputeTestVectorStatsPerLabel(outcomes))
+            << "\n\n";
+}
+
 }  // namespace
 }  // namespace dvaas
