@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/log/log.h"
 #include "absl/random/random.h"
@@ -25,11 +26,11 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "tests/gnmi/util.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
-#include "thinkit/mirror_testbed.h"
+#include "thinkit/control_device.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
@@ -37,29 +38,33 @@
 namespace pins_test {
 
 using ::gnoi::system::RebootMethod;
+using ::testing::IsEmpty;
 
 TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
-  GetParam().mirror_testbed->ExpectLinkFlaps();
-  // Get mirror testbed
-  thinkit::MirrorTestbed& mirror_testbed =
-      GetParam().mirror_testbed->GetMirrorTestbed();
+  GetParam().generic_testbed->ExpectLinkFlaps();
 
+  thinkit::TestRequirements requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 1
+                 interface_mode: CONTROL_INTERFACE
+               })pb");
+  ASSERT_OK_AND_ASSIGN(
+      auto generic_testbed,
+      GetParam().generic_testbed->GetTestbedWithRequirements(requirements));
   // Get control switch and SUT
-  thinkit::Switch& sut = mirror_testbed.Sut();
-  thinkit::Switch& control_switch = mirror_testbed.ControlSwitch();
+  thinkit::Switch& sut = generic_testbed->Sut();
+  thinkit::ControlDevice& control_device = generic_testbed->ControlDevice();
 
   // Get pins_test testbed
 
   // Get ssh client and gnmi stub
   thinkit::SSHClient& ssh_client = *GetParam().ssh_client;
-  ASSERT_OK_AND_ASSIGN(auto control_switch_gnmi_stub,
-                       control_switch.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
 
   // The following section of code is to select a up port randomly
-  ASSERT_OK_AND_ASSIGN(
-      const auto up_ports,
-      pins_test::GetUpInterfacesOverGnmi(*control_switch_gnmi_stub.get()));
+  ASSERT_OK_AND_ASSIGN(const auto up_ports,
+                       pins_test::GetUpInterfacesOverGnmi(*sut_gnmi_stub));
   if (up_ports.empty()) {
     GTEST_SKIP() << "The test cannot be performed because not enough ports "
                  << "are up. Requires at least 1. "
@@ -68,52 +73,55 @@ TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
   absl::BitGen gen;
   const int random_member_index =
       absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, up_ports.size());
-  std::string intf_to_check = up_ports[random_member_index];
+  const std::string& sut_intf_to_check = up_ports[random_member_index];
   LOG(INFO) << "Size of up port list: " << up_ports.size()
             << " Selected index: " << random_member_index
-            << " Selected interface: " << intf_to_check;
+            << " Selected interface: " << sut_intf_to_check;
+  std::string control_intf_to_check;
+  auto sut_interface_info = generic_testbed->GetSutInterfaceInfo();
+  auto it = sut_interface_info.find(sut_intf_to_check);
+  ASSERT_NE(it, sut_interface_info.end());
+  control_intf_to_check = {it->second.peer_interface_name};
 
-  // Start the test
-  ASSERT_THAT(GetInterfaceOperStatusOverGnmi(*control_switch_gnmi_stub.get(),
-                                             intf_to_check),
-              gutil::IsOkAndHolds(OperStatus::kUp));
+  LOG(INFO) << "Control interface to check: " << control_intf_to_check;
+  LOG(INFO) << "Sut interface to check: " << sut_intf_to_check;
+
+  ASSERT_OK(control_device.ValidatePortsUp({control_intf_to_check}));
   ASSERT_THAT(
-      GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), intf_to_check),
+      GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), sut_intf_to_check),
       gutil::IsOkAndHolds(OperStatus::kUp));
-  ASSERT_OK(NsfReboot(&mirror_testbed));
+  ASSERT_OK(NsfReboot(generic_testbed.get()));
   EXPECT_OK(WaitForSwitchState(sut, SwitchState::kDown, absl::Seconds(90),
                                ssh_client));
-  EXPECT_OK(
-      SetAdminStatus(control_switch_gnmi_stub.get(), intf_to_check, "DOWN"));
-
-  absl::Status reboot_status = WaitForNsfReboot(&mirror_testbed, ssh_client,
-                                                /*image_config_param=*/nullptr,
-                                                /*check_interfaces_up =*/false);
+  EXPECT_OK(control_device.SetAdminLinkState({control_intf_to_check},
+                                             thinkit::LinkState::kDown));
+  absl::Status reboot_status =
+      WaitForNsfReboot(generic_testbed.get(), ssh_client,
+                       /*image_config_param=*/nullptr,
+                       /*check_interfaces_up =*/false);
   if (!reboot_status.ok()) {
     // Cold reboot the testbed as the failed NSF reboot could leave the testbed
     // in unhealthy state
     LOG(INFO) << "NSF reboot failed. " << reboot_status.message()
               << "Cold rebooting the switch.";
-    EXPECT_OK(Reboot(RebootMethod::COLD, sut, mirror_testbed.Environment()));
-    EXPECT_OK(WaitForReboot(&mirror_testbed, ssh_client, false));
+    EXPECT_OK(Reboot(RebootMethod::COLD, sut, generic_testbed->Environment()));
+    EXPECT_OK(WaitForReboot(generic_testbed.get(), ssh_client, false));
     FAIL() << "Failure in NSF reboot.";
   }
 
-  EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*control_switch_gnmi_stub.get(),
-                                             intf_to_check),
-              gutil::IsOkAndHolds(OperStatus::kDown));
+  EXPECT_THAT(control_device.GetUpLinks({control_intf_to_check}),
+              gutil::IsOkAndHolds(IsEmpty()));
   EXPECT_THAT(
-      GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), intf_to_check),
+      GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), sut_intf_to_check),
       gutil::IsOkAndHolds(OperStatus::kDown));
   // Restore the interface state
-  EXPECT_OK(
-      SetAdminStatus(control_switch_gnmi_stub.get(), intf_to_check, "UP"));
+  EXPECT_OK(control_device.SetAdminLinkState({control_intf_to_check},
+                                             thinkit::LinkState::kUp));
   absl::SleepFor(absl::Seconds(10));
-  EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*control_switch_gnmi_stub.get(),
-                                             intf_to_check),
-              gutil::IsOkAndHolds(OperStatus::kUp));
+  ASSERT_OK(control_device.ValidatePortsUp({control_intf_to_check}));
   EXPECT_THAT(
-      GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), intf_to_check),
+      GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub.get(), sut_intf_to_check),
       gutil::IsOkAndHolds(OperStatus::kUp));
 }
+
 }  // namespace pins_test
