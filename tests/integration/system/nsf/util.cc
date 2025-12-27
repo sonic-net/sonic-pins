@@ -596,18 +596,19 @@ absl::Status InstallRebootPushConfig(
 absl::Status ValidateTestbedState(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
     absl::Nullable<const ImageConfigParams *> image_config_param,
-    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
+    bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
+    absl::Span<const std::string> control_switch_interfaces) { 
   // TODO: Add validation for SUT stack image label.
   LOG(INFO) << "Validating SUT state";
   thinkit::Switch& sut = GetSut(testbed);
   std::vector<std::string> interfaces_to_validate;
-  if (check_interfaces_up && interfaces.empty()) {
+  if (check_interfaces_up && sut_interfaces.empty()) {
     interfaces_to_validate = GetConnectedInterfacesForSut(testbed);
-    interfaces = interfaces_to_validate;
+    sut_interfaces = interfaces_to_validate;
   }
-  absl::Status sut_status = RunReadyValidations(
-      sut, ssh_client, interfaces, check_interfaces_up, /*with_healthz=*/true);
-
+  absl::Status sut_status =
+     RunReadyValidations(sut, ssh_client, sut_interfaces, check_interfaces_up,
+                         /*with_healthz=*/true);
   absl::StatusOr<thinkit::MirrorTestbed*> mirror_testbed =
       GetMirrorTestbed(testbed);
   if (!mirror_testbed.ok()) {
@@ -619,7 +620,10 @@ absl::Status ValidateTestbedState(
   if (!(*mirror_testbed)->ControlSwitch().ChassisName().empty()) {
     control_status =
         RunReadyValidations((*mirror_testbed)->ControlSwitch(), ssh_client,
-                            interfaces, check_interfaces_up,
+                            /*interfaces=*/control_switch_interfaces.empty()
+                                ? sut_interfaces
+                                : control_switch_interfaces,
+                            check_interfaces_up, 
                             /*with_healthz=*/true);
   }
   RETURN_IF_ERROR(sut_status);
@@ -672,9 +676,9 @@ absl::Status WaitForReboot(const Testbed& testbed,
 absl::Status
 WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
                  absl::Nullable<const ImageConfigParams *> image_config_param,
-                 bool check_interfaces_up,
-                 absl::Span<const std::string> interfaces,
-                 bool collect_debug_logs_for_nsf_success) {
+                 bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
+                 bool collect_debug_logs_for_nsf_success,
+                 absl::Span<const std::string> control_switch_interfaces) {
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
@@ -707,7 +711,8 @@ WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
           sut, env));
     }
     return ValidateTestbedState(testbed, ssh_client, image_config_param,
-                                check_interfaces_up, interfaces);
+                                check_interfaces_up, sut_interfaces,
+                                control_switch_interfaces);
   }
   return gutil::InternalErrorBuilder()
          << "NSF Reboot validation failed after polling for "
@@ -717,14 +722,16 @@ WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
 absl::Status DoNsfRebootAndWaitForSwitchReady(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
     absl::Nullable<const ImageConfigParams *> image_config_param,
-    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
+    bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
+    absl::Span<const std::string> control_switch_interfaces) {
   thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(uint64_t up_time_before_nsf,
                    pins_test::GetGnmiSystemUpTime(*sut_gnmi_stub));
   RETURN_IF_ERROR(NsfReboot(testbed));
   RETURN_IF_ERROR(WaitForNsfReboot(testbed, ssh_client, image_config_param,
-                                   check_interfaces_up, interfaces));
+                                   check_interfaces_up, sut_interfaces, true,
+                                   control_switch_interfaces));
   // Recreating the gNMI stub as the switch rebooted.
   ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub());
   ASSIGN_OR_RETURN(uint64_t up_time_after_nsf,
@@ -741,12 +748,14 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     const Testbed& testbed, thinkit::SSHClient& ssh_client,
     absl::Nullable<const ImageConfigParams*> image_config_param,
-    bool check_interfaces_up, absl::Span<const std::string> interfaces) {
+    bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
+    absl::Span<const std::string> control_switch_interfaces) {
   thinkit::Switch& sut = GetSut(testbed);
   thinkit::TestEnvironment& env = GetTestEnvironment(testbed);
   absl::Status nsf_reboot_status;
   nsf_reboot_status = DoNsfRebootAndWaitForSwitchReady(
-      testbed, ssh_client, image_config_param, check_interfaces_up, interfaces);
+      testbed, ssh_client, image_config_param, check_interfaces_up,
+      sut_interfaces, control_switch_interfaces);
   if (!nsf_reboot_status.ok()) {
     ADD_FAILURE() << "NSF reboot failed with: " << nsf_reboot_status;
     LOG(ERROR) << "Attempting to recover the switch through cold "
@@ -754,8 +763,8 @@ absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     thinkit::TestEnvironment& env = GetTestEnvironment(testbed);
     RETURN_IF_ERROR(Reboot(RebootMethod::COLD, sut, env,
                            /*collect_debug_artifacts_before_reboot=*/false));
-    RETURN_IF_ERROR(
-        WaitForReboot(testbed, ssh_client, check_interfaces_up, interfaces));
+    RETURN_IF_ERROR(WaitForReboot(testbed, ssh_client, check_interfaces_up,
+                                  sut_interfaces));
     return gutil::InternalErrorBuilder()
            << "NSF reboot failed. Switch recovered successfully through cold "
               "reboot.";

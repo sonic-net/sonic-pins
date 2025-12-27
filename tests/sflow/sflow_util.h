@@ -98,6 +98,11 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     const absl::flat_hash_map<std::string, bool>& sflow_interfaces,
     const int sampling_rate, const int sampling_header_size);
 
+// Updates `gnmi_config` with gNPSI-related config and returns modified config
+// if success.
+absl::StatusOr<std::string> UpdateGnpsiConfig(absl::string_view gnmi_config,
+                                              bool enable);
+
 // Updates `gnmi_config` queue limit of `queue_name` to `queue_limit` and
 // returns the updated config. Returns InvalidArgumentError if `gnmi_config`
 // doesn't have any valid cpu scheduler policy config.

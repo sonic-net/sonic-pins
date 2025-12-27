@@ -92,6 +92,8 @@ namespace pins {
 namespace {
 
 using ::gutil::IsOkAndHolds;
+using ::testing::Eq;
+using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::UnorderedElementsAreArray;
 
@@ -129,6 +131,16 @@ constexpr absl::string_view kSflowtoolFullFormatTemplate =
 
 constexpr absl::string_view kTcpdumpForTos =
     "tcpdump -c $0 -i lo -vv -eX udp and port $1";
+
+constexpr absl::Duration kCommandTimeout = absl::Seconds(5);
+constexpr absl::Duration kFreezeTimeout = absl::Seconds(30);
+
+constexpr char kFreeze[] =
+    R"(/usr/tools/bin/redis-cli -n 1 "PUBLISH" "NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL" "[\"freeze\",\"freeze\"]")";
+constexpr char kUnfreeze[] =
+    R"(/usr/tools/bin/redis-cli -n 1 "PUBLISH" "NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL" "[\"unfreeze\",\"unfreeze\"]")";
+
+constexpr int kNsfTrafficTestDurationSecs = 10;
 
 // IpV4 address for filtering the sFlow packet.
 constexpr auto kIpv4Src = netaddr::Ipv4Address(192, 168, 10, 1);
@@ -666,6 +678,91 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
   return absl::OkStatus();
 }
 
+// Track statistics for Ixia traffic.
+struct IxiaCounterStats {
+  std::vector<Counters> initial_in_counters;
+  std::string sflow_queue_name;
+  pins_test::QueueCounters initial_queue_counter;
+  const int64_t pkt_count;
+  absl::Time start_time;
+};
+
+absl::StatusOr<IxiaCounterStats> GetIxiaCounterStats(
+    absl::Span<const IxiaLink> ixia_links, gnmi::gNMI::StubInterface* gnmi_stub,
+    const int64_t pkt_count) {
+  // Read initial counters via GNMI from the SUT
+  LOG(INFO) << "Read initial packet counters.";
+  ASSIGN_OR_RETURN(std::vector<Counters> initial_in_counters,
+                   GetIxiaInterfaceCounters(ixia_links, gnmi_stub));
+  ASSIGN_OR_RETURN(std::string sflow_queue_name, GetSflowQueueName(gnmi_stub));
+  ASSIGN_OR_RETURN(
+      auto initial_queue_counter,
+      pins_test::GetGnmiQueueCounters("CPU", sflow_queue_name, *gnmi_stub));
+  absl::Time start_time = absl::Now();
+  return IxiaCounterStats{
+      .initial_in_counters = initial_in_counters,
+      .sflow_queue_name = sflow_queue_name,
+      .initial_queue_counter = initial_queue_counter,
+      .pkt_count = pkt_count,
+      .start_time = start_time,
+  };
+}
+
+absl::Status ValidateIxiaInterfaceCounters(
+    absl::Span<const IxiaLink> ixia_links, gnmi::gNMI::StubInterface* gnmi_stub,
+    const IxiaCounterStats& sflow_ixia_counter_data) {
+  const IxiaLink& ingress_link = ixia_links[0];
+
+  LOG(INFO) << "Read final packet counters.";
+  // Read final counters via GNMI from the SUT
+  ASSIGN_OR_RETURN(std::vector<Counters> final_in_counters,
+                   GetIxiaInterfaceCounters(ixia_links, gnmi_stub));
+  for (size_t i = 0; i < ixia_links.size(); ++i) {
+    Counters delta = DeltaCounters(
+        sflow_ixia_counter_data.initial_in_counters[i], final_in_counters[i]);
+    LOG(INFO) << "\nIngress Deltas (" << ixia_links[i].sut_interface << "):\n";
+    ShowCounters(delta);
+
+    // If the interface is the ingress link, the expected packet count is the
+    // same as the sent packet count. Otherwise, the expected packet count is 0.
+    uint64_t expected_pkt_count = 0;
+    if (ixia_links[i].sut_interface == ingress_link.sut_interface) {
+      expected_pkt_count = sflow_ixia_counter_data.pkt_count;
+    }
+
+    EXPECT_EQ(delta.in_pkts, expected_pkt_count)
+        << "Received packets count is not equal to sent packets count: "
+        << ". Interface: " << ixia_links[i].sut_interface << ". Sent "
+        << expected_pkt_count << ". Received " << delta.in_pkts << ".";
+  }
+
+  ASSIGN_OR_RETURN(
+      pins_test::QueueCounters final_queue_counter,
+      pins_test::GetGnmiQueueCounters(
+          "CPU", sflow_ixia_counter_data.sflow_queue_name, *gnmi_stub));
+
+  // Show CPU counter data.
+  Counters delta =
+      DeltaCounters(sflow_ixia_counter_data.initial_in_counters.back(),
+                    final_in_counters.back());
+  LOG(INFO) << "\nIngress Deltas (\"CPU\"):\n";
+ShowCounters(delta);
+  pins_test::QueueCounters queue_delta =
+      final_queue_counter - sflow_ixia_counter_data.initial_queue_counter;
+  LOG(INFO) << "CPU " << sflow_ixia_counter_data.sflow_queue_name
+            << " queue counter delta:\n"
+            << queue_delta << " \n total time: "
+            << (absl::Now() - sflow_ixia_counter_data.start_time);
+  EXPECT_EQ(queue_delta.num_packets_dropped, 0)
+      << sflow_ixia_counter_data.sflow_queue_name
+      << " queue dropped packets: " << queue_delta.num_packets_dropped << ". "
+      << sflow_ixia_counter_data.sflow_queue_name
+      << " queue transimitted pkts: " << queue_delta.num_packets_transmitted
+      << ". Expected 0 drops for " << sflow_ixia_counter_data.sflow_queue_name
+      << " queue.";
+  return absl::OkStatus();
+}
+
 int GetSflowSamplesOnSut(const std::string& sflowtool_output,
                          const int port_id) {
   constexpr int kFieldSize = 20, kDstIpIdx = 10;
@@ -1155,6 +1252,93 @@ absl::StatusOr<int> GetPortIdFromInterfaceName(
         absl::Substitute("$0 is not a valid port id.", port_id_str));
   }
   return port_id;
+}
+
+struct IxiaTrafficSettings {
+  std::string traffic_ref;
+  std::string topology_ref;
+  int64_t traffic_rate;
+  int sampling_rate;
+};
+
+absl::StatusOr<IxiaTrafficSettings> SetUpIxiaTrafficForSflowNsf(
+    const IxiaLink& ingress_link,
+    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    thinkit::GenericTestbed* testbed, gnmi::gNMI::StubInterface* gnmi_stub) {
+  absl::flat_hash_map<std::string, int> initial_interfaces_to_sample_rate;
+  ASSIGN_OR_RETURN(initial_interfaces_to_sample_rate,
+                   GetSflowActualSamplingRateForInterfaces(
+                       gnmi_stub, sflow_enabled_interfaces));
+
+  const int interface_sample_rate =
+      initial_interfaces_to_sample_rate.begin()->second;
+
+  // Set up Ixia traffic.
+  // ixia_ref_pair would include the traffic reference and topology reference
+  // which could be used to send traffic later.
+  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
+  ASSIGN_OR_RETURN(ixia_ref_pair,
+                   SetUpIxiaTraffic({ingress_link}, *testbed, /*pkt_count=*/0,
+                                    /*pkt_rate=*/0));
+  const std::string traffic_ref = ixia_ref_pair.first[0];
+  const std::string topology_ref = ixia_ref_pair.second;
+
+  // Generate 10 samples/sec.
+  int64_t traffic_rate = 10 * interface_sample_rate;
+  RETURN_IF_ERROR(SetIxiaTrafficParams(
+      traffic_ref, traffic_rate * kNsfTrafficTestDurationSecs, traffic_rate,
+      *testbed));
+
+  return IxiaTrafficSettings{
+      .traffic_ref = traffic_ref,
+      .topology_ref = topology_ref,
+      .traffic_rate = traffic_rate,
+      .sampling_rate = interface_sample_rate,
+  };
+}
+
+absl::StatusOr<int> GetSflowSamplesAfterSendingIxiaTraffic(
+    thinkit::GenericTestbed* testbed, thinkit::SSHClient* ssh_client,
+    const IxiaLink& ingress_link,
+    const IxiaTrafficSettings& ixia_traffic_settings,
+    const int collector_port) {
+  // Start sflowtool on SUT.
+  std::string sflow_result;
+  {
+    ASSIGN_OR_RETURN(std::thread sflow_tool_thread,
+                     RunSflowCollectorForNSecs(
+                         *ssh_client, testbed->Sut().ChassisName(),
+                         kSflowtoolLineFormatTemplate, collector_port,
+                         /*sflowtool_runtime=*/kNsfTrafficTestDurationSecs + 30,
+                         sflow_result));
+
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
+
+    RETURN_IF_ERROR(SendNPacketsToSut(
+        std::vector<std::string>{
+            std::string(ixia_traffic_settings.traffic_ref)},
+        ixia_traffic_settings.topology_ref,
+        /*runtime=*/
+        absl::Seconds(std::ceil(1.0f * kNsfTrafficTestDurationSecs)),
+        *testbed));
+
+    // Sleep to wait for the counters to be reflected.
+    absl::SleepFor(absl::Seconds(10));
+  }
+
+  RETURN_IF_ERROR(testbed->Environment().StoreTestArtifact(
+      absl::StrCat(
+          "sflow_result_",
+          absl::FormatTime("%H_%M_%S", absl::Now(), absl::LocalTimeZone()),
+          "_.txt"),
+      sflow_result));
+
+  return GetSflowSamplesOnSut(sflow_result, ingress_link.port_id);
 }
 
 void PerformBackoffTest(
@@ -2080,6 +2264,103 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
     ASSERT_NO_FATAL_FAILURE(PerformBackoffTest(
         testbed_.get(), gnmi_stub_.get(), ssh_client_, ready_links_[0],
         gnmi_config_with_sflow_, sflow_enabled_interfaces, collector_port_));
+  }
+}
+
+
+void SflowNsfTestFixture::TearDown() {
+  // Cold reboot and restore after NSF test.
+  ASSERT_OK(pins_test::Reboot(::gnoi::system::RebootMethod::COLD,
+                              testbed_->Sut(), testbed_->Environment()));
+  ASSERT_OK(pins_test::WaitForReboot(testbed_.get(), *ssh_client_,
+                                     /*check_interfaces_up=*/false));
+  // Restore P4 session after cold reboot.
+  ASSERT_OK_AND_ASSIGN(
+      sut_p4_session_,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed_->Sut(), gnmi_config_with_sflow_, GetP4Info()));
+  SflowTestFixture::TearDown();
+}
+ 
+TEST_P(SflowNsfTestFixture, VerifySflowAfterFreezeAndUnfreeze) {
+
+  if (!GetParam().nsf_enabled) {
+    GTEST_SKIP()
+<< "NSF is not enabled, skip VerifySflowAfterFreezeAndUnfreeze test.";
+  }
+  absl::flat_hash_map<std::string, bool> sflow_interfaces;
+  ASSERT_OK_AND_ASSIGN(sflow_interfaces, GetSflowInterfacesFromSut(*testbed_));
+  absl::flat_hash_set<std::string> sflow_enabled_interfaces;
+  for (const auto& [name, enabled] : sflow_interfaces) {
+    if (enabled) {
+      sflow_enabled_interfaces.insert(name);
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(
+      IxiaTrafficSettings ixia_traffic_settings,
+      SetUpIxiaTrafficForSflowNsf(ready_links_[0], sflow_enabled_interfaces,
+                                  testbed_.get(), gnmi_stub_.get()));
+  const int64_t pkt_count =
+      ixia_traffic_settings.traffic_rate * kNsfTrafficTestDurationSecs;
+  // The minimum percentage of samples that should be recorded during the test.
+  // This is a loose threshold to account for the fact that the test might not
+  // be able to record exactly the expected number of samples.
+  constexpr double kMinExpectedSamplesPct = 0.7;
+  const int64_t expected_number_of_samples =
+      pkt_count / ixia_traffic_settings.sampling_rate;
+  // Record initial Ixia counters to verify that traffic is only sent on the
+  // first interface and that the expected number of packets are sent. This
+  // logic has to be performed outside of
+  // `GetSflowSamplesAfterSendingIxiaTraffic` since that function might be
+  // called while the switch is frozen, and the gNMI interface would be
+  // unavailable.
+  ASSERT_OK_AND_ASSIGN(IxiaCounterStats ixia_counters_before_nsf,
+                       GetIxiaCounterStats(ready_links_, gnmi_stub_.get(),
+                                           /*pkt_count=*/pkt_count));
+  // More than 0 samples are recorded before NSF.
+  EXPECT_THAT(
+      GetSflowSamplesAfterSendingIxiaTraffic(
+          testbed_.get(), ssh_client_, ready_links_[0], ixia_traffic_settings,
+          collector_port_),
+      IsOkAndHolds(Gt(expected_number_of_samples * kMinExpectedSamplesPct)));
+  // Validate counters after sending Ixia traffic.
+  EXPECT_OK(ValidateIxiaInterfaceCounters(ready_links_, gnmi_stub_.get(),
+                                          ixia_counters_before_nsf));
+  constexpr int kNumNsfReboots = 2;
+  for (int i = 0; i < kNumNsfReboots; i++) {
+    ASSERT_OK_AND_ASSIGN(IxiaCounterStats ixia_counters_during_nsf,
+                         GetIxiaCounterStats(ready_links_, gnmi_stub_.get(),
+                                             /*pkt_count=*/pkt_count));
+    // Freeze the switch.
+    ASSERT_OK(ssh_client_
+                  ->RunCommand(testbed_.get()->Sut().ChassisName(), kFreeze,
+                               kCommandTimeout)
+                  .status());
+    absl::SleepFor(kFreezeTimeout);
+    // Flow sampling is disabled (0 samples recorded) during NSF.
+    EXPECT_THAT(GetSflowSamplesAfterSendingIxiaTraffic(
+                    testbed_.get(), ssh_client_, ready_links_[0],
+                    ixia_traffic_settings, collector_port_),
+                IsOkAndHolds(Eq(0)));
+    // Unfreeze the switch.
+    ASSERT_OK(ssh_client_
+                  ->RunCommand(testbed_.get()->Sut().ChassisName(), kUnfreeze,
+                               kCommandTimeout)
+                  .status());
+    absl::SleepFor(kFreezeTimeout);
+    EXPECT_OK(ValidateIxiaInterfaceCounters(ready_links_, gnmi_stub_.get(),
+                                            ixia_counters_during_nsf));
+    ASSERT_OK_AND_ASSIGN(IxiaCounterStats ixia_counters_after_nsf,
+                         GetIxiaCounterStats(ready_links_, gnmi_stub_.get(),
+                                             /*pkt_count=*/pkt_count));
+    // More than 0 samples are recorded after switch is unfrozen.
+    EXPECT_THAT(
+        GetSflowSamplesAfterSendingIxiaTraffic(
+            testbed_.get(), ssh_client_, ready_links_[0], ixia_traffic_settings,
+            collector_port_),
+        IsOkAndHolds(Gt(expected_number_of_samples * kMinExpectedSamplesPct)));
+    EXPECT_OK(ValidateIxiaInterfaceCounters(ready_links_, gnmi_stub_.get(),
+                                            ixia_counters_after_nsf));
   }
 }
 

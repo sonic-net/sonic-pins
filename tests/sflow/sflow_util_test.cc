@@ -19,6 +19,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
@@ -302,6 +303,75 @@ constexpr absl::string_view kResultNoCollectorJson = R"json({
           }
         ]
       }
+    }
+  }
+})json";
+
+constexpr absl::string_view kGnmiConfigWithGnpsi = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  },
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "collectors": {
+        "collector": [
+          {
+            "address": "2001:4860:f802::be",
+            "config": {
+              "address": "2001:4860:f802::be",
+              "port": 6343
+            },
+            "port": 6343
+          }
+        ]
+      },
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 128
+      },
+      "interfaces": {
+        "interface": [
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet1"
+            },
+            "name": "Ethernet1"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet2"
+            },
+            "name": "Ethernet2"
+          }
+        ]
+      }
+    }
+  },
+  "openconfig-system:system": {
+    "openconfig-system-grpc:grpc-servers": {
+      "grpc-server": [
+        {
+          "config": {
+            "enable": %v,
+            "name": "gnpsi"
+          },
+          "name": "gnpsi"
+        }
+      ]
     }
   }
 })json";
@@ -781,6 +851,16 @@ TEST(SflowconfigTest, UpdateSflowQueueFailedMissingCpuSchedulerPolicy) {
       StatusIs(
           absl::StatusCode::kInvalidArgument,
           HasSubstr("Gnmi config does not have any cpu scheduler policy.")));
+}
+
+TEST(SflowconfigTest, UpdateGnpsiConfigEnabledSuccess) {
+  EXPECT_THAT(UpdateGnpsiConfig(kGnmiConfig, /*enable=*/true),
+              IsOkAndHolds(absl::StrFormat(kGnmiConfigWithGnpsi, true)));
+}
+
+TEST(SflowconfigTest, UpdateGnpsiConfigDisabledSuccess) {
+  EXPECT_THAT(UpdateGnpsiConfig(kGnmiConfig, /*enable=*/false),
+              IsOkAndHolds(absl::StrFormat(kGnmiConfigWithGnpsi, false)));
 }
 
 TEST(SflowUtilTest, GetSampleRateSuccessForAllInterfaces) {
