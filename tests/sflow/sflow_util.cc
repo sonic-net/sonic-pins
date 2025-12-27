@@ -27,6 +27,7 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
@@ -40,6 +41,7 @@
 #include "lib/validator/validator_lib.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "re2/re2.h"
 #include "thinkit/ssh_client.h"
 
@@ -81,11 +83,19 @@ constexpr absl::string_view kSflowGnmiStateCollectorAddressPath =
 constexpr absl::string_view kSflowGnmiStateCollectorPortPath =
     "/sampling/sflow/collectors/collector[address=$0][port=$1]/state/port";
 
+// --- Gnpsi gnmi state paths ---
+constexpr absl::string_view kGnpsiGnmiConfigEnablePath =
+    "/system/grpc-servers/grpc-server[name=gnpsi]/config/enable";
+constexpr absl::string_view kGnpsiGnmiStateEnablePath =
+    "/system/grpc-servers/grpc-server[name=gnpsi]/state/enable";
+
 // ToS is present in tcp dump like
 // ... (class 0x80, ....)
 constexpr LazyRE2 kPacketTosMatchPattern{R"(class 0x([a-f0-9]+),)"};
 
 constexpr int kSonicMaxCollector = 2;
+
+constexpr absl::string_view kGnpsiServerName = "gnpsi";
 
 }  // namespace
 
@@ -135,6 +145,18 @@ absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
 
   return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
                                      gnmi_stub, kSflowGnmiStateEnablePath,
+                                     ops_val, /*resp_parse_str=*/"");
+}
+
+absl::Status SetGnpsiConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
+                                   bool enabled, absl::Duration timeout) {
+  std::string ops_val = absl::StrCat(
+      "{\"openconfig-system-grpc:enable\":", (enabled ? "true" : "false"), "}");
+  RETURN_IF_ERROR(SetGnmiConfigPath(gnmi_stub, kGnpsiGnmiConfigEnablePath,
+                                    pins_test::GnmiSetType::kUpdate, ops_val));
+
+  return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
+                                     gnmi_stub, kGnpsiGnmiStateEnablePath,
                                      ops_val, /*resp_parse_str=*/"");
 }
 
@@ -249,6 +271,15 @@ absl::Status VerifySflowStatesConverged(
   return absl::OkStatus();
 }
 
+absl::Status VerifyGnpsiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
+                                       bool enable) {
+  RETURN_IF_ERROR(VerifyGnmiStateConverged(
+      gnmi_stub, kGnpsiGnmiStateEnablePath,
+      /*expected_value=*/
+      absl::StrFormat(R"({"openconfig-system-grpc:enable":%v})", enable)));
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::string> UpdateSflowConfig(
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
@@ -338,6 +369,20 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     sflow_interface_json["config"] = interface_config_json;
     interface_json_array.push_back(sflow_interface_json);
   }
+  return json_yang::DumpJson(gnmi_config_json);
+}
+
+absl::StatusOr<std::string> UpdateGnpsiConfig(absl::string_view gnmi_config,
+                                              bool enable) {
+  ASSIGN_OR_RETURN(nlohmann::json gnmi_config_json,
+                   json_yang::ParseJson(gnmi_config));
+  nlohmann::json gnpsi_server_config;
+  gnpsi_server_config["name"] = kGnpsiServerName;
+  gnpsi_server_config["config"]["name"] = kGnpsiServerName;
+  gnpsi_server_config["config"]["enable"] = enable;
+  gnmi_config_json["openconfig-system:system"]
+                  ["openconfig-system-grpc:grpc-servers"]["grpc-server"]
+                      .push_back(gnpsi_server_config);
   return json_yang::DumpJson(gnmi_config_json);
 }
 

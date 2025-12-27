@@ -225,7 +225,7 @@ void PfcTestWithIxia::SetUp() {
       main_traffic_.traffic_item, main_traffic_parameters_, *generic_testbed_));
 
   pfc_traffic_parameters_ = ixia::TrafficParameters{
-      .frame_size_in_bytes = 200,
+      .frame_size_in_bytes = 64,
       .traffic_speed = ixia::FramesPerSecond{100},
       .src_mac = source_mac,
       .dst_mac = pfc_dmac,
@@ -491,7 +491,9 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
       }));
 
       // Wait for deadlock detection time.
-      absl::SleepFor(GetParam().deadlock_detection_time);
+      absl::SleepFor(GetParam().deadlock_detection_time +
+                     GetParam().pfc_wd_poll_time);
+
       if (create_deadlock) {
         // TODO: Assert WD counters incremented by 1
 
@@ -519,6 +521,10 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
       ASSERT_OK(
           ixia::StopTraffic(pfc_traffic_.traffic_item, *generic_testbed_));
       LOG(INFO) << "-- stopped " << pfc_traffic_.traffic_name;
+
+      // Wait for deadlock restoration time + pfc_wd_poll_time.
+      absl::SleepFor(GetParam().deadlock_restoration_time +
+                     GetParam().pfc_wd_poll_time);
       // Read counters of the target queue.
       ASSERT_OK_AND_ASSIGN(
           const pins_test::QueueCounters queue_counters_after_test,
