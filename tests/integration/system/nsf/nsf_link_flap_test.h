@@ -13,9 +13,9 @@
 // limitations under the License.
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_NSF_LINK_FLAP_TEST_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_NSF_LINK_FLAP_TEST_H_
-
+#include <functional>
 #include <memory>
-
+#include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "thinkit/generic_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
