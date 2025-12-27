@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_insights.h"
@@ -106,14 +107,16 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                        .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
                        .GetDedupedPiEntities(ir_p4info));
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&control_switch));
+  RETURN_IF_ERROR(pdpi::ClearEntities(control_switch));
   RETURN_IF_ERROR(pdpi::InstallPiEntities(control_switch, punt_entities));
 
   // Prepare the SUT.
   LOG(INFO) << "Installing entries from the given test vector on the SUT";
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&sut));
+  RETURN_IF_ERROR(pdpi::ClearEntities(sut));
   RETURN_IF_ERROR(
       pdpi::InstallIrEntities(sut, updated_arriba_test_vector.ir_entities()));
+
+  LOG(INFO) << "Installed entries successfully";
 
   // Prepare single packet test vectors.
   PacketTestVectorById test_vector_by_id;
@@ -140,20 +143,25 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                   params.mirror_testbed_port_map_override.has_value()
                       ? *params.mirror_testbed_port_map_override
                       : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+	      .enable_sut_packet_in_collection =
+                  params.enable_sut_packet_in_collection,
+              .max_expected_packet_in_flight_duration =
+                  params.max_expected_packet_in_flight_duration,
+              .max_in_flight_packets = params.max_in_flight_packets,
           },
           packet_statistics));
 
-  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
-                   pdpi::ReadIrTableEntries(sut));
+  ASSIGN_OR_RETURN(const pdpi::IrEntities installed_entities_sut,
+                   pdpi::ReadIrEntities(sut));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
-      "sut_installed_entries.txtpb",
-      gutil::PrintTextProto(installed_entries_sut)));
+      "sut_installed_entities.txtpb",
+      gutil::PrintTextProto(installed_entities_sut)));
 
-  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_control,
-                   pdpi::ReadIrTableEntries(control_switch));
+  ASSIGN_OR_RETURN(const pdpi::IrEntities installed_entities_control,
+                   pdpi::ReadIrEntities(control_switch));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
-      "control_installed_entries.txtpb",
-      gutil::PrintTextProto(installed_entries_control)));
+      "control_installed_entities.txtpb",
+      gutil::PrintTextProto(installed_entities_control)));
 
   LOG(INFO) << "Number of packets injected: "
             << packet_statistics.total_packets_injected;
@@ -166,6 +174,15 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   ASSIGN_OR_RETURN(
       PacketTestOutcomes test_outcomes,
       ValidateTestRuns(test_runs, params.switch_output_diff_params));
+
+  // Use labelers to add labels to test outcomes.
+  auto status = AugmentTestOutcomesWithLabels(test_outcomes, params.labelers);
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to augment test outcomes with labels: "
+               << status.message();
+  }
+
+  // Store test outcomes.
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
@@ -182,6 +199,7 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
 
   validation_result.LogStatistics();
+  validation_result.RecordPerLabelStatsAsTestProperties();
   return validation_result;
 }
 }  // namespace dvaas
