@@ -84,6 +84,10 @@ class SampleRateTest : public SflowTestFixture {};
 
 class BackoffTest : public SflowTestFixture {};
 
+class SflowNsfTestFixture : public SflowTestFixture {
+  void TearDown() override;
+};
+
 struct SflowMirrorTestParams {
   thinkit::MirrorTestbedInterface* testbed_interface;
   thinkit::SSHClient* ssh_client;
