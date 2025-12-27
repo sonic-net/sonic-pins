@@ -222,6 +222,9 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
                   GetParam().ignore_constraints_on_tables,
               .IsBuggyUpdateThatShouldBeSkipped =
                   GetParam().IsBuggyUpdateThatShouldBeSkipped,
+              .ModifyFuzzedTableEntry = GetParam().ModifyFuzzedTableEntry,
+              .ModifyFuzzedMulticastGroupEntry =
+                  GetParam().ModifyFuzzedMulticastGroupEntry,
           }));
 
   // Remove once switch state transitions to entities. This

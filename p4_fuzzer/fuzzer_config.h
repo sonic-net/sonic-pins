@@ -28,6 +28,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_fuzzer/fuzzer.pb.h"
+#include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
@@ -118,6 +119,25 @@ struct ConfigParams {
           [](const FuzzerConfig& config, const AnnotatedUpdate& update) {
             return false;
           };
+  // A function for modifying any `TableEntry` produced by the Fuzzer. Note that
+  // mutations can override modified values.
+  std::function<absl::Status(const pdpi::IrP4Info&, const SwitchState&,
+                             p4::v1::TableEntry&)>
+      ModifyFuzzedTableEntry =
+          [](const pdpi::IrP4Info&, const SwitchState&, p4::v1::TableEntry&) {
+            // By default, do nothing.
+            return absl::OkStatus();
+          };
+  // A function for modifying any `MulticastGroupEntry` produced by the Fuzzer.
+  // Note that mutations can override modified values.
+  std::function<absl::Status(const pdpi::IrP4Info&, const SwitchState&,
+                             p4::v1::MulticastGroupEntry&)>
+      ModifyFuzzedMulticastGroupEntry = [](const pdpi::IrP4Info&,
+                                           const SwitchState&,
+                                           p4::v1::MulticastGroupEntry&) {
+        // By default, do nothing.
+        return absl::OkStatus();
+      };
 };
 
 class FuzzerConfig {
@@ -200,6 +220,16 @@ public:
   }
   const absl::flat_hash_set<std::string> &GetIgnoreConstraintsOnTables() const {
     return params_.ignore_constraints_on_tables;
+  }
+  const std::function<absl::Status(const pdpi::IrP4Info&, const SwitchState&,
+                                   p4::v1::TableEntry&)>&
+  GetModifyFuzzedTableEntry() const {
+    return params_.ModifyFuzzedTableEntry;
+  }
+  const std::function<absl::Status(const pdpi::IrP4Info&, const SwitchState&,
+                                   p4::v1::MulticastGroupEntry&)>&
+  GetModifyFuzzedMulticastGroupEntry() const {
+    return params_.ModifyFuzzedMulticastGroupEntry;
   }
 
 private:
