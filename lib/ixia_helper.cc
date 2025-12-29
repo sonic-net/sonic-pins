@@ -1330,6 +1330,15 @@ static absl::StatusOr<int64_t> ParseInt64(absl::string_view value,
          << "' as int64_t";
 }
 
+static absl::StatusOr<double> ParseDouble(absl::string_view value,
+                                          absl::string_view description) {
+  double result;
+  if (absl::SimpleAtod(value, &result)) return result;
+  return gutil::InvalidArgumentErrorBuilder()
+         << "cannot parse '" << description << "' value '" << value
+         << "' as double";
+}
+
 absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     absl::string_view raw_stats) {
   TrafficStats result;
@@ -1378,10 +1387,10 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     TrafficItemStats &parsed_row =
         (*result.mutable_stats_by_traffic_item())[name];
     parsed_row.set_traffic_item_name(name);
-    ASSIGN_OR_RETURN(*parsed_row.mutable_tx_port(),
-                     gutil::FindOrStatus(value_by_caption, "Tx Port"));
-    ASSIGN_OR_RETURN(*parsed_row.mutable_rx_port(),
-                     gutil::FindOrStatus(value_by_caption, "Rx Port"));
+    *parsed_row.mutable_tx_port() =
+        gutil::FindOrStatus(value_by_caption, "Tx Port").value_or("");
+    *parsed_row.mutable_rx_port() =
+        gutil::FindOrStatus(value_by_caption, "Rx Port").value_or("");
     {
       ASSIGN_OR_RETURN(std::string raw,
                        gutil::FindOrStatus(value_by_caption, "Tx Frames"));
@@ -1401,6 +1410,12 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
       parsed_row.set_rx_bytes(value);
     }
     {
+      ASSIGN_OR_RETURN(std::string raw,
+                       gutil::FindOrStatus(value_by_caption, "Loss %"));
+      ASSIGN_OR_RETURN(auto value, ParseDouble(raw, "Loss %"));
+      parsed_row.set_loss_rate(value);
+    }
+    {
       ASSIGN_OR_RETURN(std::string raw, gutil::FindOrStatus(value_by_caption,
                                                             "First TimeStamp"));
       parsed_row.set_first_time_stamp(
@@ -1418,13 +1433,14 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
 }
 
 absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
-    absl::string_view href, thinkit::GenericTestbed &generic_testbed) {
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed,
+    absl::string_view view_name) {
   ASSIGN_OR_RETURN(thinkit::HttpResponse views,
                    generic_testbed.SendRestRequestToIxia(
                        thinkit::RequestType::kGet, "/ixnetwork/statistics/view",
                        /*payload=*/""));
   ASSIGN_OR_RETURN(int traffic_item_stats_index,
-                   FindIdByField(views, "caption", "Flow Statistics"));
+                   FindIdByField(views, "caption", view_name));
   // It takes some time for stats to become "ready", so we have to poll.
   // TODO: Do not hardcode this.
   constexpr absl::Duration kPollDuration = absl::Minutes(2);
