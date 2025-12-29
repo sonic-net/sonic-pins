@@ -29,6 +29,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "dvaas/switch_api.h"
@@ -391,6 +392,9 @@ static constexpr absl::string_view kActualBanner =
 static constexpr absl::string_view kExpectationBanner =
     "== EXPECTED OUTPUT "
     "=============================================================";
+static constexpr absl::string_view kLabelBanner =
+    "== LABELS "
+    "======================================================================";
 }  // namespace
 
 absl::StatusOr<std::vector<const google::protobuf::FieldDescriptor*>>
@@ -451,7 +455,7 @@ GetAllFieldDescriptorsOfHeaders(
 
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
     PacketTestRun test_run, const SwitchOutputDiffParams& diff_params,
-    absl::Nullable<SwitchApi*> sut) {
+    SwitchApi*  sut) {
   std::vector<SwitchOutput> expected_outputs(
       test_run.test_vector().acceptable_outputs().begin(),
       test_run.test_vector().acceptable_outputs().end());
@@ -527,10 +531,23 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
   if (!IsCharacterizedAsDrop(acceptable_output_characterizations)) {
     absl::StrAppend(&failure, kExpectationBanner, "\n");
     for (int i = 0; i < test_run.test_vector().acceptable_outputs_size(); ++i) {
-      absl::StrAppendFormat(
-          &failure, "-- Acceptable output: Alternative #%d --\n%s", (i + 1),
-          PrintTextProto(test_run.test_vector().acceptable_outputs(i)));
+      // Clear packet trace to avoid cluttering the output.
+      dvaas::SwitchOutput printable_output =
+          test_run.test_vector().acceptable_outputs(i);
+      printable_output.clear_packet_trace();
+      absl::StrAppendFormat(&failure,
+                            "-- Acceptable output: Alternative #%d --\n%s",
+                            (i + 1), PrintTextProto(printable_output));
     }
+  }
+
+  // Dump labels, if any.
+  absl::StrAppend(&failure, kLabelBanner, "\n");
+  for (const auto& label : test_run.labels().labels()) {
+    absl::StrAppend(&failure, "- ", label, "\n");
+  }
+  if (test_run.labels().labels().empty()) {
+    absl::StrAppend(&failure, "- <no labels>\n");
   }
 
   return result;
@@ -538,7 +555,7 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
 
 absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
     const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
-    absl::Nullable<SwitchApi*> sut) {
+    SwitchApi*  sut) {
   PacketTestOutcomes test_outcomes;
   test_outcomes.mutable_outcomes()->Reserve(test_runs.test_runs_size());
 
