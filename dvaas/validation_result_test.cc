@@ -7,9 +7,9 @@
 #include "dvaas/test_vector.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 
 namespace dvaas {
 namespace {

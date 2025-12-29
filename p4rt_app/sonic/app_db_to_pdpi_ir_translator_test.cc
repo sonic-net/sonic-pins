@@ -22,8 +22,8 @@
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
