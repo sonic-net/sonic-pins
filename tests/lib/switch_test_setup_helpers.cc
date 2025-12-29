@@ -338,7 +338,7 @@ absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
         ASSIGN_OR_RETURN(P4rtPortId port,
                          P4rtPortId::MakeFromP4rtEncoding(string_port));
         ports.insert(port);
-        return absl::OkStatus();
+   return absl::OkStatus();
       }));
 
   // Watch ports do not have a named type, but we still consider them ports so
