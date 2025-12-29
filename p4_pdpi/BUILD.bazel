@@ -29,9 +29,6 @@ cc_library(
         ":built_ins",
         ":ir_cc_proto",
         ":reference_annotations",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//p4_pdpi/string_encodings:byte_string",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
@@ -42,6 +39,9 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -65,7 +65,7 @@ cc_library(
     ],
     deps = [
         ":ir_cc_proto",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
@@ -80,7 +80,7 @@ cc_test(
     deps = [
         ":built_ins",
         ":ir_cc_proto",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -96,9 +96,6 @@ cc_library(
     deps = [
         ":built_ins",
         ":ir_cc_proto",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
-        "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/utils:annotation_parser",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:btree",
@@ -108,6 +105,9 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -119,9 +119,6 @@ cc_test(
     deps = [
         ":ir_cc_proto",
         ":reference_annotations",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi/testing:test_p4info_cc",
         "//p4rt_app/utils:ir_builder",
         "@com_google_absl//absl/status",
@@ -129,6 +126,9 @@ cc_test(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -140,7 +140,7 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
-        "//gutil/gutil:collections",
+        "@com_google_gutil//gutil:collections",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -174,8 +174,8 @@ cc_library(
         ":names",
         ":references",
         ":sequencing_util",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
         "@boost//:bimap",
         "@boost//:graph",
         "@com_github_grpc_grpc//:grpc++",
@@ -205,10 +205,6 @@ cc_library(
         ":ir",
         ":ir_cc_proto",
         ":translation_options",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
-        "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/string_encodings:hex_string",
         "//p4_pdpi/utils:ir",
         "@com_github_grpc_grpc//:grpc++",
@@ -223,6 +219,10 @@ cc_library(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -233,8 +233,8 @@ cc_binary(
         ":ir",
         ":ir_cc_proto",
         ":pdgenlib",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
@@ -254,13 +254,13 @@ cc_library(
     deps = [
         ":ir_cc_proto",
         ":pd",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
-        "//p4_pdpi/internal:ordered_map",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:collections",
+	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -271,7 +271,7 @@ cc_library(
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
-        "//gutil/gutil:proto",
+        "@com_google_gutil//gutil:proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/status",
@@ -288,9 +288,9 @@ cc_test(
     srcs = ["p4info_union_test.cc"],
     deps = [
         ":p4info_union_lib",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/strings",
@@ -303,7 +303,7 @@ cc_binary(
     srcs = ["p4info_union.cc"],
     deps = [
         ":p4info_union_lib",
-        "//gutil/gutil:proto",
+        "@com_google_gutil//gutil:proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
@@ -325,9 +325,6 @@ cc_library(
         ":ir_cc_proto",
         ":reference_annotations",
         ":translation_options",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//p4_pdpi/utils:ir",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -345,6 +342,9 @@ cc_library(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -353,9 +353,9 @@ cc_test(
     srcs = ["ir_to_ir_test.cc"],
     deps = [
         ":ir",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -403,9 +403,6 @@ cc_library(
         ":ir_cc_proto",
         ":names",
         ":sequencing",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
-        "//gutil/gutil:version",
         "//sai_p4/fixed:p4_roles",
         "//sai_p4/instantiations/google:p4_versions",
         "//thinkit:switch",
@@ -426,6 +423,9 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:version",
     ],
 )
 
@@ -437,8 +437,6 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
         "//p4_pdpi/utils:ir",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -446,6 +444,8 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -464,7 +464,7 @@ cc_test(
     srcs = ["ir_properties_test.cc"],
     deps = [
         ":ir_properties",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -477,7 +477,7 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
-        "//gutil/gutil:collections",
+        "@com_google_gutil//gutil:collections",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/functional:any_invocable",
@@ -495,10 +495,6 @@ cc_test(
         ":ir_cc_proto",
         ":ir_tools",
         ":pd",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi/testing:main_p4_pd_cc_proto",
         "//p4_pdpi/testing:test_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
@@ -507,6 +503,10 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -521,8 +521,8 @@ cc_library(
         ":p4_runtime_session",
         ":p4_runtime_session_extras_cc_proto",
         ":pd",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
@@ -540,12 +540,12 @@ cc_library(
     testonly = True,
     hdrs = ["p4_runtime_matchers.h"],
     deps = [
-        "//gutil/gutil:proto_matchers",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:proto_matchers",
     ],
 )
 
@@ -554,11 +554,11 @@ cc_test(
     srcs = ["p4_runtime_matchers_test.cc"],
     deps = [
         ":p4_runtime_matchers",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi/packetlib",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -573,7 +573,7 @@ cc_library(
     srcs = ["entity_keys.cc"],
     hdrs = ["entity_keys.h"],
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:check",
@@ -589,8 +589,8 @@ cc_test(
     srcs = ["entity_keys_test.cc"],
     deps = [
         ":entity_keys",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_absl//absl/hash:hash_testing",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -604,8 +604,8 @@ cc_library(
     deps = [
         ":built_ins",
         ":ir_cc_proto",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
@@ -621,11 +621,11 @@ cc_test(
         ":built_ins",
         ":ir_cc_proto",
         ":names",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi/testing:test_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 

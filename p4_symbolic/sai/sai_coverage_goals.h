@@ -1,7 +1,7 @@
 #ifndef PINS_P4_SYMBOLIC_SAI_SAI_COVERAGE_GOALS_H_
 #define PINS_P4_SYMBOLIC_SAI_SAI_COVERAGE_GOALS_H_
 
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
 
 namespace p4_symbolic::packet_synthesizer {

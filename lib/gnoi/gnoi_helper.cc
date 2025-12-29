@@ -14,6 +14,6 @@
 
 #include "lib/gnoi/gnoi_helper.h"
 
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace pins_test {}  // namespace pins_test
