@@ -18,6 +18,58 @@ package(
 )
 
 cc_library(
+    name = "linux_ssh_helper",
+    hdrs = ["linux_ssh_helper.h"],
+    deps = [
+        "//thinkit:ssh_client",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "mock_linux_ssh_helper",
+    testonly = 1,
+    hdrs = ["mock_linux_ssh_helper.h"],
+    deps = [
+        ":linux_ssh_helper",
+        "//thinkit:ssh_client",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_linux_ssh_helper_test",
+    srcs = ["mock_linux_ssh_helper_test.cc"],
+    deps = [
+        ":mock_linux_ssh_helper",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "ssh_wrapper_client",
+    testonly = 1,
+    srcs = ["ssh_wrapper_client.cc"],
+    hdrs = ["ssh_wrapper_client.h"],
+    deps = [
+        ":linux_ssh_helper",
+        "//gutil/gutil:status",
+        "//thinkit:ssh_client",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
     name = "common_ssh_util",
     srcs = ["common_ssh_util.cc"],
     hdrs = ["common_ssh_util.h"],
