@@ -53,27 +53,9 @@ struct TaggedPacketIn {
 using IsExpectedUnsolicitedPacketFunctionType =
     std::function<bool(const packetlib::Packet &packet)>;
 
-// Unsolicited packets that, for the time being, are acceptable in a PINS
+// Unsolicited packets that, for the time being, are acceptable on the current
 // testbeds.
-inline bool
-DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet &packet) {
-  // TODO Switch generates router solicitation packets.
-  if (packet.headers().size() == 3 &&
-      packet.headers(2).icmp_header().type() == "0x85") {
-    return true;
-  }
-  // TODO Switch generates IPV6 hop_by_hop packets.
-  if (packet.headers().size() == 2 &&
-      packet.headers(1).ipv6_header().next_header() == "0x00") {
-    return true;
-  }
-  // Switch generates LACP packets if LAGs are present.
-  if (packet.headers().size() == 1 &&
-      packet.headers(0).ethernet_header().ethertype() == "0x8809") {
-    return true;
-  }
-  return false;
-}
+bool DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet& packet);
 
 // Gets 'ingress_port' value from metadata in `packet_in`. Returns
 // InvalidArgumentError if 'ingress_port' metadata is missing.
