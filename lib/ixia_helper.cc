@@ -20,11 +20,13 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
+#include "absl/functional/function_ref.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -467,6 +469,178 @@ std::vector<std::string> GetTrefConfigs(
   }
   return json_configs;
 }
+
+// Parses time stamp in format `hh:mm:ss.xx` as seconds.
+absl::StatusOr<double> ParseTimeStampAsSeconds(absl::string_view timestamp,
+                                               absl::string_view description) {
+  absl::Time time_since_unix_epoch;
+  if (!absl::ParseTime("%H:%M:%E*S", timestamp, &time_since_unix_epoch,
+                       /*err=*/nullptr)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "expected time stamp '" << description
+           << "' of the form hh:mm:ss.xx, but got: '" << timestamp << "'";
+  }
+  return absl::ToDoubleSeconds(time_since_unix_epoch - absl::UnixEpoch());
+}
+
+absl::StatusOr<int64_t> ParseInt64(absl::string_view value,
+                                   absl::string_view description) {
+  int64_t result;
+  if (absl::SimpleAtoi(value, &result)) return result;
+  return gutil::InvalidArgumentErrorBuilder()
+         << "cannot parse '" << description << "' value '" << value
+         << "' as int64_t";
+}
+
+absl::StatusOr<double> ParseDouble(absl::string_view value,
+                                   absl::string_view description) {
+  double result;
+  if (absl::SimpleAtod(value, &result)) return result;
+  return gutil::InvalidArgumentErrorBuilder()
+         << "cannot parse '" << description << "' value '" << value
+         << "' as double";
+}
+
+// Parses a single row of traffic item/flow statistics from a map of columns to
+// values.
+absl::StatusOr<TrafficItemStats> ExtractTrafficItemStatsFromRow(
+    const absl::flat_hash_map<std::string, std::string> &value_by_caption) {
+  TrafficItemStats parsed_row;
+  ASSIGN_OR_RETURN(const std::string name,
+                   gutil::FindOrStatus(value_by_caption, "Traffic Item"));
+  parsed_row.set_traffic_item_name(name);
+  *parsed_row.mutable_tx_port() =
+      gutil::FindOrStatus(value_by_caption, "Tx Port").value_or("");
+  *parsed_row.mutable_rx_port() =
+      gutil::FindOrStatus(value_by_caption, "Rx Port").value_or("");
+  {
+    ASSIGN_OR_RETURN(std::string raw,
+                     gutil::FindOrStatus(value_by_caption, "Tx Frames"));
+    ASSIGN_OR_RETURN(auto value, ParseInt64(raw, "Tx Frames"));
+    parsed_row.set_num_tx_frames(value);
+  }
+  {
+    ASSIGN_OR_RETURN(std::string raw,
+                     gutil::FindOrStatus(value_by_caption, "Rx Frames"));
+    ASSIGN_OR_RETURN(auto value, ParseInt64(raw, "Rx Frames"));
+    parsed_row.set_num_rx_frames(value);
+  }
+  {
+    ASSIGN_OR_RETURN(std::string raw,
+                     gutil::FindOrStatus(value_by_caption, "Rx Bytes"));
+    ASSIGN_OR_RETURN(auto value, ParseInt64(raw, "Rx Bytes"));
+    parsed_row.set_rx_bytes(value);
+  }
+  {
+    ASSIGN_OR_RETURN(std::string raw,
+                     gutil::FindOrStatus(value_by_caption, "Loss %"));
+    ASSIGN_OR_RETURN(auto value, ParseDouble(raw, "Loss %"));
+    parsed_row.set_loss_rate(value);
+  }
+  {
+    ASSIGN_OR_RETURN(std::string raw,
+                     gutil::FindOrStatus(value_by_caption, "First TimeStamp"));
+    parsed_row.set_first_time_stamp(
+        ParseTimeStampAsSeconds(raw, "First TimeStamp").value_or(0.0));
+  }
+  {
+    ASSIGN_OR_RETURN(std::string raw,
+                     gutil::FindOrStatus(value_by_caption, "Last TimeStamp"));
+    parsed_row.set_last_time_stamp(
+        ParseTimeStampAsSeconds(raw, "Last TimeStamp").value_or(0.0));
+  }
+  return parsed_row;
+}
+
+// Runs the passed in `parse_row` function on each row of the statistics parsed
+// on the raw statistics from `GetRawStatsView`.
+absl::Status ParseRawStatsForEachRow(
+    absl::string_view raw_stats,
+    absl::FunctionRef<
+        absl::Status(const absl::flat_hash_map<std::string, std::string> &)>
+        parse_row) {
+  // Let proto google::protobuf's json_util do the heavy lifting.
+  ASSIGN_OR_RETURN(StatsViewObject stats_proto,
+                   gutil::ParseJsonAsProto<StatsViewObject>(
+                       raw_stats, /*ignore_unknown_fields=*/true));
+  if (!stats_proto.is_ready()) {
+    return gutil::UnavailableErrorBuilder() << "stats not ready yet";
+  }
+
+  for (auto &[row_name, row] : stats_proto.row_values()) {
+    if (row.values_size() != 1 || !row.values(0).has_list_value()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "row '" << row_name
+             << "' of stats view object has unexpected format";
+    }
+    const google::protobuf::ListValue &values = row.values(0).list_value();
+    if (values.values_size() != stats_proto.column_captions_size()) {
+      if (stats_proto.column_captions_size() == 0 ||
+          values.values_size() == 0) {
+        return gutil::UnavailableErrorBuilder() << "stats not ready yet";
+      }
+      return gutil::InvalidArgumentErrorBuilder()
+             << "found " << stats_proto.column_captions_size()
+             << " column captions, but " << values.values_size()
+             << " values in row '" << row_name << "'";
+    }
+
+    // Organize values by their caption.
+    absl::flat_hash_map<std::string, std::string> value_by_caption;
+    for (int i = 0; i < values.values_size(); ++i) {
+      const google::protobuf::Value &value = values.values(i);
+      if (value.kind_case() != google::protobuf::Value::kStringValue) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "expected string value, but found: " << value.DebugString();
+      }
+      value_by_caption[stats_proto.column_captions(i)] =
+          values.values(i).string_value();
+    }
+
+    RETURN_IF_ERROR(parse_row(value_by_caption));
+  }
+  return absl::OkStatus();
+}
+
+// Polls the Ixia stats view with the given `view_name` until the stats are
+// ready, and then calls `parse_raw_stats` on the raw stats.
+template <typename T>
+absl::StatusOr<T> GetAndParseAllStats(
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed,
+    absl::string_view view_name,
+    absl::FunctionRef<absl::StatusOr<T>(absl::string_view)> parse_raw_stats) {
+  ASSIGN_OR_RETURN(thinkit::HttpResponse views,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kGet, "/ixnetwork/statistics/view",
+                       /*payload=*/""));
+  ASSIGN_OR_RETURN(int traffic_item_stats_index,
+                   FindIdByField(views, "caption", view_name));
+  // It takes some time for stats to become "ready", so we have to poll.
+  // TODO: Do not hardcode this.
+  constexpr absl::Duration kPollDuration = absl::Minutes(2);
+  const absl::Time kTimeout = absl::Now() + kPollDuration;
+  while (absl::Now() < kTimeout) {
+    ASSIGN_OR_RETURN(
+        std::string raw_stats,
+        GetRawStatsView(href, traffic_item_stats_index, generic_testbed));
+    absl::StatusOr<T> stats = parse_raw_stats(raw_stats);
+    if (absl::IsUnavailable(stats.status())) {
+      absl::SleepFor(absl::Seconds(1));
+      continue;  // Stats not ready yet, try again.
+    } else {
+      RETURN_IF_ERROR(stats.status()).SetAppend()
+          << "\nwhile trying to parse the following stats:\n"
+          << FormatJsonBestEffort(raw_stats);
+    }
+    LOG(INFO) << "Stats ready after "
+              << absl::Now() - (kTimeout - kPollDuration) << " of polling.";
+    return stats;
+  }
+
+  return gutil::UnavailableErrorBuilder()
+         << "stats unavailable after " << kPollDuration << " of polling";
+}
+
 }  // namespace
 
 absl::Status GenerateAndApplyTrafficItems(
@@ -1308,163 +1482,56 @@ absl::StatusOr<std::string> GetRawStatsView(
   return stat_response.response;
 }
 
-// Parses time stamp in format `hh:mm:ss.xx` as seconds.
-static absl::StatusOr<double> ParseTimeStampAsSeconds(
-    absl::string_view timestamp, absl::string_view description) {
-  absl::Time time_since_unix_epoch;
-  if (!absl::ParseTime("%H:%M:%E*S", timestamp, &time_since_unix_epoch,
-                       /*err=*/nullptr)) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "expected time stamp of the form hh:mm:ss.xx, but got: '"
-           << timestamp << "'";
-  }
-  return absl::ToDoubleSeconds(time_since_unix_epoch - absl::UnixEpoch());
-}
-
-static absl::StatusOr<int64_t> ParseInt64(absl::string_view value,
-                                          absl::string_view description) {
-  int64_t result;
-  if (absl::SimpleAtoi(value, &result)) return result;
-  return gutil::InvalidArgumentErrorBuilder()
-         << "cannot parse '" << description << "' value '" << value
-         << "' as int64_t";
-}
-
-static absl::StatusOr<double> ParseDouble(absl::string_view value,
-                                          absl::string_view description) {
-  double result;
-  if (absl::SimpleAtod(value, &result)) return result;
-  return gutil::InvalidArgumentErrorBuilder()
-         << "cannot parse '" << description << "' value '" << value
-         << "' as double";
-}
-
 absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     absl::string_view raw_stats) {
   TrafficStats result;
+  RETURN_IF_ERROR(ParseRawStatsForEachRow(
+      raw_stats,
+      [&result](
+          const absl::flat_hash_map<std::string, std::string> &value_by_caption)
+          -> absl::Status {
+        // Extract the values we are interested in.
+        ASSIGN_OR_RETURN(TrafficItemStats parsed_row,
+                         ExtractTrafficItemStatsFromRow(value_by_caption));
+        (*result.mutable_stats_by_traffic_item())[parsed_row
+                                                      .traffic_item_name()] =
+            std::move(parsed_row);
+        return absl::OkStatus();
+      }));
+  return result;
+}
 
-  // Let proto google::protobuf's json_util do the heavy lifting.
-  ASSIGN_OR_RETURN(StatsViewObject stats_proto,
-                   gutil::ParseJsonAsProto<StatsViewObject>(
-                       raw_stats, /*ignore_unknown_fields=*/true));
-  if (!stats_proto.is_ready()) {
-    return gutil::UnavailableErrorBuilder() << "stats not ready yet";
-  }
-
-  for (auto &[row_name, row] : stats_proto.row_values()) {
-    if (row.values_size() != 1 || !row.values(0).has_list_value()) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "row '" << row_name
-             << "' of stats view object has unexpected format";
-    }
-    const google::protobuf::ListValue &values = row.values(0).list_value();
-    if (values.values_size() != stats_proto.column_captions_size()) {
-      if (stats_proto.column_captions_size() == 0 ||
-          values.values_size() == 0) {
-        return gutil::UnavailableErrorBuilder() << "stats not ready yet";
-      }
-      return gutil::InvalidArgumentErrorBuilder()
-             << "found " << stats_proto.column_captions_size()
-             << " column captions, but " << values.values_size()
-             << " values in row '" << row_name << "'";
-    }
-
-    // Organize values by their caption.
-    absl::flat_hash_map<std::string, std::string> value_by_caption;
-    for (int i = 0; i < values.values_size(); ++i) {
-      const google::protobuf::Value &value = values.values(i);
-      if (value.kind_case() != google::protobuf::Value::kStringValue) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "expected string value, but found: " << value.DebugString();
-      }
-      value_by_caption[stats_proto.column_captions(i)] =
-          values.values(i).string_value();
-    }
-
-    // Extract the values we are interested in.
-    ASSIGN_OR_RETURN(const std::string name,
-                     gutil::FindOrStatus(value_by_caption, "Traffic Item"));
-    TrafficItemStats &parsed_row =
-        (*result.mutable_stats_by_traffic_item())[name];
-    parsed_row.set_traffic_item_name(name);
-    *parsed_row.mutable_tx_port() =
-        gutil::FindOrStatus(value_by_caption, "Tx Port").value_or("");
-    *parsed_row.mutable_rx_port() =
-        gutil::FindOrStatus(value_by_caption, "Rx Port").value_or("");
-    {
-      ASSIGN_OR_RETURN(std::string raw,
-                       gutil::FindOrStatus(value_by_caption, "Tx Frames"));
-      ASSIGN_OR_RETURN(auto value, ParseInt64(raw, "Tx Frames"));
-      parsed_row.set_num_tx_frames(value);
-    }
-    {
-      ASSIGN_OR_RETURN(std::string raw,
-                       gutil::FindOrStatus(value_by_caption, "Rx Frames"));
-      ASSIGN_OR_RETURN(auto value, ParseInt64(raw, "Rx Frames"));
-      parsed_row.set_num_rx_frames(value);
-    }
-    {
-      ASSIGN_OR_RETURN(std::string raw,
-                       gutil::FindOrStatus(value_by_caption, "Rx Bytes"));
-      ASSIGN_OR_RETURN(auto value, ParseInt64(raw, "Rx Bytes"));
-      parsed_row.set_rx_bytes(value);
-    }
-    {
-      ASSIGN_OR_RETURN(std::string raw,
-                       gutil::FindOrStatus(value_by_caption, "Loss %"));
-      ASSIGN_OR_RETURN(auto value, ParseDouble(raw, "Loss %"));
-      parsed_row.set_loss_rate(value);
-    }
-    {
-      ASSIGN_OR_RETURN(std::string raw, gutil::FindOrStatus(value_by_caption,
-                                                            "First TimeStamp"));
-      parsed_row.set_first_time_stamp(
-          ParseTimeStampAsSeconds(raw, "First TimeStamp").value_or(0.0));
-    }
-    {
-      ASSIGN_OR_RETURN(std::string raw,
-                       gutil::FindOrStatus(value_by_caption, "Last TimeStamp"));
-      parsed_row.set_last_time_stamp(
-          ParseTimeStampAsSeconds(raw, "Last TimeStamp").value_or(0.0));
-    }
-  }
-
+absl::StatusOr<FlowStats> ParseFlowStats(absl::string_view raw_stats) {
+  FlowStats result;
+  RETURN_IF_ERROR(ParseRawStatsForEachRow(
+      raw_stats,
+      [&result](
+          const absl::flat_hash_map<std::string, std::string> &value_by_caption)
+          -> absl::Status {
+        // Extract the values we are interested in.
+        ASSIGN_OR_RETURN(TrafficItemStats parsed_row,
+                         ExtractTrafficItemStatsFromRow(value_by_caption));
+        // Add the flow stats to the repeated field based on traffic item name.
+        FlowStats::FlowStatsByTrafficItem &flow_stats_by_traffic_item =
+            (*result.mutable_stats_by_traffic_item())[parsed_row
+                                                          .traffic_item_name()];
+        *flow_stats_by_traffic_item.add_flow_stats() = std::move(parsed_row);
+        return absl::OkStatus();
+      }));
   return result;
 }
 
 absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
     absl::string_view href, thinkit::GenericTestbed &generic_testbed,
     absl::string_view view_name) {
-  ASSIGN_OR_RETURN(thinkit::HttpResponse views,
-                   generic_testbed.SendRestRequestToIxia(
-                       thinkit::RequestType::kGet, "/ixnetwork/statistics/view",
-                       /*payload=*/""));
-  ASSIGN_OR_RETURN(int traffic_item_stats_index,
-                   FindIdByField(views, "caption", view_name));
-  // It takes some time for stats to become "ready", so we have to poll.
-  // TODO: Do not hardcode this.
-  constexpr absl::Duration kPollDuration = absl::Minutes(2);
-  const absl::Time kTimeout = absl::Now() + kPollDuration;
-  while (absl::Now() < kTimeout) {
-    ASSIGN_OR_RETURN(
-        std::string raw_stats,
-        GetRawStatsView(href, traffic_item_stats_index, generic_testbed));
-    absl::StatusOr<TrafficStats> stats = ParseTrafficItemStats(raw_stats);
-    if (absl::IsUnavailable(stats.status())) {
-      absl::SleepFor(absl::Seconds(1));
-      continue;  // Stats not ready yet, try again.
-    } else {
-      RETURN_IF_ERROR(stats.status()).SetAppend()
-          << "\nwhile trying to parse the following stats:\n"
-          << FormatJsonBestEffort(raw_stats);
-    }
-    LOG(INFO) << "Stats ready after "
-              << absl::Now() - (kTimeout - kPollDuration) << " of polling.";
-    return stats;
-  }
+  return GetAndParseAllStats<TrafficStats>(href, generic_testbed, view_name,
+                                           &ParseTrafficItemStats);
+}
 
-  return gutil::UnavailableErrorBuilder()
-         << "stats unavailable after " << kPollDuration << " of polling";
+absl::StatusOr<FlowStats> GetAllFlowStats(
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed) {
+  return GetAndParseAllStats<FlowStats>(href, generic_testbed,
+                                        kFlowStatisticsView, &ParseFlowStats);
 }
 
 absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
@@ -1609,8 +1676,8 @@ absl::StatusOr<IxiaLink> GetIxiaLink(thinkit::GenericTestbed &generic_testbed,
                   .sut_interface_bits_per_second = bits_per_second};
 }
 
-// Connects to Ixia on the given testbed and returns a string handle identifying
-// the connection (aka "topology ref").
+// Connects to Ixia on the given testbed and returns a string handle
+// identifying the connection (aka "topology ref").
 absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed) {
   ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
   ASSIGN_OR_RETURN(std::vector<IxiaLink> ready_links,
