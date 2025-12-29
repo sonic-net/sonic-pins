@@ -15,11 +15,13 @@
 #ifndef PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 #define PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 
+#include <functional>
 #include <optional>
 #include <vector>
 
 #include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_run_validation.h"
@@ -58,11 +60,31 @@ struct ArribaTestVectorValidationParams {
   // pass. The value should be <= 1.0.
   double expected_minimum_success_rate = 1.0;
 
+  // Maximum time expected it takes to receive output packets either from SUT
+  // or control switch in response to an injected input packet. Beyond that,
+  // the input packet might be considered dropped.
+  absl::Duration max_expected_packet_in_flight_duration = absl::Seconds(3);
+
   // For a packet in from SUT or control switch without a test tag (i.e. an
   // "unsolicited packet"), if this function return false, packet injection
   // fails immediately.
   IsExpectedUnsolicitedPacketFunctionType is_expected_unsolicited_packet =
       DefaultIsExpectedUnsolicitedPacket;
+
+  // The maximum number of packets that are allowed to be in-flight at any given
+  // time. Packet injection and collection are done in batches of this size. If
+  // not specified, the batch size is equal to the number of test vectors (all
+  // of them are injected as one batch). Note that the assumptions about the
+  // number of in-flight packets is based on the value of
+  // `max_expected_packet_in_flight_duration`.
+  std::optional<int> max_in_flight_packets = std::nullopt;
+
+  // A list of labelers (go/test-vector-labeling) that are applied to each
+  // `PacketTestRun`. The labels may be extracted based on various
+  // characteristics such as packet injection time, tables hit, punted, dropped,
+  // etc.
+  std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+      labelers;
 };
 
 // Retrieves the set of P4RT ports used in the given `arriba_test_vector` (table

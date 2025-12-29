@@ -137,6 +137,7 @@ cc_library(
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
+	"@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
