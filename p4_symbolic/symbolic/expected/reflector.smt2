@@ -81,7 +81,7 @@
  (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x28)))
 (assert
  (let (($x28 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x29 (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x28)))
- (let (($x10 (= standard_metadata.ingress_port (_ bv511 9))))
- (or $x10 $x29)))))
+(let (($x29 (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x28)))
+(let (($x10 (= standard_metadata.ingress_port (_ bv511 9))))
+(or $x10 $x29)))))
 (check-sat)

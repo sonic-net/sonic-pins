@@ -58,16 +58,15 @@ struct SwitchOutputDiffParams {
   // `ignore_missing_packet_ins_in_actual_output`.
   bool treat_expected_and_actual_outputs_as_having_no_packet_ins = false;
 
-  // If instantiated, `ModifyExpectedOutputPreDiffing` is used to modify the
-  // expected switch output prior to diffing it against the actual output. This
-  // can be a useful workaround if the BMv2 simulation producing the expected
-  // output cannot be made 100% accurate (e.g. go/dvaas-fopic). This is only
-  // recommended as a last resort, fixing the simulation should be preferred.
-  std::function<absl::Status(
-      const SwitchInput& input, const SwitchOutput& actual_output,
-      const SwitchApi& sut,
-      google::protobuf::RepeatedPtrField<SwitchOutput>& acceptable_outputs)>
-      ModifyExpectedOutputPreDiffing;
+  // If instantiated, `GetModifiedExpectedOutputPreDiffing` is used to modify
+  // the expected switch output prior to diffing it against the actual output.
+  // This can be a useful workaround if the BMv2 simulation producing the
+  // expected output cannot be made 100% accurate (e.g. go/dvaas-fopic). This is
+  // only recommended as a last resort, fixing the simulation should be
+  // preferred.
+  std::function<absl::StatusOr<std::vector<SwitchOutput>>(
+      const PacketTestRun& packet_test_run, const SwitchApi& sut)>
+      GetModifiedExpectedOutputPreDiffing;
 
   // Used to override the default MessageDifferencer handling for only the
   // `payload` field. When enabled this override will be applied to both Packet
