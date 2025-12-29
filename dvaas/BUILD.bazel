@@ -185,10 +185,26 @@ cc_library(
         "//gutil/gutil:status",
         "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
         "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "validation_result_test",
+    srcs = ["validation_result_test.cc"],
+    deps = [
+        ":test_vector_cc_proto",
+        ":validation_result",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
+        "//gutil/gutil:status_matchers",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
