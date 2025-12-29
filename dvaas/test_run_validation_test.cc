@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -479,16 +480,19 @@ TEST(TestRunValidationTest, ModifyExpectedOutputPreDiffingTest) {
       ValidateTestRun(
           test_run,
           SwitchOutputDiffParams{
-              .ModifyExpectedOutputPreDiffing =
-                  [](const SwitchInput& input,
-		     const SwitchOutput& actual_output, const SwitchApi& sut,
-                     google::protobuf::RepeatedPtrField<dvaas::SwitchOutput>&
-			 acceptable_expected_outputs) {
-                    *acceptable_expected_outputs.at(0)
-                         .mutable_packets(0)
-                         ->mutable_parsed()
-                         ->mutable_payload() = "new-payload";
-                    return absl::OkStatus();
+              .GetModifiedExpectedOutputPreDiffing =
+                  [](const PacketTestRun& packet_test_run,
+                     const SwitchApi& sut) {
+                    std::vector<SwitchOutput> expected_outputs;
+                    for (const auto& output :
+                         packet_test_run.test_vector().acceptable_outputs()) {
+                      SwitchOutput modified_output = output;
+                      *modified_output.mutable_packets(0)
+                           ->mutable_parsed()
+                           ->mutable_payload() = "new-payload";
+                      expected_outputs.push_back(modified_output);
+                    }
+                    return expected_outputs;
                   },
           },
           /*sut=*/&sut));
@@ -604,6 +608,32 @@ TEST(TestRunValidationTest, CustomPayloadCheckFailsForPacketIn) {
                                                          FailCustomPayloadCheck,
                                                  }));
   EXPECT_TRUE(result_with_modify.has_failure());
+}
+
+TEST(TestRunValidationTest,
+     IngoredPacketInMetadataDoNotAffectPacketInOrderingDuringValidation) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packet_ins { metadata { name: "name1" } }
+        packet_ins { metadata { name: "name4" } }
+        packet_ins { metadata { name: "name2" } }
+      }
+    }
+    actual_output {
+      packet_ins { metadata { name: "name2" } }
+      packet_ins { metadata { name: "name3" } }
+      packet_ins { metadata { name: "name4" } }
+    }
+  )pb");
+
+  ASSERT_OK_AND_ASSIGN(
+      PacketTestValidationResult result_with_modify,
+      ValidateTestRun(test_run,
+                      SwitchOutputDiffParams{
+                          .ignored_packet_in_metadata = {"name1", "name3"},
+                      }));
+  EXPECT_FALSE(result_with_modify.has_failure());
 }
 
 }  // namespace

@@ -89,6 +89,12 @@ message PacketTestVector {
   repeated SwitchOutput acceptable_outputs = 3;
 }
 
+// Labels describing various characteristic of a given `PacketTestRun`. Can be
+// used for grouping, filtering, etc.
+message Labels {
+  repeated string labels = 1;
+}
+
 // A packet test vector along with the actual SUT output generated in response
 // to the test vector's input. The actual output may be empty, if the switch
 // drops the input packet.
@@ -96,6 +102,7 @@ message PacketTestRun {
   PacketTestVector test_vector = 1;
   SwitchOutput actual_output = 2;
   string input_packet_injection_time = 3;
+  Labels labels = 4;
 }
 
 // A list of packet test runs.
