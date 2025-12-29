@@ -439,12 +439,6 @@ void HashTest::InitializeTestbed() {
       !all_interfaces_up_status.ok()) {
     LOG(WARNING) << "Some ports are down at the start of the test. "
                  << "Continuing with only the UP ports.";
-    // Collect port debug data but don't fail the test.
-    absl::Status tmp_status = AllPortsUp(sut, /*with_healthz=*/true);
-    LOG_IF(WARNING, !tmp_status.ok()) << "SUT Ports Up Check: " << tmp_status;
-    tmp_status = AllPortsUp(control_switch, /*with_healthz=*/true);
-    LOG_IF(WARNING, !tmp_status.ok())
-        << "Control Ports Up Check: " << tmp_status;
   }
 
   LOG(INFO) << "Initializing forwarding pipeline for SUT.";

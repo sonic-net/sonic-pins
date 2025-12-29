@@ -17,22 +17,20 @@
 #include <memory>
 
 #include "thinkit/generic_testbed_fixture.h"
-#include "thinkit/mirror_testbed.h"
-#include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {
 
 struct NsfDynamicStateUpdateTestParams {
-  std::shared_ptr<thinkit::MirrorTestbedInterface> mirror_testbed;
   std::shared_ptr<thinkit::SSHClient> ssh_client;
+  std::shared_ptr<thinkit::GenericTestbedInterface> generic_testbed;
 };
 
 class NsfDynamicStateUpdateTestFixture
     : public testing::TestWithParam<NsfDynamicStateUpdateTestParams> {
  protected:
-  void SetUp() override { GetParam().mirror_testbed->SetUp(); }
-  void TearDown() override { GetParam().mirror_testbed->TearDown(); }
+  void SetUp() override { GetParam().generic_testbed->SetUp(); }
+  void TearDown() override { GetParam().generic_testbed->TearDown(); }
 };
 
 }  // namespace pins_test
