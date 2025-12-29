@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_insights.h"
@@ -171,6 +172,10 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       ValidateTestRuns(test_runs, params.switch_output_diff_params));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
+
+  // Use labelers to add labels to test outcomes.
+  RETURN_IF_ERROR(
+      AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
 
   // Store test insights.
   ASSIGN_OR_RETURN(const std::string insights_csv,

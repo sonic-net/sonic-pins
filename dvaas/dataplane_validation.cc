@@ -35,6 +35,7 @@
 #include "absl/strings/strip.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/port_id_map.h"
@@ -933,6 +934,10 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   ASSIGN_OR_RETURN(dvaas::PacketTestOutcomes test_outcomes,
                    dvaas::ValidateTestRuns(
                        test_runs, params.switch_output_diff_params, &sut));
+
+  // Use labelers to add labels to test outcomes.
+  RETURN_IF_ERROR(
+      AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
 
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,

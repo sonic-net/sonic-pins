@@ -26,6 +26,7 @@ cc_library(
     srcs = ["dataplane_validation.cc"],
     hdrs = ["dataplane_validation.h"],
     deps = [
+        ":label",
         ":output_writer",
         ":packet_injection",
         ":packet_trace_cc_proto",
@@ -257,6 +258,7 @@ cc_library(
     srcs = ["arriba_test_vector_validation.cc"],
     hdrs = ["arriba_test_vector_validation.h"],
     deps = [
+        ":label",
         ":packet_injection",
         ":port_id_map",
 	":test_insights",
@@ -458,6 +460,7 @@ cc_library(
     hdrs = ["traffic_generator.h"],
     deps = [
         ":dataplane_validation",
+        ":label",
         ":mirror_testbed_config",
         ":packet_injection",
         ":port_id_map",
@@ -520,6 +523,18 @@ cc_library(
     hdrs = ["packet_trace.h"],
     deps = [
         ":packet_trace_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "label",
+    srcs = ["label.cc"],
+    hdrs = ["label.h"],
+    deps = [
+        ":test_vector_cc_proto",
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

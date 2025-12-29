@@ -15,6 +15,7 @@
 #ifndef PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 #define PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -77,6 +78,13 @@ struct ArribaTestVectorValidationParams {
   // number of in-flight packets is based on the value of
   // `max_expected_packet_in_flight_duration`.
   std::optional<int> max_in_flight_packets = std::nullopt;
+
+  // A list of labelers (go/test-vector-labeling) that are applied to each
+  // `PacketTestRun`. The labels may be extracted based on various
+  // characteristics such as packet injection time, tables hit, punted, dropped,
+  // etc.
+  std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+      labelers;
 };
 
 // Retrieves the set of P4RT ports used in the given `arriba_test_vector` (table
