@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
@@ -32,6 +33,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "dvaas/dataplane_validation.h"
+#include "dvaas/label.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
@@ -641,6 +643,10 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
   for (const auto& [id, switch_output] : collected_traffic_by_id) {
     residual_collected_traffic_by_id_[id] = switch_output;
   }
+
+  // Use labelers to add labels to test outcomes.
+  RETURN_IF_ERROR(AugmentTestOutcomesWithLabels(
+      new_test_outcomes, params_.validation_params.labelers));
 
   // Append new test outcomes to the test artifact.
   gutil::BazelTestArtifactWriter dvaas_test_artifact_writer;

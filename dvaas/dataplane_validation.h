@@ -80,6 +80,8 @@ struct FailureEnhancementOptions {
   bool collect_packet_trace = true;
   // Minimize the set of test vectors that caused the first
   // `max_number_of_failures_to_minimize` failures.
+  // TODO: Currently, the algorithm terminates if the set of
+  // entities from packet trace is not sufficient to reproduce the failure.
   int max_number_of_failures_to_minimize = 1;
   // Ensures that any minimized failure maintains the original expectation and
   // switch output.
@@ -145,6 +147,13 @@ struct DataplaneValidationParams {
   // A struct to store configurable parameters for packet failure determinism.
   // Parameters in `failure_enhancement_options` are assigned default values.
   FailureEnhancementOptions failure_enhancement_options;
+
+  // A list of labelers (go/test-vector-labeling) that are applied to each
+  // `PacketTestRun`. The labels may be extracted based on various
+  // characteristics such as packet injection time, tables hit, punted, dropped,
+  // etc.
+  std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+      labelers;
 
   // If true, collect and print the switch counters.
   bool reset_and_collect_counters = true;
