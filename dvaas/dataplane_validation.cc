@@ -45,6 +45,7 @@
 #include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/user_provided_packet_test_vector.h"
 #include "dvaas/validation_result.h"
+#include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/proto_ordering.h"
 #include "gutil/gutil/status.h"
@@ -146,7 +147,7 @@ bool HasSameFailure(const dvaas::PacketTestOutcome& original_test_outcome,
          new_test_outcome.test_result().failure().description();
 }
 
-absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
+absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
     SwitchApi& sut_api, const dvaas::PacketTestOutcome& test_outcome,
     bool maintain_original_failure,
     const std::function<absl::StatusOr<PacketTestOutcome>(
@@ -179,6 +180,58 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
                    GetSynthesizedPacketFromFromTestVector(
                        test_outcome.test_run().test_vector()));
 
+  // Try minimizing with the set of entities collected from packet traces.
+  RETURN_IF_ERROR(pdpi::ClearEntities(*sut_api.p4rt));
+  pdpi::IrEntities entities_from_packet_trace;
+  for (const auto& acceptable_output :
+       test_outcome.test_run().test_vector().acceptable_outputs()) {
+    if (acceptable_output.has_packet_trace()) {
+      dvaas::PacketTrace packet_trace = acceptable_output.packet_trace();
+      for (const auto& event : packet_trace.events()) {
+        if (event.has_packet_replication() &&
+            event.packet_replication().has_packet_replication_engine_entry() &&
+            event.packet_replication().has_packet_replication_engine_entry()) {
+          *entities_from_packet_trace.add_entities()
+               ->mutable_packet_replication_engine_entry()
+               ->mutable_multicast_group_entry() =
+              event.packet_replication()
+                  .packet_replication_engine_entry()
+                  .multicast_group_entry();
+        }
+        if (event.has_table_apply() && event.table_apply().has_hit()) {
+          *entities_from_packet_trace.add_entities()->mutable_table_entry() =
+              event.table_apply().hit().table_entry();
+        }
+      }
+      break;
+    }
+  }
+  absl::Status status =
+      InstallIrEntities(*sut_api.p4rt, entities_from_packet_trace);
+  if (!status.ok()) {
+    LOG(WARNING) << "Failed to install entities from packet trace: "
+                 << status.message();
+    return std::nullopt;
+  }
+  ASSIGN_OR_RETURN(PacketTestOutcome new_test_outcome,
+                   test_and_validate_callback(synthesized_packet,
+                                              entities_from_packet_trace));
+  if (new_test_outcome.test_result().has_failure() &&
+      (maintain_original_failure &&
+       HasSameFailure(test_outcome, new_test_outcome))) {
+    testing::Test::RecordProperty("packet_trace_minimization_success", "true");
+    LOG(INFO) << "Minimization with packet trace succeeded.";
+    return entities_from_packet_trace;
+  } else {
+    testing::Test::RecordProperty("packet_trace_minimization_success", "false");
+    LOG(INFO) << "Minimization with packet trace failed.";
+    return std::nullopt;
+  }
+  // TODO: Remove once a longer-term minimization solution is
+  // implemented.
+  LOG(INFO) << "IF YOU SEE THIS MESSAGE, WE HAVE MADE A HORRIBLE MISTAKE. "
+               "PLEASE TELL dilo@ AND angzhan@ ASAP!";
+
   // Order the entities so that an entity that may be depended on by another
   // entity comes first.
   RETURN_IF_ERROR(pdpi::StableSortEntities(ir_p4info, pi_entities));
@@ -194,7 +247,7 @@ absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
   int reinstall_attempts = 0;
   int iterations = 0;
   for (int i = result.entities_size() - 1; i >= 0; --i && ++iterations) {
-    LOG_EVERY_N(INFO, kSecsBetweenLogs)
+    LOG_EVERY_N_SEC(INFO, kSecsBetweenLogs)
         << "Loop has run " << iterations << " iterations, there are " << i
         << " remaining entities out of " << pi_entities.size()
         << " original ones and we have reinstalled " << reinstall_attempts
@@ -645,7 +698,7 @@ absl::Status PostProcessTestVectorFailure(
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
-  ASSIGN_OR_RETURN(pdpi::IrEntities best_known_set_of_entities,
+  ASSIGN_OR_RETURN(std::optional<pdpi::IrEntities> best_known_set_of_entities,
                    pdpi::ReadIrEntities(*sut_api.p4rt));
   // Duplicate packet that caused test failure.
   if (failure_count <
@@ -678,24 +731,18 @@ absl::Status PostProcessTestVectorFailure(
     LOG(INFO) << "Minimization took "
               << absl::ToInt64Milliseconds(absl::Now() - start)
               << " milliseconds";
-    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-        "minimal_set_of_entities_that_caused_test_failure.txt",
-        best_known_set_of_entities));
+    if (best_known_set_of_entities.has_value()) {
+      RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+          "minimal_set_of_entities_that_caused_test_failure.txt",
+          *best_known_set_of_entities));
+    }
   }
-
-  // Output dvaas_regression_test_proto.
-  RETURN_IF_ERROR(StoreDvaasRegressionTestProto(
-      test_outcome.test_run().test_vector(), best_known_set_of_entities,
-      sut_p4info, dvaas_test_artifact_writer));
-
-  // TODO: Add support for other test vector types.
-  if (test_outcome.test_run().test_vector().input().type() ==
-          SwitchInput::SUBMIT_TO_INGRESS ||
-      test_outcome.test_run().test_vector().input().type() ==
-          SwitchInput::PACKET_OUT) {
-    return absl::OkStatus();
+  if (best_known_set_of_entities.has_value()) {
+    // Output dvaas_regression_test_proto.
+    RETURN_IF_ERROR(StoreDvaasRegressionTestProto(
+        test_outcome.test_run().test_vector(), *best_known_set_of_entities,
+        sut_p4info, dvaas_test_artifact_writer));
   }
-
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {
     // Output an Arriba test vector to test artifacts.
