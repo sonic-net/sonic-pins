@@ -26,11 +26,11 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "dvaas/labeler.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
@@ -153,7 +153,7 @@ struct DataplaneValidationParams {
   // characteristics such as packet injection time, tables hit, punted, dropped,
   // etc.
   std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
-      labelers;
+      labelers = DefaultPacketTestRunLabelers();
 
   // If true, collect and print the switch counters.
   bool reset_and_collect_counters = true;
@@ -223,6 +223,7 @@ public:
   // 2. gNMI configs will be unchanged.
   absl::StatusOr<ValidationResult> ValidateDataplaneUsingExistingSwitchApis(
       SwitchApi& sut, SwitchApi& control_switch,
+      thinkit::TestEnvironment& test_environment,
       const DataplaneValidationParams& params = {});
 
   // Returns statistics about all packets sent during the lifetime of the
@@ -321,16 +322,13 @@ public:
   virtual absl::StatusOr<P4Specification>
   InferP4Specification(SwitchApi &sut) const = 0;
 
-  // Gets the P4 simulation packet trace(s) for the given config, entries, and
-  // input packet. Returns a map from input packet's hex string to list of
-  // packet traces each corresponding to one trace for that packet (there may be
-  // multiple traces, e.g. due to exploring WCMP non-determinism).
-  virtual absl::StatusOr<
-      absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>>
-  GetPacketTraces(
-      const p4::v1::ForwardingPipelineConfig &bmv2_compatible_config,
-      const pdpi::IrP4Info &ir_p4info, const pdpi::IrEntities &ir_entities,
-      const std::vector<SwitchInput> &switch_inputs) const = 0;
+  // Augments the given `packet_test_vectors` with compact packet traces if
+  // `use_compact_traces` is true, otherwise full packet traces are added.
+  virtual absl::Status AugmentPacketTestVectorsWithPacketTraces(
+      std::vector<PacketTestVector>& packet_test_vectors,
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
+      const p4::v1::ForwardingPipelineConfig& bmv2_compatible_config,
+      bool use_compact_traces) const = 0;
 
   // Creates entities for v1Model auxiliary tables that model the effects of the
   // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
@@ -362,26 +360,10 @@ absl::StatusOr<P4Specification> InferP4Specification(
     const DataplaneValidationParams& params,
     const DataplaneValidationBackend& backend, SwitchApi& sut);
 
-// Returns a string of the packet trace summary for the given packet trace.
-absl::StatusOr<std::string> GetPacketTraceSummary(
-    dvaas::PacketTrace& packet_trace);
-
-// Appends the P4 simulation packet trace summary for the input packet in
-// `failed_packet_test` to the failure description of the test. Uses
-// `packet_traces` to find the corresponding packet trace for the input packet,
-// and also stores the full textual trace as test artifact.
-absl::Status AttachPacketTrace(
-    dvaas::PacketTestOutcome& failed_packet_test,
-    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
-        packet_traces,
-    gutil::TestArtifactWriter& dvaas_test_artifact_writer);
-
 // Stores a given `packet_test_vector` as an ArribaTestVector using only the
 // entries that might be hit by the packet (according to its P4 packet trace).
 absl::Status StorePacketTestVectorAsArribaTestVector(
     const PacketTestVector& packet_test_vector,
-    const absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
-        packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer);
 
 }  // namespace dvaas
