@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -29,6 +30,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "lib/ssh/ssh_wrapper_client.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
@@ -113,6 +115,12 @@ inline absl::Status AllPortsUp(thinkit::Switch &thinkit_switch,
 absl::Status NoAlarms(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
+// Checks if switch is SSHable, gNXI/P4RT are responding, and containers are up.
+absl::Status SwitchUp(thinkit::Switch& thinkit_switch,
+                      thinkit::SSHClient& ssh_client,
+                      thinkit::SshWrapperClient& ssh_wrapper_client,
+                      absl::Duration timeout);
+
 // Checks if the switch is ready by running the following validations:
 // Pingable, P4rtAble, GnmiAble, GnoiAble.
 absl::Status SwitchReady(thinkit::Switch &thinkit_switch,
@@ -179,16 +187,33 @@ absl::Status WaitForCondition(Func &&condition, absl::Duration timeout,
 template <typename Func, typename... Args>
 absl::Status WaitForNot(Func &&condition, absl::Duration timeout,
                         Args &&...args) {
-  return WaitForCondition(
-      [condition = std::forward<Func>(condition)](Args &&...args) {
-	absl::Status status =
-            std::invoke(condition, std::forward<Args>(args)...);
-        if (status.ok()) {
-          return absl::InternalError("Validator still returns okay.");
-        }
-        return absl::OkStatus();
-      },
-      timeout, std::forward<Args>(args)...);
+  absl::Time deadline = absl::Now() + timeout;
+  absl::Status final_status;
+  uint64_t number_of_function_invocations = 0;
+  do {
+    number_of_function_invocations++;
+    if constexpr (std::is_invocable_r_v<absl::Status, Func, Args...,
+                                        absl::Duration>) {
+      final_status = std::invoke(condition, std::forward<Args>(args)...,
+                                 /*timeout=*/deadline - absl::Now());
+    } else {
+      final_status = std::invoke(condition, std::forward<Args>(args)...);
+    }
+  } while (final_status.ok() && absl::Now() < deadline);
+  if (!final_status.ok()) {
+    // deadline - absl::Now() is the remaining time left in the timeout, so
+    // timeout - (deadline - absl::Now()) is the time it took to reach the not
+    // ok condition.
+    LOG(INFO) << "Condition became not ok after "
+              << timeout - (deadline - absl::Now()) << " with "
+              << number_of_function_invocations << " function invocations:\n"
+              << final_status;
+    return absl::OkStatus();
+  }
+
+  return absl::DeadlineExceededError(absl::StrCat(
+      "Condition still ok after ", absl::FormatDuration(timeout), " with ",
+      number_of_function_invocations, " function invocations."));
 }
 
 } // namespace pins_test
