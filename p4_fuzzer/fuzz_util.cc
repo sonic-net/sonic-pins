@@ -25,7 +25,6 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/base/casts.h"
-#include "absl/base/internal/endian.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
@@ -1252,8 +1251,8 @@ uint64_t FuzzUint64(absl::BitGen* gen, int bits) {
   return BitsToUint64(FuzzBits(gen, bits, sizeof(uint64_t)));
 }
 
-absl::StatusOr<p4::v1::FieldMatch> FuzzTernaryFieldMatch(
-    absl::BitGen* gen, const FuzzerConfig& config, int bits) {
+absl::StatusOr<p4::v1::FieldMatch> FuzzTernaryFieldMatch(absl::BitGen* gen,
+                                                         int bits) {
   ASSIGN_OR_RETURN(std::string mask, FuzzNonZeroBits(gen, bits));
   ASSIGN_OR_RETURN(std::string value, FuzzBits(gen, bits));
 
@@ -1332,8 +1331,8 @@ absl::StatusOr<p4::v1::FieldMatch> FuzzFieldMatch(
   p4::v1::FieldMatch match;
   switch (match_field_info.match_type()) {
     case p4::config::v1::MatchField::TERNARY: {
-      ASSIGN_OR_RETURN(match, FuzzTernaryFieldMatch(
-                                  gen, config, match_field_info.bitwidth()));
+      ASSIGN_OR_RETURN(match,
+                       FuzzTernaryFieldMatch(gen, match_field_info.bitwidth()));
       break;
     }
     case p4::config::v1::MatchField::LPM: {
