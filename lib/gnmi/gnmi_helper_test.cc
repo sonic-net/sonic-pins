@@ -3655,7 +3655,7 @@ TEST(GetAllInterfaceCounters, Works) {
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
             },
-            "blackhole":{
+            "pins-interfaces:blackhole":{
                "in-discard-events":"1",
                "out-discard-events":"2",
                "in-error-events":"3",
@@ -3873,7 +3873,7 @@ TEST(GetAllInterfaceCounters, WorksEvenWhenMissingBlackholeCounters) {
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
             },
-            "blackhole":{
+            "pins-interfaces:blackhole":{
             }
          },
          "subinterfaces":{
@@ -3993,7 +3993,7 @@ TEST_P(GetAllInterfaceCountersWithParams,
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
             },
-            "blackhole":{
+            "pins-interfaces:blackhole":{
                 $0
             }
          },

@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "lib/ssh/linux_ssh_helper.h"
@@ -54,6 +55,9 @@ absl::StatusOr<std::string> SetTimezoneToPst(
 absl::StatusOr<std::vector<thinkit::GetFileResult>> GetFileResults(
     std::string_view sut, thinkit::SSHClient* ssh_client,
     absl::Span<const GetFileOption> get_file_options, absl::Duration timeout);
+
+absl::Span<const GetFileOption> GetSavepinsDbStateFileOptions(
+    absl::string_view container_cmd_prefix);
 
 }  // namespace pins_test
 
