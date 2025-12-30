@@ -3655,7 +3655,7 @@ TEST(GetAllInterfaceCounters, Works) {
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
             },
-            "blackhole":{
+            "pins-interfaces:blackhole":{
                "in-discard-events":"1",
                "out-discard-events":"2",
                "in-error-events":"3",
@@ -3873,7 +3873,7 @@ TEST(GetAllInterfaceCounters, WorksEvenWhenMissingBlackholeCounters) {
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
             },
-            "blackhole":{
+            "pins-interfaces:blackhole":{
             }
          },
          "subinterfaces":{
@@ -3993,7 +3993,7 @@ TEST_P(GetAllInterfaceCountersWithParams,
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
             },
-            "blackhole":{
+            "pins-interfaces:blackhole":{
                 $0
             }
          },
@@ -4342,6 +4342,71 @@ TEST(GetAllInterfaceCounters, FailedWithMissingFieldAndReportsInterface) {
               HasSubstr(
                   "pins-interfaces:in-buffer-discards not found in"))));
 }
+
+TEST(GetBadIntervalsCounter, Success) {
+  static constexpr absl::string_view kGnmiConfigWithBadIntervals = R"json(
+{
+  "pins-interfaces:blackhole": {
+    "bad-intervals": "1"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_,
+          EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                           path {
+                             elem { name: "interfaces" }
+                             elem {
+                               name: "interface"
+                               key { key: "name" value: "Ethernet1/4/1" }
+                             }
+                             elem { name: "state" }
+                             elem { name: "pins-interfaces:blackhole" }
+                           }
+                           type: STATE
+                           encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"pins-interfaces:blackhole",
+                          /*gnmi_config=*/kGnmiConfigWithBadIntervals)),
+                      Return(grpc::Status::OK)));
+  EXPECT_THAT(GetBadIntervalsCounter("Ethernet1/4/1", stub), IsOkAndHolds(1));
+}
+
+TEST(GetBadIntervalsCounter, FailWithMissingField) {
+  // No bad-intervals field.
+  static constexpr absl::string_view kGnmiConfigWithoutBadIntervals = R"json(
+{
+  "pins-interfaces:blackhole": {
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_,
+          EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                           path {
+                             elem { name: "interfaces" }
+                             elem {
+                               name: "interface"
+                               key { key: "name" value: "Ethernet1/4/1" }
+                             }
+                             elem { name: "state" }
+                             elem { name: "pins-interfaces:blackhole" }
+                           }
+                           type: STATE
+                           encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"pins-interfaces:blackhole",
+                          /*gnmi_config=*/kGnmiConfigWithoutBadIntervals)),
+                      Return(grpc::Status::OK)));
+  EXPECT_THAT(GetBadIntervalsCounter("Ethernet1/4/1", stub),
+              StatusIs(absl::StatusCode::kNotFound,
+                       HasSubstr("bad-intervals not found in")));
+}
+
 
 TEST(GetBlackholePortCounters, Success) {
   static constexpr absl::string_view kCountersJson = R"json(

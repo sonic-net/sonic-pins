@@ -16,7 +16,9 @@
 #define PINS_LIB_SSH_MOCK_LINUX_SSH_HELPER_H_
 
 #include <string>
+#include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -37,6 +39,26 @@ class MockLinuxSshHelper : public LinuxSshHelper {
                absl::Duration timeout),
               (override));
   MOCK_METHOD(absl::StatusOr<std::string>, SetTimezoneToPst,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::string>, GetpinsVersion,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::string>, GetDebugArtifactFileName,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::Status, ClearpinsLogs,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::vector<GetFileResult>>, SavepinsLog,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::vector<GetFileResult>>, SavepinsDbState,
               (absl::string_view sut, SSHClient* ssh_client,
                absl::Duration timeout),
               (override));
