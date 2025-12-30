@@ -14,6 +14,8 @@
 
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+# load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_testonly = True,
@@ -51,6 +53,7 @@ cc_library(
         "//lib/gnmi:gnmi_helper",
         "//lib/gnmi:openconfig_cc_proto",
         "//lib/p4rt:p4rt_port",
+	"//p4_pdpi:entity_keys",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -69,6 +72,7 @@ cc_library(
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:btree",
+	"@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -77,75 +81,6 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
     ],
-)
-
-proto_library(
-    name = "dvaas_detective_proto",
-    srcs = ["dvaas_detective.proto"],
-)
-
-cc_proto_library(
-    name = "dvaas_detective_cc_proto",
-    deps = [":dvaas_detective_proto"],
-)
-
-cc_library(
-    name = "dvaas_detective",
-    srcs = ["dvaas_detective.cc"],
-    hdrs = ["dvaas_detective.h"],
-    deps = [
-        ":dvaas_detective_cc_proto",
-        ":test_vector_cc_proto",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:overload",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:variant",
-        "@com_google_ydf//yggdrasil_decision_forests/dataset:data_spec_cc_proto",
-        "@com_google_ydf//yggdrasil_decision_forests/model/decision_tree",
-        "@com_google_ydf//yggdrasil_decision_forests/model/decision_tree:decision_tree_cc_proto",
-        "@com_google_ydf//yggdrasil_decision_forests/model/random_forest",
-        "@com_google_ydf//yggdrasil_decision_forests/utils:distribution_cc_proto",
-    ],
-)
-
-# go/golden-test-with-coverage
-cc_test(
-    name = "dvaas_detective_test",
-    srcs = ["dvaas_detective_test.cc"],
-    linkstatic = True,
-    deps = [
-        ":dvaas_detective",
-        ":dvaas_detective_cc_proto",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:testing",
-        ":test_vector_cc_proto",
-        "//gutil/gutil:status_matchers",
-        "//p4_pdpi/internal:ordered_map",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_ydf//yggdrasil_decision_forests/dataset:data_spec_cc_proto",
-        "@com_google_ydf//yggdrasil_decision_forests/model/decision_tree",
-        "@com_google_ydf//yggdrasil_decision_forests/model/random_forest",
-    ],
-)
-
-cmd_diff_test(
-    name = "dvaas_detective_diff_test",
-    actual_cmd = " | ".join([
-        "$(execpath :dvaas_detective_test)",
-        # Strip unnecessary lines for golden testing.
-        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
-        "sed '/^\\[/d'",  # Strip every line beginning with '['.
-    ]),
-    expected = "dvaas_detective_test.expected",
-    tools = [":dvaas_detective_test"],
 )
 
 cc_test(
@@ -598,8 +533,10 @@ cc_library(
         ":test_vector_cc_proto",
 	":packet_trace_cc_proto",
 	"//gutil/gutil:status",
+	"//p4_pdpi:names",
         "//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
+	"@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

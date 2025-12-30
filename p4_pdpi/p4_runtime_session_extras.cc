@@ -296,12 +296,30 @@ absl::Status DeleteIrEntity(P4RuntimeSession& p4rt,
   return DeletePiEntity(p4rt, pi_entity);
 }
 
+// Deletes the given `ir_entities` from the switch.
+absl::Status DeleteIrEntities(P4RuntimeSession& p4rt,
+                              const IrEntities& ir_entities) {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot delete entity on switch: failed "
+                                     "to pull P4Info from switch: ");
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
+                   IrEntitiesToPi(ir_p4info, ir_entities));
+  return DeletePiEntities(p4rt, pi_entities);
+}
+
 absl::Status DeletePiEntity(P4RuntimeSession& p4rt,
                             const p4::v1::Entity& pi_entity) {
   p4::v1::Update updates[1];
   updates[0].set_type(p4::v1::Update::DELETE);
   *updates[0].mutable_entity() = pi_entity;
   return pdpi::SendPiUpdates(&p4rt, updates);
+}
+
+// Deletes the given `pi_entities` from the switch.
+absl::Status DeletePiEntities(P4RuntimeSession& p4rt,
+                              absl::Span<const p4::v1::Entity> pi_entities) {
+  return SendPiUpdates(&p4rt,
+                       CreatePiUpdates(pi_entities, p4::v1::Update::DELETE));
 }
 
 }  // namespace pdpi
