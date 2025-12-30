@@ -2288,6 +2288,52 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
   return counters;
 }
 
+Counters Counters::operator-(const Counters& other) const {
+  return Counters{
+      in_pkts - other.in_pkts,
+      out_pkts - other.out_pkts,
+      in_octets - other.in_octets,
+      out_octets - other.out_octets,
+      in_unicast_pkts - other.in_unicast_pkts,
+      out_unicast_pkts - other.out_unicast_pkts,
+      in_multicast_pkts - other.in_multicast_pkts,
+      out_multicast_pkts - other.out_multicast_pkts,
+      in_broadcast_pkts - other.in_broadcast_pkts,
+      out_broadcast_pkts - other.out_broadcast_pkts,
+      in_errors - other.in_errors,
+      out_errors - other.out_errors,
+      in_discards - other.in_discards,
+      out_discards - other.out_discards,
+      in_buffer_discards - other.in_buffer_discards,
+      in_maxsize_exceeded - other.in_maxsize_exceeded,
+      in_fcs_errors - other.in_fcs_errors,
+      in_ipv4_pkts - other.in_ipv4_pkts,
+      out_ipv4_pkts - other.out_ipv4_pkts,
+      in_ipv6_pkts - other.in_ipv6_pkts,
+      out_ipv6_pkts - other.out_ipv6_pkts,
+      in_ipv6_discarded_pkts - other.in_ipv6_discarded_pkts,
+      out_ipv6_discarded_pkts - other.out_ipv6_discarded_pkts,
+      timestamp_ns - other.timestamp_ns,
+  };
+}
+
+absl::StatusOr<Counters> GetCountersForInterface(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      std::string interface_info,
+      GetGnmiStatePathInfo(
+          &gnmi_stub,
+          absl::StrCat("interfaces/interface[name=", interface_name, "]"),
+          "openconfig-interfaces:interface"));
+  ASSIGN_OR_RETURN(json interface_json, json_yang::ParseJson(interface_info));
+  if (!interface_json.is_array() || interface_json.empty()) {
+    return absl::InternalError(absl::StrCat(
+        "Expecting counters for interface ", interface_name,
+        " to have a non-zero JSON array, but got: ", interface_info));
+  }
+  return GetCountersForInterface(interface_json[0]);
+}
+
 absl::StatusOr<uint64_t> GetBadIntervalsCounter(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
   ASSIGN_OR_RETURN(json port_counters_json,

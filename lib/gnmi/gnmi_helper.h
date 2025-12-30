@@ -165,6 +165,50 @@ struct Counters {
   std::optional<uint64_t> carrier_transitions;
   uint64_t timestamp_ns = 0;
   std::optional<BlackholePortCounters> blackhole_counters;
+  // Returns the difference between two counters.
+  Counters operator-(const Counters& other) const;
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink, const Counters& c) {
+    absl::Format(&sink, "in_pkts: %v\n", c.in_pkts);
+    absl::Format(&sink, "out_pkts: %v\n", c.out_pkts);
+    absl::Format(&sink, "in_octets: %v\n", c.in_octets);
+    absl::Format(&sink, "out_octets: %v\n", c.out_octets);
+    absl::Format(&sink, "in_unicast_pkts: %v\n", c.in_unicast_pkts);
+    absl::Format(&sink, "out_unicast_pkts: %v\n", c.out_unicast_pkts);
+    absl::Format(&sink, "in_multicast_pkts: %v\n", c.in_multicast_pkts);
+    absl::Format(&sink, "out_multicast_pkts: %v\n", c.out_multicast_pkts);
+    absl::Format(&sink, "in_broadcast_pkts: %v\n", c.in_broadcast_pkts);
+    absl::Format(&sink, "out_broadcast_pkts: %v\n", c.out_broadcast_pkts);
+    absl::Format(&sink, "in_errors: %v\n", c.in_errors);
+    absl::Format(&sink, "out_errors: %v\n", c.out_errors);
+    absl::Format(&sink, "in_discards: %v\n", c.in_discards);
+    absl::Format(&sink, "out_discards: %v\n", c.out_discards);
+    absl::Format(&sink, "in_buffer_discards: %v\n", c.in_buffer_discards);
+    absl::Format(&sink, "in_maxsize_exceeded: %v\n", c.in_maxsize_exceeded);
+    absl::Format(&sink, "in_fcs_errors: %v\n", c.in_fcs_errors);
+    absl::Format(&sink, "in_ipv4_pkts: %v\n", c.in_ipv4_pkts);
+    absl::Format(&sink, "out_ipv4_pkts: %v\n", c.out_ipv4_pkts);
+    absl::Format(&sink, "in_ipv6_pkts: %v\n", c.in_ipv6_pkts);
+    absl::Format(&sink, "out_ipv6_pkts: %v\n", c.out_ipv6_pkts);
+    absl::Format(&sink, "in_ipv6_discarded_pkts: %v\n",
+                 c.in_ipv6_discarded_pkts);
+    absl::Format(&sink, "out_ipv6_discarded_pkts: %v\n",
+                 c.out_ipv6_discarded_pkts);
+    if (c.carrier_transitions.has_value()) {
+      absl::Format(&sink, "carrier_transitions: %v\n", *c.carrier_transitions);
+    }
+    absl::Format(&sink, "timestamp_ns: %v\n", c.timestamp_ns);
+    if (c.blackhole_counters.has_value()) {
+      absl::Format(&sink, "blackhole_counters.in_discard_events: %v\n",
+                   c.blackhole_counters.value().in_discard_events);
+      absl::Format(&sink, "blackhole_counters.out_discard_events: %v\n",
+                   c.blackhole_counters.value().out_discard_events);
+      absl::Format(&sink, "blackhole_counters.in_error_events: %v\n",
+                   c.blackhole_counters.value().in_error_events);
+      absl::Format(&sink, "blackhole_counters.fec_not_correctable_events: %v\n",
+                   c.blackhole_counters.value().fec_not_correctable_events);
+    }
+  }
 };
 
 struct BlackholeSwitchCounters {
@@ -639,6 +683,10 @@ absl::StatusOr<std::string> GetPortPfcRxEnable(
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Gets counters for an interface.
+absl::StatusOr<Counters> GetCountersForInterface(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Gets blackhole counters for an interface.
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
