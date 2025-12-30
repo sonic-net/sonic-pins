@@ -631,6 +631,10 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
     absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Gets bad intervals counter for an interface.
+absl::StatusOr<uint64_t> GetBadIntervalsCounter(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Gets blackhole counters for the switch.
 absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
     gnmi::gNMI::StubInterface& gnmi_stub);
