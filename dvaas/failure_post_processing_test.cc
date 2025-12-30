@@ -1,5 +1,8 @@
 #include "dvaas/failure_post_processing.h"
 
+#include <string>
+#include <vector>
+
 #include "absl/status/statusor.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -13,13 +16,47 @@ namespace {
 
 using ::gutil::EqualsProto;
 using ::gutil::IsEmptyProto;
+using ::testing::UnorderedPointwise;
+using ::testing::ValuesIn;
 
-TEST(EntityMinimizationLoopTest, EntityCanNeverBeRemoved) {
+class DoEntityMinimizationTest
+    : public testing::TestWithParam<MinimizationAlgorithm> {
+ public:
+  void SetEntitiesOnSwitch(const pdpi::IrEntities& entities) {
+    entities_on_switch_ = entities;
+  }
+
+  const pdpi::IrEntities& GetEntitiesOnSwitch() { return entities_on_switch_; }
+
+  void DeleteEntitiesFromSwitch(const pdpi::IrEntities& entities_to_delete) {
+    // Remove `entities_to_delete` from `entities_on_switch_`.
+    for (int i = entities_on_switch_.entities_size() - 1; i >= 0; --i) {
+      for (const auto& ir_entity : entities_to_delete.entities()) {
+        if (gutil::ProtoEqual(ir_entity, entities_on_switch_.entities(i))) {
+          entities_on_switch_.mutable_entities()->DeleteSubrange(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+ private:
+  pdpi::IrEntities entities_on_switch_;
+};
+
+std::vector<MinimizationAlgorithm> GetMinimizationParams() {
+  return {
+      kRemoveEntitiesOneByOne,
+      kTableBasedBisection,
+  };
+}
+
+TEST_P(DoEntityMinimizationTest, EntityCanNeverBeRemoved) {
   pdpi::IrEntities entities_to_minimize =
       gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
         entities {
           table_entry {
-            table_name: "egress_port_loopback_table"
+            table_name: "egress_port_loopback_table_1"
             matches {
               name: "out_port"
               exact { str: "1" }
@@ -29,7 +66,7 @@ TEST(EntityMinimizationLoopTest, EntityCanNeverBeRemoved) {
         }
         entities {
           table_entry {
-            table_name: "egress_port_loopback_table"
+            table_name: "egress_port_loopback_table_2"
             matches {
               name: "out_port"
               exact { str: "2" }
@@ -43,30 +80,31 @@ TEST(EntityMinimizationLoopTest, EntityCanNeverBeRemoved) {
           }
         }
       )pb");
+  SetEntitiesOnSwitch(entities_to_minimize);
   const pdpi::IrEntities expected_entities = entities_to_minimize;
-  ASSERT_OK(dvaas::EntityMinimizationLoop(
-      /*test_if_entity_can_be_removed=*/
-      [](const pdpi::IrEntity& entity_to_remove,
-         const pdpi::IrEntities& current_entities) -> absl::StatusOr<bool> {
+  ASSERT_OK(dvaas::DoEntityMinimization(
+      /*test_if_entities_can_be_removed=*/
+      [](const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
         return false;
       },
-      entities_to_minimize));
-  EXPECT_THAT(entities_to_minimize, EqualsProto(expected_entities));
+      entities_to_minimize, GetParam()));
+  EXPECT_THAT(GetEntitiesOnSwitch(), EqualsProto(expected_entities));
 }
 
-TEST(EntityMinimizationLoopTest, EntityCanAlwaysBeRemoved) {
+TEST_P(DoEntityMinimizationTest, EntityCanAlwaysBeRemoved) {
   pdpi::IrEntities entities_to_minimize;
-  ASSERT_OK(dvaas::EntityMinimizationLoop(
-      /*test_if_entity_can_be_removed=*/
-      [](const pdpi::IrEntity& entity_to_remove,
-         const pdpi::IrEntities& current_entities) -> absl::StatusOr<bool> {
+  ASSERT_OK(dvaas::DoEntityMinimization(
+      /*test_if_entities_can_be_removed=*/
+      [this](const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
+        DeleteEntitiesFromSwitch(entities);
         return true;
       },
-      entities_to_minimize));
-  EXPECT_TRUE(IsEmptyProto(entities_to_minimize));
+      entities_to_minimize, GetParam()));
+  EXPECT_TRUE(IsEmptyProto(GetEntitiesOnSwitch()));
 }
 
-TEST(EntityMinimizationLoopTest, EveryOtherEntityCanBeRemoved) {
+TEST_P(DoEntityMinimizationTest,
+       EveryOtherEntityCanBeRemovedWithEvenNumberOfEntities) {
   pdpi::IrEntities entities_to_minimize =
       gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
         entities {
@@ -110,42 +148,299 @@ TEST(EntityMinimizationLoopTest, EveryOtherEntityCanBeRemoved) {
           }
         }
       )pb");
-  bool turn = true;
-  ASSERT_OK(dvaas::EntityMinimizationLoop(
-      /*test_if_entity_can_be_removed=*/
-      [&turn](
-          const pdpi::IrEntity& entity_to_remove,
-          const pdpi::IrEntities& current_entities) -> absl::StatusOr<bool> {
-        turn = !turn;
-        return turn;
+  SetEntitiesOnSwitch(entities_to_minimize);
+  auto test_if_entities_can_be_removed =
+      [this](const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
+    bool can_be_removed = true;
+    for (const auto& entity : entities.entities()) {
+      int port = std::stoi(entity.table_entry().matches().at(0).exact().str());
+      if (port % 2 == 0) {
+        can_be_removed = false;
+        break;
+      }
+    }
+    if (!can_be_removed) return false;
+    DeleteEntitiesFromSwitch(entities);
+    return true;
+  };
+  ASSERT_OK(dvaas::DoEntityMinimization(test_if_entities_can_be_removed,
+                                        entities_to_minimize, GetParam()));
+  EXPECT_THAT(GetEntitiesOnSwitch().entities(),
+              UnorderedPointwise(EqualsProto(),
+                                 gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
+                                   entities {
+                                     table_entry {
+                                       table_name: "egress_port_loopback_table"
+                                       matches {
+                                         name: "out_port"
+                                         exact { str: "2" }
+                                       }
+                                       action { name: "egress_loopback" }
+                                     }
+                                   }
+                                   entities {
+                                     table_entry {
+                                       table_name: "egress_port_loopback_table"
+                                       matches {
+                                         name: "out_port"
+                                         exact { str: "4" }
+                                       }
+                                       action { name: "egress_loopback" }
+                                     }
+                                   }
+                                 )pb")
+                                     .entities()));
+}
+
+TEST_P(DoEntityMinimizationTest,
+       EveryOtherEntityCanBeRemovedWithOddNumberOfEntities) {
+  pdpi::IrEntities entities_to_minimize =
+      gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table"
+            matches {
+              name: "out_port"
+              exact { str: "1" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table"
+            matches {
+              name: "out_port"
+              exact { str: "2" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table"
+            matches {
+              name: "out_port"
+              exact { str: "3" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table"
+            matches {
+              name: "out_port"
+              exact { str: "4" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table"
+            matches {
+              name: "out_port"
+              exact { str: "5" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+      )pb");
+  SetEntitiesOnSwitch(entities_to_minimize);
+  auto test_if_entities_can_be_removed =
+      [this](const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
+    bool can_be_removed = true;
+    for (const auto& entity : entities.entities()) {
+      int port = std::stoi(entity.table_entry().matches().at(0).exact().str());
+      if (port % 2 == 0) {
+        can_be_removed = false;
+        break;
+      }
+    }
+    if (!can_be_removed) return false;
+    for (const auto& entity : entities.entities()) {
+      int port = std::stoi(entity.table_entry().matches().at(0).exact().str());
+      if (port % 2 != 0) {
+        DeleteEntitiesFromSwitch(entities);
+      }
+    }
+    return true;
+  };
+  ASSERT_OK(dvaas::DoEntityMinimization(test_if_entities_can_be_removed,
+                                        entities_to_minimize, GetParam()));
+  EXPECT_THAT(GetEntitiesOnSwitch().entities(),
+              UnorderedPointwise(EqualsProto(),
+                                 gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
+                                   entities {
+                                     table_entry {
+                                       table_name: "egress_port_loopback_table"
+                                       matches {
+                                         name: "out_port"
+                                         exact { str: "2" }
+                                       }
+                                       action { name: "egress_loopback" }
+                                     }
+                                   }
+                                   entities {
+                                     table_entry {
+                                       table_name: "egress_port_loopback_table"
+                                       matches {
+                                         name: "out_port"
+                                         exact { str: "4" }
+                                       }
+                                       action { name: "egress_loopback" }
+                                     }
+                                   }
+                                 )pb")
+                                     .entities()));
+}
+
+TEST_P(DoEntityMinimizationTest, MinimizationsStartsFromLastTable) {
+  pdpi::IrEntities entities_to_minimize =
+      gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table_1"
+            matches {
+              name: "out_port"
+              exact { str: "1" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table_3"
+            matches {
+              name: "out_port"
+              exact { str: "3" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        # Delete the last and only entity in the table.
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table_2"
+            matches {
+              name: "out_port"
+              exact { str: "2" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+      )pb");
+  SetEntitiesOnSwitch(entities_to_minimize);
+  bool deleted_first_entity = false;
+  auto test_if_entities_can_be_removed =
+      [this, &deleted_first_entity](
+          const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
+    if (deleted_first_entity) return false;
+    if (entities.entities_size() == 1) {
+      deleted_first_entity = true;
+      DeleteEntitiesFromSwitch(entities);
+      return true;
+    }
+    return false;
+  };
+  ASSERT_OK(dvaas::DoEntityMinimization(test_if_entities_can_be_removed,
+                                        entities_to_minimize, GetParam()));
+  EXPECT_THAT(
+      GetEntitiesOnSwitch().entities(),
+      UnorderedPointwise(EqualsProto(),
+                         gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
+                           entities {
+                             table_entry {
+                               table_name: "egress_port_loopback_table_1"
+                               matches {
+                                 name: "out_port"
+                                 exact { str: "1" }
+                               }
+                               action { name: "egress_loopback" }
+                             }
+                           }
+                           entities {
+                             table_entry {
+                               table_name: "egress_port_loopback_table_3"
+                               matches {
+                                 name: "out_port"
+                                 exact { str: "3" }
+                               }
+                               action { name: "egress_loopback" }
+                             }
+                           }
+                         )pb")
+                             .entities()));
+}
+
+TEST_P(DoEntityMinimizationTest, NoEntitiesToMinimizeWorks) {
+  pdpi::IrEntities entities_to_minimize;
+  ASSERT_OK(dvaas::DoEntityMinimization(
+      /*test_if_entities_can_be_removed=*/
+      [this](const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
+        DeleteEntitiesFromSwitch(entities);
+        return true;
       },
-      entities_to_minimize));
-  EXPECT_THAT(entities_to_minimize,
+      entities_to_minimize, GetParam()));
+  EXPECT_THAT(GetEntitiesOnSwitch(), EqualsProto(entities_to_minimize));
+}
+
+TEST_P(DoEntityMinimizationTest,
+       OneEntityCannotBeRemovedFromAnOddNumberOfEntities) {
+  pdpi::IrEntities entities_to_minimize =
+      gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table_1"
+            matches {
+              name: "out_port"
+              exact { str: "1" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          table_entry {
+            table_name: "egress_port_loopback_table_2"
+            matches {
+              name: "out_port"
+              exact { str: "2" }
+            }
+            action { name: "egress_loopback" }
+          }
+        }
+        entities {
+          packet_replication_engine_entry {
+            multicast_group_entry { multicast_group_id: 7 }
+          }
+        }
+      )pb");
+  SetEntitiesOnSwitch(entities_to_minimize);
+  const pdpi::IrEntities expected_entities = entities_to_minimize;
+  ASSERT_OK(dvaas::DoEntityMinimization(
+      /*test_if_entities_can_be_removed=*/
+      [this](const pdpi::IrEntities& entities) -> absl::StatusOr<bool> {
+        for (const pdpi::IrEntity& entity : entities.entities()) {
+          if (entity.has_packet_replication_engine_entry()) {
+            return false;
+          }
+        }
+        DeleteEntitiesFromSwitch(entities);
+        return true;
+      },
+      entities_to_minimize, GetParam()));
+  EXPECT_THAT(GetEntitiesOnSwitch(),
               EqualsProto(gutil::ParseProtoOrDie<pdpi::IrEntities>(R"pb(
                 entities {
-                  table_entry {
-                    table_name: "egress_port_loopback_table"
-                    matches {
-                      name: "out_port"
-                      exact { str: "4" }
-                    }
-                    action { name: "egress_loopback" }
-                  }
-                }
-                entities {
-                  table_entry {
-                    table_name: "egress_port_loopback_table"
-                    matches {
-                      name: "out_port"
-                      exact { str: "2" }
-                    }
-                    action { name: "egress_loopback" }
+                  packet_replication_engine_entry {
+                    multicast_group_entry { multicast_group_id: 7 }
                   }
                 }
               )pb")));
 }
 
-TEST(EntityMinimizationLoopTest, HasSameFailureWorks) {
+TEST(HasSameFailureTest, HasSameFailureWorks) {
   PacketTestOutcome original_test_outcome = gutil::ParseProtoOrDie<
       PacketTestOutcome>(R"pb(
     test_result { failure { description: "Test failed" } }
@@ -231,5 +526,9 @@ TEST(EntityMinimizationLoopTest, HasSameFailureWorks) {
   EXPECT_TRUE(HasSameFailure(original_test_outcome, new_test_outcome));
 }
 
+INSTANTIATE_TEST_SUITE_P(INSTANTIATE_TEST_SUITE_P, DoEntityMinimizationTest,
+                         ValuesIn(GetMinimizationParams()));
+
 }  // namespace
 }  // namespace dvaas
+
