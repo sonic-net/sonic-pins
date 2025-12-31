@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -63,13 +64,17 @@ public:
   // labels. If the included labels are empty, no test runs are considered.
   absl::Status HasSuccessRateOfAtLeastForGivenLabels(
       double expected_success_rate,
-      absl::flat_hash_set<std::string>& included_labels) const;
+      const absl::flat_hash_set<std::string>& included_labels) const;
 
   // Gets the success rate for test runs that do not have any of the excluded
   // labels. If the excluded labels are empty, all test runs are considered.
   absl::Status HasSuccessRateOfAtLeastWithoutGivenLabels(
       double expected_success_rate,
-      absl::flat_hash_set<std::string>& excluded_labels) const;
+      const absl::flat_hash_set<std::string>& excluded_labels) const;
+
+  // Returns a new `ValidationResult` with the given labels excluded.
+  ValidationResult ExcludingLabels(
+      const absl::flat_hash_set<std::string>& excluded_labels) const;
 
   // Returns the fraction of test vectors that passed.
   double GetSuccessRate() const;
@@ -82,6 +87,7 @@ public:
   const ValidationResult& LogStatistics() const;
   ValidationResult& LogStatistics();
   void RecordStatisticsAsTestProperties() const;
+  void RecordPerLabelStatsAsTestProperties() const;
 
   // Returns a list of all test failures. Prefer using `HasSuccessRateOfAtLeast`
   // as it includes additional information to ease debugging.
@@ -118,15 +124,10 @@ public:
   bool PacketSynthesizerTimedOut() const;
 
  private:
-  ValidationResult(const PacketSynthesisResult& packet_synthesis_result,
-                   const PacketTestOutcomes& test_outcomes)
-      : test_outcomes_(test_outcomes),
-        test_vector_stats_(ComputeTestVectorStats(test_outcomes_)),
-        packet_synthesis_result_(packet_synthesis_result) {}
-
   PacketTestOutcomes test_outcomes_;
-  TestVectorStats test_vector_stats_;
+  TestVectorStats overall_test_vector_stats_;
   PacketSynthesisResult packet_synthesis_result_;
+  absl::btree_map<std::string, TestVectorStats> label_to_test_vector_stats_;
 };
 
 } // namespace dvaas
