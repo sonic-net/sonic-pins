@@ -50,8 +50,14 @@ struct ParamsForTestsWithIxia {
   absl::string_view multicast_green_queue;
   absl::string_view multicast_red_queue;
   bool is_rate_mode_in_packets = true;
+
+  // Replication queue for CPU.
+  std::string cpu_replication_queue;
+  std::string cpu_port_id;
 };
 
+// TODO: Refactor to look up redundant params from
+// interface info.
 struct IxiaSutLink {
   std::string ixia_tx_interface;
   std::string ixia_rx_interface;
@@ -61,6 +67,8 @@ struct IxiaSutLink {
   std::string sut_rx_interface;
   std::string sut_mirror_interface;
   std::string sut_mirror_backup_interface;
+  std::string ixia_tx_loc;
+  std::string ixia_rx_loc;
 };
 
 class PuntQoSTestWithIxia

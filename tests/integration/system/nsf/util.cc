@@ -42,6 +42,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/utils/constants.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -83,7 +84,6 @@ using ::p4::v1::ReadResponse;
 using ::p4::v1::Update;
 
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
-constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
 constexpr int kEpochMarginalError = 2;
 constexpr std::array<absl::string_view, 2> kAclFlows = {
@@ -130,6 +130,40 @@ constexpr std::array<absl::string_view, 2> kAclFlows = {
       }
     )pb"};
 
+constexpr std::array<absl::string_view, 2> kAclFlowsForMiddleBlock = {
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_4" } }
+          priority: 2050
+        }
+      }
+      entries {
+        acl_ingress_security_table_entry {
+          match { ether_type { value: "0x88cc" mask: "0xffff" } }
+          action { acl_deny {} }
+          priority: 4600
+        }
+      }
+    )pb",
+    R"pb(
+      entries {
+        acl_ingress_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action { acl_trap { qos_queue: "INBAND_PRIORITY_3" } }
+          priority: 2031
+        }
+      }
+      entries {
+        acl_ingress_security_table_entry {
+          match { ether_type { value: "0x0806" mask: "0xffff" } }
+          action { acl_deny {} }
+          priority: 4600
+        }
+      }
+    )pb"};
+
 std::string GetSwitchStateString(SwitchState state) {
   switch (state) {
     case SwitchState::kUp:
@@ -166,10 +200,13 @@ void AppendIgnoredP4SnapshotFields(MessageDifferencer* differencer) {
   differencer->set_repeated_field_comparison(MessageDifferencer::AS_SET);
 }
 
-sai::TableEntries GetAclFlowEntries() {
+sai::TableEntries GetAclFlowEntries(sai::Instantiation instantiation) {
   absl::BitGen gen;
-  int random_index = absl::Uniform<int>(gen, 0, kAclFlows.size());
-  return gutil::ParseProtoOrDie<sai::TableEntries>(kAclFlows[random_index]);
+  auto acl_flows = instantiation == sai::Instantiation::kMiddleblock
+                       ? kAclFlowsForMiddleBlock
+                       : kAclFlows;
+  int random_index = absl::Uniform<int>(gen, 0, acl_flows.size());
+  return gutil::ParseProtoOrDie<sai::TableEntries>(acl_flows[random_index]);
 }
 
 }  // namespace
@@ -585,8 +622,9 @@ absl::Status InstallRebootPushConfig(
   std::vector<std::string> interfaces_to_check =
       GetConnectedInterfacesForSut(testbed);
   SwitchState intent_state = SwitchState::kReady;
-  RETURN_IF_ERROR(WaitForSwitchState(sut, intent_state, kTurnUpTimeout,
-                                     ssh_client, interfaces_to_check));
+  RETURN_IF_ERROR(WaitForSwitchState(sut, intent_state,
+                                     GetColdRebootWaitForUpTime(), ssh_client,
+                                     interfaces_to_check));
 
   LOG(INFO) << "Initial setup of image install, cold reboot and config push is "
                "complete.";
@@ -595,7 +633,7 @@ absl::Status InstallRebootPushConfig(
 
 absl::Status ValidateTestbedState(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
+    const ImageConfigParams*  image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
     absl::Span<const std::string> control_switch_interfaces) { 
   // TODO: Add validation for SUT stack image label.
@@ -654,7 +692,8 @@ absl::Status NsfReboot(const Testbed &testbed) {
 absl::Status WaitForReboot(const Testbed& testbed,
                            thinkit::SSHClient& ssh_client,
                            bool check_interfaces_up,
-                           absl::Span<const std::string> interfaces) {
+                           absl::Span<const std::string> interfaces,
+                           absl::Duration timeout) {
   LOG(INFO) << "Waiting for switch to go down and come back up";
   // Wait for switch to go down and come back up.
   thinkit::Switch& sut = GetSut(testbed);
@@ -670,12 +709,12 @@ absl::Status WaitForReboot(const Testbed& testbed,
                             check_interfaces_up
                                 ? SwitchState::kReady
                                 : SwitchState::kReadyWithoutInterfacesUp,
-                            kTurnUpTimeout, ssh_client, interfaces);
+                            timeout, ssh_client, interfaces);
 }
 
 absl::Status
 WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
-                 absl::Nullable<const ImageConfigParams *> image_config_param,
+                 const ImageConfigParams*  image_config_param,
                  bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
                  bool collect_debug_logs_for_nsf_success,
                  absl::Span<const std::string> control_switch_interfaces) {
@@ -721,7 +760,7 @@ WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
 
 absl::Status DoNsfRebootAndWaitForSwitchReady(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param,
+    const ImageConfigParams*  image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
     absl::Span<const std::string> control_switch_interfaces) {
   thinkit::Switch& sut = GetSut(testbed);
@@ -747,7 +786,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 
 absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     const Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param,
+    const ImageConfigParams*  image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> sut_interfaces,
     absl::Span<const std::string> control_switch_interfaces) {
   thinkit::Switch& sut = GetSut(testbed);
@@ -836,8 +875,9 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
 }
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
-                             const P4Info& p4_info) {
-  sai::TableEntries entries = GetAclFlowEntries();
+                             const P4Info& p4_info,
+                             sai::Instantiation sut_instantiation) {
+  sai::TableEntries entries = GetAclFlowEntries(sut_instantiation);
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
                    pdpi::P4RuntimeSession::Create(thinkit_switch));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));

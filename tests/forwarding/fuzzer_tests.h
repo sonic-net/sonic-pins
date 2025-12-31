@@ -15,6 +15,7 @@
 #define PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -132,6 +133,11 @@ struct FuzzerTestFixtureParams {
         // By default, do nothing.
         return absl::OkStatus();
       };
+  // A function for determining whether resource checks on `table_name`
+  // should be skipped.
+  std::function<bool(absl::string_view table_name)>
+      IgnoreResourceExhaustionForTable =
+          [](absl::string_view table_name) { return false; };
 };
 
 class FuzzerTestFixture
@@ -146,6 +152,8 @@ protected:
   void TearDown() override;
 
   ~FuzzerTestFixture() override { delete GetParam().mirror_testbed; }
+
+  std::unique_ptr<SwitchState> switch_state_;
 };
 
 bool AbslParseFlag(absl::string_view milestone_text, Milestone *milestone,
