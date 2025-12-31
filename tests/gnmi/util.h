@@ -16,7 +16,8 @@ absl::Status SetAdminStatus(gnmi::gNMI::StubInterface* gnmi_stub,
 absl::Status FlapLink(gnmi::gNMI::StubInterface &gnmi_stub,
                       thinkit::GenericTestbed &generic_testbed,
                       absl::string_view sut_interface,
-                      const thinkit::InterfaceInfo &host_interface_info);
+                      const thinkit::InterfaceInfo& host_interface_info,
+                      bool is_ixia_testbed = false);
 
 }  // namespace pins_test
 
