@@ -52,6 +52,21 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
   LOG(INFO) << used_p4rt_port_ids.size()
             << " P4RT port IDs used in the test vector: "
             << absl::StrJoin(used_p4rt_port_ids, ", ");
+  // The CPU port in PINS has a special P4RT port ID. Given that the test
+  // modifies the P4RT port ID of interfaces to match the IDs used in the
+  // test vector, we remove the CPU port ID from the list of used port IDs to
+  // avoid using this special ID on other interfaces.
+  // TODO: Change when PINS uses better CPU port encoding.
+  ASSERT_OK_AND_ASSIGN(
+      const auto kCpuPortP4rtId,
+      pins_test::P4rtPortId::MakeFromP4rtEncoding("4294967293"));
+  if (used_p4rt_port_ids.erase(kCpuPortP4rtId) > 0) {
+    LOG(INFO) << "Removing the special CPU port P4RT port ID ("
+              << kCpuPortP4rtId.GetP4rtEncoding()
+              << ") from the list of used port IDs to avoid configuring "
+                 "non-CPU ports with it.";
+  }
+
 
   // Check for explicit port map.
   const bool explicit_port_map =
