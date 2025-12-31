@@ -18,8 +18,10 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -33,8 +35,7 @@ namespace thinkit {
 class SshWrapperClient : public LinuxSshHelper {
  public:
   explicit SshWrapperClient(
-      absl::flat_hash_map<absl::string_view,
-                          std::unique_ptr<thinkit::LinuxSshHelper>>
+      absl::flat_hash_map<std::string, std::unique_ptr<thinkit::LinuxSshHelper>>
           linux_ssh_helper_per_sut)
       : linux_ssh_helper_per_sut_(std::move(linux_ssh_helper_per_sut)) {}
 
@@ -53,12 +54,36 @@ class SshWrapperClient : public LinuxSshHelper {
                                                thinkit::SSHClient* ssh_client,
                                                absl::Duration timeout) override;
 
+  // Gets the PINs version on the switch.
+  absl::StatusOr<std::string> GetpinsVersion(absl::string_view sut,
+                                              thinkit::SSHClient* ssh_client,
+                                              absl::Duration timeout) override;
+
+  // Returns file name of the debug artifact tarball.
+  absl::StatusOr<std::string> GetDebugArtifactFileName(
+      absl::string_view sut, SSHClient* ssh_client,
+      absl::Duration timeout) override;
+
+  // Clears the PINs logs on the switch.
+  absl::Status ClearpinsLogs(absl::string_view sut, SSHClient* ssh_client,
+                              absl::Duration timeout) override;
+
+  // Returns list of PINs logs file names and their contents.
+  absl::StatusOr<std::vector<GetFileResult>> SavepinsLog(
+      absl::string_view sut, SSHClient* ssh_client,
+      absl::Duration timeout) override;
+
+  // Returns list of the PINs DB state file names and their contents.
+  absl::StatusOr<std::vector<GetFileResult>> SavepinsDbState(
+      absl::string_view sut, SSHClient* ssh_client,
+      absl::Duration timeout) override;
+
  private:
   // Returns a LinuxSshHelper instance for the given SUT.
   absl::StatusOr<LinuxSshHelper*> GetSshHelper(absl::string_view sut);
 
   // Map of SUT name to LinuxSshHelper instance.
-  absl::flat_hash_map<absl::string_view, std::unique_ptr<LinuxSshHelper>>
+  absl::flat_hash_map<std::string, std::unique_ptr<LinuxSshHelper>>
       linux_ssh_helper_per_sut_;
 };
 
