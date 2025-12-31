@@ -230,7 +230,8 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
                                                kFlowTcpDstPortRangeStart + 1);
 
   // Set the config.
-  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  ASSIGN_OR_RETURN(otg::Openapi::StubInterface * stub,
+                   generic_testbed->GetTrafficClient());
 
   RETURN_IF_ERROR(WaitForCondition(SetOtgConfig, absl::Minutes(5), stub,
                                    set_config_request, set_config_response));
@@ -254,7 +255,8 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
 absl::Status OtgHelper::StopTraffic(const Testbed &testbed) {
   ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
                    GetGenericTestbed(testbed));
-  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  ASSIGN_OR_RETURN(otg::Openapi::StubInterface * stub,
+                   generic_testbed->GetTrafficClient());
   otg::SetControlStateRequest request;
   otg::SetControlStateResponse response;
   ::grpc::ClientContext context;
@@ -280,7 +282,8 @@ absl::Status OtgHelper::ValidateTraffic(const Testbed &testbed,
                                         absl::Duration max_acceptable_outage) {
   ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
                    GetGenericTestbed(testbed));
-  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  ASSIGN_OR_RETURN(otg::Openapi::StubInterface * stub,
+                   generic_testbed->GetTrafficClient());
   otg::GetMetricsRequest metrics_req;
   otg::GetMetricsResponse metrics_res;
   grpc::ClientContext metrics_ctx;

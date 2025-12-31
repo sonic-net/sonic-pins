@@ -14,6 +14,8 @@
 #
 # PINS test functions that can be run on any infrastructure that supports ThinKit.
 
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
