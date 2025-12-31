@@ -640,6 +640,25 @@ absl::StatusOr<std::string> GenerateComponentBreakoutConfig(
   return component_config;
 }
 
+absl::StatusOr<bool> IsCopperPhysicalPort(
+    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view phy_port) {
+  auto state_path = absl::StrFormat(
+      "components/component[name=%s]/transceiver/state/ethernet-pmd", phy_port);
+  auto resp_parse_str = "openconfig-platform-transceiver:ethernet-pmd";
+  ASSIGN_OR_RETURN(
+      auto ethernet_pmd,
+      GetGnmiStatePathInfo(sut_gnmi_stub, state_path, resp_parse_str),
+      _ << "Failed to get GNMI state path value for ethernet-pmd for "
+           "port "
+        << phy_port);
+  StripSymbolFromString(ethernet_pmd, '\"');
+
+  // PMD state path value for copper ports ends in CR2/CR4/CR8.
+  auto pos = ethernet_pmd.find_last_of('_');
+  LOG(INFO) << "ethernet_pmd: " << ethernet_pmd;
+  return (ethernet_pmd.substr(pos + 1, 2) == "CR");
+}
+
 absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                   absl::string_view port) {
   // Get transceiver name for the port.
@@ -654,21 +673,9 @@ absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
         << port);
   StripSymbolFromString(xcvrd_name, '\"');
 
-  state_path = absl::StrFormat(
-      "components/component[name=%s]/transceiver/state/ethernet-pmd",
-      xcvrd_name);
-  resp_parse_str = "openconfig-platform-transceiver:ethernet-pmd";
-  ASSIGN_OR_RETURN(
-      auto ethernet_pmd,
-      GetGnmiStatePathInfo(sut_gnmi_stub, state_path, resp_parse_str),
-      _ << "Failed to get GNMI state path value for ethernet-pmd for "
-           "port "
-        << port);
-  StripSymbolFromString(ethernet_pmd, '\"');
-
-  // PMD state path value for copper ports ends in CR2/CR4/CR8.
-  auto pos = ethernet_pmd.find_last_of('_');
-  return (ethernet_pmd.substr(pos + 1, 2) == "CR");
+  ASSIGN_OR_RETURN(auto is_copper_phy_port,
+                   IsCopperPhysicalPort(sut_gnmi_stub, xcvrd_name));
+  return is_copper_phy_port;
 }
 
 absl::StatusOr<uint32_t> ComputePortIDForPort(
