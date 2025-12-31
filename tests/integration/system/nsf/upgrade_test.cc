@@ -364,7 +364,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       LOG(INFO) << upgrade_path
                 << ": Proceeding with config push after ACL flow program";
 
-      status = ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info);
+      status = ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info,
+                               GetParam().sut_instantiation);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
                           absl::InternalError(absl::StrFormat(
@@ -398,7 +399,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                               status.message())));
       }
 
-      status = ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info);
+      status = ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info,
+                               GetParam().sut_instantiation);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
                           absl::InternalError(absl::StrFormat(
@@ -605,9 +607,11 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   // mainline config params that we will configure the Control Switch with. This
   // is because we configure the Control Switch only once throughout the NSF
   // Upgrade iterations.
+  ImageConfigParams cs_image_config_param = image_config_params.back();
+  
   ASSERT_OK(InstallRebootPushConfig(testbed_, *ssh_client_,
                                     image_config_params.front(),
-                                    image_config_params.back()));
+                                    cs_image_config_param));
 
   bool continue_on_failure;
   std::vector<std::string> error_msgs;
