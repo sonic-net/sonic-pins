@@ -42,6 +42,7 @@ const absl::flat_hash_set<absl::string_view> kAllowList =
     absl::flat_hash_set<absl::string_view>({
         "SAI_OBJECT_TYPE_DEBUG_COUNTER",
         "SAI_OBJECT_TYPE_VIRTUAL_ROUTER",
+        "SAI_OBJECT_TYPE_SWITCH",
     });
 
 }  // namespace
