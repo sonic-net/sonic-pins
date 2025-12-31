@@ -80,6 +80,11 @@ constexpr netaddr::MacAddress kOriginalSrcMacAddress(0x00, 0x22, 0x33, 0x44,
 constexpr netaddr::MacAddress kDropSrcMacAddress(0x02, 0x2a, 0x10, 0x00, 0x00,
                                                  0x02);
 constexpr int kDefaultInstance = 0;
+constexpr netaddr::Ipv4Address kAllMulticastIpv4AddressMatch(224, 0, 0, 0);
+constexpr netaddr::Ipv4Address kAllMulticastIpv4AddressMask(240, 0, 0, 0);
+static const netaddr::Ipv6Address kAllMulticastIpv6AddressMatch =
+    netaddr::Ipv6Address(0xff00, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
+
 // Pair of port ID and instance.
 struct ReplicaPair {
   std::string port_id;
@@ -91,11 +96,13 @@ enum class IpmcGroupAssignmentMechanism { kAclRedirect, kIpMulticastTable };
 struct VlanForwardingParams {
   bool disable_ingress_vlan_checks = false;
   bool disable_egress_vlan_checks = false;
-  // input_vlan_id indicates vlan membership of the ingress port
+  // input_vlan_id indicates vlan membership of the ingress port. By default,
+  // the ingress port is not part of any vlan.
   std::optional<int> input_vlan_id = std::nullopt;
   // input_vlan_tagging_mode indicates mode of vlan membership of the ingress
   // port
   std::optional<sai::VlanTaggingMode> input_vlan_tagging_mode = std::nullopt;
+  std::optional<int> multicast_replica_count = std::nullopt;
   // out_ports_vlan_id indicates vlan membership of the output ports
   std::optional<int> out_ports_vlan_id = std::nullopt;
   // out_ports_vlan_tagging_mode indicates mode of vlan membership of the output
@@ -107,7 +114,7 @@ struct VlanForwardingParams {
 struct MulticastForwardingParams {
   // SUT port IDs used as ingress and egress ports for multicast replicas.
   std::vector<std::string> sut_port_ids;
-  netaddr::MacAddress next_hop_dst_mac;
+  std::optional<netaddr::MacAddress> next_hop_dst_mac = std::nullopt;
   IpmcGroupAssignmentMechanism assignment_mechanism;
   int number_replicas_per_group;
   int number_multicast_groups;
@@ -310,13 +317,10 @@ absl::Status ClearEntities(pdpi::P4RuntimeSession& session,
 std::string GetVlanIdHexStr(int val) {
   return absl::StrCat("0x", absl::Hex(val, absl::kZeroPad3));
 }
-
-absl::Status InstallVlanMembershipEntries(
-    pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
-    const std::vector<std::string>& sut_port_ids,
+absl::Status SetupIngressEgressVlanChecks(
+    pdpi::P4RuntimeSession& switch_session,
     const VlanForwardingParams& test_params) {
   sai::EntryBuilder entry_builder;
-
   // ingress/egress disable checks do it only for the first multicast group
   // for scale setups
   if (test_params.disable_ingress_vlan_checks) {
@@ -325,6 +329,14 @@ absl::Status InstallVlanMembershipEntries(
   if (test_params.disable_egress_vlan_checks) {
     entry_builder.AddDisableEgressVlanChecksEntry();
   }
+  return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
+}
+
+absl::Status InstallVlanMembershipEntries(
+    pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
+    const std::vector<std::string>& sut_port_ids,
+    const VlanForwardingParams& test_params) {
+  sai::EntryBuilder entry_builder;
 
   if (test_params.input_vlan_id.has_value()) {
     entry_builder.AddVlanEntry(
@@ -337,7 +349,7 @@ absl::Status InstallVlanMembershipEntries(
   if (test_params.out_ports_vlan_id.has_value()) {
     entry_builder.AddVlanEntry(
         GetVlanIdHexStr(test_params.out_ports_vlan_id.value()));
-    for (int r = 1; r < sut_port_ids.size(); ++r) {
+    for (int r = 1; r <= test_params.multicast_replica_count; ++r) {
       entry_builder.AddVlanMembershipEntry(
           GetVlanIdHexStr(test_params.out_ports_vlan_id.value()),
           sut_port_ids[r], test_params.out_ports_vlan_tagging_mode.value());
@@ -427,16 +439,43 @@ absl::Status SetupDefaultMulticastProgramming(
     // In the default traffic test setup, we only send traffic on one port
     // (port_index 0), so we only need to add one ACL entry.
     const std::string& port_id = params.sut_port_ids[0];
-    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_entities,
+    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_v6_entities,
                      sai::EntryBuilder()
                          .AddIngressAclEntryRedirectingToMulticastGroup(
                              /*multicast_group_id=*/1,
-			     {.in_port = port_id, .route_hit = false})
+                             {.in_port = port_id,
+                              .route_hit = false,
+                              .is_ipv6 = true,
+                              .dst_ipv6 =
+                                  sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+                                      .value = kAllMulticastIpv6AddressMatch,
+                                      .mask = kAllMulticastIpv6AddressMatch,
+                                  }})
                          .LogPdEntries()
                          .GetDedupedPiEntities(ir_p4info));
-    RETURN_IF_ERROR(pdpi::InstallPiEntities(&session, ir_p4info, acl_entities));
-    entities_created.insert(entities_created.end(), acl_entities.begin(),
-                            acl_entities.end());
+
+    RETURN_IF_ERROR(
+        pdpi::InstallPiEntities(&session, ir_p4info, acl_v6_entities));
+    entities_created.insert(entities_created.end(), acl_v6_entities.begin(),
+                            acl_v6_entities.end());
+
+    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_v4_entities,
+                     sai::EntryBuilder()
+                         .AddIngressAclEntryRedirectingToMulticastGroup(
+                             /*multicast_group_id=*/1,
+                             {.in_port = port_id,
+                              .route_hit = false,
+                              .is_ipv4 = true,
+                              .dst_ip =
+                                  sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+                                      .value = kAllMulticastIpv4AddressMatch,
+                                      .mask = kAllMulticastIpv4AddressMask}})
+                         .LogPdEntries()
+                         .GetDedupedPiEntities(ir_p4info));
+    RETURN_IF_ERROR(
+        pdpi::InstallPiEntities(&session, ir_p4info, acl_v4_entities));
+    entities_created.insert(entities_created.end(), acl_v4_entities.begin(),
+                            acl_v4_entities.end());
     return absl::OkStatus();
   }
 
@@ -478,10 +517,16 @@ struct TestVectorParams {
   int output_group_index;
   int replicas_per_group;
   int output_replica_start_index = 0;
-  // input_vlan_id indicates vlan membership of the ingress port
+  // input_vlan_id indicates vlan membership of the ingress port. By default,
+  // the ingress port is not part of any vlan.
   std::optional<int> input_vlan_id = std::nullopt;
-  // out_ports_vlan_id indicates vlan membership of the output ports
+  // out_ports_vlan_id indicates vlan membership of the output ports. By
+  // default, the output ports are not part of any vlan.
   std::optional<int> out_ports_vlan_id = std::nullopt;
+  // egress_dst_mac is the destination mac address of the egress packets. By
+  // default, the destination mac address is 01:00:5e:01:01:01 for IPv4 and
+  // 33:33:00:00:00:01 for IPv6.
+  std::optional<netaddr::MacAddress> egress_dst_mac = std::nullopt;
 };
 
 // Build a test vector that injects one IPv4 and one IPv6 test packet.  The
@@ -506,6 +551,15 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
   ProtoFixtureRepository repo;
   repo.RegisterValue("@ingress_port", in_port)
       .RegisterValue("@egress_src_mac", kOriginalSrcMacAddress.ToString())
+      .RegisterValue("@ingress_src_mac", kOriginalSrcMacAddress.ToString())
+      .RegisterValue("@egress_ipv4_dst_mac",
+                     params.egress_dst_mac.has_value()
+                         ? params.egress_dst_mac.value().ToString()
+                         : "01:00:5e:01:01:01")
+      .RegisterValue("@egress_ipv6_dst_mac",
+                     params.egress_dst_mac.has_value()
+                         ? params.egress_dst_mac.value().ToString()
+                         : "33:33:00:00:00:01")
       .RegisterValue("@ttl", "0x40")
       .RegisterValue("@hop_limit", "0x50")
       .RegisterValue("@decremented_hop_limit", "0x4f")
@@ -528,32 +582,11 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
   }
 
   // Build headers.
-  repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
+  repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet", R"pb(
         ethernet_header {
+          ethernet_source: @ingress_src_mac,
           ethernet_destination: "01:00:5e:01:01:01",
-          ethernet_source: @egress_src_mac
           ethertype: "0x0800"  # IPv4
-        }
-      )pb")
-      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv6", R"pb(
-        ethernet_header {
-          ethernet_destination: "33:33:00:00:00:01"
-          ethernet_source: @egress_src_mac
-          ethertype: "0x86dd"  # IPv6
-        }
-      )pb")
-      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4_vlan", R"pb(
-        ethernet_header {
-          ethernet_destination: "01:00:5e:01:01:01",
-          ethernet_source: @egress_src_mac
-          ethertype: "0x8100"  # vlan
-        }
-      )pb")
-      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv6_vlan", R"pb(
-        ethernet_header {
-          ethernet_destination: "33:33:00:00:00:01",
-          ethernet_source: @egress_src_mac
-          ethertype: "0x8100"  # vlan
         }
       )pb")
       .RegisterSnippetOrDie<packetlib::Header>("@vlan_ipv4", R"pb(
@@ -617,7 +650,7 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
         ParsePacketAndPadToMinimumSize(
             repo,
             R"pb(
-              headers: @ethernet_ipv4_vlan
+              headers: @ethernet { ethernet_header { ethertype: "0x8100" } }
               headers:
                   @vlan_ipv4 { vlan_header { vlan_identifier: @input_vlan_id } }
               headers: @ipv4
@@ -629,7 +662,13 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
         ParsePacketAndPadToMinimumSize(
             repo,
             R"pb(
-              headers: @ethernet_ipv6_vlan
+              headers: @ethernet {
+                ethernet_header {
+                  ethernet_destination: "33:33:00:00:00:01",
+                  ethertype: "0x8100"
+                }
+              }
+
               headers:
                   @vlan_ipv6 { vlan_header { vlan_identifier: @input_vlan_id } }
               headers: @ipv6
@@ -637,22 +676,28 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               payload: @payload_ipv6
             )pb"));
   } else {
-    repo.RegisterMessage("@input_packet_ipv4", ParsePacketAndPadToMinimumSize(
-                                                   repo,
-                                                   R"pb(
-                                                     headers: @ethernet_ipv4
-                                                     headers: @ipv4
-                                                     headers: @udp
-                                                     payload: @payload_ipv4
-                                                   )pb"));
-    repo.RegisterMessage("@input_packet_ipv6", ParsePacketAndPadToMinimumSize(
-                                                   repo,
-                                                   R"pb(
-                                                     headers: @ethernet_ipv6
-                                                     headers: @ipv6
-                                                     headers: @udp
-                                                     payload: @payload_ipv6
-                                                   )pb"));
+    repo.RegisterMessage("@input_packet_ipv4",
+                         ParsePacketAndPadToMinimumSize(repo,
+                                                        R"pb(
+                                                          headers: @ethernet
+                                                          headers: @ipv4
+                                                          headers: @udp
+                                                          payload: @payload_ipv4
+                                                        )pb"));
+    repo.RegisterMessage("@input_packet_ipv6",
+                         ParsePacketAndPadToMinimumSize(
+                             repo,
+                             R"pb(
+                               headers: @ethernet {
+                                 ethernet_header {
+                                   ethernet_destination: "33:33:00:00:00:01",
+                                   ethertype: "0x86dd"
+                                 }
+                               }
+                               headers: @ipv6
+                               headers: @udp
+                               payload: @payload_ipv6
+                             )pb"));
   }
 
   // Build up acceptable_outputs string, to account for each replica.
@@ -671,8 +716,13 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
               .RegisterMessage(
                   "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
-                    headers: @ethernet_ipv4_vlan {
-                      ethernet_header { ethernet_source: @egress_src_mac }
+                    headers: @ethernet {
+                      ethernet_header {
+                        ethernet_source: @egress_src_mac
+                        ethernet_destination: @egress_ipv4_dst_mac
+                        ethertype: "0x8100"
+                      }
+
                     }
                     headers: @vlan_ipv4 {
                       vlan_header { vlan_identifier: @out_ports_vlan_id }
@@ -691,8 +741,12 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
               .RegisterMessage(
                   "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
-                    headers: @ethernet_ipv6_vlan {
-                      ethernet_header { ethernet_source: @egress_src_mac }
+                    headers: @ethernet {
+                      ethernet_header {
+                        ethernet_source: @egress_src_mac
+                        ethernet_destination: @egress_ipv6_dst_mac
+                        ethertype: "0x8100"
+                      }
                     }
                     headers: @vlan_ipv6 {
                       vlan_header { vlan_identifier: @out_ports_vlan_id }
@@ -713,8 +767,11 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
               .RegisterMessage(
                   "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
-                    headers: @ethernet_ipv4 {
-                      ethernet_header { ethernet_source: @egress_src_mac }
+                    headers: @ethernet {
+                      ethernet_header {
+                        ethernet_source: @egress_src_mac
+                        ethernet_destination: @egress_ipv4_dst_mac
+                      }
                     }
                     headers: @ipv4 { ipv4_header { ttl: @decremented_ttl } }
                     headers: @udp
@@ -730,8 +787,12 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
               .RegisterValue("@egress_src_mac", egress_src_mac.ToString())
               .RegisterMessage(
                   "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
-                    headers: @ethernet_ipv6 {
-                      ethernet_header { ethernet_source: @egress_src_mac }
+                    headers: @ethernet {
+                      ethernet_header {
+                        ethernet_source: @egress_src_mac
+                        ethernet_destination: @egress_ipv6_dst_mac
+                        ethertype: "0x86dd"
+                      }
                     }
                     headers: @ipv6 {
                       ipv6_header { hop_limit: @decremented_hop_limit }
@@ -784,6 +845,7 @@ absl::StatusOr<std::vector<dvaas::PacketTestVector>> BuildTestVectors(
             .input_vlan_id = params.vlan_forwarding_params.input_vlan_id,
             .out_ports_vlan_id =
                 params.vlan_forwarding_params.out_ports_vlan_id,
+            .egress_dst_mac = params.next_hop_dst_mac,
         }));
     expectations.insert(expectations.end(), group_expectations.begin(),
                         group_expectations.end());
@@ -1548,17 +1610,44 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
   // Setup the ACL redirect path to use multicast group 2.
   constexpr int kMulticastGroup2 = 2;
   const std::string& input_port_id = sut_ports_ids[0];
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> acl_entities,
-      sai::EntryBuilder()
-          .AddIngressAclEntryRedirectingToMulticastGroup(
-	      kMulticastGroup2, {.in_port = input_port_id, .route_hit = true})
-          .LogPdEntries()
-          .GetDedupedPiEntities(ir_p4info_));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> acl_v6_entities,
+                       sai::EntryBuilder()
+                           .AddIngressAclEntryRedirectingToMulticastGroup(
+                               kMulticastGroup2,
+                               {.in_port = input_port_id,
+                                .route_hit = true,
+                                .is_ipv6 = true,
+                                .dst_ipv6 =
+                                    sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+                                        .value = kAllMulticastIpv6AddressMatch,
+                                        .mask = kAllMulticastIpv6AddressMatch,
+                                    }})
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(ir_p4info_));
   ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
-                                    acl_entities));
-  entities_created.insert(entities_created.end(), acl_entities.begin(),
-                          acl_entities.end());
+                                    acl_v6_entities));
+  entities_created.insert(entities_created.end(), acl_v6_entities.begin(),
+                          acl_v6_entities.end());
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> acl_v4_entities,
+                       sai::EntryBuilder()
+                           .AddIngressAclEntryRedirectingToMulticastGroup(
+                               kMulticastGroup2,
+                               {.in_port = input_port_id,
+                                .route_hit = true,
+                                .is_ipv4 = true,
+                                .dst_ip =
+                                    sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+                                        .value = kAllMulticastIpv4AddressMatch,
+                                        .mask = kAllMulticastIpv4AddressMask,
+                                    }})
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(ir_p4info_));
+  ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
+                                    acl_v4_entities));
+  entities_created.insert(entities_created.end(), acl_v4_entities.begin(),
+                          acl_v4_entities.end());
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
 
   // Inject test packets that would match the IP multicast table that would
@@ -2051,7 +2140,7 @@ TEST_P(L3MulticastTestFixture, AbleToProgramExpectedMulticastGroupCapacity) {
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities));
 }
 
-TEST_P(L3MulticastTestFixture,
+TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacAndVlanRewrite) {
        DISABLED_ReplicatePacketWithVlanAndSrcMacRewrite) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
@@ -2071,9 +2160,69 @@ TEST_P(L3MulticastTestFixture,
       .vlan_forwarding_params = {
           .disable_ingress_vlan_checks = true,
           .disable_egress_vlan_checks = true,
-          .input_vlan_id = 0x100,
+          .input_vlan_id = 0x300,
           .input_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
-          .out_ports_vlan_id = 0x100,
+          .multicast_replica_count = kPortsToUseInTest,
+          .out_ports_vlan_id = 0x300,
+          .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+      }};
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  ASSERT_OK(SetupIngressEgressVlanChecks(*sut_p4rt_session_,
+                                         test_params.vlan_forwarding_params));
+
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
+TEST_P(L3MulticastTestFixture, ReplicatePacketAndSrcMacAndVlanRewrite) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kPortsToUseInTest = 3;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+      .vlan_forwarding_params = {
+          .disable_ingress_vlan_checks = false,
+          .disable_egress_vlan_checks = false,
+          .multicast_replica_count = kPortsToUseInTest,
+          .out_ports_vlan_id = 0x600,
           .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
       }};
   // --------------------------------------------------------------------------
@@ -2111,9 +2260,198 @@ TEST_P(L3MulticastTestFixture,
   validation_result.LogStatistics();
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
 }
+// This test is to verify that the vlan tagged multicast packets are replicated
+// to the egress ports. The destination MAC address and source MAC address are
+// rewritten to the next hop MAC address and the multicast MAC address
+// respectively. The egress VLAN membership is also added to the packet.
+TEST_P(L3MulticastTestFixture,
+       ReplicatePacketWithVlanAndSrcDstMacAndVlanRewrite) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kPortsToUseInTest = 3;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .next_hop_dst_mac =
+          netaddr::MacAddress(0x00, 0x00, 0x00, 0x00, 0x00, 0x01),
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+      .vlan_forwarding_params = {
+          .disable_ingress_vlan_checks = true,
+          .disable_egress_vlan_checks = true,
+          .input_vlan_id = 0x400,
+          .input_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+          .multicast_replica_count = kPortsToUseInTest,
+          .out_ports_vlan_id = 0x400,
+          .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+      }};
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  ASSERT_OK(SetupIngressEgressVlanChecks(*sut_p4rt_session_,
+                                         test_params.vlan_forwarding_params));
+
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+// This test is to verify that the untagged multicast packets are replicated to
+// the egress ports. The destination MAC address and source MAC address are
+// rewritten to the next hop MAC address and the multicast MAC address
+// respectively. The egress VLAN membership is also added to the packet.
+TEST_P(L3MulticastTestFixture, ReplicatePackeAndSrcDstMacAndVlanRewrite) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kPortsToUseInTest = 3;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .next_hop_dst_mac =
+          netaddr::MacAddress(0x00, 0x00, 0x00, 0x00, 0x00, 0x01),
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+      .vlan_forwarding_params = {
+          .disable_ingress_vlan_checks = false,
+          .disable_egress_vlan_checks = false,
+          .multicast_replica_count = kPortsToUseInTest,
+          .out_ports_vlan_id = 0x500,
+          .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+      }};
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+  LOG(INFO) << "Adding VLAN Membership.";
+  ASSERT_OK(InstallVlanMembershipEntries(*sut_p4rt_session_, ir_p4info_,
+                                         sut_ports_ids,
+                                         test_params.vlan_forwarding_params));
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
+TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacRewrite) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kPortsToUseInTest = 3;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  const MulticastForwardingParams test_params = {
+      .sut_port_ids = sut_ports_ids,
+      .assignment_mechanism = IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      .number_replicas_per_group = kPortsToUseInTest,
+      .number_multicast_groups = 1,
+      .vlan_forwarding_params = {
+          .disable_ingress_vlan_checks = true,
+          .disable_egress_vlan_checks = true,
+          .input_vlan_id = 0x100,
+          .input_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
+      }};
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
+                                             p4::v1::Update::INSERT,
+                                             test_params, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  ASSERT_OK(SetupIngressEgressVlanChecks(*sut_p4rt_session_,
+                                         test_params.vlan_forwarding_params));
+
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
 
 TEST_P(L3MulticastTestFixture,
-       DISABLED_SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
+       SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kPortsToUseInTest = 3;
@@ -2132,23 +2470,20 @@ TEST_P(L3MulticastTestFixture,
       .vlan_forwarding_params = {
           .disable_ingress_vlan_checks = true,
           .disable_egress_vlan_checks = true,
-          .input_vlan_id = 0x100,
+          .input_vlan_id = 0x200,
           .input_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
-          .out_ports_vlan_id = 0x100,
-          .out_ports_vlan_tagging_mode = sai::VlanTaggingMode::kTagged,
       }};
   // --------------------------------------------------------------------------
   // Add multicast programming.
   // --------------------------------------------------------------------------
-  LOG(INFO) << "Adding multicast programming.";
+LOG(INFO) << "Adding multicast programming.";
   std::vector<p4::v1::Entity> entities_created;
   ASSERT_OK(SetupDefaultMulticastProgramming(*sut_p4rt_session_, ir_p4info_,
                                              p4::v1::Update::INSERT,
                                              test_params, entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
-  LOG(INFO) << "Adding VLAN Membership.";
-  ASSERT_OK(InstallVlanMembershipEntries(*sut_p4rt_session_, ir_p4info_,
-                                         sut_ports_ids,
+
+  ASSERT_OK(SetupIngressEgressVlanChecks(*sut_p4rt_session_,
                                          test_params.vlan_forwarding_params));
   // Build test packets.
   ASSERT_OK_AND_ASSIGN(auto vectors, BuildTestVectors(test_params));

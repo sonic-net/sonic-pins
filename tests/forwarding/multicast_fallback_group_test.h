@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -40,9 +41,14 @@ struct MulticastFallbackGroupTestParams {
   thinkit::MirrorTestbedInterface* testbed;
   // The test assumes that the switch is pre-configured if no `gnmi_config` is
   // given (default), or otherwise pushes the given config before starting.
-  std::optional<std::string> gnmi_config;
-  // P4Info to be used based on a specific instantiation.
-  p4::config::v1::P4Info p4_info;
+  std::optional<std::string> sut_config;
+  std::optional<std::string> control_config;
+  // P4Info to be used based on a specific instantiation
+  p4::config::v1::P4Info sut_p4_info;
+  p4::config::v1::P4Info control_p4_info;
+  absl::flat_hash_map<std::string, std::string> control_to_sut_port_name_map;
+  absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>
+      control_to_sut_port_id_map;
   // Optional function that checks the multicast fallback duration against the
   // threshold and exports the data to perfgate.
   absl::optional<std::function<absl::Status(absl::string_view chassis_name,
@@ -67,13 +73,20 @@ class MulticastFallbackGroupTestFixture
   std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
   std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
-  std::vector<pins_test::P4rtPortId> controller_port_ids_;
+  // The P4RT port IDs of the SUT interfaces.
+  std::vector<pins_test::P4rtPortId> sut_port_ids_;
+  // The P4RT port IDs of the control switch interfaces that are connected to
+  // the SUT interfaces.
+  std::vector<pins_test::P4rtPortId> control_port_ids_;
+  // Replica ports for the multicast group on the SUT.
   std::vector<std::string> replica_ports_;
-
-  // Captures the control interfaces at the start of the test. These may be
-  // changed during testing to mirror those of the SUT. They will then be
-  // returned to their previous state during teardown.
-  pins_test::openconfig::Interfaces original_control_interfaces_;
+  // Replica ports for the multicast group on the control switch.
+  std::vector<std::string> control_replica_ports_;
+  // Map from SUT port ID to control switch port ID.
+  absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>
+      sut_to_control_port_id_map_;
+  // Map from control switch port name to SUT port name.
+  absl::flat_hash_map<std::string, std::string> control_to_sut_port_name_map_;
 };
 
 }  // namespace pins
