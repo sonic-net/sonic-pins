@@ -168,9 +168,13 @@ absl::StatusOr<std::string> GetPortIndex(
 std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
                                            absl::string_view breakout_speed);
 
-// IsCopperPort returns whether the port is copper or optic.
+// IsCopperPort returns whether the logical port is copper or optic.
 absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                   absl::string_view port);
+
+// IsCopperPhysicalPort returns whether the physical port is copper or optic.
+absl::StatusOr<bool> IsCopperPhysicalPort(
+    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view phy_port);
 
 // Returns (slot/port/lane) info for a front panel port Ethernet<slot/port/lane>
 absl::StatusOr<SlotPortLane> GetSlotPortLaneForPort(
