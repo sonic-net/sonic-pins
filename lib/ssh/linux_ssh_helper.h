@@ -36,6 +36,38 @@ struct GetFileResult {
   std::string file_content;
 };
 
+enum class Container {
+  kDatabase,
+  kSystem,
+  kGnmi,
+  kP4rt,
+  kPmon,
+  kSwss,
+  kSflow,
+  kSyncd,
+  kTeamd
+};
+
+enum class CertFile {
+  kSshCaBundle,
+  kSshServerKey,
+  kSshServerCert,
+  kGrpcAuthzPolicy,
+  kGnmiAuthzPolicy,
+  kGrpcAuthnPolicy,
+  kCrlFile,
+  kCrlFlushFile,
+  kGrpcVersionFile,
+  kGnoiCaBundle,
+  kGnoiServerKey,
+  kGnoiServerCert,
+  kShadowFile,
+  kSshAuthKeys,
+  kSshAuthUsers,
+  kDefaultSshCaPubKeyPath,
+  kMountedConfigSshCaPubKeyPath,
+};
+
 // LinuxSshHelper is an interface for common operations on the switches
 // regardless of the switch OS.
 class LinuxSshHelper {
@@ -68,6 +100,11 @@ class LinuxSshHelper {
   virtual absl::Status ClearpinsLogs(absl::string_view sut,
                                       SSHClient* ssh_client,
                                       absl::Duration timeout) = 0;
+  // Removes the config db on the switch.
+  virtual absl::Status RemoveConfigDb(absl::string_view sut,
+                                      SSHClient* ssh_client,
+                                      absl::Duration timeout) = 0;
+
   // Returns list of PINs logs file names and their contents.
   virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsLog(
       absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
@@ -75,6 +112,34 @@ class LinuxSshHelper {
   // Returns list of the PINs DB state file names and their contents.
   virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsDbState(
       absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
+
+  // Returns list of the PINs Redis record file names and their contents.
+  virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsRedisRecord(
+      absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
+
+  // Translates the logical container enum to the switch-specific string name.
+  virtual absl::StatusOr<std::string> GetContainerName(
+      absl::string_view chassis_name, thinkit::Container container) = 0;
+
+  // Executes a command inside a container on the switch.
+  virtual absl::StatusOr<std::string> ExecuteCommandInContainer(
+      absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
+      thinkit::Container container, absl::string_view command,
+      absl::Duration timeout) = 0;
+
+  // Fetches the cert file name from the switch.
+  virtual absl::StatusOr<std::string_view> FetchCertFileName(
+      absl::string_view chassis_name, thinkit::CertFile cert_file) = 0;
+
+  // Checks and restore Boot install on the switch.
+  virtual absl::Status CheckAndRestoreBootinstall(
+      absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
+      absl::Duration timeout) = 0;
+
+  // Checks the status of all containers and returns an error if not all of them
+  // are running.
+  virtual absl::Status CheckContainersUp(absl::string_view chassis_name,
+                                         thinkit::SSHClient& ssh_client) = 0;
 };
 
 }  // namespace thinkit

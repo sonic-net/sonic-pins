@@ -24,6 +24,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "lib/ssh/linux_ssh_helper.h"
@@ -99,6 +100,23 @@ absl::Span<const GetFileOption> GetSavepinsDbStateFileOptions(
           {.read_file_command = absl::StrCat(
                container_cmd_prefix, absl::StrFormat(kRedisDumpCommand, 1)),
            .file_name = "asic_db.json"},
+      });
+  return *file_options;
+}
+
+absl::Span<const GetFileOption> GetSavepinsRedisRecordFileOptions(
+    absl::string_view redis_dump_cmd_template) {
+  static const absl::NoDestructor<std::vector<pins_test::GetFileOption>>
+      file_options({
+          {.read_file_command =
+               absl::Substitute(redis_dump_cmd_template, "swss.rec"),
+           .file_name = "swss.rec.txt"},
+          {.read_file_command =
+               absl::Substitute(redis_dump_cmd_template, "sairedis.rec"),
+           .file_name = "sairedis.rec.txt"},
+          {.read_file_command = absl::Substitute(redis_dump_cmd_template,
+                                                 "responsepublisher.rec"),
+           .file_name = "responsepublisher.rec.txt"},
       });
   return *file_options;
 }

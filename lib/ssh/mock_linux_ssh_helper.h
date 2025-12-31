@@ -54,6 +54,10 @@ class MockLinuxSshHelper : public LinuxSshHelper {
               (absl::string_view sut, SSHClient* ssh_client,
                absl::Duration timeout),
               (override));
+  MOCK_METHOD(absl::Status, RemoveConfigDb,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
   MOCK_METHOD(absl::StatusOr<std::vector<GetFileResult>>, SavepinsLog,
               (absl::string_view sut, SSHClient* ssh_client,
                absl::Duration timeout),
@@ -61,6 +65,28 @@ class MockLinuxSshHelper : public LinuxSshHelper {
   MOCK_METHOD(absl::StatusOr<std::vector<GetFileResult>>, SavepinsDbState,
               (absl::string_view sut, SSHClient* ssh_client,
                absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::vector<GetFileResult>>, SavepinsRedisRecord,
+              (absl::string_view sut, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::string>, ExecuteCommandInContainer,
+              (absl::string_view chassis_name, SSHClient* ssh_client,
+               thinkit::Container container, absl::string_view command,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::string>, GetContainerName,
+              (absl::string_view chassis_name, thinkit::Container container),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::string_view>, FetchCertFileName,
+              (absl::string_view chassis_name, thinkit::CertFile cert_file),
+              (override));
+  MOCK_METHOD(absl::Status, CheckAndRestoreBootinstall,
+              (absl::string_view chassis_name, SSHClient* ssh_client,
+               absl::Duration timeout),
+              (override));
+  MOCK_METHOD(absl::Status, CheckContainersUp,
+              (absl::string_view chassis_name, SSHClient& ssh_client),
               (override));
 };
 
