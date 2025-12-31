@@ -19,17 +19,21 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
+#include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
 #include "thinkit/mock_ssh_client.h"
 
 namespace pins {
 namespace {
+using ::google::protobuf::contrib::fixtures::ProtoFixtureRepository;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::AllOf;
@@ -305,6 +309,91 @@ constexpr absl::string_view kResultNoCollectorJson = R"json({
     }
   }
 })json";
+
+constexpr absl::string_view kGnmiConfigWithGnpsi = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  },
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "collectors": {
+        "collector": [
+          {
+            "address": "2001:4860:f802::be",
+            "config": {
+              "address": "2001:4860:f802::be",
+              "port": 6343
+            },
+            "port": 6343
+          }
+        ]
+      },
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 128
+      },
+      "interfaces": {
+        "interface": [
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet1"
+            },
+            "name": "Ethernet1"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet2"
+            },
+            "name": "Ethernet2"
+          }
+        ]
+      }
+    }
+  },
+  "openconfig-system:system": {
+    "openconfig-system-grpc:grpc-servers": {
+      "grpc-server": [
+        {
+          "config": {
+            "enable": %v,
+            "name": "gnpsi"
+          },
+          "name": "gnpsi"
+        }
+      ]
+    }
+  }
+})json";
+
+gnmi::GetResponse BuildGnpsiConfig(bool enable) {
+  std::string gnpsi_enable = absl::Substitute(R"json({
+    "openconfig-system-grpc:enable": $0
+  })json",
+                                              enable);
+  ProtoFixtureRepository repo;
+  repo.RegisterValue("@gnpsi_enable", gnpsi_enable);
+  gnmi::GetResponse response = repo.ParseTextProtoOrDie(R"pb(
+    notification {
+      timestamp: 1664239058571609826
+      prefix { origin: "openconfig" }
+      update { val { json_ietf_val: @gnpsi_enable } }
+    })pb");
+  return response;
+}
 
 TEST(SflowconfigTest, SflowEnabledTrue) {
   const std::string sflow_config = R"json({
@@ -783,6 +872,16 @@ TEST(SflowconfigTest, UpdateSflowQueueFailedMissingCpuSchedulerPolicy) {
           HasSubstr("Gnmi config does not have any cpu scheduler policy.")));
 }
 
+TEST(SflowconfigTest, UpdateGnpsiConfigEnabledSuccess) {
+  EXPECT_THAT(UpdateGnpsiConfig(kGnmiConfig, /*enable=*/true),
+              IsOkAndHolds(absl::StrFormat(kGnmiConfigWithGnpsi, true)));
+}
+
+TEST(SflowconfigTest, UpdateGnpsiConfigDisabledSuccess) {
+  EXPECT_THAT(UpdateGnpsiConfig(kGnmiConfig, /*enable=*/false),
+              IsOkAndHolds(absl::StrFormat(kGnmiConfigWithGnpsi, false)));
+}
+
 TEST(SflowUtilTest, GetSampleRateSuccessForAllInterfaces) {
   gnmi::MockgNMIStub stub;
   ON_CALL(stub, Get).WillByDefault(DoAll(
@@ -1000,6 +1099,38 @@ TEST(SflowUtilTest, UpdateSflowInterfaceEnableNotConvergeFail) {
   EXPECT_THAT(
       SetSflowInterfaceConfigEnable(&stub, "Ethernet1/1/1", /*enabled=*/true),
       StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(SflowUtilTest, VerifyGnpsiStateConvergedWithGnpsiEnabledSucceeds) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(
+      DoAll(SetArgPointee<2>(BuildGnpsiConfig(/*enable=*/true)),
+            Return(grpc::Status::OK)));
+  EXPECT_OK(VerifyGnpsiStateConverged(&stub, /*enable=*/true));
+}
+
+TEST(SflowUtilTest, VerifyGnpsiStateConvergedWithGnpsiDisabledSucceeds) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(
+      DoAll(SetArgPointee<2>(BuildGnpsiConfig(/*enable=*/false)),
+            Return(grpc::Status::OK)));
+  EXPECT_OK(VerifyGnpsiStateConverged(&stub, /*enable=*/false));
+}
+
+TEST(SflowUtilTest, VerifySetGnpsiStateEnabledSucceeds) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(
+      DoAll(SetArgPointee<2>(BuildGnpsiConfig(/*enable=*/true)),
+            Return(grpc::Status::OK)));
+  EXPECT_OK(SetGnpsiConfigEnabled(&stub, /*enable=*/true));
+}
+
+TEST(SflowUtilTest, VerifySetGnpsiStateDisabledSucceeds) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Get).WillByDefault(
+      DoAll(SetArgPointee<2>(BuildGnpsiConfig(/*enable=*/false)),
+            Return(grpc::Status::OK)));
+  EXPECT_OK(SetGnpsiConfigEnabled(&stub, /*enable=*/false));
 }
 
 constexpr absl::string_view kTorSflowGnmiConfig = R"json({
