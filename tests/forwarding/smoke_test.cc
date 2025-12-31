@@ -28,11 +28,14 @@
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
+#include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -52,10 +55,9 @@
 namespace pins_test {
 namespace {
 
-using ::gutil::EqualsProto;
 using ::gutil::IsOk;
 using ::gutil::StatusIs;
-using ::testing::ElementsAre;
+using ::testing::AnyOf;
 using ::testing::Not;
 
 TEST_P(SmokeTestFixture, CanEstablishConnections) {
@@ -73,6 +75,28 @@ TEST_P(SmokeTestFixture, CanEstablishConnections) {
           GetParam().p4info));
   ASSERT_NE(sut_p4rt_session, nullptr);
   ASSERT_NE(control_switch_p4rt_session, nullptr);
+}
+
+TEST_P(SmokeTestFixture, CanSendCapabilitiesRequest) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK(pins_test::ConfigureSwitch(
+      testbed.Sut(), pins_test::PinsConfigView{
+                         .gnmi_config = GetParam().gnmi_config,
+                         .p4info = GetParam().p4info,
+                     }));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4::v1::P4Runtime::StubInterface> sut_p4rt_stub,
+      testbed.Sut().CreateP4RuntimeStub());
+
+  p4::v1::CapabilitiesRequest request;
+  p4::v1::CapabilitiesResponse response;
+  grpc::ClientContext context;
+  // TODO: Remove the Unimplemented error once the release
+  // supported RPC is rolled out to all switches.
+  EXPECT_THAT(gutil::GrpcStatusToAbslStatus(
+                  sut_p4rt_stub->Capabilities(&context, request, &response)),
+              AnyOf(IsOk(), StatusIs(absl::StatusCode::kUnimplemented)));
 }
 
 TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
@@ -639,6 +663,96 @@ TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
                        pdpi::ReadIrEntities(*sut_p4rt_session));
   ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
   EXPECT_OK(pdpi::InstallIrEntities(*sut_p4rt_session, read_entities));
+}
+
+// Check that unicast routes with a multicast destination range are accepted by
+// the switch. We may disallow this via a p4-constraint in the future, but need
+// the capability as a temporary workaround as of 2023-12-08.
+TEST_P(SmokeTestFixture, CanInstallIpv4TableEntriesWithMulticastDstIp) {
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
+  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+    entries {
+      ipv4_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv4_dst { value: "224.0.0.0" prefix_length: 8 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv4_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv4_dst { value: "224.2.3.4" prefix_length: 32 }
+        }
+        action { drop {} }
+      }
+    }
+  )pb"));
+}
+
+// Check that unicast routes with a multicast destination range are accepted by
+// the switch. We may disallow this via a p4-constraint in the future, but need
+// the capability as a temporary workaround as of 2023-12-08.
+TEST_P(SmokeTestFixture, CanInstallIpv6TableEntriesWithMulticastDstIp) {
+  // Skip test for unsupported platforms.
+  if (GetParam().does_not_support_ipv6_entries_multicast_dest_ip) {
+    GTEST_SKIP() << "Skipping test since it is not supported on this platform.";
+  }
+
+  thinkit::MirrorTestbed &testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
+  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  // TODO: Use `sai::EntryBuilder` instead of hard-coding the entries
+  // here.
+  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00::" prefix_length: 8 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00:1234:5678:9012::" prefix_length: 64 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00::1234" prefix_length: 128 }
+        }
+        action { drop {} }
+      }
+    }
+  )pb"));
 }
 
 }  // namespace

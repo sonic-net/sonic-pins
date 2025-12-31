@@ -38,6 +38,7 @@ namespace pins {
 struct L3AdmitTestParams {
   thinkit::MirrorTestbedInterface *testbed_interface;
   std::optional<p4::config::v1::P4Info> p4info;
+  bool skip_testing_legacy_rifs;
 };
 
 // This test assumes that the switch is set up with a gNMI config.

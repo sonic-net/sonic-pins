@@ -139,3 +139,27 @@ cc_library(
         "@com_google_absl//absl/time",
     ],
 )
+
+cc_library(
+    name = "xcvrd_validator",
+    testonly = True,
+    srcs = ["xcvrd_validator.cc"],
+    hdrs = ["xcvrd_validator.h"],
+    deps = [
+        "//lib/gnmi:gnmi_helper",
+        "//tests:thinkit_gnmi_interface_util",
+        "//tests/integration/system/nsf:util",
+        "//tests/integration/system/nsf/interfaces:component_validator",
+        "//tests/integration/system/nsf/interfaces:testbed",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+    ],
+)

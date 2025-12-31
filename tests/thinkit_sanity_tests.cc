@@ -40,6 +40,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/utils/constants.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -64,8 +65,6 @@ using ::testing::HasSubstr;
 
 constexpr int kEpochMarginalError = 2;
 constexpr absl::Duration kColdRebootWaitForDownTime = absl::Seconds(75);
-// TODO: Reduce reboot up time.
-constexpr absl::Duration kColdRebootWaitForUpTime = absl::Minutes(6);
 constexpr char kV3ReleaseConfigBlob[] = R"({
    "openconfig-platform:components" : {
       "component" : [
@@ -360,6 +359,7 @@ void TestGnoiSystemColdReboot(thinkit::Switch& sut,
   // Wait for system to become reachable over gNOI.
   start_time = absl::Now();
   absl::Status status;
+  const absl::Duration kColdRebootWaitForUpTime = GetColdRebootWaitForUpTime();
   while (absl::Now() < (start_time + kColdRebootWaitForUpTime)) {
     status = SwitchReady(sut, interfaces);
     if (status.ok()) {
