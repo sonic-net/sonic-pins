@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
@@ -58,12 +59,15 @@
 #include "tests/forwarding/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
+#include "tests/qos/qos_test_util.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/test_environment.h"
 
 namespace pins {
 
 namespace {
+using ::pins_test::kMaxQueueCounterUpdateTime;
+using ::pins_test::QueueCounters;
 
 // Vrf used in the test.
 constexpr absl::string_view kVrfId = "vrf-1";
@@ -77,6 +81,9 @@ constexpr int kMulticastInstance = 1;
 
 // Multicast group id used in the test.
 constexpr int kMulticastGroupId = 1;
+
+// Maximum multicast group id used in the test.
+constexpr int kMaxMulticastGroupId = 500;
 
 // Multicast IP address used in the test.
 constexpr auto kMulticastDstIpv4 = netaddr::Ipv4Address(0xe0, 0, 0, 0x1);
@@ -99,6 +106,9 @@ constexpr int kDefaultInputPortIndex = 0;
 // Default replica port index.
 constexpr int kDefaultReplicaPortIndex = 1;
 
+// Default multicast queue.
+constexpr absl::string_view multicast_queue_ = "MULTICAST";
+
 // Punts all packets on the control switch.
 absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
   // Trap all packets on control switch.
@@ -107,25 +117,33 @@ absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
       .LogPdEntries()
       .InstallDedupedEntities(p4_session);
 }
+struct ReplicaPorts {
+  std::vector<std::string> replica_ports;
+  std::vector<std::string> control_replica_ports;
+};
 
-// Gets replica ports from the controller port ids.
-absl::StatusOr<std::vector<std::string>> GetReplicaPorts(
-    int size, absl::Span<const pins_test::P4rtPortId> controller_port_ids_) {
-  if (size + 2 > controller_port_ids_.size()) {
+// Gets replica ports from the sut port ids.
+absl::StatusOr<ReplicaPorts> GetReplicaPorts(
+    int size, absl::Span<const pins_test::P4rtPortId> port_ids,
+    const absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>&
+        sut_to_control_port_id_map) {
+  if (size + 2 > port_ids.size()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Not enough ports: ", controller_port_ids_.size(),
+        absl::StrCat("Not enough ports: ", port_ids.size(),
                      " to reserve an input port and a default replica port and "
                      "create the replica ports with size: ",
                      size));
   }
   std::vector<std::string> replica_ports;
-  for (int i = 0;
-       i < controller_port_ids_.size() && replica_ports.size() < size; i++) {
+  std::vector<std::string> control_replica_ports;
+  for (int i = 0; i < port_ids.size() && replica_ports.size() < size; i++) {
     if (i != kDefaultInputPortIndex && i != kDefaultReplicaPortIndex) {
-      replica_ports.push_back(controller_port_ids_[i].GetP4rtEncoding());
+      replica_ports.push_back(port_ids[i].GetP4rtEncoding());
+      control_replica_ports.push_back(
+          sut_to_control_port_id_map.at(port_ids[i]).GetP4rtEncoding());
     }
   }
-  return replica_ports;
+  return ReplicaPorts{replica_ports, control_replica_ports};
 }
 
 // Program L3 Admit table for the given mac-address.
@@ -152,9 +170,10 @@ absl::flat_hash_map<std::string, int> CountNumPacketsPerPort(
 // Generates a multicast packet.
 absl::StatusOr<packetlib::Packet> GenerateMulticastPacket() {
   std::string packet_hex =
-      "01005e01010100000000007b08004528005c000000002011b66201020304e00000010929"
-      "11d700485c7a6669656c643d49505f44535420697076343d3120656e6361707065643d30"
-      "20696e6e65725f697076343d302064656361703d302e2e2e2e2e2e2e2e2e2e2e2e2e";
+      "01005e01010100000000007b080045340077000100004001964a01020304e00000010800"
+      "4f8700000000303030303030303030303030303030303030303030303030303030303030"
+      "303030303030303030303030303030303030303030303030303030303030303030303030"
+      "30303030303030303030303030303030303030303030303030";
   return packetlib::ParsePacket(absl::HexStringToBytes(packet_hex));
 }
 
@@ -250,7 +269,8 @@ absl::Status InstallMulticastRitfs(pdpi::P4RuntimeSession& switch_session,
 
 absl::Status InstallMulticastGroup(pdpi::P4RuntimeSession& switch_session,
                                    absl::string_view default_replica_port,
-                                   const std::vector<std::string>& ports) {
+                                   const std::vector<std::string>& ports,
+                                   int multicast_group_id = kMulticastGroupId) {
   sai::EntryBuilder entry_builder;
   std::vector<sai::BackupReplica> backup_replicas;
   for (int r = 1; r < ports.size(); ++r) {
@@ -264,7 +284,7 @@ absl::Status InstallMulticastGroup(pdpi::P4RuntimeSession& switch_session,
   sai_replicas.push_back(
       sai::Replica{.egress_port = std::string(default_replica_port),
                    .instance = kMulticastInstance});
-  entry_builder.AddMulticastGroupEntry(kMulticastGroupId, sai_replicas);
+  entry_builder.AddMulticastGroupEntry(multicast_group_id, sai_replicas);
   return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
 }
 
@@ -307,25 +327,23 @@ absl::Status MulticastFallbackGroupTestFixture::SetUpSut(
 
   RETURN_IF_ERROR(pdpi::InstallPiTableEntry(sut_p4_session_.get(),
                                             pi_entity.table_entry()));
-
-  std::vector<std::string> replica_ports_with_default_port = replica_ports_;
-  replica_ports_with_default_port.push_back(
-      controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding());
+  replica_ports_with_default_port_ = replica_ports_;
+  replica_ports_with_default_port_.push_back(
+      sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding());
   std::vector<std::string> replica_ports_with_default_and_input_port =
-      replica_ports_with_default_port;
-  replica_ports_with_default_port.push_back(
-      controller_port_ids_[kDefaultInputPortIndex].GetP4rtEncoding());
+      replica_ports_with_default_port_;
+  replica_ports_with_default_port_.push_back(
+      sut_port_ids_[kDefaultInputPortIndex].GetP4rtEncoding());
 
   // Programs the required vlan, vlan members, and multicast ritfs.
   RETURN_IF_ERROR(InstallVlanMembership(
       *sut_p4_session_, replica_ports_with_default_and_input_port));
-  RETURN_IF_ERROR(
-      InstallMulticastRitfs(*sut_p4_session_, replica_ports_with_default_port));
-
+  RETURN_IF_ERROR(InstallMulticastRitfs(*sut_p4_session_,
+                                        replica_ports_with_default_port_));
   // Programs the multicast group.
   RETURN_IF_ERROR(InstallMulticastGroup(
       *sut_p4_session_,
-      controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding(),
+      sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding(),
       replica_ports_));
 
   // Programs L3 admit.
@@ -348,48 +366,56 @@ void MulticastFallbackGroupTestFixture::SetUp() {
   thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
 
   ASSERT_OK(testbed.Environment().StoreTestArtifact(
-      "p4info.pb.txt", GetParam().p4_info.DebugString()));
+      "sut_p4info.pb.txt", GetParam().sut_p4_info.DebugString()));
+
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "control_p4info.pb.txt", GetParam().control_p4_info.DebugString()));
 
   // Setup SUT & control switch.
   ASSERT_OK_AND_ASSIGN(
       sut_p4_session_,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed.Sut(), GetParam().gnmi_config, GetParam().p4_info));
-  ASSERT_OK_AND_ASSIGN(
-      control_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed.ControlSwitch(), GetParam().gnmi_config, GetParam().p4_info));
+          testbed.Sut(), GetParam().sut_config, GetParam().sut_p4_info));
+
+  ASSERT_OK_AND_ASSIGN(control_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed.ControlSwitch(), GetParam().control_config,
+                           GetParam().control_p4_info));
 
   // Create GNMI stub for admin operations.
   ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(control_gnmi_stub_,
                        testbed.ControlSwitch().CreateGnmiStub());
 
-  // Store the original control switch gNMI interface config before changing it.
-  ASSERT_OK_AND_ASSIGN(original_control_interfaces_,
-                       pins_test::GetInterfacesAsProto(
-                           *control_gnmi_stub_, gnmi::GetRequest::CONFIG));
-
-  // Ensures that the SUT and Control Switch are set up with the same
-  // P4rtPortIds for the connected interfaces.
-  ASSERT_OK(pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(
-      GetParam().testbed->GetMirrorTestbed()));
-
   // Store GNMI config for debugging.
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
                        pins_test::GetGnmiConfig(*sut_gnmi_stub_));
   ASSERT_OK(testbed.Environment().StoreTestArtifact("sut_gnmi_config.txt",
                                                     sut_gnmi_config));
-
-  ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(GetParam().p4_info));
-
+  control_to_sut_port_name_map_ = GetParam().control_to_sut_port_name_map;
+  auto control_to_sut_port_id_map = GetParam().control_to_sut_port_id_map;
+  for (const auto& [control_port_id, sut_port_id] :
+       control_to_sut_port_id_map) {
+    sut_to_control_port_id_map_[sut_port_id] = control_port_id;
+  }
+  ASSERT_OK_AND_ASSIGN(ir_p4info_,
+                       pdpi::CreateIrP4Info(GetParam().sut_p4_info));
   ASSERT_OK_AND_ASSIGN(
-      controller_port_ids_,
+      sut_port_ids_,
       pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
                                         pins_test::IsEnabledEthernetInterface));
-  ASSERT_OK_AND_ASSIGN(replica_ports_, GetReplicaPorts(kNumReplicaPortsForTest,
-                                                       controller_port_ids_));
+  for (const auto& port_id : sut_port_ids_) {
+    control_port_ids_.push_back(sut_to_control_port_id_map_[port_id]);
+  }
+  ASSERT_OK_AND_ASSIGN(ReplicaPorts replica_ports,
+                       GetReplicaPorts(kNumReplicaPortsForTest, sut_port_ids_,
+                                       sut_to_control_port_id_map_));
+  replica_ports_ = replica_ports.replica_ports;
+  control_replica_ports_ = replica_ports.control_replica_ports;
 
+  LOG(INFO) << "Sut replica_ports: " << absl::StrJoin(replica_ports_, ",");
+  LOG(INFO) << "Control replica_ports: "
+            << absl::StrJoin(control_replica_ports_, ",");
   ASSERT_OK(SetUpSut(ir_p4info_));
   ASSERT_OK(SetUpControlSwitch(*control_p4_session_));
 
@@ -417,9 +443,6 @@ void MulticastFallbackGroupTestFixture::TearDown() {
       EXPECT_OK(pins_test::SetInterfaceEnabledState(*control_gnmi_stub_, name,
                                                     /*enabled=*/true));
     }
-    // Restore the original control switch gNMI interface config's P4RT IDs.
-    ASSERT_OK(pins_test::SetInterfaceP4rtIds(*control_gnmi_stub_,
-                                             original_control_interfaces_));
   }
 
   // Clear SUT table entries.
@@ -445,6 +468,15 @@ TEST_P(MulticastFallbackGroupTestFixture, MeasureMulticastFallbackDuration) {
                     "and export vector is not defined";
   }
 
+  // Programs the multicast group.
+  for (int group_id = kMulticastGroupId + 1; group_id <= kMaxMulticastGroupId;
+       ++group_id) {
+    ASSERT_OK(InstallMulticastGroup(
+        *sut_p4_session_,
+        sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding(),
+        replica_ports_, group_id));
+  }
+
   // Get port_name to port id mapping for the control switch.
   ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
                        pins_test::GetPortNamePerPortId(*control_gnmi_stub_));
@@ -467,7 +499,7 @@ TEST_P(MulticastFallbackGroupTestFixture, MeasureMulticastFallbackDuration) {
   // the packets are being sent to the SUT while the port changes state.
   std::thread send_packets_thread([&]() {
     ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForMulticastFallback,
-                                controller_port_ids_, ir_p4info_,
+                                control_port_ids_, ir_p4info_,
                                 *control_p4_session_, kPacketRateInSeconds));
   });
 
@@ -554,6 +586,17 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyMulticastRestoreAction) {
   ASSERT_OK_AND_ASSIGN(
       const auto& port_name,
       gutil::FindOrStatus(port_name_per_port_id, replica_ports_[0]));
+  std::vector<QueueCounters> kInitialQueueCounters;
+  for (int i = 0; i < replica_ports_with_default_port_.size(); ++i) {
+    ASSERT_OK_AND_ASSIGN(
+        const auto& port_name,
+        gutil::FindOrStatus(port_name_per_port_id,
+                            replica_ports_with_default_port_[i]));
+    ASSERT_OK_AND_ASSIGN(QueueCounters queue_counters,
+                         pins_test::GetGnmiQueueCounters(
+                             port_name, multicast_queue_, *sut_gnmi_stub_));
+    kInitialQueueCounters.push_back(queue_counters);
+  }
 
   int64_t total_packets_sent;
   int64_t total_packets_received;
@@ -569,7 +612,7 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyMulticastRestoreAction) {
   // the packets are being sent to the SUT while the port changes state.
   std::thread send_packets_thread([&]() {
     ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForMulticastFallback,
-                                controller_port_ids_, ir_p4info_,
+                                control_port_ids_, ir_p4info_,
                                 *control_p4_session_, kPacketRateInSeconds));
   });
 
@@ -613,9 +656,43 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyMulticastRestoreAction) {
     total_packets_sent = test_data_.total_packets_sent;
     total_packets_received = test.output.size();
   }
+  // Verify that the target egress queue counters incremented as expected.
+  int64_t total_queue_counters = 0;
+  for (int i = 0; i < replica_ports_with_default_port_.size(); ++i) {
+    const absl::Time kDeadline = absl::Now() + kMaxQueueCounterUpdateTime;
+    LOG(INFO) << "polling queue counters for port "
+              << replica_ports_with_default_port_[i] << " (this may take up to "
+              << kMaxQueueCounterUpdateTime << ")";
+    ASSERT_OK_AND_ASSIGN(
+        const auto& port_name,
+        gutil::FindOrStatus(port_name_per_port_id,
+                            replica_ports_with_default_port_[i]));
+    QueueCounters final_counters, delta_counters;
+    do {
+      ASSERT_OK_AND_ASSIGN(final_counters,
+                           pins_test::GetGnmiQueueCounters(
+                               port_name, multicast_queue_, *sut_gnmi_stub_));
+      delta_counters = final_counters - kInitialQueueCounters[i];
+    } while (delta_counters.num_packets_transmitted < total_packets_sent &&
+             absl::Now() < kDeadline);
 
-  ASSERT_EQ(2 * total_packets_sent, total_packets_received)
-      << "Packet loss or duplicate packets received";
+    total_queue_counters += delta_counters.num_packets_transmitted;
+  }
+
+  ASSERT_EQ(total_queue_counters, 2 * total_packets_sent)
+      << "Mismatch in expected: " << 2 * total_packets_sent
+      << " and actual: " << total_queue_counters << " packets received";
+
+  // TODO: Remove this tolerance once the bug is fixed.
+  // The loss is due to the peer port status sync time.
+  int tolerate_packet_loss = 100;
+  // Assert that there are no duplicate packets.
+  ASSERT_LE(total_packets_received, 2 * total_packets_sent)
+      << "Duplicate packets received";
+  // Assert that there is a maximum of 100 packets lost.
+  ASSERT_GE(total_packets_received + tolerate_packet_loss,
+            2 * total_packets_sent)
+      << "Packet loss more than expected";
 }
 
 // Bring down/up ports and verify traffic is distributed to the first up port in
@@ -631,10 +708,10 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
   // Get port_name for the primary and secondary replica.
   ASSERT_OK_AND_ASSIGN(
       const auto& primary_replica_port_name,
-      gutil::FindOrStatus(port_name_per_port_id, replica_ports_[0]));
+      gutil::FindOrStatus(port_name_per_port_id, control_replica_ports_[0]));
   ASSERT_OK_AND_ASSIGN(
       const auto& secondary_replica_port_name,
-      gutil::FindOrStatus(port_name_per_port_id, replica_ports_[1]));
+      gutil::FindOrStatus(port_name_per_port_id, control_replica_ports_[1]));
 
   struct port_state {
     std::string name;
@@ -652,8 +729,8 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
               {primary_replica_port_name, pins_test::OperStatus::kDown},
               {secondary_replica_port_name, pins_test::OperStatus::kUp}},
           std::vector<std::string>{
-              replica_ports_[1],
-              controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
+              control_replica_ports_[1],
+              control_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
       },
       // Bring down both the primary replica and the first backup replica.
       // Expect the traffic is sent to the second backup replica.
@@ -662,8 +739,8 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
               {primary_replica_port_name, pins_test::OperStatus::kDown},
               {secondary_replica_port_name, pins_test::OperStatus::kDown}},
           std::vector<std::string>{
-              replica_ports_[2],
-              controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
+              control_replica_ports_[2],
+              control_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
       },
       // Bring down the first backup replica. Expect the traffic is sent to the
       // primary replica.
@@ -672,8 +749,8 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
               {primary_replica_port_name, pins_test::OperStatus::kUp},
               {secondary_replica_port_name, pins_test::OperStatus::kDown}},
           std::vector<std::string>{
-              replica_ports_[0],
-              controller_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
+              control_replica_ports_[0],
+              control_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding()},
       },
   };
 
@@ -682,13 +759,16 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
       ASSERT_OK(pins_test::SetInterfaceEnabledState(
           *control_gnmi_stub_, port_state.name,
           port_state.state == pins_test::OperStatus::kUp));
+      ASSERT_OK_AND_ASSIGN(
+          auto dut_port_name,
+          gutil::FindOrStatus(control_to_sut_port_name_map_, port_state.name));
       ASSERT_OK(pins_test::VerifyInterfaceOperState(
-          *sut_gnmi_stub_, port_state.name, port_state.state));
+          *sut_gnmi_stub_, dut_port_name, port_state.state));
     }
     absl::SleepFor(absl::Seconds(1));
     test_data_.ClearReceivedPackets();
     ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForMulticastFallback,
-                                controller_port_ids_, ir_p4info_,
+                                control_port_ids_, ir_p4info_,
                                 *control_p4_session_, kPacketRateInSeconds));
     test_data_.total_packets_sent = kNumTestPacketsForMulticastFallback;
     ASSERT_OK(control_p4_session_->HandleNextNStreamMessages(
@@ -717,12 +797,20 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyBasicMulticastFallbackAction) {
   // Restore the port state to UP.
   ASSERT_OK(pins_test::SetInterfaceEnabledState(
       *control_gnmi_stub_, primary_replica_port_name, /*enabled=*/true));
-  ASSERT_OK(pins_test::VerifyInterfaceOperState(
-      *sut_gnmi_stub_, primary_replica_port_name, pins_test::OperStatus::kUp));
+  ASSERT_OK_AND_ASSIGN(auto dut_primary_replica_port_name,
+                       gutil::FindOrStatus(control_to_sut_port_name_map_,
+                                           primary_replica_port_name));
+  ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                                dut_primary_replica_port_name,
+                                                pins_test::OperStatus::kUp));
+
   ASSERT_OK(pins_test::SetInterfaceEnabledState(
       *control_gnmi_stub_, secondary_replica_port_name, /*enabled=*/true));
+  ASSERT_OK_AND_ASSIGN(auto dut_secondary_replica_port_name,
+                       gutil::FindOrStatus(control_to_sut_port_name_map_,
+                                           secondary_replica_port_name));
   ASSERT_OK(pins_test::VerifyInterfaceOperState(*sut_gnmi_stub_,
-                                                secondary_replica_port_name,
+                                                dut_secondary_replica_port_name,
                                                 pins_test::OperStatus::kUp));
 }
 

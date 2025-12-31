@@ -518,6 +518,10 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
 }
 
 TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
+  if (!pins::TableHasMatchField(ir_p4info_, "l3_admit_table", "in_port")) {
+    GTEST_SKIP() << "Skipping because l3_admit table in p4info does not "
+                    "support match on in_port.";
+  }
 
   // Get SUT and control ports to test on.
   ASSERT_OK_AND_ASSIGN(
@@ -607,6 +611,17 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
 }
 
 TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
+
+  // TODO: This is a temporary workaround to mask l3 admit legacy
+  // RIF test on the testbeds that do not need legacy RIF. Legacy RIFs are not
+  // needed for Pod and should be removed from P4 models. Once non-legacy RIF
+  // is enforced for Pod, move this test filter back to whether legacy RIF is
+  // supported or not.
+  if (GetParam().skip_testing_legacy_rifs) {
+    GTEST_SKIP()
+        << "Skipping because there is no use case to use the router_interfaces "
+           "table entries that program l3_admit table.";
+  }
 
   // Only use 1 port because for the router interface L3 admit behavior to work
   // the incomming packet needs to match the outgoing port.
