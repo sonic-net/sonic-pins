@@ -28,11 +28,14 @@
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
+#include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -52,10 +55,9 @@
 namespace pins_test {
 namespace {
 
-using ::gutil::EqualsProto;
 using ::gutil::IsOk;
 using ::gutil::StatusIs;
-using ::testing::ElementsAre;
+using ::testing::AnyOf;
 using ::testing::Not;
 
 TEST_P(SmokeTestFixture, CanEstablishConnections) {
@@ -73,6 +75,28 @@ TEST_P(SmokeTestFixture, CanEstablishConnections) {
           GetParam().p4info));
   ASSERT_NE(sut_p4rt_session, nullptr);
   ASSERT_NE(control_switch_p4rt_session, nullptr);
+}
+
+TEST_P(SmokeTestFixture, CanSendCapabilitiesRequest) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK(pins_test::ConfigureSwitch(
+      testbed.Sut(), pins_test::PinsConfigView{
+                         .gnmi_config = GetParam().gnmi_config,
+                         .p4info = GetParam().p4info,
+                     }));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4::v1::P4Runtime::StubInterface> sut_p4rt_stub,
+      testbed.Sut().CreateP4RuntimeStub());
+
+  p4::v1::CapabilitiesRequest request;
+  p4::v1::CapabilitiesResponse response;
+  grpc::ClientContext context;
+  // TODO: Remove the Unimplemented error once the release
+  // supported RPC is rolled out to all switches.
+  EXPECT_THAT(gutil::GrpcStatusToAbslStatus(
+                  sut_p4rt_stub->Capabilities(&context, request, &response)),
+              AnyOf(IsOk(), StatusIs(absl::StatusCode::kUnimplemented)));
 }
 
 TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
