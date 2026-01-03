@@ -15,6 +15,7 @@
 #ifndef PINS_LIB_GNMI_GNMI_HELPER_H_
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <ostream>

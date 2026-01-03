@@ -59,6 +59,9 @@ absl::StatusOr<std::vector<thinkit::GetFileResult>> GetFileResults(
 absl::Span<const GetFileOption> GetSavepinsDbStateFileOptions(
     absl::string_view container_cmd_prefix);
 
+absl::Span<const GetFileOption> GetSavepinsRedisRecordFileOptions(
+    absl::string_view redis_dump_cmd_prefix);
+
 }  // namespace pins_test
 
 #endif  // PINS_LIB_SSH_COMMON_SSH_UTIL_H_

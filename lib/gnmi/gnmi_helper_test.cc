@@ -4866,5 +4866,501 @@ TEST(ParseJsonValue, ReturnsJsonValue) {
               IsOkAndHolds("value"));
 }
 
+TEST(GetGnmiSystemUpTime, FailedRPCReturnsError) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "system" }
+                                elem { name: "state" }
+                                elem { name: "up-time" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetGnmiSystemUpTime, InvalidResponsesFail) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "system" }
+                                elem { name: "state" }
+                                elem { name: "up-time" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      // More than one notification.
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" target: "chassis" }
+                           update {
+                             path {
+                               elem { name: "system" }
+                               elem { name: "state" }
+                               elem { name: "up-time" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                         }
+                         notification {})pb")),
+                Return(grpc::Status::OK)))
+      // More than one update.
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" target: "chassis" }
+                           update {
+                             path {
+                               elem { name: "system" }
+                               elem { name: "state" }
+                               elem { name: "up-time" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                           update {}
+                         })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiSystemUpTime(stub),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-system:up-time not present in JSON")));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub), StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(GetGnmiSystemUpTime, EmptySubtreeReturnsNoUpTime) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "system" }
+                                elem { name: "state" }
+                                elem { name: "up-time" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" target: "chassis" }
+                           update {
+                             path {
+                               elem { name: "system" }
+                               elem { name: "state" }
+                               elem { name: "up-time" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                         })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiSystemUpTime(stub),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-system:up-time not present in JSON")));
+}
+
+TEST(GetGnmiSystemUpTime, ReturnsNoUpTime) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "system" }
+                                elem { name: "state" }
+                                elem { name: "up-time" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1619721040593669829
+                     prefix { origin: "openconfig" target: "chassis" }
+                     update {
+                       path {
+                         elem { name: "system" }
+                         elem { name: "state" }
+                         elem { name: "up-time" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-system:up-time\":\"\"}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Unable to parse up-time")));
+}
+
+TEST(GetGnmiSystemUpTime, UpTimeSuccess) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "system" }
+                                elem { name: "state" }
+                                elem { name: "up-time" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(DoAll(
+          SetArgPointee<
+              2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(absl::Substitute(
+              R"pb(notification {
+                     timestamp: 1619721040593669829
+                     prefix { origin: "openconfig" target: "chassis" }
+                     update {
+                       path {
+                         elem { name: "system" }
+                         elem { name: "state" }
+                         elem { name: "up-time" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-system:up-time\":\"145274000000000\"}"
+                       }
+                     }
+                   })pb"))),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetGnmiSystemUpTime(stub), IsOkAndHolds(145274000000000));
+}
+
+TEST(GetOcOsNetworkStackGnmiStatePathInfo, FailedRPCReturnsError) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "components" }
+                                elem {
+                                  name: "component"
+                                  key { key: "name" value: "network_stack0" }
+                                }
+                                elem { name: "state" }
+                                elem { name: "name" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(
+      GetOcOsNetworkStackGnmiStatePathInfo(stub, "network_stack0", "name"),
+      StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetOcOsNetworkStackGnmiStatePathInfo, InvalidResponsesFail) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "components" }
+                                elem {
+                                  name: "component"
+                                  key { key: "name" value: "network_stack0" }
+                                }
+                                elem { name: "state" }
+                                elem { name: "name" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      // More than one notification.
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" target: "chassis" }
+                           update {
+                             path {
+                               elem { name: "components" }
+                               elem {
+                                 name: "component"
+                                 key { key: "name" value: "network_stack0" }
+                               }
+                               elem { name: "state" }
+                               elem { name: "name" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                         }
+                         notification {})pb")),
+                Return(grpc::Status::OK)))
+      // More than one update.
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" target: "chassis" }
+                           update {
+                             path {
+                               elem { name: "components" }
+                               elem {
+                                 name: "component"
+                                 key { key: "name" value: "network_stack0" }
+                               }
+                               elem { name: "state" }
+                               elem { name: "name" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                           update {}
+                         })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetOcOsNetworkStackGnmiStatePathInfo(stub, "network_stack0", "name"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-platform:name not present in JSON")));
+  EXPECT_THAT(
+      GetOcOsNetworkStackGnmiStatePathInfo(stub, "network_stack0", "name"),
+      StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(GetOcOsNetworkStackGnmiStatePathInfo,
+     EmptySubtreeReturnsNoNetworkStackName) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "components" }
+                                elem {
+                                  name: "component"
+                                  key { key: "name" value: "network_stack0" }
+                                }
+                                elem { name: "state" }
+                                elem { name: "name" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {
+                           timestamp: 1619721040593669829
+                           prefix { origin: "openconfig" target: "chassis" }
+                           update {
+                             path {
+                               elem { name: "components" }
+                               elem {
+                                 name: "component"
+                                 key { key: "name" value: "network_stack0" }
+                               }
+                               elem { name: "state" }
+                               elem { name: "name" }
+                             }
+                             val { json_ietf_val: "{}" }
+                           }
+                         })pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetOcOsNetworkStackGnmiStatePathInfo(stub, "network_stack0", "name"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-platform:name not present in JSON")));
+}
+
+TEST(GetOcOsNetworkStackGnmiStatePathInfo, ReturnsNoNetworkStackName) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "components" }
+                                elem {
+                                  name: "component"
+                                  key { key: "name" value: "network_stack0" }
+                                }
+                                elem { name: "state" }
+                                elem { name: "name" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1619721040593669829
+                     prefix { origin: "openconfig" target: "chassis" }
+                     update {
+                       path {
+                         elem { name: "components" }
+                         elem {
+                           name: "component"
+                           key { key: "name" value: "network_stack0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "name" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-platform:name\":\"\"}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetOcOsNetworkStackGnmiStatePathInfo(stub, "network_stack0", "name"),
+      IsOkAndHolds("\"\""));
+}
+
+TEST(GetOcOsNetworkStackGnmiStatePathInfo, NetworkStackNameSuccess) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Get(_, EqualsProto(R"pb(prefix { origin: "openconfig" target: "chassis" }
+                              path {
+                                elem { name: "components" }
+                                elem {
+                                  name: "component"
+                                  key { key: "name" value: "network_stack0" }
+                                }
+                                elem { name: "state" }
+                                elem { name: "name" }
+                              }
+                              type: STATE
+                              encoding: JSON_IETF)pb"),
+          _))
+      .WillOnce(DoAll(
+          SetArgPointee<
+              2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(absl::Substitute(
+              R"pb(notification {
+                     timestamp: 1619721040593669829
+                     prefix { origin: "openconfig" target: "chassis" }
+                     update {
+                       path {
+                         elem { name: "components" }
+                         elem {
+                           name: "component"
+                           key { key: "name" value: "network_stack0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "name" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-platform:name\":\"network_stack0\"}"
+                       }
+                     }
+                   })pb"))),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetOcOsNetworkStackGnmiStatePathInfo(stub, "network_stack0", "name"),
+      IsOkAndHolds("\"network_stack0\""));
+}
+
+TEST(SetPortPfcRxEnableValue, SetPfcRxEnableValueSuccess) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(
+      stub,
+      Set(_,
+          EqualsProto(
+              R"pb(prefix { origin: "openconfig" target: "chassis" }
+                   update {
+                     path {
+                       elem { name: "interfaces" }
+                       elem {
+                         name: "interface"
+                         key { key: "name" value: "Ethernet8" }
+                       }
+                       elem { name: "ethernet" }
+                       elem { name: "config" }
+                       elem { name: "enable-pfc-rx" }
+                     }
+                     val {
+                       json_ietf_val: "{\"openconfig-interfaces:enable-pfc-rx\":true}"
+                     }
+                   })pb"),
+          _))
+      .WillOnce(Return(grpc::Status::OK));
+  EXPECT_OK(SetPortPfcRxEnable("Ethernet8", "true", stub));
+}
+
+TEST(GetPortPfcRxEnableValue, ReturnsPfcRxEnableValue) {
+  gnmi::GetResponse response;
+  constexpr char RxEnableValue[] =
+      R"({"openconfig-interfaces:enable-pfc-rx":"true"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/config/enable-pfc-rx");
+  update->mutable_val()->set_json_ietf_val(RxEnableValue);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:enable-pfc-rx"),
+      IsOkAndHolds(HasSubstr("true")));
+}
+
+TEST(GetPortPfcRxEnableValue, ReturnsErrorForMalformedPfcRxEnableValue) {
+  gnmi::GetResponse response;
+  constexpr char RxEnableValue[] =
+      R"({"openconfig-interfaces:enable-pfc-rx":"TESTERROR"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/config/enable-pfc-rx");
+  update->mutable_val()->set_json_ietf_val(RxEnableValue);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:enable-pfc-rx"),
+      IsOkAndHolds(Not(HasSubstr("true"))));
+}
+
+class MalformedJson : public testing::TestWithParam<std::string> {};
+
+const absl::btree_map<std::string /*name*/, std::string /*text*/> &
+MalformedJsonTests() {
+  static const auto *const kTestCases =
+      new absl::btree_map<std::string, std::string>({
+          {"UnquotedName", "{name : \"value\"}"},
+          {"HalfQuotedName", "{\"name : \"value\"}"},
+          {"UnquotedValue", "{\"name\" : value}"},
+          {"HalfQuotedValue", "{\"name\" : \"value}"},
+          {"MissingSeparator", "{\"name\"\"value\"}"},
+          {"MissingBraces", "\"name\":\"value\""},
+          {"MissingLeftBrace", "{\"name\":\"value\""},
+          {"MissingRightBrace", "\"name\":\"value\"}"},
+      });
+  return *kTestCases;
+}
+
+absl::btree_set<std::string> MalformedJsonTestNames() {
+  absl::btree_set<std::string> test_names;
+  for (const auto &[name, text] : MalformedJsonTests()) test_names.insert(name);
+  return test_names;
+}
+
+TEST_P(MalformedJson, ReturnsError) {
+  EXPECT_THAT(ParseJsonValue(MalformedJsonTests().at(GetParam())),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+INSTANTIATE_TEST_SUITE_P(ParseJsonNalue, MalformedJson,
+                         testing::ValuesIn(MalformedJsonTestNames()),
+                         [](const testing::TestParamInfo<std::string> &info) {
+                           return info.param;
+                         });
+
+TEST(SetPortLoopbackMode, TestSetLoopback) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_OK(SetPortLoopbackMode(true, "Ethernet1/1/1", stub));
+  EXPECT_OK(SetPortLoopbackMode(false, "Ethernet1/1/1", stub));
+}
+
 }  // namespace
 }  // namespace pins_test
