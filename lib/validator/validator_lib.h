@@ -154,10 +154,10 @@ absl::Status WaitForCondition(Func &&condition, absl::Duration timeout,
     number_of_function_invocations++;
     if constexpr (std::is_invocable_r_v<absl::Status, Func, Args...,
                                         absl::Duration>) {
-      final_status = condition(std::forward<Args>(args)...,
-                               /*timeout=*/deadline - absl::Now());
+      final_status = std::invoke(condition, std::forward<Args>(args)...,
+                                 /*timeout=*/deadline - absl::Now());
     } else {
-      final_status = condition(std::forward<Args>(args)...);
+      final_status = std::invoke(condition, std::forward<Args>(args)...);
     }
     latest_results.push_back(absl::StrCat(absl::FormatTime(absl::Now()), ": ",
                                           final_status.message()));
@@ -181,7 +181,8 @@ absl::Status WaitForNot(Func &&condition, absl::Duration timeout,
                         Args &&...args) {
   return WaitForCondition(
       [condition = std::forward<Func>(condition)](Args &&...args) {
-        absl::Status status = condition(std::forward<Args>(args)...);
+	absl::Status status =
+            std::invoke(condition, std::forward<Args>(args)...);
         if (status.ok()) {
           return absl::InternalError("Validator still returns okay.");
         }

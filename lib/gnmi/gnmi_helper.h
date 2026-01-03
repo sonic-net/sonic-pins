@@ -195,6 +195,17 @@ struct HstCounters {
   std::vector<float> abwc_digests_cumulative;
 };
 
+struct DelayMaps {
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_configured_ingress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_configured_egress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_applied_ingress_delay_map;
+  absl::flat_hash_map<std::string, float_t>
+      interface_to_applied_egress_delay_map;
+};
+
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
 
 // Generates an OpenConfig JSON string using the given list of `interfaces` to

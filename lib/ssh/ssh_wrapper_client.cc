@@ -79,6 +79,13 @@ absl::Status SshWrapperClient::ClearpinsLogs(absl::string_view sut,
   return ssh_helper->ClearpinsLogs(sut, ssh_client, timeout);
 }
 
+absl::Status SshWrapperClient::RemoveConfigDb(absl::string_view sut,
+                                              SSHClient* ssh_client,
+                                              absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
+  return ssh_helper->RemoveConfigDb(sut, ssh_client, timeout);
+}
+
 absl::StatusOr<std::vector<GetFileResult>> SshWrapperClient::SavepinsLog(
     absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto* ssh_helper, SshWrapperClient::GetSshHelper(sut));
@@ -115,5 +122,23 @@ absl::StatusOr<std::string> SshWrapperClient::ExecuteCommandInContainer(
   return ssh_helper->ExecuteCommandInContainer(
       chassis_name, ssh_client, docker_name, command, timeout);
 }
+
+absl::StatusOr<std::string_view> SshWrapperClient::FetchCertFileName(
+    absl::string_view chassis_name, thinkit::CertFile cert_file) {
+  ASSIGN_OR_RETURN(auto* ssh_helper,
+                   SshWrapperClient::GetSshHelper(chassis_name));
+  return ssh_helper->FetchCertFileName(chassis_name, cert_file);
+}
+
+
+absl::Status SshWrapperClient::CheckAndRestoreBootinstall(
+    absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto* ssh_helper,
+                   SshWrapperClient::GetSshHelper(chassis_name));
+  return ssh_helper->CheckAndRestoreBootinstall(chassis_name, ssh_client,
+                                                timeout);
+}
+
 }  // namespace thinkit
 
