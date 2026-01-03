@@ -1,0 +1,59 @@
+#ifndef PINS_DVAAS_LABELER_H_
+#define PINS_DVAAS_LABELER_H_
+
+#include "absl/status/statusor.h"
+#include "dvaas/test_vector.pb.h"
+
+#include <functional>
+#include <vector>
+
+namespace dvaas {
+
+// List of default labelers.
+std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+DefaultPacketTestRunLabelers();
+
+// Returns the 'vlan_tagged_input' label if the input packet is VLAN tagged.
+absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run);
+
+// Returns the 'submit_to_ingress_vlan_tagged_input' label if the input packet
+// is VLAN tagged and is also a submit-to-ingress packet.
+absl::StatusOr<Labels> SubmitToIngressVlanTaggedInputLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'multicast_src_mac_input' label if the input
+// packet has a multicast source MAC address.
+absl::StatusOr<Labels> MulticastSrcMacInputLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'unicast_dst_mac_multicast_dst_ip_input' label if the input
+// packet has a unicast destination MAC address and a IPv4/IPv6 multicast
+// destination IP address.
+absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'submit_to_ingress_multicast_dst_ip_input' label if the input
+// packet has a IPv4/IPv6 multicast destination IP address and is also a
+// submit-to-ingress packet.
+absl::StatusOr<Labels> SubmitToIngressMulticastDstIpInputLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'ttl_01_input_forward' label if the input packet has TTL 0 or 1
+// and hits `ipv4_table` or `ipv6_table`, but does not hit any ingress/egress
+// ACLs.
+absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'icmp_input_forward' label if the input packet is ICMP tagged and
+// the packet is forwarded by the switch.
+absl::StatusOr<Labels> IcmpInputForwardingLabeler(
+    const PacketTestRun& test_run);
+
+// Returns the 'icmp_input_forward' label if the input packet is ICMP tagged and
+// the packet is forwarded by the switch.
+absl::StatusOr<Labels> IcmpInputForwardingLabeler(
+    const PacketTestRun& test_run);
+
+}  // namespace dvaas
+
+#endif  // PINS_DVAAS_LABELER_H_
