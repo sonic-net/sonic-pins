@@ -36,6 +36,18 @@ struct GetFileResult {
   std::string file_content;
 };
 
+enum class Container {
+  kDatabase,
+  kSystem,
+  kGnmi,
+  kP4rt,
+  kPmon,
+  kSwss,
+  kSflow,
+  kSyncd,
+  kTeamd
+};
+
 // LinuxSshHelper is an interface for common operations on the switches
 // regardless of the switch OS.
 class LinuxSshHelper {
@@ -75,6 +87,20 @@ class LinuxSshHelper {
   // Returns list of the PINs DB state file names and their contents.
   virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsDbState(
       absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
+
+  // Returns list of the PINs Redis record file names and their contents.
+  virtual absl::StatusOr<std::vector<GetFileResult>> SavepinsRedisRecord(
+      absl::string_view sut, SSHClient* ssh_client, absl::Duration timeout) = 0;
+
+  // Translates the logical container enum to the switch-specific string name.
+  virtual absl::StatusOr<std::string> GetContainerName(
+      absl::string_view chassis_name, thinkit::Container container) = 0;
+
+  // Executes a command inside a container on the switch.
+  virtual absl::StatusOr<std::string> ExecuteCommandInContainer(
+      absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
+      thinkit::Container container, absl::string_view command,
+      absl::Duration timeout) = 0;
 };
 
 }  // namespace thinkit
