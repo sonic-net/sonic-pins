@@ -135,6 +135,11 @@ class LinuxSshHelper {
   virtual absl::Status CheckAndRestoreBootinstall(
       absl::string_view chassis_name, thinkit::SSHClient* ssh_client,
       absl::Duration timeout) = 0;
+
+  // Checks the status of all containers and returns an error if not all of them
+  // are running.
+  virtual absl::Status CheckContainersUp(absl::string_view chassis_name,
+                                         thinkit::SSHClient& ssh_client) = 0;
 };
 
 }  // namespace thinkit

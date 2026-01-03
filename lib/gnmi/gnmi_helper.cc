@@ -2112,6 +2112,14 @@ bool InterfaceSupportsBert(
         << lane_speed << " kbps.";
     return false;
   }
+
+  // TODO - Remove this once the bug is fixed.
+  // Skip BERT for ports 33 and 34.
+  if (absl::StrContains(interface, "1/33") ||
+      absl::StrContains(interface, "1/34")) {
+    return false;
+  }
+
   return true;
 }
 

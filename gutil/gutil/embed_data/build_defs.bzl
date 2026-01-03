@@ -14,6 +14,13 @@
 
 """Embeds data files into a C++ or Go module."""
 
+def clean_dep(dep):
+    """Returns an absolute Bazel path to 'dep'.
+
+    This is necessary when calling these functions from another workspace.
+    """
+    return str(Label(dep))
+
 def cc_embed_data(
         name,
         srcs,
@@ -55,7 +62,7 @@ def cc_embed_data(
       identifier: The identifier to use in generated names (defaults to name).
       **kwargs: Args to pass to the cc_library.
     """
-    generator = "//gutil/gutil/embed_data:generate_cc_embed_data"
+    generator = clean_dep("//gutil/gutil/embed_data:generate_cc_embed_data")
     generator_location = "$(location %s)" % generator
     if identifier == None:
         identifier = name
