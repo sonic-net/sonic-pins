@@ -30,7 +30,6 @@ void MirrorBlackboxTestFixture::TearDown() {
   EXPECT_OK(pdpi::ClearTableEntries(&GetSutP4RuntimeSession()));
   EXPECT_OK(pdpi::ClearTableEntries(&GetControlP4RuntimeSession()));
 
-  MirrorTestbedFixture::TearDown();
 }
 
 }  // namespace pins_test

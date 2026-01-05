@@ -14,24 +14,21 @@
 
 #include "tests/qos/frontpanel_qos_test.h"
 
-#include <algorithm>
 #include <cmath>
-#include <complex>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
@@ -40,12 +37,13 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
@@ -80,7 +78,6 @@
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
@@ -744,6 +741,7 @@ TEST_P(FrontpanelQosTest,
           (kDscpsByQueueName == kDscpsByMulticastQueueName);
 
       QueueCounters kInitialQueueCounters;
+      Counters kInitialPortCounters;
       // Actual testing -- inject test IPv4 and IPv6 packets for each DSCP,
       // and check the behavior is as eexpted.
       constexpr int kMaxDscp = 63;
@@ -788,6 +786,9 @@ TEST_P(FrontpanelQosTest,
             ASSERT_OK_AND_ASSIGN(
                 kInitialQueueCounters,
                 GetGnmiQueueCounters(kSutEgressPort, kTargetQueue, *gnmi_stub));
+            ASSERT_OK_AND_ASSIGN(
+                kInitialPortCounters,
+                GetCountersForInterface(kSutEgressPort, *gnmi_stub));
           }
           // Configure & start test packet flow.
           const std::string kTrafficName =
@@ -873,7 +874,8 @@ TEST_P(FrontpanelQosTest,
                 ixia::BytesPerSecondReceived(kIxiaTrafficStats);
             LOG(INFO) << "observed traffic rate (bytes/second): "
                       << kObservedTrafficRate;
-            const int kAbsoluteError = kObservedTrafficRate - kTargetQueuePir;
+            const int64_t kAbsoluteError =
+                kObservedTrafficRate - kTargetQueuePir;
             const double kRelativeErrorPercent =
                 100. * kAbsoluteError / kTargetQueuePir;
             constexpr double kTolerancePercent = 10;  // +-10% tolerance.
@@ -906,6 +908,17 @@ TEST_P(FrontpanelQosTest,
             } while (TotalPacketsForQueue(delta_counters) <
                          kIxiaTrafficStats.num_tx_frames() &&
                      absl::Now() < kDeadline);
+            ASSERT_OK_AND_ASSIGN(
+                Counters final_port_counters,
+                GetCountersForInterface(kSutEgressPort, *gnmi_stub));
+
+            SCOPED_TRACE(
+                absl::StrCat("port counters incremented by ",
+                             kInitialPortCounters - final_port_counters));
+            SCOPED_TRACE(
+                absl::StrCat("Initial port counters: ", kInitialPortCounters));
+            SCOPED_TRACE(
+                absl::StrCat("Final port counters: ", final_port_counters));
             LOG(INFO) << "queue counters incremented by " << delta_counters;
             LOG(INFO) << "Queue Counters.\nBefore: "
                       << ToString(kInitialQueueCounters)
@@ -1240,6 +1253,9 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     ASSERT_OK_AND_ASSIGN(sut_p4rt, pdpi::P4RuntimeSession::Create(sut));
   }
   // Start traffic.
+  Counters kInitialPortCounters;
+  ASSERT_OK_AND_ASSIGN(kInitialPortCounters,
+                       GetCountersForInterface(kSutEgressPort, *gnmi_stub));
   LOG(INFO) << "starting traffic";
   ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
   auto stop_traffic = absl::Cleanup(
@@ -1257,6 +1273,14 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   // weights.
   ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
                        ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+
+  ASSERT_OK_AND_ASSIGN(Counters final_port_counters,
+                       GetCountersForInterface(kSutEgressPort, *gnmi_stub));
+
+  SCOPED_TRACE(absl::StrCat("port counters incremented by ",
+                            final_port_counters - kInitialPortCounters));
+  SCOPED_TRACE(absl::StrCat("Initial port counters: ", kInitialPortCounters));
+  SCOPED_TRACE(absl::StrCat("Final port counters: ", final_port_counters));
   absl::flat_hash_map<std::string, int64_t> num_rx_frames_by_queue;
   for (auto &[traffic_item_name, stats] :
        Ordered(kTrafficStats.stats_by_traffic_item())) {
@@ -1274,7 +1298,9 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     ASSERT_OK_AND_ASSIGN(int64_t weight,
                          gutil::FindOrStatus(weights_by_queue_name, queue));
     const double kExpectedFraction = 1. * weight / total_weight;
-    const double kActualFraction = 1. * num_rx_frames / total_num_rx_frames;
+    // If received packets are 0, then the fraction is 0 (can't divide by 0).
+    const double kActualFraction =
+        total_num_rx_frames == 0 ? 0 : 1. * num_rx_frames / total_num_rx_frames;
     const double kAbsoluteError = kActualFraction - kExpectedFraction;
     const double kRelativeErrorPercent =
         100. * kAbsoluteError / kExpectedFraction;
@@ -1685,6 +1711,18 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
           LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
                        "the forwarding traffic is not disrupted.";
         }
+        bool not_after_nsf_reboot =
+            !GetParam().nsf_reboot ||
+            test_operation == TestOperations::NsfRebootAndTrafficTest;
+        Counters kInitialPortCounters;
+        if (not_after_nsf_reboot) {
+          // Get initial port counters after NSF Reboot is complete since
+          // gnmi calls cannot be made during NSF reboot.
+          ASSERT_OK_AND_ASSIGN(
+              kInitialPortCounters,
+              GetCountersForInterface(kSutEgressPort, *gnmi_stub));
+        }
+
         // Run traffic for a while, then obtain stats.
         LOG(INFO) << "starting traffic (" << traffic_items.size() << " items)";
         // Occasionally the Ixia API cannot keep up and starting traffic
@@ -1703,6 +1741,23 @@ TEST_P(FrontpanelQosTest, StrictQueuesAreStrictlyPrioritized) {
         ASSERT_OK_AND_ASSIGN(
             const ixia::TrafficStats kTrafficStats,
             ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+        
+        if (not_after_nsf_reboot) {
+          // Get port counters after NSF Reboot is complete since
+          // gnmi calls cannot be made during NSF reboot.
+          ASSERT_OK_AND_ASSIGN(
+              Counters final_port_counters,
+              GetCountersForInterface(kSutEgressPort, *gnmi_stub));
+
+          SCOPED_TRACE(
+              absl::StrCat("port counters incremented by ",
+                           final_port_counters - kInitialPortCounters));
+          SCOPED_TRACE(
+              absl::StrCat("Initial port counters: ", kInitialPortCounters));
+          SCOPED_TRACE(
+              absl::StrCat("Final port counters: ", final_port_counters));
+        }
+
         LOG(INFO) << "validating traffic stats against expectation";
         double bytes_per_second_received = 0;
         for (auto &[traffic_item, stats] :
@@ -2127,6 +2182,9 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
 
         ResetEcnTestPacketCounters(packet_receive_info);
 
+        Counters kInitialPortCounters;
+        ASSERT_OK_AND_ASSIGN(kInitialPortCounters,
+                             GetCountersForInterface(kSutOutPort, *gnmi_stub));
         ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
           return pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
                                                ixia_setup_result.topology_ref,
@@ -2163,13 +2221,27 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
         // Wait for a bit to collect queue statistics.
         constexpr absl::Duration kQueueStatsWaitTime = absl::Seconds(5);
         absl::SleepFor(kQueueStatsWaitTime);
+        
+        ASSERT_OK_AND_ASSIGN(Counters final_port_counters,
+                             GetCountersForInterface(kSutOutPort, *gnmi_stub));
+
+        SCOPED_TRACE(absl::StrCat("port counters incremented by ",
+                                  final_port_counters - kInitialPortCounters));
+        SCOPED_TRACE(
+            absl::StrCat("Initial port counters: ", kInitialPortCounters));
+        SCOPED_TRACE(
+            absl::StrCat("Final port counters: ", final_port_counters));
 
         // Read counters of the target queue.
         ASSERT_OK_AND_ASSIGN(
             const QueueCounters queue_counters_after_test_packet,
             GetGnmiQueueCounters(/*port=*/kSutOutPort,
                                  /*queue=*/target_queue, *gnmi_stub));
-
+        
+        SCOPED_TRACE(absl::StrCat("Queue counters before test packet: ",
+                                  ToString(queue_counters_before_test_packet)));
+        SCOPED_TRACE(absl::StrCat("Queue counters after test packet: ",
+                                  ToString(queue_counters_after_test_packet)));
         // This test expects WRED config to only mark packets and not
         // drop. Expect no drops in target queue and queue transmit
         // counter increments.
@@ -2525,6 +2597,10 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
       ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(
           testbed.get(), *GetParam().default_params.ssh_client_for_nsf));
     }
+    Counters kInitialPortCounters;
+    ASSERT_OK_AND_ASSIGN(kInitialPortCounters,
+                         GetCountersForInterface(kSutEgressPort, *gnmi_stub));
+
     // Start traffic.
     LOG(INFO) << "starting traffic";
     ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
@@ -2536,6 +2612,13 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
     // config.
     ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
                          ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+    
+    ASSERT_OK_AND_ASSIGN(Counters final_port_counters,
+                         GetCountersForInterface(kSutEgressPort, *gnmi_stub));
+    SCOPED_TRACE(absl::StrCat("port counters incremented by ",
+                              final_port_counters - kInitialPortCounters));
+    SCOPED_TRACE(absl::StrCat("Initial port counters: ", kInitialPortCounters));
+    SCOPED_TRACE(absl::StrCat("Final port counters: ", final_port_counters));
 
     absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
     for (auto &[traffic_item_name, stats] :

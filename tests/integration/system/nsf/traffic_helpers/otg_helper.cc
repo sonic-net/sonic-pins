@@ -199,15 +199,6 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
   layer1->add_port_names(otg_src_port);
   layer1->add_port_names(otg_dst_port);
 
-  // Set speed dynamically to ensure maximum
-  // linerate.
-  // Set speed.
-  if (enable_linerate_) {
-    layer1->set_speed(otg::Layer1::Speed::speed_200_gbps);
-  } else {
-    layer1->set_speed(otg::Layer1::Speed::speed_1_gbps);
-  }
-
   // Set MTU.
   layer1->set_mtu(kDefaultMtu);
 
@@ -239,7 +230,8 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
                                                kFlowTcpDstPortRangeStart + 1);
 
   // Set the config.
-  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  ASSIGN_OR_RETURN(otg::Openapi::StubInterface * stub,
+                   generic_testbed->GetTrafficClient());
 
   RETURN_IF_ERROR(WaitForCondition(SetOtgConfig, absl::Minutes(5), stub,
                                    set_config_request, set_config_response));
@@ -263,7 +255,8 @@ absl::Status OtgHelper::StartTraffic(const Testbed &testbed,
 absl::Status OtgHelper::StopTraffic(const Testbed &testbed) {
   ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
                    GetGenericTestbed(testbed));
-  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  ASSIGN_OR_RETURN(otg::Openapi::StubInterface * stub,
+                   generic_testbed->GetTrafficClient());
   otg::SetControlStateRequest request;
   otg::SetControlStateResponse response;
   ::grpc::ClientContext context;
@@ -289,7 +282,8 @@ absl::Status OtgHelper::ValidateTraffic(const Testbed &testbed,
                                         absl::Duration max_acceptable_outage) {
   ASSIGN_OR_RETURN(thinkit::GenericTestbed * generic_testbed,
                    GetGenericTestbed(testbed));
-  otg::Openapi::StubInterface *stub = generic_testbed->GetTrafficClient();
+  ASSIGN_OR_RETURN(otg::Openapi::StubInterface * stub,
+                   generic_testbed->GetTrafficClient());
   otg::GetMetricsRequest metrics_req;
   otg::GetMetricsResponse metrics_res;
   grpc::ClientContext metrics_ctx;

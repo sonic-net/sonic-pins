@@ -21,6 +21,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "artifacts/otg.grpc.pb.h"
@@ -111,7 +112,9 @@ public:
 
   // Returns a client to interact with the Open Traffic Generator Service, if
   // present, for the testbed.
-  virtual otg::Openapi::StubInterface *GetTrafficClient() { return nullptr; }
+  virtual absl::StatusOr<otg::Openapi::StubInterface*> GetTrafficClient() {
+    return absl::UnimplementedError("GetTrafficClient is not implemented.");
+  }
 
   // Sends a REST request to the Ixia and returns the response.
   // `url` can be either "https://...", "/api/...", or "/ixnetwork/...".

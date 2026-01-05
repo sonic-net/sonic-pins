@@ -16,6 +16,8 @@ load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 
 # Placeholder: load py_binary
 load("//p4_symbolic/bmv2:test.bzl", "bmv2_protobuf_parsing_test")
+# load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],

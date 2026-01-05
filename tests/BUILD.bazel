@@ -14,6 +14,9 @@
 #
 # PINS test functions that can be run on any infrastructure that supports ThinKit.
 
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -32,8 +35,9 @@ cc_library(
         "//gutil/gutil:status",
         "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
-        "//p4_pdpi:p4_runtime_session",
+        "//lib/utils:constants",
         "//lib/validator:validator_lib",
+        "//p4_pdpi:p4_runtime_session",
         "//thinkit:mirror_testbed",
         "//thinkit:ssh_client",
         "//thinkit:switch",
