@@ -40,7 +40,6 @@ constexpr std::string_view kVrfTableEntryWithSfeMetadata =
                exact { value: "vrf-81" }
              }
              action { action { action_id: 24742814 } }
-             metadata: "orion_type: SFE_VRF_SAIONLYENTRY"
            }
          })pb";
 
@@ -65,7 +64,6 @@ constexpr std::string_view kVrfTableEntryWithSfeMetadata2 =
                exact { value: "vrf-81" }
              }
              action { action { action_id: 24742815 } }
-             metadata: "orion_type: SFE_VRF_SAIONLYENTRY"
            }
          })pb";
 
@@ -78,7 +76,6 @@ constexpr std::string_view kNonVrfTableEntryWithSfeMetadata =
                exact { value: "vrf-81" }
              }
              action { action { action_id: 24742814 } }
-             metadata: "orion_type: SFE_VRF_SAIONLYENTRY"
            }
          })pb";
 
@@ -91,7 +88,6 @@ constexpr std::string_view kNonVrfTableEntryWithSfeMetadata2 =
                exact { value: "vrf-81" }
              }
              action { action { action_id: 24742814 } }
-             metadata: "orion_type: SFE_VRF_SAIONLYENTRY"
            }
          })pb";
 
