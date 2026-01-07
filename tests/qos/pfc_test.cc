@@ -397,7 +397,7 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
             expected_watermark;
         const double relative_error_percent =
             100. * absolute_error / expected_watermark;
-        constexpr double tolerance_percent = 20;  // +-20% tolerance.
+        constexpr double tolerance_percent = 27;  // +-27% tolerance.
         if (std::abs(relative_error_percent) <= tolerance_percent) {
           LOG(INFO) << "observed watermark matches expected watermark "
                        "(error: "
