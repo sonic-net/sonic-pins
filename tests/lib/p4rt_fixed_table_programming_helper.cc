@@ -166,6 +166,12 @@ absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
     absl::string_view router_interface_id, absl::string_view port,
     absl::string_view src_mac) {
   pdpi::IrUpdate ir_update;
+  // Use unicast_set_port_and_src_mac if set_port_and_src_mac is not supported
+  // in the P4Info.
+  absl::string_view action_name = "set_port_and_src_mac";
+  if (!ir_p4_info.actions_by_name().contains(action_name)) {
+    action_name = "unicast_set_port_and_src_mac";
+  }
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
       absl::Substitute(R"pb(
                          type: $0
@@ -177,20 +183,20 @@ absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
                                exact { str: "$1" }
                              }
                              action {
-                               name: "set_port_and_src_mac"
+                               name: "$2"
                                params {
                                  name: "port"
-                                 value { str: "$2" }
+                                 value { str: "$3" }
                                }
                                params {
                                  name: "src_mac"
-                                 value { mac: "$3" }
+                                 value { mac: "$4" }
                                }
                              }
                            }
                          }
                        )pb",
-                       type, router_interface_id, port, src_mac),
+                       type, router_interface_id, action_name, port, src_mac),
       &ir_update))
       << "invalid pdpi::IrUpdate string.";
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
