@@ -14,11 +14,13 @@
 
 #include "dvaas/packet_injection.h"
 
+#include <cstdlib>
 #include <optional>
 #include <queue>
 #include <string>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
@@ -54,7 +56,80 @@ absl::StatusOr<pdpi::IrP4Info> GetIrP4Info(
   return pdpi::CreateIrP4Info(response.config().p4info());
 }
 
+bool IsRouteSolicitationPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.icmp_header().type() == "0x85";
+  });
+}
+
+bool IsIpv6HopByHopPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.ipv6_header().next_header() == "0x00";
+  });
+}
+
+bool IsLacpPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.ethernet_header().ethertype() == "0x8809";
+  });
+}
+
+bool IsPsampEncapedPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.has_psamp_header();
+  });
+}
+
+bool IsArpPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.ethernet_header().ethertype() == "0x0806" ||
+           header.vlan_header().ethertype() == "0x0806";
+  });
+}
+
+bool IsRsyslogPacket(const packetlib::Packet& packet) {
+  return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
+    return header.has_ipv6_header() &&
+           (header.ipv6_header().ipv6_destination() == "2001:4860:f802::c0" ||
+            header.ipv6_header().ipv6_destination() == "2001:4860:f802::bf");
+  });
+}
+
 }  // namespace
+
+bool DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet& packet) {
+  // TODO Switch generates router solicitation packets.
+  if (IsRouteSolicitationPacket(packet)) {
+    return true;
+  }
+  // TODO Switch generates IPV6 hop_by_hop packets.
+  if (IsIpv6HopByHopPacket(packet)) {
+    return true;
+  }
+  // Switch generates LACP packets if LAGs are present.
+  if (IsLacpPacket(packet)) {
+    return true;
+  }
+  // Control switch sends a known unsolicited packet, SUT mirrors it back to the
+  // control switch but with PSAMP encap, so it is no longer recognized by the
+  // above filters.
+  if (IsPsampEncapedPacket(packet)) {
+    return true;
+  }
+  if (std::getenv("gpins_alpine_env") != nullptr) {
+    // TODO: Remove once Alpine disables unsolicited ARP packets.
+    if (IsArpPacket(packet)) {
+      LOG(INFO) << "ALPINE: Ignoring ARP packet";
+      return true;
+    }
+    // TODO: Remove once rsyslog packets are disabled on Alpine.
+    if (IsRsyslogPacket(packet)) {
+      LOG(INFO) << "ALPINE: Ignoring rsyslog packet";
+      return true;
+    }
+  }
+  return false;
+}
 
 absl::StatusOr<std::vector<TaggedPacketIn>>
 CollectStreamMessageResponsesAndReturnTaggedPacketIns(
@@ -135,9 +210,9 @@ absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
 }
 
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
-    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
-    const PacketTestVectorById &packet_test_vector_by_id,
-    const PacketInjectionParams &parameters, PacketStatistics &statistics,
+    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    const PacketTestVectorById& packet_test_vector_by_id,
+    const PacketInjectionParams& parameters, PacketStatistics& statistics,
     bool log_injection_progress) {
   LOG(INFO) << "Injecting test packets into the dataplane "
             << packet_test_vector_by_id.size();
@@ -211,8 +286,8 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
         ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
         RETURN_IF_ERROR(
             pins::InjectEgressPacket(sut_egress_port.GetP4rtEncoding(),
-                                      absl::HexStringToBytes(packet.hex()),
-                                      sut_ir_p4info, &sut, injection_delay));
+                                     absl::HexStringToBytes(packet.hex()),
+                                     sut_ir_p4info, &sut, injection_delay));
       } else {
         // TODO: Add support for other input types.
         return absl::UnimplementedError(
