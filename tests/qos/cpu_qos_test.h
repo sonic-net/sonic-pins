@@ -22,7 +22,7 @@
 
 #include <functional>
 #include <vector>
-
+#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
@@ -44,6 +44,8 @@ struct PacketAndExpectedTargetQueue {
   packetlib::Packet packet;
   absl::string_view target_queue;
 };
+constexpr absl::string_view kNoUnexpectedPacketsPristineSwitchStateTest =
+    "NoUnexpectedPacketsReachCpuInPristineSwitchState";
 
 // Parameters used by the tests that don't require an Ixia.
 struct ParamsForTestsWithoutIxia {
@@ -75,6 +77,15 @@ class CpuQosTestWithoutIxia
     : public testing::TestWithParam<ParamsForTestsWithoutIxia> {
  protected:
   void SetUp() override {
+    const testing::TestInfo* const test_info =
+        testing::UnitTest::GetInstance()->current_test_info();
+    // Expect link flaps only for the
+    // NoUnexpectedPacketsReachCpuInPristineSwitchState test case as P4 info
+    // change reboots the switch.
+    if (absl::StrContains(test_info->name(),
+                          kNoUnexpectedPacketsPristineSwitchStateTest)) {
+      GetParam().testbed_interface->ExpectLinkFlaps();
+    }
     GetParam().testbed_interface->SetUp();
 
     // TODO: Port to thinkit::GenericTestbed.

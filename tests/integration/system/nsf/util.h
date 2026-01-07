@@ -31,6 +31,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -172,7 +173,7 @@ absl::Status InstallRebootPushConfig(
 // `image_config_param` is provided.
 absl::Status ValidateTestbedState(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     absl::Span<const std::string> control_switch_interfaces = {});
@@ -198,7 +199,7 @@ absl::Status WaitForReboot(const Testbed& testbed,
 // additionally checks whether all the SUT interfaces are UP after turnup.
 absl::Status WaitForNsfReboot(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     bool collect_debug_logs_for_nsf_success = true,
@@ -207,7 +208,7 @@ absl::Status WaitForNsfReboot(
 // Performs NSF Reboot and waits for the SUT to be ready.
 absl::Status DoNsfRebootAndWaitForSwitchReady(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     absl::Span<const std::string> control_switch_interfaces = {});
@@ -215,7 +216,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 // NSF reboot failure, a cold reboot is executed on the switch to recover it.
 absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     const Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     absl::Span<const std::string> control_switch_interfaces = {});
@@ -238,7 +239,8 @@ absl::Status PushConfig(const ImageConfigParams& image_config_param,
                         bool is_inband_testbed = false);
 
 absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
-                             const p4::config::v1::P4Info& p4_info);
+                             const p4::config::v1::P4Info& p4_info,
+                             sai::Instantiation sut_instantiation);
 
 // Program flows based on table_name to the capacity.
 absl::Status ProgramFlowsBasedOnTable(thinkit::Switch& thinkit_switch,

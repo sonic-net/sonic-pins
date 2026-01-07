@@ -80,6 +80,8 @@ class MulticastFallbackGroupTestFixture
   std::vector<pins_test::P4rtPortId> control_port_ids_;
   // Replica ports for the multicast group on the SUT.
   std::vector<std::string> replica_ports_;
+  // Replica ports for the multicast group on the SUT with the default port.
+  std::vector<std::string> replica_ports_with_default_port_;
   // Replica ports for the multicast group on the control switch.
   std::vector<std::string> control_replica_ports_;
   // Map from SUT port ID to control switch port ID.

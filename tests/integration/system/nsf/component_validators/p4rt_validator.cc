@@ -55,7 +55,7 @@ absl::Status VerifyAclRecarvingTelemetry(absl::string_view version,
 
   // Add release specific objects in the allow list.
   absl::flat_hash_set<absl::string_view> allowlist;
-
+  
   std::string allowlist_str;
   for (const auto obj : allowlist) {
     absl::StrAppend(&allowlist_str, obj, ", ");

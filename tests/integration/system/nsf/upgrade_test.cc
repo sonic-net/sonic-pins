@@ -364,7 +364,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       LOG(INFO) << upgrade_path
                 << ": Proceeding with config push after ACL flow program";
 
-      status = ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info);
+      status = ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info,
+                               GetParam().sut_instantiation);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
                           absl::InternalError(absl::StrFormat(
@@ -398,7 +399,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
                               status.message())));
       }
 
-      status = ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info);
+      status = ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info,
+                               GetParam().sut_instantiation);
       if (!status.ok()) {
         AppendErrorStatus(overall_status,
                           absl::InternalError(absl::StrFormat(
