@@ -13,6 +13,10 @@
 // limitations under the License.
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 
+#include <stdint.h>
+
+#include <optional>
+
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/proto.h"
@@ -45,8 +49,11 @@ absl::StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
 }
 
 absl::StatusOr<sai::WcmpGroupLimitations> GetWcmpGroupCapabilities(
-    pdpi::P4RuntimeSession* session) {
+    pdpi::P4RuntimeSession* session, const std::optional<uint64_t>& device_id) {
   p4::v1::CapabilitiesRequest request;
+  if (device_id.has_value()) {
+    request.set_device_id(device_id.value());
+  }
   ASSIGN_OR_RETURN(p4::v1::CapabilitiesResponse capability_response,
                    session->GetSwitchCapabilities(request));
   return sai::GetWcmpGroupLimitations(capability_response);

@@ -37,6 +37,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
 ABSL_FLAG(int32_t, number_iterations, 10, "Number of iterations");
@@ -139,7 +140,7 @@ absl::Status Main() {
   if (response.has_config()) {
     p4info = response.config().p4info();
   } else {
-    p4info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
+    p4info = sai::GetP4Info(sai::Instantiation::kTor);
     RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,

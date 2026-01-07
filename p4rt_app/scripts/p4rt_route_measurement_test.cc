@@ -24,6 +24,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/log/initialize.h"
@@ -152,6 +153,8 @@ ABSL_FLAG(bool, wcmp_update_nexthops_when_modifying, false,
 ABSL_FLAG(bool, wcmp_increasing_weights, false,
           "Force the weight of a member to be >= the weight of the member "
           "that came before it.");
+ABSL_FLAG(int32_t, wcmp_unique_weights_per_group, 512,
+          "Max number of unique weights to use for each WCMP group.");
 ABSL_FLAG(bool, wcmp_set_watch_port, false,
           "Use the port from the next hop as the WCMP watch port.");
 
@@ -409,7 +412,9 @@ class P4rtRouteTest : public testing::Test {
                              *p4rt_session_, sai::Instantiation::kMiddleblock));
 
     // Clear the current table entries, if any.
-    ASSERT_OK(pdpi::ClearEntities(*p4rt_session_.get()));
+    if (absl::GetFlag(FLAGS_cleanup)) {
+      ASSERT_OK(pdpi::ClearEntities(*p4rt_session_.get()));
+    }
   }
 
   void TearDown() override {
@@ -439,14 +444,17 @@ class P4rtRouteTest : public testing::Test {
   absl::StatusOr<absl::Duration> SendBatchRequest(
       const std::vector<p4::v1::WriteRequest>& requests) {
     absl::Duration total_execution_time;
+    int batch_count = 0;
     for (const auto& request : requests) {
       // Send a batch of requests to the server and measure the response time.
       absl::Time start = absl::Now();
 
       // We don't expect any errors in the test. So if we see one we invalidate
       // the run.
-      RETURN_IF_ERROR(p4rt_session_->Write(request));
+      RETURN_IF_ERROR(p4rt_session_->Write(request))
+          << "Failed after sending " << batch_count << " batches.";
       total_execution_time += absl::Now() - start;
+      batch_count++;
     }
 
     return total_execution_time;
@@ -493,10 +501,10 @@ struct MulticastEntryInfo {
   std::vector<int32_t> mcast_groups;
 };
 
-absl::StatusOr<std::vector<int32_t>> ParsePortIds(
-    absl::string_view available_port_ids) {
-  std::vector<int32_t> port_ids;
-  for (const auto& str : absl::StrSplit(available_port_ids, ',')) {
+absl::StatusOr<std::vector<int32_t>> ParseIds(absl::string_view available_ids) {
+  std::vector<int32_t> ids;
+  if (available_ids.empty()) return ids;
+  for (const auto& str : absl::StrSplit(available_ids, ',')) {
     int32_t id = 0;
     if (!absl::SimpleAtoi(str, &id)) {
       return absl::InvalidArgumentError(
@@ -507,9 +515,9 @@ absl::StatusOr<std::vector<int32_t>> ParsePortIds(
       return absl::InvalidArgumentError(
           absl::StrCat("Port ID 0 is invalid: ", str));
     }
-    port_ids.push_back(id);
+    ids.push_back(id);
   }
-  return port_ids;
+  return ids;
 }
 
 absl::Status GenerateRandomVrfs(absl::BitGen& bitgen, RouteEntryInfo& routes,
@@ -841,18 +849,39 @@ absl::StatusOr<P4WriteRequests> ComputeIpv4WriteRequests(
 // WCMP entries are required to have a positive weight. This method will assign
 // a weight of 1 to all members (i.e. even if the `total_group_weight` is less
 // than the `size`). Then it will assign any remaining weight randomly.
-std::vector<int> RandmizeWeights(absl::BitGen& bitgen, int size,
-                                 int total_group_weight) {
+std::vector<int> RandomizeWeights(absl::BitGen& bitgen, int size,
+                                  int total_group_weight) {
   // All actions need at least a weight of 1 to be functionally correct.
   std::vector<int> weights(size, 1);
   int remaining_weight = total_group_weight - size;
+  int unique_weights_per_group =
+      absl::GetFlag(FLAGS_wcmp_unique_weights_per_group);
 
   // If there is any weights remaining then we assign them randomly across
-  // the actions.
-  while (remaining_weight > 0) {
+  // the actions. Keep track of total unique weights in the group as well,
+  // reserve one weight to fill in for what randomization cannot assign.
+  absl::flat_hash_set<int> unique_weights = {1};
+  int count = 0;
+  while (remaining_weight > 0 && count < 2 * total_group_weight) {
+    int selected_index = absl::Uniform<size_t>(bitgen, 0, weights.size());
+    int selected_weight = weights[selected_index];
+    if (!unique_weights.contains(selected_weight + 1) &&
+        unique_weights.size() >= (unique_weights_per_group - 1)) {
+      ++count;
+      continue;
+    }
+    ++weights[selected_index];
+    unique_weights.insert(weights[selected_index]);
+    // Remove previous weight from the unique weights set if it does not exist
+    // anymore.
+    if (std::find(weights.begin(), weights.end(), selected_weight) ==
+        weights.end()) {
+      unique_weights.erase(selected_weight);
+    }
     --remaining_weight;
-    weights[absl::Uniform<size_t>(bitgen, 0, weights.size())]++;
   }
+  // Add the remaining weight, if any, to the first action.
+  weights[0] += remaining_weight;
 
   // Switches can preallocate weights as members are added. The worst case
   // is when weights get larger and larger with the members. Users can set a
@@ -934,7 +963,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
 
       std::vector<int> weights;
       if (randomize_weights) {
-        weights = RandmizeWeights(bitgen, actions.size(), total_group_weight);
+        weights = RandomizeWeights(bitgen, actions.size(), total_group_weight);
       } else {
         weights = std::vector<int>(members_per_group, 1);
       }
@@ -956,7 +985,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
                                       nexthops, routes.port_by_next_hop_name));
       }
       if (change_weights_on_modify) {
-        weights = RandmizeWeights(bitgen, actions.size(), total_group_weight);
+        weights = RandomizeWeights(bitgen, actions.size(), total_group_weight);
         for (size_t i = 0; i < actions.size(); ++i) {
           actions[i].weight = weights[i];
         }
@@ -1496,7 +1525,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   bool test_ipv4_multicast = absl::GetFlag(FLAGS_run_ipv4_mcast_routes);
   bool test_ipv6_multicast = absl::GetFlag(FLAGS_run_ipv6_mcast_routes);
 
-  ASSERT_OK_AND_ASSIGN(routes.port_ids, ParsePortIds(available_port_ids));
+  ASSERT_OK_AND_ASSIGN(routes.port_ids, ParseIds(available_port_ids));
   entries.port_ids = routes.port_ids;
   std::vector<p4::v1::WriteRequest> premeasurement_requests;
 
