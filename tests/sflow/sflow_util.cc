@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
@@ -580,24 +581,25 @@ absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
       ipv4_address_1.ok()) {
     return ip1 == ip2;
   }
-  ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_adddress_1,
+  ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_address_1,
                    netaddr::Ipv6Address::OfString(ip1));
-  ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_adddress_2,
+  ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_address_2,
                    netaddr::Ipv6Address::OfString(ip2));
-
-  return ipv6_adddress_1 == ipv6_adddress_2;
+  
+  return ipv6_address_1 == ipv6_address_2;
 }
 
 int GetSflowCollectorPort() { return kSflowStandaloneCollectorPort; }
 
 absl::Status CheckStateDbPortIndexTableExists(
     thinkit::SSHClient& ssh_client, absl::string_view device_name,
+    const std::string redis_cli_path,
     absl::Span<const std::string> interfaces) {
   ASSIGN_OR_RETURN(
       std::string ssh_result,
       ssh_client.RunCommand(
           device_name,
-          /*command=*/"/usr/tools/bin/redis-cli -n 6 keys PORT_INDEX_TABLE*",
+          /*command=*/redis_cli_path + "redis-cli -n 6 keys PORT_INDEX_TABLE*",
           /*timeout=*/absl::Seconds(5)));
   LOG(INFO) << "ssh_result: " << ssh_result;
   absl::flat_hash_set<std::string> port_index_table_interfaces;

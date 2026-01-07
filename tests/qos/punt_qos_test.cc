@@ -89,15 +89,15 @@ absl::Status NsfRebootHelper(const Testbed &testbed,
 // Go over the connections and return vector of connections
 // whose links are up.
 absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
-    thinkit::GenericTestbed& generic_testbed,
-    gnmi::gNMI::StubInterface& gnmi_stub) {
+    thinkit::GenericTestbed &generic_testbed,
+    gnmi::gNMI::StubInterface &gnmi_stub) {
   std::vector<IxiaLink> links;
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed.GetSutInterfaceInfo();
   // Loop through the interface_info looking for Ixia/SUT interface pairs,
   // checking if the link is up.  Add the pair to connections.
-  for (const auto& [interface, info] : interface_info) {
+  for (const auto &[interface, info] : interface_info) {
     bool sut_link_up = false;
     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
       ASSIGN_OR_RETURN(sut_link_up, CheckLinkUp(interface, gnmi_stub));
@@ -393,6 +393,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
     ASSERT_OK_AND_ASSIGN(
         QueueCounters initial_cpu_queue_counters,
         GetGnmiQueueCounters("CPU", queue_name, *sut_gnmi_stub_));
+
     ASSERT_OK(ixia::SetTrafficParameters(
         ixia_traffic_handle_, traffic_parameters, *generic_testbed_));
 
@@ -722,7 +723,7 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
     return ixia::StartTraffic(ixia_traffic_handle_, ixia_handle_,
                               *generic_testbed_);
   }));
-  
+
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
     ASSERT_OK(
         NsfRebootHelper(generic_testbed_.get(), GetParam().ssh_client_for_nsf));
@@ -845,7 +846,7 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
 
   ASSERT_OK(ixia::SetTrafficParameters(ixia_traffic_handle_, traffix_parameters,
                                        *generic_testbed_));
-  
+
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
     ASSERT_OK(
         NsfRebootHelper(generic_testbed_.get(), GetParam().ssh_client_for_nsf));
