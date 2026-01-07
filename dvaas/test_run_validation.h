@@ -85,12 +85,12 @@ struct SwitchOutputDiffParams {
 // invalid argument error if `sut` is required but null.
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
     PacketTestRun test_run, const SwitchOutputDiffParams& diff_params = {},
-    absl::Nullable<SwitchApi*> sut = nullptr);
+    SwitchApi*  sut = nullptr);
 
 // Like `ValidateTestRun`, but for a collection of `test_runs`.
 absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
     const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
-    absl::Nullable<SwitchApi*> sut = nullptr);
+    SwitchApi*  sut = nullptr);
 
 } // namespace dvaas
 

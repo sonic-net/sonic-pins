@@ -16,6 +16,8 @@ message Event {
     TableApply table_apply = 1;
     MarkToDrop mark_to_drop = 2;
     PacketReplication packet_replication = 3;
+    Drop drop = 4;
+    Transmit transmit = 5;
   }
 }
 
@@ -41,4 +43,13 @@ message TableApply {
     Hit hit = 4;
     Miss miss = 5;
   }
+}
+
+message Transmit {
+  string port = 1;
+  int32 packet_size = 2;
+}
+
+message Drop {
+  string pipeline = 1;
 }
