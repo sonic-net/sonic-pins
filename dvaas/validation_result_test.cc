@@ -102,15 +102,13 @@ TEST(ValidationResultTest, HasSuccessRateOfAtLeast100PercentWithLabels) {
   ValidationResult validation_result(packet_test_outcomes,
                                      packet_synthesis_result);
 
-  absl::flat_hash_set<std::string> included_labels_set = {"passing"};
-  absl::flat_hash_set<std::string> excluded_labels_set = {"failing"};
 
   EXPECT_THAT(validation_result.HasSuccessRateOfAtLeast(0.76),
               Not(absl::OkStatus()));
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeastForGivenLabels(
-      1.0, included_labels_set));
+      1.0, {"passing"}));
   EXPECT_OK(validation_result.HasSuccessRateOfAtLeastWithoutGivenLabels(
-      1.0, excluded_labels_set));
+      1.0, {"failing"}));
 }
 
 }  // namespace
