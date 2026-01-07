@@ -1583,8 +1583,10 @@ grpc::Status P4RuntimeImpl::Capabilities(
   try {
 #endif
 
-    // TODO: Call AllowNonMutableRequest() API once device_id is
-    // added to CapabilityRequest.
+    auto connection_status = controller_manager_->AllowRequest(*request);
+    if (!connection_status.ok()) {
+      return connection_status;
+    }
 
     auto capability_status = GetSwitchCapabilities(*response);
     if (!capability_status.ok()) {
