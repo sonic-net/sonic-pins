@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_LIB_SWITCH_TEST_SETUP_HELPERS_H_
 #define PINS_TESTS_LIB_SWITCH_TEST_SETUP_HELPERS_H_
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -72,6 +73,11 @@ absl::Status WaitForEnabledInterfacesToBeUp(
     std::optional<
         std::function<void(const openconfig::Interfaces& enabled_interfaces)>>
         on_failure = std::nullopt);
+
+// Reads the enabled ethernet interfaces from the switch and waits up to
+// `timeout` until they are all up.
+absl::Status WaitForEnabledEthernetInterfacesToBeUp(
+    thinkit::Switch& thinkit_switch, absl::Duration timeout = absl::Minutes(5));
 
 // Gets the set of P4 Runtime port IDs used in `entries`.
 absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
@@ -168,13 +174,13 @@ struct MirroredPort {
 
 // Returns the set of operational UP ports that are mirrored between the SUT and
 // control switch.
-absl::StatusOr<std::vector<MirroredPort>>
-MirroredPorts(thinkit::MirrorTestbed &testbed);
+absl::StatusOr<std::vector<MirroredPort>> MirroredPorts(
+    thinkit::MirrorTestbed& testbed);
 
 // Same as above but takes in the gRPC stubs directly.
-absl::StatusOr<std::vector<MirroredPort>>
-MirroredPorts(gnmi::gNMI::StubInterface &sut_gnmi_stub,
-              gnmi::gNMI::StubInterface &control_switch_gnmi_stub);
+absl::StatusOr<std::vector<MirroredPort>> MirroredPorts(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub,
+    gnmi::gNMI::StubInterface& control_switch_gnmi_stub);
 
 }  // namespace pins_test
 

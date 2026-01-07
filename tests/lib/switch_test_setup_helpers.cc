@@ -26,6 +26,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/flags/flag.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -35,12 +36,11 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
-#include "absl/flags/flag.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
-#include "google/protobuf/repeated_ptr_field.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -326,6 +326,34 @@ absl::Status WaitForEnabledInterfacesToBeUp(
                                      /*with_healthz=*/false);
 }
 
+absl::Status WaitForEnabledEthernetInterfacesToBeUp(
+    thinkit::Switch& thinkit_switch, absl::Duration timeout) {
+  absl::Time start = absl::Now();
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
+                   thinkit_switch.CreateGnmiStub());
+
+  // Get all enabled, Ethernet interfaces from the config.
+  ASSIGN_OR_RETURN(
+      const pins_test::openconfig::Interfaces enabled_ethernet_interfaces,
+      pins_test::GetMatchingInterfacesAsProto(
+          *gnmi_stub, gnmi::GetRequest::CONFIG,
+          /*predicate=*/pins_test::IsEnabledEthernetInterface, timeout));
+
+  std::vector<std::string> enabled_ethernet_interface_names;
+  enabled_ethernet_interface_names.reserve(
+      enabled_ethernet_interfaces.interfaces_size());
+  for (const auto& interface : enabled_ethernet_interfaces.interfaces()) {
+    enabled_ethernet_interface_names.push_back(interface.name());
+  }
+
+  // Wait for all enabled, Ethernet interfaces to be up.
+  timeout = timeout - (absl::Now() - start);
+  return pins_test::WaitForCondition(pins_test::PortsUp, timeout,
+                                     thinkit_switch,
+                                     enabled_ethernet_interface_names,
+                                     /*with_healthz=*/false);
+}
+
 // Gets every P4runtime port used in `entries`.
 absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
     const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry> entries) {
@@ -338,7 +366,7 @@ absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
         ASSIGN_OR_RETURN(P4rtPortId port,
                          P4rtPortId::MakeFromP4rtEncoding(string_port));
         ports.insert(port);
-   return absl::OkStatus();
+        return absl::OkStatus();
       }));
 
   // Watch ports do not have a named type, but we still consider them ports so
@@ -516,8 +544,8 @@ absl::Status ConfigureSwitchPair(
 }
 
 namespace {
-absl::StatusOr<absl::btree_map<std::string, P4rtPortId>>
-UpPorts(gnmi::gNMI::StubInterface &gnmi_stub) {
+absl::StatusOr<absl::btree_map<std::string, P4rtPortId>> UpPorts(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
   ASSIGN_OR_RETURN(const auto interface_id_map,
                    GetAllInterfaceNameToPortId(gnmi_stub));
   ASSIGN_OR_RETURN(
@@ -525,7 +553,7 @@ UpPorts(gnmi::gNMI::StubInterface &gnmi_stub) {
       GetUpInterfacesOverGnmi(gnmi_stub, InterfaceType::kSingleton));
 
   absl::btree_map<std::string, P4rtPortId> ports;
-  for (const std::string &interface : up_interfaces) {
+  for (const std::string& interface : up_interfaces) {
     auto lookup = interface_id_map.find(interface);
     if (lookup == interface_id_map.end()) {
       return gutil::NotFoundErrorBuilder()
@@ -538,10 +566,10 @@ UpPorts(gnmi::gNMI::StubInterface &gnmi_stub) {
   }
   return ports;
 }
-} // namespace
+}  // namespace
 
-absl::StatusOr<std::vector<MirroredPort>>
-MirroredPorts(thinkit::MirrorTestbed &testbed) {
+absl::StatusOr<std::vector<MirroredPort>> MirroredPorts(
+    thinkit::MirrorTestbed& testbed) {
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, testbed.Sut().CreateGnmiStub());
   ASSIGN_OR_RETURN(auto control_switch_gnmi_stub,
                    testbed.ControlSwitch().CreateGnmiStub());
@@ -549,9 +577,9 @@ MirroredPorts(thinkit::MirrorTestbed &testbed) {
   return MirroredPorts(*sut_gnmi_stub, *control_switch_gnmi_stub);
 }
 
-absl::StatusOr<std::vector<MirroredPort>>
-MirroredPorts(gnmi::gNMI::StubInterface &sut_gnmi_stub,
-              gnmi::gNMI::StubInterface &control_switch_gnmi_stub) {
+absl::StatusOr<std::vector<MirroredPort>> MirroredPorts(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub,
+    gnmi::gNMI::StubInterface& control_switch_gnmi_stub) {
   ASSIGN_OR_RETURN(auto sut_ports, UpPorts(sut_gnmi_stub),
                    _ << "Failed to lookup operational ports from the SUT.");
 
@@ -559,10 +587,9 @@ MirroredPorts(gnmi::gNMI::StubInterface &sut_gnmi_stub,
       auto control_switch_ports, UpPorts(control_switch_gnmi_stub),
       _ << "Failed to lookup operational ports from the Control Switch.");
   std::vector<MirroredPort> mirrored_ports;
-  for (const auto &[interface, port] : control_switch_ports) {
+  for (const auto& [interface, port] : control_switch_ports) {
     auto lookup = sut_ports.find(interface);
-    if (lookup == sut_ports.end())
-      continue;
+    if (lookup == sut_ports.end()) continue;
     mirrored_ports.push_back({
         .interface = interface,
         .sut = lookup->second,
