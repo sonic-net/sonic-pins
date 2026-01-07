@@ -381,5 +381,10 @@ P4RuntimeImpl& P4RuntimeGrpcService::GetP4rtServer() {
   return *p4runtime_server_;
 }
 
+void P4RuntimeGrpcService::SetSwitchCapabilitiesTableInDb(
+    const sonic::SonicDbEntryList& values) {
+  GetSwitchCapabilityStateDbTable().InsertTableEntry("switch", values);
+}
+
 }  // namespace test_lib
 }  // namespace p4rt_app

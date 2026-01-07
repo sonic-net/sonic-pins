@@ -53,6 +53,7 @@
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
+#include "sai_p4/capabilities.pb.h"
 // TODO(PINS):
 // #include "swss/component_state_helper_interface.h"
 // #include "swss/intf_translator.h"
@@ -149,6 +150,11 @@ public:
      grpc::ServerReaderWriter<p4::v1::StreamMessageResponse,
                               p4::v1::StreamMessageRequest>* stream) override
      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+ grpc::Status Capabilities(grpc::ServerContext* context,
+                            const p4::v1::CapabilitiesRequest* request,
+                            p4::v1::CapabilitiesResponse* response) override
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
  // Updates the Device ID for the P4Runtime service if there is no active
  // connections.
@@ -340,6 +346,9 @@ private:
   // Enter critical state and write component state to DB.
   // Caller should take server_state_lock_.
   grpc::Status EnterCriticalState(const std::string& message)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  grpc::Status GetSwitchCapabilities(p4::v1::CapabilitiesResponse& response)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Mutex for constraining actions to access and modify server state.

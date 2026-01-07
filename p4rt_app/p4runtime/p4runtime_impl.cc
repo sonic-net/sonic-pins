@@ -33,6 +33,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -85,6 +86,8 @@
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
+#include "sai_p4/capabilities.h"
+#include "sai_p4/capabilities.pb.h"
 //TODO(PINS): Add Component/Interface Translator
 /*#include "swss/component_state_helper_interface.h"
 #include "swss/intf_translator.h"*/
@@ -747,6 +750,51 @@ std::vector<p4::v1::Entity> GetCachedEntitiesInTable(
   auto lookup = ir_p4info.tables_by_name().find(table_name);
   if (lookup == ir_p4info.tables_by_name().end()) return {};
   return GetCachedEntitiesInTable(entity_cache, lookup->second.preamble().id());
+}
+
+absl::StatusOr<sai::WcmpGroupLimitations> GetWcmpGroupCapabilities(
+    const sonic::SwitchCapabilityTable& switch_capability_table) {
+  sai::WcmpGroupLimitations wcmp_group_limitations;
+  // By default, mark these limitations as not applicable.
+  wcmp_group_limitations.set_max_total_weight_per_group(0);
+  wcmp_group_limitations.set_max_distinct_weights_per_group(0);
+
+  absl::string_view kMaxTotalWeightPerGroupKey = "max_total_weight_per_group";
+  absl::string_view kMaxDistinctWeightsPerGroupKey =
+      "max_distinct_weights_per_group";
+  absl::flat_hash_set<absl::string_view> keys_to_process = {
+      kMaxTotalWeightPerGroupKey,
+      kMaxDistinctWeightsPerGroupKey,
+  };
+
+  auto switch_capabilities = switch_capability_table.state_db->get("switch");
+  for (const auto& [key, value] : switch_capabilities) {
+    if (!keys_to_process.contains(key)) {
+      continue;
+    }
+
+    int int_value;
+    if (!absl::SimpleAtoi(value, &int_value)) {
+      return gutil::InvalidArgumentErrorBuilder() << absl::StrFormat(
+                 "Invalid WCMP group capability in DB: %s value '%s' is not an "
+                 "integer",
+                 key, value);
+    }
+    if (int_value < 0) {
+      return gutil::InvalidArgumentErrorBuilder() << absl::StrFormat(
+                 "Invalid WCMP group capability in DB: %s value '%s' is less "
+                 "than 0",
+                 key, value);
+    }
+
+    if (key == kMaxTotalWeightPerGroupKey) {
+      wcmp_group_limitations.set_max_total_weight_per_group(int_value);
+    } else if (key == kMaxDistinctWeightsPerGroupKey) {
+      wcmp_group_limitations.set_max_distinct_weights_per_group(int_value);
+    }
+  }
+
+  return wcmp_group_limitations;
 }
 
 // Returns FailedPreconditionError for transitions that should be supported but
@@ -1526,6 +1574,37 @@ grpc::Status P4RuntimeImpl::GetForwardingPipelineConfig(
   return grpc::Status(grpc::StatusCode::OK, "");
 }
 
+grpc::Status P4RuntimeImpl::Capabilities(
+    grpc::ServerContext* context, const p4::v1::CapabilitiesRequest* request,
+    p4::v1::CapabilitiesResponse* response) {
+  absl::MutexLock l(&server_state_lock_);
+
+#ifdef __EXCEPTIONS
+  try {
+#endif
+
+    // TODO: Call AllowNonMutableRequest() API once device_id is
+    // added to CapabilityRequest.
+
+    auto capability_status = GetSwitchCapabilities(*response);
+    if (!capability_status.ok()) {
+      return grpc::Status(grpc::StatusCode::UNKNOWN,
+                          capability_status.error_message());
+    }
+
+#ifdef __EXCEPTIONS
+  } catch (const std::exception& e) {
+    return EnterCriticalState(
+        absl::StrCat("Exception caught in ", __func__, ", error:", e.what()));
+  } catch (...) {
+    return EnterCriticalState(
+        absl::StrCat("Unknown exception caught in ", __func__, "."));
+  }
+#endif
+
+  return grpc::Status(grpc::StatusCode::OK, "");
+}
+
 absl::Status P4RuntimeImpl::UpdateDeviceId(uint64_t device_id) {
   absl::MutexLock l(&server_state_lock_);
   return controller_manager_->SetDeviceId(device_id);
@@ -2269,6 +2348,31 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
   }
 
   return absl::OkStatus();
+}
+
+grpc::Status P4RuntimeImpl::GetSwitchCapabilities(
+    p4::v1::CapabilitiesResponse& response) {
+  auto status_or_wcmp_group_capabilities =
+      GetWcmpGroupCapabilities(switch_capability_table_);
+  if (!status_or_wcmp_group_capabilities.ok()) {
+    LOG(ERROR) << "GetWcmpGroupCapabilities() failed, error: "
+               << status_or_wcmp_group_capabilities.status();
+    return gutil::AbslStatusToGrpcStatus(
+        status_or_wcmp_group_capabilities.status());
+  }
+
+  sai::ExperimentalResourceCapabilities resource_capabilities;
+  resource_capabilities.mutable_wcmp_group_limitations()->CopyFrom(
+      *status_or_wcmp_group_capabilities);
+  auto exp_resource_cap_status =
+      sai::AddExperimentalResourceCapabilities(resource_capabilities, response);
+  if (!exp_resource_cap_status.ok()) {
+    LOG(ERROR) << "AddExperimentalResourceCapabilities() failed, error: "
+               << exp_resource_cap_status;
+    return gutil::AbslStatusToGrpcStatus(exp_resource_cap_status);
+  }
+
+  return grpc::Status::OK;
 }
 
 }  // namespace p4rt_app
