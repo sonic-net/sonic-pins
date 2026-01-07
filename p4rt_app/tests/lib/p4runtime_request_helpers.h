@@ -19,6 +19,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "sai_p4/capabilities.pb.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -34,6 +35,9 @@ PdWriteRequestToPi(absl::string_view pd_request,
 absl::StatusOr<p4::v1::WriteRequest>
 IrWriteRequestToPi(absl::string_view ir_request,
                    const pdpi::IrP4Info &ir_p4_info);
+
+absl::StatusOr<sai::WcmpGroupLimitations> GetWcmpGroupCapabilities(
+    p4_runtime::P4RuntimeSession* session);
 
 } // namespace test_lib
 } // namespace p4rt_app

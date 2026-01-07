@@ -160,6 +160,8 @@ cc_library(
         "//p4rt_app/utils:event_data_tracker",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",
+        "//sai_p4:capabilities",
+        "//sai_p4:capabilities_cc_proto",
         "@boost//:bimap",
         "@boost//:graph",
         "@com_github_grpc_grpc//:grpc++",

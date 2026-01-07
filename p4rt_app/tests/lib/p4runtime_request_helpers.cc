@@ -21,6 +21,8 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "sai_p4/capabilities.h"
+#include "sai_p4/capabilities.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace p4rt_app {
@@ -40,6 +42,14 @@ absl::StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
   RETURN_IF_ERROR(gutil::ReadProtoFromString(ir_request, &ir_proto))
       << "Unable to translate IrWriteRequest proto string";
   return pdpi::IrWriteRequestToPi(ir_p4_info, ir_proto);
+}
+
+absl::StatusOr<sai::WcmpGroupLimitations> GetWcmpGroupCapabilities(
+    p4_runtime::P4RuntimeSession* session) {
+  p4::v1::CapabilitiesRequest request;
+  ASSIGN_OR_RETURN(p4::v1::CapabilitiesResponse capability_response,
+                   session->GetSwitchCapabilities(request));
+  return sai::GetWcmpGroupLimitations(capability_response);
 }
 
 }  // namespace test_lib
