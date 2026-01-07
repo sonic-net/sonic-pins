@@ -32,6 +32,16 @@
 
 namespace pins {
 
+// The constants structure for NOS
+struct NosParameters {
+  std::string kRedisExecPrefix;
+  std::string kSflowContainerExecPrefix;
+  std::string kSudoCmdPrefix;
+  std::string kCpuQueueName;
+  std::string kRedisCliPath;
+  bool kIsSonicDebianLinux;
+};
+
 struct SflowTestParams {
   thinkit::GenericTestbedInterface* testbed_interface;
   thinkit::SSHClient* ssh_client;
@@ -42,8 +52,15 @@ struct SflowTestParams {
   int sample_size;
   // For sampling rate tests.
   int sample_rate;
+  uint64_t traffic_speed;
+  uint64_t run_time;
+  int iterations;
+  bool measure_cpumem;
   // For NSF tests.
   bool nsf_enabled;
+  NosParameters nos_param;
+  bool nos_is_sonic;
+  bool run_all_tests;
 };
 
 // Structure represents a link between SUT and Ixia.
@@ -76,6 +93,8 @@ class SflowTestFixture : public ::testing::TestWithParam<SflowTestParams> {
   // first collector config port. If config does not have any collector config,
   // it would be set to 6343.
   int collector_port_;
+
+  NosParameters nos_param_;
 };
 
 class SampleSizeTest : public SflowTestFixture {};
@@ -83,6 +102,8 @@ class SampleSizeTest : public SflowTestFixture {};
 class SampleRateTest : public SflowTestFixture {};
 
 class BackoffTest : public SflowTestFixture {};
+
+class MeasurementTest : public SflowTestFixture {};
 
 class SflowNsfTestFixture : public SflowTestFixture {
   void TearDown() override;
@@ -101,6 +122,10 @@ struct SflowMirrorTestParams {
 
   // If enabled, warm reboot would be used in tests instead of cold reboot.
   bool nsf_enabled;
+
+  NosParameters nos_param;
+  bool nos_is_sonic;
+  bool run_all_tests;
 };
 
 struct Port {
@@ -139,6 +164,8 @@ class SflowMirrorTestFixture
   // first collector config port. If config does not have any collector config,
   // it would be set to 6343.
   int collector_port_;
+
+  NosParameters nos_param_;
 };
 
 class SflowRebootTestFixture : public SflowMirrorTestFixture {};
