@@ -172,7 +172,7 @@ absl::Status InstallRebootPushConfig(
 // `image_config_param` is provided.
 absl::Status ValidateTestbedState(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     absl::Span<const std::string> control_switch_interfaces = {});
@@ -198,7 +198,7 @@ absl::Status WaitForReboot(const Testbed& testbed,
 // additionally checks whether all the SUT interfaces are UP after turnup.
 absl::Status WaitForNsfReboot(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     bool collect_debug_logs_for_nsf_success = true,
@@ -207,7 +207,7 @@ absl::Status WaitForNsfReboot(
 // Performs NSF Reboot and waits for the SUT to be ready.
 absl::Status DoNsfRebootAndWaitForSwitchReady(
     const Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     absl::Span<const std::string> control_switch_interfaces = {});
@@ -215,7 +215,7 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
 // NSF reboot failure, a cold reboot is executed on the switch to recover it.
 absl::Status DoNsfRebootAndWaitForSwitchReadyOrRecover(
     const Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param = nullptr,
+    const ImageConfigParams*  image_config_param = nullptr,
     bool check_interfaces_up = true,
     absl::Span<const std::string> sut_interfaces = {},
     absl::Span<const std::string> control_switch_interfaces = {});
