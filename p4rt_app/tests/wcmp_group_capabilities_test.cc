@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -68,8 +69,9 @@ TEST_F(WcmpGroupCapabilitiesTest, InvalidWcmpGroupCapabilityValuesInDbTest) {
         {"max_distinct_weights_per_group", "10"},
     };
     p4rt_service_.SetSwitchCapabilitiesTableInDb(values);
-    EXPECT_THAT(test_lib::GetWcmpGroupCapabilities(p4rt_session_.get()),
-                gutil::StatusIs(absl::StatusCode::kUnknown));
+    EXPECT_THAT(
+        test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), device_id_),
+        gutil::StatusIs(absl::StatusCode::kUnknown));
   }
 
   {
@@ -79,8 +81,9 @@ TEST_F(WcmpGroupCapabilitiesTest, InvalidWcmpGroupCapabilityValuesInDbTest) {
         {"max_distinct_weights_per_group", "-1"},
     };
     p4rt_service_.SetSwitchCapabilitiesTableInDb(values);
-    EXPECT_THAT(test_lib::GetWcmpGroupCapabilities(p4rt_session_.get()),
-                gutil::StatusIs(absl::StatusCode::kUnknown));
+    EXPECT_THAT(
+        test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), device_id_),
+        gutil::StatusIs(absl::StatusCode::kUnknown));
   }
 }
 
@@ -88,8 +91,9 @@ TEST_F(WcmpGroupCapabilitiesTest, WcmpGroupCapabilitySuccessTest) {
   {
     // Don't set any WCMP group capabilities in the DB.
     sai::WcmpGroupLimitations expected_wcmp_group_capabilities;
-    EXPECT_THAT(test_lib::GetWcmpGroupCapabilities(p4rt_session_.get()),
-                IsOkAndHolds(EqualsProto(expected_wcmp_group_capabilities)));
+    EXPECT_THAT(
+        test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), device_id_),
+        IsOkAndHolds(EqualsProto(expected_wcmp_group_capabilities)));
   }
 
   {
@@ -106,8 +110,9 @@ TEST_F(WcmpGroupCapabilitiesTest, WcmpGroupCapabilitySuccessTest) {
         kMaxTotalWeight);
     expected_wcmp_group_capabilities.set_max_distinct_weights_per_group(
         kMaxDistinctWeight);
-    EXPECT_THAT(test_lib::GetWcmpGroupCapabilities(p4rt_session_.get()),
-                IsOkAndHolds(EqualsProto(expected_wcmp_group_capabilities)));
+    EXPECT_THAT(
+        test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), device_id_),
+        IsOkAndHolds(EqualsProto(expected_wcmp_group_capabilities)));
   }
 
   {
@@ -124,11 +129,23 @@ TEST_F(WcmpGroupCapabilitiesTest, WcmpGroupCapabilitySuccessTest) {
         kMaxTotalWeight);
     expected_wcmp_group_capabilities.set_max_distinct_weights_per_group(
         kMaxDistinctWeight);
-    EXPECT_THAT(test_lib::GetWcmpGroupCapabilities(p4rt_session_.get()),
-                IsOkAndHolds(EqualsProto(expected_wcmp_group_capabilities)));
+    EXPECT_THAT(
+        test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), device_id_),
+        IsOkAndHolds(EqualsProto(expected_wcmp_group_capabilities)));
   }
+}
+
+TEST_F(WcmpGroupCapabilitiesTest, WcmpGroupCapabilityDeviceIdValuesTest) {
+  // Capabilities request without device id should return UNIMPLEMENTED.
+  EXPECT_THAT(
+      test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), std::nullopt),
+      gutil::StatusIs(absl::StatusCode::kUnimplemented));
+
+  // Capabilities request with incorrect device id should return NOT_FOUND.
+  EXPECT_THAT(
+      test_lib::GetWcmpGroupCapabilities(p4rt_session_.get(), device_id_ + 1),
+      gutil::StatusIs(absl::StatusCode::kNotFound));
 }
 
 }  // namespace
 }  // namespace p4rt_app
-

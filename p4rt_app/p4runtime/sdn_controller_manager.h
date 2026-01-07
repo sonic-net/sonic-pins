@@ -108,6 +108,7 @@ public:
   AllowRequest(const p4::v1::SetForwardingPipelineConfigRequest &request) const;
   grpc::Status
   AllowRequest(const p4::v1::GetForwardingPipelineConfigRequest &request) const;
+  grpc::Status AllowRequest(const p4::v1::CapabilitiesRequest& request) const;
 
   absl::Status
   SendPacketInToPrimary(const p4::v1::StreamMessageResponse &response);
