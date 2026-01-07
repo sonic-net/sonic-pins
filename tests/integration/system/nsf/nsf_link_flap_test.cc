@@ -52,7 +52,8 @@ absl::StatusOr<absl::Duration> FlapAllLinksAndReportDuration(
     gnmi::gNMI::StubInterface& gnmi_stub,
     thinkit::GenericTestbed& generic_testbed,
     absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
-        host_interface_infos) {
+         host_interface_infos,
+    bool is_ixia_testbed) {
   // Create a flat_hash_map to store the link flap results for all the links
   // where the key is the SUT link name and the value is the link flap
   // status.
@@ -75,9 +76,11 @@ absl::StatusOr<absl::Duration> FlapAllLinksAndReportDuration(
        host_interface_infos) {
     // Flap all the links in parallel.
     std::thread thread([&gnmi_stub, &generic_testbed, &sut_interface,
-                        &host_interface_info, &link_flap_status] {
-      link_flap_status[sut_interface] = FlapLink(
-          gnmi_stub, generic_testbed, sut_interface, host_interface_info);
+                        &host_interface_info, &link_flap_status,
+                        &is_ixia_testbed] {
+      link_flap_status[sut_interface] =
+          FlapLink(gnmi_stub, generic_testbed, sut_interface,
+                   host_interface_info, is_ixia_testbed);
     });
     link_threads.push_back(std::move(thread));
   }
@@ -120,11 +123,17 @@ absl::StatusOr<absl::Duration> FlapAllLinksAndReportDuration(
 TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
   LOG(INFO) << "Get testbed requirements.";
   thinkit::TestRequirements requirements =
-      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
-          R"pb(interface_requirements {
-                 count: 1
-                 interface_mode: CONTROL_INTERFACE
-               })pb");
+      GetParam().is_ixia_testbed
+          ? gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+                R"pb(interface_requirements {
+                       count: 1
+                       interface_mode: TRAFFIC_GENERATOR
+                     })pb")
+          : gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+                R"pb(interface_requirements {
+                       count: 1
+                       interface_mode: CONTROL_INTERFACE
+                     })pb");
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
                        GetTestbedWithRequirements(requirements));
 
@@ -145,12 +154,13 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
                    << " Peer device index: " << info.peer_device_index;
       continue;
     }
-    if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
+    if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE) ||
+        info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
       host_interface_infos[interface] = info;
     } else {
-      LOG(WARNING)
-          << "Skipping the interface "
-          << interface << " as interface mode is not CONTROL_INTERFACE.";
+      LOG(WARNING) << "Skipping the interface " << interface
+                   << " as interface mode is neither CONTROL_INTERFACE nor "
+                      "TRAFFIC_GENERATOR.";
     }
   }
   if (host_interface_infos.empty()) {
@@ -164,7 +174,8 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
   // Flap links and report the time taken to flap all the links.
   const absl::StatusOr<absl::Duration> pre_nsf_link_flap_time =
       FlapAllLinksAndReportDuration(*gnmi_stub, *generic_testbed,
-                                    host_interface_infos);
+                                    host_interface_infos,
+                                    GetParam().is_ixia_testbed);
   if (pre_nsf_link_flap_time.ok()) {
     LOG(INFO) << "Pre-NSF Link Flap Time: " << pre_nsf_link_flap_time.value();
     EXPECT_LE(pre_nsf_link_flap_time.value(), kLinkFlapTimeout)
@@ -178,11 +189,11 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
   ASSERT_OK(DoNsfRebootAndWaitForSwitchReadyOrRecover(generic_testbed.get(),
                                                       *GetParam().ssh_client));
   LOG(INFO) << "Flap links after NSF Reboot.";
-
   // Flap links and report the time taken to flap all the links.
   const absl::StatusOr<absl::Duration> post_nsf_link_flap_time =
       FlapAllLinksAndReportDuration(*gnmi_stub, *generic_testbed,
-                                    host_interface_infos);
+                                    host_interface_infos,
+                                    GetParam().is_ixia_testbed);
   if (post_nsf_link_flap_time.ok()) {
     LOG(INFO) << "Post-NSF Link Flap Time: " << post_nsf_link_flap_time.value();
     EXPECT_LE(post_nsf_link_flap_time.value(), kLinkFlapTimeout)

@@ -167,7 +167,7 @@ int GetSflowCollectorPort();
 // Checks if state db port index table exists for `interfaces`.
 absl::Status CheckStateDbPortIndexTableExists(
     thinkit::SSHClient& ssh_client, absl::string_view device_name,
-    absl::Span<const std::string> interfaces);
+    const std::string redis_cli_path, absl::Span<const std::string> interfaces);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
