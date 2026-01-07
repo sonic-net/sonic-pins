@@ -59,12 +59,15 @@
 #include "tests/forwarding/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
+#include "tests/qos/qos_test_util.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/test_environment.h"
 
 namespace pins {
 
 namespace {
+using ::pins_test::kMaxQueueCounterUpdateTime;
+using ::pins_test::QueueCounters;
 
 // Vrf used in the test.
 constexpr absl::string_view kVrfId = "vrf-1";
@@ -99,6 +102,9 @@ constexpr int kDefaultInputPortIndex = 0;
 
 // Default replica port index.
 constexpr int kDefaultReplicaPortIndex = 1;
+
+// Default multicast queue.
+constexpr absl::string_view multicast_queue_ = "MULTICAST";
 
 // Punts all packets on the control switch.
 absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
@@ -161,9 +167,10 @@ absl::flat_hash_map<std::string, int> CountNumPacketsPerPort(
 // Generates a multicast packet.
 absl::StatusOr<packetlib::Packet> GenerateMulticastPacket() {
   std::string packet_hex =
-      "01005e01010100000000007b08004528005c000000002011b66201020304e00000010929"
-      "11d700485c7a6669656c643d49505f44535420697076343d3120656e6361707065643d30"
-      "20696e6e65725f697076343d302064656361703d302e2e2e2e2e2e2e2e2e2e2e2e2e";
+      "01005e01010100000000007b080045340077000100004001964a01020304e00000010800"
+      "4f8700000000303030303030303030303030303030303030303030303030303030303030"
+      "303030303030303030303030303030303030303030303030303030303030303030303030"
+      "30303030303030303030303030303030303030303030303030";
   return packetlib::ParsePacket(absl::HexStringToBytes(packet_hex));
 }
 
@@ -316,21 +323,19 @@ absl::Status MulticastFallbackGroupTestFixture::SetUpSut(
 
   RETURN_IF_ERROR(pdpi::InstallPiTableEntry(sut_p4_session_.get(),
                                             pi_entity.table_entry()));
-
-  std::vector<std::string> replica_ports_with_default_port = replica_ports_;
-  replica_ports_with_default_port.push_back(
+  replica_ports_with_default_port_ = replica_ports_;
+  replica_ports_with_default_port_.push_back(
       sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding());
   std::vector<std::string> replica_ports_with_default_and_input_port =
-      replica_ports_with_default_port;
-  replica_ports_with_default_port.push_back(
+      replica_ports_with_default_port_;
+  replica_ports_with_default_port_.push_back(
       sut_port_ids_[kDefaultInputPortIndex].GetP4rtEncoding());
 
   // Programs the required vlan, vlan members, and multicast ritfs.
   RETURN_IF_ERROR(InstallVlanMembership(
       *sut_p4_session_, replica_ports_with_default_and_input_port));
-  RETURN_IF_ERROR(
-      InstallMulticastRitfs(*sut_p4_session_, replica_ports_with_default_port));
-
+  RETURN_IF_ERROR(InstallMulticastRitfs(*sut_p4_session_,
+                                        replica_ports_with_default_port_));
   // Programs the multicast group.
   RETURN_IF_ERROR(InstallMulticastGroup(
       *sut_p4_session_,
@@ -568,6 +573,17 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyMulticastRestoreAction) {
   ASSERT_OK_AND_ASSIGN(
       const auto& port_name,
       gutil::FindOrStatus(port_name_per_port_id, replica_ports_[0]));
+  std::vector<QueueCounters> kInitialQueueCounters;
+  for (int i = 0; i < replica_ports_with_default_port_.size(); ++i) {
+    ASSERT_OK_AND_ASSIGN(
+        const auto& port_name,
+        gutil::FindOrStatus(port_name_per_port_id,
+                            replica_ports_with_default_port_[i]));
+    ASSERT_OK_AND_ASSIGN(QueueCounters queue_counters,
+                         pins_test::GetGnmiQueueCounters(
+                             port_name, multicast_queue_, *sut_gnmi_stub_));
+    kInitialQueueCounters.push_back(queue_counters);
+  }
 
   int64_t total_packets_sent;
   int64_t total_packets_received;
@@ -627,9 +643,42 @@ TEST_P(MulticastFallbackGroupTestFixture, VerifyMulticastRestoreAction) {
     total_packets_sent = test_data_.total_packets_sent;
     total_packets_received = test.output.size();
   }
+  // Verify that the target egress queue counters incremented as expected.
+  int64_t total_queue_counters = 0;
+  for (int i = 0; i < replica_ports_with_default_port_.size(); ++i) {
+    const absl::Time kDeadline = absl::Now() + kMaxQueueCounterUpdateTime;
+    LOG(INFO) << "polling queue counters for port "
+              << replica_ports_with_default_port_[i] << " (this may take up to "
+              << kMaxQueueCounterUpdateTime << ")";
+    ASSERT_OK_AND_ASSIGN(
+        const auto& port_name,
+        gutil::FindOrStatus(port_name_per_port_id,
+                            replica_ports_with_default_port_[i]));
+    QueueCounters final_counters, delta_counters;
+    do {
+      ASSERT_OK_AND_ASSIGN(final_counters,
+                           pins_test::GetGnmiQueueCounters(
+                               port_name, multicast_queue_, *sut_gnmi_stub_));
+      delta_counters = final_counters - kInitialQueueCounters[i];
+    } while (delta_counters.num_packets_transmitted < total_packets_sent &&
+             absl::Now() < kDeadline);
 
-  ASSERT_EQ(2 * total_packets_sent, total_packets_received)
-      << "Packet loss or duplicate packets received";
+    total_queue_counters += delta_counters.num_packets_transmitted;
+  }
+
+  ASSERT_EQ(total_queue_counters, 2 * total_packets_sent)
+      << "Mismatch in expected: " << 2 * total_packets_sent
+      << " and actual: " << total_queue_counters << " packets received";
+
+  // The loss is due to the peer port status sync time.
+  int tolerate_packet_loss = 100;
+  // Assert that there are no duplicate packets.
+  ASSERT_LE(total_packets_received, 2 * total_packets_sent)
+      << "Duplicate packets received";
+  // Assert that there is a maximum of 100 packets lost.
+  ASSERT_GE(total_packets_received + tolerate_packet_loss,
+            2 * total_packets_sent)
+      << "Packet loss more than expected";
 }
 
 // Bring down/up ports and verify traffic is distributed to the first up port in
