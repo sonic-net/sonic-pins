@@ -63,13 +63,13 @@ public:
   // labels. If the included labels are empty, no test runs are considered.
   absl::Status HasSuccessRateOfAtLeastForGivenLabels(
       double expected_success_rate,
-      absl::flat_hash_set<std::string>& included_labels) const;
+      const absl::flat_hash_set<std::string>& included_labels) const;
 
   // Gets the success rate for test runs that do not have any of the excluded
   // labels. If the excluded labels are empty, all test runs are considered.
   absl::Status HasSuccessRateOfAtLeastWithoutGivenLabels(
       double expected_success_rate,
-      absl::flat_hash_set<std::string>& excluded_labels) const;
+      const absl::flat_hash_set<std::string>& excluded_labels) const;
 
   // Returns the fraction of test vectors that passed.
   double GetSuccessRate() const;

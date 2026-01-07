@@ -15,6 +15,7 @@
 #include "dvaas/validation_result.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -76,7 +77,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeast(
 
 absl::Status ValidationResult::HasSuccessRateOfAtLeastForGivenLabels(
     double expected_success_rate,
-    absl::flat_hash_set<std::string>& included_labels) const {
+    const absl::flat_hash_set<std::string>& included_labels) const {
   PacketTestOutcomes filtered_test_outcomes;
   // Filter test outcomes based on the included labels.
   for (const auto& outcome : test_outcomes_.outcomes()) {
@@ -88,7 +89,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeastForGivenLabels(
     }
   }
 
-  ValidationResult filtered_validation_result(filtered_test_outcomes,
+  ValidationResult filtered_validation_result(std::move(filtered_test_outcomes),
                                               packet_synthesis_result_);
   return filtered_validation_result.HasSuccessRateOfAtLeast(
       expected_success_rate);
@@ -96,7 +97,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeastForGivenLabels(
 
 absl::Status ValidationResult::HasSuccessRateOfAtLeastWithoutGivenLabels(
     double expected_success_rate,
-    absl::flat_hash_set<std::string>& excluded_labels) const {
+    const absl::flat_hash_set<std::string>& excluded_labels) const {
   // Filter test outcomes based on the excluded labels.
   PacketTestOutcomes filtered_test_outcomes;
   for (const auto& outcome : test_outcomes_.outcomes()) {
@@ -112,7 +113,7 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeastWithoutGivenLabels(
     }
   }
 
-  ValidationResult filtered_validation_result(filtered_test_outcomes,
+  ValidationResult filtered_validation_result(std::move(filtered_test_outcomes),
                                               packet_synthesis_result_);
   return filtered_validation_result.HasSuccessRateOfAtLeast(
       expected_success_rate);
