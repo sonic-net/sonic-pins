@@ -273,6 +273,18 @@ P4RuntimeSession::GetForwardingPipelineConfig(
   return response;
 }
 
+absl::StatusOr<p4::v1::CapabilitiesResponse>
+P4RuntimeSession::GetSwitchCapabilities(
+    const p4::v1::CapabilitiesRequest& request) {
+  grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
+  p4::v1::CapabilitiesResponse response;
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      stub_->Capabilities(&context, request, &response)));
+  return response;
+}
+
 bool P4RuntimeSession::StreamChannelRead(
     p4::v1::StreamMessageResponse& response,
     std::optional<absl::Duration> timeout) {
