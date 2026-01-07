@@ -116,6 +116,8 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
   RETURN_IF_ERROR(
       pdpi::InstallIrEntities(sut, updated_arriba_test_vector.ir_entities()));
 
+  LOG(INFO) << "Installed entries successfully";
+
   // Prepare single packet test vectors.
   PacketTestVectorById test_vector_by_id;
   std::vector<PacketTestVector> packet_test_vectors;
@@ -141,6 +143,8 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                   params.mirror_testbed_port_map_override.has_value()
                       ? *params.mirror_testbed_port_map_override
                       : MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+              .enable_sut_packet_in_collection =
+                  params.enable_sut_packet_in_collection,
               .max_expected_packet_in_flight_duration =
                   params.max_expected_packet_in_flight_duration,
               .max_in_flight_packets = params.max_in_flight_packets,
@@ -174,8 +178,11 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
   // Use labelers to add labels to test outcomes.
-  RETURN_IF_ERROR(
-      AugmentTestOutcomesWithLabels(test_outcomes, params.labelers));
+  auto status = AugmentTestOutcomesWithLabels(test_outcomes, params.labelers);
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to augment test outcomes with labels: "
+               << status.message();
+  }
 
   // Store test insights.
   ASSIGN_OR_RETURN(const std::string insights_csv,
