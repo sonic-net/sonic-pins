@@ -97,6 +97,7 @@ cc_library(
         ":scenario",
         ":testbed",
         ":traffic_helper",
+        "//sai_p4/instantiations/google:instantiations",
         "//thinkit:ssh_client",
     ],
 )
