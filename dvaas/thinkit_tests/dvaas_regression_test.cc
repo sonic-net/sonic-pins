@@ -81,7 +81,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
       dvaas::ValidationResult validation_result,
       GetParam().validator->ValidateDataplaneUsingExistingSwitchApis(
           configured_testbed.SutApi(), configured_testbed.ControlSwitchApi(),
-          params));
+          testbed.Environment(), params));
   bool currently_failing =
       GetParam().dvaas_regression_test_proto.currently_failing();
   if (currently_failing) {
@@ -96,5 +96,5 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   }
 }
 
-} // namespace
-} // namespace dvaas
+}  // namespace
+}  // namespace dvaas

@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 
+#include "absl/container/btree_map.h"
 #include "dvaas/test_vector.pb.h"
 
 namespace dvaas {
@@ -38,13 +39,20 @@ struct TestVectorStats {
   int num_vectors_with_reproducibility_rate = 0;
 };
 
-TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes &test_outcomes);
+TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes& test_outcomes);
 
-std::string ExplainTestVectorStats(const TestVectorStats &stats);
+absl::btree_map<std::string, TestVectorStats> ComputeTestVectorStatsPerLabel(
+    const PacketTestOutcomes& test_outcomes);
+
+std::string ExplainTestVectorStats(const TestVectorStats& stats);
 
 // Records the statistics into Test properties.
 void RecordStatsAsTestProperties(const TestVectorStats& stats);
 
+std::string ExplainPerLabelStats(
+    const absl::btree_map<std::string, TestVectorStats>&
+        label_to_test_vector_stats);
+
 }  // namespace dvaas
 
-#endif // PINS_DVAAS_TEST_VECTOR_STATS_H_
+#endif  // PINS_DVAAS_TEST_VECTOR_STATS_H_
