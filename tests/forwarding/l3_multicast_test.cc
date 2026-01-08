@@ -80,6 +80,11 @@ constexpr netaddr::MacAddress kOriginalSrcMacAddress(0x00, 0x22, 0x33, 0x44,
 constexpr netaddr::MacAddress kDropSrcMacAddress(0x02, 0x2a, 0x10, 0x00, 0x00,
                                                  0x02);
 constexpr int kDefaultInstance = 0;
+constexpr netaddr::Ipv4Address kAllMulticastIpv4AddressMatch(224, 0, 0, 0);
+constexpr netaddr::Ipv4Address kAllMulticastIpv4AddressMask(240, 0, 0, 0);
+static const netaddr::Ipv6Address kAllMulticastIpv6AddressMatch =
+    netaddr::Ipv6Address(0xff00, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0);
+
 // Pair of port ID and instance.
 struct ReplicaPair {
   std::string port_id;
@@ -434,16 +439,43 @@ absl::Status SetupDefaultMulticastProgramming(
     // In the default traffic test setup, we only send traffic on one port
     // (port_index 0), so we only need to add one ACL entry.
     const std::string& port_id = params.sut_port_ids[0];
-    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_entities,
+    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_v6_entities,
                      sai::EntryBuilder()
                          .AddIngressAclEntryRedirectingToMulticastGroup(
                              /*multicast_group_id=*/1,
-			     {.in_port = port_id, .route_hit = false})
+                             {.in_port = port_id,
+                              .route_hit = false,
+                              .is_ipv6 = true,
+                              .dst_ipv6 =
+                                  sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+                                      .value = kAllMulticastIpv6AddressMatch,
+                                      .mask = kAllMulticastIpv6AddressMatch,
+                                  }})
                          .LogPdEntries()
                          .GetDedupedPiEntities(ir_p4info));
-    RETURN_IF_ERROR(pdpi::InstallPiEntities(&session, ir_p4info, acl_entities));
-    entities_created.insert(entities_created.end(), acl_entities.begin(),
-                            acl_entities.end());
+
+    RETURN_IF_ERROR(
+        pdpi::InstallPiEntities(&session, ir_p4info, acl_v6_entities));
+    entities_created.insert(entities_created.end(), acl_v6_entities.begin(),
+                            acl_v6_entities.end());
+
+    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_v4_entities,
+                     sai::EntryBuilder()
+                         .AddIngressAclEntryRedirectingToMulticastGroup(
+                             /*multicast_group_id=*/1,
+                             {.in_port = port_id,
+                              .route_hit = false,
+                              .is_ipv4 = true,
+                              .dst_ip =
+                                  sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+                                      .value = kAllMulticastIpv4AddressMatch,
+                                      .mask = kAllMulticastIpv4AddressMask}})
+                         .LogPdEntries()
+                         .GetDedupedPiEntities(ir_p4info));
+    RETURN_IF_ERROR(
+        pdpi::InstallPiEntities(&session, ir_p4info, acl_v4_entities));
+    entities_created.insert(entities_created.end(), acl_v4_entities.begin(),
+                            acl_v4_entities.end());
     return absl::OkStatus();
   }
 
@@ -1575,17 +1607,44 @@ TEST_P(L3MulticastTestFixture, ConfirmAclRedirectOverridesIpMulticastTable) {
   // Setup the ACL redirect path to use multicast group 2.
   constexpr int kMulticastGroup2 = 2;
   const std::string& input_port_id = sut_ports_ids[0];
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> acl_entities,
-      sai::EntryBuilder()
-          .AddIngressAclEntryRedirectingToMulticastGroup(
-	      kMulticastGroup2, {.in_port = input_port_id, .route_hit = true})
-          .LogPdEntries()
-          .GetDedupedPiEntities(ir_p4info_));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> acl_v6_entities,
+                       sai::EntryBuilder()
+                           .AddIngressAclEntryRedirectingToMulticastGroup(
+                               kMulticastGroup2,
+                               {.in_port = input_port_id,
+                                .route_hit = true,
+                                .is_ipv6 = true,
+                                .dst_ipv6 =
+                                    sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+                                        .value = kAllMulticastIpv6AddressMatch,
+                                        .mask = kAllMulticastIpv6AddressMatch,
+                                    }})
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(ir_p4info_));
   ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
-                                    acl_entities));
-  entities_created.insert(entities_created.end(), acl_entities.begin(),
-                          acl_entities.end());
+                                    acl_v6_entities));
+  entities_created.insert(entities_created.end(), acl_v6_entities.begin(),
+                          acl_v6_entities.end());
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> acl_v4_entities,
+                       sai::EntryBuilder()
+                           .AddIngressAclEntryRedirectingToMulticastGroup(
+                               kMulticastGroup2,
+                               {.in_port = input_port_id,
+                                .route_hit = true,
+                                .is_ipv4 = true,
+                                .dst_ip =
+                                    sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+                                        .value = kAllMulticastIpv4AddressMatch,
+                                        .mask = kAllMulticastIpv4AddressMask,
+                                    }})
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(ir_p4info_));
+  ASSERT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
+                                    acl_v4_entities));
+  entities_created.insert(entities_created.end(), acl_v4_entities.begin(),
+                          acl_v4_entities.end());
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
 
   // Inject test packets that would match the IP multicast table that would
