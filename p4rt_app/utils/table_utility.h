@@ -52,10 +52,15 @@ GetTableType(const pdpi::IrTableDefinition &ir_table);
 
 // Looks at the bitwidth for all match fields in a table and returns an ordered
 // list of table definitions in decreasing order.
-std::vector<pdpi::IrTableDefinition> OrderTablesBySize(
-    const google::protobuf::Map<std::string, pdpi::IrTableDefinition>
-        &tables_by_name);
+std::vector<const pdpi::IrTableDefinition*> OrderTablesBySize(
+    const google::protobuf::Map<std::string, pdpi::IrTableDefinition>&
+        tables_by_name);
 
-} // namespace p4rt_app
+void OrderTablesBySize(std::vector<const pdpi::IrTableDefinition*>& tables);
+
+absl::StatusOr<std::string> DuplicateTable(pdpi::IrP4Info& ir_p4info,
+                                           absl::string_view table_name);
+
+}  // namespace p4rt_app
 
 #endif // PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
