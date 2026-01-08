@@ -433,6 +433,18 @@ grpc::Status SdnControllerManager::AllowRequest(
   return AllowNonMutableRequest(device_id);
 }
 
+grpc::Status SdnControllerManager::AllowRequest(
+    const p4::v1::CapabilitiesRequest& request) const {
+  if (request.device_id() == 0) {
+    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED,
+                        "CapabilitiesRequest does not have a device ID.");
+  }
+
+  std::optional<uint64_t> device_id = request.device_id();
+  // Getting the capabilities will not mutate switch state.
+  return AllowNonMutableRequest(device_id);
+}
+
 void SdnControllerManager::InformConnectionsAboutPrimaryChange(
     const std::optional<std::string>& role_name) {
   VLOG(1) << "Informing all connections about primary connection change.";

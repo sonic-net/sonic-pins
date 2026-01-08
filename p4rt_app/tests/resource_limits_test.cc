@@ -11,7 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "absl/status/status.h"
@@ -35,6 +37,7 @@
 namespace p4rt_app {
 namespace {
 
+using ::gutil::IsOk;
 using ::gutil::StatusIs;
 using ::testing::AllOf;
 using ::testing::HasSubstr;
@@ -65,7 +68,8 @@ absl::StatusOr<int64_t> GetMaxGroupSizeForActionProfile(
 
 absl::StatusOr<p4::v1::Update> WcmpUpdateWithNMembers(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type update_type,
-    const std::string& group_id, int size, int nexthop_index_start = 1) {
+    const std::string& group_id, int group_size, int member_weight = 1,
+    int nexthop_index_start = 1) {
   // Set the update type, and table name.
   pdpi::IrUpdate update;
   update.set_type(update_type);
@@ -79,7 +83,7 @@ absl::StatusOr<p4::v1::Update> WcmpUpdateWithNMembers(
   match->mutable_exact()->set_str(group_id);
 
   // Add all the member actions.
-  for (int action_id = 0; action_id < size; ++action_id) {
+  for (int action_id = 0; action_id < group_size; ++action_id) {
     pdpi::IrActionSetInvocation* action_set = update.mutable_entity()
                                                   ->mutable_table_entry()
                                                   ->mutable_action_set()
@@ -87,7 +91,7 @@ absl::StatusOr<p4::v1::Update> WcmpUpdateWithNMembers(
     pdpi::IrActionInvocation::IrActionParam* param =
         action_set->mutable_action()->add_params();
 
-    action_set->set_weight(1);
+    action_set->set_weight(member_weight);
     action_set->mutable_action()->set_name("set_nexthop_id");
     param->set_name("nexthop_id");
     param->mutable_value()->set_str(
@@ -101,31 +105,60 @@ absl::StatusOr<p4::v1::Update> WcmpUpdateWithNMembers(
 // On actual hardware resources can be very large which make these component
 // tests run slowly. To speed them up and simplify the tests we modify the
 // values in the P4Info for these tests.
-p4::config::v1::P4Info GetResourceLimitsP4Info() {
+p4::config::v1::P4Info GetResourceLimitsP4Info(
+    int64_t size, int32_t max_group_size,
+    std::optional<int32_t> max_member_weight) {
   p4::config::v1::P4Info p4info =
       sai::GetP4Info(sai::Instantiation::kMiddleblock);
 
   for (auto& action_profile : *p4info.mutable_action_profiles()) {
-    action_profile.set_size(100);
-    action_profile.set_max_group_size(99);
+    action_profile.set_size(size);
+    action_profile.set_max_group_size(max_group_size);
+    if (max_member_weight.has_value()) {
+      action_profile.mutable_sum_of_members()->set_max_member_weight(
+          *max_member_weight);
+    } else {
+      action_profile.mutable_sum_of_weights();
+    }
   }
 
   return p4info;
 }
 
-class ResourceLimitsTest : public test_lib::P4RuntimeComponentTestFixture {
+constexpr int64_t kActionProfileSize = 100;
+constexpr int32_t kActionProfileMaxGroupSize = 99;
+class SumOfWeightsResourceLimitsTest
+    : public test_lib::P4RuntimeComponentTestFixture {
  protected:
-  ResourceLimitsTest()
-      : test_lib::P4RuntimeComponentTestFixture(GetResourceLimitsP4Info()) {}
+  SumOfWeightsResourceLimitsTest()
+      : test_lib::P4RuntimeComponentTestFixture(GetResourceLimitsP4Info(
+            kActionProfileSize, kActionProfileMaxGroupSize, std::nullopt)) {}
 
   // Selector names are dependent on the P4 program, but shouldn't affect the
-  // test behaviors. We use a static memeber variable to simplify any future
+  // test behaviors. We use a static member variable to simplify any future
   // changes.
   static constexpr absl::string_view kWcmpGroupSelectorName =
       "wcmp_group_selector";
 };
 
-TEST_F(ResourceLimitsTest, WcmpAccountingRejectsInsertsBeyondLimit) {
+constexpr int32_t kActionProfileMaxMemberWeight = 200;
+class SumOfMembersResourceLimitsTest
+    : public test_lib::P4RuntimeComponentTestFixture {
+ protected:
+  SumOfMembersResourceLimitsTest()
+      : test_lib::P4RuntimeComponentTestFixture(GetResourceLimitsP4Info(
+            kActionProfileSize, kActionProfileMaxGroupSize,
+            kActionProfileMaxMemberWeight)) {}
+
+  // Selector names are dependent on the P4 program, but shouldn't affect the
+  // test behaviors. We use a static member variable to simplify any future
+  // changes.
+  static constexpr absl::string_view kWcmpGroupSelectorName =
+      "wcmp_group_selector";
+};
+
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingRejectsInsertsBeyondLimit) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -138,7 +171,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingRejectsInsertsBeyondLimit) {
   ASSERT_OK_AND_ASSIGN(
       *request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-2", /*size=*/11));
+                             /*group_id=*/"group-2", /*group_size=*/11));
 
   // Using more resources than available should result in a RESOURCE_EXHAUSTED
   // error.
@@ -149,7 +182,33 @@ TEST_F(ResourceLimitsTest, WcmpAccountingRejectsInsertsBeyondLimit) {
                    "#2: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
 }
 
-TEST_F(ResourceLimitsTest, WcmpAccountingRejectsGroupSizeThatIsTooLarge) {
+TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingRejectsInsertsBeyondLimit) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_size,
+      GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-1", max_size - 10));
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-2", /*group_size=*/11));
+
+  // Using more resources than available should result in a RESOURCE_EXHAUSTED
+  // error.
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr(
+                   "#2: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
+}
+
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingRejectsGroupSizeThatIsTooLarge) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_group_size,
       GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -162,17 +221,98 @@ TEST_F(ResourceLimitsTest, WcmpAccountingRejectsGroupSizeThatIsTooLarge) {
 
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: INVALID_ARGUMENT: [P4RT App] too much weight")));
+}
+
+TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingRejectsGroupSizeThatIsTooLarge) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-1", max_group_size + 1));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: INVALID_ARGUMENT: [P4RT App] too many actions")));
+}
+
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingRejectsGroupWeightGreaterThanSize) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-1", max_group_size / 10,
+                             /*member_weight=*/50));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
       StatusIs(
           absl::StatusCode::kUnknown,
-          HasSubstr("#1: RESOURCE_EXHAUSTED: [P4RT App] too many actions")));
+          HasSubstr(
+              "#1: INVALID_ARGUMENT: [P4RT App] too much weight in actions")));
+}
+
+TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingAcceptsGroupWeightGreaterThanSize) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-1", max_group_size / 10,
+          /*member_weight=*/kActionProfileMaxMemberWeight / 2));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      IsOk());
+}
+
+TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingRejectsSingleMemberWeightGreaterThanMaxMemberWeight) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-1", max_group_size / 10,
+          /*member_weight=*/kActionProfileMaxMemberWeight + 1));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          HasSubstr(
+              "#1: INVALID_ARGUMENT: [P4RT App] Action had too high weight")));
 }
 
 // This test will:
+//   * Use a SumOfWeights action profile.
 //   * Insert WCMP members up to the resource limit.
-//   * Verify that a modify can be done on all the memebers.
+//   * Verify that a modify can be done on all the members.
 //   * Try to insert 1 more entry, but expect it to fail because the resources
 //     are all used.
-TEST_F(ResourceLimitsTest, WcmpAccountingSupportsModifyingUpToTheLimit) {
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingSupportsModifyingUpToTheLimit) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -185,13 +325,65 @@ TEST_F(ResourceLimitsTest, WcmpAccountingSupportsModifyingUpToTheLimit) {
   ASSERT_OK_AND_ASSIGN(
       *request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-2", /*size=*/10));
+                             /*group_id=*/"group-2", /*group_size=*/10));
 
   p4::v1::WriteRequest overflow_request;
   ASSERT_OK_AND_ASSIGN(
       *overflow_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-3", /*size=*/1));
+                             /*group_id=*/"group-3", /*group_size=*/1));
+
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  // We're only verifyifying the accounting behavior so reusing the same value
+  // should not matter.
+  request.mutable_updates(0)->set_type(p4::v1::Update::MODIFY);
+  request.mutable_updates(1)->set_type(p4::v1::Update::MODIFY);
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             overflow_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr(
+                   "#1: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
+}
+
+// This test will:
+//   * Use a SumOfMembers action profile.
+//   * Insert WCMP members with high weights up to the resource limit.
+//   * Verify that a modify can be done on all the members.
+//   * Try to insert 1 more entry, but expect it to fail because the resources
+//     are all used.
+TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingSupportsModifyingUpToTheLimit) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_size,
+      GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-1", max_size - 10,
+          /*member_weight=*/kActionProfileMaxMemberWeight / 2));
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-2", /*group_size=*/10,
+          /*member_weight=*/kActionProfileMaxMemberWeight / 2));
+
+  p4::v1::WriteRequest overflow_request;
+  ASSERT_OK_AND_ASSIGN(
+      *overflow_request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-3", /*group_size=*/1,
+          /*member_weight=*/kActionProfileMaxMemberWeight / 2));
 
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
@@ -216,7 +408,8 @@ TEST_F(ResourceLimitsTest, WcmpAccountingSupportsModifyingUpToTheLimit) {
 //   * Modify the group to save space for 5 resource.
 //   * Insert 5 new entry which should succeed.
 //   * Insert 1 more entry which should fail.
-TEST_F(ResourceLimitsTest, WcmpAccountingModifyCanReduceResources) {
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingModifyMembersCanReduceResources) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -235,12 +428,72 @@ TEST_F(ResourceLimitsTest, WcmpAccountingModifyCanReduceResources) {
   ASSERT_OK_AND_ASSIGN(
       *valid_insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-2", /*size=*/5));
+                             /*group_id=*/"group-2", /*group_size=*/5));
   p4::v1::WriteRequest overflow_insert_request;
   ASSERT_OK_AND_ASSIGN(
       *overflow_insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-3", /*size=*/1));
+                             /*group_id=*/"group-3", /*group_size=*/1));
+
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   insert_request));
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   modify_request));
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   valid_insert_request));
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             overflow_insert_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr(
+                   "#1: RESOURCE_EXHAUSTED: [P4RT App] not enough resources")));
+}
+
+// This test will:
+//   * Use a SumOfWeights action profile.
+//   * Insert a WCMP member with weight up to the limit of group size or size.
+//   * Modify the group to reduce the weight by 5.
+//   * Insert a new entry with the maximal weight that should succeed.
+//   * Insert 1 more entry which should fail.
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingModifyWeightsCanReduceResources) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_size,
+      GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  // If max_size isn't at most 2x max_group_size (plus a little), this test
+  // won't work.
+  ASSERT_GT((max_group_size + 3) * 2, max_size);
+
+  p4::v1::WriteRequest insert_request;
+  ASSERT_OK_AND_ASSIGN(
+      *insert_request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-1", /*group_size=*/1,
+          /*member_weight=*/std::min(max_group_size, max_size)));
+  p4::v1::WriteRequest modify_request;
+  ASSERT_OK_AND_ASSIGN(
+      *modify_request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::MODIFY,
+          /*group_id=*/"group-1", /*group_size=*/1,
+          /*member_weight=*/std::min(max_group_size, max_size) - 5));
+  p4::v1::WriteRequest valid_insert_request;
+  ASSERT_OK_AND_ASSIGN(
+      *valid_insert_request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-2", /*group_size=*/1,
+          /*member_weight=*/max_size - std::min(max_group_size, max_size) + 5));
+  p4::v1::WriteRequest overflow_insert_request;
+  ASSERT_OK_AND_ASSIGN(
+      *overflow_insert_request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-3", /*group_size=*/1));
 
   EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    insert_request));
@@ -262,7 +515,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingModifyCanReduceResources) {
 //   * Insert group-3 with 5 more members, and expect it to fail.
 //   * Delete group-2 freeing up space for 5 more members.
 //   * Insert group-3 and expect it to succeed.
-TEST_F(ResourceLimitsTest, WcmpAccountingSupportsDelete) {
+TEST_F(SumOfWeightsResourceLimitsTest, WcmpAccountingSupportsDelete) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -276,12 +529,12 @@ TEST_F(ResourceLimitsTest, WcmpAccountingSupportsDelete) {
   ASSERT_OK_AND_ASSIGN(
       *group_2.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-2", /*size=*/5));
+                             /*group_id=*/"group-2", /*group_size=*/5));
   p4::v1::WriteRequest group_3;
   ASSERT_OK_AND_ASSIGN(
       *group_3.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-3", /*size=*/5));
+                             /*group_id=*/"group-3", /*group_size=*/5));
 
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_1));
@@ -300,7 +553,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingSupportsDelete) {
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), group_3));
 }
 
-TEST_F(ResourceLimitsTest, WcmpAccountingHandlesBatchRequests) {
+TEST_F(SumOfWeightsResourceLimitsTest, WcmpAccountingHandlesBatchRequests) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -313,11 +566,11 @@ TEST_F(ResourceLimitsTest, WcmpAccountingHandlesBatchRequests) {
   ASSERT_OK_AND_ASSIGN(
       *insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-2", /*size=*/2));
+                             /*group_id=*/"group-2", /*group_size=*/2));
   ASSERT_OK_AND_ASSIGN(
       *insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-3", /*size=*/1));
+                             /*group_id=*/"group-3", /*group_size=*/1));
 
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
@@ -329,7 +582,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingHandlesBatchRequests) {
                 HasSubstr("#3: ABORTED"))));
 }
 
-TEST_F(ResourceLimitsTest, WcmpAccountingAssumesModifyWillPass) {
+TEST_F(SumOfWeightsResourceLimitsTest, WcmpAccountingAssumesModifyWillPass) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -339,7 +592,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesModifyWillPass) {
   ASSERT_OK_AND_ASSIGN(
       *insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-1", /*size=*/5));
+                             /*group_id=*/"group-1", /*group_size=*/5));
   ASSERT_OK_AND_ASSIGN(
       *insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
@@ -352,11 +605,11 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesModifyWillPass) {
   ASSERT_OK_AND_ASSIGN(
       *batch_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::MODIFY,
-                             /*group_id=*/"group-1", /*size=*/4));
+                             /*group_id=*/"group-1", /*group_size=*/4));
   ASSERT_OK_AND_ASSIGN(
       *batch_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-3", /*size=*/1));
+                             /*group_id=*/"group-3", /*group_size=*/1));
 
   EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    insert_request));
@@ -364,7 +617,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesModifyWillPass) {
                                                    batch_request));
 }
 
-TEST_F(ResourceLimitsTest, WcmpAccountingAssumesDeleteWillPass) {
+TEST_F(SumOfWeightsResourceLimitsTest, WcmpAccountingAssumesDeleteWillPass) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_size,
       GetMaximumSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
@@ -374,7 +627,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesDeleteWillPass) {
   ASSERT_OK_AND_ASSIGN(
       *insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-1", /*size=*/5));
+                             /*group_id=*/"group-1", /*group_size=*/5));
   ASSERT_OK_AND_ASSIGN(
       *insert_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
@@ -389,7 +642,7 @@ TEST_F(ResourceLimitsTest, WcmpAccountingAssumesDeleteWillPass) {
   ASSERT_OK_AND_ASSIGN(
       *batch_request.add_updates(),
       WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
-                             /*group_id=*/"group-3", /*size=*/1));
+                             /*group_id=*/"group-3", /*group_size=*/1));
 
   EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    insert_request));
