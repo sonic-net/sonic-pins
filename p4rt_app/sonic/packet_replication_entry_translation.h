@@ -14,6 +14,7 @@
 #ifndef PINS_P4RT_APP_SONIC_PACKET_REPLICATION_ENTRY_TRANSLATION_H_
 #define PINS_P4RT_APP_SONIC_PACKET_REPLICATION_ENTRY_TRANSLATION_H_
 
+#include <string>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -21,21 +22,16 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "swss/rediscommand.h"
 
 namespace p4rt_app {
 namespace sonic {
 
-// Take a packet replication engine entry for an update operation (i.e. insert,
-// modify, or delete) and forms the key and KeyOpFieldsValuesTuple that are
-// consumable by App DB.
-absl::StatusOr<std::string> CreatePacketReplicationTableUpdateForAppDb(
-    P4rtTable &p4rt_table, p4::v1::Update::Type update_type,
-    const pdpi::IrPacketReplicationEngineEntry &entry,
-    std::vector<swss::KeyOpFieldsValuesTuple> &kfv_updates);
-
-// Returns all REPLICATION_IP_MULTICAST_TABLE keys currently installed in AppDb.
-std::vector<std::string>
-GetAllPacketReplicationTableEntryKeys(P4rtTable &p4rt_table);
+// Create an AppDB operation to update a packet replication engine entry.
+absl::StatusOr<swss::KeyOpFieldsValuesTuple>
+CreateAppDbPacketReplicationTableUpdate(
+    p4::v1::Update::Type update_type,
+    const pdpi::IrPacketReplicationEngineEntry& entry);
 
 // Returns all packet replication entry keys currently installed in AppDb.
 // Currently, this is only for table REPLICATION_IP_MULTICAST_TABLE.
