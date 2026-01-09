@@ -18,7 +18,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"

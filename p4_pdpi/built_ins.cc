@@ -19,7 +19,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace pdpi {

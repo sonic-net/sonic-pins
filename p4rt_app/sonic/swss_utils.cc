@@ -5,7 +5,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "swss/rediscommand.h"
 #include "swss/table.h"
 

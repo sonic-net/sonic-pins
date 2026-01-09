@@ -20,7 +20,7 @@
 #include <netlink/genl/genl.h>
 
 #include "absl/log/log.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace packet_metadata {
 

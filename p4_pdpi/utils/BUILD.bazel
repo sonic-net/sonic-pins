@@ -26,7 +26,7 @@ cc_library(
         "annotation_parser.h",
     ],
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -37,7 +37,7 @@ cc_test(
     srcs = ["annotation_parser_test.cc"],
     deps = [
         ":annotation_parser",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -54,8 +54,6 @@ cc_library(
         "ir.h",
     ],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:translation_options",
         "//p4_pdpi/netaddr:ipv4_address",
@@ -73,6 +71,8 @@ cc_library(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_protobuf//:protobuf",
         "@com_google_protobuf//third_party/utf8_range:utf8_validity",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -81,9 +81,6 @@ cc_test(
     srcs = ["ir_test.cc"],
     deps = [
         ":ir",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/netaddr:ipv6_address",
         "@com_google_absl//absl/status",
@@ -91,5 +88,8 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )

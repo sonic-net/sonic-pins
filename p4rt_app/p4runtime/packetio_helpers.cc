@@ -18,7 +18,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "boost/bimap.hpp"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
