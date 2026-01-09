@@ -26,7 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "z3++.h"
 #include "z3_api.h"
 

@@ -107,6 +107,12 @@ rules_proto_grpc_toolchains()
 
 rules_proto_grpc_repos()
 
+# -- Load GUtil -----------------------------------------------------------------
+
+load("@com_google_gutil//:gutil_deps.bzl", "gutil_deps")
+
+gutil_deps()
+
 # -- Load P4Runtime ------------------------------------------------------------
 
 load("@com_github_p4lang_p4runtime//:p4runtime_deps.bzl", "p4runtime_deps")

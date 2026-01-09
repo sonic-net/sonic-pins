@@ -21,7 +21,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 
 namespace p4_symbolic::packet_synthesizer {
