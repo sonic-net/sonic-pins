@@ -1,6 +1,8 @@
 #include "dvaas/labeler.h"
 
 #include <bitset>
+#include <functional>
+#include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/log/log.h"
@@ -45,7 +47,7 @@ absl::StatusOr<bool> IsMulticast(const netaddr::Ipv6Address& ipv6) {
   return ipv6_top_8_bits.to_ulong() == 0xFF;
 }
 
-}  // namespace
+// Returns the 'vlan_tagged_input' label if the input packet is VLAN tagged.
 
 absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run) {
   Labels labels;
@@ -55,6 +57,9 @@ absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run) {
   return labels;
 }
 
+// Returns the 'unicast_dst_mac_multicast_dst_ip_input' label if the input
+// packet has a unicast destination MAC address and a IPv4/IPv6 multicast
+// destination IP address.
 absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
     const PacketTestRun& test_run) {
   Labels labels;
@@ -95,4 +100,15 @@ absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
 
   return labels;
 }
+
+}  // namespace
+
+std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+DefaultPacketTestRunLabelers() {
+  return {
+      VlanTaggedInputLabeler,
+      UnicastDstMacMulticastDstIpInputLabeler,
+  };
+}
+
 }  // namespace dvaas
