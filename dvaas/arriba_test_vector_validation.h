@@ -17,9 +17,11 @@
 
 #include <functional>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "dvaas/packet_injection.h"
@@ -85,6 +87,11 @@ struct ArribaTestVectorValidationParams {
   // etc.
   std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
       labelers;
+
+  // A set of labels that exclude test vectors from validation if there is a
+  // matching label. If this value is empty, then all test vectors are
+  // validated.
+  absl::flat_hash_set<std::string> excluded_labels;
 };
 
 // Retrieves the set of P4RT ports used in the given `arriba_test_vector` (table
@@ -122,4 +129,4 @@ absl::StatusOr<ArribaTestVector> GetUpdatedArribaTestVector(
 
 }  // namespace dvaas
 
-#endif // PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
+#endif  // PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_

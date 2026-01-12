@@ -82,7 +82,8 @@ bool IsPsampEncapedPacket(const packetlib::Packet& packet) {
 
 bool IsArpPacket(const packetlib::Packet& packet) {
   return absl::c_any_of(packet.headers(), [](const packetlib::Header& header) {
-    return header.ethernet_header().ethertype() == "0x0806";
+    return header.ethernet_header().ethertype() == "0x0806" ||
+           header.vlan_header().ethertype() == "0x0806";
   });
 }
 
@@ -193,9 +194,9 @@ absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
 }
 
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
-    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
-    const PacketTestVectorById &packet_test_vector_by_id,
-    const PacketInjectionParams &parameters, PacketStatistics &statistics,
+    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    const PacketTestVectorById& packet_test_vector_by_id,
+    const PacketInjectionParams& parameters, PacketStatistics& statistics,
     bool log_injection_progress) {
   LOG(INFO) << "Injecting test packets into the dataplane "
             << packet_test_vector_by_id.size();
@@ -269,8 +270,8 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
         ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
         RETURN_IF_ERROR(
             pins::InjectEgressPacket(sut_egress_port.GetP4rtEncoding(),
-                                      absl::HexStringToBytes(packet.hex()),
-                                      sut_ir_p4info, &sut, injection_delay));
+                                     absl::HexStringToBytes(packet.hex()),
+                                     sut_ir_p4info, &sut, injection_delay));
       } else {
         // TODO: Add support for other input types.
         return absl::UnimplementedError(
