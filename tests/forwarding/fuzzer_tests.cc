@@ -177,12 +177,6 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
       gutil::Version current_version,
       gutil::ParseVersion(GetParam().p4info.pkg_info().version()));
 
-  // TODO: Remove version check when the P4Info version in release
-  // is equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST.
-  ASSERT_OK_AND_ASSIGN(
-      gutil::Version first_version_with_fail_on_first,
-      gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST));
-
   // Record gNMI config and P4Info that we plan to push for debugging purposes.
   if (GetParam().gnmi_config.has_value()) {
     ASSERT_OK(environment.StoreTestArtifact("gnmi_config.txt",
@@ -325,8 +319,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
 
     // Ensure that the responses from the switch correctly use fail-on-first
     // ordering.
-    if (!GetParam().do_not_enforce_fail_on_first_switch_ordering &&
-        current_version >= first_version_with_fail_on_first) {
+    if (!GetParam().do_not_enforce_fail_on_first_switch_ordering) {
       bool encountered_first_error = false;
       for (const pdpi::IrUpdateStatus& status :
            response.rpc_response().statuses()) {
@@ -521,10 +514,7 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
     for (const p4::v1::Update& update : pi_updates) {
       // If the switch doesn't support fail-on-first, batch requests based on
       // rank AND number of updates.
-      // TODO: Remove version check when the P4Info version in
-      // release is equal or higher than
-      // SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST.
-      if (current_version < first_version_with_fail_on_first) {
+      if (!GetParam().do_not_enforce_fail_on_first_switch_ordering) {
         ASSERT_OK_AND_ASSIGN(
             std::string table_name,
             pdpi::EntityToTableName(config.GetIrP4Info(), update.entity()));
