@@ -14,6 +14,7 @@
 
 #include "dvaas/traffic_generator.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -38,6 +39,7 @@
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
+#include "dvaas/test_insights.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
@@ -55,169 +57,6 @@
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
-
-SimpleTrafficGenerator::State SimpleTrafficGenerator::GetState() {
-  absl::MutexLock lock(&state_mutex_);
-  return state_;
-}
-
-void SimpleTrafficGenerator::SetState(State state) {
-  absl::MutexLock lock(&state_mutex_);
-  state_ = state;
-}
-
-absl::StatusOr<PacketSynthesisStats> SimpleTrafficGenerator::Init(
-    thinkit::MirrorTestbed* testbed, const TrafficGenerator::Params& params) {
-  if (GetState() == kTrafficFlowing) {
-    return absl::FailedPreconditionError(
-        "Cannot initialize while traffic is flowing");
-  }
-
-  params_ = params;
-
-  // Configure testbed.
-  ASSIGN_OR_RETURN(auto mirror_testbed_configurator,
-                   MirrorTestbedConfigurator::Create(testbed));
-  testbed_configurator_ = std::make_unique<MirrorTestbedConfigurator>(
-      std::move(mirror_testbed_configurator));
-  RETURN_IF_ERROR(testbed_configurator_->ConfigureForForwardingTest({
-      .mirror_sut_ports_ids_to_control_switch =
-          !params_.validation_params.mirror_testbed_port_map_override
-               .has_value(),
-  }));
-  // Install punt entries on control switch.
-  // TODO: Use testbed configurator to do this, instead.
-  pdpi::P4RuntimeSession& control_p4rt =
-      *testbed_configurator_->ControlSwitchApi().p4rt;
-  RETURN_IF_ERROR(pdpi::ClearEntities(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
-                   pdpi::GetIrP4Info(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrEntities punt_entries,
-                   backend_->GetEntitiesToPuntAllPackets(ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallIrEntities(control_p4rt, punt_entries));
-
-  // Generate test vectors.
-  gutil::BazelTestArtifactWriter writer;
-  ASSIGN_OR_RETURN(
-      generate_test_vectors_result_,
-      GenerateTestVectors(params.validation_params,
-                          testbed_configurator_->SutApi(), *backend_, writer));
-
-  SetState(kInitialized);
-
-  return PacketSynthesisStats{};
-}
-
-absl::Status SimpleTrafficGenerator::StartTraffic() {
-  State state = GetState();
-  if (state == kUninitialized) {
-    return absl::FailedPreconditionError(
-        "Cannot start traffic before initialization.");
-  }
-  if (state == kTrafficFlowing) {
-    return absl::FailedPreconditionError(
-        "Traffic injection has already started");
-  }
-
-  // Spawn traffic injection thread.
-  traffic_injection_thread_ =
-      std::thread(&SimpleTrafficGenerator::InjectTraffic, this);
-
-  // Wait for state to change before returning.
-  while (GetState() != kTrafficFlowing) {
-    absl::SleepFor(absl::Seconds(1));
-  }
-
-  return absl::OkStatus();
-}
-
-absl::Status SimpleTrafficGenerator::StopTraffic() {
-  if (GetState() != kTrafficFlowing) {
-    return absl::FailedPreconditionError(
-        "Cannot stop traffic if not already flowing.");
-  }
-
-  // Change state.
-  SetState(kInitialized);
-
-  // Wait for traffic injection thread to stop before returning.
-  traffic_injection_thread_.join();
-
-  return absl::OkStatus();
-}
-
-void SimpleTrafficGenerator::InjectTraffic() {
-  // Change state.
-  SetState(kTrafficFlowing);
-
-  LOG(INFO) << "Starting to inject traffic";
-  int iterations = 0;
-  while (GetState() == kTrafficFlowing) {
-    ++iterations;
-    LOG_EVERY_N_SEC(INFO, 10) << "Traffic injection iteration #" << iterations;
-
-    // Inject and collect.
-    PacketStatistics statistics;
-    absl::StatusOr<PacketTestRuns> test_runs = SendTestPacketsAndCollectOutputs(
-        *testbed_configurator_->SutApi().p4rt,
-        *testbed_configurator_->ControlSwitchApi().p4rt,
-        generate_test_vectors_result_.packet_test_vector_by_id,
-        {
-            .max_packets_to_send_per_second =
-                params_.validation_params.max_packets_to_send_per_second,
-            .is_expected_unsolicited_packet =
-                params_.validation_params.is_expected_unsolicited_packet,
-            .mirror_testbed_port_map =
-                params_.validation_params.mirror_testbed_port_map_override
-                    .value_or(MirrorTestbedP4rtPortIdMap::CreateIdentityMap()),
-            .enable_sut_packet_in_collection =
-                !params_.validation_params.switch_output_diff_params
-                     .treat_expected_and_actual_outputs_as_having_no_packet_ins,
-        },
-        statistics);
-    CHECK_OK(test_runs.status());  // Crash OK.
-
-    // Add results to test_runs_.
-    absl::MutexLock lock(&test_runs_mutex_);
-    test_runs_.mutable_test_runs()->Add(test_runs->test_runs().begin(),
-                                        test_runs->test_runs().end());
-  }
-
-  LOG(INFO) << "Stopped traffic injection";
-}
-
-absl::StatusOr<ValidationResult> SimpleTrafficGenerator::GetValidationResult() {
-  test_runs_mutex_.Lock();
-  PacketTestRuns test_runs = test_runs_;
-  test_runs_mutex_.Unlock();
-  return ValidationResult::Create(
-      test_runs, params_.validation_params.switch_output_diff_params,
-      generate_test_vectors_result_.packet_synthesis_result);
-}
-
-absl::StatusOr<ValidationResult>
-SimpleTrafficGenerator::GetAndClearValidationResult() {
-  test_runs_mutex_.Lock();
-  PacketTestRuns test_runs = test_runs_;
-  test_runs_.clear_test_runs();
-  test_runs_mutex_.Unlock();
-
-  return ValidationResult::Create(
-      test_runs, params_.validation_params.switch_output_diff_params,
-      generate_test_vectors_result_.packet_synthesis_result);
-}
-
-SimpleTrafficGenerator::~SimpleTrafficGenerator() {
-  if (GetState() == kTrafficFlowing) {
-    LOG(WARNING)
-        << "SimpleTrafficGenerator destructed while traffic is flowing. "
-           "Stopping traffic.";
-    absl::Status status = StopTraffic();
-    if (!status.ok()) {
-      LOG(FATAL) << "Failed to stop traffic: " << status;  // Crash OK.
-    }
-  }
-}
 
 TrafficGeneratorWithGuaranteedRate::~TrafficGeneratorWithGuaranteedRate() {
   if (GetState() == kTrafficInjectionAndCollection) {
@@ -563,7 +402,8 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
 }
 
 absl::StatusOr<ValidationResult>
-TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
+TrafficGeneratorWithGuaranteedRate::GetValidationResult(
+    const std::optional<SwitchOutputDiffParams>& diff_params_override) {
   if (GetState() == kError) {
     return absl::FailedPreconditionError(
         "Cannot validate results in the error state.");
@@ -599,9 +439,16 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
   }
   residual_collected_traffic_by_id_.clear();
 
-  std::vector<SwitchInput> failed_switch_inputs;
+  std::vector<PacketTestVector> failed_test_vectors;
   PacketTestOutcomes new_test_outcomes;
   new_test_outcomes.mutable_outcomes()->Reserve(injected_traffic_vector.size());
+  SwitchOutputDiffParams diff_params =
+      params_.validation_params.switch_output_diff_params;
+  if (diff_params_override.has_value()) {
+    LOG(INFO) << "Using overridden SwitchOutputDiffParams while validating the "
+                 "current test runs";
+    diff_params = *diff_params_override;
+  }
 
   // Only consider traffic injected before the cut off time for validation. This
   // is done to ensure in-flight packets are accounted for. The remaining
@@ -627,11 +474,9 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
           *test_outcome->mutable_test_result(),
           ValidateTestRun(*packet_test_run,
                           /*diff_params=*/
-                          params_.validation_params.switch_output_diff_params,
-                          &testbed_configurator_->SutApi()));
+                          diff_params, &testbed_configurator_->SutApi()));
       if (test_outcome->test_result().has_failure()) {
-        failed_switch_inputs.push_back(
-            test_outcome->test_run().test_vector().input());
+        failed_test_vectors.push_back(test_outcome->test_run().test_vector());
       }
     } else {
       residual_injected_traffic_.push_back(injected_traffic);
@@ -653,47 +498,52 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_outcomes.textproto", gutil::PrintTextProto(new_test_outcomes)));
 
-  if (!failed_switch_inputs.empty() &&
+  // Store test insights.
+  absl::StatusOr<const std::string> insights_csv =
+      GetTestInsightsTableAsCsv(new_test_outcomes, sut_ir_p4info_);
+  if (insights_csv.ok()) {
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "test_insights.csv", *insights_csv));
+  } else {
+    LOG(ERROR) << "Failed to get test insights: " << insights_csv.status();
+  }
+
+  if (!failed_test_vectors.empty() &&
       params_.validation_params.failure_enhancement_options
           .collect_packet_trace &&
       packet_trace_count_ <
           generate_test_vectors_result_.packet_test_vector_by_id.size()) {
-    LOG(INFO) << "Storing packet traces for failed test packets";
-    // Store the packet trace for all failed test outcomes.
-    SwitchApi& control_switch = testbed_configurator_->ControlSwitchApi();
-    ASSIGN_OR_RETURN(P4Specification p4_spec,
-                     InferP4Specification(params_.validation_params, *backend_,
-                                          control_switch));
-    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
-                     pdpi::GetIrP4Info(*control_switch.p4rt));
-
-    // Read P4Info and control plane entities from control switch, sorted for
-    // determinism.
-    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
-                     pdpi::ReadIrEntitiesSorted(*control_switch.p4rt));
-
-    // Retrieve auxiliary entries for v1model targets.
-    ASSIGN_OR_RETURN(
-        pdpi::IrEntities v1model_auxiliary_table_entries,
-        backend_->CreateV1ModelAuxiliaryEntities(
-            v1model_augmented_entities, ir_p4info, *control_switch.gnmi));
-    v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
-
-    ASSIGN_OR_RETURN(auto packet_traces,
-                     backend_->GetPacketTraces(
-                         sut_p4_spec_.bmv2_config, sut_ir_p4info_,
-                         sut_augmented_entities_, failed_switch_inputs));
-
+    LOG(INFO) << "Retrieving full packet traces for failed test packets";
+    // Retrieving full packet traces for all failed test outcomes.
+    RETURN_IF_ERROR(backend_->AugmentPacketTestVectorsWithPacketTraces(
+        failed_test_vectors, sut_ir_p4info_, sut_augmented_entities_,
+        sut_p4_spec_.bmv2_config,
+        /*use_compact_traces=*/false));
+    int current_failures_count = 0;
     for (dvaas::PacketTestOutcome& test_outcome :
          *new_test_outcomes.mutable_outcomes()) {
+      dvaas::PacketTestOutcome test_outcome_with_full_packet_trace =
+          test_outcome;
       if (test_outcome.test_result().has_failure()) {
-        RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
+        if (current_failures_count >= failed_test_vectors.size()) {
+          LOG(ERROR) << "Current failures count " << current_failures_count
+                     << " is greater than or equal to the size of "
+                        "failed_test_vectors "
+                     << failed_test_vectors.size();
+          continue;
+        }
+        *test_outcome_with_full_packet_trace.mutable_test_run()
+             ->mutable_test_vector() =
+            failed_test_vectors[current_failures_count];
+        current_failures_count++;
+      }
+      if (test_outcome.test_result().has_failure()) {
+        RETURN_IF_ERROR(AttachPacketTrace(test_outcome_with_full_packet_trace,
                                           dvaas_test_artifact_writer));
 
         // Output an Arriba test vector to test artifacts.
         RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
-            test_outcome.test_run().test_vector(), packet_traces,
-            dvaas_test_artifact_writer));
+            test_outcome.test_run().test_vector(), dvaas_test_artifact_writer));
 
         packet_trace_count_++;
       }
@@ -719,8 +569,10 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
 }
 
 absl::StatusOr<ValidationResult>
-TrafficGeneratorWithGuaranteedRate::GetAndClearValidationResult() {
-  ASSIGN_OR_RETURN(ValidationResult validation_result, GetValidationResult());
+TrafficGeneratorWithGuaranteedRate::GetAndClearValidationResult(
+    const std::optional<SwitchOutputDiffParams>& diff_params_override) {
+  ASSIGN_OR_RETURN(ValidationResult validation_result,
+                   GetValidationResult(diff_params_override));
   test_outcomes_.clear_outcomes();
   return validation_result;
 }
