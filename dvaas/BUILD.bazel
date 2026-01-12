@@ -235,6 +235,7 @@ cc_library(
 	"//p4_pdpi/utils:ir",
         "//tests/forwarding:util",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+	"@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",

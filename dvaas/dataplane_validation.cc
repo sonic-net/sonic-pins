@@ -220,11 +220,13 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
   if (new_test_outcome.test_result().has_failure() &&
       (maintain_original_failure &&
        HasSameFailure(test_outcome, new_test_outcome))) {
-    testing::Test::RecordProperty("packet_trace_minimization_success", "true");
+    testing::Test::RecordProperty("tag_packet_trace_minimization_success",
+                                  "true");
     LOG(INFO) << "Minimization with packet trace succeeded.";
     return entities_from_packet_trace;
   } else {
-    testing::Test::RecordProperty("packet_trace_minimization_success", "false");
+    testing::Test::RecordProperty("tag_packet_trace_minimization_success",
+                                  "false");
     LOG(INFO) << "Minimization with packet trace failed.";
     return std::nullopt;
   }
