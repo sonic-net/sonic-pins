@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_LIB_SWITCH_TEST_SETUP_HELPERS_H_
 #define PINS_TESTS_LIB_SWITCH_TEST_SETUP_HELPERS_H_
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -72,6 +73,11 @@ absl::Status WaitForEnabledInterfacesToBeUp(
     std::optional<
         std::function<void(const openconfig::Interfaces& enabled_interfaces)>>
         on_failure = std::nullopt);
+
+// Reads the enabled ethernet interfaces from the switch and waits up to
+// `timeout` until they are all up.
+absl::Status WaitForEnabledEthernetInterfacesToBeUp(
+    thinkit::Switch& thinkit_switch, absl::Duration timeout = absl::Minutes(5));
 
 // Gets the set of P4 Runtime port IDs used in `entries`.
 absl::StatusOr<absl::btree_set<P4rtPortId>> GetPortsUsed(
