@@ -615,7 +615,11 @@ absl::Status SplitSortedUpdatesIntoBatchesAndSend(
 }
 }  // namespace
 
-absl::Status ClearEntities(P4RuntimeSession& session) {
+absl::Status ClearEntities(
+    P4RuntimeSession& session,
+    absl::AnyInvocable<absl::Status(
+        const std::vector<Entity>& entities_that_failed_to_be_deleted)>
+        execute_on_failure) {
   // Get P4Info from Switch. It is needed to sequence the delete requests.
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,

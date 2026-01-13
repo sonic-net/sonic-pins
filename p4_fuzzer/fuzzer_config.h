@@ -23,6 +23,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -138,6 +139,11 @@ struct ConfigParams {
         // By default, do nothing.
         return absl::OkStatus();
       };
+  // A function for determining whether resource checks on `table_name`
+  // should be skipped.
+  std::function<bool(absl::string_view table_name)>
+      IgnoreResourceExhaustionForTable =
+          [](absl::string_view table_name) { return false; };
 };
 
 class FuzzerConfig {
@@ -231,7 +237,10 @@ public:
   GetModifyFuzzedMulticastGroupEntry() const {
     return params_.ModifyFuzzedMulticastGroupEntry;
   }
-
+  const std::function<bool(absl::string_view table_name)>&
+  GetIgnoreResourceExhaustionForTable() const {
+    return params_.IgnoreResourceExhaustionForTable;
+  }
 private:
   explicit FuzzerConfig() {}
 

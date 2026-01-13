@@ -17,6 +17,7 @@ namespace pins {
 struct PacketAtPort {
   // TODO Change it to string type port.
   int port;
+  // This string represents the packet's serialized data (bytestring).
   std::string data;
 };
 

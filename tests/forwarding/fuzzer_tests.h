@@ -133,6 +133,11 @@ struct FuzzerTestFixtureParams {
         // By default, do nothing.
         return absl::OkStatus();
       };
+  // A function for determining whether resource checks on `table_name`
+  // should be skipped.
+  std::function<bool(absl::string_view table_name)>
+      IgnoreResourceExhaustionForTable =
+          [](absl::string_view table_name) { return false; };
 };
 
 class FuzzerTestFixture
