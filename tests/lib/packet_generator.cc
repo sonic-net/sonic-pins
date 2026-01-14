@@ -58,14 +58,6 @@ int SkipValues(int value, const absl::btree_set<int>& skip) {
   return value;
 }
 
-const absl::btree_set<int>& ReservedFlowLabelsLower16() {
-  static const auto* const kPorts = new absl::btree_set<int>({
-      0x7103,
-      0x7104,
-  });
-  return *kPorts;
-}
-
 template <typename Proto>
 Proto ParseTextProtoOrDie(absl::string_view text) {
   auto proto = gutil::ParseTextProto<Proto>(text);
@@ -377,8 +369,7 @@ void SetFieldValue(Field field, int value, packetlib::Packet& packet) {
                    << Ipv6Header(packet).flow_label();
       }
       flow_label = field == Field::kFlowLabelLower16
-                       ? (flow_label & ~0xffff) +
-                             SkipValues(value, ReservedFlowLabelsLower16())
+                       ? (flow_label & ~0xffff) + value
                        : (flow_label & 0xffff) + (value << 16);
       Ipv6Header(packet).set_flow_label(packetlib::IpFlowLabel(flow_label));
     } break;

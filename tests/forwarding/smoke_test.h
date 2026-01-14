@@ -33,6 +33,9 @@ struct SmokeTestParams {
   // Use on platforms that don't support GRE tunnels to avoid using them in
   // tests.
   bool does_not_support_gre_tunnels;
+  // Use on platforms that don't support IPv6 entries with multicast destination
+  // IP address.
+  bool does_not_support_ipv6_entries_multicast_dest_ip;
 };
 
 class SmokeTestFixture : public testing::TestWithParam<SmokeTestParams> {
