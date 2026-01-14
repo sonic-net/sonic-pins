@@ -590,6 +590,7 @@ cc_library(
         "//sai_p4/instantiations/google/test_tools:test_entries",
         "//tests/lib:p4rt_fixed_table_programming_helper",
         "//tests/lib:switch_test_setup_helpers",
+        "//tests/qos:qos_test_util",
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
         "//thinkit:test_environment",
