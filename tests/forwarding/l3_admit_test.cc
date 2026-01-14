@@ -611,6 +611,15 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
 }
 
 TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
+  
+  // Only run this test if set_port_and_src_mac is used, which at SAI level
+  // results in RIFs that also program MyMac table - see
+  // go/rif-without-mystation for details.
+  if (!ir_p4info_.actions_by_name().contains("set_port_and_src_mac")) {
+    GTEST_SKIP()
+        << "Skipping because p4info does not support router_interfaces table "
+           "entries that program l3_admit table.";
+  }
 
   // TODO: This is a temporary workaround to mask l3 admit legacy
   // RIF test on the testbeds that do not need legacy RIF. Legacy RIFs are not
