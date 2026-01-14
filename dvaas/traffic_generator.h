@@ -16,7 +16,8 @@
 #define PINS_DVAAS_TRAFFIC_GENERATOR_H_
 
 #include <memory>
-#include <thread> // NOLINT: third_party code.
+#include <optional>
+#include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,7 @@
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "thinkit/mirror_testbed.h"
@@ -45,7 +47,7 @@ struct PacketSynthesisStats {
 
 // Interface for generating traffic and validating it.
 class TrafficGenerator {
-public:
+ public:
   // Traffic generation and validation parameters.
   struct Params {
     // See dataplane_validation.h for details.
@@ -125,84 +127,27 @@ public:
   //
   // NOTE: If called while traffic flowing, the function may block for a while
   // to collect in-flight packets and validate results.
-  virtual absl::StatusOr<ValidationResult> GetValidationResult() = 0;
+  //
+  // If an optional `diff_params_override` is provided, overrides the
+  // `params.validation_params.switch_output_diff_params` passed during the call
+  // to Init while validating the switch output for pending test packets.
+  // Note: The override is only effective for the pending test packets. It does
+  // NOT affect the result of test packets that were validated during the
+  // previous calls to `GetValidationResult`. It does NOT affect future calls to
+  // `Get*ValidationResult` after the current call, either.
+  virtual absl::StatusOr<ValidationResult> GetValidationResult(
+      const std::optional<SwitchOutputDiffParams>& diff_params_override =
+          std::nullopt) = 0;
+
   // Similar to `GetValidationResult` but (on a successful return) resets the
   // old results before returning, in the sense that the future calls to
   // Get*ValidationResult will not include the results returned by
   // the current call.
-  virtual absl::StatusOr<ValidationResult> GetAndClearValidationResult() = 0;
+  virtual absl::StatusOr<ValidationResult> GetAndClearValidationResult(
+      const std::optional<SwitchOutputDiffParams>& diff_params_override =
+          std::nullopt) = 0;
 
   virtual ~TrafficGenerator() = default;
-};
-
-// A simple implementation of `TrafficGenerator` interface that can be used as a
-// proof of concept. This implementation does NOT provide a consistent traffic
-// injection rate guarantee (see `InjectTraffic` function comments for more
-// details).
-class SimpleTrafficGenerator : public TrafficGenerator {
-public:
-  SimpleTrafficGenerator() = delete;
-  explicit SimpleTrafficGenerator(
-      std::unique_ptr<DataplaneValidationBackend> backend)
-      : backend_(std::move(backend)) {}
-
-  absl::StatusOr<PacketSynthesisStats> Init(thinkit::MirrorTestbed* testbed,
-                                            const Params& params) override;
-  absl::Status StartTraffic() override;
-  absl::Status StopTraffic() override;
-  absl::StatusOr<ValidationResult> GetValidationResult() override;
-  absl::StatusOr<ValidationResult> GetAndClearValidationResult() override;
-
-  ~SimpleTrafficGenerator();
-
- private:
-  std::unique_ptr<DataplaneValidationBackend> backend_;
-  std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
-  // Test vectors created as a result of (latest) call to `Init`. Calls to
-  // `StartTraffic` use these test vectors.
-  GenerateTestVectorsResult generate_test_vectors_result_;
-
-  enum State {
-    // The object has been created but `Init` has not been called.
-    kUninitialized,
-    // `Init` has been called, but no traffic is flowing (either `StartTraffic`
-    // has not been called or `StopTraffic` has been called after that).
-    kInitialized,
-    // Traffic is flowing (`StartTraffic` has been called and `StopTraffic` has
-    // NOT been called after that).
-    kTrafficFlowing,
-  };
-  // The state of the SimpleTrafficGenerator object.
-  State state_ ABSL_GUARDED_BY(state_mutex_) = kUninitialized;
-  // Mutex to synchronize access to state_;
-  absl::Mutex state_mutex_;
-
-  // Thread safe getter for state_.
-  State GetState() ABSL_LOCKS_EXCLUDED(state_mutex_);
-  // Thread safe setter for state_.
-  void SetState(State state) ABSL_LOCKS_EXCLUDED(state_mutex_);
-
-  // The thread that is spawned during the call to `StartTraffic` and runs
-  // `InjectTraffic` function. The thread continues until `StopTraffic` is
-  // called.
-  std::thread traffic_injection_thread_;
-  // Runs in a separate thread, as a loop that injects and collects packets
-  // until traffic is stopped.
-  // In each iteration of the loop, injects packets in
-  // `generate_test_vectors_result_.packet_test_vector_by_id` at the rate
-  // specified by `params_`. At the end of each iteration, WAITS UP TO 3 SECONDS
-  // to collect any in-flight packets, before moving on to next iteration.
-  void InjectTraffic() ABSL_LOCKS_EXCLUDED(test_runs_mutex_);
-
-  // Result of packet injection and collection (i.e. test vector + switch
-  // output). Populated by `InjectTraffic`. Used during the call to
-  // `Get*ValidationStats`.
-  PacketTestRuns test_runs_ ABSL_GUARDED_BY(test_runs_mutex_);
-  // Mutex to synchronize access to test_runs_;
-  absl::Mutex test_runs_mutex_;
-
-  // Parameters received in the (latest) call to `Init`.
-  TrafficGenerator::Params params_;
 };
 
 // The duration needed to wait to ensure packets are no longer in-flight during
@@ -226,8 +171,12 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
                                             const Params& params) override;
   absl::Status StartTraffic() override;
   absl::Status StopTraffic() override;
-  absl::StatusOr<ValidationResult> GetValidationResult() override;
-  absl::StatusOr<ValidationResult> GetAndClearValidationResult() override;
+  absl::StatusOr<ValidationResult> GetValidationResult(
+      const std::optional<SwitchOutputDiffParams>& diff_params_override =
+          std::nullopt) override;
+  absl::StatusOr<ValidationResult> GetAndClearValidationResult(
+      const std::optional<SwitchOutputDiffParams>& diff_params_override =
+          std::nullopt) override;
   ~TrafficGeneratorWithGuaranteedRate();
 
  private:
@@ -268,7 +217,7 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
     kTrafficCollection,
     // The unrecoverable error state that happens when either
     // `InjectInputTraffic` or `CollectOutputTraffic` thread returns an error
-    // status. 
+    // status.
     kError,
   };
   // The state of the TrafficGeneratorWithGuaranteedRate object.
@@ -347,4 +296,4 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
 };
 }  // namespace dvaas
 
-#endif // PINS_DVAAS_TRAFFIC_GENERATOR_H_
+#endif  // PINS_DVAAS_TRAFFIC_GENERATOR_H_
