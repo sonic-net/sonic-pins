@@ -2,9 +2,7 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
 
-#include "absl/container/btree_map.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -80,17 +78,19 @@ TEST(AttachPacketTraceTest, IsOk) {
       }
     }
   )pb");
-  std::string packet_hex =
-      failed_packet_test.test_run().test_vector().input().packet().hex();
-  auto packet_trace = gutil::ParseProtoOrDie<PacketTrace>(R"pb(
+  dvaas::PacketTrace packet_trace = gutil::ParseProtoOrDie<PacketTrace>(R"pb(
     bmv2_textual_log: "BMv2 textual log"
     events { packet_replication { number_of_packets_replicated: 1 } }
   )pb");
-  absl::btree_map<std::string, std::vector<PacketTrace>> packet_traces;
-  packet_traces[packet_hex] = {packet_trace};
+  failed_packet_test.mutable_test_run()
+      ->mutable_test_vector()
+      ->add_acceptable_outputs();
+  *failed_packet_test.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packet_trace() = packet_trace;
   DummyArtifactWriter dvaas_test_artifact_writer;
-  EXPECT_THAT(AttachPacketTrace(failed_packet_test, packet_traces,
-                                dvaas_test_artifact_writer),
+  EXPECT_THAT(AttachPacketTrace(failed_packet_test, dvaas_test_artifact_writer),
               IsOk());
 }
 
@@ -133,21 +133,19 @@ TEST(AttachPacketTraceTest, SubmitToIngressTestVectorIsHandledProperly) {
       }
     }
   )pb");
-  std::string packet_hex =
-      "004002dac4a7b1350288e4584b9286dd66d12345004ffdf22002ad124100000300000000"
-      "000000002002ad1241000001000000000000000074657374207061636b65742023323a20"
-      "5355424d49545f544f5f494e4752455353204950763620756e6963617374207061636b65"
-      "7420657870656374656420746f2067657420666f72776172646564";
   dvaas::PacketTrace packet_trace = gutil::ParseProtoOrDie<PacketTrace>(R"pb(
     bmv2_textual_log: "BMv2 textual log"
     events { packet_replication { number_of_packets_replicated: 1 } }
   )pb");
-  absl::btree_map<std::string, std::vector<PacketTrace>> packet_traces;
-  packet_traces[packet_hex] = {packet_trace};
+  failed_packet_test.mutable_test_run()
+      ->mutable_test_vector()
+      ->add_acceptable_outputs();
+  *failed_packet_test.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packet_trace() = packet_trace;
   DummyArtifactWriter dvaas_test_artifact_writer;
-
-  EXPECT_THAT(AttachPacketTrace(failed_packet_test, packet_traces,
-                                dvaas_test_artifact_writer),
+  EXPECT_THAT(AttachPacketTrace(failed_packet_test, dvaas_test_artifact_writer),
               IsOk());
 }
 
@@ -194,15 +192,16 @@ TEST(AttachPacketTraceTest, SubmitToEgressTestVectorIsHandledProperly) {
     bmv2_textual_log: "BMv2 textual log"
     events { packet_replication { number_of_packets_replicated: 1 } }
   )pb");
-  absl::btree_map<std::string, std::vector<PacketTrace>> packet_traces;
-  packet_traces
-      [failed_packet_test.test_run().test_vector().input().packet().hex()] = {
-          packet_trace};
   DummyArtifactWriter dvaas_test_artifact_writer;
-
-  EXPECT_THAT(AttachPacketTrace(failed_packet_test, packet_traces,
-                                dvaas_test_artifact_writer),
-              gutil::StatusIs(absl::StatusCode::kUnimplemented));
+  failed_packet_test.mutable_test_run()
+      ->mutable_test_vector()
+      ->add_acceptable_outputs();
+  *failed_packet_test.mutable_test_run()
+       ->mutable_test_vector()
+       ->mutable_acceptable_outputs(0)
+       ->mutable_packet_trace() = packet_trace;
+  EXPECT_THAT(AttachPacketTrace(failed_packet_test, dvaas_test_artifact_writer),
+              IsOk());
 }
 
 TEST(GetPacketTraceSummaryTest, GetPacketTraceSummaryGoldenTest) {

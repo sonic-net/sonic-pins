@@ -1,0 +1,124 @@
+#include "dvaas/labeler.h"
+
+#include "dvaas/packet_trace.pb.h"
+#include "dvaas/test_vector.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
+#include "p4_pdpi/ir.pb.h"
+
+namespace dvaas {
+namespace {
+
+using ::testing::ElementsAre;
+
+TEST(LabelerTest, TestVectorLabeledWithVlanTaggedInput) {
+  Labels labels;
+  for (const auto& labeler : DefaultPacketTestRunLabelers()) {
+    ASSERT_OK_AND_ASSIGN(
+        Labels new_labels,
+        labeler(gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+          test_vector {
+            input {
+              packet {
+                # Exclude unnecessary packet fields for testing.
+                parsed {
+                  headers {
+                    ethernet_header {
+                      ethernet_destination: "02:03:04:05:06:07"
+                      ethertype: "0x8100"  # VLAN
+                    }
+                  }
+                  headers {
+                    vlan_header {
+                      vlan_identifier: "0x0",
+                      ethertype: "0x0800"  # IPv4
+                    }
+                  }
+                  headers { ipv4_header { ipv4_destination: "192.168.100.1" } }
+                  payload: "VLAN tagged IPv4 packet."
+                }
+              }
+            }
+          }
+        )pb")));
+    labels.MergeFrom(new_labels);
+  }
+  EXPECT_THAT(labels.labels(), ElementsAre("vlan_tagged_input"));
+}
+
+TEST(LabelerTest, TestVectorLabeledWithIpv4MulticastInput) {
+  Labels labels;
+  for (const auto& labeler : DefaultPacketTestRunLabelers()) {
+    ASSERT_OK_AND_ASSIGN(
+        Labels new_labels,
+        labeler(gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+          test_vector {
+            input {
+              packet {
+                # Exclude unnecessary packet fields for testing.
+                parsed {
+                  headers {
+                    ethernet_header {
+                      # IPv4 Unicast MAC.
+                      ethernet_destination: "00:00:5e:05:06:07"
+                      ethertype: "0x0800"  # IPv4
+                    }
+                  }
+                  headers {
+                    ipv4_header {
+                      # IPv4 Multicast IP.
+                      ipv4_destination: "232.1.2.3"
+                    }
+                  }
+                  payload: "IPv4 multicast test packet."
+                }
+              }
+            }
+          }
+        )pb")));
+    labels.MergeFrom(new_labels);
+  }
+  EXPECT_THAT(labels.labels(),
+              ElementsAre("unicast_dst_mac_multicast_dst_ip_input"));
+}
+
+TEST(LabelerTest, TestVectorLabeledWithIpv6MulticastInput) {
+  Labels labels;
+  for (const auto& labeler : DefaultPacketTestRunLabelers()) {
+    ASSERT_OK_AND_ASSIGN(
+        Labels new_labels,
+        labeler(gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+          test_vector {
+            input {
+              packet {
+                # Exclude unnecessary packet fields for testing.
+                parsed {
+                  headers {
+                    ethernet_header {
+                      # IPv6 Multicast MAC.
+                      ethernet_destination: "00:33:04:05:06:07"
+                      ethertype: "0x86dd"  # IPv6
+                    }
+                  }
+                  headers {
+                    ipv6_header {
+                      # IPv6 Multicast IP.
+                      ipv6_destination: "ff30::2"
+                    }
+                  }
+                  payload: "IPv6 multicast test packet."
+                }
+              }
+            }
+          }
+        )pb")));
+    labels.MergeFrom(new_labels);
+  }
+  EXPECT_THAT(labels.labels(),
+              ElementsAre("unicast_dst_mac_multicast_dst_ip_input"));
+}
+
+}  // namespace
+}  // namespace dvaas
