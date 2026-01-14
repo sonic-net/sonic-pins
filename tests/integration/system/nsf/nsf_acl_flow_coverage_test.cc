@@ -76,7 +76,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   ASSERT_OK(flow_programmer_->ProgramFlows(image_config_param, testbed_,
                                            *ssh_client_));
   LOG(INFO) << "Programming ACL flows";
-  ASSERT_OK(ProgramAclFlows(sut, image_config_param.p4_info));
+  ASSERT_OK(ProgramAclFlows(sut, image_config_param.p4_info,
+                            GetParam().sut_instantiation));
 
   LOG(INFO) << "Starting the traffic";
   ASSERT_OK(traffic_helper_->StartTraffic(testbed_));
