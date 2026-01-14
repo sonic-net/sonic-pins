@@ -451,7 +451,7 @@ GetAllFieldDescriptorsOfHeaders(
 
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
     PacketTestRun test_run, const SwitchOutputDiffParams& diff_params,
-    absl::Nullable<SwitchApi*> sut) {
+    SwitchApi* sut) {
   std::vector<SwitchOutput> expected_outputs(
       test_run.test_vector().acceptable_outputs().begin(),
       test_run.test_vector().acceptable_outputs().end());
@@ -538,7 +538,7 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
 
 absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
     const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
-    absl::Nullable<SwitchApi*> sut) {
+    SwitchApi* sut) {
   PacketTestOutcomes test_outcomes;
   test_outcomes.mutable_outcomes()->Reserve(test_runs.test_runs_size());
 

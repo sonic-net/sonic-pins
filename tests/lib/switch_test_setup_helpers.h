@@ -174,13 +174,13 @@ struct MirroredPort {
 
 // Returns the set of operational UP ports that are mirrored between the SUT and
 // control switch.
-absl::StatusOr<std::vector<MirroredPort>>
-MirroredPorts(thinkit::MirrorTestbed &testbed);
+absl::StatusOr<std::vector<MirroredPort>> MirroredPorts(
+    thinkit::MirrorTestbed& testbed);
 
 // Same as above but takes in the gRPC stubs directly.
-absl::StatusOr<std::vector<MirroredPort>>
-MirroredPorts(gnmi::gNMI::StubInterface &sut_gnmi_stub,
-              gnmi::gNMI::StubInterface &control_switch_gnmi_stub);
+absl::StatusOr<std::vector<MirroredPort>> MirroredPorts(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub,
+    gnmi::gNMI::StubInterface& control_switch_gnmi_stub);
 
 }  // namespace pins_test
 

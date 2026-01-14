@@ -6,7 +6,9 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/log/log.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_vector.pb.h"
 #include "gutil/gutil/status.h"
@@ -15,10 +17,23 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "re2/re2.h"
 
 namespace dvaas {
 
 namespace {
+
+// Returns the first packet trace found in the test run. Returns an error if no
+// packet trace is found.
+absl::StatusOr<PacketTrace> GetPacketTrace(const PacketTestRun& test_run) {
+  for (const auto& acceptable_output :
+       test_run.test_vector().acceptable_outputs()) {
+    if (acceptable_output.has_packet_trace()) {
+      return acceptable_output.packet_trace();
+    }
+  }
+  return absl::NotFoundError("No packet trace found in test run");
+}
 
 bool IsVlanTagged(const packetlib::Packet& packet) {
   return absl::c_any_of(packet.headers(), [](const auto& header) {
@@ -47,7 +62,24 @@ absl::StatusOr<bool> IsMulticast(const netaddr::Ipv6Address& ipv6) {
   return ipv6_top_8_bits.to_ulong() == 0xFF;
 }
 
-// Returns the 'vlan_tagged_input' label if the input packet is VLAN tagged.
+bool IsAclTableInIngressStage(absl::string_view table_name) {
+  return RE2::PartialMatch(table_name, "acl_ingress_*");
+}
+
+bool IsAclTableInEgressStage(absl::string_view table_name) {
+  return RE2::PartialMatch(table_name, "acl_egress_*");
+}
+
+}  // namespace
+
+std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
+DefaultPacketTestRunLabelers() {
+  return {
+      VlanTaggedInputLabeler,
+      UnicastDstMacMulticastDstIpInputLabeler,
+      Ttl01InputForwardingLabeler,
+  };
+}
 
 absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run) {
   Labels labels;
@@ -57,9 +89,6 @@ absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run) {
   return labels;
 }
 
-// Returns the 'unicast_dst_mac_multicast_dst_ip_input' label if the input
-// packet has a unicast destination MAC address and a IPv4/IPv6 multicast
-// destination IP address.
 absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
     const PacketTestRun& test_run) {
   Labels labels;
@@ -101,14 +130,51 @@ absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
   return labels;
 }
 
-}  // namespace
+absl::StatusOr<Labels> Ttl01InputForwardingLabeler(
+    const PacketTestRun& test_run) {
+  Labels labels;
+  bool has_ttl_0_or_1 = false;
+  bool hit_l3_admit = false;
+  bool hit_ingress_or_egress_acl = false;
+  for (const auto& header :
+       test_run.test_vector().input().packet().parsed().headers()) {
+    if ((header.has_ipv4_header() && (header.ipv4_header().ttl() == "0x00" ||
+                                      header.ipv4_header().ttl() == "0x01")) ||
+        (header.has_ipv6_header() &&
+         (header.ipv6_header().hop_limit() == "0x000" ||
+          header.ipv6_header().hop_limit() == "0x001"))) {
+      has_ttl_0_or_1 = true;
+    }
+    // For IP-in-IP packets, we only check the outer IP header so we can
+    // break early.
+    if (header.has_ipv4_header() || header.has_ipv6_header()) {
+      break;
+    }
+  }
 
-std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
-DefaultPacketTestRunLabelers() {
-  return {
-      VlanTaggedInputLabeler,
-      UnicastDstMacMulticastDstIpInputLabeler,
-  };
+  ASSIGN_OR_RETURN(const PacketTrace& packet_trace, GetPacketTrace(test_run));
+  for (const auto& event : packet_trace.events()) {
+    if (event.has_table_apply() && event.table_apply().has_hit()) {
+      pdpi::IrTableEntry ir_table_entry =
+          event.table_apply().hit().table_entry();
+
+      // Packet hits an L3 route (ipv4_table or ipv6_table).
+      if (ir_table_entry.table_name() == "ipv4_table" ||
+          ir_table_entry.table_name() == "ipv6_table") {
+        hit_l3_admit = true;
+      }
+
+      // Packet hits any ingress/egress ACL.
+      if (IsAclTableInIngressStage(ir_table_entry.table_name()) ||
+          IsAclTableInEgressStage(ir_table_entry.table_name())) {
+        hit_ingress_or_egress_acl = true;
+      }
+    }
+  }
+  if (has_ttl_0_or_1 && hit_l3_admit && !hit_ingress_or_egress_acl) {
+    labels.add_labels("ttl_01_input_forward");
+  }
+  return labels;
 }
 
 }  // namespace dvaas

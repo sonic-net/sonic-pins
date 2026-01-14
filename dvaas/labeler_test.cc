@@ -12,112 +12,166 @@ namespace dvaas {
 namespace {
 
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 
 TEST(LabelerTest, TestVectorLabeledWithVlanTaggedInput) {
-  Labels labels;
-  for (const auto& labeler : DefaultPacketTestRunLabelers()) {
-    ASSERT_OK_AND_ASSIGN(
-        Labels new_labels,
-        labeler(gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
-          test_vector {
-            input {
-              packet {
-                # Exclude unnecessary packet fields for testing.
-                parsed {
-                  headers {
-                    ethernet_header {
-                      ethernet_destination: "02:03:04:05:06:07"
-                      ethertype: "0x8100"  # VLAN
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::VlanTaggedInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers {
+                      ethernet_header {
+                        ethernet_destination: "02:03:04:05:06:07"
+                        ethertype: "0x8100"  # VLAN
+                      }
                     }
-                  }
-                  headers {
-                    vlan_header {
-                      vlan_identifier: "0x0",
-                      ethertype: "0x0800"  # IPv4
+                    headers {
+                      vlan_header {
+                        vlan_identifier: "0x0",
+                        ethertype: "0x0800"  # IPv4
+                      }
                     }
+                    headers {
+                      ipv4_header { ipv4_destination: "192.168.100.1" }
+                    }
+                    payload: "VLAN tagged IPv4 packet."
                   }
-                  headers { ipv4_header { ipv4_destination: "192.168.100.1" } }
-                  payload: "VLAN tagged IPv4 packet."
                 }
               }
             }
-          }
-        )pb")));
-    labels.MergeFrom(new_labels);
-  }
+          )pb")));
   EXPECT_THAT(labels.labels(), ElementsAre("vlan_tagged_input"));
 }
 
 TEST(LabelerTest, TestVectorLabeledWithIpv4MulticastInput) {
-  Labels labels;
-  for (const auto& labeler : DefaultPacketTestRunLabelers()) {
-    ASSERT_OK_AND_ASSIGN(
-        Labels new_labels,
-        labeler(gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
-          test_vector {
-            input {
-              packet {
-                # Exclude unnecessary packet fields for testing.
-                parsed {
-                  headers {
-                    ethernet_header {
-                      # IPv4 Unicast MAC.
-                      ethernet_destination: "00:00:5e:05:06:07"
-                      ethertype: "0x0800"  # IPv4
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::UnicastDstMacMulticastDstIpInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers {
+                      ethernet_header {
+                        # IPv4 Unicast MAC.
+                        ethernet_destination: "00:00:5e:05:06:07"
+                        ethertype: "0x0800"  # IPv4
+                      }
                     }
-                  }
-                  headers {
-                    ipv4_header {
-                      # IPv4 Multicast IP.
-                      ipv4_destination: "232.1.2.3"
+                    headers {
+                      ipv4_header {
+                        # IPv4 Multicast IP.
+                        ipv4_destination: "232.1.2.3"
+                      }
                     }
+                    payload: "IPv4 multicast test packet."
                   }
-                  payload: "IPv4 multicast test packet."
                 }
               }
             }
-          }
-        )pb")));
-    labels.MergeFrom(new_labels);
-  }
+          )pb")));
   EXPECT_THAT(labels.labels(),
               ElementsAre("unicast_dst_mac_multicast_dst_ip_input"));
 }
 
 TEST(LabelerTest, TestVectorLabeledWithIpv6MulticastInput) {
-  Labels labels;
-  for (const auto& labeler : DefaultPacketTestRunLabelers()) {
-    ASSERT_OK_AND_ASSIGN(
-        Labels new_labels,
-        labeler(gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
-          test_vector {
-            input {
-              packet {
-                # Exclude unnecessary packet fields for testing.
-                parsed {
-                  headers {
-                    ethernet_header {
-                      # IPv6 Multicast MAC.
-                      ethernet_destination: "00:33:04:05:06:07"
-                      ethertype: "0x86dd"  # IPv6
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::UnicastDstMacMulticastDstIpInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers {
+                      ethernet_header {
+                        # IPv6 Multicast MAC.
+                        ethernet_destination: "00:33:04:05:06:07"
+                        ethertype: "0x86dd"  # IPv6
+                      }
                     }
-                  }
-                  headers {
-                    ipv6_header {
-                      # IPv6 Multicast IP.
-                      ipv6_destination: "ff30::2"
+                    headers {
+                      ipv6_header {
+                        # IPv6 Multicast IP.
+                        ipv6_destination: "ff30::2"
+                      }
                     }
+                    payload: "IPv6 multicast test packet."
                   }
-                  payload: "IPv6 multicast test packet."
                 }
               }
             }
-          }
-        )pb")));
-    labels.MergeFrom(new_labels);
-  }
+          )pb")));
   EXPECT_THAT(labels.labels(),
               ElementsAre("unicast_dst_mac_multicast_dst_ip_input"));
+}
+
+TEST(LabelerTest, TestVectorLabeledWithTtl01InputForwarding) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::Ttl01InputForwardingLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed { headers { ipv4_header { ttl: "0x00" } } }
+                }
+              }
+              acceptable_outputs {
+                packet_trace {
+                  events {
+                    table_apply {
+                      table_name: "ipv4_table"
+                      hit { table_entry { table_name: "ipv4_table" } }
+                    }
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), ElementsAre("ttl_01_input_forward"));
+}
+
+TEST(LabelerTest, TestVectorWithNoLabelsUsingTtl01InputForwardingLabeler) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::Ttl01InputForwardingLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed { headers { ipv4_header { ttl: "0x00" } } }
+                }
+              }
+              acceptable_outputs {
+                packet_trace {
+                  events {
+                    table_apply {
+                      table_name: "ipv4_table"
+                      hit { table_entry { table_name: "ipv4_table" } }
+                    }
+                  }
+                  events {
+                    table_apply {
+                      table_name: "acl_ingress_table"
+                      hit { table_entry { table_name: "acl_ingress_table" } }
+                    }
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), IsEmpty());
 }
 
 }  // namespace
