@@ -114,7 +114,7 @@ TEST(LabelerTest, TestVectorLabeledWithIpv6MulticastInput) {
               ElementsAre("unicast_dst_mac_multicast_dst_ip_input"));
 }
 
-TEST(LabelerTest, TestVectorLabeledWithTtl01InputForwarding) {
+TEST(LabelerTest, Ipv4TestVectorLabeledWithTtl01InputForwarding) {
   ASSERT_OK_AND_ASSIGN(
       Labels labels,
       dvaas::Ttl01InputForwardingLabeler(
@@ -132,6 +132,33 @@ TEST(LabelerTest, TestVectorLabeledWithTtl01InputForwarding) {
                     table_apply {
                       table_name: "ipv4_table"
                       hit { table_entry { table_name: "ipv4_table" } }
+                    }
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), ElementsAre("ttl_01_input_forward"));
+}
+
+TEST(LabelerTest, Ipv6TestVectorLabeledWithTtl01InputForwarding) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::Ttl01InputForwardingLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed { headers { ipv6_header { hop_limit: "0x00" } } }
+                }
+              }
+              acceptable_outputs {
+                packet_trace {
+                  events {
+                    table_apply {
+                      table_name: "ipv6_table"
+                      hit { table_entry { table_name: "ipv6_table" } }
                     }
                   }
                 }

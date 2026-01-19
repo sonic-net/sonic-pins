@@ -39,6 +39,7 @@ limitations under the License.
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/validation_result.h"
 #include "gutil/gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -86,6 +87,9 @@ struct FailureEnhancementOptions {
   // Ensures that any minimized failure maintains the original expectation and
   // switch output.
   bool maintain_original_failure_during_minimization = true;
+
+  std::function<absl::Status(DvaasRegressionTestProto&)>
+      attach_user_metadata_to_dvaas_regression_proto;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
