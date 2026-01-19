@@ -48,6 +48,31 @@ TEST(LabelerTest, TestVectorLabeledWithVlanTaggedInput) {
   EXPECT_THAT(labels.labels(), ElementsAre("vlan_tagged_input"));
 }
 
+TEST(LabelerTest, TestVectorLabeledWithMulticastSrcMacInput) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::MulticastSrcMacInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers {
+                      ethernet_header {
+                        # Multicast MAC.
+                        ethernet_source: "11:11:5e:05:06:07"
+                      }
+                    }
+                    payload: "MAC multicast test packet."
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(), ElementsAre("multicast_src_mac_input"));
+}
+
 TEST(LabelerTest, TestVectorLabeledWithIpv4MulticastInput) {
   ASSERT_OK_AND_ASSIGN(
       Labels labels,

@@ -142,14 +142,6 @@ absl::Status DetermineReproducibilityRate(
   return absl::OkStatus();
 }
 
-// Uses the failure description to determine if the new failure is the same as
-// the original failure.
-bool HasSameFailure(const dvaas::PacketTestOutcome& original_test_outcome,
-                    const dvaas::PacketTestOutcome& new_test_outcome) {
-  return original_test_outcome.test_result().failure().description() ==
-         new_test_outcome.test_result().failure().description();
-}
-
 absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
     SwitchApi& sut_api, const dvaas::PacketTestOutcome& test_outcome,
     bool maintain_original_failure,
