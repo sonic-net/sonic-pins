@@ -527,9 +527,13 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
   if (!IsCharacterizedAsDrop(acceptable_output_characterizations)) {
     absl::StrAppend(&failure, kExpectationBanner, "\n");
     for (int i = 0; i < test_run.test_vector().acceptable_outputs_size(); ++i) {
-      absl::StrAppendFormat(
-          &failure, "-- Acceptable output: Alternative #%d --\n%s", (i + 1),
-          PrintTextProto(test_run.test_vector().acceptable_outputs(i)));
+      // Clear packet trace to avoid cluttering the output.
+      dvaas::SwitchOutput printable_output =
+          test_run.test_vector().acceptable_outputs(i);
+      printable_output.clear_packet_trace();
+      absl::StrAppendFormat(&failure,
+                            "-- Acceptable output: Alternative #%d --\n%s",
+                            (i + 1), PrintTextProto(printable_output));
     }
   }
 

@@ -359,19 +359,6 @@ absl::StatusOr<P4Specification> InferP4Specification(
     const DataplaneValidationParams& params,
     const DataplaneValidationBackend& backend, SwitchApi& sut);
 
-// Returns a string of the packet trace summary for the given packet trace.
-absl::StatusOr<std::string> GetPacketTraceSummary(
-    dvaas::PacketTrace& packet_trace);
-
-// Appends the P4 simulation packet trace summary for the input packet in
-// `failed_packet_test` to the failure description of the test.
-// Uses `packet_trace` in `failed_packet_test` to find the corresponding packet
-// trace for the input packet, and also stores the full textual trace as test
-// artifact.
-absl::Status AttachPacketTrace(
-    dvaas::PacketTestOutcome& failed_packet_test,
-    gutil::TestArtifactWriter& dvaas_test_artifact_writer);
-
 // Stores a given `packet_test_vector` as an ArribaTestVector using only the
 // entries that might be hit by the packet (according to its P4 packet trace).
 absl::Status StorePacketTestVectorAsArribaTestVector(
