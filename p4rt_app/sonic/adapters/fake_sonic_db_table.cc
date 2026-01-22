@@ -101,7 +101,6 @@ bool FakeSonicDbTable::PushNotification(const std::string &key,
   return true;
 }
 
-
 absl::Status FakeSonicDbTable::GetNextNotification(std::string &op,
                                                    std::string &data,
                                                    SonicDbEntryList &values) {
