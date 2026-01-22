@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "dvaas/test_run_validation.h"
@@ -38,6 +39,7 @@ struct TestCase {
   PacketTestVector test_vector;
   SwitchOutput actual_output;
   SwitchOutputDiffParams diff_params;
+  Labels labels;
 };
 
 // Defines and returns test cases (i.e., inputs) for the
@@ -531,6 +533,10 @@ std::vector<TestCase> TestCases() {
         )pb"),
         // Overridden below.
         .actual_output = SwitchOutput(),
+	.labels = ParseProtoOrDie<Labels>(R"pb(
+          labels: "unexpected_port"
+          labels: "ethernet"
+        )pb"),
     };
 
     // Set expected packet to be forwarded out of port 12.
@@ -605,6 +611,7 @@ void main() {
     PacketTestRun test_run;
     *test_run.mutable_test_vector() = test.test_vector;
     *test_run.mutable_actual_output() = test.actual_output;
+    *test_run.mutable_labels() = test.labels;
     absl::StatusOr<PacketTestValidationResult> result =
         ValidateTestRun(test_run, test.diff_params);
     CHECK_OK(result.status());    // Crash OK: this is test code.

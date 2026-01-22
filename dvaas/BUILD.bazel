@@ -578,7 +578,8 @@ cc_library(
     hdrs = ["label.h"],
     deps = [
         ":test_vector_cc_proto",
-        "//gutil/gutil:status",
+	"//gutil/gutil:status",
+	"@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -742,6 +743,7 @@ cc_test(
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_google_absl//absl/log",
+	"@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
     ],
 )
