@@ -83,6 +83,7 @@ std::vector<std::function<absl::StatusOr<Labels>(const PacketTestRun&)>>
 DefaultPacketTestRunLabelers() {
   return {
       VlanTaggedInputLabeler,
+      SubmitToIngressVlanTaggedInputLabeler,
       MulticastSrcMacInputLabeler,
       UnicastDstMacMulticastDstIpInputLabeler,
       Ttl01InputForwardingLabeler,
@@ -93,6 +94,17 @@ absl::StatusOr<Labels> VlanTaggedInputLabeler(const PacketTestRun& test_run) {
   Labels labels;
   if (IsVlanTagged(test_run.test_vector().input().packet().parsed())) {
     labels.add_labels("vlan_tagged_input");
+  }
+  return labels;
+}
+
+absl::StatusOr<Labels> SubmitToIngressVlanTaggedInputLabeler(
+    const PacketTestRun& test_run) {
+  Labels labels;
+  if (test_run.test_vector().input().type() ==
+          dvaas::SwitchInput::SUBMIT_TO_INGRESS &&
+      IsVlanTagged(test_run.test_vector().input().packet().parsed())) {
+    labels.add_labels("submit_to_ingress_vlan_tagged_input");
   }
   return labels;
 }

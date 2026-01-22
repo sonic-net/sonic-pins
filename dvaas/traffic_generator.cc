@@ -24,6 +24,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
@@ -260,6 +261,7 @@ absl::Status TrafficGeneratorWithGuaranteedRate::InjectInputTraffic() {
   LOG(INFO) << "Starting to inject traffic";
   int iterations = 0;
   int total_packets_injected = 0;
+  absl::flat_hash_map<std::string, int> non_dataplane_packets_injected_by_type;
   while (GetState() == kTrafficInjectionAndCollection) {
     ++iterations;
     LOG_EVERY_N_SEC(INFO, 10) << "Traffic injection iteration #" << iterations;
@@ -270,39 +272,48 @@ absl::Status TrafficGeneratorWithGuaranteedRate::InjectInputTraffic() {
       packet_tag_id_++;
       LOG_EVERY_N_SEC(INFO, 10) << "Injecting test packet #" << new_tag;
 
-      if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
-        // Update tag.
-        RETURN_IF_ERROR(UpdateTestTag(packet_test_vector, new_tag));
-
-        // Get corresponding control switch port for the packet's ingress port.
-        ASSIGN_OR_RETURN(pins_test::P4rtPortId sut_ingress_port,
-                         pins_test::P4rtPortId::MakeFromP4rtEncoding(
-                             packet_test_vector.input().packet().port()));
-        ASSIGN_OR_RETURN(
-            pins_test::P4rtPortId control_switch_port,
-            mirror_testbed_port_map.GetControlSwitchPortConnectedToSutPort(
-                sut_ingress_port));
-
-        // Inject to egress of control switch.
-        RETURN_IF_ERROR(pins::InjectEgressPacket(
-            control_switch_port.GetP4rtEncoding(),
-            absl::HexStringToBytes(packet_test_vector.input().packet().hex()),
-            control_ir_p4info, &control_switch, injection_delay));
-
-        absl::MutexLock lock(&injected_traffic_mutex_);
-        injected_traffic_.push_back({
-            .tag = new_tag,
-            .packet_test_vector = std::move(packet_test_vector),
-        });
-      } else {
-        LOG(ERROR) << "Test vector input type not supported\n"
-                   << packet_test_vector.input().DebugString();
+      // Skip `PACKET_OUT` and `SUBMIT_TO_INGRESS` packets if
+      // `treat_expected_and_actual_outputs_as_having_no_packet_ins` is true.
+      if (params_.validation_params.switch_output_diff_params
+              .treat_expected_and_actual_outputs_as_having_no_packet_ins &&
+          (packet_test_vector.input().type() ==
+               SwitchInput::SUBMIT_TO_INGRESS ||
+           packet_test_vector.input().type() == SwitchInput::PACKET_OUT)) {
+        non_dataplane_packets_injected_by_type[SwitchInput::Type_Name(
+            packet_test_vector.input().type())]++;
+        continue;
       }
+      // Update tag.
+      RETURN_IF_ERROR(UpdateTestTag(packet_test_vector, new_tag));
+
+      // Get corresponding control switch port for the packet's ingress port.
+      ASSIGN_OR_RETURN(pins_test::P4rtPortId sut_ingress_port,
+                       pins_test::P4rtPortId::MakeFromP4rtEncoding(
+                           packet_test_vector.input().packet().port()));
+      ASSIGN_OR_RETURN(
+          pins_test::P4rtPortId control_switch_port,
+          mirror_testbed_port_map.GetControlSwitchPortConnectedToSutPort(
+              sut_ingress_port));
+
+      // Inject to egress of control switch.
+      RETURN_IF_ERROR(pins::InjectEgressPacket(
+          control_switch_port.GetP4rtEncoding(),
+          absl::HexStringToBytes(packet_test_vector.input().packet().hex()),
+          control_ir_p4info, &control_switch, injection_delay));
+
+      absl::MutexLock lock(&injected_traffic_mutex_);
+      injected_traffic_.push_back({
+          .tag = new_tag,
+          .packet_test_vector = std::move(packet_test_vector),
+      });
     }
     total_packets_injected += packet_test_vector_by_id.size();
   }
   LOG(INFO) << "Stopped traffic injection";
   statistics_.total_packets_injected += total_packets_injected;
+    for (auto& [packet_type, count] : non_dataplane_packets_injected_by_type) {
+    LOG(ERROR) << "Injected " << count << " " << packet_type << " packets";
+  }
   return absl::OkStatus();
 }
 

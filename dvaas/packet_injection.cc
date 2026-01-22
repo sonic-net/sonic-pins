@@ -122,11 +122,6 @@ bool DefaultIsExpectedUnsolicitedPacket(const packetlib::Packet& packet) {
       LOG(INFO) << "ALPINE: Ignoring ARP packet";
       return true;
     }
-    // TODO: Remove once rsyslog packets are disabled on Alpine.
-    if (IsRsyslogPacket(packet)) {
-      LOG(INFO) << "ALPINE: Ignoring rsyslog packet";
-      return true;
-    }
   }
   return false;
 }
