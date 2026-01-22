@@ -29,6 +29,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
 #include "gutil/gutil/status.h"
+#include "gtest/gtest.h"
 
 namespace dvaas {
 
@@ -180,6 +181,13 @@ ValidationResult& ValidationResult::LogStatistics() {
 
 void ValidationResult::RecordStatisticsAsTestProperties() const {
   RecordStatsAsTestProperties(overall_test_vector_stats_);
+}
+
+void ValidationResult::RecordPerLabelStatsAsTestProperties() const {
+  testing::Test::RecordProperty(
+      "dvaas__success_rate_per_label",
+      ExplainPerLabelStats(label_to_test_vector_stats_,
+                           /*include_title=*/false));
 }
 
 std::vector<std::string> ValidationResult::GetAllFailures() const {

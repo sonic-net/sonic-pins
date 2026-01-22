@@ -86,6 +86,7 @@ DefaultPacketTestRunLabelers() {
       SubmitToIngressVlanTaggedInputLabeler,
       MulticastSrcMacInputLabeler,
       UnicastDstMacMulticastDstIpInputLabeler,
+      SubmitToIngressMulticastDstIpInputLabeler,
       Ttl01InputForwardingLabeler,
   };
 }
@@ -172,6 +173,43 @@ absl::StatusOr<Labels> UnicastDstMacMulticastDstIpInputLabeler(
     labels.add_labels("unicast_dst_mac_multicast_dst_ip_input");
   }
 
+  return labels;
+}
+
+absl::StatusOr<Labels> SubmitToIngressMulticastDstIpInputLabeler(
+    const PacketTestRun& test_run) {
+  Labels labels;
+  // Only considering submit-to-ingress packets.
+  if (test_run.test_vector().input().type() !=
+      dvaas::SwitchInput::SUBMIT_TO_INGRESS) {
+    return labels;
+  }
+  const auto& headers =
+      test_run.test_vector().input().packet().parsed().headers();
+  bool is_dst_ip_multicast = false;
+  for (const auto& header : headers) {
+    if (header.has_ipv4_header()) {
+      ASSIGN_OR_RETURN(netaddr::Ipv4Address ipv4_dst_address,
+                       netaddr::Ipv4Address::OfString(
+                           header.ipv4_header().ipv4_destination()));
+      ASSIGN_OR_RETURN(is_dst_ip_multicast, IsMulticast(ipv4_dst_address));
+      // For IP-in-IP packets, we only check the outer IP header so we can
+      // break early.
+      break;
+    }
+    if (header.has_ipv6_header()) {
+      ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_dst_address,
+                       netaddr::Ipv6Address::OfString(
+                           header.ipv6_header().ipv6_destination()));
+      ASSIGN_OR_RETURN(is_dst_ip_multicast, IsMulticast(ipv6_dst_address));
+      // For IP-in-IP packets, we only check the outer IP header so we can
+      // break early.
+      break;
+    }
+  }
+  if (is_dst_ip_multicast) {
+    labels.add_labels("submit_to_ingress_multicast_dst_ip_input");
+  }
   return labels;
 }
 

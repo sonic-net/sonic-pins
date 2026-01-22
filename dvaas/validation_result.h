@@ -87,6 +87,7 @@ class [[nodiscard]] ValidationResult {
   const ValidationResult& LogStatistics() const;
   ValidationResult& LogStatistics();
   void RecordStatisticsAsTestProperties() const;
+  void RecordPerLabelStatsAsTestProperties() const;
 
   // Returns a list of all test failures. Prefer using `HasSuccessRateOfAtLeast`
   // as it includes additional information to ease debugging.

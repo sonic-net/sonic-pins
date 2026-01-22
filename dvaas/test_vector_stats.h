@@ -51,7 +51,8 @@ void RecordStatsAsTestProperties(const TestVectorStats& stats);
 
 std::string ExplainPerLabelStats(
     const absl::btree_map<std::string, TestVectorStats>&
-        label_to_test_vector_stats);
+        label_to_test_vector_stats,
+    bool include_title = true);
 
 }  // namespace dvaas
 

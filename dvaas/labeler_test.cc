@@ -182,6 +182,60 @@ TEST(LabelerTest, TestVectorLabeledWithIpv6MulticastInput) {
               ElementsAre("unicast_dst_mac_multicast_dst_ip_input"));
 }
 
+TEST(LabelerTest, TestVectorLabeledWithSubmitToIngressMulticastIpv4DstIpInput) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::SubmitToIngressMulticastDstIpInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                type: SUBMIT_TO_INGRESS
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers {
+                      ipv4_header {
+                        # IPv4 Multicast IP.
+                        ipv4_destination: "232.1.2.3"
+                      }
+                    }
+                    payload: "Submit-to-ingress IPv4 multicast test packet."
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(),
+              ElementsAre("submit_to_ingress_multicast_dst_ip_input"));
+}
+
+TEST(LabelerTest, TestVectorLabeledWithSubmitToIngressMulticastIpv6DstIpInput) {
+  ASSERT_OK_AND_ASSIGN(
+      Labels labels,
+      dvaas::SubmitToIngressMulticastDstIpInputLabeler(
+          gutil::ParseProtoOrDie<dvaas::PacketTestRun>(R"pb(
+            test_vector {
+              input {
+                type: SUBMIT_TO_INGRESS
+                packet {
+                  # Exclude unnecessary packet fields for testing.
+                  parsed {
+                    headers {
+                      ipv6_header {
+                        # IPv6 Multicast IP.
+                        ipv6_destination: "ff30::2"
+                      }
+                    }
+                    payload: "Submit-to-ingress IPv6 multicast test packet."
+                  }
+                }
+              }
+            }
+          )pb")));
+  EXPECT_THAT(labels.labels(),
+              ElementsAre("submit_to_ingress_multicast_dst_ip_input"));
+}
+
 TEST(LabelerTest, Ipv4TestVectorLabeledWithTtl01InputForwarding) {
   ASSERT_OK_AND_ASSIGN(
       Labels labels,
