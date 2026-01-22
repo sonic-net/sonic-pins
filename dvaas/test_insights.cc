@@ -259,10 +259,27 @@ absl::StatusOr<std::vector<std::string>> InferOrderOfTablesFromPacketTraces(
       const dvaas::PacketTrace& packet_trace = acceptable_output.packet_trace();
 
       std::vector<std::string> tables_partial_order;
+      absl::flat_hash_set<std::string> seen_tables;
       for (const auto& event : packet_trace.events()) {
         if (event.has_table_apply()) {
           const auto& table_name = event.table_apply().table_name();
           if (!target_tables.contains(table_name)) continue;
+	  if (!seen_tables.insert(table_name).second) {
+            // Break potential cycles in the partial table application order
+            // inferred from the packet trace. Note that the packet traces
+            // contain events for multiple packets (e.g. in case of mirroring,
+            // copying, multicast) or packets recirculating through the
+            // pipeline. This shows up as repetition of table applications.
+            // Therefore, as soon as we encounter a re-application of the same
+            // table, we stop considering the rest of the events in the packet
+            // trace. This may lose some partial orders but given that
+            // information is only used to sort the columns in the test insights
+            // table for ease of readability, it is a reasonable heuristic. Also
+            // note that there is no risk of wrong partial order inference
+            // because the trace events are ordered in a way that there is no
+            // interleaving of events corresponding to different packets.
+            break;
+          }
           tables_partial_order.push_back(table_name);
         }
       }
