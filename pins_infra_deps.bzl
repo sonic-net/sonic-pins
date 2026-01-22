@@ -81,6 +81,21 @@ def pins_infra_deps():
             strip_prefix = "googleapis-f405c718d60484124808adb7fb5963974d654bb4",
             sha256 = "406b64643eede84ce3e0821a1d01f66eaf6254e79cb9c4f53be9054551935e79",
         )
+    if not native.existing_rule("com_github_google_glog"):
+        http_archive(
+            name = "com_github_google_glog",
+            url = "https://github.com/google/glog/archive/v0.6.0.tar.gz",
+            strip_prefix = "glog-0.6.0",
+            sha256 = "8a83bf982f37bb70825df71a9709fa90ea9f4447fb3c099e1d720a439d88bad6",
+        )
+    if not native.existing_rule("com_google_gutil"):
+        http_archive(
+            name = "com_google_gutil",
+            # Newest commit on main as of 2025-05-14.
+            url = "https://github.com/google/gutil/archive/d2f1bdd819287c3951adaba5ea6e5426d2eefff1.zip",
+            strip_prefix = "gutil-d2f1bdd819287c3951adaba5ea6e5426d2eefff1",
+            sha256 = "033bcab2835a0aea0427d38503f5ae2bd478af134ab8f3e75b65d2cd444ac8ca",
+        )
     if not native.existing_rule("com_github_otg_models"):
         http_archive(
             name = "com_github_otg_models",

@@ -60,7 +60,6 @@ cc_library(
     hdrs = ["ssh_wrapper_client.h"],
     deps = [
         ":linux_ssh_helper",
-        "//gutil/gutil:status",
         "//thinkit:ssh_client",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
@@ -68,6 +67,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
+	"@com_google_gutil//gutil:status",
     ],
 )
 

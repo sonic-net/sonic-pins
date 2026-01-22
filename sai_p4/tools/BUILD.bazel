@@ -34,7 +34,6 @@ cc_library(
     srcs = ["packetio_tools.cc"],
     hdrs = ["packetio_tools.h"],
     deps = [
-        "//gutil/gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/fixed:p4_ids",
@@ -42,6 +41,7 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -50,9 +50,6 @@ cc_library(
     srcs = ["auxiliary_entries_for_v1model_targets.cc"],
     hdrs = ["auxiliary_entries_for_v1model_targets.h"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
-        "//gutil/gutil:version",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/fixed:p4_ids",
@@ -64,6 +61,9 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
 	"@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:version",
     ],
 )
 
@@ -72,9 +72,6 @@ cc_test(
     srcs = ["auxiliary_entries_for_v1model_targets_test.cc"],
     deps = [
         ":auxiliary_entries_for_v1model_targets",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
@@ -82,6 +79,9 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -90,8 +90,8 @@ cc_test(
     srcs = ["p4info_tools_test.cc"],
     deps = [
         ":p4info_tools",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -103,12 +103,12 @@ cc_test(
     srcs = ["packetio_tools_test.cc"],
     deps = [
         ":packetio_tools",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )

@@ -29,8 +29,6 @@ cc_library(
         "thinkit_util.h",
     ],
     deps = [
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:p4_runtime_session",
         "//lib/validator:validator_lib",
@@ -51,6 +49,8 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -61,8 +61,6 @@ cc_library(
     hdrs = ["thinkit_gnmi_interface_util.h"],
     deps = [
         ":thinkit_gnmi_subscribe_tests",
-        "//gutil/gutil:status",
-        "//gutil/gutil:testing",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:pd",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
@@ -78,6 +76,8 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_googletest//:gtest",
         "@com_googlesource_code_re2//:re2",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -93,9 +93,6 @@ cc_library(
     ],
     deps = [
         ":thinkit_gnmi_interface_util",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:pd",
         "//sai_p4/instantiations/google:instantiations",
@@ -114,6 +111,9 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -128,7 +128,6 @@ cc_library(
         "thinkit_util.h",
     ],
     deps = [
-        "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:p4_runtime_session",
         "//thinkit:ssh_client",
@@ -143,6 +142,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -152,9 +152,6 @@ cc_test(
     deps = [
         ":thinkit_gnmi_interface_util",
         ":thinkit_gnmi_tests",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//thinkit:mock_ssh_client",
         "//thinkit:mock_switch",
@@ -169,5 +166,8 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )

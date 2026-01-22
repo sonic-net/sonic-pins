@@ -21,7 +21,7 @@
 #include "absl/status/statusor.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 

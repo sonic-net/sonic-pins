@@ -28,8 +28,8 @@
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/config/v1/p4types.pb.h"
 

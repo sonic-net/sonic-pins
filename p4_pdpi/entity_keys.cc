@@ -23,7 +23,7 @@
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace pdpi {
 
