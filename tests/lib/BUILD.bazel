@@ -25,13 +25,13 @@ cc_library(
     srcs = ["p4info_helper.cc"],
     hdrs = ["p4info_helper.h"],
     deps = [
-        "//gutil/gutil:collections",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//thinkit:switch",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_gutil//gutil:collections",
     ],
 )
 
@@ -41,8 +41,6 @@ cc_library(
     srcs = ["p4rt_fixed_table_programming_helper.cc"],
     hdrs = ["p4rt_fixed_table_programming_helper.h"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google/test_tools:test_entries", 
@@ -52,6 +50,8 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -60,9 +60,6 @@ cc_test(
     srcs = ["p4rt_fixed_table_programming_helper_test.cc"],
     deps = [
         ":p4rt_fixed_table_programming_helper",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
@@ -73,6 +70,9 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -92,12 +92,12 @@ cc_test(
     srcs = ["common_ir_table_entries_test.cc"],
     deps = [
         ":common_ir_table_entries",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -107,10 +107,6 @@ cc_library(
     srcs = ["switch_test_setup_helpers.cc"],
     hdrs = ["switch_test_setup_helpers.h"],
     deps = [
-        "//gutil/gutil:collections",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
-        "//gutil/gutil:test_artifact_writer",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnmi:openconfig_cc_proto",
         "//lib/p4rt:p4rt_port",
@@ -136,7 +132,10 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_absl//absl/flags:parse",
         "@com_google_googletest//:gtest",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:test_artifact_writer",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -148,9 +147,6 @@ cc_test(
     linkstatic = True,
     deps = [
         ":switch_test_setup_helpers",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
         "//lib/p4rt:p4rt_port",
         "//p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
@@ -159,6 +155,9 @@ cc_test(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 
@@ -191,8 +190,6 @@ cc_library(
     srcs = ["packet_generator.cc"],
     hdrs = ["packet_generator.h"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
@@ -207,6 +204,8 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -216,13 +215,13 @@ cc_test(
     shard_count = 4,
     deps = [
         ":packet_generator",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 

@@ -12,7 +12,7 @@
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_vector.pb.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"

@@ -6,8 +6,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/io.h"
-#include "gutil/gutil/proto.h"
+#include "gutil/io.h"
+#include "gutil/proto.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 

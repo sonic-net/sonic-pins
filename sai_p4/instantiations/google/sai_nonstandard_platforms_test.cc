@@ -4,7 +4,7 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
