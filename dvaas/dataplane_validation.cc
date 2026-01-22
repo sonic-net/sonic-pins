@@ -50,6 +50,7 @@
 #include "dvaas/validation_result.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"
+#include "gutil/gutil/timer.h"
 #include "gutil/gutil/proto_ordering.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/test_artifact_writer.h"
@@ -73,6 +74,15 @@
 
 namespace dvaas {
 namespace {
+
+void LogAndRecordDurationForDvaasComponent(std::string component_name,
+                                           absl::Duration duration) {
+  testing::Test::RecordProperty(
+      absl::StrCat("tag_dvaas_", component_name, "_duration"),
+      absl::FormatDuration(duration));
+  LOG(INFO) << component_name << " took " << absl::ToInt64Milliseconds(duration)
+            << " milliseconds";
+}
 
 using ::p4_symbolic::packet_synthesizer::SynthesizedPacket;
 using ::packetlib::Packet;
@@ -445,6 +455,7 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 
   // Synthesize test packets.
   LOG(INFO) << "Synthesizing test packets";
+  gutil::Timer packet_synthesis_timer;
   ASSIGN_OR_RETURN(
       generate_test_vectors_result.packet_synthesis_result,
       backend.SynthesizePackets(
@@ -454,6 +465,8 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
                 "auto_generated_test_packet_stats.txt", stats);
           },
           params.coverage_goals_override, params.packet_synthesis_time_limit));
+  LogAndRecordDurationForDvaasComponent("packet_synthesis",
+                                        packet_synthesis_timer.GetDuration());
 
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "synthesized_packets.txt",
@@ -463,12 +476,15 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   // Generate test vectors with output prediction from the synthesized
   // packets.
   LOG(INFO) << "Generating test vectors with output prediction";
+  gutil::Timer generate_test_vectors_timer;
   ASSIGN_OR_RETURN(generate_test_vectors_result.packet_test_vector_by_id,
                    backend.GeneratePacketTestVectors(
                        ir_p4info, entities, p4_spec.bmv2_config, ports,
                        generate_test_vectors_result.packet_synthesis_result
                            .synthesized_packets,
                        default_ingress_port));
+  LogAndRecordDurationForDvaasComponent(
+      "generate_test_vectors", generate_test_vectors_timer.GetDuration());
 
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "generated_test_vectors.txt",
@@ -608,7 +624,10 @@ absl::Status PostProcessTestVectorFailure(
         const SynthesizedPacket& synthesized_packet,
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
-        test_and_validate_callback) {
+	test_and_validate_callback,
+    const std::function<void(std::string_view dvaas_component_name,
+                             absl::Duration duration)>
+        accumulate_duration) {
   RETURN_IF_ERROR(StorePacketTraceTextualBmv2LogAsTestArtifact(
       test_outcome, dvaas_test_artifact_writer));
   ASSIGN_OR_RETURN(pdpi::IrEntities best_known_set_of_entities,
@@ -633,7 +652,7 @@ absl::Status PostProcessTestVectorFailure(
               .reproducibility_rate() == 1.0 &&
       failure_count < params.failure_enhancement_options
                           .max_number_of_failures_to_minimize) {
-    absl::Time start = absl::Now();
+    gutil::Timer minimization_timer;
     ASSIGN_OR_RETURN(std::optional<pdpi::IrEntities> minimal_entities,
                      MinimizePacketTestVectors(
                          sut_api, test_outcome,
@@ -641,9 +660,7 @@ absl::Status PostProcessTestVectorFailure(
                              .maintain_original_failure_during_minimization,
                          test_and_validate_callback),
                      _.SetPrepend() << "When minimizing failure: ");
-    LOG(INFO) << "Minimization took "
-              << absl::ToInt64Milliseconds(absl::Now() - start)
-              << " milliseconds";
+    accumulate_duration("minimization", minimization_timer.GetDuration());
     if (minimal_entities.has_value()) {
       RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
           "minimal_set_of_entities_that_caused_test_failure.txt",
@@ -733,6 +750,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     thinkit::TestEnvironment& test_environment,
     const DataplaneValidationParams& params) {
   // Read all entities.
+  gutil::Timer testbed_preparation_timer;
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> original_entities,
                    pdpi::ReadPiEntitiesSorted(*sut.p4rt));
 
@@ -788,6 +806,8 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   RETURN_IF_ERROR(CheckAndStoreMappedAndUnmappedPortIds(
       mirror_testbed_port_map, *sut.gnmi, *control_switch.gnmi,
       dvaas_test_artifact_writer));
+  LogAndRecordDurationForDvaasComponent(
+      "testbed_preparation", testbed_preparation_timer.GetDuration());
 
   // Generate test vectors.
   GenerateTestVectorsResult generate_test_vectors_result;
@@ -827,11 +847,14 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   };
 
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(
-      PacketTestRuns test_runs,
-      SendTestPacketsAndCollectOutputs(
-          *sut.p4rt.get(), *control_switch.p4rt.get(), test_vectors,
-          packet_injection_params, packet_statistics_));
+  gutil::Timer packet_injection_timer;
+  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
+                   SendTestPacketsAndCollectOutputs(
+                       *sut.p4rt.get(), *control_switch.p4rt.get(),
+                       test_vectors, packet_injection_params,
+                       packet_statistics_));
+  LogAndRecordDurationForDvaasComponent("packet_injection",
+                                        packet_injection_timer.GetDuration());
   const absl::Time kTimeLastPacketInjected = absl::Now();
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
@@ -888,10 +911,19 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
 
       // The test packets likely already have a compact version of the traces,
       // but we want to augment them with the full version.
-      RETURN_IF_ERROR(backend_->AugmentPacketTestVectorsWithPacketTraces(
+      gutil::Timer failure_packet_trace_timer;
+      auto status = backend_->AugmentPacketTestVectorsWithPacketTraces(
           failed_test_vectors, ir_p4info, v1model_augmented_entities,
           p4_spec.bmv2_config,
-          /*use_compact_traces=*/false));
+          /*use_compact_traces=*/false);
+      LogAndRecordDurationForDvaasComponent(
+          "failure_packet_trace", failure_packet_trace_timer.GetDuration());
+      if (!status.ok()) {
+        LOG(ERROR)
+            << "Failed to augment failed packet test vectors with full packet "
+               "traces: "
+            << status;
+      }
     } else {
       LOG(INFO)
           << "Skipping full packet trace collection for failed test packets";
@@ -900,6 +932,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     int current_failures_count = 0;
     // Rerun at most `num_failures_to_rerun` to avoid timeouts if there are too
     // many failures.
+    absl::Duration post_processing_duration;
+    absl::Duration deflaking_duration;
+    absl::Duration minimization_duration;
     for (dvaas::PacketTestOutcome& test_outcome :
          *test_outcomes.mutable_outcomes()) {
       if (test_outcome.test_result().has_failure()) {
@@ -935,7 +970,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         // Tolerate failures.
         // Remove once packet trace, replication, and
         // minimization code is stably integrated.
-        absl::Time start = absl::Now();
+	gutil::Timer post_processing_timer;
         absl::Status status = PostProcessTestVectorFailure(
             sut_p4info, params, packet_injection_params,
             current_failures_count++, sut, control_switch,
@@ -995,16 +1030,27 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                        << test_outcomes.DebugString();
               }
               return test_outcomes.outcomes(0);
+	    },
+            [&](std::string_view dvaas_component_name,
+                absl::Duration duration) {
+              if (dvaas_component_name == "deflaking") {
+                deflaking_duration += duration;
+              } else if (dvaas_component_name == "minimization") {
+                minimization_duration += duration;
+              }
             });
-        LOG(INFO) << "Post-processing failure took "
-                  << absl::ToInt64Milliseconds(absl::Now() - start)
-                  << " milliseconds";
+        post_processing_duration += post_processing_timer.GetDuration();
         if (!status.ok()) {
           LOG(WARNING) << "Got error when post-processing failure: "
                        << status.message();
         }
       }
     }
+    LogAndRecordDurationForDvaasComponent("post_processing",
+                                          post_processing_duration);
+    LogAndRecordDurationForDvaasComponent("deflaking", deflaking_duration);
+    LogAndRecordDurationForDvaasComponent("minimization",
+                                          minimization_duration);
   }
 
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
