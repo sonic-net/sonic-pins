@@ -37,14 +37,16 @@ ValidationResult::ValidationResult(
     const PacketSynthesisResult& packet_synthesis_result)
     : test_outcomes_(test_outcomes),
       overall_test_vector_stats_(ComputeTestVectorStats(test_outcomes)),
-      packet_synthesis_result_(packet_synthesis_result) {}
+      packet_synthesis_result_(packet_synthesis_result),
+      label_to_test_vector_stats_(
+          ComputeTestVectorStatsPerLabel(test_outcomes)) {}
 
 absl::StatusOr<ValidationResult> ValidationResult::Create(
     PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
     const PacketSynthesisResult& packet_synthesis_result) {
   ASSIGN_OR_RETURN(PacketTestOutcomes test_outcomes,
                    ValidateTestRuns(test_runs, diff_params));
-  return ValidationResult(packet_synthesis_result, test_outcomes);
+  return ValidationResult(test_outcomes, packet_synthesis_result);
 }
 
 std::string ExplainFailure(const PacketTestOutcome& test_outcome) {
@@ -129,6 +131,12 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeastForGivenLabels(
 absl::Status ValidationResult::HasSuccessRateOfAtLeastWithoutGivenLabels(
     double expected_success_rate,
     const absl::flat_hash_set<std::string>& excluded_labels) const {
+  return ExcludingLabels(excluded_labels)
+      .HasSuccessRateOfAtLeast(expected_success_rate);
+}
+
+ValidationResult ValidationResult::ExcludingLabels(
+    const absl::flat_hash_set<std::string>& excluded_labels) const {
   // Filter test outcomes based on the excluded labels.
   PacketTestOutcomes filtered_test_outcomes;
   for (const auto& outcome : test_outcomes_.outcomes()) {
@@ -143,11 +151,8 @@ absl::Status ValidationResult::HasSuccessRateOfAtLeastWithoutGivenLabels(
       *filtered_test_outcomes.add_outcomes() = outcome;
     }
   }
-
-  ValidationResult filtered_validation_result(std::move(filtered_test_outcomes),
-                                              packet_synthesis_result_);
-  return filtered_validation_result.HasSuccessRateOfAtLeast(
-      expected_success_rate);
+  return ValidationResult(std::move(filtered_test_outcomes),
+                          packet_synthesis_result_);
 }
 
 double ValidationResult::GetSuccessRate() const {
