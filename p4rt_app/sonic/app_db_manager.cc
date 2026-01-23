@@ -16,22 +16,22 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "google/rpc/code.pb.h"
+#include "google/rpc/status.pb.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "include/nlohmann/json.hpp"
@@ -52,64 +52,6 @@
 namespace p4rt_app {
 namespace sonic {
 namespace {
-
-// Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be deleted (i.e. already exist). On success the
-// P4RT key is returned.
-absl::StatusOr<std::string> CreateEntryForDelete(
-    P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
-    const pdpi::IrP4Info& p4_info,
-    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_deletes) {
-  VLOG(2) << "Delete PDPI IR entry: " << entry.ShortDebugString();
-  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
-
-  VLOG(1) << "Delete AppDb entry: " << key;
-  swss::KeyOpFieldsValuesTuple key_value;
-  kfvKey(key_value) = key;
-  kfvOp(key_value) = "DEL";
-  p4rt_deletes.push_back(std::move(key_value));
-  return key;
-}
-
-// Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be inserted (i.e. doesn't already exist). On
-// success the P4RT key is returned.
-absl::StatusOr<std::string> CreateEntryForInsert(
-    P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
-    const pdpi::IrP4Info& p4_info,
-    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts) {
-  VLOG(2) << "Insert PDPI IR entry: " << entry.ShortDebugString();
-  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
-
-  VLOG(1) << "Insert AppDb entry: " << key;
-  swss::KeyOpFieldsValuesTuple key_value;
-  kfvKey(key_value) = key;
-  kfvOp(key_value) = "SET";
-  ASSIGN_OR_RETURN(kfvFieldsValues(key_value),
-                   IrTableEntryToAppDbValues(entry));
-  p4rt_inserts.push_back(std::move(key_value));
-  return key;
-}
-
-// Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be modified (i.e. already exist). On success the
-// P4RT key is returned.
-absl::StatusOr<std::string> CreateEntryForModify(
-    P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
-    const pdpi::IrP4Info& p4_info,
-    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies) {
-  VLOG(2) << "Modify PDPI IR entry: " << entry.ShortDebugString();
-  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
-
-  VLOG(1) << "Modify AppDb entry: " << key;
-  swss::KeyOpFieldsValuesTuple key_value;
-  kfvKey(key_value) = key;
-  kfvOp(key_value) = "SET";
-  ASSIGN_OR_RETURN(kfvFieldsValues(key_value),
-                   IrTableEntryToAppDbValues(entry));
-  p4rt_modifies.push_back(std::move(key_value));
-  return key;
-}
 
 absl::Status AppendCounterData(
     pdpi::IrTableEntry& table_entry,
@@ -167,6 +109,48 @@ absl::Status AppendCounterData(
   }
 
   return absl::OkStatus();
+}
+
+absl::StatusOr<swss::KeyOpFieldsValuesTuple> CreateAppDbP4rtUpdate(
+    p4::v1::Update::Type update_type, const pdpi::IrTableEntry& entry,
+    const pdpi::IrP4Info& p4_info) {
+  swss::KeyOpFieldsValuesTuple update;
+  ASSIGN_OR_RETURN(kfvKey(update), GetRedisP4rtTableKey(entry, p4_info));
+  switch (update_type) {
+    case p4::v1::Update::INSERT:
+    case p4::v1::Update::MODIFY: {
+      kfvOp(update) = SET_COMMAND;
+      ASSIGN_OR_RETURN(kfvFieldsValues(update),
+                       IrTableEntryToAppDbValues(entry));
+    } break;
+    case p4::v1::Update::DELETE:
+      kfvOp(update) = DEL_COMMAND;
+      break;
+    default:
+      return gutil::InvalidArgumentErrorBuilder()
+             << "[P4RT App] Unsupported update type: "
+             << p4::v1::Update::Type_Name(update_type);
+  }
+  return update;
+}
+
+// Executes updates to the P4RT table. Returns an error if there was a problem
+// with performing the request. Returns false if the request was processed but
+// at least one update failed. Returns true if all updates succeeed.
+absl::StatusOr<bool> PerformAppDbP4rtUpdates(
+    P4rtTable& p4rt_table,
+    const std::vector<swss::KeyOpFieldsValuesTuple>& updates,
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& results) {
+  if (updates.empty()) return true;
+  p4rt_table.producer->send(updates);
+  RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
+      *p4rt_table.producer, results));
+  for (const auto& update : updates) {
+    if (results.at(kfvKey(update))->code() != google::rpc::Code::OK) {
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace
@@ -350,10 +334,120 @@ absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
   kfvKey(kfv) = key;
   kfvOp(kfv) = "SET";
   kfvFieldsValues(kfv) = values;
-  p4rt_table.notification_producer->send({kfv});
+  p4rt_table.producer->send({kfv});
 
   return key;
 
+}
+
+bool operator==(const AppDbUpdate& lhs, const AppDbUpdate& rhs) {
+  if (lhs.table != rhs.table) return false;
+  if (kfvKey(lhs.update) != kfvKey(rhs.update)) return false;
+  if (kfvOp(lhs.update) != kfvOp(rhs.update)) return false;
+  if (kfvFieldsValues(lhs.update).size() !=
+      kfvFieldsValues(rhs.update).size()) {
+    return false;
+  }
+
+  absl::flat_hash_map<std::string, std::string> lhs_values;
+  for (const auto& [field, value] : kfvFieldsValues(lhs.update)) {
+    lhs_values[field] = value;
+  }
+  for (const auto& [field, value] : kfvFieldsValues(rhs.update)) {
+    auto lhs_lookup = lhs_values.find(field);
+    if (lhs_lookup == lhs_values.end()) return false;
+    if (lhs_lookup->second != value) return false;
+  }
+  return true;
+}
+
+AppDbTableType GetAppDbTableType(const pdpi::IrEntity& ir_entity) {
+  return ir_entity.table_entry().table_name() == "vrf_table"
+             ? sonic::AppDbTableType::VRF_TABLE
+             : sonic::AppDbTableType::P4RT;
+}
+
+absl::StatusOr<AppDbUpdate> CreateAppDbUpdate(p4::v1::Update::Type update_type,
+                                              const pdpi::IrEntity& entity,
+                                              const pdpi::IrP4Info& p4_info) {
+  AppDbUpdate update;
+  update.table = GetAppDbTableType(entity);
+  switch (GetAppDbTableType(entity)) {
+    case AppDbTableType::VRF_TABLE: {
+      ASSIGN_OR_RETURN(update.update,
+                       CreateAppDbVrfUpdate(update_type, entity.table_entry()));
+      return update;
+    }
+    case AppDbTableType::P4RT: {
+      switch (entity.entity_case()) {
+        case pdpi::IrEntity::kTableEntry: {
+          ASSIGN_OR_RETURN(update.update,
+                           CreateAppDbP4rtUpdate(
+                               update_type, entity.table_entry(), p4_info));
+          return update;
+        }
+        case pdpi::IrEntity::kPacketReplicationEngineEntry: {
+          ASSIGN_OR_RETURN(
+              update.update,
+              CreateAppDbPacketReplicationTableUpdate(
+                  update_type, entity.packet_replication_engine_entry()));
+          return update;
+        }
+        default:
+          break;
+      }
+    } break;
+    default:
+      break;
+  }
+  return gutil::InvalidArgumentErrorBuilder()
+         << "[P4RT App] Entity has no AppDb translation.";
+}
+
+absl::StatusOr<bool> PerformAppDbUpdates(
+    P4rtTable& p4rt_table, VrfTable& vrf_table,
+    const std::vector<std::pair<AppDbUpdate, pdpi::IrUpdateStatus*>>&
+        updates_and_results) {
+  std::vector<swss::KeyOpFieldsValuesTuple> p4rt_updates;
+  absl::btree_map<std::string, pdpi::IrUpdateStatus*> p4rt_results;
+
+  bool failed = false;
+  for (const auto& [update, result] : updates_and_results) {
+    if (failed) {
+      *result = GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+      continue;
+    }
+    switch (update.table) {
+      case AppDbTableType::VRF_TABLE: {
+        // Flush any P4 updates before attempting the VRF update.
+        // This maintains fail-on-first-error behavior where we shouldn't
+        // attempt the VRF update if any of the queued P4 updates fails.
+        ASSIGN_OR_RETURN(
+            bool p4_success,
+            PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results));
+        p4rt_updates.clear();
+        p4rt_results.clear();
+        if (p4_success) {
+          ASSIGN_OR_RETURN(*result,
+                           PerformAppDbVrfUpdate(vrf_table, update.update));
+        } else {
+          *result =
+              GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+        }
+        // Fail on the first error.
+        failed = result->code() != google::rpc::Code::OK;
+      } break;
+      case AppDbTableType::P4RT: {
+        p4rt_updates.push_back(update.update);
+        p4rt_results[kfvKey(update.update)] = result;
+      } break;
+      default:
+        break;
+    }
+  }
+
+  if (failed) return false;
+  return PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results);
 }
 
 absl::StatusOr<std::string> GetRedisP4rtTableKey(
@@ -430,93 +524,6 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
     p4rt_keys.push_back(key);
   }
   return p4rt_keys;
-}
-
-absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
-                         const AppDbUpdates& updates,
-                         const pdpi::IrP4Info& p4_info,
-                         pdpi::IrWriteResponse* response) {
-  std::vector<swss::KeyOpFieldsValuesTuple> kfv_updates;
-  absl::btree_map<std::string, pdpi::IrUpdateStatus*> app_db_status;
-  bool fail_on_first_error = false;
-  for (const auto& entry : updates.entries) {
-    // Mark rest of the entries as not attempted after the first error.
-    if (fail_on_first_error) {
-      *response->mutable_statuses(entry.rpc_index) =
-          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
-      continue;
-    }
-
-    if (entry.appdb_table == AppDbTableType::UNKNOWN) {
-      // If we cannot determine the table type then something went wrong with
-      // the IR translation, and we should not continue with this request.
-      return gutil::InternalErrorBuilder()
-             << "Could not determine AppDb table type for entry: "
-             << entry.entry.ShortDebugString();
-    } else if (entry.appdb_table == AppDbTableType::VRF_TABLE) {
-      // Update non AppDb:P4RT entries (e.g. VRF_TABLE).
-      RETURN_IF_ERROR(
-          UpdateAppDbVrfTable(vrf_table, entry.update_type, entry.rpc_index,
-                              entry.entry.table_entry(), *response));
-      if (response->statuses(entry.rpc_index).code() != google::rpc::Code::OK) {
-        fail_on_first_error = true;
-      }
-    } else if (entry.appdb_table == AppDbTableType::P4RT &&
-               entry.entry.entity_case() ==
-                   pdpi::IrEntity::kPacketReplicationEngineEntry) {
-      // Add update for packet replication to P4RT batch.
-      auto packet_replication_key = CreatePacketReplicationTableUpdateForAppDb(
-          p4rt_table, entry.update_type,
-          entry.entry.packet_replication_engine_entry(), kfv_updates);
-
-      if (packet_replication_key.ok()) {
-        app_db_status[*packet_replication_key] =
-            response->mutable_statuses(entry.rpc_index);
-      } else {
-        LOG(WARNING) << "Could not update in AppDb: "
-                     << packet_replication_key.status();
-        *response->mutable_statuses(entry.rpc_index) =
-            GetIrUpdateStatus(packet_replication_key.status());
-        fail_on_first_error = true;
-      }
-    } else {
-      // Otherwise we default to updating the P4RT table.
-      absl::StatusOr<std::string> key;
-      switch (entry.update_type) {
-        case p4::v1::Update::INSERT:
-          key = CreateEntryForInsert(p4rt_table, entry.entry.table_entry(),
-                                     p4_info, kfv_updates);
-          break;
-        case p4::v1::Update::MODIFY:
-          key = CreateEntryForModify(p4rt_table, entry.entry.table_entry(),
-                                     p4_info, kfv_updates);
-          break;
-        case p4::v1::Update::DELETE:
-          key = CreateEntryForDelete(p4rt_table, entry.entry.table_entry(),
-                                     p4_info, kfv_updates);
-          break;
-        default:
-          key = gutil::InvalidArgumentErrorBuilder()
-                << "Unsupported update type: " << entry.update_type;
-      }
-
-      if (key.ok()) {
-        app_db_status[*key] = response->mutable_statuses(entry.rpc_index);
-      } else {
-        LOG(WARNING) << "Could not update in AppDb: " << key.status();
-        *response->mutable_statuses(entry.rpc_index) =
-            GetIrUpdateStatus(key.status());
-        fail_on_first_error = true;
-      }
-    }
-  }
-
-  // Send all the P4RT_TABLE updates as one batch.
-  p4rt_table.notification_producer->send(kfv_updates);
-  RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
-      *p4rt_table.notification_consumer, app_db_status));
-
-  return absl::OkStatus();
 }
 
 }  // namespace sonic
