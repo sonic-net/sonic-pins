@@ -25,6 +25,8 @@
 #include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/btree_map.h"
+#include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -34,6 +36,7 @@
 #include "absl/strings/strip.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "dvaas/failure_post_processing.h"
 #include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
@@ -59,6 +62,7 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -75,6 +79,10 @@
 namespace dvaas {
 namespace {
 
+using ::p4_symbolic::packet_synthesizer::SynthesizedPacket;
+using ::packetlib::Packet;
+using ::pins_test::P4rtPortId;
+
 void LogAndRecordDurationForDvaasComponent(std::string component_name,
                                            absl::Duration duration) {
   testing::Test::RecordProperty(
@@ -83,10 +91,6 @@ void LogAndRecordDurationForDvaasComponent(std::string component_name,
   LOG(INFO) << component_name << " took " << absl::ToInt64Milliseconds(duration)
             << " milliseconds";
 }
-
-using ::p4_symbolic::packet_synthesizer::SynthesizedPacket;
-using ::packetlib::Packet;
-using ::pins_test::P4rtPortId;
 
 absl::StatusOr<SynthesizedPacket> GetSynthesizedPacketFromFromTestVector(
     const dvaas::PacketTestVector& test_vector) {
@@ -258,6 +262,8 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
 
   // Order the entities so that an entity that may be depended on by another
   // entity comes first.
+  // TODO: Make sure that the current entities on the switch are
+  // all the ones from the start at this point.
   RETURN_IF_ERROR(pdpi::StableSortEntities(ir_p4info, pi_entities));
 
   // Convert `pi_entities` to `ir_entities` to pass into
@@ -265,46 +271,80 @@ absl::StatusOr<std::optional<pdpi::IrEntities>> MinimizePacketTestVectors(
   ASSIGN_OR_RETURN(pdpi::IrEntities result,
                    pdpi::PiEntitiesToIr(ir_p4info, pi_entities));
 
-  // Iterate backwards through the entities, remove the current entity from the
-  // switch, and reinstall the entity on the switch if no failure occurs.
+  TestIfEntitiesCanBeRemoved test_if_entities_can_be_removed =
+      [&](const pdpi::IrEntities& entities_to_remove) -> absl::StatusOr<bool> {
+    // Store the entities on the switch before deleting the entities.
+    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities_before_deletion,
+                     pdpi::ReadPiEntities(sut_api.p4rt.get()));
 
-  RETURN_IF_ERROR(dvaas::EntityMinimizationLoop(
-      /*test_if_entity_can_be_removed=*/
-      [&sut_api, maintain_original_failure, &test_and_validate_callback,
-       &test_outcome, &synthesized_packet](
-          const pdpi::IrEntity& entity_to_remove,
-          const pdpi::IrEntities& current_entities) -> absl::StatusOr<bool> {
-        // Uninstall the entity from the switch.
-        if (!DeleteIrEntity(*sut_api.p4rt, entity_to_remove).ok()) {
-          return false;
-        }
-        ASSIGN_OR_RETURN(
-            PacketTestOutcome new_test_outcome,
-            test_and_validate_callback(synthesized_packet, current_entities));
+    if (status.ok()) {
+      // Get the current entities on the switch.
+      ASSIGN_OR_RETURN(pdpi::IrEntities current_entities,
+                       pdpi::ReadIrEntities(*sut_api.p4rt));
+      ASSIGN_OR_RETURN(
+          PacketTestOutcome new_test_outcome,
+          test_and_validate_callback(synthesized_packet, current_entities));
 
-        if (!new_test_outcome.test_result().has_failure() ||
-            (maintain_original_failure &&
-             !HasSameFailure(test_outcome, new_test_outcome))) {
-          // If there is no failure, reinstall the entity on the switch and add
-          // the entity back to the result.
-          RETURN_IF_ERROR(
-              pdpi::InstallIrEntity(*sut_api.p4rt, entity_to_remove))
-              << "Failed to reinstall entity that we just deleted from switch:"
-              << gutil::PrintTextProto(entity_to_remove);
-          return false;
-        }
+      // The entities can be removed from the switch if there is a failure and
+      // `maintain_same_failure` is true. If this condition is not met, then we
+      // reinstall the entities on the switch.
+      if (new_test_outcome.test_result().has_failure() &&
+          (!maintain_original_failure ||
+           HasSameFailure(test_outcome, new_test_outcome))) {
         return true;
-      },
-      result));
+      }
+    }
+
+    // Reinstall the entities that failed to be deleted by reinstalling all
+    // the entities. Reinstalling an entity that is still on the switch will
+    // throw an error.
+    status = InstallIrEntities(*sut_api.p4rt, entities_to_remove);
+    if (!status.ok()) {
+      // Get a set of the current entities after reinstallation.
+      ASSIGN_OR_RETURN(
+          std::vector<p4::v1::Entity> entities_after_reinstallation,
+          pdpi::ReadPiEntities(sut_api.p4rt.get()));
+      absl::flat_hash_set<pdpi::EntityKey> entity_keys_after_reinstallation;
+      for (const auto& entity : entities_after_reinstallation) {
+        ASSIGN_OR_RETURN(pdpi::EntityKey entity_key,
+                         pdpi::EntityKey::MakeEntityKey(entity));
+        entity_keys_after_reinstallation.insert(entity_key);
+      }
+
+      // Make a set of entity keys before deletion.
+      absl::btree_set<pdpi::EntityKey> entity_keys_before_deletion;
+      for (const auto& entity : entities_before_deletion) {
+        ASSIGN_OR_RETURN(pdpi::EntityKey entity_key,
+                         pdpi::EntityKey::MakeEntityKey(entity));
+        if (!entity_keys_after_reinstallation.contains(entity_key)) {
+          return status;
+        }
+      }
+    }
+    return false;
+  };
+
+  RETURN_IF_ERROR(dvaas::DoEntityMinimization(
+      /*test_if_entities_can_be_removed=*/
+      test_if_entities_can_be_removed, result, kTableBasedBisection));
 
   LOG(INFO) << "The initial number of entities is " << pi_entities.size()
             << ".\n";
   LOG(INFO) << "The final number of entities is " << result.entities_size()
             << ".\n";
+
+  // Get the minimal set of entities from the switch that caused the test
+  // failure.
+  ASSIGN_OR_RETURN(pdpi::IrEntities minimal_entities,
+                   pdpi::ReadIrEntities(*sut_api.p4rt));
+
+  // TODO: Print the minimal set of entities that caused the test
+  // failure to an artifact file.
+  //
   LOG(INFO)
       << "The minimal set of entities that caused the test failure is: \n";
-  LOG(INFO) << gutil::PrintTextProto(result);
-  return result;
+  LOG(INFO) << gutil::PrintTextProto(minimal_entities);
+  return minimal_entities;
 }
 
 std::string ToString(
