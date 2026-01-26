@@ -87,6 +87,8 @@ struct FailureEnhancementOptions {
   // Ensures that any minimized failure maintains the original expectation and
   // switch output.
   bool maintain_original_failure_during_minimization = true;
+  // If true, reset the entities on the switch after minimization completes.
+  bool reset_entities_on_switch = true;
 
   std::function<absl::Status(DvaasRegressionTestProto&)>
       attach_user_metadata_to_dvaas_regression_proto;
