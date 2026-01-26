@@ -37,6 +37,7 @@
 #include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnoi/gnoi_helper.h"
+#include "lib/ssh/ssh_wrapper_client.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "system/system.grpc.pb.h"
@@ -268,6 +269,18 @@ absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
   }
   return absl::FailedPreconditionError(
       absl::StrCat("The system has alarms set: ", absl::StrJoin(alarms, "; ")));
+}
+
+absl::Status SwitchUp(thinkit::Switch& thinkit_switch,
+                      thinkit::SSHClient& ssh_client,
+                      thinkit::SshWrapperClient& ssh_wrapper_client,
+                      absl::Duration timeout) {
+  RETURN_IF_ERROR(SwitchReadyWithSsh(thinkit_switch, ssh_client,
+                                     /*interfaces=*/{},
+                                     /*check_interfaces=*/false,
+                                     /*with_healthz=*/false, timeout));
+  return ssh_wrapper_client.CheckContainersUp(thinkit_switch.ChassisName(),
+                                              ssh_client);
 }
 
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
