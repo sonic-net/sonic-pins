@@ -42,6 +42,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/utils/constants.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -83,7 +84,6 @@ using ::p4::v1::ReadResponse;
 using ::p4::v1::Update;
 
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
-constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr absl::Duration kTurnDownTimeout = absl::Minutes(2);
 constexpr int kEpochMarginalError = 2;
 constexpr std::array<absl::string_view, 2> kAclFlows = {
@@ -622,8 +622,9 @@ absl::Status InstallRebootPushConfig(
   std::vector<std::string> interfaces_to_check =
       GetConnectedInterfacesForSut(testbed);
   SwitchState intent_state = SwitchState::kReady;
-  RETURN_IF_ERROR(WaitForSwitchState(sut, intent_state, kTurnUpTimeout,
-                                     ssh_client, interfaces_to_check));
+  RETURN_IF_ERROR(WaitForSwitchState(sut, intent_state,
+                                     GetColdRebootWaitForUpTime(), ssh_client,
+                                     interfaces_to_check));
 
   LOG(INFO) << "Initial setup of image install, cold reboot and config push is "
                "complete.";
@@ -691,7 +692,8 @@ absl::Status NsfReboot(const Testbed &testbed) {
 absl::Status WaitForReboot(const Testbed& testbed,
                            thinkit::SSHClient& ssh_client,
                            bool check_interfaces_up,
-                           absl::Span<const std::string> interfaces) {
+                           absl::Span<const std::string> interfaces,
+                           absl::Duration timeout) {
   LOG(INFO) << "Waiting for switch to go down and come back up";
   // Wait for switch to go down and come back up.
   thinkit::Switch& sut = GetSut(testbed);
@@ -707,7 +709,7 @@ absl::Status WaitForReboot(const Testbed& testbed,
                             check_interfaces_up
                                 ? SwitchState::kReady
                                 : SwitchState::kReadyWithoutInterfacesUp,
-                            kTurnUpTimeout, ssh_client, interfaces);
+                            timeout, ssh_client, interfaces);
 }
 
 absl::Status

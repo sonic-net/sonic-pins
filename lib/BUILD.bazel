@@ -240,3 +240,34 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "otg_helper",
+    testonly = True,
+    srcs = ["otg_helper.cc"],
+    hdrs = ["otg_helper.h"],
+    deps = [
+        "//gutil/gutil:status",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_otg_models//:otg_cc_proto",
+        "@com_github_otg_models//:otg_grpc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+)
+
+cc_test(
+    name = "otg_helper_test",
+    srcs = ["otg_helper_test.cc"],
+    deps = [
+        ":otg_helper",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status_matchers",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_otg_models//:otg_cc_proto",
+        "@com_github_otg_models//:otg_grpc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
