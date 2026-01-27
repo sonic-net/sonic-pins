@@ -250,7 +250,7 @@ absl::StatusOr<std::string> TranslatePort(
     case TranslationDirection::kForController: {
       auto value = port_map.left.find(port_key);
       if (value == port_map.left.end()) {
-        return gutil::InvalidArgumentErrorBuilder().LogError()
+        return gutil::FailedPreconditionErrorBuilder().LogError()
                << "[P4RT App] Cannot translate port '"
                << absl::CHexEscape(port_key)
                << "' to P4RT ID. Has the port been configured with an ID?";
@@ -260,7 +260,7 @@ absl::StatusOr<std::string> TranslatePort(
     case TranslationDirection::kForOrchAgent: {
       auto value = port_map.right.find(port_key);
       if (value == port_map.right.end()) {
-        return gutil::InvalidArgumentErrorBuilder().LogError()
+        return gutil::FailedPreconditionErrorBuilder().LogError()
                << "[P4RT App] Cannot translate port '"
                << absl::CHexEscape(port_key)
                << "' to SONiC name. Has the port been configured with an ID?";

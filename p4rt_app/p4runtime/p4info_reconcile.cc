@@ -25,6 +25,7 @@
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/hashing.h"
@@ -156,13 +157,18 @@ absl::StatusOr<bool> IsValidModification(
                    sonic::kfvFieldLookup(to_db_table, "stage"));
 
   if (from_stage != to_stage) {
-    return gutil::InvalidArgumentErrorBuilder()
+    return gutil::FailedPreconditionErrorBuilder()
            << "ACL tables may not change stage. Cannot transition table '"
            << to_table.preamble().alias() << "' from stage '" << from_stage
            << "' to '" << to_stage << "'";
   }
 
-  return !sonic::kfvEq(*from_db_table, to_db_table);
+  bool force_modify = pdpi::GetAnnotationBody("reinstall_during_upgrade",
+                                              to_table.preamble().annotations())
+                          .ok();
+  bool modified = !sonic::kfvEq(*from_db_table, to_db_table);
+
+  return modified || force_modify;
 }
 
 absl::Status CalculateAclDifference(const pdpi::IrP4Info& from,
@@ -183,7 +189,15 @@ absl::Status CalculateAclDifference(const pdpi::IrP4Info& from,
     pdpi::IrTableDefinition from_table = from.tables_by_name().at(table_name);
     pdpi::IrTableDefinition to_table = to.tables_by_name().at(table_name);
     ASSIGN_OR_RETURN(bool modified, IsValidModification(from_table, to_table));
-    if (modified) transition.acl_tables_to_modify.push_back(table_name);
+    if (modified) {
+      if (pdpi::GetAnnotationBody("nonessential_for_upgrade",
+                                  to_table.preamble().annotations())
+              .ok()) {
+        transition.nonessential_acl_tables_to_modify.push_back(table_name);
+      } else {
+        transition.essential_acl_tables_to_modify.push_back(table_name);
+      }
+    }
   }
   return absl::OkStatus();
 }
@@ -210,26 +224,34 @@ GetUpdatedResourceCapacities(
         GetActionProfileResourceCapacity(action_profile_def);
     const ActionProfileResourceCapacity* original_capacity =
         gutil::FindOrNull(original, action_profile_name);
-    capacity.current_utilization = original_capacity == nullptr
-                                       ? 0
-                                       : original_capacity->current_utilization;
-    if (capacity.current_utilization > capacity.max_weight_for_all_groups) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "The new ForwardingPipelineConfig capacity for action profile '"
-             << action_profile_name << "' ("
-             << capacity.max_weight_for_all_groups
-             << ") is less than the current usage ("
-             << capacity.current_utilization << ")";
+    if (original_capacity != nullptr) {
+      capacity.current_total_weight = original_capacity->current_total_weight;
+      capacity.current_total_members = original_capacity->current_total_members;
     }
+
+    if (auto max_total_weight = GetMaxWeightForAllGroups(capacity);
+        max_total_weight.has_value() && *max_total_weight != 0 &&
+        capacity.current_total_weight > *max_total_weight) {
+      return gutil::FailedPreconditionErrorBuilder()
+             << "The new ForwardingPipelineConfig capacity for action profile '"
+             << action_profile_name << "' with SumOfWeight size semantics ("
+             << *max_total_weight << ") is less than the current usage ("
+             << capacity.current_total_weight << ")";
+    }
+    // TODO: b/330375908 - Handle new SumOfMembers circumstances.
+
     // TODO: Check against the current usage.
-    if (capacity.current_utilization > 0 &&
-        capacity.max_group_size < original_capacity->max_group_size) {
-      return gutil::InvalidArgumentErrorBuilder()
+    // If the action profile is in use, then we do not allow shrinking max group
+    // size.
+    if (capacity.current_total_weight > 0 &&
+        capacity.action_profile.max_group_size() <
+            original_capacity->action_profile.max_group_size()) {
+      return gutil::FailedPreconditionErrorBuilder()
              << "The new ForwardingPipelineConfig max group size for action "
              << "profile '" << action_profile_name << "' ("
-             << capacity.max_group_size
+             << capacity.action_profile.max_group_size()
              << ") is smaller than the original size ("
-             << original_capacity->max_group_size
+             << original_capacity->action_profile.max_group_size()
              << "). Shrinking the max group size is currently unsupported.";
     }
 

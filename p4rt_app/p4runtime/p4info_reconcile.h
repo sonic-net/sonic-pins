@@ -38,7 +38,8 @@ struct P4InfoReconcileTransition {
   // ACL
   std::vector<std::string> acl_tables_to_delete;
   std::vector<std::string> acl_tables_to_add;
-  std::vector<std::string> acl_tables_to_modify;
+  std::vector<std::string> nonessential_acl_tables_to_modify;
+  std::vector<std::string> essential_acl_tables_to_modify;
 
   template <typename Sink>
   friend void AbslStringify(Sink& sink,
@@ -51,7 +52,8 @@ struct P4InfoReconcileTransition {
   upate_switch_table = %s,
   acl_tables_to_delete = {%s},
   acl_tables_to_add = {%s},
-  acl_tables_to_modify = {%s},
+  nonessential_acl_tables_to_modify = {%s},
+  essential_acl_tables_to_modify = {%s},
 })",
 
         absl::StrJoin(transition.hashing_packet_field_configs_to_delete, ", "),
@@ -59,7 +61,8 @@ struct P4InfoReconcileTransition {
         (transition.update_switch_table ? "true" : "false"),
         absl::StrJoin(transition.acl_tables_to_delete, ", "),
         absl::StrJoin(transition.acl_tables_to_add, ", "),
-        absl::StrJoin(transition.acl_tables_to_modify, ", "));
+        absl::StrJoin(transition.nonessential_acl_tables_to_modify, ", "),
+        absl::StrJoin(transition.essential_acl_tables_to_modify, ", "));
   }
 };
 
