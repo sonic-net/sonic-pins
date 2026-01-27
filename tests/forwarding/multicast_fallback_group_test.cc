@@ -82,6 +82,9 @@ constexpr int kMulticastInstance = 1;
 // Multicast group id used in the test.
 constexpr int kMulticastGroupId = 1;
 
+// Maximum multicast group id used in the test.
+constexpr int kMaxMulticastGroupId = 500;
+
 // Multicast IP address used in the test.
 constexpr auto kMulticastDstIpv4 = netaddr::Ipv4Address(0xe0, 0, 0, 0x1);
 
@@ -266,7 +269,8 @@ absl::Status InstallMulticastRitfs(pdpi::P4RuntimeSession& switch_session,
 
 absl::Status InstallMulticastGroup(pdpi::P4RuntimeSession& switch_session,
                                    absl::string_view default_replica_port,
-                                   const std::vector<std::string>& ports) {
+                                   const std::vector<std::string>& ports,
+                                   int multicast_group_id = kMulticastGroupId) {
   sai::EntryBuilder entry_builder;
   std::vector<sai::BackupReplica> backup_replicas;
   for (int r = 1; r < ports.size(); ++r) {
@@ -280,7 +284,7 @@ absl::Status InstallMulticastGroup(pdpi::P4RuntimeSession& switch_session,
   sai_replicas.push_back(
       sai::Replica{.egress_port = std::string(default_replica_port),
                    .instance = kMulticastInstance});
-  entry_builder.AddMulticastGroupEntry(kMulticastGroupId, sai_replicas);
+  entry_builder.AddMulticastGroupEntry(multicast_group_id, sai_replicas);
   return entry_builder.LogPdEntries().InstallDedupedEntities(switch_session);
 }
 
@@ -462,6 +466,15 @@ TEST_P(MulticastFallbackGroupTestFixture, MeasureMulticastFallbackDuration) {
   if (!GetParam().check_and_export_duration.has_value()) {
     GTEST_SKIP() << "Multicast fallback duration test skipped because threshold"
                     "and export vector is not defined";
+  }
+
+  // Programs the multicast group.
+  for (int group_id = kMulticastGroupId + 1; group_id <= kMaxMulticastGroupId;
+       ++group_id) {
+    ASSERT_OK(InstallMulticastGroup(
+        *sut_p4_session_,
+        sut_port_ids_[kDefaultReplicaPortIndex].GetP4rtEncoding(),
+        replica_ports_, group_id));
   }
 
   // Get port_name to port id mapping for the control switch.
