@@ -44,14 +44,17 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "artifacts/otg.grpc.pb.h"
+#include "artifacts/otg.pb.h"
 #include "gmock/gmock.h"
+#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "lib/ixia_helper.h"
+#include "lib/otg_helper.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -71,7 +74,6 @@
 #include "tests/forwarding/util.h"
 #include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
-#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
@@ -96,6 +98,22 @@ using ::testing::Eq;
 using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::UnorderedElementsAreArray;
+
+using ::grpc::ClientContext;
+using ::otg::GetConfigResponse;
+using ::otg::Openapi;
+using ::otg::SetConfigRequest;
+using ::otg::SetConfigResponse;
+using ::otg::StateTrafficFlowTransmit;
+
+using ::pins_test::otg_helper::AddEthernetHeader;
+using ::pins_test::otg_helper::AddIPv4Header;
+using ::pins_test::otg_helper::AddPorts;
+using ::pins_test::otg_helper::CreateFlow;
+using ::pins_test::otg_helper::SetFlowDuration;
+using ::pins_test::otg_helper::SetFlowRatePps;
+using ::pins_test::otg_helper::SetFlowSize;
+using ::pins_test::otg_helper::SetTrafficTransmissionState;
 
 // Number of packets sent to one port.
 constexpr int kPacketsNum = 1000000;
@@ -440,85 +458,63 @@ absl::StatusOr<Counters> ReadCounters(std::string iface,
   return cnt;
 }
 
+struct IxiaTrafficSettings {
+  Openapi::StubInterface& traffic_client;
+  int64_t traffic_rate;
+  int sampling_rate;
+};
+
 // The packets are all same for one port. Use port_id as the index for
 // generating packets.
-absl::Status SendNPacketsToSut(absl::Span<const std::string> traffic_ref,
-                               absl::string_view topology_ref,
-                               absl::Duration runtime,
-                               thinkit::GenericTestbed& testbed) {
+absl::Status SendNPacketsToSut(Openapi::StubInterface& traffic_client,
+                               absl::Duration runtime) {
   // Send Ixia traffic.
-  RETURN_IF_ERROR(
-      pins_test::ixia::StartTraffic(traffic_ref, topology_ref, testbed));
+  RETURN_IF_ERROR(SetTrafficTransmissionState(
+      traffic_client, StateTrafficFlowTransmit::State::start));
 
   // Wait for Traffic to be sent.
   absl::SleepFor(runtime);
 
   // Stop Ixia traffic.
-  RETURN_IF_ERROR(pins_test::ixia::StopTraffic(traffic_ref, testbed));
-
-  return absl::OkStatus();
+  return SetTrafficTransmissionState(traffic_client,
+                                     StateTrafficFlowTransmit::State::stop);
 }
 
-// Set up Ixia traffic with given parameters and return the traffic ref and
-// topology ref string.
-absl::StatusOr<std::pair<std::vector<std::string>, std::string>>
-SetUpIxiaTraffic(absl::Span<const IxiaLink> ixia_links,
-                 thinkit::GenericTestbed& testbed, const int64_t pkt_count,
-                 const int64_t pkt_rate, const int frame_size = 1000) {
-  std::vector<std::string> traffic_refs;
-  std::string topology_ref;
-  for (const IxiaLink& ixia_link : ixia_links) {
-    LOG(INFO) << __func__ << " Ixia if:" << ixia_link.ixia_interface
-              << " sut if:" << ixia_link.sut_interface
-              << " port id:" << ixia_link.port_id;
+// Set up Ixia traffic with given parameters and return the traffic_client.
+absl::StatusOr<Openapi::StubInterface*> SetUpIxiaTraffic(
+    absl::Span<const IxiaLink> ixia_links, thinkit::GenericTestbed& testbed,
+    const int64_t pkt_count, const int64_t pkt_rate,
+    gnmi::gNMI::StubInterface& gnmi_stub, const int frame_size = 1000) {
+  const IxiaLink& tx_link = ixia_links[0];
+  const IxiaLink& rx_link = ixia_links[1];
 
-    std::string ixia_interface = ixia_link.ixia_interface;
-    std::string sut_interface = ixia_link.sut_interface;
+  // Create config.
+  SetConfigRequest set_config_request;
+  otg::Config* config = set_config_request.mutable_config();
 
-    // Set up Ixia traffic.
-    ASSIGN_OR_RETURN(pins_test::ixia::IxiaPortInfo ixia_port,
-                     pins_test::ixia::ExtractPortInfo(ixia_interface));
-    ASSIGN_OR_RETURN(std::string topology_ref_tmp,
-                     pins_test::ixia::IxiaConnect(ixia_port.hostname, testbed));
-    if (topology_ref.empty()) {
-      topology_ref = topology_ref_tmp;
-    } else {
-      EXPECT_EQ(topology_ref, topology_ref_tmp);
-    }
+  AddPorts(*config, tx_link.ixia_interface, rx_link.ixia_interface,
+           tx_link.ixia_location, rx_link.ixia_location);
 
-    ASSIGN_OR_RETURN(std::string vport_ref,
-                     pins_test::ixia::IxiaVport(topology_ref, ixia_port.card,
-                                                ixia_port.port, testbed));
+  otg::Flow& flow = CreateFlow(*config, tx_link.ixia_interface,
+                               rx_link.ixia_interface, "sflow");
+  SetFlowSize(flow, frame_size);
+  SetFlowDuration(flow, pkt_count);
+  SetFlowRatePps(flow, pkt_rate);
 
-    ASSIGN_OR_RETURN(std::string traffic_ref,
-                     pins_test::ixia::IxiaSession(vport_ref, testbed));
+  AddEthernetHeader(flow, kSourceMac.ToString(), kDstMac.ToString());
+  AddIPv4Header(flow, kIpv4Src.ToString(),
+                GetDstIpv4AddrByPortId(tx_link.port_id));
 
-    RETURN_IF_ERROR(
-        pins_test::ixia::SetFrameRate(traffic_ref, pkt_rate, testbed));
+  // Set the config.
+  SetConfigResponse set_config_response;
+  ClientContext set_config_context;
+  Openapi::StubInterface* traffic_client = testbed.GetTrafficClient();
+  LOG(INFO) << "Set Config Request: " << set_config_request;
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(traffic_client->SetConfig(
+      &set_config_context, set_config_request, &set_config_response)));
+  LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
 
-    RETURN_IF_ERROR(
-        pins_test::ixia::SetFrameCount(traffic_ref, pkt_count, testbed));
-
-    RETURN_IF_ERROR(
-        pins_test::ixia::SetFrameSize(traffic_ref, frame_size, testbed));
-
-    RETURN_IF_ERROR(pins_test::ixia::SetSrcMac(traffic_ref,
-                                               kSourceMac.ToString(), testbed));
-
-    RETURN_IF_ERROR(
-        pins_test::ixia::SetDestMac(traffic_ref, kDstMac.ToString(), testbed));
-
-    RETURN_IF_ERROR(pins_test::ixia::AppendIPv4(traffic_ref, testbed));
-
-    RETURN_IF_ERROR(
-        pins_test::ixia::SetSrcIPv4(traffic_ref, kIpv4Src.ToString(), testbed));
-    // Use Ipv4 dst address to differentiate different ports.
-    RETURN_IF_ERROR(pins_test::ixia::SetDestIPv4(
-        traffic_ref, GetDstIpv4AddrByPortId(ixia_link.port_id), testbed));
-
-    traffic_refs.push_back(traffic_ref);
-  }
-  return std::make_pair(traffic_refs, topology_ref);
+  return traffic_client;
 }
 
 // Get the packet counters on SUT interface connected to Ixia.
@@ -543,12 +539,10 @@ absl::StatusOr<std::vector<Counters>> GetIxiaInterfaceCounters(
   return counters;
 }
 
-absl::Status SetIxiaTrafficParams(absl::string_view traffic_ref,
-                                  int64_t pkts_num, int64_t traffic_rate,
-                                  thinkit::GenericTestbed& generic_testbed) {
-  RETURN_IF_ERROR(pins_test::ixia::SetFrameRate(traffic_ref, traffic_rate,
-                                                generic_testbed));
-  return pins_test::ixia::SetFrameCount(traffic_ref, pkts_num, generic_testbed);
+void SetIxiaTrafficParams(otg::Flow& flow, int64_t pkts_num,
+                          int64_t traffic_rate) {
+  SetFlowDuration(flow, pkts_num);
+  SetFlowRatePps(flow, traffic_rate);
 }
 
 // Run sflowtool on SUT in a new thread. Returns the thread to let caller to
@@ -720,8 +714,7 @@ absl::StatusOr<std::string> GetHsflowdPid(thinkit::SSHClient& ssh_client,
 
 // Send packets to SUT and validate packet counters via gNMI. This function
 // expects no drops on CPU queue.
-absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
-                              absl::string_view topology_ref,
+absl::Status SendSflowTraffic(Openapi::StubInterface& traffic_client,
                               absl::Span<const IxiaLink> ixia_links,
                               thinkit::GenericTestbed& testbed,
                               gnmi::gNMI::StubInterface* gnmi_stub,
@@ -739,9 +732,8 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
   absl::Time start_time = absl::Now();
 
   RETURN_IF_ERROR(SendNPacketsToSut(
-      traffic_refs, topology_ref,
-      /*runtime=*/absl::Seconds(std::ceil(1.0f * pkt_count / pkt_rate)),
-      testbed));
+      traffic_client,
+      /*runtime=*/absl::Seconds(std::ceil(1.0f * pkt_count / pkt_rate))));
 
   // Sleep to wait for the counters to be reflected.
   absl::SleepFor(absl::Seconds(10));
@@ -887,17 +879,6 @@ int GetSflowSamplesOnSut(const std::string& sflowtool_output,
   return count;
 }
 
-// Get port speed by reading interface/ethernet/state/port-speed path.
-absl::StatusOr<std::string> GetPortSpeed(absl::string_view iface,
-                                         gnmi::gNMI::StubInterface* gnmi_stub) {
-  std::string ops_state_path = absl::StrCat("interfaces/interface[name=", iface,
-                                            "]/ethernet/state/port-speed");
-
-  std::string ops_parse_str = "openconfig-if-ethernet:port-speed";
-  return pins_test::GetGnmiStatePathInfo(gnmi_stub, ops_state_path,
-                                         ops_parse_str);
-}
-
 // Check interface/state/oper-status value to validate if link is up.
 absl::StatusOr<bool> CheckLinkUp(absl::string_view interface,
                                  gnmi::gNMI::StubInterface& gnmi_stub) {
@@ -957,6 +938,7 @@ absl::StatusOr<std::vector<IxiaLink>> GetIxiaConnectedUpLinks(
                   << *port_id;
         ixia_links.push_back(IxiaLink{
             .ixia_interface = info.peer_interface_name,
+            .ixia_location = info.peer_traffic_location,
             .sut_interface = interface,
             .port_id = std::stoi(*port_id),
         });
@@ -1368,15 +1350,8 @@ absl::StatusOr<int> GetPortIdFromInterfaceName(
   return port_id;
 }
 
-struct IxiaTrafficSettings {
-  std::string traffic_ref;
-  std::string topology_ref;
-  int64_t traffic_rate;
-  int sampling_rate;
-};
-
 absl::StatusOr<IxiaTrafficSettings> SetUpIxiaTrafficForSflowNsf(
-    const IxiaLink& ingress_link,
+    absl::Span<const IxiaLink> ixia_links,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     thinkit::GenericTestbed* testbed, gnmi::gNMI::StubInterface* gnmi_stub) {
   absl::flat_hash_map<std::string, int> initial_interfaces_to_sample_rate;
@@ -1387,25 +1362,18 @@ absl::StatusOr<IxiaTrafficSettings> SetUpIxiaTrafficForSflowNsf(
   const int interface_sample_rate =
       initial_interfaces_to_sample_rate.begin()->second;
 
-  // Set up Ixia traffic.
-  // ixia_ref_pair would include the traffic reference and topology reference
-  // which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
-  ASSIGN_OR_RETURN(ixia_ref_pair,
-                   SetUpIxiaTraffic({ingress_link}, *testbed, /*pkt_count=*/0,
-                                    /*pkt_rate=*/0));
-  const std::string traffic_ref = ixia_ref_pair.first[0];
-  const std::string topology_ref = ixia_ref_pair.second;
-
   // Generate 10 samples/sec.
   int64_t traffic_rate = 10 * interface_sample_rate;
-  RETURN_IF_ERROR(SetIxiaTrafficParams(
-      traffic_ref, traffic_rate * kNsfTrafficTestDurationSecs, traffic_rate,
-      *testbed));
+
+  // Set up Ixia traffic.
+  ASSIGN_OR_RETURN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic(ixia_links, *testbed,
+                       /*pkt_count=*/traffic_rate * kNsfTrafficTestDurationSecs,
+                       /*pkt_rate=*/traffic_rate, *gnmi_stub));
 
   return IxiaTrafficSettings{
-      .traffic_ref = traffic_ref,
-      .topology_ref = topology_ref,
+      .traffic_client = *traffic_client,
       .traffic_rate = traffic_rate,
       .sampling_rate = interface_sample_rate,
   };
@@ -1436,12 +1404,9 @@ absl::StatusOr<int> GetSflowSamplesAfterSendingIxiaTraffic(
     });
 
     RETURN_IF_ERROR(SendNPacketsToSut(
-        std::vector<std::string>{
-            std::string(ixia_traffic_settings.traffic_ref)},
-        ixia_traffic_settings.topology_ref,
+        ixia_traffic_settings.traffic_client,
         /*runtime=*/
-        absl::Seconds(std::ceil(1.0f * kNsfTrafficTestDurationSecs)),
-        *testbed));
+        absl::Seconds(std::ceil(1.0f * kNsfTrafficTestDurationSecs))));
 
     // Sleep to wait for the counters to be reflected.
     absl::SleepFor(absl::Seconds(10));
@@ -1459,7 +1424,7 @@ absl::StatusOr<int> GetSflowSamplesAfterSendingIxiaTraffic(
 
 void PerformBackoffTest(
     thinkit::GenericTestbed* testbed, gnmi::gNMI::StubInterface* gnmi_stub,
-    thinkit::SSHClient* ssh_client, const IxiaLink& ingress_link,
+    thinkit::SSHClient* ssh_client, absl::Span<const IxiaLink> ixia_links,
     const std::string& sut_gnmi_config,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const int collector_port, const NosParameters& nos_param) {
@@ -1473,21 +1438,15 @@ void PerformBackoffTest(
   const int interface_sample_rate =
       initial_interfaces_to_sample_rate.begin()->second;
 
-  // Set up Ixia traffic.
-  // ixia_ref_pair would include the traffic reference and topology reference
-  // which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed, 0, 0));
-  const std::string traffic_ref = ixia_ref_pair.first[0],
-                    topology_ref = ixia_ref_pair.second;
+  const IxiaLink& ingress_link = ixia_links[0];
 
-  // Setup Ixia for normal traffic speed - it would generate 10
-  // samples/sec.
   int64_t traffic_rate = 10 * interface_sample_rate;
-  ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackoffTrafficDurationSecs,
-                                 traffic_rate, *testbed));
+
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic(ixia_links, *testbed,
+                       traffic_rate * kBackoffTrafficDurationSecs, traffic_rate,
+                       *gnmi_stub));
 
   // Start sflowtool on SUT.
   std::string sflow_result;
@@ -1510,8 +1469,7 @@ void PerformBackoffTest(
 
     // Send packets from Ixia to SUT.
     ASSERT_OK(SendSflowTraffic(
-        std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
-        {ingress_link}, *testbed, gnmi_stub,
+        *traffic_client, {ingress_link}, *testbed, gnmi_stub,
         /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs, traffic_rate,
         nos_param.kCpuQueueName));
   }
@@ -1533,8 +1491,28 @@ void PerformBackoffTest(
   // generate kBackOffThresholdSamples per sec.
   traffic_rate = kBackOffThresholdSamples * interface_sample_rate;
   int64_t packets_num = traffic_rate * kBackoffTrafficDurationSecs;
+
+  GetConfigResponse get_config_response;
+  ClientContext get_config_context;
+
   ASSERT_OK(
-      SetIxiaTrafficParams(traffic_ref, packets_num, traffic_rate, *testbed));
+      traffic_client->GetConfig(&get_config_context, {}, &get_config_response));
+
+  SetConfigRequest set_config_request;
+
+  otg::Config* config = set_config_request.mutable_config();
+  *config = get_config_response.config();
+  otg::Flow* flow = config->mutable_flows(0);
+  SetIxiaTrafficParams(*flow, packets_num, traffic_rate);
+
+  {
+    SetConfigResponse set_config_response;
+    ClientContext set_config_context;
+    LOG(INFO) << "Set Config Request: " << absl::StrCat(set_config_request);
+    ASSERT_OK(traffic_client->SetConfig(&set_config_context, set_config_request,
+                                        &set_config_response));
+    LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
+  }
 
   // Start sflowtool on SUT.
   {
@@ -1557,8 +1535,7 @@ void PerformBackoffTest(
     // Send packets from Ixia to SUT. We set the `expected_drop_ratio` to 0.05
     // since Ixia traffic unavoidably causes some drops on BE1 queue.
     ASSERT_OK(SendSflowTraffic(
-        std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
-        {ingress_link}, *testbed, gnmi_stub,
+        *traffic_client, {ingress_link}, *testbed, gnmi_stub,
         /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs, traffic_rate,
         nos_param.kCpuQueueName));
   }
@@ -1596,9 +1573,18 @@ void PerformBackoffTest(
 
   // Use a normal traffic speed, sample rate should remain as doubled.
   traffic_rate = 10 * interface_sample_rate;
-  ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackoffTrafficDurationSecs,
-                                 traffic_rate, *testbed));
+  packets_num = traffic_rate * kBackoffTrafficDurationSecs;
+
+  SetIxiaTrafficParams(*flow, packets_num, traffic_rate);
+
+  {
+    SetConfigResponse set_config_response;
+    ClientContext set_config_context;
+    LOG(INFO) << "Set Config Request: " << absl::StrCat(set_config_request);
+    ASSERT_OK(traffic_client->SetConfig(&set_config_context, set_config_request,
+                                        &set_config_response));
+    LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
+  }
 
   {
     // Start sflowtool on SUT.
@@ -1620,8 +1606,7 @@ void PerformBackoffTest(
 
     // Send packets from Ixia to SUT.
     ASSERT_OK(SendSflowTraffic(
-        std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
-        {ingress_link}, *testbed, gnmi_stub,
+        *traffic_client, {ingress_link}, *testbed, gnmi_stub,
         /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs, traffic_rate,
         nos_param.kCpuQueueName));
   }
@@ -1648,9 +1633,18 @@ void PerformBackoffTest(
 
   // Use a normal traffic speed, sample rate should remain as doubled.
   traffic_rate = 10 * interface_sample_rate;
-  ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackoffTrafficDurationSecs,
-                                 traffic_rate, *testbed));
+  packets_num = traffic_rate * kBackoffTrafficDurationSecs;
+
+  SetIxiaTrafficParams(*flow, packets_num, traffic_rate);
+
+  {
+    SetConfigResponse set_config_response;
+    ClientContext set_config_context;
+    LOG(INFO) << "Set Config Request: " << absl::StrCat(set_config_request);
+    ASSERT_OK(traffic_client->SetConfig(&set_config_context, set_config_request,
+                                        &set_config_response));
+    LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
+  }
 
   {
     // Start sflowtool on SUT.
@@ -1672,8 +1666,7 @@ void PerformBackoffTest(
 
     // Send packets from Ixia to SUT.
     ASSERT_OK(SendSflowTraffic(
-        std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
-        {ingress_link}, *testbed, gnmi_stub,
+        *traffic_client, {ingress_link}, *testbed, gnmi_stub,
         /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs, traffic_rate,
         nos_param.kCpuQueueName));
   }
@@ -1762,7 +1755,7 @@ void SflowTestFixture::SetUp() {
 
   ASSERT_OK_AND_ASSIGN(ready_links_,
                        GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
-  ASSERT_FALSE(ready_links_.empty()) << "Ixia links are not ready";
+  ASSERT_GE(ready_links_.size(), 2) << "Ixia links are not ready";
 
   CollectSflowDebugs(ssh_client_, testbed_->Sut().ChassisName(),
                      /*prefix=*/"pretest_", testbed_->Environment(),
@@ -1818,13 +1811,11 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
   };
   const int pkt_size = 500;
 
-  // ixia_ref_pair would include the traffic reference and topology reference
-  // which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
   // Set up Ixia traffic.
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
-                                        kPacketsPerSecond, pkt_size));
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ready_links_[0], ready_links_[1]}, *testbed_,
+                       kPacketsNum, kPacketsPerSecond, *gnmi_stub_, pkt_size));
 
   std::string sflow_result;
   {
@@ -1846,9 +1837,8 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
     });
 
     // Send packets from Ixia to SUT.
-    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                               {ingress_link}, *testbed_, gnmi_stub_.get(),
-                               kPacketsNum, kPacketsPerSecond,
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), kPacketsNum, kPacketsPerSecond,
                                nos_param_.kCpuQueueName));
   }
 
@@ -1910,12 +1900,11 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
                           egress_next_hop_id));
 
   const int pkt_size = 500;
-  // Set up Ixia traffic. ixia_ref_pair would include the traffic reference and
-  // topology reference which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
-                                        kPacketsPerSecond, pkt_size));
+
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ready_links_[0], ready_links_[1]}, *testbed_,
+                       kPacketsNum, kPacketsPerSecond, *gnmi_stub_, pkt_size));
 
   std::string sflow_result;
   {
@@ -1937,9 +1926,8 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
     });
 
     // Send packets from Ixia to SUT.
-    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                               {ingress_link}, *testbed_, gnmi_stub_.get(),
-                               kPacketsNum, kPacketsPerSecond,
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), kPacketsNum, kPacketsPerSecond,
                                nos_param_.kCpuQueueName));
   }
 
@@ -1982,12 +1970,10 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
       SetUpAclDrop(*sut_p4_session_, GetIrP4Info(), ingress_port.port_id));
   const int pkt_size = 500;
 
-  // Set up Ixia traffic. ixia_ref_pair would include the traffic reference and
-  // topology reference which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
-                                        kPacketsPerSecond, pkt_size));
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ready_links_[0], ready_links_[1]}, *testbed_,
+                       kPacketsNum, kPacketsPerSecond, *gnmi_stub_, pkt_size));
 
   std::string sflow_result;
   {
@@ -2009,9 +1995,8 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
     });
 
     // Send packets from Ixia to SUT.
-    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                               {ingress_link}, *testbed_, gnmi_stub_.get(),
-                               kPacketsNum, kPacketsPerSecond,
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), kPacketsNum, kPacketsPerSecond,
                                nos_param_.kCpuQueueName));
   }
 
@@ -2067,12 +2052,11 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
   const int packets_num = 100000;
   const int traffic_speed = 400;
   const int packet_size = 1000;
-  // Set up Ixia traffic. ixia_ref_pair would include the traffic reference
-  // and topology reference which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, packets_num,
-                                        traffic_speed, packet_size));
+
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ready_links_[0], ready_links_[1]}, *testbed_,
+                       packets_num, traffic_speed, *gnmi_stub_, packet_size));
   std::string sflow_result;
 
   absl::Time start_time;
@@ -2104,9 +2088,8 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
     });
 
     start_time = absl::Now();
-    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                               {ingress_link}, *testbed_, gnmi_stub_.get(),
-                               packets_num, traffic_speed,
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), packets_num, traffic_speed,
                                nos_param_.kCpuQueueName));
   }
   EXPECT_OK(testbed_->Environment().StoreTestArtifact("sflow_result.txt",
@@ -2190,16 +2173,16 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
             sample_size = GetParam().sample_size;
   ASSERT_NE(packet_size, 0);
   ASSERT_NE(sample_size, 0);
-  // ixia_ref_pair would include the traffic reference and topology reference
-  // which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
+
   ASSERT_OK(SetSflowSamplingSize(gnmi_stub_.get(), sample_size));
   const IxiaLink& ingress_link = ready_links_[0];
 
   // Set up Ixia traffic.
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
-                                        kPacketsPerSecond, packet_size));
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ready_links_[0], ready_links_[1]}, *testbed_,
+                       kPacketsNum, kPacketsPerSecond, *gnmi_stub_,
+                       packet_size));
 
   // Start sflowtool on SUT.
   std::string sflow_result;
@@ -2222,9 +2205,8 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
     });
 
     // Send packets from Ixia to SUT.
-    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                               {ingress_link}, *testbed_, gnmi_stub_.get(),
-                               kPacketsNum, kPacketsPerSecond,
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), kPacketsNum, kPacketsPerSecond,
                                nos_param_.kCpuQueueName));
   }
 
@@ -2247,9 +2229,6 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
 // send traffic to two interfaces with different sampling rate and verifies
 // samples count.
 TEST_P(SampleRateTest, VerifySamplingRateWorks) {
-  if (!GetParam().run_all_tests) {
-    GTEST_SKIP() << "Skip the test on new platform, to be run later";
-  }
 
   const IxiaLink& ingress_link = ready_links_[0];
   const int sample_rate = GetParam().sample_rate;
@@ -2262,13 +2241,11 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
   ASSERT_OK(SetSflowIngressSamplingRate(
       gnmi_stub_.get(), ingress_link.sut_interface, sample_rate));
 
-  // ixia_ref_pair would include the traffic reference and topology reference
-  // which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
   // Set up Ixia traffic.
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, packets_num,
-                                        traffic_rate, pkt_size));
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ready_links_[0], ready_links_[1]}, *testbed_,
+                       packets_num, traffic_rate, *gnmi_stub_, pkt_size));
 
   std::string sflow_result;
   {
@@ -2290,9 +2267,9 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
     });
 
     // Send packets from Ixia to SUT.
-    ASSERT_OK(SendSflowTraffic(
-        ixia_ref_pair.first, ixia_ref_pair.second, {ingress_link}, *testbed_,
-        gnmi_stub_.get(), packets_num, traffic_rate, nos_param_.kCpuQueueName));
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), packets_num, traffic_rate,
+                               nos_param_.kCpuQueueName));
   }
 
   EXPECT_OK(testbed_->Environment().StoreTestArtifact(
@@ -2347,21 +2324,23 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
     }
   }
   PerformBackoffTest(testbed_.get(), gnmi_stub_.get(), ssh_client_,
-                     ready_links_[0], gnmi_config_with_sflow_,
-                     sflow_enabled_interfaces, collector_port_, nos_param_);
+                     {ready_links_[0], ready_links_[1]},
+                     gnmi_config_with_sflow_, sflow_enabled_interfaces,
+                     collector_port_, nos_param_);
 }
 
 // Sflow measurement test:
 // Measure sflow sampling rate, CPU usage, mem usage
 TEST_P(MeasurementTest, BasicMeasurementTest) {
-  if (!GetParam().run_all_tests) {
-    GTEST_SKIP() << "Skip the test on new platform, to be run later";
-  }
 
   IxiaLink& ingress_link = ready_links_[0];
+  IxiaLink& egress_link = ready_links_[1];
   for (int i = 0; i < ready_links_.size(); i++) {
     if (ready_links_[i].sut_interface == "Ethernet1/1/1") {
       ingress_link = ready_links_[i];
+      if (i == 1) {
+        egress_link = ready_links_[0];
+      }
     }
   }
 
@@ -2384,13 +2363,10 @@ TEST_P(MeasurementTest, BasicMeasurementTest) {
       gnmi_stub_.get(), ingress_link.sut_interface, sample_rate));
   LOG(INFO) << "Interface for sending traffic: " << ingress_link.sut_interface;
 
-  // ixia_ref_pair would include the traffic reference and topology reference
-  // which could be used to send traffic later.
-  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
-  // Set up Ixia traffic.
-  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
-                       SetUpIxiaTraffic({ingress_link}, *testbed_, packets_num,
-                                        traffic_rate, pkt_size));
+  ASSERT_OK_AND_ASSIGN(
+      Openapi::StubInterface * traffic_client,
+      SetUpIxiaTraffic({ingress_link, egress_link}, *testbed_, packets_num,
+                       traffic_rate, *gnmi_stub_, pkt_size));
 
   std::vector<int> actual_result;
   int its = GetParam().iterations;
@@ -2432,9 +2408,9 @@ TEST_P(MeasurementTest, BasicMeasurementTest) {
     }
 
     // Send packets from Ixia to SUT.
-    ASSERT_OK(SendSflowTraffic(
-        ixia_ref_pair.first, ixia_ref_pair.second, {ingress_link}, *testbed_,
-        gnmi_stub_.get(), packets_num, traffic_rate, nos_param_.kCpuQueueName));
+    ASSERT_OK(SendSflowTraffic(*traffic_client, {ingress_link}, *testbed_,
+                               gnmi_stub_.get(), packets_num, traffic_rate,
+                               nos_param_.kCpuQueueName));
 
     // Wait for sflowtool to finish.
     if (sflow_tool_thread.joinable()) {
@@ -2533,7 +2509,8 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
     GTEST_SKIP() << "NSF is disabled, skip VerifyBackOffWorksAfterNsf test.";
   }
 
-  ASSERT_GE(ready_links_.size(), 2) << "Needs two ready ixia links for testing";
+  ASSERT_GE(ready_links_.size(), 4)
+      << "Needs four ready ixia links for testing";
   absl::flat_hash_map<std::string, bool> sflow_interfaces;
   ASSERT_OK_AND_ASSIGN(sflow_interfaces, GetSflowInterfacesFromSut(*testbed_));
   absl::flat_hash_set<std::string> sflow_enabled_interfaces;
@@ -2546,9 +2523,9 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
   {
     SCOPED_TRACE("Backoff test before NSF");
     ASSERT_NO_FATAL_FAILURE(PerformBackoffTest(
-        testbed_.get(), gnmi_stub_.get(), ssh_client_, ready_links_[1],
-        gnmi_config_with_sflow_, sflow_enabled_interfaces, collector_port_,
-        nos_param_));
+        testbed_.get(), gnmi_stub_.get(), ssh_client_,
+        {ready_links_[2], ready_links_[3]}, gnmi_config_with_sflow_,
+        sflow_enabled_interfaces, collector_port_, nos_param_));
   }
   absl::flat_hash_map<std::string, int> interfaces_to_sample_rate;
   ASSERT_OK_AND_ASSIGN(interfaces_to_sample_rate,
@@ -2585,27 +2562,26 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
   {
     SCOPED_TRACE("Backoff test after NSF");
     ASSERT_NO_FATAL_FAILURE(PerformBackoffTest(
-        testbed_.get(), gnmi_stub_.get(), ssh_client_, ready_links_[0],
-        gnmi_config_with_sflow_, sflow_enabled_interfaces, collector_port_,
-        nos_param_));
+        testbed_.get(), gnmi_stub_.get(), ssh_client_,
+        {ready_links_[0], ready_links_[1]}, gnmi_config_with_sflow_,
+        sflow_enabled_interfaces, collector_port_, nos_param_));
   }
 }
 
 
 void SflowNsfTestFixture::TearDown() {
-  if (GetParam().nsf_enabled) {
-    // Cold reboot and restore after NSF test.
-    ASSERT_OK(pins_test::Reboot(::gnoi::system::RebootMethod::COLD,
-                                testbed_->Sut(), testbed_->Environment()));
-    ASSERT_OK(pins_test::WaitForReboot(testbed_.get(), *ssh_client_,
-                                       /*check_interfaces_up=*/false));
+  // Cold reboot and restore after NSF test.
+  ASSERT_OK(pins_test::Reboot(::gnoi::system::RebootMethod::COLD,
+                              testbed_->Sut(), testbed_->Environment()));
+  ASSERT_OK(pins_test::WaitForReboot(testbed_.get(), *ssh_client_,
+                                     /*check_interfaces_up=*/false));
 
-    // Restore P4 session after cold reboot.
-    ASSERT_OK_AND_ASSIGN(
-        sut_p4_session_,
-        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-            testbed_->Sut(), gnmi_config_with_sflow_, GetP4Info()));
-  }
+  // Restore P4 session after cold reboot.
+  ASSERT_OK_AND_ASSIGN(
+      sut_p4_session_,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed_->Sut(), gnmi_config_with_sflow_, GetP4Info()));
+
   SflowTestFixture::TearDown();
 }
  
@@ -2625,8 +2601,9 @@ TEST_P(SflowNsfTestFixture, VerifySflowAfterFreezeAndUnfreeze) {
   }
   ASSERT_OK_AND_ASSIGN(
       IxiaTrafficSettings ixia_traffic_settings,
-      SetUpIxiaTrafficForSflowNsf(ready_links_[0], sflow_enabled_interfaces,
-                                  testbed_.get(), gnmi_stub_.get()));
+      SetUpIxiaTrafficForSflowNsf({ready_links_[0], ready_links_[1]},
+                                  sflow_enabled_interfaces, testbed_.get(),
+                                  gnmi_stub_.get()));
   const int64_t pkt_count =
       ixia_traffic_settings.traffic_rate * kNsfTrafficTestDurationSecs;
   // The minimum percentage of samples that should be recorded during the test.
