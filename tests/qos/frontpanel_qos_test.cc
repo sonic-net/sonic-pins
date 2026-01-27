@@ -1272,7 +1272,9 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     ASSERT_OK_AND_ASSIGN(int64_t weight,
                          gutil::FindOrStatus(weights_by_queue_name, queue));
     const double kExpectedFraction = 1. * weight / total_weight;
-    const double kActualFraction = 1. * num_rx_frames / total_num_rx_frames;
+    // If received packets are 0, then the fraction is 0 (can't divide by 0).
+    const double kActualFraction =
+        total_num_rx_frames == 0 ? 0 : 1. * num_rx_frames / total_num_rx_frames;
     const double kAbsoluteError = kActualFraction - kExpectedFraction;
     const double kRelativeErrorPercent =
         100. * kAbsoluteError / kExpectedFraction;
