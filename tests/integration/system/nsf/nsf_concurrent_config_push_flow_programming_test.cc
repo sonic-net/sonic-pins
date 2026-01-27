@@ -32,6 +32,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/utils/constants.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/compare_p4flows.h"
@@ -56,7 +57,7 @@ constexpr int kIsolatedLacpSystemPriority = 512;
 constexpr int kFlowPrepDuration = 3;
 constexpr int kMinNsfDelayDuration = kFlowPrepDuration + 1;
 constexpr int kMaxNsfDelayDuration = kMinNsfDelayDuration + 10;
-constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
+
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 constexpr int kMaxGnmiGetClients = 15;
 constexpr int kMaxGnmiSubscribeClients = 10;
@@ -86,7 +87,7 @@ void NsfConcurrentConfigPushFlowProgrammingTestFixture::TearDown() {
     ASSERT_OK(PushConfig(GetParam().image_config_params[0], GetSut(testbed_),
                          *ssh_client_));
     ASSERT_OK(WaitForSwitchState(GetSut(testbed_), SwitchState::kReady,
-                                 kTurnUpTimeout, *ssh_client_,
+                                 GetColdRebootWaitForUpTime(), *ssh_client_,
                                  GetConnectedInterfacesForSut(testbed_)));
   }
   TearDownTestbed(testbed_interface_);
