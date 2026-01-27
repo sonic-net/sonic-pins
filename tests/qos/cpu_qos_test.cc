@@ -1498,6 +1498,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   std::string ixia_interface = ready_links[0].ixia_interface;
   std::string sut_interface = ready_links[0].sut_interface;
+
   // Disable sFlow since it would interfere with the test results.
   ASSERT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), /*enabled=*/false));
 
