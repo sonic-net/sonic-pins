@@ -45,19 +45,13 @@ using ListOfValues = std::vector<std::pair<std::string, std::string>>;
 class StateVerificationPacketReplicationTest : public ::testing::Test {
  protected:
   StateVerificationPacketReplicationTest() {
-    auto p4rt_notification_producer =
-        std::make_unique<MockNotificationProducerAdapter>();
-    auto p4rt_notifier = std::make_unique<MockConsumerNotifierAdapter>();
     auto p4rt_app_db = std::make_unique<MockTableAdapter>();
     auto p4rt_counter_db = std::make_unique<MockTableAdapter>();
 
     // Save a pointer so we can test against the mocks.
     mock_p4rt_app_db_ = p4rt_app_db.get();
-    mock_p4rt_notification_producer_ = p4rt_notification_producer.get();
 
     mock_p4rt_table_ = P4rtTable{
-        .notification_producer = std::move(p4rt_notification_producer),
-        .notification_consumer = std::move(p4rt_notifier),
         .app_db = std::move(p4rt_app_db),
         .counter_db = std::move(p4rt_counter_db),
     };
@@ -66,7 +60,6 @@ class StateVerificationPacketReplicationTest : public ::testing::Test {
   // Mock AppDb tables.
   MockTableAdapter* mock_p4rt_app_db_;
   P4rtTable mock_p4rt_table_;
-  MockNotificationProducerAdapter* mock_p4rt_notification_producer_;
 };
 
 TEST(StateVerificationTest, VerifyStateMatches) {

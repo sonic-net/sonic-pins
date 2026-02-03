@@ -1649,7 +1649,7 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       ASSIGN_OR_RETURN(
           pdpi::IrUpdateStatus status,
           sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-              *p4rt_table_.notification_consumer, acl_key));
+              *p4rt_table_.producer, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
@@ -1666,9 +1666,9 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
             _ << "Could not publish Table Definition Set to APPDB");
 
       ASSIGN_OR_RETURN(
-            pdpi::IrUpdateStatus status,
-            sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-                 *p4rt_table_.notification_consumer, acl_key));
+          pdpi::IrUpdateStatus status,
+          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
+              *p4rt_table_.producer, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
