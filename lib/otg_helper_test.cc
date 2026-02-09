@@ -117,6 +117,40 @@ TEST(OtgHelperTest, AddIPv4HeaderTest) {
   EXPECT_THAT(ipv4_header, EqualsProto(flow.packet(0).ipv4()));
 }
 
+TEST(OtgHelperTest, SetIPv4PriorityTest) {
+  otg::FlowIpv4 ipv4_header;
+
+  SetIPv4Priority(ipv4_header, /*dscp=*/8, /*ecn=*/2);
+
+  EXPECT_THAT(ipv4_header, EqualsProto(R"pb(
+                priority {
+                  choice: dscp
+                  dscp {
+                    phb { value: 8 }
+                    ecn { value: 2 }
+                  }
+                }
+              )pb"));
+}
+
+TEST(OtgHelperTest, AddIPv6HeaderTest) {
+  otg::Flow flow;
+  otg::FlowIpv6& ipv6_header = AddIPv6Header(flow, /*src_ipv6=*/"2001:db8::1",
+                                             /*dst_ipv6=*/"2001:db8::2");
+
+  EXPECT_THAT(flow, EqualsProto(R"pb(
+                packet {
+                  choice: ipv6
+                  ipv6 {
+                    src { choice: value value: "2001:db8::1" }
+                    dst { choice: value value: "2001:db8::2" }
+                  }
+                }
+              )pb"));
+
+  EXPECT_THAT(ipv6_header, EqualsProto(flow.packet(0).ipv6()));
+}
+
 TEST(OtgHelperTest, SetTrafficTransmissionStateSuccess) {
   otg::MockOpenapiStub mock_stub;
 

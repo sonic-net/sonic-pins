@@ -76,6 +76,26 @@ otg::FlowIpv4& AddIPv4Header(otg::Flow& flow, absl::string_view src_ipv4,
   return *ipv4_header;
 }
 
+void SetIPv4Priority(otg::FlowIpv4& ip_packet, int dscp, int ecn) {
+  ip_packet.mutable_priority()->set_choice(otg::FlowIpv4Priority::Choice::dscp);
+  ip_packet.mutable_priority()->mutable_dscp()->mutable_phb()->set_value(dscp);
+  ip_packet.mutable_priority()->mutable_dscp()->mutable_ecn()->set_value(ecn);
+}
+
+otg::FlowIpv6& AddIPv6Header(otg::Flow& flow, absl::string_view src_ipv6,
+                             absl::string_view dst_ipv6) {
+  otg::FlowHeader* ipv6_packet = flow.add_packet();
+  ipv6_packet->set_choice(otg::FlowHeader::Choice::ipv6);
+  otg::FlowIpv6* ipv6_header = ipv6_packet->mutable_ipv6();
+  ipv6_header->mutable_src()->set_choice(
+      otg::PatternFlowIpv6Src::Choice::value);
+  ipv6_header->mutable_dst()->set_choice(
+      otg::PatternFlowIpv6Dst::Choice::value);
+  ipv6_header->mutable_src()->set_value(src_ipv6);
+  ipv6_header->mutable_dst()->set_value(dst_ipv6);
+  return *ipv6_header;
+}
+
 absl::Status SetTrafficTransmissionState(
     otg::Openapi::StubInterface& otg_stub,
     otg::StateTrafficFlowTransmit::State::Enum transmission_state) {

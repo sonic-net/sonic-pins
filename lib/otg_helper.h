@@ -30,6 +30,11 @@ otg::FlowEthernet& AddEthernetHeader(otg::Flow& flow, absl::string_view src_mac,
 otg::FlowIpv4& AddIPv4Header(otg::Flow& flow, absl::string_view src_ipv4,
                              absl::string_view dst_ipv4);
 
+void SetIPv4Priority(otg::FlowIpv4& ip_packet, int dscp, int ecn);
+
+otg::FlowIpv6& AddIPv6Header(otg::Flow& flow, absl::string_view src_ipv6,
+                             absl::string_view dst_ipv6);
+
 absl::Status SetTrafficTransmissionState(
     otg::Openapi::StubInterface& otg_stub,
     otg::StateTrafficFlowTransmit::State::Enum transmission_state);
