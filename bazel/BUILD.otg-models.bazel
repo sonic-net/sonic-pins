@@ -22,6 +22,7 @@ cc_proto_library(
 cc_grpc_library(
     name = "otg_grpc_proto",
     srcs = [":otg_proto"],
+    generate_mocks = True,
     grpc_only = True,
     deps = [":otg_cc_proto"],
 )

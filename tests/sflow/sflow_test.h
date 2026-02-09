@@ -68,6 +68,7 @@ struct SflowTestParams {
 // name and its corresponding p4 runtime id.
 struct IxiaLink {
   std::string ixia_interface;
+  std::string ixia_location;
   std::string sut_interface;
   int port_id;
 };
