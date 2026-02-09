@@ -30,6 +30,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "lib/utils/constants.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -193,7 +194,8 @@ absl::Status NsfReboot(const Testbed &testbed);
 absl::Status WaitForReboot(const Testbed& testbed,
                            thinkit::SSHClient& ssh_client,
                            bool check_interfaces_up = true,
-                           absl::Span<const std::string> interfaces = {});
+                           absl::Span<const std::string> interfaces = {},
+                           absl::Duration timeout = kColdRebootWaitForUpTime);
 
 // Waits for the SUT to warm reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.

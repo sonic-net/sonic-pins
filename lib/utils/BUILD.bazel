@@ -97,6 +97,18 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "constants",
+    testonly = True,
+    srcs = ["constants.cc"],
+    hdrs = ["constants.h"],
+    deps = [
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_otg_models//:otg_cc_proto",
+        "@com_google_absl//absl/time",
+    ],
+)
+
 cc_test(
     name = "generic_testbed_utils_test",
     srcs = ["generic_testbed_utils_test.cc"],
