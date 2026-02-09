@@ -22,12 +22,14 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
@@ -367,6 +369,9 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     PacketTestRun& run = *result.add_test_runs();
     *run.mutable_test_vector() = packet_test_vector;
     *run.mutable_actual_output() = switch_output_by_id[id];
+    *run.mutable_input_packet_injection_time() =
+        absl::FormatTime(absl::RFC3339_full, packet_injection_time_by_id[id],
+                         absl::UTCTimeZone());
   }
 
   // TODO: Detect problematic packets and log or store them.
