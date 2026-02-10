@@ -31,20 +31,6 @@ NotificationProducerAdapter::NotificationProducerAdapter(
     : notification_producer_(
           std::make_unique<swss::NotificationProducer>(db, channel)) {}
 
-void NotificationProducerAdapter::send(
-     const std::vector<swss::KeyOpFieldsValuesTuple>& values)
-{   
-     std::vector<swss::FieldValueTuple> new_values;
-     for (const auto &value: values) {
-         if (kfvOp(value) == SET_COMMAND) {
-          new_values.push_back(swss::FieldValueTuple{kfvKey(value), swss::JSon::buildJson(kfvFieldsValues(value))});
-         } else {
-             new_values.push_back(swss::FieldValueTuple{kfvKey(value), ""});
-         }
-     }
-     notification_producer_->send("", "", new_values);
-}
-
 void NotificationProducerAdapter::send_with_op_key(
     const std::string& op, const std::string& key,
     std::vector<swss::FieldValueTuple>& fv) {

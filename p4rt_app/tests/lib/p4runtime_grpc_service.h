@@ -83,6 +83,9 @@ class P4RuntimeGrpcService {
   /*swss::FakeComponentStateHelper& GetComponentStateHelper();
   swss::FakeSystemStateHelper& GetSystemStateHelper();*/
 
+  // Sets switch capabilities table in the DB for the fake server.
+  void SetSwitchCapabilitiesTableInDb(const sonic::SonicDbEntryList& values);
+
   // Accessor for the P4RT server.
   P4RuntimeImpl &GetP4rtServer();
 

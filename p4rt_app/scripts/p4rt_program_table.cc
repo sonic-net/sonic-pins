@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <cstdint>
-#include <cstring>
+#include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/log/initialize.h"
 #include "absl/log/log.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_split.h"
-#include "google/protobuf/text_format.h"
-#include "grpcpp/grpcpp.h"
-#include "gutil/gutil/io.h"
+#include "absl/status/status.h"
 #include "gutil/gutil/proto.h"
+#include "gutil/gutil/status.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -38,47 +36,13 @@ ABSL_FLAG(bool, push_config, false, "Push P4 Info config file");
 ABSL_FLAG(bool, cleanup, false, "Clean the entries that were programmed");
 ABSL_FLAG(bool, cleanall, false,
           "Clean all the entries that exist in the switch");
-ABSL_FLAG(
-    std::string, input_file, "",
-    "Input file in SAI PD format(sai::Update proto), see go/p4rt-sample-entry");
+ABSL_FLAG(std::string, input_file, "",
+          "Input file in IR format(IrEntities or IrWriteRequest proto), see "
+          "go/p4rt-sample-entry");
 ABSL_FLAG(uint64_t, p4rt_device_id, 1, "P4RT device ID");
 ABSL_FLAG(sai::Instantiation, switch_instantiation,
           sai::Instantiation::kMiddleblock,
           "The switch instantiation to test.");
-
-namespace {
-
-// Read input file and group PD table entries, split by the special
-// line identifier '***'.
-absl::StatusOr<std::vector<sai::Update>> ConvertToPdEntries(
-    const std::string& input_file) {
-  absl::StatusOr<std::string> in_str_or = gutil::ReadFile(input_file);
-  std::vector<std::string> in_lines = absl::StrSplit(*in_str_or, '\n');
-  std::vector<sai::Update> pd_entries;
-  std::string entry;
-  for (const auto& line : in_lines) {
-    if (line.empty()) continue;
-    if (absl::StrContains(line, "***")) {
-      if (!entry.empty()) {
-        sai::Update pd_entry;
-        RETURN_IF_ERROR(gutil::ReadProtoFromString(entry, &pd_entry));
-        pd_entries.push_back(pd_entry);
-        entry.clear();
-      }
-    } else {
-      absl::StrAppend(&entry, line, "\n");
-    }
-  }
-  // Add the last entry to PD table.
-  if (!entry.empty()) {
-    sai::Update pd_entry;
-    RETURN_IF_ERROR(gutil::ReadProtoFromString(entry, &pd_entry));
-    pd_entries.push_back(pd_entry);
-  }
-  return pd_entries;
-}
-
-}  // namespace
 
 // Class to help in programming P4RT table entries on the switch.
 class P4rtTableWriter {
@@ -97,6 +61,8 @@ class P4rtTableWriter {
         LOG(ERROR) << "Unable to clear enries on the switch: "
                    << status.ToString();
       }
+      std::cout << "Successfully cleared all entries on the switch."
+                << std::endl;
       return;
     }
     // Cleanup the entries in reverse order, if specified.
@@ -112,19 +78,31 @@ class P4rtTableWriter {
                      << " in deleting entry " << write_request.DebugString();
         }
       }
+      std::cout << "Successfully deleted " << pi_entries_.size()
+                << " entries on the switch." << std::endl;
     }
   }
 
-  // Convert PD entry to PI and write to switch.
-  absl::Status SendP4WriteToSwitch(const pdpi::IrP4Info& ir_p4info,
-                                   const sai::Update& pd_entry) {
-    ASSIGN_OR_RETURN(auto pi_entry, pdpi::PdUpdateToPi(ir_p4info, pd_entry));
+  // Convert IR entry to PI and write to switch.
+  absl::Status SendP4WriteToSwitch(
+      const pdpi::IrP4Info& ir_p4info,
+      const pdpi::IrWriteRequest& ir_write_request) {
     p4::v1::WriteRequest write_request;
     write_request.set_device_id(p4rt_session_->DeviceId());
-    *write_request.add_updates() = pi_entry;
+    for (const auto& updates : ir_write_request.updates()) {
+      p4::v1::Update* update = write_request.add_updates();
+      update->set_type(updates.type());
+      ASSIGN_OR_RETURN(auto pi_update, pdpi::IrUpdateToPi(ir_p4info, updates));
+      *update->mutable_entity() = std::move(pi_update.entity());
+    }
     RETURN_IF_ERROR(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                            write_request));
-    pi_entries_.push_back(pi_entry);
+    // Save the entries for cleanup.
+    for (const auto& update : write_request.updates()) {
+      pi_entries_.push_back(update);
+    }
+    std::cout << "Successfully programmed " << pi_entries_.size()
+              << " entries on the switch." << std::endl;
     return absl::OkStatus();
   }
 
@@ -170,26 +148,44 @@ int main(int argc, char** argv) {
     }
   }
 
-  auto pd_entries_or = ConvertToPdEntries(absl::GetFlag(FLAGS_input_file));
-  if (!pd_entries_or.ok()) {
-    LOG(ERROR) << "Failed to convert input entries to SAI PD, error : "
-               << pd_entries_or.status();
-    return -1;
-  }
-  std::vector<sai::Update> pd_entries = std::move(*pd_entries_or);
-
-  P4rtTableWriter writer(std::move(p4rt_session), absl::GetFlag(FLAGS_cleanup),
-                         absl::GetFlag(FLAGS_cleanall));
-  absl::Status status;
-  // Convert to PI and program the entries on the switch.
-  for (const auto& pd_entry : pd_entries) {
-    status = writer.SendP4WriteToSwitch(ir_p4info, pd_entry);
+  pdpi::IrEntities ir_entities;
+  pdpi::IrWriteRequest ir_write_request;
+  absl::Status status =
+      gutil::ReadProtoFromFile(absl::GetFlag(FLAGS_input_file), &ir_entities);
+  if (!status.ok()) {
+    // Try to read the file as IrWriteRequest.
+    status = gutil::ReadProtoFromFile(absl::GetFlag(FLAGS_input_file),
+                                      &ir_write_request);
     if (!status.ok()) {
-      LOG(ERROR) << "Error in programming entry to the switch : "
+      LOG(ERROR) << "Failed to convert input entries to IR format, error : "
                  << status.ToString();
-      break;
+      return -1;
+    } else {
+      std::cout << "Successfully read input file in IrWriteRequest format."
+                << std::endl;
     }
   }
 
-  return status.raw_code();
+  // Convert IR entities (if present) to IR Write Request.
+  if (ir_entities.entities_size() > 0) {
+    for (const auto& entity : ir_entities.entities()) {
+      pdpi::IrUpdate ir_update;
+      ir_update.set_type(p4::v1::Update::INSERT);
+      *ir_update.mutable_entity() = entity;
+      *ir_write_request.add_updates() = std::move(ir_update);
+    }
+  }
+
+  // Convert to PI and program the entries on the switch.
+
+  P4rtTableWriter writer(std::move(p4rt_session), absl::GetFlag(FLAGS_cleanup),
+                         absl::GetFlag(FLAGS_cleanall));
+  status = writer.SendP4WriteToSwitch(ir_p4info, ir_write_request);
+  if (!status.ok()) {
+    LOG(ERROR) << "Error in programming entry to the switch : "
+               << status.ToString();
+    return -1;
+  }
+
+  return 0;
 }
