@@ -21,7 +21,7 @@
 
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 
 namespace pins_test {
 

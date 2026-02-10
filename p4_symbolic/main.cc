@@ -34,7 +34,7 @@
 #include "gutil/gutil/io.h"
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/test_util.h"

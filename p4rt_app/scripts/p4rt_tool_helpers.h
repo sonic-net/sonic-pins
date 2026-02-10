@@ -21,7 +21,7 @@
 #include "absl/flags/declare.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 
 // Flags to configure the P4RT connection.
 ABSL_DECLARE_FLAG(std::string, p4rt_server_address);

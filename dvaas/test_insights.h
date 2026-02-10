@@ -21,7 +21,7 @@
 #include "absl/types/span.h"
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_vector.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace dvaas {
 

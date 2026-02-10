@@ -17,8 +17,8 @@
 
 #include "absl/strings/str_cat.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
 namespace p4rt_app {

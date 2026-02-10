@@ -1,0 +1,103 @@
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+cc_library(
+    name = "network_address",
+    hdrs = ["network_address.h"],
+    deps = [
+        "//gutil/gutil:status",
+        "//p4_infra/p4_pdpi/string_encodings:byte_string",
+        "//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "ipv4_address",
+    srcs = ["ipv4_address.cc"],
+    hdrs = ["ipv4_address.h"],
+    deps = [
+        ":network_address",
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "ipv4_address_and_network_address_test",
+    srcs = ["ipv4_address_and_network_address_test.cc"],
+    deps = [
+        ":ipv4_address",
+        ":network_address",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//p4_infra/p4_pdpi/string_encodings:safe",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "ipv6_address",
+    srcs = ["ipv6_address.cc"],
+    hdrs = ["ipv6_address.h"],
+    deps = [
+        ":network_address",
+        "//gutil/gutil:status",
+        "//p4_infra/p4_pdpi/string_encodings:hex_string",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/numeric:int128",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "ipv6_address_test",
+    srcs = ["ipv6_address_test.cc"],
+    deps = [
+        ":ipv6_address",
+        ":network_address",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//p4_infra/p4_pdpi/string_encodings:safe",
+        "@com_google_absl//absl/numeric:int128",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "mac_address",
+    srcs = ["mac_address.cc"],
+    hdrs = ["mac_address.h"],
+    deps = [
+        ":ipv6_address",
+        ":network_address",
+        "//gutil/gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "mac_address_test",
+    srcs = ["mac_address_test.cc"],
+    deps = [
+        ":mac_address",
+        ":network_address",
+        "//gutil/gutil:status",
+        "//gutil/gutil:status_matchers",
+        "//p4_infra/p4_pdpi/string_encodings:safe",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

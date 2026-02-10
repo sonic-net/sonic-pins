@@ -9,7 +9,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_pdpi/string_encodings/bit_string.h"
+#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
 #include "z3++.h"
 
 namespace p4_symbolic {

@@ -2,7 +2,7 @@
 // P4 PD proto
 
 // NOTE: This file is automatically created from the P4 program using the pdgen
-//       library in p4_pdpi. DO NOT modify it manually.
+//       library in p4_infra/p4_pdpi. DO NOT modify it manually.
 
 syntax = "proto3";
 

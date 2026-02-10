@@ -27,7 +27,7 @@
 #include "absl/status/statusor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/table_entries.h"

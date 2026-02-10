@@ -27,8 +27,8 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
