@@ -34,7 +34,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 #include "p4rt_app/sonic/redis_connections.h"
-#include "swss/json.h"
+#include "swss/rediscommand.h"
 #include "swss/schema.h"
 #include "swss/table.h"
 
@@ -64,15 +64,8 @@ std::string GetRedisPacketReplicationTableKey(
                                          entry.multicast_group_entry()));
 }
 
-std::string CreateEntryForInsert(
-    const pdpi::IrPacketReplicationEngineEntry& entry,
-    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts) {
-  std::string key = GetRedisPacketReplicationTableKey(entry);
-
-  swss::KeyOpFieldsValuesTuple key_value;
-  kfvKey(key_value) = key;
-  kfvOp(key_value) = "SET";
-
+std::vector<swss::FieldValueTuple> CreateFieldValues(
+    const pdpi::IrPacketReplicationEngineEntry& entry) {
   nlohmann::json json_array = nlohmann::json::array();
   for (auto& replica : entry.multicast_group_entry().replicas()) {
     nlohmann::json json;
@@ -81,24 +74,7 @@ std::string CreateEntryForInsert(
         absl::StrCat("0x", absl::Hex(replica.instance(), absl::kZeroPad4));
     json_array.push_back(json);
   }
-  kfvFieldsValues(key_value).push_back(
-      std::make_pair("replicas", json_array.dump()));
-
-  p4rt_inserts.push_back(std::move(key_value));
-  return key;
-}
-
-std::string CreateEntryForDelete(
-    const pdpi::IrPacketReplicationEngineEntry& entry,
-    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_deletes) {
-  std::string key = GetRedisPacketReplicationTableKey(entry);
-
-  swss::KeyOpFieldsValuesTuple key_value;
-  kfvKey(key_value) = key;
-  kfvOp(key_value) = "DEL";
-  p4rt_deletes.push_back(std::move(key_value));
-
-  return key;
+  return {{"replicas", json_array.dump()}};
 }
 
 void ComparePacketReplicationEntities(const pdpi::IrEntity& entity_app_db,
@@ -151,29 +127,29 @@ void ComparePacketReplicationEntities(const pdpi::IrEntity& entity_app_db,
 
 }  // namespace
 
-absl::StatusOr<std::string> CreatePacketReplicationTableUpdateForAppDb(
-    P4rtTable& p4rt_table, p4::v1::Update::Type update_type,
-    const pdpi::IrPacketReplicationEngineEntry& entry,
-    std::vector<swss::KeyOpFieldsValuesTuple>& kfv_updates) {
-  VLOG(2) << p4::v1::Update::Type_Name(update_type)
-          << " PDPI IR packet replication entry: " << entry.ShortDebugString();
-  std::string update_key;
+absl::StatusOr<swss::KeyOpFieldsValuesTuple>
+CreateAppDbPacketReplicationTableUpdate(
+    p4::v1::Update::Type update_type,
+    const pdpi::IrPacketReplicationEngineEntry& entry) {
+  swss::KeyOpFieldsValuesTuple update;
+  kfvKey(update) = GetRedisPacketReplicationTableKey(entry);
   switch (update_type) {
     case p4::v1::Update::INSERT:
     case p4::v1::Update::MODIFY:
       // Modify looks exactly the same as insert.
       // The Orchagent layer resolves differences.
-      update_key = CreateEntryForInsert(entry, kfv_updates);
+      kfvOp(update) = SET_COMMAND;
+      kfvFieldsValues(update) = CreateFieldValues(entry);
       break;
     case p4::v1::Update::DELETE:
-      update_key = CreateEntryForDelete(entry, kfv_updates);
+      kfvOp(update) = DEL_COMMAND;
       break;
     default:
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unsupported update type: " << update_type;
-      break;
+             << "[P4RT App] Unsupported update type "
+             << p4::v1::Update::Type_Name(update_type);
   }
-  return update_key;
+  return update;
 }
 
 std::vector<std::string> GetAllPacketReplicationTableEntryKeys(
