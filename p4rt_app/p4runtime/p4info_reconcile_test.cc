@@ -86,10 +86,17 @@ MATCHER_P(TransitionIsImpl, expected, "") {
     failed = true;
   }
   if (!ExplainMatchResult(
-          UnorderedElementsAreArray(expected.acl_tables_to_modify),
-          arg.acl_tables_to_modify, result_listener)) {
+          UnorderedElementsAreArray(expected.nonessential_acl_tables_to_modify),
+          arg.nonessential_acl_tables_to_modify, result_listener)) {
     *result_listener << (failed ? "and " : "where ")
-                     << "acl_tables_to_modify does not match\n";
+                     << "nonessential_acl_tables_to_modify does not match\n";
+    failed = true;
+  }
+  if (!ExplainMatchResult(
+          UnorderedElementsAreArray(expected.essential_acl_tables_to_modify),
+          arg.essential_acl_tables_to_modify, result_listener)) {
+    *result_listener << (failed ? "and " : "where ")
+                     << "essential_acl_tables_to_modify does not match\n";
     failed = true;
   }
   return !failed;
@@ -192,7 +199,9 @@ const pdpi::IrP4Info& GetIrP4Info() {
           .table(
               IrTableDefinitionBuilder()
                   .preamble(R"pb(alias: "acl_ingress_table_b"
-                                 annotations: "@sai_acl(INGRESS)")pb")
+                                 annotations: "@sai_acl(INGRESS)"
+                                 annotations: "@nonessential_for_upgrade"
+                  )pb")
                   .match_field(
                       R"pb(id: 1
                            name: "l4_dst_port"
@@ -225,7 +234,8 @@ const pdpi::IrP4Info& GetIrP4Info() {
           .table(
               IrTableDefinitionBuilder()
                   .preamble(R"pb(alias: "acl_ingress_table_c"
-                                 annotations: "@sai_acl(INGRESS)")pb")
+                                 annotations: "@sai_acl(INGRESS)"
+                                 annotations: "@nonessential_for_upgrade")pb")
                   .match_field(
                       R"pb(id: 1
                            name: "l4_dst_port"
@@ -470,12 +480,18 @@ TEST(CalculateTransition, CalculatesFullAclTableModification) {
     }
   }
 
+  const P4InfoReconcileTransition expected_transition = {
+      .nonessential_acl_tables_to_modify = {"acl_ingress_table_b",
+                                            "acl_ingress_table_c"},
+      .essential_acl_tables_to_modify = {"acl_ingress_table_a",
+                                         "acl_ingress_table_d"},
+  };
+
   EXPECT_THAT(CalculateTransition(original, modified_acl_tables),
-              IsOkAndHolds(TransitionIs({.acl_tables_to_modify = acl_tables})));
+              IsOkAndHolds(TransitionIs(expected_transition)));
 
   EXPECT_THAT(CalculateTransition(modified_acl_tables, original),
-              IsOkAndHolds(TransitionIs(
-                  {.acl_tables_to_modify = std::move(acl_tables)})));
+              IsOkAndHolds(TransitionIs(expected_transition)));
 }
 
 TEST(CalculateTransition, CalculatesPartialAclTableDeletion) {
@@ -514,8 +530,8 @@ TEST(CalculateTransition, CalculatesPartialAclTableModification) {
   std::vector<std::string> modified_tables;
   for (auto& [name, table] : *modified_acl_tables.mutable_tables_by_name()) {
     if (!IsAclTable(table) ||
-        table.preamble().alias() == "acl_ingress_table_a" ||
-        table.preamble().alias() == "acl_ingress_table_c") {
+        table.preamble().alias() == "acl_ingress_table_b" ||
+        table.preamble().alias() == "acl_ingress_table_d") {
       continue;
     }
     modified_tables.push_back(name);
@@ -527,13 +543,36 @@ TEST(CalculateTransition, CalculatesPartialAclTableModification) {
   }
   ASSERT_THAT(modified_tables, Not(IsEmpty()));
 
-  EXPECT_THAT(
-      CalculateTransition(original, modified_acl_tables),
-      IsOkAndHolds(TransitionIs({.acl_tables_to_modify = modified_tables})));
+  P4InfoReconcileTransition expected_transition = {
+      .nonessential_acl_tables_to_modify = {"acl_ingress_table_c"},
+      .essential_acl_tables_to_modify = {"acl_ingress_table_a"},
+  };
+  EXPECT_THAT(CalculateTransition(original, modified_acl_tables),
+              IsOkAndHolds(TransitionIs(expected_transition)));
 
   EXPECT_THAT(CalculateTransition(modified_acl_tables, original),
-              IsOkAndHolds(TransitionIs(
-                  {.acl_tables_to_modify = std::move(modified_tables)})));
+              IsOkAndHolds(TransitionIs(expected_transition)));
+}
+
+TEST(CalculateTransition, CanForceTransitionForUnmodifiedAclTable) {
+  pdpi::IrP4Info new_p4info = GetIrP4Info();
+  new_p4info.mutable_tables_by_name()
+      ->at("acl_ingress_table_b")
+      .mutable_preamble()
+      ->add_annotations("@reinstall_during_upgrade");
+  new_p4info.mutable_tables_by_name()
+      ->at("acl_ingress_table_d")
+      .mutable_preamble()
+      ->add_annotations("@reinstall_during_upgrade");
+
+  P4InfoReconcileTransition expected_transition = {
+      .nonessential_acl_tables_to_modify = {"acl_ingress_table_b"},
+      .essential_acl_tables_to_modify = {"acl_ingress_table_d"},
+  };
+  EXPECT_THAT(CalculateTransition(GetIrP4Info(), new_p4info),
+              IsOkAndHolds(TransitionIs(expected_transition)));
+  EXPECT_THAT(CalculateTransition(new_p4info, GetIrP4Info()),
+              IsOkAndHolds(TransitionIs({})));
 }
 
 TEST(CalculateTransition, IgnoresFixedTableDeletion) {
@@ -609,7 +648,7 @@ TEST(CalculateTransition, CalculatesComplexTransition) {
           .update_switch_table = true,
           .acl_tables_to_delete = {"acl_ingress_table_a"},
           .acl_tables_to_add = {"acl_ingress_table_d"},
-          .acl_tables_to_modify = {"acl_ingress_table_b"},
+          .nonessential_acl_tables_to_modify = {"acl_ingress_table_b"},
       })));
 
   EXPECT_THAT(
@@ -619,7 +658,7 @@ TEST(CalculateTransition, CalculatesComplexTransition) {
           .update_switch_table = true,
           .acl_tables_to_delete = {"acl_ingress_table_d"},
           .acl_tables_to_add = {"acl_ingress_table_a"},
-          .acl_tables_to_modify = {"acl_ingress_table_b"},
+          .nonessential_acl_tables_to_modify = {"acl_ingress_table_b"},
       })));
 }
 
@@ -654,16 +693,16 @@ TEST(CalculateTransition, ReturnsErrorForBadHashSetting) {
               StatusIs(absl::StatusCode::kInternal));
 }
 
-TEST(CalculateTransition, ReturnsInvalidArgumentForAclStageTransition) {
+TEST(CalculateTransition, ReturnsFailedPreconditionForAclStageTransition) {
   const pdpi::IrP4Info original = GetIrP4Info();
   pdpi::IrP4Info modified = original;
   auto& table = modified.mutable_tables_by_name()->at("acl_ingress_table_a");
   *table.mutable_preamble()->mutable_annotations(0) = "@sai_acl(EGRESS)";
 
   EXPECT_THAT(CalculateTransition(original, modified),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(CalculateTransition(modified, original),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(GetUpdatedResourceCapacities, ReturnsBasicCapacityWithNoOriginal) {
@@ -769,7 +808,7 @@ TEST(GetUpdatedResourceCapacities,
   ++original.at("action_profile2").max_group_size;
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(GetUpdatedResourceCapacities,
@@ -789,10 +828,10 @@ TEST(GetUpdatedResourceCapacities, DoesNotAllowShrinkingCapacityBelowUsage) {
   original.at("action_profile2").max_weight_for_all_groups += 2;
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
-TEST(GetUpdatedResourceCapacities, DoesAllowsShrinkingCapacityToCurrentUsage) {
+TEST(GetUpdatedResourceCapacities, DoesAllowShrinkingCapacityToCurrentUsage) {
   auto original = CapacityMapFromIrP4Info();
   for (auto& [_, capacity] : original) {
     capacity.current_utilization = capacity.max_weight_for_all_groups;
