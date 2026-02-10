@@ -8,7 +8,7 @@
 #include "absl/strings/string_view.h"
 #include "lib/p4rt/p4rt_programming_context.h"
 #include "lib/utils/generic_testbed_utils.h"
-#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 #include "thinkit/generic_testbed_fixture.h"
 
 namespace pins_test {

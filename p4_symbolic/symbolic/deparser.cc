@@ -20,7 +20,7 @@
 #include "absl/status/statusor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/string_encodings/bit_string.h"
+#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/solver_state.h"

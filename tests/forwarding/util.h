@@ -21,8 +21,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 
 namespace pins {
 

@@ -31,7 +31,7 @@
 #include "grpcpp/support/stub_options.h"
 #include "os/os.grpc.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
 #include "thinkit/switch.h"

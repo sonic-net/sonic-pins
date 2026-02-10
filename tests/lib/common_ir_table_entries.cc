@@ -16,7 +16,7 @@
 #include <string>
 
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace pins {
 

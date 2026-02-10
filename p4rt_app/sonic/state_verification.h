@@ -18,7 +18,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/redis_connections.h"

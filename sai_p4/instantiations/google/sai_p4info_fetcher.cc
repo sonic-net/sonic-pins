@@ -5,7 +5,7 @@
 #include "absl/log/check.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/clos_stage.h"
 #include "sai_p4/instantiations/google/fabric_border_router_p4info_embed.h"
 #include "sai_p4/instantiations/google/instantiations.h"

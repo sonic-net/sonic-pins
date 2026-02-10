@@ -31,7 +31,7 @@
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.pb.h"
 

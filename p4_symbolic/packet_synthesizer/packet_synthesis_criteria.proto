@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package p4_symbolic.packet_synthesizer;
 
-import "p4_pdpi/ir.proto";
+import "p4_infra/p4_pdpi/ir.proto";
 
 // Criteria stating the synthesized packet must reach and match a certain table
 // entry.

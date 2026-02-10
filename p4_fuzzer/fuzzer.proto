@@ -17,7 +17,7 @@ syntax = "proto3";
 package p4_fuzzer;
 
 import "p4/v1/p4runtime.proto";
-import "p4_pdpi/ir.proto";
+import "p4_infra/p4_pdpi/ir.proto";
 
 // The types of mutations p4-fuzzer can perform on a given table entry.
 enum Mutation {
