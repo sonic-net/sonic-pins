@@ -29,6 +29,8 @@ IrP4InfoBuilder& IrP4InfoBuilder::table(pdpi::IrTableDefinition ir_table) {
   if (auto action_profile = action_profile_associations_.find(table_id);
       action_profile != action_profile_associations_.end()) {
     ir_table.set_action_profile_id(action_profile->second);
+    // One shot is the only type of action profile used in PiNS.
+    ir_table.set_uses_oneshot(true);
     action_profile_associations_.erase(action_profile);
   }
 
@@ -50,9 +52,14 @@ IrP4InfoBuilder& IrP4InfoBuilder::action_profile(
     if (p4info_.tables_by_id().contains(table_id)) {
       auto& table_by_id = p4info_.mutable_tables_by_id()->at(table_id);
       table_by_id.set_action_profile_id(preamble.id());
+      // One shot is the only type of action profile used in PiNS.
+      table_by_id.set_uses_oneshot(true);
       p4info_.mutable_tables_by_name()
           ->at(table_by_id.preamble().alias())
           .set_action_profile_id(preamble.id());
+      p4info_.mutable_tables_by_name()
+          ->at(table_by_id.preamble().alias())
+          .set_uses_oneshot(true);
     } else {
       action_profile_associations_.insert({table_id, preamble.id()});
     }

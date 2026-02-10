@@ -14,6 +14,7 @@
 #include "p4rt_app/utils/table_utility.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
@@ -24,12 +25,18 @@
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"  // NOLINT
 #include "p4_pdpi/ir.pb.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4rt_app {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::testing::Contains;
 using ::testing::ElementsAre;
+using ::testing::HasSubstr;
+using ::testing::Matches;
+using ::testing::TestWithParam;
+using ::testing::ValuesIn;
 
 TEST(GetTableType, ReturnsAclForSaiAclAnnotation) {
   pdpi::IrTableDefinition ir_table;
@@ -94,7 +101,7 @@ TEST(TableParse, ReturnsErrorForUnknownString) {
       << "Actual status: " << parse_result.status();
 }
 
-class TypeTest : public testing::TestWithParam<table::Type> {};
+class TypeTest : public TestWithParam<table::Type> {};
 
 TEST_P(TypeTest, TypeNameMatchesTypeParse) {
   std::string type_name = table::TypeName(GetParam());
@@ -112,14 +119,15 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 TEST(OrderTablesBySize, OrdersTablesBySize) {
-  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table_size_5,
+  google::protobuf::Map<std::string, pdpi::IrTableDefinition> tables_by_name;
+  ASSERT_OK_AND_ASSIGN(tables_by_name["table_size_5"],
                        gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
                          match_fields_by_name {
                            key: "a"
                            value { match_field { bitwidth: 5 } }
                          }
                        )pb"));
-  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table_size_10,
+  ASSERT_OK_AND_ASSIGN(tables_by_name["table_size_10"],
                        gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
                          match_fields_by_name {
                            key: "b"
@@ -130,7 +138,7 @@ TEST(OrderTablesBySize, OrdersTablesBySize) {
                            value { match_field { bitwidth: 7 } }
                          }
                        )pb"));
-  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table_size_15,
+  ASSERT_OK_AND_ASSIGN(tables_by_name["table_size_15"],
                        gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
                          match_fields_by_name {
                            key: "d"
@@ -138,51 +146,178 @@ TEST(OrderTablesBySize, OrdersTablesBySize) {
                          }
                        )pb"));
 
-  google::protobuf::Map<std::string, pdpi::IrTableDefinition> tables_by_name;
-  tables_by_name["table_size_10"] = table_size_10;
-  tables_by_name["table_size_5"] = table_size_5;
-  tables_by_name["table_size_15"] = table_size_15;
-
-  EXPECT_THAT(
-      OrderTablesBySize(tables_by_name),
-      ElementsAre(EqualsProto(table_size_15), EqualsProto(table_size_10),
-                  EqualsProto(table_size_5)));
+  EXPECT_THAT(OrderTablesBySize(tables_by_name),
+              ElementsAre(&tables_by_name["table_size_15"],
+                          &tables_by_name["table_size_10"],
+                          &tables_by_name["table_size_5"]));
 }
 
 TEST(OrderTablesBySize, OrdersTablesByNameToBreakTies) {
-  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table0,
+  google::protobuf::Map<std::string, pdpi::IrTableDefinition> tables_by_name;
+  ASSERT_OK_AND_ASSIGN(tables_by_name["a"],
                        gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         preamble { alias: "a" }
                          match_fields_by_name {
                            key: "a"
                            value { match_field { bitwidth: 5 } }
                          }
                        )pb"));
-  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table1,
+  ASSERT_OK_AND_ASSIGN(tables_by_name["b"],
                        gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         preamble { alias: "b" }
                          match_fields_by_name {
                            key: "b"
                            value { match_field { bitwidth: 5 } }
                          }
                        )pb"));
-  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table2,
+  ASSERT_OK_AND_ASSIGN(tables_by_name["c"],
                        gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         preamble { alias: "d" }
                          match_fields_by_name {
                            key: "d"
                            value { match_field { bitwidth: 6 } }
                          }
                        )pb"));
 
-  google::protobuf::Map<std::string, pdpi::IrTableDefinition> tables_by_name;
-  tables_by_name["a"] = table0;
-  tables_by_name["b"] = table1;
-  tables_by_name["c"] = table2;
-
-  // Note that `table2` has a larger size so it will be first. Then table 1
-  // because its name is larger than table0.
+  // Note that table `c` has a larger size so it will be first. Then table `b`
+  // because its name is larger than table `a`.
   EXPECT_THAT(OrderTablesBySize(tables_by_name),
-              ElementsAre(EqualsProto(table2), EqualsProto(table1),
-                          EqualsProto(table0)));
+              ElementsAre(&tables_by_name["c"], &tables_by_name["b"],
+                          &tables_by_name["a"]));
 }
+
+std::vector<std::string> AllTableNames() {
+  std::vector<std::string> table_names;
+  table_names.reserve(sai::GetUnionedIrP4Info().tables_by_name().size());
+  for (const auto& [table_name, _] :
+       sai::GetUnionedIrP4Info().tables_by_name()) {
+    table_names.push_back(table_name);
+  }
+  return table_names;
+}
+
+class PerTableTest : public TestWithParam<std::string /*table_name*/> {};
+
+TEST_P(PerTableTest, CreatesANewTable) {
+  const pdpi::IrP4Info& kBaseP4Info = sai::GetUnionedIrP4Info();
+  std::string table_name = GetParam();
+  const pdpi::IrTableDefinition& table_def =
+      kBaseP4Info.tables_by_name().at(table_name);
+
+  pdpi::IrP4Info ir_p4info = kBaseP4Info;
+  ASSERT_OK_AND_ASSIGN(std::string dup_table_name,
+                       DuplicateTable(ir_p4info, table_name));
+  ASSERT_THAT(dup_table_name, HasSubstr(table_name));
+  ASSERT_NE(dup_table_name, table_name);
+  ASSERT_FALSE(kBaseP4Info.tables_by_name().contains(dup_table_name));
+  ASSERT_TRUE(ir_p4info.tables_by_name().contains(dup_table_name));
+  auto dup_table_def = ir_p4info.tables_by_name().at(dup_table_name);
+
+  int dup_table_id = dup_table_def.preamble().id();
+  ASSERT_NE(dup_table_id, table_def.preamble().id());
+  ASSERT_TRUE(ir_p4info.tables_by_id().contains(dup_table_id));
+  ASSERT_FALSE(kBaseP4Info.tables_by_id().contains(dup_table_id));
+
+  ASSERT_THAT(ir_p4info.tables_by_id().at(dup_table_id),
+              EqualsProto(ir_p4info.tables_by_name().at(dup_table_name)));
+}
+
+TEST_P(PerTableTest, NewTableEqualsOriginalTable) {
+  const pdpi::IrP4Info& kBaseP4Info = sai::GetUnionedIrP4Info();
+  std::string table_name = GetParam();
+
+  pdpi::IrP4Info ir_p4info = kBaseP4Info;
+  ASSERT_OK_AND_ASSIGN(std::string dup_table_name,
+                       DuplicateTable(ir_p4info, table_name));
+  pdpi::IrTableDefinition table = ir_p4info.tables_by_name().at(table_name);
+  pdpi::IrTableDefinition dup_table =
+      ir_p4info.tables_by_name().at(dup_table_name);
+
+  EXPECT_THAT(dup_table.preamble().alias(),
+              HasSubstr(table.preamble().alias()));
+  EXPECT_THAT(dup_table.preamble().name(), HasSubstr(table.preamble().name()));
+  EXPECT_NE(dup_table.preamble().id(), table.preamble().id());
+
+  table.mutable_preamble()->set_alias(dup_table.preamble().alias());
+  table.mutable_preamble()->set_name(dup_table.preamble().name());
+  table.mutable_preamble()->set_id(dup_table.preamble().id());
+
+  EXPECT_THAT(dup_table, EqualsProto(table));
+}
+
+TEST_P(PerTableTest, UpdatesActionTableReferences) {
+  const pdpi::IrP4Info& kBaseP4Info = sai::GetUnionedIrP4Info();
+  std::string table_name = GetParam();
+  const pdpi::IrTableDefinition& table_def =
+      kBaseP4Info.tables_by_name().at(table_name);
+
+  pdpi::IrP4Info ir_p4info = kBaseP4Info;
+  ASSERT_OK_AND_ASSIGN(std::string dup_table_name,
+                       DuplicateTable(ir_p4info, table_name));
+  int table_id = table_def.preamble().id();
+  int dup_table_id =
+      ir_p4info.tables_by_name().at(dup_table_name).preamble().id();
+
+  for (const auto& [action_name, action_profile] :
+       ir_p4info.action_profiles_by_name()) {
+    EXPECT_EQ(Matches(Contains(table_id))(
+                  action_profile.action_profile().table_ids()),
+              Matches(Contains(dup_table_id))(
+                  action_profile.action_profile().table_ids()));
+  }
+
+  for (const auto& [action_id, action_profile] :
+       ir_p4info.action_profiles_by_id()) {
+    EXPECT_EQ(Matches(Contains(table_id))(
+                  action_profile.action_profile().table_ids()),
+              Matches(Contains(dup_table_id))(
+                  action_profile.action_profile().table_ids()));
+  }
+}
+
+TEST_P(PerTableTest, DoesNotTouchTheRestOfTheIrP4Info) {
+  const pdpi::IrP4Info& kBaseP4Info = sai::GetUnionedIrP4Info();
+  std::string table_name = GetParam();
+
+  pdpi::IrP4Info ir_p4info = kBaseP4Info;
+  ASSERT_OK_AND_ASSIGN(std::string dup_table_name,
+                       DuplicateTable(ir_p4info, table_name));
+  int dup_table_id =
+      ir_p4info.tables_by_name().at(dup_table_name).preamble().id();
+  ir_p4info.mutable_tables_by_name()->erase(dup_table_name);
+  ir_p4info.mutable_tables_by_id()->erase(dup_table_id);
+
+  for (auto& [_, action_profile] :
+       *ir_p4info.mutable_action_profiles_by_name()) {
+    auto& table_ids =
+        *action_profile.mutable_action_profile()->mutable_table_ids();
+    for (auto iter = table_ids.begin(); iter != table_ids.end(); ++iter) {
+      if (*iter == dup_table_id) {
+        table_ids.erase(iter);
+        break;
+      }
+    }
+  }
+
+  for (auto& [_, action_profile] : *ir_p4info.mutable_action_profiles_by_id()) {
+    auto& table_ids =
+        *action_profile.mutable_action_profile()->mutable_table_ids();
+    for (auto iter = table_ids.begin(); iter != table_ids.end(); ++iter) {
+      if (*iter == dup_table_id) {
+        table_ids.erase(iter);
+        break;
+      }
+    }
+  }
+
+  EXPECT_THAT(ir_p4info, EqualsProto(kBaseP4Info));
+}
+
+INSTANTIATE_TEST_SUITE_P(DuplicateTable, PerTableTest,
+                         ValuesIn(AllTableNames()),
+                         [](const testing::TestParamInfo<std::string>& info) {
+                           return info.param;
+                         });
 
 }  // namespace
 }  // namespace p4rt_app
