@@ -39,6 +39,7 @@
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"

@@ -156,6 +156,7 @@ constexpr absl::string_view kTcpdumpForTos =
 
 constexpr absl::Duration kCommandTimeout = absl::Seconds(5);
 constexpr absl::Duration kFreezeTimeout = absl::Seconds(30);
+constexpr absl::Duration kDelayTimeForIxia = absl::Seconds(5);
 
 constexpr char kFreeze[] =
     R"(/usr/tools/bin/redis-cli -n 1 "PUBLISH" "NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL" "[\"freeze\",\"freeze\"]")";
@@ -472,8 +473,9 @@ absl::Status SendNPacketsToSut(Openapi::StubInterface& traffic_client,
   RETURN_IF_ERROR(SetTrafficTransmissionState(
       traffic_client, StateTrafficFlowTransmit::State::start));
 
-  // Wait for Traffic to be sent.
-  absl::SleepFor(runtime);
+  // Wait for Traffic to be sent. Add a little extra time kDelayTimeForIxia (5
+  // sec)
+  absl::SleepFor(runtime + kDelayTimeForIxia);
 
   // Stop Ixia traffic.
   return SetTrafficTransmissionState(traffic_client,
@@ -4495,7 +4497,7 @@ TEST_P(SflowRebootTestFixture, TestHsflowdRestartSucceed) {
         }
         return absl::FailedPreconditionError(
             absl::Substitute("Expected: hsflowd pid should exist and differ "
-                             "from $0. Acutal: hsflowd pid: $1.",
+                             "from $0. Actual: hsflowd pid: $1.",
                              pid, hsflowd_pid));
       },
       absl::Seconds(120)));
@@ -4539,6 +4541,9 @@ TEST_P(SflowPortBreakoutTest, TestPortbreakoutWorks) {
       GetParam().control_gnmi_config, control_loopback0_ipv6s[0].ToString()));
 
   // Perform breakout on SUT.
+  CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
+                     /*prefix=*/"predpb_sut_", testbed.Environment(),
+                     nos_param_);
   pins_test::SflowBreakoutTestOption sut_option{
       .sampling_rate = kInbandSamplingRate,
       .sampling_header_size = kSampleHeaderSize,
@@ -4548,15 +4553,24 @@ TEST_P(SflowPortBreakoutTest, TestPortbreakoutWorks) {
       .mirror_broken_out = false,
   };
   ASSERT_OK_AND_ASSIGN(
-      std::string platform_json_contents,
+      std::string platform_json_contents_sut,
       FetchPlatformJsonContents(*GetParam().ssh_client, testbed.Sut(),
                                 GetParam().platform_json_path));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "predpb_sut_platform_json.txt", platform_json_contents_sut));
   ASSERT_OK_AND_ASSIGN(
       const pins_test::SflowBreakoutResult& sut_breakout_result,
-      pins_test::TestBreakoutWithSflowConfig(
-          testbed.Sut(), platform_json_contents, GetSutP4Info(), sut_option));
+      pins_test::TestBreakoutWithSflowConfig(testbed.Sut(),
+                                             platform_json_contents_sut,
+                                             GetSutP4Info(), sut_option));
+  CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
+                     /*prefix=*/"postdpb_sut_", testbed.Environment(),
+                     nos_param_);
 
   // Perform breakout on control switch with the same ports as SUT.
+  CollectSflowDebugs(
+      GetParam().ssh_client, testbed.ControlSwitch().ChassisName(),
+      /*prefix=*/"predpb_control_", testbed.Environment(), nos_param_);
   pins_test::SflowBreakoutTestOption control_option{
       .sampling_rate = kInbandSamplingRate,
       .sampling_header_size = kSampleHeaderSize,
@@ -4572,10 +4586,19 @@ TEST_P(SflowPortBreakoutTest, TestPortbreakoutWorks) {
         ASSERT_OK(pins_test::PushGnmiConfig(control_switch, config));
       });
   ASSERT_OK_AND_ASSIGN(
+      std::string platform_json_contents_control,
+      FetchPlatformJsonContents(*GetParam().ssh_client, testbed.ControlSwitch(),
+                                GetParam().platform_json_path));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "predpb_control_platform_json.txt", platform_json_contents_control));
+  ASSERT_OK_AND_ASSIGN(
       const pins_test::SflowBreakoutResult& control_breakout_result,
       TestBreakoutWithSflowConfig(testbed.ControlSwitch(),
-                                  platform_json_contents, GetControlP4Info(),
-                                  control_option));
+                                  platform_json_contents_control,
+                                  GetControlP4Info(), control_option));
+  CollectSflowDebugs(
+      GetParam().ssh_client, testbed.ControlSwitch().ChassisName(),
+      /*prefix=*/"postdpb_control_", testbed.Environment(), nos_param_);
   ASSERT_THAT(
       sut_breakout_result.breakout_ports,
       UnorderedElementsAreArray(control_breakout_result.breakout_ports));
