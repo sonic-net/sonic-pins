@@ -102,6 +102,32 @@ absl::Status NsfRebootHelper(const Testbed &testbed,
   return DoNsfRebootAndWaitForSwitchReadyOrRecover(testbed, *ssh_client,
                                                    nullptr, false);
 }
+// Go over the connections and return vector of connections
+// whose links are up.
+absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
+    thinkit::GenericTestbed &generic_testbed,
+    gnmi::gNMI::StubInterface &gnmi_stub) {
+  std::vector<IxiaLink> links;
+
+  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
+      generic_testbed.GetSutInterfaceInfo();
+  // Loop through the interface_info looking for Ixia/SUT interface pairs,
+  // checking if the link is up.  Add the pair to connections.
+  for (const auto &[interface, info] : interface_info) {
+    bool sut_link_up = false;
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+      ASSIGN_OR_RETURN(sut_link_up, CheckLinkUp(interface, gnmi_stub));
+      if (sut_link_up) {
+        links.push_back({
+            .ixia_interface = info.peer_interface_name,
+            .sut_interface = interface,
+        });
+      }
+    }
+  }
+
+  return links;
+}
 
 absl::StatusOr<double> GetCpuAverage(gnmi::gNMI::StubInterface &gnmi) {
   const int kNumCPUs = 8;
@@ -379,15 +405,8 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
         QueueCounters initial_cpu_queue_counters,
         GetGnmiQueueCounters("CPU", queue_name, *sut_gnmi_stub_));
 
-    // Set the config.
-    SetConfigResponse set_config_response;
-    ClientContext set_config_context;
-    LOG(INFO) << "Set Config Request: " << absl::StrCat(set_config_request);
-    Openapi::StubInterface *traffic_client =
-        generic_testbed_->GetTrafficClient();
-    ASSERT_OK(traffic_client->SetConfig(&set_config_context, set_config_request,
-                                        &set_config_response));
-    LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
+    ASSERT_OK(ixia::SetTrafficParameters(
+        ixia_traffic_handle_, traffic_parameters, *generic_testbed_));
 
     if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
       ASSERT_OK(NsfRebootHelper(generic_testbed_.get(),
@@ -740,9 +759,12 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
   LOG(INFO) << "Mirror-To-Backup Port packets pre: "
             << mirror_packets_backup_mtp_pre;
 
-  // Start the traffic.
-  ASSERT_OK(SetTrafficTransmissionState(
-      *traffic_client, StateTrafficFlowTransmit::State::start));
+  // Occasionally the Ixia API cannot keep up and starting traffic fails,
+  // so we try up to 3 times.
+  ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+    return ixia::StartTraffic(ixia_traffic_handle_, ixia_handle_,
+                              *generic_testbed_);
+  }));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
     ASSERT_OK(
@@ -890,14 +912,8 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
           })
           .InstallDedupedEntities(*sut_p4_session_));
 
-  // Set the config.
-  SetConfigResponse set_config_response;
-  ClientContext set_config_context;
-  LOG(INFO) << "Set Config Request: " << absl::StrCat(set_config_request);
-  Openapi::StubInterface *traffic_client = generic_testbed_->GetTrafficClient();
-  ASSERT_OK(traffic_client->SetConfig(&set_config_context, set_config_request,
-                                      &set_config_response));
-  LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
+  ASSERT_OK(ixia::SetTrafficParameters(ixia_traffic_handle_, traffix_parameters,
+                                       *generic_testbed_));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
     ASSERT_OK(
