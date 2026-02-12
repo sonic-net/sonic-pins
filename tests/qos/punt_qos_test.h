@@ -56,8 +56,6 @@ struct ParamsForTestsWithIxia {
   std::string cpu_port_id;
 };
 
-// TODO: Refactor to look up redundant params from
-// interface info.
 struct IxiaSutLink {
   std::string ixia_tx_interface;
   std::string ixia_rx_interface;
@@ -67,8 +65,6 @@ struct IxiaSutLink {
   std::string sut_rx_interface;
   std::string sut_mirror_interface;
   std::string sut_mirror_backup_interface;
-  std::string ixia_tx_loc;
-  std::string ixia_rx_loc;
 };
 
 class PuntQoSTestWithIxia

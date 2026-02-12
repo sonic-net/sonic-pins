@@ -135,6 +135,20 @@ cc_test(
 )
 
 cc_library(
+    name = "reboot_operations",
+    testonly = True,
+    srcs = ["reboot_operations.cc"],
+    hdrs = ["reboot_operations.h"],
+    deps = [
+        "//lib/validator:validator_lib",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
     name = "merging_status_bundle",
     srcs = ["merging_status_bundle.cc"],
     hdrs = ["merging_status_bundle.h"],

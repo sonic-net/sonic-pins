@@ -16,12 +16,12 @@
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/flags/declare.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
@@ -34,10 +34,8 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "artifacts/otg.grpc.pb.h"
-#include "artifacts/otg.pb.h"
+#include "absl/types/optional.h"
 #include "gmock/gmock.h"
-#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
@@ -45,8 +43,7 @@
 #include "gutil/gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
-#include "lib/otg_helper.h"
-#include "lib/utils/generic_testbed_utils.h"
+#include "lib/ixia_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
@@ -60,6 +57,7 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
+#include "tests/forwarding/util.h"
 #include "tests/gnmi/util.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
@@ -75,27 +73,13 @@ ABSL_DECLARE_FLAG(std::optional<sai::Instantiation>, switch_instantiation);
 
 namespace pins_test {
 
-using ::grpc::ClientContext;
-using ::otg::FlowLatencyMetrics;
-using ::otg::GetMetricsRequest;
-using ::otg::GetMetricsResponse;
-using ::otg::MetricsRequest;
-using ::otg::Openapi;
-using ::otg::SetConfigRequest;
-using ::otg::SetConfigResponse;
-using ::otg::StateTrafficFlowTransmit;
-
-using ::pins_test::otg_helper::AddEthernetHeader;
-using ::pins_test::otg_helper::AddIPv4Header;
-using ::pins_test::otg_helper::AddIPv6Header;
-using ::pins_test::otg_helper::AddPorts;
-using ::pins_test::otg_helper::CreateFlow;
-using ::pins_test::otg_helper::SetFlowDuration;
-using ::pins_test::otg_helper::SetFlowRatePps;
-using ::pins_test::otg_helper::SetFlowSize;
-using ::pins_test::otg_helper::SetIPv4Priority;
-using ::pins_test::otg_helper::SetIPv6Priority;
-using ::pins_test::otg_helper::SetTrafficTransmissionState;
+// Structure represents a link between SUT and Ixia.
+// This is represented by Ixia interface name and the SUT's gNMI interface
+// name.
+struct IxiaLink {
+  std::string ixia_interface;
+  std::string sut_interface;
+};
 
 absl::Status NsfRebootHelper(const Testbed &testbed,
                              std::shared_ptr<thinkit::SSHClient> ssh_client) {
@@ -182,22 +166,19 @@ void PuntQoSTestWithIxia::SetUp() {
   const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
       interface_info = generic_testbed_->GetSutInterfaceInfo();
 
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<pins_test::InterfaceLink> up_links,
-      GetUpLinks(pins_test::GetAllTrafficGeneratorLinks, *generic_testbed_));
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*generic_testbed_, *sut_gnmi_stub_));
 
-  ASSERT_FALSE(up_links.empty());
+  ASSERT_FALSE(ready_links.empty());
 
-  ixia_sut_link_.ixia_tx_interface = up_links[0].peer_interface;
-  ixia_sut_link_.sut_rx_interface = up_links[0].sut_interface;
-  ixia_sut_link_.ixia_rx_interface = up_links[1].peer_interface;
-  ixia_sut_link_.sut_tx_interface = up_links[1].sut_interface;
-  ixia_sut_link_.ixia_mirror_interface = up_links[2].peer_interface;
-  ixia_sut_link_.sut_mirror_interface = up_links[2].sut_interface;
-  ixia_sut_link_.ixia_mirror_backup_interface = up_links[3].peer_interface;
-  ixia_sut_link_.sut_mirror_backup_interface = up_links[3].sut_interface;
-  ixia_sut_link_.ixia_tx_loc = up_links[0].peer_traffic_location;
-  ixia_sut_link_.ixia_rx_loc = up_links[1].peer_traffic_location;
+  ixia_sut_link_.ixia_tx_interface = ready_links[0].ixia_interface;
+  ixia_sut_link_.sut_rx_interface = ready_links[0].sut_interface;
+  ixia_sut_link_.ixia_rx_interface = ready_links[1].ixia_interface;
+  ixia_sut_link_.sut_tx_interface = ready_links[1].sut_interface;
+  ixia_sut_link_.ixia_mirror_interface = ready_links[2].ixia_interface;
+  ixia_sut_link_.sut_mirror_interface = ready_links[2].sut_interface;
+  ixia_sut_link_.ixia_mirror_backup_interface = ready_links[3].ixia_interface;
+  ixia_sut_link_.sut_mirror_backup_interface = ready_links[3].sut_interface;
 
   LOG(INFO) << absl::StrFormat(
       "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s] "
@@ -211,10 +192,40 @@ void PuntQoSTestWithIxia::SetUp() {
 
   ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface_,
                        GetAllInterfaceNameToPortId(*sut_gnmi_stub_));
+
+  // We will perform the following steps with Ixia:
+  // Set up Ixia traffic.
+
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_port,
+                       ixia::ExtractPortInfo(ixia_sut_link_.ixia_tx_interface));
+
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_rx_port,
+                       ixia::ExtractPortInfo(ixia_sut_link_.ixia_rx_interface));
+
+  ASSERT_OK_AND_ASSIGN(
+      ixia_handle_,
+      pins_test::ixia::IxiaConnect(ixia_port.hostname, *generic_testbed_));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string kIxiaSrcPortHandle,
+      pins_test::ixia::IxiaVport(ixia_handle_, ixia_port.card, ixia_port.port,
+                                 *generic_testbed_));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string kIxiaDstPortHandle,
+      pins_test::ixia::IxiaVport(ixia_handle_, ixia_rx_port.card,
+                                 ixia_rx_port.port, *generic_testbed_));
+
+  ixia_traffic_name_ = "cpu_qos_test_ixia_traffic";
+  ASSERT_OK_AND_ASSIGN(
+      ixia_traffic_handle_,
+      ixia::SetUpTrafficItem(kIxiaSrcPortHandle, kIxiaDstPortHandle,
+                             ixia_traffic_name_, *generic_testbed_));
 }
 
 void PuntQoSTestWithIxia::TearDown() {
   GetParam().testbed_interface->TearDown();
+  ASSERT_OK(ixia::DeleteTrafficItem(ixia_traffic_handle_, *generic_testbed_));
 }
 
 namespace {
@@ -265,40 +276,18 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
   const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
   const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
 
-  // Create config.
-  SetConfigRequest set_config_request;
-  otg::Config *config = set_config_request.mutable_config();
-
-  // Add ports.
-  AddPorts(*config, ixia_sut_link_.ixia_tx_interface,
-           ixia_sut_link_.ixia_rx_interface, ixia_sut_link_.ixia_tx_loc,
-           ixia_sut_link_.ixia_rx_loc);
-
-  // Create flow.
-  otg::Flow &flow =
-      CreateFlow(*config, ixia_sut_link_.ixia_tx_interface,
-                 ixia_sut_link_.ixia_rx_interface, "punt_qos_test_flow");
-
-  SetFlowSize(flow, kFrameSize);
-  SetFlowDuration(flow, kTotalFrames);
-  SetFlowRatePps(flow, kFramesPerSecond);
-
-  // Set capture metrics.
-  flow.mutable_metrics()->set_enable(true);
-  flow.mutable_metrics()->set_loss(false);
-  flow.mutable_metrics()->set_timestamps(true);
-  flow.mutable_metrics()->mutable_latency()->set_enable(true);
-  flow.mutable_metrics()->mutable_latency()->set_mode(
-      FlowLatencyMetrics::Mode::cut_through);
-
-  // Add ethernet header.
-  otg_helper::AddEthernetHeader(flow, source_mac.ToString(),
-                                dest_mac.ToString());
-
-  // Add IPv4 header.
-  otg::FlowIpv4 &ip_packet =
-      AddIPv4Header(flow, source_ip.ToString(), dest_ip.ToString());
-  SetIPv4Priority(ip_packet, 0, 0);
+  auto traffic_parameters = ixia::TrafficParameters{
+      .frame_count = kTotalFrames,
+      .frame_size_in_bytes = kFrameSize,
+      .traffic_speed = ixia::FramesPerSecond{kFramesPerSecond},
+      .src_mac = source_mac,
+      .dst_mac = dest_mac,
+      .ip_parameters = ixia::Ipv4TrafficParameters{
+          .src_ipv4 = source_ip,
+          .dst_ipv4 = dest_ip,
+          // Set ECN 0 to avoid RED drops.
+          .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
+      }};
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto cpu_queues, ExtractQueueInfoViaGnmiConfig(
@@ -457,10 +446,12 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
         QueueCounters initial_mirror_red_queue_counters,
         GetGnmiQueueCounters(ixia_sut_link_.sut_mirror_interface,
                              GetParam().multicast_red_queue, *sut_gnmi_stub_));
-
-    // Start the traffic.
-    ASSERT_OK(SetTrafficTransmissionState(
-        *traffic_client, StateTrafficFlowTransmit::State::start));
+    // Occasionally the Ixia API cannot keep up and starting traffic fails,
+    // so we try up to 3 times.
+    ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+      return ixia::StartTraffic(ixia_traffic_handle_, ixia_handle_,
+                                *generic_testbed_);
+    }));
 
     // Wait for Traffic to be sent.
     absl::SleepFor(kTrafficDuration);
@@ -557,27 +548,13 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
           punt_rate_received_in_bytes_per_second,
           flow_rate_limit_in_bytes_per_second * (1 - kTolerancePercent / 100));
 
-      // Get flow metrics.
-      GetMetricsRequest metrics_req;
-      GetMetricsResponse metrics_res;
-      ClientContext metrics_ctx;
-      metrics_req.mutable_metrics_request()->set_choice(
-          MetricsRequest::Choice::flow);
-      metrics_req.mutable_metrics_request()->mutable_flow();
-      ASSERT_OK(
-          traffic_client->GetMetrics(&metrics_ctx, metrics_req, &metrics_res));
-      LOG(INFO) << "Traffic Metrics: " << metrics_res;
-
-      const otg::FlowMetric &flow_metric =
-          metrics_res.metrics_response().flow_metrics(0);
-      int64_t kObservedTrafficRate = 0;
-      double total_time_in_second =
-          (flow_metric.timestamps().last_timestamp_ns() -
-           flow_metric.timestamps().first_timestamp_ns()) /
-          1000000000;
-      if (total_time_in_second != 0) {
-        kObservedTrafficRate = flow_metric.bytes_rx() / total_time_in_second;
-      }
+      // Verify forwarded rate matches configured rate limit.
+      ASSERT_OK_AND_ASSIGN(
+          const ixia::TrafficItemStats kIxiaTrafficStats,
+          ixia::GetTrafficItemStats(ixia_traffic_handle_, ixia_traffic_name_,
+                                    *generic_testbed_));
+      const int64_t kObservedTrafficRate =
+          ixia::BytesPerSecondReceived(kIxiaTrafficStats);
       LOG(INFO) << "Rate of forwarded packets received (bytes per second): "
                 << kObservedTrafficRate;
       // For "deny" actions verify that forwarded traffic does not
@@ -665,31 +642,18 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
   const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
   const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
 
-  // Create config.
-  SetConfigRequest set_config_request;
-  otg::Config *config = set_config_request.mutable_config();
-
-  // Add ports.
-  AddPorts(*config, ixia_sut_link_.ixia_tx_interface,
-           ixia_sut_link_.ixia_rx_interface, ixia_sut_link_.ixia_tx_loc,
-           ixia_sut_link_.ixia_rx_loc);
-
-  // Create flow.
-  otg::Flow &flow =
-      CreateFlow(*config, ixia_sut_link_.ixia_tx_interface,
-                 ixia_sut_link_.ixia_rx_interface, "punt_qos_flow");
-
-  SetFlowSize(flow, kFrameSize);
-  SetFlowDuration(flow, kTotalFramesTrafficLowTrafficRate);
-  SetFlowRatePps(flow, kFramesPerSecondLowTrafficRate);
-
-  // Add ethernet header.
-  AddEthernetHeader(flow, source_mac.ToString(), dest_mac.ToString());
-
-  // Add IPv4 header.
-  otg::FlowIpv4 &ip_packet =
-      AddIPv4Header(flow, source_ip.ToString(), dest_ip.ToString());
-  SetIPv4Priority(ip_packet, 0, 0);
+  auto traffic_parameters = ixia::TrafficParameters{
+      .frame_count = kTotalFramesTrafficLowTrafficRate,
+      .frame_size_in_bytes = kFrameSize,
+      .traffic_speed = ixia::FramesPerSecond{kFramesPerSecondLowTrafficRate},
+      .src_mac = source_mac,
+      .dst_mac = dest_mac,
+      .ip_parameters = ixia::Ipv4TrafficParameters{
+          .src_ipv4 = source_ip,
+          .dst_ipv4 = dest_ip,
+          // Set ECN 0 to avoid RED drops.
+          .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
+      }};
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
@@ -736,14 +700,8 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
           .LogPdEntries()
           .InstallDedupedEntities(*sut_p4_session_));
 
-  // Set the config.
-  SetConfigResponse set_config_response;
-  ClientContext set_config_context;
-  LOG(INFO) << "Set Config Request: " << absl::StrCat(set_config_request);
-  Openapi::StubInterface *traffic_client = generic_testbed_->GetTrafficClient();
-  ASSERT_OK(traffic_client->SetConfig(&set_config_context, set_config_request,
-                                      &set_config_response));
-  LOG(INFO) << "Set Config Response: " << absl::StrCat(set_config_response);
+  ASSERT_OK(ixia::SetTrafficParameters(ixia_traffic_handle_, traffic_parameters,
+                                       *generic_testbed_));
 
   // Get packet count for Mirror-To-Port.
   ASSERT_OK_AND_ASSIGN(uint64_t mirror_packets_mtp_pre,
@@ -821,41 +779,15 @@ TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
 }
 
 TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
-
-  const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
-      sut_interface_info = generic_testbed_->GetSutInterfaceInfo();
-  ASSERT_TRUE(sut_interface_info.contains(ixia_sut_link_.sut_rx_interface));
-
-  const auto src_mac =
-      sut_interface_info.at(ixia_sut_link_.sut_rx_interface).peer_mac_address;
-  const auto dest_mac = netaddr::MacAddress(0x33, 0x33, 0, 0, 0, 1);
-  const auto source_ip = netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 1);
-  const auto dest_ip = netaddr::Ipv6Address(0xff00, 0, 0, 0, 0, 0, 0, 1);
-
-  // Create config.
-  SetConfigRequest set_config_request;
-  otg::Config *config = set_config_request.mutable_config();
-
-  // Add ports.
-  AddPorts(*config, ixia_sut_link_.ixia_tx_interface,
-           ixia_sut_link_.ixia_rx_interface, ixia_sut_link_.ixia_tx_loc,
-           ixia_sut_link_.ixia_rx_loc);
-
-  // Create flow.
-  otg::Flow &flow =
-      CreateFlow(*config, ixia_sut_link_.ixia_tx_interface,
-                 ixia_sut_link_.ixia_rx_interface, "punt_qos_flow");
-
-  SetFlowSize(flow, kFrameSize);
-  SetFlowRatePps(flow, 1000000);
-
-  // Add ethernet header.
-  AddEthernetHeader(flow, src_mac, dest_mac.ToString());
-
-  // Add IPv6 header.
-  otg::FlowIpv6 &ip_packet =
-      AddIPv6Header(flow, source_ip.ToString(), dest_ip.ToString());
-  SetIPv6Priority(ip_packet, 0, 0);
+  auto traffix_parameters = ixia::TrafficParameters{
+      .frame_size_in_bytes = kFrameSize,
+      .traffic_speed = ixia::FramesPerSecond{1'000'000},
+      .dst_mac = netaddr::MacAddress(0x33, 0x33, 0, 0, 0, 1),
+      .ip_parameters = ixia::Ipv6TrafficParameters{
+          .src_ipv6 = netaddr::Ipv6Address(0x1000, 0, 0, 0, 0, 0, 0, 1),
+          .dst_ipv6 = netaddr::Ipv6Address(0xff00, 0, 0, 0, 0, 0, 0, 1),
+          .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
+      }};
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
@@ -933,9 +865,12 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
       GetGnmiQueueCounters("CPU", GetParam().cpu_replication_queue,
                            *sut_gnmi_stub_));
 
-  // Start the traffic.
-  ASSERT_OK(SetTrafficTransmissionState(
-      *traffic_client, StateTrafficFlowTransmit::State::start));
+  // Occasionally the Ixia API cannot keep up and starting traffic fails,
+  // so we try up to 3 times.
+  ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+    return ixia::StartTraffic(ixia_traffic_handle_, ixia_handle_,
+                              *generic_testbed_);
+  }));
 
   absl::SleepFor(absl::Seconds(15));
   
@@ -963,8 +898,7 @@ TEST_P(PuntQoSTestWithIxia, MulticastReplicationToCpu) {
   LOG(INFO) << "CPU queue delta: " << delta_cpu_queue_counters;
 
   // Stop traffic
-  ASSERT_OK(SetTrafficTransmissionState(*traffic_client,
-                                        StateTrafficFlowTransmit::State::stop));
+  ASSERT_OK(ixia::StopTraffic(ixia_traffic_handle_, *generic_testbed_));
 }
 
 }  // namespace

@@ -106,6 +106,7 @@ cc_library(
         "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnoi:gnoi_helper",
+        "//lib/ssh:ssh_wrapper_client",
         "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
