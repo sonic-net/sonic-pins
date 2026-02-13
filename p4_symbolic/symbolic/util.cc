@@ -27,8 +27,8 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/status.h"
-#include "p4_pdpi/internal/ordered_map.h"
+#include "gutil/status.h"
+#include "gutil/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
@@ -42,6 +42,8 @@
 namespace p4_symbolic {
 namespace symbolic {
 namespace util {
+
+using ::gutil::AsOrderedView;
 
 namespace {
 
@@ -77,7 +79,7 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
   // Find its type, and loop over every field in it, creating a symbolic free
   // variable for every field in every header instance.
   absl::btree_map<std::string, z3::expr> symbolic_headers;
-  for (const auto &[header_name, header_type] : Ordered(headers)) {
+  for (const auto &[header_name, header_type] : AsOrderedView(headers)) {
     // Pseudo fields (`$valid$`, `$extracted$`) in P4-Symbolic indicate the
     // state of the header. Here we initialize the pseudo fields of each header
     // to symbolic variables.
@@ -90,7 +92,8 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
     }
 
     // Regular fields defined in the p4 program or v1model.
-    for (const auto &[field_name, field] : Ordered(header_type.fields())) {
+    for (const auto &[field_name, field] : 
+		    AsOrderedView(header_type.fields())) {
       if (field.signed_()) {
         return absl::UnimplementedError(
             "Negative header fields are not supported");

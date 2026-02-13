@@ -24,7 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 
 namespace pins_test {

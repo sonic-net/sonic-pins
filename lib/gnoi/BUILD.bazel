@@ -24,7 +24,7 @@ cc_library(
     srcs = ["gnoi_helper.cc"],
     hdrs = ["gnoi_helper.h"],
     deps = [
-        "//gutil/gutil:status",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -33,8 +33,8 @@ cc_test(
     srcs = ["gnoi_helper_test.cc"],
     deps = [
         ":gnoi_helper",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
 )

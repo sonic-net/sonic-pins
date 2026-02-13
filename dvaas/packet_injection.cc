@@ -32,7 +32,7 @@
 #include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"

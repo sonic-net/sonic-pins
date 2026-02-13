@@ -22,7 +22,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "lib/ssh/linux_ssh_helper.h"
 #include "thinkit/ssh_client.h"
 

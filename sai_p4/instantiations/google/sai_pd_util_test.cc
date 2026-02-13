@@ -5,7 +5,7 @@
 #include "absl/strings/str_replace.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "re2/re2.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 

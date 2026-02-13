@@ -36,12 +36,12 @@
 #include "google/protobuf/message.h"
 #include "google/rpc/code.pb.h"
 #include "google/rpc/status.pb.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"
+#include "gutil/collections.h"
+#include "gutil/ordered_map.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
@@ -2645,7 +2645,7 @@ absl::StatusOr<T> PdPacketIoToIr(const IrP4Info &info, const std::string &kind,
         absl::StrCat(kNewBullet, pd_metadata.status().message())));
   }
   std::vector<std::string> invalid_reasons;
-  for (const auto &[name, metadata] : Ordered(metadata_by_name)) {
+  for (const auto &[name, metadata] : gutil::AsOrderedView(metadata_by_name)) {
     // Skip metadata with @padding annotation (go/pdpi-padding).
     if (metadata.is_padding()) continue;
 

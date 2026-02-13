@@ -31,7 +31,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace pdpi {
 

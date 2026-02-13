@@ -17,7 +17,7 @@
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "swss/rediscommand.h"
 #include "swss/schema.h"
 #include "swss/table.h"

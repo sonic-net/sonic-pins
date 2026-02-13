@@ -4,8 +4,8 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
 namespace sai {

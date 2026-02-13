@@ -32,11 +32,11 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"
+#include "gutil/collections.h"
+#include "gutil/ordered_map.h"
+#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -47,6 +47,8 @@
 #include "z3++.h"
 
 namespace p4_symbolic::symbolic {
+
+using ::gutil::AsOrderedView;
 
 using MatchType = p4::config::v1::MatchField::MatchType;
 
@@ -680,7 +682,7 @@ absl::Status InitializeSymbolicActions(
 
     // Create a symbolic variable for each action parameter.
     for (const auto &[param_name, param_definition] :
-         Ordered(action.action_definition().params_by_name())) {
+         AsOrderedView(action.action_definition().params_by_name())) {
       ASSIGN_OR_RETURN(z3::expr action_param,
                        GetSymbolicActionParameter(symbolic_entry, param_name,
                                                   action, table, z3_context));
@@ -857,7 +859,7 @@ absl::StatusOr<ir::ConcreteTableEntry> ExtractConcreteEntryFromModel(
 
     // Set action parameters.
     for (const auto &[param_name, param_definition] :
-         Ordered(action.action_definition().params_by_name())) {
+         AsOrderedView(action.action_definition().params_by_name())) {
       // Set action parameter name.
       pdpi::IrActionInvocation::IrActionParam &ir_param =
           *result_entry.mutable_action()->add_params();

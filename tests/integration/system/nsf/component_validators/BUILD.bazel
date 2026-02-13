@@ -29,7 +29,6 @@ cc_library(
     srcs = ["p4rt_validator.cc"],
     hdrs = ["p4rt_validator.h"],
     deps = [
-        "//gutil/gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//tests/integration/system/nsf:util",
         "//tests/integration/system/nsf/interfaces:component_validator",
@@ -41,6 +40,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
+        "@com_google_gutil//gutil:status",
     ],
 )
 

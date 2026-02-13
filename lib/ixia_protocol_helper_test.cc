@@ -4,7 +4,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "lib/utils/json_test_utils.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mock_generic_testbed.h"

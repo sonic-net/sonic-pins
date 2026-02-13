@@ -1,7 +1,7 @@
 #include "tests/forwarding/mirror_blackbox_test_fixture.h"
 
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"

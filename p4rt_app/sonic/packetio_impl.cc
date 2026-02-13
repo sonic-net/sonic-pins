@@ -22,8 +22,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"
 #include "p4rt_app/sonic/receive_genetlink.h"
 #include "swss/selectable.h"
 

@@ -64,7 +64,7 @@ cc_test(
     srcs = ["switch_test.cc"],
     deps = [
         ":switch",
-        "//gutil/gutil:status_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnoi//cert:cert_cc_grpc_proto",
         "@com_github_gnoi//diag:diag_cc_grpc_proto",
@@ -188,7 +188,7 @@ cc_library(
     hdrs = ["bazel_test_environment.h"],
     deps = [
         ":test_environment",
-        "//gutil/gutil:test_artifact_writer",
+        "@com_google_gutil//gutil:test_artifact_writer",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
@@ -210,8 +210,8 @@ cc_test(
         # This dependency is not technically needed inside Google3,
         # but is a hack to keep the Copybara rules simple.
         "@com_google_benchmark//:benchmark",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
     ],
 )
 

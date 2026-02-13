@@ -17,7 +17,7 @@
 
 #include <string>
 
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 
 namespace p4_symbolic {

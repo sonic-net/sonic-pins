@@ -25,11 +25,11 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/repeated_ptr_field.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"
+#include "gutil/collections.h"
+#include "gutil/ordered_map.h"
+#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/built_ins.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 
@@ -382,7 +382,7 @@ absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
   // Parse reference annotations on action parameters.
   for (const auto &[action_name, action_def] : info.actions_by_name()) {
     for (const auto &[param_name, param_def] :
-         Ordered(action_def.params_by_name())) {
+         gutil::AsOrderedView(action_def.params_by_name())) {
       // Parse @refers_by annotations on parameter.
       ASSIGN_OR_RETURN(
           const std::vector<ParsedRefersToAnnotation> refers_to_annotations,
@@ -433,9 +433,10 @@ absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
       table_references_by_dst_table_by_src_table;
 
   // Parse all annotations on table match fields.
-  for (const auto &[table_name, table_def] : Ordered(info.tables_by_name())) {
+  for (const auto &[table_name, table_def] : 
+		  gutil::AsOrderedView(info.tables_by_name())) {
     for (const auto &[match_field_name, match_field_def] :
-         Ordered(table_def.match_fields_by_name())) {
+         gutil::AsOrderedView(table_def.match_fields_by_name())) {
       // Parse all @refers_to annotations on table match field.
       ASSIGN_OR_RETURN(
           const std::vector<ParsedRefersToAnnotation> refers_to_annotations,

@@ -22,7 +22,7 @@
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"

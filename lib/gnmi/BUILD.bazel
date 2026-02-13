@@ -27,9 +27,6 @@ cc_library(
     hdrs = ["gnmi_helper.h"],
     deps = [
         ":openconfig_cc_proto",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//lib/p4rt:p4rt_port",
         "//lib/utils:json_utils",
         "//p4_pdpi:p4_runtime_session",
@@ -57,6 +54,9 @@ cc_library(
         "@com_google_protobuf//:protobuf",
         "@com_googlesource_code_re2//:re2",
         "@com_jsoncpp//:json",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -66,9 +66,9 @@ cc_test(
     deps = [
         ":gnmi_helper",
         ":openconfig_cc_proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//gutil/gutil:testing",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
+        "@com_google_gutil//gutil:testing",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_gnoi//types:types_cc_proto",

@@ -22,7 +22,7 @@
 #include "absl/strings/str_join.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "tests/forwarding/group_programming_util.h"
 
 namespace pins_test {

@@ -34,9 +34,9 @@
 #include "dvaas/validation_result.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status.h"  // IWYU pragma: keep
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status.h"  // IWYU pragma: keep
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "p4/config/v1/p4info.pb.h"
