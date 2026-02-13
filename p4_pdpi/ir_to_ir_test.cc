@@ -16,9 +16,9 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 
 using gutil::EqualsProto;
 using gutil::IsOk;

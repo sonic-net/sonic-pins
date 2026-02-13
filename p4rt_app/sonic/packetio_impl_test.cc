@@ -25,7 +25,7 @@
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4rt_app/sonic/adapters/mock_system_call_adapter.h"
 
 namespace p4rt_app {

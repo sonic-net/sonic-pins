@@ -19,8 +19,8 @@
 #include "absl/strings/match.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/proto.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 
 namespace pdpi {
 namespace {

@@ -22,7 +22,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace pdpi {
 namespace {

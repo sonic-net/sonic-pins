@@ -41,7 +41,7 @@ limitations under the License.
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/validation_result.h"
-#include "gutil/gutil/test_artifact_writer.h"
+#include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"

@@ -34,8 +34,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 
 namespace p4rt_app {

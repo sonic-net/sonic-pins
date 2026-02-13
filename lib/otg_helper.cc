@@ -6,7 +6,7 @@
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
 #include "grpcpp/client_context.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 
 namespace pins_test::otg_helper {
 

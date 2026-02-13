@@ -20,7 +20,7 @@
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"

@@ -4,9 +4,9 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
-#include "gutil/gutil/test_artifact_writer.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/status_matchers.h"
+#include "gutil/test_artifact_writer.h"
+#include "gutil/testing.h"
 
 namespace {
 

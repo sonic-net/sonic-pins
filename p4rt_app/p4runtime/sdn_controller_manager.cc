@@ -22,8 +22,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 
 namespace p4rt_app {

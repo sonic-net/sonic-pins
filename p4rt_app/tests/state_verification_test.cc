@@ -14,7 +14,7 @@
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"

@@ -21,7 +21,7 @@ cc_library(
     hdrs = ["capabilities.h"],
     deps = [
         ":capabilities_cc_proto",
-	"//gutil/gutil:status",
+	"@com_google_gutil//gutil:status",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_protobuf//:protobuf",
@@ -34,8 +34,8 @@ cc_test(
     deps = [
         ":capabilities",
         ":capabilities_cc_proto",
-	"//gutil/gutil:proto_matchers",
-	"//gutil/gutil:status_matchers",
+	"@com_google_gutil//gutil:proto_matchers",
+	"@com_google_gutil//gutil:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )

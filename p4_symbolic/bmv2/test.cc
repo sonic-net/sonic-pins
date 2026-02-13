@@ -28,9 +28,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "google/protobuf/util/json_util.h"
-#include "gutil/gutil/io.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/status.h"
+#include "gutil/io.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.h"
 
 ABSL_FLAG(std::string, bmv2, "", "The path to the bmv2 json file (required)");

@@ -20,8 +20,8 @@
 #include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 

@@ -17,7 +17,7 @@
 #include "gmock/gmock.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace packetlib {

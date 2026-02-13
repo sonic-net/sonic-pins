@@ -23,7 +23,7 @@
 
 #include <string>
 
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "z3++.h"
 
 namespace p4_symbolic {

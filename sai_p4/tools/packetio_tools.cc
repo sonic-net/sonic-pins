@@ -15,7 +15,7 @@
 #include "sai_p4/tools/packetio_tools.h"
 
 #include "absl/status/statusor.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"

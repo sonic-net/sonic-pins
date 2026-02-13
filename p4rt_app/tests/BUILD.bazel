@@ -24,9 +24,6 @@ cc_test(
     srcs = ["acl_table_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
@@ -46,6 +43,9 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -54,8 +54,6 @@ cc_test(
     srcs = ["api_access_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "@com_github_grpc_grpc//:grpc++",
@@ -66,6 +64,8 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -74,8 +74,6 @@ cc_test(
     srcs = ["arbitration_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
 	"@com_github_grpc_grpc//:grpc++",
@@ -87,6 +85,8 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -95,9 +95,6 @@ cc_test(
     srcs = ["action_set_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
@@ -111,6 +108,9 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -119,10 +119,6 @@ cc_test(
     srcs = ["fixed_l3_tables_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
@@ -142,6 +138,10 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -150,10 +150,6 @@ cc_test(
     srcs = ["forwarding_pipeline_config_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/utils:annotation_parser",
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -181,6 +177,10 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
         "@sonic_swss_common//:common",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -189,7 +189,6 @@ cc_test(
     srcs = ["p4_programs_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/utils:annotation_parser",
@@ -202,6 +201,7 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -211,8 +211,6 @@ cc_test(
     srcs = ["packetio_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
@@ -234,6 +232,8 @@ cc_test(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -244,7 +244,6 @@ cc_test(
     deps = [
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/event_monitoring:config_db_queue_table_event",
-        "//gutil/gutil:io",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
@@ -255,6 +254,7 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@sonic_swss_common//:libswsscommon",
+        "@com_google_gutil//gutil:io",
     ],
 )
 
@@ -263,8 +263,6 @@ cc_test(
     srcs = ["port_name_and_id_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -278,6 +276,8 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -286,8 +286,6 @@ cc_test(
     srcs = ["cpu_queue_name_and_id_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
 	"//p4rt_app/event_monitoring:config_db_queue_table_event",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
@@ -298,6 +296,8 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@sonic_swss_common//:common",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -320,8 +320,6 @@ cc_test(
     srcs = ["packet_replication_table_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
@@ -331,6 +329,8 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -339,9 +339,6 @@ cc_test(
     srcs = ["response_path_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -357,6 +354,9 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -365,9 +365,6 @@ cc_test(
     srcs = ["role_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -387,6 +384,9 @@ cc_test(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -395,7 +395,6 @@ cc_test(
     srcs = ["state_verification_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
@@ -404,6 +403,7 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -412,8 +412,6 @@ cc_test(
     srcs = ["vrf_table_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -426,6 +424,8 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -451,10 +451,6 @@ cc_test(
     name = "warm_restart_bootup_test",
     srcs = ["warm_restart_bootup_test.cc"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/p4runtime:queue_translator",
@@ -476,6 +472,10 @@ cc_test(
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
         "@sonic_swss_common//:common",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -486,8 +486,6 @@ cc_test(
     linkstatic = True,
     tags = ["exclusive"],
     deps = [
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -502,6 +500,8 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
@@ -509,9 +509,6 @@ cc_test(
     name = "resource_limits_test",
     srcs = ["resource_limits_test.cc"],
     deps = [
-        "//gutil/gutil:collections",
-        "//gutil/gutil:status",
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -524,6 +521,9 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 
@@ -531,7 +531,6 @@ cc_test(
     name = "utf8_validity_test",
     srcs = ["utf8_validity_test.cc"],
     deps = [
-        "//gutil/gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
         "//p4_pdpi/string_encodings:hex_string",
@@ -542,6 +541,7 @@ cc_test(
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:status_matchers",
     ],
 )
 

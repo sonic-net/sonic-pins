@@ -29,7 +29,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"

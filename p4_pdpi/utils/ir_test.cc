@@ -28,9 +28,9 @@
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/proto_matchers.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 

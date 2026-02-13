@@ -18,7 +18,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 
 namespace pdpi {

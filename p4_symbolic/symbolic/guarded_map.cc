@@ -24,7 +24,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
