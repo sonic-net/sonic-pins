@@ -15,8 +15,12 @@
 #ifndef PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
 #define PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
 
+#include <string>
+
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "artifacts/otg.grpc.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
@@ -33,7 +37,8 @@ public:
   MOCK_METHOD(TestEnvironment &, Environment, (), (override));
   MOCK_METHOD((absl::flat_hash_map<std::string, InterfaceInfo>),
               GetSutInterfaceInfo, (), (override));
-  MOCK_METHOD(otg::Openapi::StubInterface *, GetTrafficClient, (), (override));
+  MOCK_METHOD(absl::StatusOr<otg::Openapi::StubInterface*>, GetTrafficClient,
+              (), (override));
   MOCK_METHOD(absl::StatusOr<HttpResponse>, SendRestRequestToIxia,
               (RequestType type, absl::string_view url,
                absl::string_view payload),

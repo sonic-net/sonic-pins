@@ -18,6 +18,8 @@
 # Component owners need to have their own implementations and register to be used by the NSF Upgrade
 # tests.
 
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],

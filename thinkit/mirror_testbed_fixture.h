@@ -83,8 +83,15 @@ struct MirrorTestbedFixtureParams {
 //
 //  Individual tests should use the new suite name:
 //    TEST_P(MyPinsTest, MyTestName) {}
-class MirrorTestbedFixture
-    : public testing::TestWithParam<MirrorTestbedFixtureParams> {
+//
+// For those wanting to pass their own custom parameters, as long as it has a
+// member 'MirrorTestbedInterface* mirror_testbed', it can be passed as the
+// template parameter:
+//    struct MyParams { MirrorTestbedInterface* mirror_testbed; ...};
+//    class MyPinsTest :
+//      public thinkit::MirrorTestbedFixtureWithParams<MyParams> {...};
+template <class Params>
+class MirrorTestbedFixtureWithParams : public testing::TestWithParam<Params> {
 protected:
   // A derived class that needs/wants to do its own setup can override this
   // method. However, it should take care to call this base setup first. That
@@ -108,15 +115,22 @@ protected:
     return mirror_testbed_interface_->SaveSwitchLogs(save_prefix);
   }
 
-  const std::string &gnmi_config() const { return GetParam().gnmi_config; }
+  const std::string& gnmi_config() const {
+    return this->GetParam().gnmi_config;
+  }
 
-  const p4::config::v1::P4Info &p4_info() const { return GetParam().p4_info; }
+  const p4::config::v1::P4Info& p4_info() const {
+    return this->GetParam().p4_info;
+  }
 
 private:
   // Takes ownership of the MirrorTestbedInterface parameter.
   std::unique_ptr<MirrorTestbedInterface> mirror_testbed_interface_ =
-      absl::WrapUnique<MirrorTestbedInterface>(GetParam().mirror_testbed);
+      absl::WrapUnique<MirrorTestbedInterface>(this->GetParam().mirror_testbed);
 };
+
+using MirrorTestbedFixture =
+    MirrorTestbedFixtureWithParams<MirrorTestbedFixtureParams>;
 
 } // namespace thinkit
 

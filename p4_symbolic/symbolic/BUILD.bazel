@@ -13,6 +13,8 @@
 # limitations under the License.
 
 load("//p4_symbolic/symbolic:test.bzl", "end_to_end_test")
+# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+# load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
