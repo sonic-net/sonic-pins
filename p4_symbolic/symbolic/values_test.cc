@@ -11,7 +11,7 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 

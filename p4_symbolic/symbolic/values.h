@@ -30,7 +30,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "z3++.h"
 
 namespace p4_symbolic {

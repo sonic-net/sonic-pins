@@ -29,7 +29,7 @@
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"
-#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
 

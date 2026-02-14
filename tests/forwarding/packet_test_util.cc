@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
 
 namespace pins {
 

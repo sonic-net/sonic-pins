@@ -12,7 +12,7 @@
 #include "google/protobuf/message.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "tests/qos/gnmi_parsers.h"
 
 // -- Pretty printers for golden testing ---------------------------------------

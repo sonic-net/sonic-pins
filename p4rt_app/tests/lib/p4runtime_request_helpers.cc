@@ -18,8 +18,8 @@
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/pd.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace p4rt_app {

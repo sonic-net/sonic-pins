@@ -34,9 +34,9 @@
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
 ABSL_FLAG(int32_t, number_iterations, 10, "Number of iterations");

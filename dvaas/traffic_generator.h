@@ -34,7 +34,7 @@
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {

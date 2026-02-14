@@ -12,7 +12,7 @@
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/test_artifact_writer.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace dvaas {
 

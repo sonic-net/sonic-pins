@@ -19,9 +19,9 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/utils/ir.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/utils/ir.h"
 #include "thinkit/test_environment.h"
 
 namespace p4_fuzzer {

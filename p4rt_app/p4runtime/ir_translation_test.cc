@@ -20,7 +20,7 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/utils/ir_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"

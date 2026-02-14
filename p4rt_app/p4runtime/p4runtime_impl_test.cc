@@ -20,7 +20,7 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
-#include "p4_pdpi/utils/ir.h"
+#include "p4_infra/p4_pdpi/utils/ir.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/sonic/adapters/mock_system_call_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"

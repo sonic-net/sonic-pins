@@ -19,7 +19,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
-#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_infra/p4_pdpi/internal/ordered_map.h"
 
 namespace p4_fuzzer {
 

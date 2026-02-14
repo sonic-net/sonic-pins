@@ -31,7 +31,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/timer.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"

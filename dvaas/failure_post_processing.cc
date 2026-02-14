@@ -11,8 +11,8 @@
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/names.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/names.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 
 namespace dvaas {

@@ -16,7 +16,7 @@
 
 #include <utility>
 
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 
 namespace p4rt_app {
 

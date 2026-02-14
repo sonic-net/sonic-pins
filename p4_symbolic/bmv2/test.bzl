@@ -23,7 +23,7 @@ over a sample P4 program.
 """
 
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-load("//p4_pdpi/testing:diff_test.bzl", "diff_test")
+load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "diff_test")
 
 def _subset_diff_impl(ctx):
     """Subset diff between actual and expected json files.

@@ -15,7 +15,7 @@ syntax = "proto3";
 
 package p4rt_app;
 
-import "p4_pdpi/ir.proto";
+import "p4_infra/p4_pdpi/ir.proto";
 
 // Schema for verifying a action within a fixed SAI P4 table.
 message ActionSchema {

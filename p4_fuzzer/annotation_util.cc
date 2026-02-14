@@ -19,8 +19,8 @@
 #include "absl/log/log.h"
 #include "gutil/gutil/status.h"
 #include "p4_fuzzer/fuzzer.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "thinkit/test_environment.h"
 
 namespace p4_fuzzer {

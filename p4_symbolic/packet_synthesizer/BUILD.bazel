@@ -27,9 +27,9 @@ cc_library(
     hdrs = ["util.h"],
     deps = [
         "//gutil/gutil:status",
-        "//p4_pdpi/netaddr:ipv6_address",
-        "//p4_pdpi/string_encodings:decimal_string",
-        "//p4_pdpi/utils:ir",
+        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
+        "//p4_infra/p4_pdpi/string_encodings:decimal_string",
+        "//p4_infra/p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
 	"//p4_symbolic/sai",
         "//p4_symbolic/symbolic",
@@ -45,7 +45,7 @@ cc_library(
 proto_library(
     name = "packet_synthesis_criteria_proto",
     srcs = ["packet_synthesis_criteria.proto"],
-    deps = ["//p4_pdpi:ir_proto"],
+    deps = ["//p4_infra/p4_pdpi:ir_proto"],
 )
 
 cc_proto_library(
@@ -58,7 +58,7 @@ proto_library(
     srcs = ["packet_synthesizer.proto"],
     deps = [
         ":packet_synthesis_criteria_proto",
-        "//p4_pdpi/packetlib:packetlib_proto",
+        "//p4_infra/p4_pdpi/packetlib:packetlib_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_proto",
     ],
 )
@@ -122,7 +122,7 @@ cc_library(
         ":z3_model_to_packet",
         "//gutil/gutil:status",
         "//gutil/gutil:timer",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
         "//p4_symbolic/symbolic:solver_state",
@@ -148,7 +148,7 @@ cc_library(
         ":packet_synthesis_criteria",
         ":packet_synthesis_criteria_cc_proto",
         "//gutil/gutil:proto",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
         "//p4_symbolic/symbolic:solver_state",
@@ -165,7 +165,7 @@ cc_library(
     hdrs = ["z3_model_to_packet.h"],
     deps = [
         ":packet_synthesizer_cc_proto",
-        "//p4_pdpi/packetlib",
+        "//p4_infra/p4_pdpi/packetlib",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/sai",
         "//p4_symbolic/symbolic:solver_state",
