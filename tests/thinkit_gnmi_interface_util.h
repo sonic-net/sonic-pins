@@ -27,7 +27,7 @@
 #include "gutil/gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
-#include "p4_pdpi/pd.h"
+#include "p4_infra/p4_pdpi/pd.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/ssh_client.h"

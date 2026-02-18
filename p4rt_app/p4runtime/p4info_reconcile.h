@@ -22,7 +22,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 
 namespace p4rt_app {

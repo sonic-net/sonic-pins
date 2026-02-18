@@ -33,7 +33,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "tests/lib/p4info_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed_fixture.h"

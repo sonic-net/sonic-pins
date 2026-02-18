@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -28,8 +26,8 @@ cc_library(
     hdrs = ["p4info_helper.h"],
     deps = [
         "//gutil/gutil:collections",
-        "//p4_pdpi:ir_cc_proto",
-        "//p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:p4_runtime_session",
         "//thinkit:switch",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
@@ -45,8 +43,8 @@ cc_library(
     deps = [
         "//gutil/gutil:proto",
         "//gutil/gutil:status",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google/test_tools:test_entries", 
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
@@ -65,8 +63,8 @@ cc_test(
         "//gutil/gutil:proto_matchers",
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -84,7 +82,7 @@ cc_library(
     srcs = ["common_ir_table_entries.cc"],
     hdrs = ["common_ir_table_entries.h"],
     deps = [
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -95,8 +93,8 @@ cc_test(
     deps = [
         ":common_ir_table_entries",
         "//gutil/gutil:status_matchers",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_google_googletest//:gtest_main",
@@ -117,9 +115,9 @@ cc_library(
         "//lib/gnmi:openconfig_cc_proto",
         "//lib/p4rt:p4rt_port",
         "//lib/validator:validator_lib",
-        "//p4_pdpi:ir_cc_proto",
-        "//p4_pdpi:ir_tools",
-        "//p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_tools",
+        "//p4_infra/p4_pdpi:p4_runtime_session",
         "//tests:thinkit_sanity_tests",
         "//thinkit:mirror_testbed",
         "//thinkit:switch",
@@ -154,7 +152,7 @@ cc_test(
         "//gutil/gutil:status_matchers",
         "//gutil/gutil:testing",
         "//lib/p4rt:p4rt_port",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_google_absl//absl/strings",
@@ -178,7 +176,7 @@ cc_library(
     srcs = ["packet_in_helper.cc"],
     hdrs = ["packet_in_helper.h"],
     deps = [
-        "//p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_pdpi:p4_runtime_session",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -195,12 +193,12 @@ cc_library(
     deps = [
         "//gutil/gutil:proto",
         "//gutil/gutil:status",
-        "//p4_pdpi/netaddr:ipv4_address",
-        "//p4_pdpi/netaddr:ipv6_address",
-        "//p4_pdpi/netaddr:mac_address",
-        "//p4_pdpi/packetlib",
-        "//p4_pdpi/packetlib:bit_widths",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
+        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
+        "//p4_infra/p4_pdpi/netaddr:mac_address",
+        "//p4_infra/p4_pdpi/packetlib",
+        "//p4_infra/p4_pdpi/packetlib:bit_widths",
+        "//p4_infra/p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/numeric:int128",
@@ -220,8 +218,8 @@ cc_test(
         ":packet_generator",
         "//gutil/gutil:proto_matchers",
         "//gutil/gutil:status_matchers",
-        "//p4_pdpi/packetlib",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_infra/p4_pdpi/packetlib",
+        "//p4_infra/p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -235,8 +233,8 @@ cc_library(
     hdrs = ["packet_injector.h"],
     deps = [
         "//lib/p4rt:p4rt_port",
-        "//p4_pdpi:ir_cc_proto",
-        "//p4_pdpi:p4_runtime_session",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:p4_runtime_session",
         "//tests/forwarding:util",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",

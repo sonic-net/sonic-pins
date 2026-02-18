@@ -19,7 +19,7 @@
 // each instantiation P4Info.
 
 #include "absl/status/statusor.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/test_tools/table_entry_generator_helper.h"
 
 namespace sai {

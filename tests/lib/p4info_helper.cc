@@ -19,8 +19,8 @@
 #include "absl/status/statusor.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "thinkit/switch.h"
 
 namespace pins {

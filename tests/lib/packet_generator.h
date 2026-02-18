@@ -28,7 +28,7 @@
 #include "absl/status/statusor.h"
 #include "gutil/gutil/status.h"  // IWYU pragma: keep
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 
 // Helper library to hold a collection of functions to define a test
 // configuration, define a packet, generate a packet etc.

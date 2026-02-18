@@ -16,11 +16,8 @@ load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("//gutil/gutil/embed_data:build_defs.bzl", "cc_embed_data")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-# load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("//p4_infra/p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -162,7 +159,7 @@ cc_test(
 cmd_diff_test(
     name = "union_p4info_up_to_date_test",
     actual_cmd = "$(execpath {p4info_union}) --list_of_p4infos='{p4infos}'".format(
-        p4info_union = "//p4_pdpi:p4info_union",
+        p4info_union = "//p4_infra/p4_pdpi:p4info_union",
         p4infos = ",".join([
             "$(location %s.p4info.pb.txt)" % instantiation
             for (instantiation, _) in INSTANTIATIONS
@@ -173,7 +170,7 @@ cmd_diff_test(
         for (instantiation, _) in INSTANTIATIONS
     ],
     expected = "unioned_p4info.pb.txt",
-    tools = ["//p4_pdpi:p4info_union"],
+    tools = ["//p4_infra/p4_pdpi:p4info_union"],
 )
 
 # Only for testing and updating the PD proto when the P4 program changes.
@@ -198,8 +195,8 @@ cc_library(
     deps = [
         ":instantiations",
         ":sai_p4info_fetcher_cc",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "//sai_p4/tools:p4info_tools",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/log",
@@ -238,7 +235,7 @@ cc_library(
             ":clos_stage",
             ":instantiations",
             ":unioned_p4info_embed",
-            "//p4_pdpi:ir_cc_proto",
+            "//p4_infra/p4_pdpi:ir_cc_proto",
             "//sai_p4/tools:p4info_tools",
             "@com_github_p4lang_p4runtime//:p4info_cc_proto",
             "@com_google_absl//absl/log:check",
@@ -355,7 +352,7 @@ cc_library(
     deps = [
         ":instantiations",
         ":sai_nonstandard_platforms_embed",
-        "//p4_pdpi:ir_cc_proto",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",

@@ -31,7 +31,7 @@ syntax = "proto3";
 
 package p4_symbolic.ir;
 
-import "p4_pdpi/ir.proto";
+import "p4_infra/p4_pdpi/ir.proto";
 import "p4_symbolic/bmv2/bmv2.proto";
 
 // Overall structure of a p4 program.

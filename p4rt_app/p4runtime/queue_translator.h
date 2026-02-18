@@ -23,7 +23,7 @@
 #include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 namespace p4rt_app {
 
 // QueueTranslator is an immutable bidirectional map that translates between

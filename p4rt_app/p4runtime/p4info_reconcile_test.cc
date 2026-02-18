@@ -27,7 +27,7 @@
 #include "gutil/gutil/proto_matchers.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/utils/ir_builder.h"
 #include "p4rt_app/utils/table_utility.h"

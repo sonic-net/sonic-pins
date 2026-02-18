@@ -25,8 +25,8 @@
 #include "google/protobuf/map.h"
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/utils/annotation_parser.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/utils/annotation_parser.h"
 #include "swss/schema.h"
 
 namespace p4rt_app {

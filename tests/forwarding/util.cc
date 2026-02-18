@@ -22,8 +22,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gutil/gutil/status.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/tools/packetio_tools.h"
 
 namespace pins {

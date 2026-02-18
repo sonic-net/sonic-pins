@@ -22,7 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/utils/ir.h"
+#include "p4_infra/p4_pdpi/utils/ir.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/packetio_selectables.h"
 #include "p4rt_app/sonic/receive_genetlink.h"
