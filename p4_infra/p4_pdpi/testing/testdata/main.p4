@@ -278,7 +278,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
   }
 
   // Action that refers to both fields of two_match_fields_table.
-  // TODO Add double reference.
+  // TODO: Add double reference.
   action referring_to_two_match_fields_action(@id(1)
   @refers_to(two_match_fields_table, id_1)
                          string_id_t referring_id_1,
