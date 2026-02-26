@@ -15,6 +15,8 @@
  */
 #include "p4rt_app/sonic/response_handler.h"
 
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -30,7 +32,9 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/adapters/zmq_producer_state_table_adapter.h"
 #include "swss/rediscommand.h"
+#include "swss/schema.h"
 #include "swss/status_code_util.h"
 #include "swss/table.h"
 
@@ -70,6 +74,70 @@ google::rpc::Code SwssToP4RTErrorCode(const std::string& status_str) {
     default:
       return google::rpc::Code::UNKNOWN;
   }
+}
+
+// Same as GetAppDbResponses() but over the zmq connection.
+absl::StatusOr<absl::btree_map<std::string, pdpi::IrUpdateStatus>>
+GetZmqResponses(int expected_response_count,
+                ZmqProducerStateTableAdapter& producer) {
+  absl::btree_map<std::string, pdpi::IrUpdateStatus> key_to_status_map;
+  if (expected_response_count == 0) {
+    return key_to_status_map;
+  }
+
+  std::string db_name;
+  std::string table_name;
+  std::vector<std::shared_ptr<swss::KeyOpFieldsValuesTuple>> kfvs;
+  bool response = producer.wait(db_name, table_name, kfvs);
+  if (!response) {
+    return gutil::InternalErrorBuilder()
+           << "[OrchAgent] P4RT App timed out on waiting for "
+              "the ZMQ response from OrchAgent.";
+  }
+
+  if (kfvs.size() != expected_response_count) {
+    return gutil::InternalErrorBuilder()
+           << "[OrchaAgent]P4RT App did not get expected "
+           << expected_response_count
+           << " responses on the ZMQ channel from the OrchAgent but got "
+           << kfvs.size();
+  }
+
+  if (db_name != "APPL_DB" || table_name != APP_P4RT_TABLE_NAME) {
+    return gutil::InternalErrorBuilder()
+           << "[OrchAgent] P4RT App did not receive the correct ZMQ response "
+              "from the OrchAgent."
+           << "Expected: APPL_DB table " << APP_P4RT_TABLE_NAME
+           << " but got: " << db_name << " table " << table_name;
+  }
+
+  for (const auto& kfv : kfvs) {
+    std::string actual_key;
+    std::vector<swss::FieldValueTuple> value_tuples;
+
+    actual_key = kfvKey(*kfv);
+    value_tuples = kfvFieldsValues(*kfv);
+    if (value_tuples.empty()) {
+      return gutil::InternalErrorBuilder()
+             << "Notification response for '" << actual_key
+             << "' should not be empty.";
+    }
+
+    pdpi::IrUpdateStatus result;
+    const swss::FieldValueTuple& first_tuple = value_tuples[0];
+    // Sanitize any response messages coming from the OA layers.
+    result.set_code(SwssToP4RTErrorCode(fvField(first_tuple)));
+    result.set_message(absl::CHexEscape(fvValue(first_tuple)));
+
+    // Insert into the responses map, but do not allow duplicates.
+    if (!key_to_status_map.insert({actual_key, result}).second) {
+      return gutil::InternalErrorBuilder()
+             << "[P4RT App] The response path received a duplicate key from "
+                "the AppDb: "
+             << actual_key;
+    }
+  }
+  return key_to_status_map;
 }
 
 // Get expected responses from the notification channel.
@@ -252,22 +320,21 @@ absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
 
 absl::StatusOr<pdpi::IrUpdateStatus>
 GetAndProcessResponseNotificationWithoutRevertingState(
-    ConsumerNotifierAdapter& notification_interface, const std::string& key) {
+    ZmqProducerStateTableAdapter& producer, const std::string& key) {
   pdpi::IrUpdateStatus local_status;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> key_to_status_map;
   key_to_status_map[key] = &local_status;
 
   RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
-      notification_interface, key_to_status_map));
+      producer, key_to_status_map));
   return local_status;
 }
 
 absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
-    ConsumerNotifierAdapter& notification_interface,
+    ZmqProducerStateTableAdapter& producer,
     absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map) {
-  ASSIGN_OR_RETURN(
-      auto response_status_map,
-      GetAppDbResponses(key_to_status_map.size(), notification_interface));
+  ASSIGN_OR_RETURN(auto response_status_map,
+                   GetZmqResponses(key_to_status_map.size(), producer));
 
   return UpdateResponsesAndRestoreState(key_to_status_map, response_status_map,
                                         /*app_db_table=*/nullptr,
