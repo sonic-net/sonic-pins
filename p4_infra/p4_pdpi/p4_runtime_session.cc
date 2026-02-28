@@ -46,8 +46,6 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/names.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
-// TODO: A temporary dependence on SAI to mask a bug. Safe to remove
-// in April 2024.
 #include "gutil/gutil/status.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "thinkit/switch.h"
@@ -292,6 +290,18 @@ bool P4RuntimeSession::StreamChannelRead(
   return false;
 }
 
+absl::StatusOr<p4::v1::CapabilitiesResponse>
+P4RuntimeSession::GetSwitchCapabilities(
+    const p4::v1::CapabilitiesRequest& request) {
+  grpc::ClientContext context;
+  context.set_deadline(
+      absl::ToChronoTime(absl::Now() + kNonStreamingGRPCReqTimeout));
+  p4::v1::CapabilitiesResponse response;
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      stub_->Capabilities(&context, request, &response)));
+  return response;
+}
+
 bool P4RuntimeSession::StreamChannelWrite(
     const p4::v1::StreamMessageRequest& request) {
   absl::MutexLock lock(&stream_write_lock_);
@@ -496,21 +506,27 @@ absl::Status SetMetadataAndSendPiWriteRequests(
 
 absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
   ReadRequest read_request;
-  read_request.add_entities()->mutable_table_entry();
-  // Currently, `ReadPiEntities()` cannot read all PRE entities due to ambiguity
-  // expanded upon here
-  // (https://github.com/p4lang/PI/pull/610#issuecomment-2011101546). Until the
-  // P4RT App bug is fixed, it will only read
-  // `multicast_group_entry`, but we will eventually want to read
-  // `clone_session_entry` again.
-  // TODO: Remove the workaround that allows `ReadPiEntities()`
-  // read entities without failing.
+  // Read all table entries and their associated counters and meters.
+  TableEntry& table_entry = *read_request.add_entities()->mutable_table_entry();
+  table_entry.mutable_meter_config();
+  table_entry.mutable_counter_data();
+  table_entry.mutable_meter_counter_data();
+
+  // Read all Packet Replication Engine entities.
+  // Currently, there is ambiguity in the P4 Runtime specification regarding PRE
+  // wildcard reads
+  // (https://github.com/p4lang/PI/pull/610#issuecomment-2011101546). Depending
+  // on the resolution of that issue, we may want to combine these to lines to
+  // only add a single PRE entry. BMv2 does not currently support that.
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
+  read_request.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_clone_session_entry();
+
   ASSIGN_OR_RETURN(ReadResponse read_response,
                    SetMetadataAndSendPiReadRequest(session, read_request));
-
   return std::vector<Entity>{read_response.entities().begin(),
                              read_response.entities().end()};
 }
@@ -518,7 +534,12 @@ absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
 absl::StatusOr<std::vector<TableEntry>> ReadPiTableEntries(
     P4RuntimeSession* session) {
   ReadRequest read_request;
-  read_request.add_entities()->mutable_table_entry();
+  // Read all table entries and their associated counters and meters.
+  TableEntry& table_entry = *read_request.add_entities()->mutable_table_entry();
+  table_entry.mutable_meter_config();
+  table_entry.mutable_counter_data();
+  table_entry.mutable_meter_counter_data();
+
   ASSIGN_OR_RETURN(ReadResponse read_response,
                    SetMetadataAndSendPiReadRequest(session, read_request));
 
@@ -644,26 +665,39 @@ absl::Status ClearEntities(
   absl::c_reverse(entities);
 
   // Get current switch version to determine if we need to mask old errors.
-  // TODO: Remove version check when the P4Info version in release
-  // is equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST. Almost
-  // certainly safe to remove by April 2024.
   ASSIGN_OR_RETURN(
       gutil::Version current_version,
       gutil::ParseVersion(response.config().p4info().pkg_info().version()));
   ASSIGN_OR_RETURN(
       gutil::Version first_version_with_fail_on_first,
       gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST));
+
+  absl::Status status;
+  absl::Time start_time = absl::Now();
   if (current_version >= first_version_with_fail_on_first) {
-    RETURN_IF_ERROR(
-        SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE)))
-        << "when attempting to delete the following entities: "
-        << absl::StrJoin(entities, "\n");
+    status = SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE));
   } else {
     // Ideally, whether to use batches or not should be determined by a P4Info
-    RETURN_IF_ERROR(SplitSortedUpdatesIntoBatchesAndSend(
-        session, info, CreatePiUpdates(entities, Update::DELETE)))
-        << "when attempting to delete the following entities: "
-        << absl::StrJoin(entities, "\n");
+    // option
+    status = SplitSortedUpdatesIntoBatchesAndSend(
+        session, info, CreatePiUpdates(entities, Update::DELETE));
+  }
+  // Record size and timing
+  LOG(INFO) << absl::StrFormat("Number of entities cleared from the switch: %d",
+                               entities.size());
+  LOG(INFO) << absl::StrFormat("Amount of time taken to clear entities: %s",
+                               absl::StrCat(absl::Now() - start_time));
+
+  if (!status.ok()) {
+    if (execute_on_failure != nullptr) {
+      RETURN_IF_ERROR(execute_on_failure(entities))
+          << "failed to delete entities and execute user-provided callback "
+             "`execute_on_failure`";
+    }
+    RETURN_IF_ERROR(status)
+        << "when attempting to delete the following entities (first 10 "
+           "entities displayed): "
+        << absl::StrJoin(entities.begin(), entities.begin() + 10, "\n");
   }
 
   // Verify that all entities were cleared successfully.
