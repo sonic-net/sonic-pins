@@ -160,17 +160,19 @@ GetOrSetP4Info(pdpi::P4RuntimeSession &p4rt_session,
                const p4::config::v1::P4Info &default_p4info);
 
 // Deletes the given `ir_entity` from the switch.
-absl::Status DeleteIrEntity(P4RuntimeSession &p4rt, const IrEntity &Ir_entity);
+absl::Status DeleteIrEntity(P4RuntimeSession& p4rt,
+                            const pdpi::IrEntity& ir_entity);
 
 // Deletes the given `ir_entities` from the switch.
-absl::Status DeleteIrEntities(P4RuntimeSession& p4rt, const IrEntities &ir_entities);
+absl::Status DeleteIrEntities(P4RuntimeSession& p4rt,
+                              const pdpi::IrEntities& ir_entities);
 
 // Deletes the given `pi_entity` from the switch.
 absl::Status DeletePiEntity(P4RuntimeSession &p4rt,
                             const p4::v1::Entity &pi_entity);
 
 // Deletes the given `pi_entities` from the switch.
-absl::Status DeletePiEntities(P4RuntimeSession &p4rt,
+absl::Status DeletePiEntities(P4RuntimeSession& p4rt,
                               absl::Span<const p4::v1::Entity> pi_entities);
 
 // == END OF PUBLIC INTERFACE ==================================================

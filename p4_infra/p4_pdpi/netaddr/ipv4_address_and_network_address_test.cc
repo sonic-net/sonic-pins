@@ -27,7 +27,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_infra/p4_pdpi/netaddr/network_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/safe.h"
+#include "p4_infra/string_encodings/safe.h"
 
 // This file serves double duty, testing both Ipv4Address and the template class
 // NetworkAddress from which Ipv4Address derives.
@@ -40,7 +40,7 @@ namespace {
 
 using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
-using ::pdpi::SafeString;
+using ::string_encodings::SafeString;
 using ::testing::Eq;
 using ::testing::Not;
 

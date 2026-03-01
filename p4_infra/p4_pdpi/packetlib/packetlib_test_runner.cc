@@ -26,7 +26,7 @@
 #include "gutil/gutil/testing.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/readable_byte_string.h"
+#include "p4_infra/string_encodings/readable_byte_string.h"
 
 namespace packetlib {
 
@@ -67,7 +67,8 @@ void RunPacketParseTest(
             << kOutputHeader;
 
   // Attempt to parse.
-  auto byte_string = pdpi::ReadableByteStringToByteString(readable_byte_string);
+  auto byte_string =
+      string_encodings::ReadableByteStringToByteString(readable_byte_string);
   if (!byte_string.ok()) {
     std::cout << "TEST BUG, DO NOT"
               << " SUBMIT! ReadableByteStringToByteString failed: "

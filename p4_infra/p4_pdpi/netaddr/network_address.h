@@ -24,8 +24,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/byte_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace netaddr {
 
@@ -82,7 +82,9 @@ public:
   // Returns underlying bit representation.
   std::bitset<num_bits> ToBitset() const { return bits_; }
   // Returns hexadecimal representation of the address.
-  std::string ToHexString() const { return pdpi::BitsetToHexString(bits_); }
+  std::string ToHexString() const {
+    return string_encodings::BitsetToHexString(bits_);
+  }
   // Returns big-endian byte string encoding of the address of length exactly
   // ceil(num_bits/8).
   std::string ToPaddedByteString() const;
@@ -170,25 +172,26 @@ absl::StatusOr<T> NetworkAddress<N, T>::MaskForPrefixLength(int prefix_length) {
 
 template <std::size_t N, typename T>
 absl::StatusOr<T> NetworkAddress<N, T>::OfHexString(absl::string_view hex_str) {
-  ASSIGN_OR_RETURN(auto bits, pdpi::HexStringToBitset<N>(hex_str));
+  ASSIGN_OR_RETURN(auto bits, string_encodings::HexStringToBitset<N>(hex_str));
   return T(std::move(bits));
 }
 
 template <std::size_t N, typename T>
-absl::StatusOr<T>
-NetworkAddress<N, T>::OfByteString(absl::string_view byte_str) {
-  ASSIGN_OR_RETURN(auto bits, pdpi::ByteStringToBitset<N>(byte_str));
+absl::StatusOr<T> NetworkAddress<N, T>::OfByteString(
+    absl::string_view byte_str) {
+  ASSIGN_OR_RETURN(auto bits,
+                   string_encodings::ByteStringToBitset<N>(byte_str));
   return T(bits);
 }
 
 template <std::size_t N, typename T>
 std::string NetworkAddress<N, T>::ToPaddedByteString() const {
-  return pdpi::BitsetToPaddedByteString(bits_);
+  return string_encodings::BitsetToPaddedByteString(bits_);
 }
 
 template <std::size_t N, typename T>
 std::string NetworkAddress<N, T>::ToP4RuntimeByteString() const {
-  return pdpi::BitsetToP4RuntimeByteString(bits_);
+  return string_encodings::BitsetToP4RuntimeByteString(bits_);
 }
 
 template <std::size_t N, typename T>

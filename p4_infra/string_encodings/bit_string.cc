@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
+
+#include "p4_infra/string_encodings/bit_string.h"
 
 #include <algorithm>
 
@@ -21,7 +22,7 @@
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 absl::Status BitString::Consume(int num_bits) {
   if (num_bits < 0) {
@@ -121,4 +122,4 @@ std::string BitString::ToHexString(int start, int num_bits) const {
   return absl::StrCat("0x", result);
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings

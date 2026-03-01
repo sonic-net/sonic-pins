@@ -28,13 +28,12 @@
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/netaddr/network_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 
 namespace netaddr {
 
 absl::StatusOr<Ipv6Address> Ipv6Address::OfString(absl::string_view address) {
   std::string bytes = std::string(128 / 8, '\x0');
-  if (inet_pton(AF_INET6, address.data(), bytes.data()) == 1) {
+  if (inet_pton(AF_INET6, std::string(address).c_str(), bytes.data()) == 1) {
     auto ip = Ipv6Address::OfByteString(bytes);
     if (ip.ok()) return ip;
     LOG(DFATAL) << "failed to parse IPv6 byte string produced by inet_pton: "

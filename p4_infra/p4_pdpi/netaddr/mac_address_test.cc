@@ -23,7 +23,7 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4_infra/p4_pdpi/netaddr/network_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/safe.h"
+#include "p4_infra/string_encodings/safe.h"
 
 namespace netaddr {
 namespace {
@@ -50,20 +50,22 @@ std::vector<MacTriple> CorrectMacTriples() {
   triples.push_back(MacTriple{
       .canonical_notation = "00:00:00:00:00:00",
       .alternative_notations = {"00:00:00:00:0:0", "0:0:0:0:0:0"},
-      .byte_string = pdpi::SafeString({0, 0, 0, 0, 0, 0}),
+      .byte_string = string_encodings::SafeString({0, 0, 0, 0, 0, 0}),
       .mac = MacAddress::AllZeros(),
   });
   triples.push_back(MacTriple{
       .canonical_notation = "01:23:45:67:89:ab",
       .alternative_notations = {"01:23:45:67:89:ab", "1:23:45:67:89:ab",
                                 "01:23:45:67:89:Ab"},
-      .byte_string = pdpi::SafeString({0x01, 0x23, 0x45, 0x67, 0x89, 0xab}),
+      .byte_string =
+          string_encodings::SafeString({0x01, 0x23, 0x45, 0x67, 0x89, 0xab}),
       .mac = MacAddress(0x01, 0x23, 0x45, 0x67, 0x89, 0xab),
   });
   triples.push_back(MacTriple{
       .canonical_notation = "ff:ff:ff:ff:ff:ff",
       .alternative_notations = {"ff:ff:ff:FF:fF:ff", "FF:FF:FF:FF:FF:FF"},
-      .byte_string = pdpi::SafeString({0xff, 0xff, 0xff, 0xff, 0xff, 0xff}),
+      .byte_string =
+          string_encodings::SafeString({0xff, 0xff, 0xff, 0xff, 0xff, 0xff}),
       .mac = MacAddress::AllOnes(),
   });
 
