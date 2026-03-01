@@ -14,15 +14,23 @@
 
 #include "p4_symbolic/packet_synthesizer/util.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/decimal_string.h"
+#include "p4_infra/netaddr/ipv6_address.h"
 #include "p4_infra/p4_pdpi/utils/ir.h"
+#include "p4_infra/string_encodings/decimal_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/operators.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/z3_util.h"
@@ -59,7 +67,8 @@ absl::StatusOr<Ipv6Range> ParseIpv6Range(absl::string_view ipv6_range) {
   }
   ASSIGN_OR_RETURN(auto ipv6, netaddr::Ipv6Address::OfString(parts[0]),
                    _ << " while trying to parse Ipv6 range: " << ipv6_range);
-  ASSIGN_OR_RETURN(int prefix_length, pdpi::DecimalStringToUint32(parts[1]),
+  ASSIGN_OR_RETURN(int prefix_length,
+                   string_encodings::DecimalStringToUint32(parts[1]),
                    _ << " while trying to parse Ipv6 range: " << ipv6_range);
   return Ipv6Range{
       .value = ipv6,
@@ -125,7 +134,7 @@ absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
                                               z3::context& z3_context) {
   ASSIGN_OR_RETURN(const std::string bytes,
                    pdpi::IrValueToNormalizedByteString(value, bitwidth));
-  const std::string hex_string = pdpi::ByteStringToHexString(bytes);
+  const std::string hex_string = string_encodings::ByteStringToHexString(bytes);
   return HexStringToZ3Bitvector(z3_context, hex_string, bitwidth);
 }
 

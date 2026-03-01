@@ -25,13 +25,13 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_infra/netaddr/ipv4_address.h"
+#include "p4_infra/netaddr/ipv6_address.h"
+#include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 #include "p4_infra/p4_pdpi/ternary.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -1633,8 +1633,9 @@ TEST(AddNexthopRifNeighborEntriesTest, RewritesPassedToDisableRewrites) {
 TEST(EntryBuilder,
      AddPreIngressAclTableEntryMatchingVlanIdAndSetVlanIdAndAclMetadata) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(std::bitset<kVlanIdBitwidth> vlan_id,
-                       pdpi::HexStringToBitset<kVlanIdBitwidth>("0x00a"));
+  ASSERT_OK_AND_ASSIGN(
+      std::bitset<kVlanIdBitwidth> vlan_id,
+      string_encodings::HexStringToBitset<kVlanIdBitwidth>("0x00a"));
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()

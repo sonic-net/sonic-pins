@@ -26,16 +26,16 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/decimal_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/byte_string.h"
+#include "p4_infra/string_encodings/decimal_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace pins_test {
 
 absl::StatusOr<P4rtPortId> P4rtPortId::MakeFromP4rtEncoding(
     absl::string_view p4rt_port_id) {
   ASSIGN_OR_RETURN(uint32_t p4rt_port_id_int,
-                   pdpi::DecimalStringToUint32(p4rt_port_id));
+                   string_encodings::DecimalStringToUint32(p4rt_port_id));
   return P4rtPortId(p4rt_port_id_int);
 }
 
@@ -65,7 +65,7 @@ std::vector<P4rtPortId> P4rtPortId::MakeVectorFromOpenConfigEncodings(
 absl::StatusOr<P4rtPortId> P4rtPortId::MakeFromHexstringEncoding(
     absl::string_view hexstring_encoding) {
   ASSIGN_OR_RETURN(uint32_t p4rt_port_id_int,
-                   pdpi::HexStringToUint32(hexstring_encoding));
+                   string_encodings::HexStringToUint32(hexstring_encoding));
   return P4rtPortId(p4rt_port_id_int);
 }
 
@@ -84,7 +84,8 @@ absl::StatusOr<std::string> P4rtPortId::GetBmv2P4rtEncoding() const {
               "but the present P4RT port ID "
            << p4rt_port_id_ << " has " << width << " bits.";
   }
-  return pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitWidth>(p4rt_port_id_);
+  return string_encodings::BitsetToP4RuntimeByteString<kBmv2PortBitWidth>(
+      p4rt_port_id_);
 }
 
 bool P4rtPortId::operator==(const P4rtPortId& other) const {

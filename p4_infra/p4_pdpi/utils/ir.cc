@@ -49,12 +49,12 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_infra/netaddr/ipv4_address.h"
+#include "p4_infra/netaddr/ipv6_address.h"
+#include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
+#include "p4_infra/string_encodings/byte_string.h"
 #include "utf8_validity.h"
 
 namespace pdpi {
@@ -73,7 +73,8 @@ absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
            << "Bytestrings must have non-zero length.";
   }
   std::string canonical_string = ArbitraryToCanonicalByteString(bytes);
-  const int bitwidth = GetBitwidthOfByteString(canonical_string);
+  const int bitwidth =
+      string_encodings::GetBitwidthOfByteString(canonical_string);
   if (bitwidth > expected_bitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Bytestring of length " << bitwidth << " bits does not fit in "

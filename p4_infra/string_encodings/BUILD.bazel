@@ -11,6 +11,7 @@ cc_library(
     hdrs = ["byte_string.h"],
     deps = [
         "//gutil/gutil:status",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -42,9 +43,9 @@ cc_library(
     deps = [
         ":hex_string",
         "//gutil/gutil:status",
-        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
-        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
-        "//p4_infra/p4_pdpi/netaddr:mac_address",
+        "//p4_infra/netaddr:ipv4_address",
+        "//p4_infra/netaddr:ipv6_address",
+        "//p4_infra/netaddr:mac_address",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -90,7 +91,6 @@ cc_library(
     srcs = ["hex_string.cc"],
     hdrs = ["hex_string.h"],
     deps = [
-        ":byte_string",
         ":safe",
         "//gutil/gutil:status",
         "@com_google_absl//absl/log",

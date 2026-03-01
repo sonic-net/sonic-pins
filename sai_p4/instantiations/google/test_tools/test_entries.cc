@@ -38,18 +38,17 @@
 #include "gutil/gutil/testing.h"
 #include "gutil/gutil/version.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_infra/netaddr/ipv4_address.h"
+#include "p4_infra/netaddr/ipv6_address.h"
+#include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
 #include "p4_infra/p4_pdpi/ternary.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -65,8 +64,10 @@ template <std::size_t bitwidth>
 sai::Ternary BitSetTernaryToSai(
     const pdpi::Ternary<std::bitset<bitwidth>>& bitset_ternary) {
   sai::Ternary sai_ternary;
-  sai_ternary.set_value(pdpi::BitsetToHexString(bitset_ternary.value));
-  sai_ternary.set_mask(pdpi::BitsetToHexString(bitset_ternary.mask));
+  sai_ternary.set_value(
+      string_encodings::BitsetToHexString(bitset_ternary.value));
+  sai_ternary.set_mask(
+      string_encodings::BitsetToHexString(bitset_ternary.mask));
   return sai_ternary;
 }
 
@@ -526,19 +527,21 @@ EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
   sai::MulticastGroupTableEntry& entry =
       *entries_.add_entries()->mutable_multicast_group_table_entry();
   entry.mutable_match()->set_multicast_group_id(
-      pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(multicast_group_id));
+      string_encodings::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+          multicast_group_id));
   for (const Replica& replica : replicas) {
     sai::ReplicateAction::Replica& pd_replica =
         *entry.mutable_action()->mutable_replicate()->add_replicas();
     pd_replica.set_port(replica.egress_port);
     pd_replica.set_instance(
-        pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica.instance));
+        string_encodings::BitsetToHexString<kReplicaInstanceBitwidth>(
+            replica.instance));
     for (const BackupReplica& backup_replica : replica.backup_replicas) {
       sai::ReplicateAction::BackupReplica& pd_backup_replica =
           *pd_replica.add_backup_replicas();
       pd_backup_replica.set_port(backup_replica.egress_port);
       pd_backup_replica.set_instance(
-          pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(
+          string_encodings::BitsetToHexString<kReplicaInstanceBitwidth>(
               backup_replica.instance));
     }
   }
@@ -566,7 +569,8 @@ sai::MulticastRouterInterfaceTableEntry ActionlessMrifEntry(
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(egress_port);
   match.set_multicast_replica_instance(
-      pdpi::BitsetToHexString<kReplicaInstanceBitwidth>(replica_instance));
+      string_encodings::BitsetToHexString<kReplicaInstanceBitwidth>(
+          replica_instance));
   return pd_entry;
 }
 }  // namespace
@@ -622,7 +626,8 @@ EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacAndVlanId(
   auto& action =
       *pd_entry.mutable_action()->mutable_multicast_set_src_mac_and_vlan_id();
   action.set_src_mac(src_mac.ToString());
-  action.set_vlan_id(pdpi::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
+  action.set_vlan_id(
+      string_encodings::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
 
   *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
       pd_entry;
@@ -640,7 +645,8 @@ EntryBuilder& EntryBuilder::AddMrifEntryRewritingSrcMacDstMacAndVlanId(
                       ->mutable_multicast_set_src_mac_and_dst_mac_and_vlan_id();
   action.set_src_mac(src_mac.ToString());
   action.set_dst_mac(dst_mac.ToString());
-  action.set_vlan_id(pdpi::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
+  action.set_vlan_id(
+      string_encodings::BitsetToHexString<kVlanIdBitwidth>(vlan_id));
 
   *entries_.add_entries()->mutable_multicast_router_interface_table_entry() =
       pd_entry;
@@ -686,7 +692,7 @@ EntryBuilder& EntryBuilder::AddMulticastRoute(
   entry.mutable_action()
       ->mutable_set_multicast_group_id()
       ->set_multicast_group_id(
-          pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+          string_encodings::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
               multicast_group_id));
   return *this;
 }
@@ -701,7 +707,7 @@ EntryBuilder& EntryBuilder::AddMulticastRoute(
   entry.mutable_action()
       ->mutable_set_multicast_group_id()
       ->set_multicast_group_id(
-          pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+          string_encodings::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
               multicast_group_id));
   return *this;
 }
@@ -841,7 +847,8 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<kVlanIdBitwidth>(*match_fields.vlan_id));
+        string_encodings::BitsetToHexString<kVlanIdBitwidth>(
+            *match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   if (match_fields.dst_ip.has_value()) {
@@ -899,7 +906,8 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<kVlanIdBitwidth>(*match_fields.vlan_id));
+        string_encodings::BitsetToHexString<kVlanIdBitwidth>(
+            *match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   if (match_fields.dst_ip.has_value()) {
@@ -927,7 +935,7 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
   if (match_fields.vrf.has_value()) {
     entry.mutable_match()->mutable_vrf_id()->set_value(*match_fields.vrf);
   }
-  
+
   std::visit(
       gutil::Overload{
           [&](const Forward& action) {
@@ -936,9 +944,9 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
           [&](const RedirectToIpmcGroup& action) {
             entry.mutable_action()
                 ->mutable_redirect_to_ipmc_group()
-                ->set_multicast_group_id(
-		    pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
-                        action.multicast_group_id));
+                ->set_multicast_group_id(string_encodings::BitsetToHexString<
+                                         kPdMulticastGroupIdBitwidth>(
+                    action.multicast_group_id));
           },
           [&](const RedirectToIpmcGroupAndSetCpuQueueAndCancelCopy& action) {
             auto& proto =
@@ -947,8 +955,8 @@ EntryBuilder& EntryBuilder::AddIngressAclMirrorAndRedirectEntry(
                      // NOLINTNEXTLINE
                      ->mutable_redirect_to_ipmc_group_and_set_cpu_queue_and_cancel_copy();
             proto.set_multicast_group_id(
-	        pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
-                    action.multicast_group_id));
+                string_encodings::BitsetToHexString<
+                    kPdMulticastGroupIdBitwidth>(action.multicast_group_id));
             proto.set_cpu_queue(action.cpu_queue);
           },
           [&](const SetCpuQueueAndCancelCopy& action) {
@@ -978,7 +986,8 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   }
   if (match_fields.vlan_id.has_value()) {
     entry.mutable_match()->mutable_vlan_id()->set_value(
-        pdpi::BitsetToHexString<kVlanIdBitwidth>(*match_fields.vlan_id));
+        string_encodings::BitsetToHexString<kVlanIdBitwidth>(
+            *match_fields.vlan_id));
     entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
   }
   if (match_fields.dst_ip.has_value()) {
@@ -1200,7 +1209,7 @@ EntryBuilder::AddAclIngressTableEntryToRedirectingToL2MulticastGroup(
   entry.mutable_action()
       ->mutable_redirect_to_l2mc_group()
       ->set_multicast_group_id(
-          pdpi::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
+          string_encodings::BitsetToHexString<kPdMulticastGroupIdBitwidth>(
               multicast_group_id));
   entry.set_priority(1);
   return *this;

@@ -11,12 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
+
+#include "p4_infra/netaddr/mac_address.h"
 
 #include <bitset>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -25,8 +27,8 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_infra/p4_pdpi/netaddr/network_address.h"
+#include "p4_infra/netaddr/ipv6_address.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace netaddr {
 
@@ -100,7 +102,8 @@ absl::StatusOr<MacAddress> MacAddress::OfInterfaceId(
   uint64_t id = interface_id.to_ullong();
   if ((id & 0x0000'00FF'FF00'0000) != 0x0000'00FF'FE00'0000) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "invalid interface ID " << pdpi::BitsetToHexString(interface_id)
+           << "invalid interface ID "
+           << string_encodings::BitsetToHexString(interface_id)
            << ": the two middle bytes must be equal to FF FE.";
   }
   std::bitset<48> mac = ((id & 0xFFFF'FF00'0000'0000u) >> 16) |

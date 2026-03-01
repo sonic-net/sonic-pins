@@ -25,7 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 namespace packetlib {
 
@@ -70,11 +70,11 @@ absl::Status ValidatePacket(const Packet &packet);
 // valid instead.
 std::vector<std::string> PacketInvalidReasons(const Packet &packet);
 
-// Seralizes a given packet. The packet may miss computed fields, which will be
-// filled in automatically when missing (but not changed if they are present).
-// Serialization succeeds iff `ValidatePacket(packet).ok()` after calling
-// `PadPacketToMinimumSize(packet); UpdateMissingComputedFields(packet)`. An
-// error status is returned otherwise.
+// Seralizes a given packet to the bytestring format. The packet may miss
+// computed fields, which will be filled in automatically when missing (but not
+// changed if they are present). Serialization succeeds iff
+// `ValidatePacket(packet).ok()` after calling `PadPacketToMinimumSize(packet);
+// UpdateMissingComputedFields(packet)`. An error status is returned otherwise.
 absl::StatusOr<std::string> SerializePacket(Packet packet);
 
 // Like the other `SerializePacket` overload, but takes in the `packet` in text
@@ -240,7 +240,7 @@ std::string ValidateAndConvertToHexString(uint64_t input) {
         << bit_limit << " but input has " << bit_width << " bits: " << input;
   }
 
-  return pdpi::BitsetToHexString(std::bitset<bit_limit>(input));
+  return string_encodings::BitsetToHexString(std::bitset<bit_limit>(input));
 }
 
 } // namespace packetlib

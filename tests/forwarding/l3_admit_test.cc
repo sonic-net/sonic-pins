@@ -42,6 +42,7 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/p4_runtime_session.h"

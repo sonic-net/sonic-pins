@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
+
+#include "p4_infra/netaddr/mac_address.h"
 
 #include <cstdint>
 #include <string>
@@ -22,8 +23,8 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_infra/p4_pdpi/netaddr/network_address.h"
-#include "p4_infra/p4_pdpi/string_encodings/safe.h"
+#include "p4_infra/netaddr/network_address.h"
+#include "p4_infra/string_encodings/safe.h"
 
 namespace netaddr {
 namespace {
@@ -35,7 +36,7 @@ using ::testing::Not;
 
 // An MAC address, in 3 different representations.
 struct MacTriple {
-  // Cannonical representation
+  // Canonical representation
   std::string canonical_notation;
   // Other legal human readable strings, e.g. using uppercase.
   std::vector<std::string> alternative_notations;
@@ -50,20 +51,22 @@ std::vector<MacTriple> CorrectMacTriples() {
   triples.push_back(MacTriple{
       .canonical_notation = "00:00:00:00:00:00",
       .alternative_notations = {"00:00:00:00:0:0", "0:0:0:0:0:0"},
-      .byte_string = pdpi::SafeString({0, 0, 0, 0, 0, 0}),
+      .byte_string = string_encodings::SafeString({0, 0, 0, 0, 0, 0}),
       .mac = MacAddress::AllZeros(),
   });
   triples.push_back(MacTriple{
       .canonical_notation = "01:23:45:67:89:ab",
       .alternative_notations = {"01:23:45:67:89:ab", "1:23:45:67:89:ab",
                                 "01:23:45:67:89:Ab"},
-      .byte_string = pdpi::SafeString({0x01, 0x23, 0x45, 0x67, 0x89, 0xab}),
+      .byte_string =
+          string_encodings::SafeString({0x01, 0x23, 0x45, 0x67, 0x89, 0xab}),
       .mac = MacAddress(0x01, 0x23, 0x45, 0x67, 0x89, 0xab),
   });
   triples.push_back(MacTriple{
       .canonical_notation = "ff:ff:ff:ff:ff:ff",
       .alternative_notations = {"ff:ff:ff:FF:fF:ff", "FF:FF:FF:FF:FF:FF"},
-      .byte_string = pdpi::SafeString({0xff, 0xff, 0xff, 0xff, 0xff, 0xff}),
+      .byte_string =
+          string_encodings::SafeString({0xff, 0xff, 0xff, 0xff, 0xff, 0xff}),
       .mac = MacAddress::AllOnes(),
   });
 

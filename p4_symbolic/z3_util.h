@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -45,9 +45,9 @@ absl::StatusOr<int> EvalZ3Int(const z3::expr& int_expr, const z3::model& model);
 // Evaluates the given `bv_expr` bit-vector and appends the value to the
 // `output` bit-string based on the given `model`. Returns an error if the given
 // expression is not a bit-vector.
-absl::Status EvalAndAppendZ3BitvectorToBitString(pdpi::BitString& output,
-                                                 const z3::expr& bv_expr,
-                                                 const z3::model& model);
+absl::Status EvalAndAppendZ3BitvectorToBitString(
+    string_encodings::BitString& output, const z3::expr& bv_expr,
+    const z3::model& model);
 
 // Evaluates the given `bv_expr` bit-vector to uint64_t based on the given
 // `model`. Returns an error if the given expression is not a bit-vector or if
@@ -84,7 +84,7 @@ uint64_t Z3ValueStringToInt(const std::string& value);
 // evaluated Z3 string `value`. Returns an error if the `value` is not a valid
 // Z3 bit-vector value (i.e., if it is not a hex string starting with "#x" and
 // not a binary bit string starting with "#b").
-absl::Status AppendZ3ValueStringToBitString(pdpi::BitString& result,
+absl::Status AppendZ3ValueStringToBitString(string_encodings::BitString& result,
                                             absl::string_view value,
                                             size_t num_bits);
 

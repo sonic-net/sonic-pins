@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/string_encodings/hex_string.h"
+#include "p4_infra/string_encodings/hex_string.h"
 
 #include <bitset>
 #include <cstdint>
@@ -25,10 +25,10 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
-#include "p4_infra/p4_pdpi/string_encodings/safe.h"
+#include "absl/strings/strip.h"
+#include "p4_infra/string_encodings/safe.h"
 
-namespace pdpi {
+namespace string_encodings {
 
 // -- Conversions to Hex Strings -----------------------------------------------
 
@@ -94,7 +94,7 @@ absl::StatusOr<std::string> HexStringToByteString(
         const uint8_t ith_plus1_digit, HexCharToDigit(ith_plus1_char),
         _ << " while trying to convert hex string: " << hex_string);
     uint8_t c = (ith_digit << 4) | ith_plus1_digit;
-    result += pdpi::SafeChar(c);
+    result += SafeChar(c);
   }
   return result;
 }
@@ -185,4 +185,4 @@ absl::StatusOr<int> HexCharToDigit(char hex_char) {
          << "invalid hexadecimal character: " << hex_char;
 }
 
-}  // namespace pdpi
+}  // namespace string_encodings
