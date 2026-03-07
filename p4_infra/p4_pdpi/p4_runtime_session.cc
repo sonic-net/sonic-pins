@@ -653,17 +653,26 @@ absl::Status ClearEntities(
   ASSIGN_OR_RETURN(
       gutil::Version first_version_with_fail_on_first,
       gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST));
+
+  absl::Status status;
   if (current_version >= first_version_with_fail_on_first) {
-    RETURN_IF_ERROR(
-        SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE)))
-        << "when attempting to delete the following entities: "
-        << absl::StrJoin(entities, "\n");
+    status = SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE));
   } else {
     // Ideally, whether to use batches or not should be determined by a P4Info
-    RETURN_IF_ERROR(SplitSortedUpdatesIntoBatchesAndSend(
-        session, info, CreatePiUpdates(entities, Update::DELETE)))
-        << "when attempting to delete the following entities: "
-        << absl::StrJoin(entities, "\n");
+    // option
+    status = SplitSortedUpdatesIntoBatchesAndSend(
+        session, info, CreatePiUpdates(entities, Update::DELETE));
+  }
+  if (!status.ok()) {
+    if (execute_on_failure != nullptr) {
+      RETURN_IF_ERROR(execute_on_failure(entities))
+          << "failed to delete entities and execute user-provided callback "
+             "`execute_on_failure`";
+    }
+    RETURN_IF_ERROR(status)
+        << "when attempting to delete the following entities (first 10 "
+           "entities displayed): "
+        << absl::StrJoin(entities.begin(), entities.begin() + 10, "\n");
   }
 
   // Verify that all entities were cleared successfully.
