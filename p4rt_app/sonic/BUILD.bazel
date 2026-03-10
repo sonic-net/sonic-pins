@@ -46,9 +46,9 @@ cc_test(
     deps = [
         ":app_db_acl_def_table_manager",
         ":redis_connections",
-        "//p4rt_app/sonic/adapters:fake_notification_producer_adapter",
         "//gutil/gutil:status_matchers",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
+        "//p4rt_app/sonic/adapters:fake_zmq_producer_state_table_adapter",
         "//p4rt_app/utils:ir_builder",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/log",
@@ -101,9 +101,9 @@ cc_test(
         "//gutil/gutil:status_matchers",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
+        "//p4rt_app/sonic/adapters:mock_zmq_producer_state_table_adapter",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
@@ -287,9 +287,9 @@ cc_library(
     hdrs = ["redis_connections.h"],
     deps = [
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:notification_producer_adapter",
         "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",
+        "//p4rt_app/sonic/adapters:zmq_producer_state_table_adapter",
     ],
 )
 
@@ -303,6 +303,7 @@ cc_library(
         "//p4_infra/p4_pdpi/utils:ir",
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",
+        "//p4rt_app/sonic/adapters:zmq_producer_state_table_adapter",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",

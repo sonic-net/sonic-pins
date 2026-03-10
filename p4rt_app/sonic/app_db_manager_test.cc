@@ -28,9 +28,9 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/mock_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"
+#include "p4rt_app/sonic/adapters/mock_zmq_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -58,29 +58,25 @@ const std::vector<std::pair<std::string, std::string>>&
 GetSuccessfulResponseValues() {
   static const std::vector<std::pair<std::string, std::string>>* const
       kResponse = new std::vector<std::pair<std::string, std::string>>{
-          {"err_str", "SWSS_RC_SUCCESS"}};
+          {"SWSS_RC_SUCCESS", "SWSS_RC_SUCCESS"}};
   return *kResponse;
 }
 
 class AppDbManagerTest : public ::testing::Test {
  protected:
   AppDbManagerTest() {
-    auto p4rt_notification_producer =
-        std::make_unique<MockNotificationProducerAdapter>();
-    auto p4rt_notifier = std::make_unique<MockConsumerNotifierAdapter>();
+    auto p4rt_producer = std::make_unique<MockZmqProducerStateTableAdapter>();
     auto p4rt_app_db = std::make_unique<StrictMock<MockTableAdapter>>();
     auto p4rt_counter_db = std::make_unique<MockTableAdapter>();
     auto vrf_producer_state = std::make_unique<MockProducerStateTableAdapter>();
 
     // Save a pointer so we can test against the mocks.
-    mock_p4rt_notification_producer_ = p4rt_notification_producer.get();
-    mock_p4rt_notifier_ = p4rt_notifier.get();
+    mock_p4rt_producer_ = p4rt_producer.get();
     mock_p4rt_app_db_ = p4rt_app_db.get();
     mock_p4rt_counter_db_ = p4rt_counter_db.get();
 
     mock_p4rt_table_ = P4rtTable{
-        .notification_producer = std::move(p4rt_notification_producer),
-        .notification_consumer = std::move(p4rt_notifier),
+        .producer = std::move(p4rt_producer),
         .app_db = std::move(p4rt_app_db),
         .counter_db = std::move(p4rt_counter_db),
     };
@@ -95,8 +91,7 @@ class AppDbManagerTest : public ::testing::Test {
   }
 
   // Mock AppDb tables.
-  MockNotificationProducerAdapter* mock_p4rt_notification_producer_;
-  MockConsumerNotifierAdapter* mock_p4rt_notifier_;
+  MockZmqProducerStateTableAdapter* mock_p4rt_producer_;
   StrictMock<MockTableAdapter>* mock_p4rt_app_db_;
   MockTableAdapter* mock_p4rt_counter_db_;
   P4rtTable mock_p4rt_table_;
@@ -146,14 +141,16 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
       std::make_tuple(expected.GetKey(), "SET", expected.GetValueList())};
-  EXPECT_CALL(*mock_p4rt_notification_producer_, send(expected_key_value))
-      .Times(1);
+  EXPECT_CALL(*mock_p4rt_producer_, send(expected_key_value)).Times(1);
 
   // Expected OrchAgent response.
-  EXPECT_CALL(*mock_p4rt_notifier_, WaitForNotificationAndPop)
-      .WillOnce(DoAll(SetArgReferee<0>("SWSS_RC_SUCCESS"),
-                      SetArgReferee<1>(expected.GetKey()),
-                      SetArgReferee<2>(GetSuccessfulResponseValues()),
+  const swss::KeyOpFieldsValuesTuple expected_resp_key_value =
+      std::make_tuple(expected.GetKey(), "", GetSuccessfulResponseValues());
+  const std::vector<std::shared_ptr<swss::KeyOpFieldsValuesTuple>> kcos = {
+      std::make_shared<swss::KeyOpFieldsValuesTuple>(expected_resp_key_value)};
+  EXPECT_CALL(*mock_p4rt_producer_, wait)
+      .WillOnce(DoAll(SetArgReferee<0>("APPL_DB"),
+                      SetArgReferee<1>("P4RT_TABLE"), SetArgReferee<2>(kcos),
                       Return(true)));
 
   pdpi::IrWriteResponse response;
@@ -249,14 +246,16 @@ TEST_F(AppDbManagerTest, ModifyTableEntry) {
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
       std::make_tuple(expected.GetKey(), "SET", expected.GetValueList())};
-  EXPECT_CALL(*mock_p4rt_notification_producer_, send(expected_key_value))
-      .Times(1);
+  EXPECT_CALL(*mock_p4rt_producer_, send(expected_key_value)).Times(1);
 
   // OrchAgent returns success.
-  EXPECT_CALL(*mock_p4rt_notifier_, WaitForNotificationAndPop)
-      .WillOnce(DoAll(SetArgReferee<0>("SWSS_RC_SUCCESS"),
-                      SetArgReferee<1>(expected.GetKey()),
-                      SetArgReferee<2>(GetSuccessfulResponseValues()),
+  const swss::KeyOpFieldsValuesTuple expected_resp_key_value =
+      std::make_tuple(expected.GetKey(), "", GetSuccessfulResponseValues());
+  const std::vector<std::shared_ptr<swss::KeyOpFieldsValuesTuple>> kcos = {
+      std::make_shared<swss::KeyOpFieldsValuesTuple>(expected_resp_key_value)};
+  EXPECT_CALL(*mock_p4rt_producer_, wait)
+      .WillOnce(DoAll(SetArgReferee<0>("APPL_DB"),
+                      SetArgReferee<1>("P4RT_TABLE"), SetArgReferee<2>(kcos),
                       Return(true)));
 
   pdpi::IrWriteResponse response;
@@ -308,14 +307,16 @@ TEST_F(AppDbManagerTest, DeleteTableEntry) {
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
       std::make_tuple(expected.GetKey(), "DEL",
                       std::vector<swss::FieldValueTuple>{})};
-  EXPECT_CALL(*mock_p4rt_notification_producer_, send(expected_key_value))
-      .Times(1);
+  EXPECT_CALL(*mock_p4rt_producer_, send(expected_key_value)).Times(1);
 
   // OrchAgent returns success.
-  EXPECT_CALL(*mock_p4rt_notifier_, WaitForNotificationAndPop)
-      .WillOnce(DoAll(SetArgReferee<0>("SWSS_RC_SUCCESS"),
-                      SetArgReferee<1>(expected.GetKey()),
-                      SetArgReferee<2>(GetSuccessfulResponseValues()),
+  const swss::KeyOpFieldsValuesTuple expected_resp_key_value =
+      std::make_tuple(expected.GetKey(), "", GetSuccessfulResponseValues());
+  const std::vector<std::shared_ptr<swss::KeyOpFieldsValuesTuple>> kcos = {
+      std::make_shared<swss::KeyOpFieldsValuesTuple>(expected_resp_key_value)};
+  EXPECT_CALL(*mock_p4rt_producer_, wait)
+      .WillOnce(DoAll(SetArgReferee<0>("APPL_DB"),
+                      SetArgReferee<1>("P4RT_TABLE"), SetArgReferee<2>(kcos),
                       Return(true)));
 
   pdpi::IrWriteResponse response;

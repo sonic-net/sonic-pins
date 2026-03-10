@@ -27,11 +27,11 @@
 #include "grpcpp/server_builder.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_zmq_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/warm_restart_utility.h"
@@ -137,12 +137,8 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
 
   // Create interfaces to access P4RT_TABLE entries.
   sonic::P4rtTable p4rt_table{
-      .notification_producer =
-          std::make_unique<sonic::FakeNotificationProducerAdapter>(
-              &fake_p4rt_table_),
-      .notification_consumer =
-          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
-              &fake_p4rt_table_),
+      .producer = std::make_unique<sonic::FakeZmqProducerStateTableAdapter>(
+          &fake_p4rt_table_),
       .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_p4rt_table_,
                                                            kP4rtTableName),
       .counter_db = absl::make_unique<sonic::FakeTableAdapter>(
