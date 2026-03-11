@@ -52,7 +52,7 @@
 #include "p4_infra/p4_pdpi/packetlib/packetlib.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/string_encodings/decimal_string.h"
+#include "p4_infra/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -243,7 +243,8 @@ absl::StatusOr<absl::flat_hash_map<int, int>> CountNumPacketsPerPort(
     absl::Span<const dvaas::Packet> output_packets) {
   absl::flat_hash_map<int, int> num_packets_per_port;
   for (const auto& output : output_packets) {
-    ASSIGN_OR_RETURN(int out_port, pdpi::DecimalStringToInt(output.port()));
+    ASSIGN_OR_RETURN(int out_port,
+                     string_encodings::DecimalStringToInt(output.port()));
     num_packets_per_port[out_port]++;
   }
   return num_packets_per_port;

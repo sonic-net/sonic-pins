@@ -32,7 +32,7 @@
 #include "p4_infra/p4_pdpi/built_ins.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/reference_annotations.h"
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
+#include "p4_infra/string_encodings/byte_string.h"
 
 namespace pdpi {
 namespace {
@@ -41,6 +41,7 @@ namespace {
 // ConcreteTableReference, coming from an action or the match fields. Partial
 // references are combined to form full references, more details below.
 using PartialConcreteTableReference = absl::btree_set<ConcreteFieldReference>;
+using ::string_encodings::BitsetToP4RuntimeByteString;
 
 // Inherited from v1model , see `standard_metadata_t.mcast_grp`.
 // https://github.com/p4lang/p4c/blob/main/p4include/v1model.p4

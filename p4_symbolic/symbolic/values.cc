@@ -36,8 +36,8 @@
 #include "gmpxx.h"
 #include "gutil/gutil/status.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
 #include "p4_infra/p4_pdpi/utils/ir.h"
+#include "p4_infra/string_encodings/bit_string.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
@@ -176,7 +176,7 @@ absl::StatusOr<pdpi::IrValue> TranslateZ3ValueStringToIrValue(
   if (translated) {
     byte_string = p4rt_value;
   } else {
-    pdpi::BitString bit_string;
+    string_encodings::BitString bit_string;
     int bitstring_width = bitwidth;
     // Round up the bitwidth to the nearest multiple of 8 for converting to IR
     // value via byte strings.

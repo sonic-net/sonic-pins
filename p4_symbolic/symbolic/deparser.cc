@@ -20,7 +20,7 @@
 #include "absl/status/statusor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/gutil/status.h"
-#include "p4_infra/p4_pdpi/string_encodings/bit_string.h"
+#include "p4_infra/string_encodings/bit_string.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/solver_state.h"
@@ -37,7 +37,7 @@ absl::StatusOr<std::string> Deparse(
     const symbolic::SymbolicPerPacketState& packet, const z3::model& model,
     const ::google::protobuf::RepeatedPtrField<std::string>& header_order,
     const ::google::protobuf::Map<std::string, ir::HeaderType>& headers) {
-  pdpi::BitString result;
+  string_encodings::BitString result;
 
   // Serialize each header to the bit-string from the outermost one to the
   // innermost one.

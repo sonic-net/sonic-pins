@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "p4_infra/p4_pdpi/string_encodings/byte_string.h"
+
+#include "p4_infra/string_encodings/byte_string.h"
 
 #include <bitset>
 #include <cmath>
@@ -28,9 +29,9 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_infra/p4_pdpi/string_encodings/safe.h"
+#include "p4_infra/string_encodings/safe.h"
 
-namespace pdpi {
+namespace string_encodings {
 namespace {
 
 using ::gutil::IsOk;
@@ -147,4 +148,4 @@ TEST(GetBitwidthOfByteString, LeadingPaddingDoesNotAffectBitwidth) {
 }
 
 }  // namespace
-}  // namespace pdpi
+}  // namespace string_encodings
