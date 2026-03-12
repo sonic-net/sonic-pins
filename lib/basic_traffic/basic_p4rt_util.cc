@@ -21,6 +21,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/substitute.h"
+#include "absl/flags/flag.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -30,6 +31,9 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+
+// TODO(PINS) : To be removed when pins supports vrf creation in vrforch
+ABSL_FLAG(bool, traffic_p4_vrf_support, false, "Whether p4 supports vrf creation");
 
 namespace pins_test::basic_traffic {
 namespace {
@@ -59,9 +63,12 @@ absl::Status ProgramTrafficVrf(
                                 }
                               }
                             })pb"));
-  RETURN_IF_ERROR(WritePdWriteRequest(write_request, ir_p4info, vrf_request))
-      << "Error writing VRF request.";
 
+  // TODO(PINS) : Skip if pins does not support vrf creation
+  if (absl::GetFlag(FLAGS_traffic_p4_vrf_support)) {
+    RETURN_IF_ERROR(WritePdWriteRequest(write_request, ir_p4info, vrf_request))
+        << "Error writing VRF request.";
+  }
   ASSIGN_OR_RETURN(auto pre_ingress_request,
                    gutil::ParseTextProto<sai::WriteRequest>(R"pb(
                      updates {

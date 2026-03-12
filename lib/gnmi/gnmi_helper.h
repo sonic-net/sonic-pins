@@ -753,5 +753,10 @@ absl::Status VerifyInterfaceOperState(
     gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view if_name,
     OperStatus desired_state,
     absl::Duration timeout = kVerifyOperStateDefaultTimeout);
+
+// TODO(PINS) Checks if there is a hard-coded mapping from the interface
+// to p4rt id
+int GetP4rtIdMap(std::string_view interface_name);
+
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

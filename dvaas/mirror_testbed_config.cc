@@ -47,6 +47,9 @@
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
+// TODO(PINS): Flag indicates whether p4rt_id support is present in gnmi
+ABSL_DECLARE_FLAG(bool, gnmi_p4rtid_support);
+
 namespace dvaas {
 namespace {
 
@@ -448,6 +451,7 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
   RETURN_IF_ERROR(StoreSwitchStateAsArtifacts(
       control_switch_api_, absl::StrCat(kArtifactPrefix, "configured.cs."),
       kStoreConfiguredSwitchStateParams));
+  return absl::OkStatus();
 }
 
 absl::Status MirrorTestbedConfigurator::RestoreToOriginalConfiguration() {
@@ -464,10 +468,13 @@ absl::Status MirrorTestbedConfigurator::RestoreToOriginalConfiguration() {
 
   // Restore the original interface P4RT port id configurations of SUT and
   // control switch.
-  RETURN_IF_ERROR(pins_test::SetInterfaceP4rtIds(*sut_api_.gnmi,
+  // TODO(PINS): To be removed when gnmi supports p4rt_id
+  if (absl::GetFlag(FLAGS_gnmi_p4rtid_support)) {
+    RETURN_IF_ERROR(pins_test::SetInterfaceP4rtIds(*sut_api_.gnmi,
                                                  *original_sut_interfaces_));
-  RETURN_IF_ERROR(pins_test::SetInterfaceP4rtIds(
-      *control_switch_api_.gnmi, *original_control_interfaces_));
+    RETURN_IF_ERROR(pins_test::SetInterfaceP4rtIds(
+        *control_switch_api_.gnmi, *original_control_interfaces_));
+  }
 
   // Remove the kept interfaces.
   original_control_interfaces_.reset();
