@@ -66,6 +66,71 @@ cc_library(
 )
 
 cc_library(
+    name = "ixia_helper",
+    testonly = True,
+    srcs = ["ixia_helper.cc"],
+    hdrs = ["ixia_helper.h"],
+    deps = [
+        ":ixia_helper_cc_proto",
+        "//gutil/gutil:collections",
+        "//gutil/gutil:overload",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//lib/gnmi:gnmi_helper",
+        "//lib/utils:json_utils",
+        "//p4_infra/netaddr:ipv4_address",
+        "//p4_infra/netaddr:ipv6_address",
+        "//p4_infra/netaddr:mac_address",
+        "//thinkit:generic_testbed",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "ixia_helper_test",
+    srcs = ["ixia_helper_test.cc"],
+    deps = [
+        ":ixia_helper",
+        ":ixia_helper_cc_proto",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status_matchers",
+        "//lib/utils:json_test_utils",
+        "//lib/utils:json_utils",
+        "//thinkit:generic_testbed",
+        "//thinkit:mock_generic_testbed",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+proto_library(
+    name = "ixia_helper_proto",
+    srcs = ["ixia_helper.proto"],
+    deps = ["@com_google_protobuf//:struct_proto"],
+)
+
+cc_proto_library(
+    name = "ixia_helper_cc_proto",
+    deps = [":ixia_helper_proto"],
+)
+
+cc_library(
     name = "basic_switch",
     hdrs = ["basic_switch.h"],
     deps = [
@@ -114,72 +179,6 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_googletest//:gtest_main",
     ],
-)
-
-cc_library(
-    name = "ixia_helper",
-    testonly = 1,
-    srcs = ["ixia_helper.cc"],
-    hdrs = ["ixia_helper.h"],
-    deps = [
-        ":ixia_helper_cc_proto",
-        "//gutil/gutil:collections",
-        "//gutil/gutil:overload",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:status",
-        "//lib/gnmi:gnmi_helper",
-        "//lib/utils:json_utils",
-        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
-        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
-        "//p4_infra/p4_pdpi/netaddr:mac_address",
-        "//thinkit:generic_testbed",
-        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-	"@com_google_absl//absl/functional:function_ref",
-        "@com_google_absl//absl/random",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf",
-    ],
-)
-
-cc_test(
-    name = "ixia_helper_test",
-    srcs = ["ixia_helper_test.cc"],
-    deps = [
-        ":ixia_helper",
-        ":ixia_helper_cc_proto",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
-        "//lib/utils:json_test_utils",
-        "//lib/utils:json_utils",
-        "//thinkit:generic_testbed",
-        "//thinkit:mock_generic_testbed",
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-proto_library(
-    name = "ixia_helper_proto",
-    srcs = ["ixia_helper.proto"],
-    deps = ["@com_google_protobuf//:struct_proto"],
-)
-
-cc_proto_library(
-    name = "ixia_helper_cc_proto",
-    deps = [":ixia_helper_proto"],
 )
 
 cc_library(
