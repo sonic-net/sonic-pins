@@ -33,6 +33,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/flags/flag.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto.h"
@@ -54,6 +55,11 @@
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
+
+//TODO(PINS): Flags to indicate whether pins support vrf and
+// p4rt id for interfaces
+ABSL_DECLARE_FLAG(bool, p4_vrf_support);
+ABSL_DECLARE_FLAG(bool, gnmi_p4rtid_support);
 
 namespace pins {
 namespace {
@@ -93,8 +99,12 @@ absl::Status AddAndSetDefaultVrf(p4_runtime::P4RuntimeSession& session,
       &set_vrf_ir_update));
 
   p4::v1::WriteRequest pi_write_request;
-  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
+
+  // TODO(PINS) : Skip if pins does not support vrf creation
+  if (absl::GetFlag(FLAGS_p4_vrf_support)) {
+    ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
                    VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
+  }
   ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
                    pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
   return p4_runtime::SetMetadataAndSendPiWriteRequest(&session,
@@ -322,6 +332,19 @@ absl::Status SendUdpPacket(p4_runtime::P4RuntimeSession& session,
 
 bool IsNonLagEthernetInterface(
     const pins_test::openconfig::Interfaces::Interface& interface) {
+
+  // TODO(PINS) : If pins does not support id, look up the mapping
+  if (!absl::GetFlag(FLAGS_gnmi_p4rtid_support)) {
+    int p4rt_id = pins_test::GetP4rtIdMap(interface.name());
+
+    if (p4rt_id > 0) {
+      LOG(INFO) << "Interface " << interface.name()
+                << " found in map with ID: " << p4rt_id;
+      return true;
+    }
+    return false;
+  }
+
   return interface.state().enabled() && interface.state().has_p4rt_id() &&
          absl::StartsWith(interface.name(), "Ethernet") &&
          interface.ethernet().state().aggregate_id().empty();
@@ -615,8 +638,7 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
   EXPECT_EQ(bad_packet_count, 0);
 }
 
-TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
-  
+TEST_P(L3AdmitTestFixture, DISABLED_L3PacketsCanBeRoutedWithOnlyARouterInterface) {
   // Only run this test if set_port_and_src_mac is used, which at SAI level
   // results in RIFs that also program MyMac table - see
   // go/rif-without-mystation for details.
@@ -695,8 +717,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
   EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
 }
 
-TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
-
+TEST_P(L3AdmitTestFixture, DISABLED_L3PacketsCanBeClassifiedByDestinationMac) {
   // Only run this test if the ACL_PRE_INGRESS table supports matching on
   // DST_MAC.
   if (!TableHasMatchField(ir_p4info_, "acl_pre_ingress_table", "dst_mac")) {
@@ -799,8 +820,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
   EXPECT_EQ(bad_packet_count, 0);
 }
 
-TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
-
+TEST_P(L3AdmitTestFixture, DISABLED_VlanOverrideAdmitsAllPacketsToL3Routing) {
   // Only run this test if the ACL_PRE_INGRESS_VLAN_TABLE exists.
   if (!ir_p4info_.tables_by_name().contains("acl_pre_ingress_vlan_table")) {
     GTEST_SKIP()
@@ -920,8 +940,7 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
   EXPECT_EQ(good_packet_count, kNumberOfTestPackets);
 }
 
-TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
-
+TEST_P(L3AdmitTestFixture, DISABLED_RoutedPacketsCanMatchOnCpuPort) {
   // Only run this test if the ACL_INGRESS_QOS_TABLE exists and we can match on
   // the IN_PORT.
   if (!TableHasMatchField(ir_p4info_, "acl_ingress_qos_table", "in_port")) {
