@@ -66,17 +66,18 @@
 #include "thinkit/switch.h"
 
 // It is assumed that getting the device id through gnmi, the gnmi
-// get type of CONFIG/STATE, get for p4rt_id, pins support in vrforch,
-// and all the mandatory counter are NOT supported by default.
-// The flags can be removed or set to true when the support is added
+// get types of CONFIG/STATE, get for p4rt_id, pins support in vrforch,
+// and all the mandatory counters are supported by default.
+// The flags should be set to false while running in an enviroment
+// where they are not supported
 
 // TODO(PINS): To be removed when get device id and get config are supported
-ABSL_FLAG(bool, gnmi_deviceid_support, false, "gNMI supports GetDeviceId");
-ABSL_FLAG(bool, gnmi_get_config_support, false,
+ABSL_FLAG(bool, gnmi_deviceid_support, true, "gNMI supports GetDeviceId");
+ABSL_FLAG(bool, gnmi_state_and_config_support, true,
               "gNMI supports config type in gnmi get request");
-ABSL_FLAG(bool, gnmi_p4rtid_support, false, "gNMI supports p4rt_id");
-ABSL_FLAG(bool, p4_vrf_support, false, "Whether p4 supports vrf creation");
-ABSL_FLAG(bool, gnmi_all_counters_support, false,
+ABSL_FLAG(bool, gnmi_p4rtid_support, true, "gNMI supports p4rt_id");
+ABSL_FLAG(bool, p4_vrf_support, true, "Whether p4 supports vrf creation");
+ABSL_FLAG(bool, gnmi_all_counters_support, true,
 		"Whether gnmi supports all the available counters ");
 
 namespace pins_test {
@@ -149,7 +150,7 @@ GetPortNameToIdMapFromJsonString(absl::string_view json_string,
     // get the pre-defined mapping. Else get it from the gnmi response
     if (!absl::GetFlag(FLAGS_gnmi_p4rtid_support)) {
       port_id = pins_test::GetP4rtIdMap(name);
-      if (port_id <= 0) continue;
+      if (port_id < 0) continue;
       interface_name_to_port_id[name] = absl::StrCat(port_id);
     } else {
       const auto element_id_json =
@@ -756,7 +757,7 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                GnmiSetType operation, absl::string_view value) {
 
   // TODO(PINS): To be removed when get/set config are supported
-  if (!absl::GetFlag(FLAGS_gnmi_get_config_support)) {
+  if (!absl::GetFlag(FLAGS_gnmi_state_and_config_support)) {
     return absl::OkStatus();
   }
 
@@ -904,7 +905,7 @@ absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
   // Use CONFIG as the gnmi get type by default. Use ALL if the flag is
   // is set to false in the command line
   // TODO(PINS): To be removed when config is supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? gnmi::GetRequest::CONFIG
                                 : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(gnmi::GetRequest request,
@@ -925,7 +926,7 @@ absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::StubInterface& stub,
 absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
   // TODO(PINS): To be removed when get is fully supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? gnmi::GetRequest::STATE
                                 : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(auto req,
@@ -1255,7 +1256,7 @@ absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
     gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
     absl::Duration timeout) {
   // TODO(PINS): To be removed when all gnmi get modes are supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? type
                                 : gnmi::GetRequest::ALL;
 
@@ -1273,7 +1274,7 @@ absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
 absl::StatusOr<std::string> GetGnmiConfig(
     gnmi::gNMI::StubInterface& gnmi_stub) {
   // TODO(PINS): To be removed when config mode is supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? gnmi::GetRequest::CONFIG
                                 : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(
@@ -1306,7 +1307,7 @@ absl::StatusOr<std::vector<P4rtPortId>> GetMatchingP4rtPortIds(
     gnmi::gNMI::StubInterface& stub,
     std::function<bool(const openconfig::Interfaces::Interface&)> predicate) {
   // TODO(PINS): To be removed when config mode is supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? gnmi::GetRequest::STATE
                                 : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(
@@ -1321,7 +1322,7 @@ absl::StatusOr<std::vector<P4rtPortId>> GetMatchingP4rtPortIds(
     if (!absl::GetFlag(FLAGS_gnmi_p4rtid_support)) {
       std::string name = interface.name();
       int port_id = GetP4rtIdMap(name);
-      if (port_id != 0) {
+      if (port_id > 0) {
         ports.push_back(P4rtPortId::MakeFromOpenConfigEncoding(port_id));
       }
     } else {
@@ -1500,7 +1501,7 @@ absl::Status MapP4rtIdsToMatchingInterfaces(
     absl::Duration timeout) {
   // Gets the config path for all interfaces matching the predicate.
   // TODO(PINS): To be removed when get config mode is supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? gnmi::GetRequest::CONFIG
                                 : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(
@@ -2324,7 +2325,7 @@ absl::Status SetPortPfcRxEnable(const absl::string_view interface_name,
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
   // TODO(PINS): To be removed when get config mode is supported
-  const auto request_type = absl::GetFlag(FLAGS_gnmi_get_config_support)
+  const auto request_type = absl::GetFlag(FLAGS_gnmi_state_and_config_support)
                                 ? gnmi::GetRequest::STATE
                                 : gnmi::GetRequest::ALL;
   ASSIGN_OR_RETURN(
@@ -2606,27 +2607,26 @@ absl::Status VerifyInterfaceOperState(gnmi::gNMI::StubInterface& gnmi_stub,
   return absl::OkStatus();
 }
 
-// TODO(PINS) Hard-coded mapping between interfaces and their p4rt id
-  static const absl::flat_hash_map<std::string, int> interface_p4rtid_map = {
+// TODO(PINS): To be removed when vrf support is added in pins
+bool GetP4VrfFlag() {
+  return absl::GetFlag(FLAGS_p4_vrf_support);
+}
+
+// TODO(PINS): Hard-coded mapping between interfaces and their p4rt id
+  static const absl::flat_hash_map<std::string, int> kInterfaceToP4rtIdMap = {
       {"Ethernet0", 1},
       {"Ethernet4", 2}
   };
 
 int GetP4rtIdMap(std::string_view interface_name) {
   // Lookup using the iterator
-  auto it = interface_p4rtid_map.find(interface_name);
+  auto it = kInterfaceToP4rtIdMap.find(interface_name);
 
-  if (it != interface_p4rtid_map.end()) {
+  if (it != kInterfaceToP4rtIdMap.end()) {
     return it->second; // Found: returns 1 or 2
   }
 
-  // This is a dummy usage of p4_vrf_support flag to avoid
-  // 'undefined reference' error because of dead code elimination by the
-  // linker. p4_vrf_support is not used in gnmi_helper.cc but used by test files
-  if (absl::GetFlag(FLAGS_p4_vrf_support)) {
-  }
-
-  return 0; // Failure case
+  return -1; // Failure case
 }
 
 }  // namespace pins_test

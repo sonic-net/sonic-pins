@@ -33,7 +33,7 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 // TODO(PINS) : To be removed when pins supports vrf creation in vrforch
-ABSL_FLAG(bool, traffic_p4_vrf_support, false, "Whether p4 supports vrf creation");
+ABSL_FLAG(bool, traffic_p4_vrf_support, true, "Whether p4 supports vrf creation");
 
 namespace pins_test::basic_traffic {
 namespace {

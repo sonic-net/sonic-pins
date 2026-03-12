@@ -56,11 +56,6 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 
-//TODO(PINS): Flags to indicate whether pins support vrf and
-// p4rt id for interfaces
-ABSL_DECLARE_FLAG(bool, p4_vrf_support);
-ABSL_DECLARE_FLAG(bool, gnmi_p4rtid_support);
-
 namespace pins {
 namespace {
 
