@@ -134,6 +134,7 @@ cc_library(
     srcs = ["p4runtime_impl.cc"],
     hdrs = ["p4runtime_impl.h"],
     deps = [
+        ":entity_update",
         ":ir_translation",
         ":p4info_reconcile",
         ":p4info_verification",
@@ -159,7 +160,6 @@ cc_library(
         "//p4rt_app/sonic:response_handler",
         "//p4rt_app/sonic:state_verification",
         "//p4rt_app/sonic:vrf_entry_translation",
-        "//p4rt_app/sonic/adapters:table_adapter",
         "//p4rt_app/sonic/adapters:warm_boot_state_adapter",
         "//p4rt_app/utils:event_data_tracker",
         "//p4rt_app/utils:status_utility",
@@ -348,11 +348,11 @@ cc_library(
     srcs = ["resource_utilization.cc"],
     hdrs = ["resource_utilization.h"],
     deps = [
+        ":entity_update",
         "//gutil/gutil:collections",
         "//gutil/gutil:status",
         "//p4_infra/p4_pdpi:entity_keys",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4rt_app/sonic:app_db_manager",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -367,6 +367,7 @@ cc_test(
     name = "resource_utilization_test",
     srcs = ["resource_utilization_test.cc"],
     deps = [
+        ":entity_update",
         ":resource_utilization",
         "//gutil/gutil:collections",
         "//gutil/gutil:status",
@@ -374,7 +375,6 @@ cc_test(
         "//p4_infra/p4_pdpi:entity_keys",
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4rt_app/sonic:app_db_manager",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -453,5 +453,16 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "entity_update",
+    hdrs = ["entity_update.h"],
+    deps = [
+        "//p4_infra/p4_pdpi:entity_keys",
+        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic:app_db_manager",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
     ],
 )
