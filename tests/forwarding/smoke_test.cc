@@ -52,9 +52,6 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/test_environment.h"
 
-//TODO(PINS): Flag to indicate whether pins support vrfs
-ABSL_DECLARE_FLAG(bool, p4_vrf_support);
-
 namespace pins_test {
 namespace {
 

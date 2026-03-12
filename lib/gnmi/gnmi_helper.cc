@@ -71,12 +71,12 @@
 // The flags can be removed or set to true when the support is added
 
 // TODO(PINS): To be removed when get device id and get config are supported
-ABSL_FLAG(bool, gnmi_deviceid_support, false, "gNMI supports GetDeviceId");
-ABSL_FLAG(bool, gnmi_get_config_support, false,
+ABSL_FLAG(bool, gnmi_deviceid_support, true, "gNMI supports GetDeviceId");
+ABSL_FLAG(bool, gnmi_get_config_support, true,
               "gNMI supports config type in gnmi get request");
-ABSL_FLAG(bool, gnmi_p4rtid_support, false, "gNMI supports p4rt_id");
-ABSL_FLAG(bool, p4_vrf_support, false, "Whether p4 supports vrf creation");
-ABSL_FLAG(bool, gnmi_all_counters_support, false,
+ABSL_FLAG(bool, gnmi_p4rtid_support, true, "gNMI supports p4rt_id");
+ABSL_FLAG(bool, p4_vrf_support, true, "Whether p4 supports vrf creation");
+ABSL_FLAG(bool, gnmi_all_counters_support, true,
 		"Whether gnmi supports all the available counters ");
 
 namespace pins_test {
