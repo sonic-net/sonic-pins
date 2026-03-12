@@ -25,8 +25,7 @@
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_infra/p4_pdpi/netaddr/network_address.h"
+#include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/string_encodings/safe.h"
 
 // This file serves double duty, testing both Ipv4Address and the template class

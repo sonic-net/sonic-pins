@@ -634,9 +634,9 @@ cc_test(
     srcs = ["ternary_test.cc"],
     deps = [
         ":ternary",
-        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
-        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
-        "//p4_infra/p4_pdpi/netaddr:mac_address",
+        "//p4_infra/netaddr:ipv4_address",
+        "//p4_infra/netaddr:ipv6_address",
+        "//p4_infra/netaddr:mac_address",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -645,8 +645,8 @@ cc_library(
     name = "ternary",
     hdrs = ["ternary.h"],
     deps = [
-        "//p4_infra/p4_pdpi/netaddr:ipv4_address",
-        "//p4_infra/p4_pdpi/netaddr:ipv6_address",
-        "//p4_infra/p4_pdpi/netaddr:mac_address",
+        "//p4_infra/netaddr:ipv4_address",
+        "//p4_infra/netaddr:ipv6_address",
+        "//p4_infra/netaddr:mac_address",
     ],
 )

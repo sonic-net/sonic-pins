@@ -26,8 +26,8 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "dvaas/test_vector.h"
-#include "p4_infra/p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_infra/p4_pdpi/netaddr/mac_address.h"
+#include "p4_infra/netaddr/ipv4_address.h"
+#include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/packetlib/packetlib.h"
 
 // Helper library to hold a collection of functions to define a test
