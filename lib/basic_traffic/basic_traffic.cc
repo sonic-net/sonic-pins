@@ -306,6 +306,11 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
     absl::Time last_sent_time = start_time;
     absl::Duration interpacket_time =
         absl::Seconds(1.0f / options.packets_per_second);
+
+    LOG(INFO) << "Duration : " << duration;
+    LOG(INFO) << absl::StrFormat("Interpacket_time : %.2fs",
+          absl::ToDoubleSeconds(interpacket_time));
+
     while (absl::Now() - start_time < duration) {
       for (const auto& [key, packet] : packets_to_send) {
         RETURN_IF_ERROR(testbed.ControlDevice().SendPacket(
