@@ -18,7 +18,7 @@ package dvaas;
 
 import "dvaas/packet_trace.proto";
 import "p4_infra/p4_pdpi/ir.proto";
-import "p4_infra/p4_pdpi/packetlib/packetlib.proto";
+import "p4_infra/packetlib/packetlib.proto";
 
 // Describes a packet from/to a given port.
 // This proto contains both a parsed and unparsed (raw) representation
