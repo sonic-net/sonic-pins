@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef P4_PDPI_UTILS_IR_H
-#define P4_PDPI_UTILS_IR_H
+#ifndef PINS_P4_INFRA_P4_PDPI_IR_UTILS_H_
+#define PINS_P4_INFRA_P4_PDPI_IR_UTILS_H_
 
 #include <stdint.h>
 
@@ -169,5 +169,6 @@ std::string MetadataName(absl::string_view metadata_name);
 bool IsElementDeprecated(
     const google::protobuf::RepeatedPtrField<std::string> &annotations);
 
-} // namespace pdpi
-#endif // P4_PDPI_UTILS_IR_H
+}  // namespace pdpi
+
+#endif  // PINS_P4_INFRA_P4_PDPI_IR_UTILS_H_

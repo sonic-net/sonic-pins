@@ -22,7 +22,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/utils/ir.h"
+#include "p4_infra/p4_pdpi/ir_utils.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/sonic/packetio_impl.h"
 #include "p4rt_app/sonic/packetio_interface.h"

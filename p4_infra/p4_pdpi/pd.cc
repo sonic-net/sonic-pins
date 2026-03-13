@@ -44,8 +44,8 @@
 #include "p4_infra/p4_pdpi/internal/ordered_map.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/ir_utils.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
-#include "p4_infra/p4_pdpi/utils/ir.h"
 #include "p4_infra/string_encodings/hex_string.h"
 
 namespace pdpi {

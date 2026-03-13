@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/utils/ir.h"
+#include "p4_infra/p4_pdpi/ir_utils.h"
 
 #include <arpa/inet.h>
 #include <endian.h>
