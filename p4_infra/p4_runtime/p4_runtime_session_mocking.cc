@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_infra/p4_pdpi/p4_runtime_session_mocking.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 
 #include <cstdint>
 #include <string>
@@ -31,12 +31,10 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4/v1/p4runtime_mock.grpc.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-// TODO: Remove version setting once the version check in
-// `p4_runtime_session.cc` is removed.
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/versions.h"
 
-namespace pdpi {
+namespace p4_runtime {
 
 namespace {
 
@@ -47,7 +45,7 @@ using ::testing::InSequence;
 using ::testing::Return;
 
 // One of the tables and actions from
-// http://google3/blaze-out/genfiles/third_party/pins_infra/p4_infra/p4_infra/p4_infra/p4_infra/p4_pdpi/testing/test_p4info_embed.cc?l=13
+// http://google3/blaze-out/genfiles/third_party/pins_infra/p4_infra/p4_pdpi/test_p4info_embed.cc?l=13
 // These need to correspond to the values in our p4info because it is checked
 // when sequencing updates to clear tables on the switch.
 constexpr uint32_t kTableId = 33554433;
@@ -360,4 +358,4 @@ absl::StatusOr<P4SessionWithMockStub> MakeP4SessionWithMockStub(
   };
 }
 
-}  // namespace pdpi
+}  // namespace p4_runtime

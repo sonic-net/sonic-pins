@@ -21,7 +21,7 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins {
 
@@ -37,31 +37,31 @@ public:
   // A filter can be used to limit the type of messages collected. The filter
   // should return true for any packets the test wants to collect, and false for
   // any packets the test wants to ignore.
-  explicit PacketInHelper(
-      pdpi::P4RuntimeSession *p4rt_session,
-      std::function<bool(const p4::v1::StreamMessageResponse &)>
-          packet_in_message_filter);
+ explicit PacketInHelper(
+     p4_runtime::P4RuntimeSession* p4rt_session,
+     std::function<bool(const p4::v1::StreamMessageResponse&)>
+         packet_in_message_filter);
 
-  // Closes the P4RuntimeSession's stream, and joins the PacketIn thread.
-  ~PacketInHelper();
+ // Closes the P4RuntimeSession's stream, and joins the PacketIn thread.
+ ~PacketInHelper();
 
-  // Always returns true so no packet gets filtered out.
-  static bool NoFilter(const p4::v1::StreamMessageResponse &response);
+ // Always returns true so no packet gets filtered out.
+ static bool NoFilter(const p4::v1::StreamMessageResponse& response);
 
-  // Returns true if the PacketIn queue has packets. Otherwise it returns false.
-  bool HasPacketInMessage() const ABSL_LOCKS_EXCLUDED(packet_in_lock_);
+ // Returns true if the PacketIn queue has packets. Otherwise it returns false.
+ bool HasPacketInMessage() const ABSL_LOCKS_EXCLUDED(packet_in_lock_);
 
-  // Returns the next packet in the queue. If no packet exists in the queue it
-  // will return an OUT_OF_BOUNDS error.
-  absl::StatusOr<p4::v1::StreamMessageResponse> GetNextPacketInMessage()
-      ABSL_LOCKS_EXCLUDED(packet_in_lock_);
+ // Returns the next packet in the queue. If no packet exists in the queue it
+ // will return an OUT_OF_BOUNDS error.
+ absl::StatusOr<p4::v1::StreamMessageResponse> GetNextPacketInMessage()
+     ABSL_LOCKS_EXCLUDED(packet_in_lock_);
 
 private:
   // Helper method used by the PacketIn thread to update the PacketIn messages.
   void PushBackPacketInMessage(const p4::v1::StreamMessageResponse &response)
       ABSL_LOCKS_EXCLUDED(packet_in_lock_);
 
-  pdpi::P4RuntimeSession &p4rt_session_;
+  p4_runtime::P4RuntimeSession& p4rt_session_;
 
   // Thread is spawned in ctor and joined in dtor. It will wait for a PacketIn
   // message then update the PacketIn message queue.

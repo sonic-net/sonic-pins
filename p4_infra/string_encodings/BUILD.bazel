@@ -113,7 +113,7 @@ cc_test(
 cmd_diff_test(
     name = "hex_string_test",
     actual_cmd = "$(execpath :hex_string_test_runner)",
-    expected = "//p4_infra/p4_pdpi/testing/testdata:hex_string.expected",
+    expected = "//p4_infra/string_encodings:hex_string.expected",
     tools = [
         ":hex_string_test_runner",
     ],
@@ -144,7 +144,7 @@ cc_test(
 cmd_diff_test(
     name = "decimal_string_test",
     actual_cmd = "$(execpath :decimal_string_test_runner)",
-    expected = "//p4_infra/p4_pdpi/testing/testdata:decimal_string.expected",
+    expected = "//p4_infra/string_encodings:decimal_string.expected",
     tools = [
         ":decimal_string_test_runner",
     ],

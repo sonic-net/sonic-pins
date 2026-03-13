@@ -26,8 +26,8 @@
 #include "lib/p4rt/p4rt_programming_context.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -35,7 +35,7 @@
 namespace pins_test {
 
 PacketListener::PacketListener(
-    pdpi::P4RuntimeSession* session, P4rtProgrammingContext context,
+    p4_runtime::P4RuntimeSession* session, P4rtProgrammingContext context,
     sai::Instantiation instantiation,
     const absl::flat_hash_map<std::string, std::string>*
         interface_port_id_to_name)

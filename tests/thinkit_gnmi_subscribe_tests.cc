@@ -28,7 +28,7 @@
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "tests/thinkit_util.h"

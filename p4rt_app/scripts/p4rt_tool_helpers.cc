@@ -23,7 +23,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "grpcpp/security/credentials.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 ABSL_FLAG(std::string, p4rt_server_address, "unix:/sock/p4rt.sock",
           "Server address of the P4RT service.");
@@ -46,7 +46,8 @@ void Error(absl::string_view message) {
   std::cerr << absl::StreamFormat("\033[1;31m%s\033[0m\n", message);
 }
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> CreateP4rtSession() {
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>>
+CreateP4rtSession() {
   std::shared_ptr<grpc::ChannelCredentials> credentials;
   if (absl::GetFlag(FLAGS_use_insecure_credentials)) {
     credentials = grpc::InsecureChannelCredentials();
@@ -54,10 +55,10 @@ absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> CreateP4rtSession() {
     credentials = grpc::experimental::LocalCredentials(UDS);
   }
 
-  auto stub = pdpi::CreateP4RuntimeStub(
+  auto stub = p4_runtime::CreateP4RuntimeStub(
       absl::GetFlag(FLAGS_p4rt_server_address), credentials);
-  return pdpi::P4RuntimeSession::Create(std::move(stub),
-                                        absl::GetFlag(FLAGS_p4rt_device_id));
+  return p4_runtime::P4RuntimeSession::Create(
+      std::move(stub), absl::GetFlag(FLAGS_p4rt_device_id));
 }
 
 }  // namespace p4rt_app
