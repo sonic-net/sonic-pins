@@ -23,7 +23,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace pins_test {
 namespace {
@@ -102,7 +102,8 @@ static constexpr char kDeletePreingressRequest[] = R"pb(
 )pb";
 
 TEST(P4rtProgrammingContext, RevertsOnDestruction) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   Sequence sequence;
   EXPECT_CALL(mock_write_request, Call(_, EqualsProto(kInsertVrfRequest)))
@@ -134,7 +135,8 @@ TEST(P4rtProgrammingContext, RevertsOnDestruction) {
 }
 
 TEST(P4rtProgrammingContext, MoveDoesntBreakRevertsOnDestruction) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   Sequence sequence;
   EXPECT_CALL(mock_write_request, Call(_, EqualsProto(kInsertVrfRequest)))
@@ -171,7 +173,8 @@ TEST(P4rtProgrammingContext, MoveDoesntBreakRevertsOnDestruction) {
 }
 
 TEST(P4rtProgrammingContext, WorksWithGetWriteRequestFunction) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
 
   Sequence sequence;
@@ -204,7 +207,8 @@ TEST(P4rtProgrammingContext, WorksWithGetWriteRequestFunction) {
 }
 
 TEST(P4rtProgrammingContext, RevertsOnRevertCall) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
 
   Sequence sequence;
@@ -253,7 +257,8 @@ TEST(P4rtProgrammingContext, RevertsOnRevertCall) {
 // This test case covers that when one of the revert requests fails, that
 // retrying the revert will continue where it left off.
 TEST(P4rtProgrammingContext, RevertsOnRevertCallResumesOnFailure) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   Sequence sequence;
   EXPECT_CALL(mock_write_request,
@@ -305,7 +310,8 @@ TEST(P4rtProgrammingContext, RevertsOnRevertCallResumesOnFailure) {
 }
 
 TEST(P4rtProgrammingContext, RejectModifyRequests) {
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
+                            p4::v1::WriteRequest&)>
       mock_write_request;
   P4rtProgrammingContext context(nullptr, mock_write_request.AsStdFunction());
 

@@ -41,7 +41,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -172,7 +172,7 @@ gnmi::GetResponse GenerateResponseForInterfaceToPortID(
 TEST(BasicTraffic, SendTraffic) {
   // This mock function validates the function performs the P4RT programming
   // requests properly. `SendTraffic` should also revert all flows programmed.
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*,
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
                             const p4::v1::WriteRequest&)>
       mock_write_request;
 
@@ -749,7 +749,7 @@ TEST(BasicTraffic, SendTraffic) {
 // This test checks that packets sent to the wrong port are tracked as such.
 TEST(BasicTraffic, SendTrafficTracksIncorrectlyRoutedPackets) {
   // The `SendTraffic` test above tests the flow programming, so just return OK.
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*,
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
                             const p4::v1::WriteRequest&)>
       mock_write_request;
   EXPECT_CALL(mock_write_request, Call(_, _))
@@ -876,7 +876,7 @@ TEST(BasicTraffic, SendTrafficBigPackets) {
   static constexpr int kPayloadSize = 500;
 
   // The `SendTraffic` test above tests the flow programming, so just return OK.
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*,
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
                             const p4::v1::WriteRequest&)>
       mock_write_request;
   EXPECT_CALL(mock_write_request, Call(_, _))
@@ -1007,7 +1007,7 @@ TEST(BasicTraffic, SendTrafficPacketsSentAccurate) {
   static constexpr int kPayloadSize = 500;
 
   // The `SendTraffic` test above tests the flow programming, so just return OK.
-  MockFunction<absl::Status(pdpi::P4RuntimeSession*,
+  MockFunction<absl::Status(p4_runtime::P4RuntimeSession*,
                             const p4::v1::WriteRequest&)>
       mock_write_request;
   EXPECT_CALL(mock_write_request, Call(_, _))

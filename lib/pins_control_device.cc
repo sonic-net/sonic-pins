@@ -46,8 +46,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -95,7 +95,7 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetLinkStateRequest(
 
 PinsControlDevice::PinsControlDevice(
     std::unique_ptr<thinkit::Switch> sut, pdpi::IrP4Info ir_p4_info,
-    std::unique_ptr<pdpi::P4RuntimeSession> control_session,
+    std::unique_ptr<p4_runtime::P4RuntimeSession> control_session,
     absl::flat_hash_map<std::string, std::string> interface_name_to_port_id)
     : sut_(std::move(sut)),
       ir_p4_info_(std::move(ir_p4_info)),

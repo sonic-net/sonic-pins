@@ -38,8 +38,8 @@
 #include "p4_infra/netaddr/ipv6_address.h"
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -347,7 +347,7 @@ dvaas::PacketTestVector Ipv4InIpv6NoDecapTestVector(
 
 // Helper routine to install L3 route
 absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
-    pdpi::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
+    p4_runtime::P4RuntimeSession& switch_session, pdpi::IrP4Info& ir_p4info,
     const pins_test::TunnelMatchType tunnel_type) {
   std::vector<p4::v1::Entity> pi_entities;
   LOG(INFO) << "Installing Tunnel term table";
@@ -396,12 +396,12 @@ absl::StatusOr<std::vector<p4::v1::Entity>> InstallTunnelTermTable(
   ASSIGN_OR_RETURN(
       pi_entities,
       entry_builder.LogPdEntries().GetDedupedPiEntities(ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallPiEntities(switch_session, pi_entities));
+  RETURN_IF_ERROR(p4_runtime::InstallPiEntities(switch_session, pi_entities));
   return pi_entities;
 }
 
 // Helper routine to install L3 admit table
-absl::Status InstallL3AdmitTable(pdpi::P4RuntimeSession &switch_session) {
+absl::Status InstallL3AdmitTable(p4_runtime::P4RuntimeSession& switch_session) {
   LOG(INFO) << "Installing L3 admit rule";
   sai::EntryBuilder entry_builder =
       sai::EntryBuilder().AddEntryAdmittingAllPacketsToL3();
@@ -410,7 +410,7 @@ absl::Status InstallL3AdmitTable(pdpi::P4RuntimeSession &switch_session) {
 }
 
 // Helper routine to install L3 route
-absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
+absl::Status InstallL3Route(p4_runtime::P4RuntimeSession& switch_session,
                             pdpi::IrP4Info& ir_p4info, std::string given_port,
                             sai::IpVersion ip_version, bool l3_admit) {
   std::vector<p4::v1::Entity> pi_entities;
@@ -429,15 +429,14 @@ absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
   ASSIGN_OR_RETURN(
       pi_entities,
       entry_builder.LogPdEntries().GetDedupedPiEntities(ir_p4info));
-  RETURN_IF_ERROR(pdpi::InstallPiEntities(switch_session, pi_entities));
+  RETURN_IF_ERROR(p4_runtime::InstallPiEntities(switch_session, pi_entities));
   return absl::OkStatus();
 }
 
 // Helper routine to install ingress acl redirect to egress port
-absl::StatusOr<std::vector<p4::v1::Entity>>
-InstallIngressAclRedirectToNexthop(pdpi::P4RuntimeSession &switch_session,
-                                   std::string given_port,
-                                   sai::IpVersion ip_version) {
+absl::StatusOr<std::vector<p4::v1::Entity>> InstallIngressAclRedirectToNexthop(
+    p4_runtime::P4RuntimeSession& switch_session, std::string given_port,
+    sai::IpVersion ip_version) {
   std::vector<p4::v1::Entity> pi_entities;
   LOG(INFO) << "Installing ACL Redirect on "
             << (ip_version == sai::IpVersion::kIpv4 ? "IPv4" : "IPv6");
@@ -496,13 +495,14 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
 
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
+      p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // Get control ports to test on.
   ASSERT_OK_AND_ASSIGN(
@@ -587,13 +587,14 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv6Inv6) {
 
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
+      p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // Get control ports to test on.
   ASSERT_OK_AND_ASSIGN(
@@ -651,13 +652,14 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
   // Set testbed environment
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
+      p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // Get control ports to test on.
   ASSERT_OK_AND_ASSIGN(
@@ -723,13 +725,14 @@ TEST_P(TunnelDecapTestFixture, NoAdmitTableAclRedirectTunnelTermNoDecapForV4) {
 
   // Initialize the connection, clear all entities, and (for the SUT) push
   // P4Info.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
+      p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // Get control ports to test on.
   ASSERT_OK_AND_ASSIGN(
@@ -786,13 +789,14 @@ TEST_P(TunnelDecapTestFixture, AdmitTableAclRedirectTunnelTermDecapForV4) {
 
   // Initialize the connection, clear all entities, and (for the SUT) get
   // P4Info.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
+      p4_runtime::P4RuntimeSession::Create(testbed.Sut()));
 
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
 
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
-                       pdpi::GetIrP4Info(*sut_p4rt_session));
+                       p4_runtime::GetIrP4Info(*sut_p4rt_session));
 
   // Get control ports to test on.
   ASSERT_OK_AND_ASSIGN(

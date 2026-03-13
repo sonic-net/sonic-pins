@@ -63,9 +63,9 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -243,7 +243,7 @@ std::string GetDstIpv4AddrByPortId(const int port_id) {
 }
 
 // Sets ACL punt rule according to `port_id`.
-absl::Status SetUpAclPunt(pdpi::P4RuntimeSession& p4_session,
+absl::Status SetUpAclPunt(p4_runtime::P4RuntimeSession& p4_session,
                           const pdpi::IrP4Info& ir_p4info, int port_id) {
   ASSIGN_OR_RETURN(
       p4::v1::TableEntry pi_entry,
@@ -262,11 +262,11 @@ absl::Status SetUpAclPunt(pdpi::P4RuntimeSession& p4_session,
                 }
               )pb",
               kDstMac.ToString(), GetDstIpv4AddrByPortId(port_id)))));
-  return pdpi::InstallPiTableEntry(&p4_session, pi_entry);
+  return p4_runtime::InstallPiTableEntry(&p4_session, pi_entry);
 }
 
 // Sets ACL drop rule according to `port_id`.
-absl::Status SetUpAclDrop(pdpi::P4RuntimeSession& p4_session,
+absl::Status SetUpAclDrop(p4_runtime::P4RuntimeSession& p4_session,
                           const pdpi::IrP4Info& ir_p4info, int port_id) {
   ASSIGN_OR_RETURN(
       p4::v1::TableEntry pi_entry,
@@ -285,11 +285,11 @@ absl::Status SetUpAclDrop(pdpi::P4RuntimeSession& p4_session,
                 }
               )pb",
               kDstMac.ToString(), GetDstIpv4AddrByPortId(port_id)))));
-  return pdpi::InstallPiTableEntry(&p4_session, pi_entry);
+  return p4_runtime::InstallPiTableEntry(&p4_session, pi_entry);
 }
 
 // Sets VRF according to port number. The pattern would be vrf-x (x=port id).
-absl::Status SetSutVrf(pdpi::P4RuntimeSession& p4_session,
+absl::Status SetSutVrf(p4_runtime::P4RuntimeSession& p4_session,
                        const p4::config::v1::P4Info& p4info,
                        const pdpi::IrP4Info& ir_p4info,
                        absl::Span<const int> port_ids) {
@@ -305,7 +305,7 @@ absl::Status SetSutVrf(pdpi::P4RuntimeSession& p4_session,
                                action { no_action {} }
                              })pb",
                            absl::StrCat(kVrfIdPrefix, port_ids[i])))));
-    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+    RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(&p4_session, pi_entry));
 
     ASSIGN_OR_RETURN(
         pi_entry,
@@ -319,7 +319,7 @@ absl::Status SetSutVrf(pdpi::P4RuntimeSession& p4_session,
                     priority: 1
                   })pb",
                 port_ids[i], absl::StrCat(kVrfIdPrefix, port_ids[i])))));
-    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+    RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(&p4_session, pi_entry));
   }
 
   return absl::OkStatus();
@@ -343,7 +343,7 @@ absl::StatusOr<std::vector<GroupMember>> CreateGroupMembers(
 }
 
 // Program route entries using vrf_id.
-absl::Status ProgramRoutes(pdpi::P4RuntimeSession& p4_session,
+absl::Status ProgramRoutes(p4_runtime::P4RuntimeSession& p4_session,
                            const pdpi::IrP4Info& ir_p4info, const int port_id,
                            absl::string_view next_hop_id) {
   const std::string vrf_id = absl::StrCat(kVrfIdPrefix, port_id);
@@ -364,18 +364,20 @@ absl::Status ProgramRoutes(pdpi::P4RuntimeSession& p4_session,
       _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
                      << ipv4_entry.DebugString() << " error: ");
   *write_request.add_updates() = pi_entry;
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // Program L3 Admit table for the given mac-address.
-absl::Status ProgramL3Admit(pdpi::P4RuntimeSession& p4_session,
+absl::Status ProgramL3Admit(p4_runtime::P4RuntimeSession& p4_session,
                             const pdpi::IrP4Info& ir_p4info,
                             const L3AdmitOptions& options) {
   p4::v1::WriteRequest write_request;
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),
       L3AdmitTableUpdate(ir_p4info, p4::v1::Update::INSERT, options));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // These are the counters we track in these tests.
@@ -1326,14 +1328,13 @@ absl::Status IsExpectedSamplingRateFromGnmi(
   return absl::OkStatus();
 }
 
-absl::Status OutputTableEntriesToArtifact(pdpi::P4RuntimeSession& p4_session,
-                                          thinkit::TestEnvironment& environment,
-                                          absl::string_view artifact_name) {
+absl::Status OutputTableEntriesToArtifact(
+    p4_runtime::P4RuntimeSession& p4_session,
+    thinkit::TestEnvironment& environment, absl::string_view artifact_name) {
   // Read entries back and store in an artifact.
   ASSIGN_OR_RETURN(pdpi::IrTableEntries entries,
-                   pdpi::ReadIrTableEntries(p4_session));
+                   p4_runtime::ReadIrTableEntries(p4_session));
   return environment.AppendToTestArtifact(artifact_name, entries.DebugString());
-
 }
 
 absl::StatusOr<int> GetPortIdFromInterfaceName(
@@ -1786,7 +1787,7 @@ void SflowTestFixture::TearDown() {
   ASSERT_OK(SetSflowConfigEnabled(stub.get(), sflow_enabled));
   ASSERT_OK(pins_test::PushGnmiConfig(testbed_->Sut(), GetParam().gnmi_config));
   if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearTableEntries(sut_p4_session_.get()));
     EXPECT_OK(sut_p4_session_->Finish());
   }
   GetParam().testbed_interface->TearDown();
@@ -2124,7 +2125,7 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
   // EXPECT_EQ(delta_queue_counter.num_packets_transmitted, packets_num);
 
   // Verify all packets have been punted.
-  EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+  EXPECT_OK(p4_runtime::ClearTableEntries(sut_p4_session_.get()));
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::StreamMessageResponse> control_packets_in,
       sut_p4_session_->ReadStreamChannelResponsesAndFinish());
@@ -2687,7 +2688,7 @@ constexpr auto kClusterMac =
 absl::Status SendNPacketsFromSwitch(
     int num_packets, int traffic_speed, int port_id,
     absl::string_view interface, gnmi::gNMI::StubInterface* sut_gnmi_stub,
-    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& p4_session,
+    const pdpi::IrP4Info& ir_p4info, p4_runtime::P4RuntimeSession& p4_session,
     thinkit::TestEnvironment& test_environment) {
   const absl::Time start_time = absl::Now();
   auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(
@@ -2748,7 +2749,7 @@ absl::Status SendNPacketsFromSwitch(
 absl::Status SendPacketsFromSwitchUntilNotificationReceived(
     const absl::Notification& notification, int traffic_speed, int port_id,
     absl::string_view interface, gnmi::gNMI::StubInterface* sut_gnmi_stub,
-    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& p4_session,
+    const pdpi::IrP4Info& ir_p4info, p4_runtime::P4RuntimeSession& p4_session,
     thinkit::TestEnvironment& test_environment) {
   const absl::Time start_time = absl::Now();
   auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(
@@ -2807,7 +2808,7 @@ absl::Status SendPacketsFromSwitchUntilNotificationReceived(
 }
 
 // Sets VRF id for all packets.
-absl::Status SetSwitchVrfForAllPackets(pdpi::P4RuntimeSession& p4_session,
+absl::Status SetSwitchVrfForAllPackets(p4_runtime::P4RuntimeSession& p4_session,
                                        const pdpi::IrP4Info& ir_p4info,
                                        absl::string_view vrf_id) {
   // Create default VRF for test.
@@ -2821,7 +2822,7 @@ absl::Status SetSwitchVrfForAllPackets(pdpi::P4RuntimeSession& p4_session,
                              action { no_action {} }
                            })pb",
                          vrf_id))));
-  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+  RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(&p4_session, pi_entry));
 
   ASSIGN_OR_RETURN(
       pi_entry,
@@ -2834,11 +2835,11 @@ absl::Status SetSwitchVrfForAllPackets(pdpi::P4RuntimeSession& p4_session,
                              priority: 1
                            })pb",
                          vrf_id))));
-  return pdpi::InstallPiTableEntry(&p4_session, pi_entry);
+  return p4_runtime::InstallPiTableEntry(&p4_session, pi_entry);
 }
 
 // Programs ipv6_table_entry using `vrf_id`, `ip_address` and `next_hop_id`.
-absl::Status ProgramRoutesForIpv6(pdpi::P4RuntimeSession& p4_session,
+absl::Status ProgramRoutesForIpv6(p4_runtime::P4RuntimeSession& p4_session,
                                   const pdpi::IrP4Info& ir_p4info,
                                   absl::string_view vrf_id,
                                   absl::string_view ip_address,
@@ -2862,13 +2863,14 @@ absl::Status ProgramRoutesForIpv6(pdpi::P4RuntimeSession& p4_session,
       _.SetPrepend() << "Failed in PD table conversion to PI, entry: "
                      << ipv4_entry.DebugString() << " error: ");
   *write_request.add_updates() = pi_entry;
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // Programs a next hop entry for `port_id` and returns nexthop id if successful.
-absl::StatusOr<std::string> ProgramNextHops(pdpi::P4RuntimeSession& p4_session,
-                                            const pdpi::IrP4Info& ir_p4info,
-                                            absl::string_view port_id) {
+absl::StatusOr<std::string> ProgramNextHops(
+    p4_runtime::P4RuntimeSession& p4_session, const pdpi::IrP4Info& ir_p4info,
+    absl::string_view port_id) {
   p4::v1::WriteRequest pi_request;
   const std::string rif_id = absl::StrCat("rif-", port_id);
   const std::string neighbor_id = "fe80::2";
@@ -2885,7 +2887,7 @@ absl::StatusOr<std::string> ProgramNextHops(pdpi::P4RuntimeSession& p4_session,
                    NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                       nexthop_id, rif_id, neighbor_id));
   RETURN_IF_ERROR(
-      pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, pi_request));
+      p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session, pi_request));
   return nexthop_id;
 }
 
@@ -2895,7 +2897,7 @@ constexpr int kIpProtocolTcp = 6;
 absl::Status SendNSshPacketsFromSwitch(
     int num_packets, int traffic_speed, Port port, absl::string_view src_ip,
     absl::string_view dst_ip, gnmi::gNMI::StubInterface* sut_gnmi_stub,
-    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& p4_session,
+    const pdpi::IrP4Info& ir_p4info, p4_runtime::P4RuntimeSession& p4_session,
     thinkit::TestEnvironment& test_environment) {
   auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(absl::Substitute(
       R"pb(
@@ -3074,21 +3076,9 @@ void SflowMirrorTestFixture::SetUp() {
           testbed.Sut(), sut_gnmi_config, /*p4info=*/std::nullopt));
   ASSERT_OK_AND_ASSIGN(
       sut_p4_info_,
-      pdpi::GetOrSetP4Info(*sut_p4_session_, GetParam().sut_p4_info));
-  ASSERT_OK_AND_ASSIGN(sut_ir_p4_info_, pdpi::GetIrP4Info(*sut_p4_session_));
-  
-  ASSERT_OK(GetParam().ssh_client->RunCommand(
-      testbed.Sut().ChassisName(),
-      /*command=*/
-      nos_param_.kRedisExecPrefix +
-          "redis-cli -n 14 hset \"PORT_TABLE:CPU\" \"NULL\" \"NULL\"",
-      absl::Seconds(20)));
-  ASSERT_OK(GetParam().ssh_client->RunCommand(
-      testbed.ControlSwitch().ChassisName(),
-      /*command=*/
-      nos_param_.kRedisExecPrefix +
-          "redis-cli -n 14 hset \"PORT_TABLE:CPU\" \"NULL\" \"NULL\"",
-      absl::Seconds(20)));
+      p4_runtime::GetOrSetP4Info(*sut_p4_session_, GetParam().sut_p4_info));
+  ASSERT_OK_AND_ASSIGN(sut_ir_p4_info_,
+                       p4_runtime::GetIrP4Info(*sut_p4_session_));
 
   // Push gNMI config to control switch.
   const std::string& control_gnmi_config = GetParam().control_gnmi_config;
@@ -3098,11 +3088,11 @@ void SflowMirrorTestFixture::SetUp() {
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            testbed.ControlSwitch(), control_gnmi_config,
                            /*p4info=*/std::nullopt));
-  ASSERT_OK_AND_ASSIGN(
-      control_p4_info_,
-      pdpi::GetOrSetP4Info(*control_p4_session_, GetParam().control_p4_info));
+  ASSERT_OK_AND_ASSIGN(control_p4_info_,
+                       p4_runtime::GetOrSetP4Info(*control_p4_session_,
+                                                  GetParam().control_p4_info));
   ASSERT_OK_AND_ASSIGN(control_ir_p4_info_,
-                       pdpi::GetIrP4Info(*control_p4_session_));
+                       p4_runtime::GetIrP4Info(*control_p4_session_));
 
   ASSERT_OK_AND_ASSIGN(control_gnmi_stub_,
                        testbed.ControlSwitch().CreateGnmiStub());
@@ -3130,11 +3120,11 @@ void SflowMirrorTestFixture::TearDown() {
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"posttest_", testbed.Environment(), nos_param_);
   if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearTableEntries(sut_p4_session_.get()));
     EXPECT_OK(sut_p4_session_->Finish());
   }
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearTableEntries(control_p4_session_.get()));
     EXPECT_OK(control_p4_session_->Finish());
   }
   ASSERT_OK_AND_ASSIGN(control_p4_session_,

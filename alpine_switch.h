@@ -3,13 +3,15 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "grpc/grpc.h"
 #include "grpcpp/support/channel_arguments.h"
 #include "lib/basic_switch.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+
 namespace pins_test {
 template <class CreateStubPolicy>
 class AlpineSwitch : public BasicSwitch<CreateStubPolicy> {
@@ -26,7 +28,10 @@ public:
   CreateP4RuntimeStub() override {
     LOG(WARNING) << "Creating P4 Runtime stub for AlpineSwitch";
     grpc::ChannelArguments args;
-    args.SetInt(GRPC_ARG_MAX_METADATA_SIZE, pdpi::P4GRPCMaxMetadataSize());
+    // All the args are same as
+    // p4_pdpi/p4_runtime_session.h:GrpcChannelArgumentsForP4rt.
+    args.SetInt(GRPC_ARG_MAX_METADATA_SIZE,
+                p4_runtime::P4GRPCMaxMetadataSize());
     // Allows grpc::channel to send keepalive ping without on-going traffic.
     args.SetInt(
         GRPC_ARG_KEEPALIVE_TIMEOUT_MS,

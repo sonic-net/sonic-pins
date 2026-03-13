@@ -51,7 +51,7 @@
 #include "p4_fuzzer/switch_state.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -129,9 +129,10 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
     p4_info = *std::move(GetParam().p4_info);
   } else {
     ASSERT_OK_AND_ASSIGN(auto p4rt_session,
-                         pdpi::P4RuntimeSession::Create(testbed->Sut()));
-    ASSERT_OK_AND_ASSIGN(p4::v1::GetForwardingPipelineConfigResponse response,
-                         pdpi::GetForwardingPipelineConfig(p4rt_session.get()));
+                         p4_runtime::P4RuntimeSession::Create(testbed->Sut()));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::GetForwardingPipelineConfigResponse response,
+        p4_runtime::GetForwardingPipelineConfig(p4rt_session.get()));
     p4_info = std::move(*response.mutable_config()->mutable_p4info());
   }
 
@@ -146,7 +147,7 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed->Sut(), /*gnmi_config=*/std::nullopt, std::move(p4_info)));
   absl::Cleanup clear_p4rt_entries = [&] {
-    absl::Status status = pdpi::ClearEntities(*p4rt_session);
+    absl::Status status = p4_runtime::ClearEntities(*p4rt_session);
     if (!status.ok()) {
       LOG(ERROR) << "Failed to cleanup table entries: " << status;
     }
@@ -185,7 +186,7 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
           }
         }
 
-        EXPECT_OK(pdpi::ReadPiTableEntries(p4rt_session.get()).status());
+        EXPECT_OK(p4_runtime::ReadPiTableEntries(p4rt_session.get()).status());
       }
     });
 

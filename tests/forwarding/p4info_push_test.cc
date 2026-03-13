@@ -23,7 +23,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/switch.h"
 
@@ -46,14 +46,14 @@ TEST_P(P4InfoPushTestFixture, P4InfoPushTest) {
   LOG(INFO) << "Pushing gNMI config & P4info to "
             << thinkit_switch.ChassisName();
   ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           thinkit_switch, GetParam().gnmi_config, GetParam().p4info));
 
   // Pull P4Info, make sure it is the same as the pushed one.
   LOG(INFO) << "Pulling P4Info";
   ASSERT_OK_AND_ASSIGN(const auto response,
-                       pdpi::GetForwardingPipelineConfig(
+                       p4_runtime::GetForwardingPipelineConfig(
                            sut_p4rt_session.get(),
                            p4::v1::GetForwardingPipelineConfigRequest::ALL));
   ASSERT_THAT(response.config().p4info(),

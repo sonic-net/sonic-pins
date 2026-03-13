@@ -38,6 +38,8 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/test_vector.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
@@ -48,8 +50,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_infra/string_encodings/decimal_string.h"
@@ -66,8 +68,6 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 // Tests for the watchport functionality in Action Profile Group operation.
 namespace pins {
@@ -109,7 +109,7 @@ constexpr int kPacketRateInSecondsForPruning = 1200;
 constexpr int kDefaultInputPortIndex = 0;
 
 // Helper function that creates/deletes V4, V6 default route entries.
-absl::Status ProgramDefaultRoutes(pdpi::P4RuntimeSession& p4_session,
+absl::Status ProgramDefaultRoutes(p4_runtime::P4RuntimeSession& p4_session,
                                   const pdpi::IrP4Info& ir_p4info,
                                   absl::string_view default_vrf,
                                   const p4::v1::Update_Type& type) {
@@ -149,11 +149,12 @@ absl::Status ProgramDefaultRoutes(pdpi::P4RuntimeSession& p4_session,
                        << pd_entry.DebugString() << " error: ");
     *write_request.add_updates() = pi_entry;
   }
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // Installs a default vrf for all packets on the SUT.
-absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
+absl::Status SetUpSut(p4_runtime::P4RuntimeSession& p4_session,
                       const pdpi::IrP4Info& ir_p4info,
                       absl::string_view default_vrf) {
   // Create default VRF for test.
@@ -167,7 +168,7 @@ absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
                              action { no_action {} }
                            })pb",
                          default_vrf))));
-  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+  RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(&p4_session, pi_entry));
 
   // Set default VRF for all packets.
   ASSIGN_OR_RETURN(
@@ -182,11 +183,11 @@ absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
                            })pb",
                          default_vrf))));
 
-  return pdpi::InstallPiTableEntry(&p4_session, pi_entry);
+  return p4_runtime::InstallPiTableEntry(&p4_session, pi_entry);
 }
 
 // Punts all packets on the control switch.
-absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session) {
+absl::Status SetUpControlSwitch(p4_runtime::P4RuntimeSession& p4_session) {
   // Trap all packets on control switch.
   return sai::EntryBuilder()
       .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
@@ -251,14 +252,15 @@ absl::StatusOr<absl::flat_hash_map<int, int>> CountNumPacketsPerPort(
 }
 
 // Program L3 Admit table for the given mac-address.
-absl::Status ProgramL3Admit(pdpi::P4RuntimeSession& p4_session,
+absl::Status ProgramL3Admit(p4_runtime::P4RuntimeSession& p4_session,
                             const pdpi::IrP4Info& ir_p4info,
                             const L3AdmitOptions& options) {
   p4::v1::WriteRequest write_request;
   ASSIGN_OR_RETURN(
       *write_request.add_updates(),
       L3AdmitTableUpdate(ir_p4info, p4::v1::Update::INSERT, options));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
+  return p4_runtime::SetMetadataAndSendPiWriteRequest(&p4_session,
+                                                      write_request);
 }
 
 // Checks if there is a header next to UDP header by UDP dest_port.
@@ -282,7 +284,7 @@ absl::Status SendNPacketsToSut(int num_packets,
                                absl::Span<const GroupMember> members,
                                absl::Span<const pins_test::P4rtPortId> port_ids,
                                const pdpi::IrP4Info& ir_p4info,
-                               pdpi::P4RuntimeSession& p4_session,
+                               p4_runtime::P4RuntimeSession& p4_session,
                                thinkit::TestEnvironment& test_environment,
                                int packets_rate = 500) {
   const absl::Time start_time = absl::Now();
@@ -445,7 +447,7 @@ void WatchPortTestFixture::TearDown() {
 
   // Do some general cleanup for control switch.
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearTableEntries(control_p4_session_.get()));
   }
   if (control_gnmi_stub_) {
     ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
@@ -475,12 +477,12 @@ void WatchPortTestFixture::TearDown() {
 
   // Clear SUT table entries.
   if (sut_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearTableEntries(sut_p4_session_.get()));
     EXPECT_OK(sut_p4_session_->Finish());
   }
   // Stop RPC sessions.
   if (control_p4_session_ != nullptr) {
-    EXPECT_OK(pdpi::ClearTableEntries(control_p4_session_.get()));
+    EXPECT_OK(p4_runtime::ClearTableEntries(control_p4_session_.get()));
   }
   if (control_gnmi_stub_) {
     ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,

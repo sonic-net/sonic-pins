@@ -34,7 +34,7 @@
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
@@ -158,7 +158,7 @@ class TrafficGenerator {
   // is indeed threadsafe.
   // TODO: Further investigate whether P4RuntimeSession object is
   // threadsafe or create another wrapper that is explicitly thread safe.
-  virtual absl::StatusOr<pdpi::P4RuntimeSession*> SutP4rtSession() = 0;
+  virtual absl::StatusOr<p4_runtime::P4RuntimeSession*> SutP4rtSession() = 0;
 
   // Returns the TrafficGenerator's P4RT sessions to Control Switch or error if
   // the session is not established. Note that the session is only available
@@ -170,7 +170,7 @@ class TrafficGenerator {
   // is indeed threadsafe.
   // TODO: Further investigate whether P4RuntimeSession object is
   // threadsafe or create another wrapper that is explicitly thread safe.
-  virtual absl::StatusOr<pdpi::P4RuntimeSession*>
+  virtual absl::StatusOr<p4_runtime::P4RuntimeSession*>
   ControlSwitchP4rtSession() = 0;
 
   virtual ~TrafficGenerator() = default;
@@ -205,7 +205,7 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
           std::nullopt) override;
   ~TrafficGeneratorWithGuaranteedRate();
 
-  absl::StatusOr<pdpi::P4RuntimeSession*> SutP4rtSession() override {
+  absl::StatusOr<p4_runtime::P4RuntimeSession*> SutP4rtSession() override {
     if (testbed_configurator_ != nullptr) {
       return testbed_configurator_->SutApi().p4rt.get();
     }
@@ -213,7 +213,7 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
         "Testbed configurator is not initialized.");
   }
 
-  absl::StatusOr<pdpi::P4RuntimeSession*> ControlSwitchP4rtSession()
+  absl::StatusOr<p4_runtime::P4RuntimeSession*> ControlSwitchP4rtSession()
       override {
     if (testbed_configurator_ != nullptr) {
       return testbed_configurator_->ControlSwitchApi().p4rt.get();

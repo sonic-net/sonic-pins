@@ -48,7 +48,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -105,7 +105,7 @@ absl::StatusOr<p4::config::v1::P4Info> GetP4InfoFromParamOrSUT(
 
 // Pushes the P4 Info to SUT if the param push_p4_info is set to true and
 // returns the P4 Runtime Session
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> P4InfoPush(
+absl::StatusOr<std::unique_ptr<p4_runtime::P4RuntimeSession>> P4InfoPush(
     bool push_p4_info, const p4::config::v1::P4Info& p4_info,
     thinkit::GenericTestbed& testbed) {
   std::optional<p4::config::v1::P4Info> p4info = std::nullopt;
@@ -152,15 +152,15 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
 
   ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info p4_info,
                        GetP4InfoFromParamOrSUT(GetParam(), testbed->Sut()));
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
                        P4InfoPush(GetParam().push_p4_info, p4_info, *testbed));
   // Set up a route between the source and destination interfaces.
   ASSERT_OK_AND_ASSIGN(auto port_id_from_sut_interface,
                        GetAllInterfaceNameToPortId(*stub));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4_info));
-  P4rtProgrammingContext p4rt_context(p4_session.get(),
-                                      pdpi::SetMetadataAndSendPiWriteRequest);
+  P4rtProgrammingContext p4rt_context(
+      p4_session.get(), p4_runtime::SetMetadataAndSendPiWriteRequest);
   ASSERT_OK(basic_traffic::ProgramRoutes(
       p4rt_context.GetWriteRequestFunction(), ir_p4info,
       port_id_from_sut_interface,
@@ -231,7 +231,7 @@ TEST_P(PacketForwardingTestFixture, AllPortsPacketForwardingTest) {
 
   ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info p4_info,
                        GetP4InfoFromParamOrSUT(GetParam(), testbed->Sut()));
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
                        P4InfoPush(GetParam().push_p4_info, p4_info, *testbed));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4_info));
@@ -299,7 +299,7 @@ TEST_P(PacketForwardingTestFixture, MtuPacketForwardingTest) {
 
   ASSERT_OK_AND_ASSIGN(p4::config::v1::P4Info p4_info,
                        GetP4InfoFromParamOrSUT(GetParam(), testbed->Sut()));
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
                        P4InfoPush(GetParam().push_p4_info, p4_info, *testbed));
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4_info));

@@ -32,7 +32,7 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -212,24 +212,24 @@ TEST_F(RoleTest, EachRoleCanHaveAPrimaryAndBackupConnection) {
 // we removed the linkqual app.
 TEST_F(RoleTest, DISABLED_RolesEnforceReadWriteOnTables) {
   ASSERT_OK_AND_ASSIGN(auto controller,
-                       pdpi::P4RuntimeSession::Create(
+                       p4_runtime::P4RuntimeSession::Create(
                            p4rt_grpc_address_,
                            grpc::InsecureChannelCredentials(), p4rt_device_id_,
-                           pdpi::P4RuntimeSessionOptionalArgs{
+                           p4_runtime::P4RuntimeSessionOptionalArgs{
                                .role = P4RUNTIME_ROLE_SDN_CONTROLLER}));
 
   ASSERT_OK_AND_ASSIGN(
-      auto linkqual, pdpi::P4RuntimeSession::Create(
+      auto linkqual, p4_runtime::P4RuntimeSession::Create(
                          p4rt_grpc_address_, grpc::InsecureChannelCredentials(),
                          p4rt_device_id_,
-                         pdpi::P4RuntimeSessionOptionalArgs{
+                         p4_runtime::P4RuntimeSessionOptionalArgs{
                              // TODO: Since linkqual got removed,
                              // we need to find a viable replacement.
                              // .role = P4RUNTIME_ROLE_LINKQUAL_APP,
                          }));
 
   // Either primary connection can set the forwarding config.
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       controller.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
@@ -268,19 +268,21 @@ TEST_F(RoleTest, DISABLED_RolesEnforceReadWriteOnTables) {
 
   // controller can write to the ingress ACL table, and linkqual can write to
   // the linkqual ACL table.
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(controller.get(), ingress_write));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(linkqual.get(), linkqual_write));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(controller.get(),
+                                                         ingress_write));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(linkqual.get(),
+                                                         linkqual_write));
 
   // controller can not write to the linkqual ACL table.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(controller.get(), linkqual_write),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(controller.get(),
+                                                   linkqual_write),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("PERMISSION_DENIED")));
 
   // linkqual can not write to the ingress ACL table.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(linkqual.get(), ingress_write),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(linkqual.get(),
+                                                   ingress_write),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("PERMISSION_DENIED")));
 
   // controller does not read state from the linkqual ACL table.
@@ -290,9 +292,9 @@ TEST_F(RoleTest, DISABLED_RolesEnforceReadWriteOnTables) {
 
   p4::v1::ReadRequest controller_read;
   controller_read.add_entities()->mutable_table_entry();
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiReadRequest(controller.get(), controller_read),
-      IsOkAndHolds(EqualsProto(expected_controller_response)));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiReadRequest(controller.get(),
+                                                          controller_read),
+              IsOkAndHolds(EqualsProto(expected_controller_response)));
 
   // linkqual does not read state from the ingress ACL table.
   p4::v1::ReadResponse expected_linkqual_response;
@@ -301,19 +303,20 @@ TEST_F(RoleTest, DISABLED_RolesEnforceReadWriteOnTables) {
 
   p4::v1::ReadRequest linkqual_read;
   linkqual_read.add_entities()->mutable_table_entry();
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiReadRequest(linkqual.get(), linkqual_read),
-      IsOkAndHolds(EqualsProto(expected_linkqual_response)));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiReadRequest(linkqual.get(),
+                                                          linkqual_read),
+              IsOkAndHolds(EqualsProto(expected_linkqual_response)));
 }
 
 TEST_F(RoleTest, DefaultRoleCanWriteAndReadAnyTable) {
   ASSERT_OK_AND_ASSIGN(
       auto default_role,
-      pdpi::P4RuntimeSession::Create(
+      p4_runtime::P4RuntimeSession::Create(
           p4rt_grpc_address_, grpc::InsecureChannelCredentials(),
-          p4rt_device_id_, pdpi::P4RuntimeSessionOptionalArgs{.role = ""}));
+          p4rt_device_id_,
+          p4_runtime::P4RuntimeSessionOptionalArgs{.role = ""}));
 
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       default_role.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
@@ -333,8 +336,8 @@ TEST_F(RoleTest, DefaultRoleCanWriteAndReadAnyTable) {
                              }
                            )pb",
                            ir_p4_info_));
-  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(default_role.get(),
-                                                   ingress_write));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(default_role.get(),
+                                                         ingress_write));
   // TODO: Install a second table entry using a different role here, once one is
   // avalable. This is to ensure tthat he default role reads back the table
   // entries installed with *any* role.
@@ -344,9 +347,9 @@ TEST_F(RoleTest, DefaultRoleCanWriteAndReadAnyTable) {
 
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiReadRequest(default_role.get(), read_request),
-      IsOkAndHolds(EqualsProto(expected_response)));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiReadRequest(default_role.get(),
+                                                          read_request),
+              IsOkAndHolds(EqualsProto(expected_response)));
 }
 
 }  // namespace

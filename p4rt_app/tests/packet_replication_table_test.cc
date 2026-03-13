@@ -20,7 +20,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -67,8 +67,8 @@ TEST_F(PacketReplicationTableTest, InsertReadAndDeleteEntry) {
 
   // Create the packet replication entry, and check that it exists in the
   // REPLICATION_IP_MULTICAST_TABLE.
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
 
@@ -81,17 +81,17 @@ TEST_F(PacketReplicationTableTest, InsertReadAndDeleteEntry) {
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one entity.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
 
   // Delete the multicast group entry, and do a sanity check that it is gone.
   request.mutable_updates(0)->set_type(p4::v1::Update::DELETE);
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   ASSERT_THAT(p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_key1),
               StatusIs(absl::StatusCode::kNotFound))
       << "Multicast group was not deleted: " << expected_key1;
@@ -116,10 +116,11 @@ TEST_F(PacketReplicationTableTest, CannotInsertDuplicateEntries) {
                                }
                              })pb",
                            ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: ALREADY_EXISTS")));
 }
 
@@ -151,10 +152,10 @@ TEST_F(PacketReplicationTableTest, InsertRequestFails) {
 
   // We expect the invalid argument error to be propagated all the way back to
   // the gRPC response.
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown,
-               HasSubstr("#1: INVALID_ARGUMENT: my error message")));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request),
+              StatusIs(absl::StatusCode::kUnknown,
+                       HasSubstr("#1: INVALID_ARGUMENT: my error message")));
 
   // Sanity check that the entry is not accidentally left in replication table.
   ASSERT_THAT(p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_key1),
@@ -182,9 +183,9 @@ TEST_F(PacketReplicationTableTest, CannotDeleteMissingEntry) {
                                }
                              })pb",
                            ir_p4_info_));
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: NOT_FOUND")));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request),
+              StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: NOT_FOUND")));
 }
 
 TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
@@ -211,8 +212,8 @@ TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
 
   // First we insert the entry because a delete isn't allowed on non-existing
   // table entries.
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Then we can update the PI write request to delete the entry, and setup the
   // Orchagent to fail with an invalid parameter.
@@ -222,10 +223,10 @@ TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
 
   // We expect the invalid argument error to be propagated all the way back to
   // the gRPC response.
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown,
-               HasSubstr("#1: INVALID_ARGUMENT: my error message")));
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request),
+              StatusIs(absl::StatusCode::kUnknown,
+                       HasSubstr("#1: INVALID_ARGUMENT: my error message")));
 
   // Sanity check that the entries still exists in the
   // REPLICATION_IP_MULTICAST_TABLE.
@@ -257,8 +258,8 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
   const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
 
   // First, insert an entry.
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Read back the entry which should result in the same packet replication
   // entry.
@@ -266,9 +267,9 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one entity.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
@@ -291,9 +292,9 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
                                }
                              })pb",
                            ir_p4_info_));
-  EXPECT_TRUE(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request2)
-          .ok());
+  EXPECT_TRUE(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                           request2)
+                  .ok());
 
   // Sanity check that the correct entries exist in the
   // REPLICATION_IP_MULTICAST_TABLE.
@@ -307,7 +308,7 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
       ->mutable_packet_replication_engine_entry()
       ->mutable_multicast_group_entry();
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response2,
-                       pdpi::SetMetadataAndSendPiReadRequest(
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
                            p4rt_session_.get(), read_request2));
   ASSERT_EQ(read_response2.entities_size(), 1);  // Only one entity.
   EXPECT_THAT(read_response2.entities(0),
@@ -323,8 +324,8 @@ TEST_F(PacketReplicationTableTest, PopulatedReadRequestFails) {
       ->mutable_multicast_group_entry()
       ->set_multicast_group_id(1);
 
-  auto read_response =
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request);
+  auto read_response = p4_runtime::SetMetadataAndSendPiReadRequest(
+      p4rt_session_.get(), read_request);
   EXPECT_FALSE(read_response.ok());
   EXPECT_THAT(read_response, StatusIs(absl::StatusCode::kUnknown,
                                       HasSubstr("multicast_group_id: 1")));
@@ -351,17 +352,17 @@ TEST_F(PacketReplicationTableTest, CloneSessionReadIsEmpty) {
                            ir_p4_info_));
 
   // First, insert a multicast group entry.
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Attempt to read back a clone_session_entry.  The response should be empty.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()
       ->mutable_packet_replication_engine_entry()
       ->mutable_clone_session_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   EXPECT_THAT(read_response.entities(), IsEmpty());
 }
 
@@ -372,7 +373,7 @@ TEST_F(PacketReplicationTableTest, PopulatedCloneSessionReadRequestsFail) {
       ->mutable_clone_session_entry()
       ->set_session_id(1);
 
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiReadRequest(
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiReadRequest(
                   p4rt_session_.get(), read_request_with_session_id),
               StatusIs(absl::StatusCode::kUnknown, HasSubstr("session_id: 1")));
 
@@ -383,7 +384,7 @@ TEST_F(PacketReplicationTableTest, PopulatedCloneSessionReadRequestsFail) {
   auto* replica = clone_with_replica->add_replicas();
   replica->set_instance(2);
 
-  EXPECT_THAT(pdpi::SetMetadataAndSendPiReadRequest(
+  EXPECT_THAT(p4_runtime::SetMetadataAndSendPiReadRequest(
                   p4rt_session_.get(), read_request_with_clone_replica),
               Not(IsOk()));
 }
@@ -410,16 +411,16 @@ TEST_F(PacketReplicationTableTest,
                            ir_p4_info_));
 
   // First, insert a multicast group entry.
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_OK(p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                         request));
 
   // Read back a packet replication engine entry.  Expect the multicast group
   // entry to be returned.
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_packet_replication_engine_entry();
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::ReadResponse read_response,
-      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4_runtime::SetMetadataAndSendPiReadRequest(
+                           p4rt_session_.get(), read_request));
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one entity.
   EXPECT_THAT(read_response.entities(0),
               EqualsProto(request.updates(0).entity()));
@@ -443,7 +444,8 @@ TEST_F(PacketReplicationTableTest, CannotTranslatePortFailure) {
                            ir_p4_info_));
   // Expect port translation failure.
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("Cannot translate port")));
 }
 

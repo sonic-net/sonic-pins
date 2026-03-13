@@ -43,8 +43,8 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
 #include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -385,16 +385,16 @@ void InstallTestEntries(thinkit::Switch& sut,
                         std::optional<p4::config::v1::P4Info> p4info,
                         struct AlpmRouteParams& route_params,
                         IpVersion ip_version) {
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<p4_runtime::P4RuntimeSession> p4_session,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            sut, /*gnmi_config=*/std::nullopt, p4info));
 
   ASSERT_OK_AND_ASSIGN(sai::TableEntries sut_test_entries,
                        ConstructTestEntries(route_params, ip_version));
-  ASSERT_OK(pdpi::ClearTableEntries(p4_session.get()));
+  ASSERT_OK(p4_runtime::ClearTableEntries(p4_session.get()));
 
   LOG(INFO) << "Installing entries:" << sut_test_entries.ShortDebugString();
-  ASSERT_OK(pdpi::InstallPdTableEntries(*p4_session, sut_test_entries));
+  ASSERT_OK(p4_runtime::InstallPdTableEntries(*p4_session, sut_test_entries));
 }
 
 // Tests that when IPv4 L3 route is added and Ipv4 test packets hit the added

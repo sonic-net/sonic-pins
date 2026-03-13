@@ -23,14 +23,14 @@
 #include "absl/strings/str_format.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 
 namespace pins_test::basic_traffic {
 
 // A function that handles sending a write request to a `P4RuntimeSession`.
-using WriteRequestHandler = std::function<absl::Status(pdpi::P4RuntimeSession *,
-                                                       p4::v1::WriteRequest &)>;
+using WriteRequestHandler = std::function<absl::Status(
+    p4_runtime::P4RuntimeSession*, p4::v1::WriteRequest&)>;
 
 // Returns a standardized IP from a `port_id` for use by `basic_traffic`
 // utilities.
@@ -52,11 +52,10 @@ absl::Status ProgramTrafficVrf(
 
 // Programs a VRF that matches on all packets ingressing into the SUT. Takes in
 // a `P4RuntimeSession`.
-inline absl::Status
-ProgramTrafficVrf(pdpi::P4RuntimeSession *session,
-                  const pdpi::IrP4Info &ir_p4info,
-                  const WriteRequestHandler &write_request =
-                      pdpi::SetMetadataAndSendPiWriteRequest) {
+inline absl::Status ProgramTrafficVrf(
+    p4_runtime::P4RuntimeSession* session, const pdpi::IrP4Info& ir_p4info,
+    const WriteRequestHandler& write_request =
+        p4_runtime::SetMetadataAndSendPiWriteRequest) {
   return ProgramTrafficVrf(absl::bind_front(write_request, session), ir_p4info);
 }
 
@@ -68,11 +67,11 @@ absl::Status ProgramRouterInterface(
 
 // Programs a router interface for the specified `port_id`. Uses `PortIdToMac`
 // as the MAC address. Takes in a `P4RuntimeSession`.
-inline absl::Status
-ProgramRouterInterface(pdpi::P4RuntimeSession *session, int port_id,
-                       const pdpi::IrP4Info &ir_p4info,
-                       const WriteRequestHandler &write_request =
-                           pdpi::SetMetadataAndSendPiWriteRequest) {
+inline absl::Status ProgramRouterInterface(
+    p4_runtime::P4RuntimeSession* session, int port_id,
+    const pdpi::IrP4Info& ir_p4info,
+    const WriteRequestHandler& write_request =
+        p4_runtime::SetMetadataAndSendPiWriteRequest) {
   return ProgramRouterInterface(absl::bind_front(write_request, session),
                                 port_id, ir_p4info);
 }
@@ -87,11 +86,11 @@ absl::Status ProgramIPv4Route(
 // Programs an IPv4 route that forwards a destination IP to the specified
 // `port_id`. Uses `PortIdToIP` for the destination IP to match against. Takes
 // in a `P4RuntimeSession`.
-inline absl::Status
-ProgramIPv4Route(pdpi::P4RuntimeSession *session, int port_id,
-                 const pdpi::IrP4Info &ir_p4info,
-                 const WriteRequestHandler &write_request =
-                     pdpi::SetMetadataAndSendPiWriteRequest) {
+inline absl::Status ProgramIPv4Route(
+    p4_runtime::P4RuntimeSession* session, int port_id,
+    const pdpi::IrP4Info& ir_p4info,
+    const WriteRequestHandler& write_request =
+        p4_runtime::SetMetadataAndSendPiWriteRequest) {
   return ProgramIPv4Route(absl::bind_front(write_request, session), port_id,
                           ir_p4info);
 }
@@ -104,11 +103,10 @@ absl::Status ProgramL3AdmitTableEntry(
 
 // Programs L3 admit table entry allowing all unicast packets to be routed.
 // Takes in a `P4RuntimeSession`.
-inline absl::Status
-ProgramL3AdmitTableEntry(pdpi::P4RuntimeSession *session,
-                         const pdpi::IrP4Info &ir_p4info,
-                         const WriteRequestHandler &write_request =
-                             pdpi::SetMetadataAndSendPiWriteRequest) {
+inline absl::Status ProgramL3AdmitTableEntry(
+    p4_runtime::P4RuntimeSession* session, const pdpi::IrP4Info& ir_p4info,
+    const WriteRequestHandler& write_request =
+        p4_runtime::SetMetadataAndSendPiWriteRequest) {
   return ProgramL3AdmitTableEntry(absl::bind_front(write_request, session),
                                   ir_p4info);
 }

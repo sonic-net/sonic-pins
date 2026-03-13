@@ -23,6 +23,7 @@
 #include <valarray>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/flags/flag.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -31,7 +32,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "absl/flags/flag.h"
 #include "gmock/gmock.h"
 #include "grpcpp/impl/codegen/client_context.h"
 #include "grpcpp/support/status.h"
@@ -43,7 +43,7 @@
 #include "lib/utils/constants.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "system/system.grpc.pb.h"

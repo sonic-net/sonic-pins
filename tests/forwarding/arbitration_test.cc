@@ -29,7 +29,7 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/test_environment.h"
 
 namespace pins {
@@ -217,7 +217,7 @@ TEST_P(ArbitrationTestFixture, BackupCanRead) {
   // The switch should always return some const entries.
   ASSERT_FALSE(response.entities().empty());
   // Clear all table entries to leave the switch in a clean state.
-  ASSERT_OK(pdpi::ClearTableEntries(connection.get()));
+  ASSERT_OK(p4_runtime::ClearTableEntries(connection.get()));
 }
 
 TEST_P(ArbitrationTestFixture, GetNotifiedOfActualPrimary) {
@@ -293,14 +293,14 @@ TEST_P(ArbitrationTestFixture, OldPrimaryCannotWriteAfterNewPrimaryCameUp) {
 
   ASSERT_OK(
       c1->Write(GetWriteRequest(0, ElectionIdFromLower(id1), DeviceId())));
-  ASSERT_OK(pdpi::ClearTableEntries(c1.get()));
+  ASSERT_OK(p4_runtime::ClearTableEntries(c1.get()));
 
   // Connects controller C2 with id=2 > 1 to become primary.
   ASSERT_OK_AND_ASSIGN(auto c2, BecomePrimary(id2));
   // Checks new primary C2 can write.
   ASSERT_OK(
       c2->Write(GetWriteRequest(1, ElectionIdFromLower(id2), DeviceId())));
-  ASSERT_OK(pdpi::ClearTableEntries(c2.get()));
+  ASSERT_OK(p4_runtime::ClearTableEntries(c2.get()));
 
   // Checks C1 cannot write after new primary C2 came up.
   ASSERT_FALSE(
@@ -320,7 +320,7 @@ TEST_P(ArbitrationTestFixture, PrimaryDowngradesItself) {
   ASSERT_OK(controller->Write(
       GetWriteRequest(0, ElectionIdFromLower(id2), DeviceId())));
 
-  ASSERT_OK(pdpi::ClearTableEntries(controller.get()));
+  ASSERT_OK(p4_runtime::ClearTableEntries(controller.get()));
 
   // C2 sends primary arbitration request with id=1 to downgrade itself.
   p4::v1::StreamMessageRequest request;
