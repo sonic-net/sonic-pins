@@ -27,7 +27,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/entity_keys.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/p4runtime/entity_update.h"
 
 namespace p4rt_app {
 namespace {
@@ -46,9 +46,9 @@ absl::StatusOr<std::string> GetActionProfileName(
 
 }  // namespace
 
-absl::StatusOr<sonic::TableResources> GetResourceUsageForIrTableEntry(
+absl::StatusOr<TableResources> GetResourceUsageForIrTableEntry(
     const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntry& table_entry) {
-  sonic::TableResources resources{
+  TableResources resources{
       .name = table_entry.table_name(),
   };
 
@@ -77,7 +77,7 @@ absl::StatusOr<sonic::TableResources> GetResourceUsageForIrTableEntry(
     ++actions;
     total_weight += action.weight();
   }
-  resources.action_profile = sonic::ActionProfileResources{
+  resources.action_profile = ActionProfileResources{
       .name = action_profile_name,
       .number_of_actions = actions,
       .total_weight = total_weight,
@@ -86,7 +86,7 @@ absl::StatusOr<sonic::TableResources> GetResourceUsageForIrTableEntry(
   return resources;
 }
 
-absl::StatusOr<sonic::TableResources> GetResourceUsageForPiTableEntry(
+absl::StatusOr<TableResources> GetResourceUsageForPiTableEntry(
     const pdpi::IrP4Info& ir_p4info, const p4::v1::TableEntry& table_entry) {
   const pdpi::IrTableDefinition* table_def =
       gutil::FindOrNull(ir_p4info.tables_by_id(), table_entry.table_id());
@@ -95,7 +95,7 @@ absl::StatusOr<sonic::TableResources> GetResourceUsageForPiTableEntry(
            << "Could not find table definition for ID: "
            << table_entry.table_id();
   }
-  sonic::TableResources resources{
+  TableResources resources{
       .name = table_def->preamble().alias(),
   };
 
@@ -118,7 +118,7 @@ absl::StatusOr<sonic::TableResources> GetResourceUsageForPiTableEntry(
     ++actions;
     total_weight += action.weight();
   }
-  resources.action_profile = sonic::ActionProfileResources{
+  resources.action_profile = ActionProfileResources{
       .name = action_profile_name,
       .number_of_actions = actions,
       .total_weight = total_weight,
@@ -139,27 +139,26 @@ ActionProfileResourceCapacity GetActionProfileResourceCapacity(
   };
 }
 
-absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
-    const pdpi::IrP4Info& ir_p4info, const sonic::AppDbEntry& app_db_entry,
+absl::StatusOr<TableResources> VerifyCapacityAndGetTableResourceChange(
+    const pdpi::IrP4Info& ir_p4info, const EntityUpdate& update,
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
         capacity_by_action_profile_name,
     absl::flat_hash_map<std::string, int64_t>& current_batch_resources) {
-  sonic::TableResources resources;
+  TableResources resources;
   // This function currently only applies to table entries.
-  if (app_db_entry.entry.entity_case() != pdpi::IrEntity::kTableEntry) {
+  if (update.entry.entity_case() != pdpi::IrEntity::kTableEntry) {
     return resources;
   }
-  std::optional<sonic::TableResources> new_resources;
-  std::optional<sonic::TableResources> old_resources;
+  std::optional<TableResources> new_resources;
+  std::optional<TableResources> old_resources;
 
   // For an insert or modify we will need the table resources for the new table
   // entry.
-  if (app_db_entry.update_type == p4::v1::Update::INSERT ||
-      app_db_entry.update_type == p4::v1::Update::MODIFY) {
-    absl::StatusOr<sonic::TableResources> table_resources =
-        GetResourceUsageForIrTableEntry(ir_p4info,
-                                        app_db_entry.entry.table_entry());
+  if (update.update_type == p4::v1::Update::INSERT ||
+      update.update_type == p4::v1::Update::MODIFY) {
+    absl::StatusOr<TableResources> table_resources =
+        GetResourceUsageForIrTableEntry(ir_p4info, update.entry.table_entry());
     if (!table_resources.ok()) {
       LOG(WARNING) << "Could not get table entry's resources: "
                    << table_resources.status();
@@ -172,15 +171,15 @@ absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
 
   // For a modify or delete we will need the table resources for the old table
   // entry.
-  if (app_db_entry.update_type == p4::v1::Update::MODIFY ||
-      app_db_entry.update_type == p4::v1::Update::DELETE) {
+  if (update.update_type == p4::v1::Update::MODIFY ||
+      update.update_type == p4::v1::Update::DELETE) {
     const auto* cache_entry =
-        gutil::FindOrNull(entity_cache, app_db_entry.entity_key);
+        gutil::FindOrNull(entity_cache, update.entity_key);
     if (cache_entry == nullptr) {
       return gutil::NotFoundErrorBuilder() << "[P4RT App] Could not find cache "
                                               "entry for resource accounting.";
     }
-    absl::StatusOr<sonic::TableResources> cache_resources =
+    absl::StatusOr<TableResources> cache_resources =
         GetResourceUsageForPiTableEntry(ir_p4info,
                                         (*cache_entry).table_entry());
     if (!cache_resources.ok()) {
@@ -206,7 +205,7 @@ absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
   if (old_resources.has_value() && old_resources->action_profile.has_value()) {
     resources.name = old_resources->name;
     if (!resources.action_profile.has_value()) {
-      resources.action_profile = sonic::ActionProfileResources{
+      resources.action_profile = ActionProfileResources{
           .name = old_resources->action_profile->name,
       };
     }
