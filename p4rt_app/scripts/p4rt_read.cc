@@ -31,7 +31,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 
 // Flags to read table entries.
@@ -49,9 +49,9 @@ namespace p4rt_app {
 namespace {
 
 absl::StatusOr<pdpi::IrP4Info> GetIrP4infoFromSwitch(
-    pdpi::P4RuntimeSession& session) {
+    p4_runtime::P4RuntimeSession& session) {
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   pdpi::GetForwardingPipelineConfig(&session));
+                   p4_runtime::GetForwardingPipelineConfig(&session));
   return pdpi::CreateIrP4Info(response.config().p4info());
 }
 
@@ -120,10 +120,10 @@ absl::Status PrintAsPi(
 
 absl::Status Main() {
   // Connect to the P4RT server.
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+  ASSIGN_OR_RETURN(std::unique_ptr<p4_runtime::P4RuntimeSession> session,
                    CreateP4rtSession());
   ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_table_entries,
-                   pdpi::ReadPiTableEntries(session.get()));
+                   p4_runtime::ReadPiTableEntries(session.get()));
 
   // Filter any entries based on PI values.
   FilterByTableId(pi_table_entries);

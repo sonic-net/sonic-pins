@@ -67,9 +67,9 @@
 #include "p4_infra/netaddr/mac_address.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -125,11 +125,11 @@ absl::Status NsfRebootHelper(const Testbed &testbed,
 }
 
 // Set up the switch to punt packets to CPU.
-absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
-                            const netaddr::Ipv4Address &dst_ip,
+absl::Status SetUpPuntToCPU(const netaddr::MacAddress& dmac,
+                            const netaddr::Ipv4Address& dst_ip,
                             absl::string_view p4_queue,
-                            const pdpi::IrP4Info &ir_p4info,
-                            pdpi::P4RuntimeSession &p4_session) {
+                            const pdpi::IrP4Info& ir_p4info,
+                            p4_runtime::P4RuntimeSession& p4_session) {
   auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
         acl_ingress_table_entry {
@@ -150,7 +150,8 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
                      << acl_entry.DebugString() << " error: ");
 
   LOG(INFO) << "Installing Table Entry: " << acl_entry.ShortDebugString();
-  return gutil::StatusBuilder(pdpi::InstallPiTableEntry(&p4_session, pi_entry))
+  return gutil::StatusBuilder(
+             p4_runtime::InstallPiTableEntry(&p4_session, pi_entry))
          << "Failed to install entry: " << acl_entry.ShortDebugString();
 }
 
@@ -192,18 +193,19 @@ packetlib::Packet BuildPuntToCpuPacket(const netaddr::MacAddress &dmac,
 // should still be able to receive the packets end to end due to the
 // punt flow.
 absl::Status SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
-    const netaddr::MacAddress &dmac, const netaddr::Ipv6Address &src_ip,
-    const netaddr::Ipv6Address &dst_ip, int rate_bytes_per_second,
+    const netaddr::MacAddress& dmac, const netaddr::Ipv6Address& src_ip,
+    const netaddr::Ipv6Address& dst_ip, int rate_bytes_per_second,
     int burst_in_bytes, absl::string_view p4_queue,
-    const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
+    const p4::config::v1::P4Info& p4info,
+    p4_runtime::P4RuntimeSession& p4_session) {
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       &p4_session,
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(&p4_session));
 
   auto l3_admit_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -284,24 +286,25 @@ absl::Status SetUpV6PuntToCPUWithRateLimitAndWildCardL3AdmitEntry(
                        << acl_entry.DebugString() << " error: ");
   }
   LOG(INFO) << "InstallPiTableEntries";
-  return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
+  return p4_runtime::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
 }
 
 // Set up the switch to punt packets to CPU with meter.
 // Returns a copy of installed Punt Entry or QoS Entry.
 absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
-    const netaddr::MacAddress &dmac, const netaddr::Ipv4Address &dst_ip,
+    const netaddr::MacAddress& dmac, const netaddr::Ipv4Address& dst_ip,
     absl::string_view p4_queue, int rate_bytes_per_second, int burst_in_bytes,
-    const AclIngressTablePuntFlowRateLimitAction &acl_ingress_table_action,
-    const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
+    const AclIngressTablePuntFlowRateLimitAction& acl_ingress_table_action,
+    const p4::config::v1::P4Info& p4info,
+    p4_runtime::P4RuntimeSession& p4_session) {
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+  RETURN_IF_ERROR(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
       &p4_session,
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+  RETURN_IF_ERROR(p4_runtime::ClearTableEntries(&p4_session));
 
   // There can be 2 schemes for punting depending on pipeline.
   // If p4 info table has the "acl_ingress_qos_table" configured, then
@@ -329,7 +332,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
     ASSIGN_OR_RETURN(
         const p4::v1::TableEntry pi_acl_entry,
         pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, punt_entry));
-    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
+    RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(&p4_session, pi_acl_entry));
 
     auto qos_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
         R"pb(
@@ -351,7 +354,8 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
     ASSIGN_OR_RETURN(
         const p4::v1::TableEntry pi_acl_qos_entry,
         pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, qos_entry));
-    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_qos_entry));
+    RETURN_IF_ERROR(
+        p4_runtime::InstallPiTableEntry(&p4_session, pi_acl_qos_entry));
 
     return pi_acl_qos_entry;
   } else {
@@ -377,7 +381,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
     ASSIGN_OR_RETURN(
         const p4::v1::TableEntry pi_acl_entry,
         pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry));
-    RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
+    RETURN_IF_ERROR(p4_runtime::InstallPiTableEntry(&p4_session, pi_acl_entry));
     return pi_acl_entry;
   }
 }
@@ -607,7 +611,7 @@ bool IsValidCpuQueue(absl::string_view queue_name) {
 }
 
 absl::Status InstallAclEntriesToFilterOutUnsolicitedPackets(
-    pdpi::P4RuntimeSession &sut_p4rt_session) {
+    p4_runtime::P4RuntimeSession& sut_p4rt_session) {
   // TODO: Uncomment when acl_deny is supported by the
   // switch and acl_ingress_table.
   // return pdpi::InstallPdTableEntries<sai::TableEntries>(
@@ -654,7 +658,7 @@ TEST_P(CpuQosTestWithoutIxia,
   // Configure mirror testbed.
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_p4rt_session),
@@ -698,8 +702,8 @@ TEST_P(CpuQosTestWithoutIxia,
                        pdpi::PartialPdTableEntryToPiTableEntry(
                            ir_p4info, pd_broadcast_drop_entry));
 
-  ASSERT_OK(
-      pdpi::InstallPiTableEntry(control_p4rt_session.get(), pi_drop_entry));
+  ASSERT_OK(p4_runtime::InstallPiTableEntry(control_p4rt_session.get(),
+                                            pi_drop_entry));
 
   // Read CPU queue state prior to injecting test packets. The state should
   // remain unchanged when we inject test packets.
@@ -796,7 +800,7 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   // Configure mirror testbed.
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_p4rt_session),
@@ -831,11 +835,12 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   ASSERT_OK_AND_ASSIGN(
       const p4::v1::TableEntry pi_acl_entry,
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_acl_entry));
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
+  ASSERT_OK(
+      p4_runtime::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
 
   // Check that the counters are initially zero.
   ASSERT_THAT(
-      pdpi::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry),
+      p4_runtime::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry),
       IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
@@ -887,7 +892,7 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   do {
     ASSERT_OK_AND_ASSIGN(
         counter_data,
-        pdpi::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry));
+        p4_runtime::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry));
   } while (counter_data.packet_count() == 0 &&
            absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
   p4::v1::CounterData expected_counter_data;
@@ -919,7 +924,7 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
 
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_p4rt_session;
 
   ASSERT_OK_AND_ASSIGN(
@@ -1028,7 +1033,8 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
   ASSERT_OK_AND_ASSIGN(
       const p4::v1::TableEntry pi_acl_entry,
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_acl_entry));
-  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
+  ASSERT_OK(
+      p4_runtime::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
 
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
     ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf));
@@ -1038,7 +1044,8 @@ TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
 
   for (packetlib::Packet &test_packet : test_packets) {
     // Start from fresh P4RT session.
-    ASSERT_OK_AND_ASSIGN(sut_p4rt_session, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
+                         p4_runtime::P4RuntimeSession::Create(sut));
 
     // Send packets.
     ASSERT_OK(packetlib::PadPacketToMinimumSize(test_packet));
@@ -1089,7 +1096,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
   // Configure mirror testbed.
   EXPECT_OK(
       Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_p4rt_session),
@@ -1117,7 +1124,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
       << "No packets to test, maybe no loopback IP is configured on switch?";
 
   // Clear table entries and install l3 admit entry.
-  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  ASSERT_OK(p4_runtime::ClearEntities(*sut_p4rt_session));
   absl::flat_hash_set<std::string> added_dst_mac;
   for (const PacketAndExpectedTargetQueue &test_packet : test_packets) {
     std::string_view target_queue = test_packet.target_queue;
@@ -1141,7 +1148,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
                 << test_packet.packet.headers(0)
                        .ethernet_header()
                        .ethernet_destination();
-      ASSERT_OK(pdpi::InstallPdTableEntry<sai::TableEntry>(
+      ASSERT_OK(p4_runtime::InstallPdTableEntry<sai::TableEntry>(
           *sut_p4rt_session,
           absl::Substitute(
               R"pb(
@@ -1271,7 +1278,7 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
                  << SAI_P4_PKGINFO_VERSION_HAS_CPU_QUEUE_NAME_SUPPORT;
   }
 
-  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+  std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4rt_session,
       control_p4rt_session;
   ASSERT_OK_AND_ASSIGN(
       std::tie(sut_p4rt_session, control_p4rt_session),
@@ -1336,7 +1343,7 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
     ASSERT_OK(NsfRebootHelper(&Testbed(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
     ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
-                         pdpi::P4RuntimeSession::Create(Sut()));
+                         p4_runtime::P4RuntimeSession::Create(Sut()));
     // Reset initial state of queues after NSF Reboot
     ASSERT_OK_AND_ASSIGN(initial_state,
                          GetCpuQueueStateViaGnmi(*sut_gnmi_stub));
@@ -1472,9 +1479,10 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   // Configure SUT.
   EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
       "p4info.textproto", GetParam().p4info));
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut, std::nullopt, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(sut, std::nullopt,
+                                                          GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
                        pins_test::GetGnmiConfig(*gnmi_stub));
@@ -1568,7 +1576,8 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
     ASSERT_OK(
         NsfRebootHelper(generic_testbed.get(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
-    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(sut_p4_session,
+                         p4_runtime::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1774,9 +1783,10 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
       "p4info.textproto", GetParam().p4info));
   // Configure SUT.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut, std::nullopt, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(sut, std::nullopt,
+                                                          GetParam().p4info));
 
   // Disable sFlow since it would interfere with the test results.
   ASSERT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), /*enabled=*/false));
@@ -1889,7 +1899,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
     ASSERT_OK(
         NsfRebootHelper(generic_testbed.get(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
-    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(sut_p4_session,
+                         p4_runtime::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1987,8 +1998,8 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
               flow_rate_limit_in_bytes_per_second,
               /*burst_in_bytes=*/kMaxFrameSizeWithoutVlanTag,
               acl_table_punt_action, GetParam().p4info, *sut_p4_session));
-      ASSERT_OK(
-          pdpi::InstallPiEntities(sut_p4_session.get(), ir_p4info, entities));
+      ASSERT_OK(p4_runtime::InstallPiEntities(sut_p4_session.get(), ir_p4info,
+                                              entities));
       ASSERT_OK_AND_ASSIGN(
           QueueCounters initial_counters,
           GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
@@ -2001,11 +2012,11 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
       // Check that the counters are initially zero.
       ASSERT_THAT(
-          pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry),
+          p4_runtime::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry),
           IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
       if (pi_acl_entry.has_meter_config()) {
-        EXPECT_OK(
-            pdpi::ReadPiMeterCounterData(sut_p4_session.get(), pi_acl_entry));
+        EXPECT_OK(p4_runtime::ReadPiMeterCounterData(sut_p4_session.get(),
+                                                     pi_acl_entry));
       }
 
       ASSERT_OK(ixia::SetTrafficParameters(
@@ -2029,7 +2040,7 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       do {
         ASSERT_OK_AND_ASSIGN(
             counter_data,
-            pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry));
+            p4_runtime::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry));
       } while (counter_data.packet_count() != kTotalFrames &&
                absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
       p4::v1::CounterData expected_counter_data;
@@ -2120,9 +2131,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
                       (1 - kTolerancePercent / 100));
 
         if (pi_acl_entry.has_meter_config()) {
-          ASSERT_OK_AND_ASSIGN(
-              p4::v1::MeterCounterData meter_counter_data,
-              pdpi::ReadPiMeterCounterData(sut_p4_session.get(), pi_acl_entry));
+          ASSERT_OK_AND_ASSIGN(p4::v1::MeterCounterData meter_counter_data,
+                               p4_runtime::ReadPiMeterCounterData(
+                                   sut_p4_session.get(), pi_acl_entry));
           LOG(INFO) << "Meter counter data: "
                     << meter_counter_data.DebugString();
           // With some tolerance, green packets should equal number of expected
@@ -2242,9 +2253,10 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
   // Configure SUT.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut, std::nullopt, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_p4_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(sut, std::nullopt,
+                                                          GetParam().p4info));
 
   // Disable sFlow since it would interfere with the test results.
   ASSERT_OK(pins::SetSflowConfigEnabled(gnmi_stub.get(), /*enabled=*/false));
@@ -2315,7 +2327,8 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
     ASSERT_OK(
         NsfRebootHelper(generic_testbed.get(), GetParam().ssh_client_for_nsf));
     // Create a new P4rt session after NSF Reboot
-    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(sut_p4_session,
+                         p4_runtime::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }

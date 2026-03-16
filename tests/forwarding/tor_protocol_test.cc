@@ -1,4 +1,5 @@
 #include "tests/forwarding/tor_protocol_test.h"
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -17,8 +18,8 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session_extras.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/lib/switch_test_setup_helpers.h"
@@ -317,7 +318,7 @@ void TorProtocolTest::SetUp() {
           .p4info = GetParam().control_switch.p4info,
       }));
   ASSERT_OK_AND_ASSIGN(sut_p4rt_session_,
-                       pdpi::P4RuntimeSession::Create(testbed().Sut()));
+                       p4_runtime::P4RuntimeSession::Create(testbed().Sut()));
 }
 
 TEST_P(TorProtocolTest, Ndv6PacketsFromControllerAreMulticast) {
@@ -347,7 +348,8 @@ TEST_P(TorProtocolTest, Ndv6PacketsFromControllerAreMulticast) {
         EntitiesRewritingVlan().entities());
   }
   LOG(INFO) << "Installing forwarding entities";
- ASSERT_OK(pdpi::InstallIrEntities(sut_p4rt_session(), multicast_entities));
+  ASSERT_OK(
+      p4_runtime::InstallIrEntities(sut_p4rt_session(), multicast_entities));
 
   dvaas::DataplaneValidationParams dvaas_params = GetParam().dvaas_params;
   dvaas_params.packet_test_vector_override = {

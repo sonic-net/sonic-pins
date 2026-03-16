@@ -20,8 +20,8 @@
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
 #include "p4_infra/p4_pdpi/pd.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/string_encodings/hex_string.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -63,7 +63,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInRouterInterfaceTable) {
           )pb",
           ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -88,7 +89,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInNextHopTable) {
                            )pb",
                            ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -115,7 +117,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInTunnelTable) {
                            )pb",
                            ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -150,7 +153,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInMirrorTable) {
           ir_p4_info_));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -176,7 +180,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInWcmpGroupTable) {
           )pb",
           ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -202,7 +207,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInWatchPort) {
           )pb",
           ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -226,7 +232,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInVrfTable) {
                              })pb",
                            ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -249,7 +256,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInQosQueue) {
           )pb",
           ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -280,7 +288,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInMulticastQueue) {
           )pb",
           ir_p4_info_));
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }
@@ -306,7 +315,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInReplicaPort) {
           ir_p4_info_));
 
   EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   request),
       StatusIs(absl::StatusCode::kUnknown, AllOf(HasSubstr("INVALID_ARGUMENT"),
                                                  HasSubstr("Invalid UTF-8"))));
 }

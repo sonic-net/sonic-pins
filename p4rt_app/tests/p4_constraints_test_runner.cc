@@ -31,7 +31,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -73,8 +73,8 @@ absl::Status P4ConstraintsTest::SendIrWriteRequestAndPrintGoldenOutput(
   std::cout << "--- INPUT: WriteRequest ------------------------------------\n";
   std::cout << gutil::PrintTextProto(ir_request);
   std::cout << "--- OUTPUT: WriteResponse ----------------------------------\n";
-  absl::Status response =
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), pi_request);
+  absl::Status response = p4_runtime::SetMetadataAndSendPiWriteRequest(
+      p4rt_session_.get(), pi_request);
   std::cout << gutil::StableStatusToString(response);
   return absl::OkStatus();
 }

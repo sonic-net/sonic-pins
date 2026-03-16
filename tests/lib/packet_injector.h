@@ -29,7 +29,7 @@
 #include "absl/time/time.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/p4_runtime_session.h"
+#include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "tests/forwarding/util.h"
 namespace pins_test {
 
@@ -72,13 +72,14 @@ class PacketInjector {
  public:
   // Factor method to create a PacketInjector.
   static absl::StatusOr<std::unique_ptr<PacketInjector>> Create(
-      pdpi::P4RuntimeSession& injector_p4rt_session, pdpi::IrP4Info ir_p4info,
-      P4rtPortId port, std::vector<std::string> packets,
+      p4_runtime::P4RuntimeSession& injector_p4rt_session,
+      pdpi::IrP4Info ir_p4info, P4rtPortId port,
+      std::vector<std::string> packets,
       absl::Duration interval = absl::Milliseconds(10),
-      absl::AnyInvocable<
-          absl::Status(const std::string& /*port*/,
-                       const std::string& /*packet*/, const pdpi::IrP4Info&,
-                       pdpi::P4RuntimeSession*, std::optional<absl::Duration>)>
+      absl::AnyInvocable<absl::Status(
+          const std::string& /*port*/, const std::string& /*packet*/,
+          const pdpi::IrP4Info&, p4_runtime::P4RuntimeSession*,
+          std::optional<absl::Duration>)>
           injector = pins::InjectEgressPacket);
 
   ~PacketInjector();
@@ -99,19 +100,19 @@ class PacketInjector {
 
  private:
   // Constructor allowing for a custom packet injector.
-  PacketInjector(pdpi::P4RuntimeSession& injector_p4rt_session,
+  PacketInjector(p4_runtime::P4RuntimeSession& injector_p4rt_session,
                  pdpi::IrP4Info ir_p4info, P4rtPortId port,
                  std::vector<std::string> packets, absl::Duration interval,
                  absl::AnyInvocable<absl::Status(
                      const std::string& /*port*/, const std::string& /*packet*/,
-                     const pdpi::IrP4Info&, pdpi::P4RuntimeSession*,
+                     const pdpi::IrP4Info&, p4_runtime ::P4RuntimeSession*,
                      std::optional<absl::Duration>)>
                      injector);
 
   // This should only be called inside the thread.
   void DoInjection() ABSL_LOCKS_EXCLUDED(mutex_);
 
-  pdpi::P4RuntimeSession& p4rt_session_;
+  p4_runtime::P4RuntimeSession& p4rt_session_;
   const pdpi::IrP4Info ir_p4info_;
   const P4rtPortId port_;
   const std::vector<std::string> packets_;
@@ -127,7 +128,7 @@ class PacketInjector {
 
   absl::AnyInvocable<absl::Status(
       const std::string&, const std::string&, const pdpi::IrP4Info&,
-      pdpi::P4RuntimeSession*, std::optional<absl::Duration>)>
+      p4_runtime::P4RuntimeSession*, std::optional<absl::Duration>)>
       injector_;
 
   absl::Notification stop_;
