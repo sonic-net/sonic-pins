@@ -28,11 +28,11 @@
 #include "gutil/gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_pdpi/references.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_helper.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_helper.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
 
 namespace pdpi {
 namespace {
@@ -289,8 +289,8 @@ OutgoingConcreteTableReferencesTestCases() {
           "P4MatchField-Refers-To-BuiltInMatchField reference creates a "
           "single concrete reference.",
   });
-  
-    pdpi::TableEntry built_in_entry_with_multiple_actions =
+
+  pdpi::TableEntry built_in_entry_with_multiple_actions =
       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
         multicast_group_table_entry {
           match { multicast_group_id: "0x0037" }
@@ -348,7 +348,7 @@ OutgoingConcreteTableReferencesTestCases() {
           "a single concrete reference.",
   });
 
-    pdpi::TableEntry p4_group_entry_with_multiple_actions =
+  pdpi::TableEntry p4_group_entry_with_multiple_actions =
       gutil::ParseProtoOrDie<pdpi::TableEntry>(
           R"pb(golden_test_friendly_wcmp_table_entry {
                  match { key1: "key-a" key2: "key-b" }
@@ -491,7 +491,7 @@ OutgoingConcreteTableReferencesTestCases() {
           "concrete reference for every instance of the action.",
   });
 
-    pdpi::TableEntry built_in_entry_with_multiple_backup_actions =
+  pdpi::TableEntry built_in_entry_with_multiple_backup_actions =
       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
         multicast_group_table_entry {
           match { multicast_group_id: "0x0037" }

@@ -23,11 +23,14 @@
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/testing.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_pdpi/sequencing_util.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_helper.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_helper.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
+
+namespace pdpi {
+namespace {
 
 constexpr absl::string_view kInputBanner =
     "-- INPUT "
@@ -130,13 +133,16 @@ void CreateReferrableTableEntryTest(
   }
 }
 
+}  // namespace
+}  // namespace pdpi
+
 int main(int argc, char** argv) {
   std::cout << "Golden file test for utils used for reachability analysis.\n"
                "Note, std::cout doesn't work nicely with hex values: certain "
                "hex values are converted, via obsecure means, to control "
                "characters and become invisible in the golde file.\n\n";
-  CreateReferenceRelationsTest(pdpi::GetTestIrP4Info());
-  EntriesReferredToByTableEntryTest(
+  pdpi::CreateReferenceRelationsTest(pdpi::GetTestIrP4Info());
+  pdpi::EntriesReferredToByTableEntryTest(
       "Referring to an entry with 2 match fields",
       R"pb(
         referring_by_match_field_table_entry {
@@ -144,18 +150,19 @@ int main(int argc, char** argv) {
           action { do_thing_4 {} }
         }
       )pb");
-  EntriesReferredToByTableEntryTest("Referring to an entry with 1 action param",
-                                    R"pb(
-                                      referring_by_action_table_entry {
-                                        match { val: "0x012" }
-                                        action {
-                                          referring_to_one_match_field_action {
-                                            referring_id_1: "key-a",
-                                          }
-                                        }
-                                      }
-                                    )pb");
-  EntriesReferredToByTableEntryTest(
+  pdpi::EntriesReferredToByTableEntryTest(
+      "Referring to an entry with 1 action param",
+      R"pb(
+        referring_by_action_table_entry {
+          match { val: "0x012" }
+          action {
+            referring_to_one_match_field_action {
+              referring_id_1: "key-a",
+            }
+          }
+        }
+      )pb");
+  pdpi::EntriesReferredToByTableEntryTest(
       "Referring to an entry with 2 action params",
       R"pb(
         referring_by_action_table_entry {
@@ -168,7 +175,7 @@ int main(int argc, char** argv) {
           }
         }
       )pb");
-  EntriesReferredToByTableEntryTest(
+  pdpi::EntriesReferredToByTableEntryTest(
       "Entry that doesn't refer to other entry will not generate "
       "ReferredTableEntry",
       R"pb(
@@ -183,7 +190,7 @@ int main(int argc, char** argv) {
           pdpi::CreateReferenceRelations(pdpi::GetTestIrP4Info());
 
   // -- CreateReferredTableEntry test.
-  CreateReferrableTableEntryTest(
+  pdpi::CreateReferrableTableEntryTest(
       "Non-referred-to table entry will not generate ReferredTableEntry",
       pdpi::GetTestIrP4Info(), default_reference_relations,
       R"pb(
@@ -198,7 +205,7 @@ int main(int argc, char** argv) {
         }
       )pb");
 
-  CreateReferrableTableEntryTest(
+  pdpi::CreateReferrableTableEntryTest(
       "Referred-to table entry will generate ReferredTableEntry",
       pdpi::GetTestIrP4Info(), default_reference_relations,
       R"pb(
