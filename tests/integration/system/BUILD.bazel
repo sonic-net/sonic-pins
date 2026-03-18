@@ -127,7 +127,6 @@ cc_library(
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:pd",
-        "//p4_infra/p4_pdpi/internal:ordered_map",
         "//p4_infra/p4_runtime:p4_runtime_session",
         "//p4_infra/packetlib",
         "//p4_infra/packetlib:packetlib_cc_proto",
