@@ -27,7 +27,7 @@
 #include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "include/nlohmann/json.hpp"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"

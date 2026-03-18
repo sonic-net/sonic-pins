@@ -24,7 +24,7 @@
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "absl/strings/strip.h"
 #include "p4_infra/string_encodings/safe.h"
 

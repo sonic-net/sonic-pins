@@ -17,7 +17,7 @@
 #include "absl/log/log.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 
 namespace pins {

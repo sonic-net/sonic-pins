@@ -23,7 +23,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "gutil/gutil/test_artifact_writer.h"
+#include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 

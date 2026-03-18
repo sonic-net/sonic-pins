@@ -6,8 +6,8 @@
 #include "dvaas/packet_trace.h"
 #include "dvaas/packet_trace.pb.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/proto.h"
-#include "gutil/gutil/testing.h"
+#include "gutil/proto.h"
+#include "gutil/testing.h"
 
 namespace dvaas {
 namespace {
