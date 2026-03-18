@@ -36,6 +36,8 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "absl/flags/flag.h"
+#include "absl/flags/declare.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -43,6 +45,10 @@
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "thinkit/switch.h"
+
+//TODO(PINS): To make the flags availble in other files
+ABSL_DECLARE_FLAG(bool, gnmi_p4rtid_support);
+ABSL_DECLARE_FLAG(bool, p4_vrf_support);
 
 namespace pins_test {
 
@@ -753,5 +759,11 @@ absl::Status VerifyInterfaceOperState(
     gnmi::gNMI::StubInterface& gnmi_stub, absl::string_view if_name,
     OperStatus desired_state,
     absl::Duration timeout = kVerifyOperStateDefaultTimeout);
+
+// TODO(PINS): Checks if there is a hard-coded mapping from
+// the interface to p4rt id and get the vrf support flag
+int GetP4rtIdMap(std::string_view interface_name);
+bool GetP4VrfFlag();
+
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

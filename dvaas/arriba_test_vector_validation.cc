@@ -98,7 +98,7 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
       "arriba_test_vector.txtpb", updated_arriba_test_vector));
 
   // Prepare the control switch.
-  LOG(INFO) << "Installing entires to punt all packets on the control switch";
+  LOG(INFO) << "Installing entries to punt all packets on the control switch";
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&control_switch));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
