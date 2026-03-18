@@ -29,7 +29,7 @@
 #include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_p4info.h"
+#include "p4_infra/p4_pdpi/test_p4info.h"
 #include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
 #include "thinkit/mock_switch.h"
 

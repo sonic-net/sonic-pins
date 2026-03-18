@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <iostream>
+#include <ostream>
 #include <string>
 
 #include "absl/status/status.h"
@@ -23,9 +25,13 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/testing/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/testing/test_helper.h"
+#include "p4_infra/p4_pdpi/test_helper.h"
+#include "p4_infra/p4_pdpi/translation_options.h"
+
+namespace pdpi {
+namespace {
 
 using ::p4::config::v1::P4Info;
 
@@ -259,6 +265,9 @@ static void RunPacketOutTests(pdpi::IrP4Info info) {
       INPUT_IS_VALID);
 }
 
+}  // namespace
+}  // namespace pdpi
+
 int main(int argc, char** argv) {
   // Usage: packet_io_test <p4info file>.
   if (argc != 2) {
@@ -275,7 +284,7 @@ int main(int argc, char** argv) {
   }
   pdpi::IrP4Info info = status_or_info.value();
 
-  RunPacketInTests(info);
-  RunPacketOutTests(info);
+  pdpi::RunPacketInTests(info);
+  pdpi::RunPacketOutTests(info);
   return 0;
 }
