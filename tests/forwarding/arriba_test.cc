@@ -68,8 +68,6 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
               << ") from the list of used port IDs to avoid configuring "
                  "non-CPU ports with it.";
   }
-
-
   // Check for explicit port map.
   const bool explicit_port_map =
       GetParam().validation_params.mirror_testbed_port_map_override.has_value();
@@ -88,6 +86,9 @@ TEST_P(ArribaTest, SwitchUnderTestPassesArribaTestVector) {
       .mirror_sut_ports_ids_to_control_switch = !explicit_port_map,
       .original_port_map =
           GetParam().validation_params.mirror_testbed_port_map_override,
+      .wait_for_all_enabled_interfaces_to_be_up =
+          GetParam().wait_for_all_enabled_interfaces_to_be_up,
+
   }));
 
   dvaas::ArribaTestVectorValidationParams validation_params =

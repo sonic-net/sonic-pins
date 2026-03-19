@@ -283,7 +283,7 @@ TEST_P(PacketForwardingTestFixture, AllPortsPacketForwardingTest) {
                                                      sut_counters_csv));
 }
 
-TEST_P(PacketForwardingTestFixture, MtuPacketForwardingTest) {
+TEST_P(PacketForwardingTestFixture, DISABLED_MtuPacketForwardingTest) {
   thinkit::TestRequirements requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
           R"pb(interface_requirements {

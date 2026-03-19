@@ -34,7 +34,7 @@ struct ArribaTestParams {
   dvaas::ArribaTestVector arriba_test_vector;
   dvaas::ArribaTestVectorValidationParams validation_params;
   // If true, waits for all enabled ports to be up on SUT and control switch.
-  bool wait_for_all_enabled_interfaces_to_be_up = true;
+  bool wait_for_all_enabled_interfaces_to_be_up = false;
   const std::string description;
 };
 

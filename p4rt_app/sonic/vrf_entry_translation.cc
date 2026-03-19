@@ -40,7 +40,8 @@ std::vector<swss::FieldValueTuple> GetVrfValues() {
   return std::vector<swss::FieldValueTuple>{
       std::make_pair("v4", "true"),
       std::make_pair("v6", "true"),
-      std::make_pair("sync_mode", "true"),
+      //TODO(PINS):sync_mode is not supported in vrforch
+      //std::make_pair("sync_mode", "true"),
   };
 }
 
