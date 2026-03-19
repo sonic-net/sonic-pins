@@ -82,12 +82,10 @@ def pins_infra_deps():
             sha256 = "406b64643eede84ce3e0821a1d01f66eaf6254e79cb9c4f53be9054551935e79",
         )
     if not native.existing_rule("com_google_gutil"):
-        http_archive(
+        git_repository(
             name = "com_google_gutil",
-            # Newest commit on main as of 2025-05-14.
-            url = "https://github.com/google/gutil/archive/d2f1bdd819287c3951adaba5ea6e5426d2eefff1.zip",
-            strip_prefix = "gutil-d2f1bdd819287c3951adaba5ea6e5426d2eefff1",
-            sha256 = "033bcab2835a0aea0427d38503f5ae2bd478af134ab8f3e75b65d2cd444ac8ca",
+            remote = "https://github.com/google/gutil",
+            branch = "bazel-workspace-support",
         )
     if not native.existing_rule("com_github_otg_models"):
         http_archive(
@@ -120,29 +118,26 @@ def pins_infra_deps():
         )
 
     if not native.existing_rule("com_github_p4lang_p4c"):
-        http_archive(
+        git_repository(
             name = "com_github_p4lang_p4c",
-	    # Newest commit on main on 2024-08-01.
-            url = "https://github.com/p4lang/p4c/archive/44dbcda9c7e3d26d24baadb884b31b32d215edef.zip",
-            strip_prefix = "p4c-44dbcda9c7e3d26d24baadb884b31b32d215edef",
-            sha256 = "ae4d53d0fd41572c38b03e881a8e2d2e472df246f75d6a64555f9ff1b656b574",
+            remote = "https://github.com/p4lang/p4c",
+            branch = "bazel-workspace-support",
         )
     if not native.existing_rule("com_github_p4lang_p4runtime"):
-        # We frequently need bleeding-edge, unreleased version of P4Runtime, so we use a commit
-        # rather than a release.
+        # Keep using the old commit — the workspace-support branch moved the
+        # workspace root to the repo root, which is incompatible with the
+        # strip_prefix = ".../proto" pattern used here.
         http_archive(
             name = "com_github_p4lang_p4runtime",
-	    # Newest commit on main as of 2025-05-09.
             urls = ["https://github.com/p4lang/p4runtime/archive/81527931abed0e488d1305f7d2061539aad7021b.zip"],
             strip_prefix = "p4runtime-81527931abed0e488d1305f7d2061539aad7021b/proto",
             sha256 = "5826d9385bce7deafd41c081be7ecd2c875904c45d07d8e234570e7fffbc7852",
         )
     if not native.existing_rule("com_github_p4lang_p4_constraints"):
-        http_archive(
+        git_repository(
             name = "com_github_p4lang_p4_constraints",
-            urls = ["https://github.com/p4lang/p4-constraints/archive/d26400c0061c6eca43f48309ccfcec750c313337.zip"],
-            strip_prefix = "p4-constraints-d26400c0061c6eca43f48309ccfcec750c313337",
-            sha256 = "8bb2954680ded0f21d405ae79c5c7e893fcfa96b0236f22047154e07e536c9bd",
+            remote = "https://github.com/p4lang/p4-constraints",
+            branch = "bazel-workspace-support",
         )
     if not native.existing_rule("com_github_nlohmann_json"):
         http_archive(

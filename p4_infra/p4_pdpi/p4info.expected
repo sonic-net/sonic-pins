@@ -281,6 +281,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -332,6 +335,9 @@ tables {
     annotations: "@proto_id(1)"
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -405,6 +411,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -425,6 +434,9 @@ tables {
     annotations: "@proto_id(1)"
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -445,6 +457,9 @@ tables {
     annotations: "@proto_id(1)"
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -470,6 +485,9 @@ tables {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
+  }
+  initial_default_action {
+    action_id: 21257015
   }
   implementation_id: 290772822
   size: 1024
@@ -498,6 +516,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   direct_resource_ids: 318767106
   direct_resource_ids: 352321539
   size: 1024
@@ -529,6 +550,9 @@ tables {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
+  }
+  initial_default_action {
+    action_id: 21257015
   }
   implementation_id: 290772822
   size: 1024
@@ -571,6 +595,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -610,6 +637,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -636,6 +666,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -667,6 +700,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -704,6 +740,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -730,6 +769,9 @@ tables {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
+  }
+  initial_default_action {
+    action_id: 21257015
   }
   size: 1024
 }
@@ -758,6 +800,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -795,6 +840,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -821,6 +869,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   direct_resource_ids: 318767120
   direct_resource_ids: 352321553
   size: 1024
@@ -849,6 +900,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   direct_resource_ids: 318767124
   direct_resource_ids: 352321557
   size: 1024
@@ -891,6 +945,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -968,6 +1025,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -994,6 +1054,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -1019,6 +1082,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -1053,6 +1119,9 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
+  initial_default_action {
+    action_id: 21257015
+  }
   size: 1024
 }
 tables {
@@ -1085,6 +1154,9 @@ tables {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
+  }
+  initial_default_action {
+    action_id: 21257015
   }
   size: 1024
 }
@@ -1124,6 +1196,9 @@ tables {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
+  }
+  initial_default_action {
+    action_id: 21257015
   }
   implementation_id: 290772822
   size: 1024

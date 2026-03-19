@@ -14,7 +14,7 @@
 
 """This file includes macros for compiling P4 programs."""
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 
 def p4_config_and_p4info_files(name, srcs, deps):
     """
