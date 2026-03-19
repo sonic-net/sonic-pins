@@ -24,7 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
-#include "p4_infra/string_encodings/bit_string.h"
+#include "string_encodings/bit_string.h"
 #include "z3++.h"
 
 namespace p4_symbolic {

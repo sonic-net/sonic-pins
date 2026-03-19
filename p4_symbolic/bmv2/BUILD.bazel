@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 
 # Placeholder: load py_binary
 load("//p4_symbolic/bmv2:test.bzl", "bmv2_protobuf_parsing_test")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
 # load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 # load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
@@ -35,7 +36,7 @@ proto_library(
         "bmv2.proto",
     ],
     deps = [
-        "@com_google_protobuf//:struct_proto",
+        "@protobuf//:struct_proto",
     ],
 )
 
@@ -49,9 +50,9 @@ cc_library(
     ],
     deps = [
         ":bmv2_cc_proto",
-        "@com_google_gutil//gutil:io",
-        "@com_google_gutil//gutil:status",
-        "@com_google_protobuf//:protobuf",
+        "@gutil//gutil:io",
+        "@gutil//gutil:status",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -60,15 +61,15 @@ cc_binary(
     srcs = ["test.cc"],
     deps = [
         ":bmv2",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/flags:parse",
-        "@com_google_absl//absl/flags:usage",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_gutil//gutil:io",
-        "@com_google_gutil//gutil:proto",
-        "@com_google_gutil//gutil:status",
-        "@com_google_protobuf//:protobuf",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/flags:usage",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:str_format",
+        "@gutil//gutil:io",
+        "@gutil//gutil:proto",
+        "@gutil//gutil:status",
+        "@protobuf//:protobuf",
     ],
 )
 

@@ -31,7 +31,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "lib/utils/constants.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"

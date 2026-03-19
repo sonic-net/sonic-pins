@@ -24,7 +24,7 @@ cc_library(
     srcs = ["consumer_notifier_adapter.cc"],
     hdrs = ["consumer_notifier_adapter.h"],
     deps = [
-        "@com_google_absl//absl/log",
+        "@abseil-cpp//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -35,7 +35,7 @@ cc_library(
     hdrs = ["mock_consumer_notifier_adapter.h"],
     deps = [
         ":consumer_notifier_adapter",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -48,7 +48,7 @@ cc_library(
     deps = [
         ":consumer_notifier_adapter",
         ":fake_sonic_db_table",
-        "@com_google_absl//absl/log",
+        "@abseil-cpp//absl/log",
     ],
 )
 
@@ -65,7 +65,7 @@ cc_library(
     hdrs = ["mock_notification_producer_adapter.h"],
     deps = [
         ":notification_producer_adapter",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -87,7 +87,7 @@ cc_library(
     srcs = ["producer_state_table_adapter.cc"],
     hdrs = ["producer_state_table_adapter.h"],
     deps = [
-        "@com_google_absl//absl/log",
+        "@abseil-cpp//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -98,7 +98,7 @@ cc_library(
     hdrs = ["mock_producer_state_table_adapter.h"],
     deps = [
         ":producer_state_table_adapter",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -111,7 +111,7 @@ cc_library(
     deps = [
         ":fake_sonic_db_table",
         ":producer_state_table_adapter",
-        "@com_google_absl//absl/log",
+        "@abseil-cpp//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -128,7 +128,7 @@ cc_library(
     hdrs = ["mock_system_call_adapter.h"],
     deps = [
         ":system_call_adapter",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -137,7 +137,7 @@ cc_library(
     srcs = ["table_adapter.cc"],
     hdrs = ["table_adapter.h"],
     deps = [
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/strings",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -148,7 +148,7 @@ cc_library(
     hdrs = ["mock_table_adapter.h"],
     deps = [
         ":table_adapter",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -161,8 +161,8 @@ cc_library(
     deps = [
         ":fake_sonic_db_table",
         ":table_adapter",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/strings",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -184,14 +184,14 @@ cc_library(
     srcs = ["fake_sonic_db_table.cc"],
     hdrs = ["fake_sonic_db_table.h"],
     deps = [
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/synchronization",
     ],
 )
 
@@ -200,10 +200,10 @@ cc_test(
     srcs = ["fake_sonic_db_table_test.cc"],
     deps = [
         ":fake_sonic_db_table",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
     ],
 )
 
@@ -212,7 +212,7 @@ cc_test(
     srcs = ["fake_warm_boot_state_adapter_test.cc"],
     deps = [
         ":fake_warm_boot_state_adapter",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -222,7 +222,7 @@ cc_library(
     srcs = ["subscriber_state_table_adapter.cc"],
     hdrs = ["subscriber_state_table_adapter.h"],
     deps = [
-        "@com_google_absl//absl/log",
+        "@abseil-cpp//absl/log",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -233,7 +233,7 @@ cc_library(
     hdrs = ["mock_subscriber_state_table_adapter.h"],
     deps = [
         ":subscriber_state_table_adapter",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
         "@sonic_swss_common//:common",
     ],
 )
@@ -251,7 +251,7 @@ cc_library(
     hdrs = ["mock_warm_boot_state_adapter.h"],
     deps = [
         ":warm_boot_state_adapter",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
         "@sonic_swss_common//:common",
     ],
 )

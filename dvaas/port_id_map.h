@@ -25,7 +25,7 @@
 #include "absl/status/statusor.h"
 #include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 
 namespace dvaas {
 

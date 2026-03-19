@@ -15,7 +15,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "packetlib/packetlib.pb.h"
 
 namespace dvaas {
 namespace {

@@ -24,7 +24,7 @@
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "p4_infra/p4_pdpi/pd.h"
+#include "p4_pdpi/pd.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -132,7 +132,11 @@ absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment& test_environment,
                                      const p4::v1::Update_Type& type) {
   auto group_update = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
-        wcmp_group_table_entry { match { wcmp_group_id: "$0" } })pb",
+        wcmp_group_table_entry {
+          match { wcmp_group_id: "$0" }
+          size_semantics: SUM_OF_WEIGHTS
+          action_selection_mode: DEFAULT_MODE_DETERMINED_BY_ACTION_SELECTOR
+        })pb",
       group_id));
   switch (type) {
     case p4::v1::Update::INSERT:
@@ -232,7 +236,11 @@ absl::Status VerifyGroupMembersFromP4Read(
   auto pd_group_update =
       gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
           R"pb(
-            wcmp_group_table_entry { match { wcmp_group_id: "$0" } })pb",
+            wcmp_group_table_entry {
+              match { wcmp_group_id: "$0" }
+              size_semantics: SUM_OF_WEIGHTS
+              action_selection_mode: DEFAULT_MODE_DETERMINED_BY_ACTION_SELECTOR
+            })pb",
           group_id));
   for (const auto& member : expected_members) {
     // Member weight and watch_port will be ignored in the MessageDifferencer

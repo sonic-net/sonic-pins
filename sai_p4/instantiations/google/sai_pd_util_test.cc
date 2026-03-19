@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#include "absl/log/log.h"
 #include "absl/strings/str_replace.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

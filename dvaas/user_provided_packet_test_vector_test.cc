@@ -33,9 +33,9 @@
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "p4_infra/p4_pdpi/test_p4info.h"
-#include "p4_infra/packetlib/packetlib.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "p4_pdpi/test_p4info.h"
+#include "packetlib/packetlib.h"
+#include "packetlib/packetlib.pb.h"
 
 namespace dvaas {
 namespace {

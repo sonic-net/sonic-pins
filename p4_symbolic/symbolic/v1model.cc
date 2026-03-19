@@ -28,9 +28,9 @@
 #include "absl/strings/substitute.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
-#include "p4_infra/p4_pdpi/built_ins.h"
-#include "p4_infra/p4_pdpi/internal/ordered_map.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/built_ins.h"
+#include "gutil/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
@@ -164,7 +164,7 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
 
   // Set the `$valid$` and `$extracted$` fields of all headers to false.
   const z3::expr false_expr = z3_context.bool_val(false);
-  for (const auto &[header_name, _] : Ordered(program.headers())) {
+  for (const auto &[header_name, _] : gutil::AsOrderedView(program.headers())) {
     RETURN_IF_ERROR(ingress_headers.UnguardedSet(header_name, kValidPseudoField,
                                                  false_expr));
     RETURN_IF_ERROR(ingress_headers.UnguardedSet(
@@ -289,7 +289,7 @@ absl::Status EvaluateV1model(SolverState &state,
 
   // Update the ingress_headers' valid fields to be parsed_headers' extracted
   // fields.
-  for (const auto &[header_name, _] : Ordered(state.program.headers())) {
+  for (const auto &[header_name, _] : gutil::AsOrderedView(state.program.headers())) {
     ASSIGN_OR_RETURN(
         z3::expr extracted,
         context.parsed_headers.Get(header_name, kExtractedPseudoField));

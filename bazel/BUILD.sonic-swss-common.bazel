@@ -1,0 +1,44 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["LICENSE"])
+
+cc_library(
+    name = "common",
+    srcs = glob(
+        ["common/*.cpp"],
+        exclude = [
+            "common/loglevel.cpp",
+            "common/loglevel_util.cpp",
+            # These depend on libyang1 headers, incompatible with Ubuntu 24.04's libyang2.
+            "common/defaultvalueprovider.cpp",
+            "common/decoratorsubscriberstatetable.cpp",
+            "common/decoratortable.cpp",
+        ],
+    ),
+    hdrs = glob([
+        "common/*.h",
+        "common/*.hpp",
+    ]),
+    copts = [
+        "-std=c++14",
+        "-I/usr/include/libnl3",
+    ],
+    includes = [
+        "common",
+    ],
+    linkopts = ["-lpthread -lhiredis -lnl-genl-3 -lnl-nf-3 -lnl-route-3 -lnl-3 -lzmq -lboost_serialization -luuid"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "libswsscommon",
+    hdrs = glob([
+        "common/*.h",
+        "common/*.hpp",
+    ]),
+    include_prefix = "swss",
+    strip_include_prefix = "common",
+    deps = [":common"],
+)

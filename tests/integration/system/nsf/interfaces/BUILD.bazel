@@ -30,9 +30,9 @@ cc_library(
         "//thinkit:generic_testbed_fixture",
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_gutil//gutil:overload",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@gutil//gutil:overload",
     ],
 )
 
@@ -44,8 +44,8 @@ cc_library(
         ":image_config_params",
         ":testbed",
         "//thinkit:ssh_client",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/status",
     ],
 )
 
@@ -55,9 +55,9 @@ cc_library(
     hdrs = ["traffic_helper.h"],
     deps = [
         ":testbed",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:string_view",
+        "@abseil-cpp//absl/time",
     ],
 )
 
@@ -68,9 +68,9 @@ cc_library(
     deps = [
         ":testbed",
         "//thinkit:ssh_client",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:string_view",
     ],
 )
 
@@ -78,8 +78,8 @@ cc_library(
     name = "image_config_params",
     hdrs = ["image_config_params.h"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/time",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/time",
     ],
 )
 

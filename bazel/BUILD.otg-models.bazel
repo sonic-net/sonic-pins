@@ -1,5 +1,6 @@
-load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -9,8 +10,8 @@ proto_library(
     name = "otg_proto",
     srcs = ["artifacts/otg.proto"],
     deps = [
-        "@com_google_protobuf//:descriptor_proto",
-        "@com_google_protobuf//:empty_proto",
+        "@protobuf//:descriptor_proto",
+        "@protobuf//:empty_proto",
     ],
 )
 

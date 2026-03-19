@@ -11,8 +11,8 @@
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/gnmi/openconfig.pb.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
 
 namespace pins_test {
 

@@ -24,7 +24,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "factory_reset/factory_reset.pb.h"
+#include "github.com/openconfig/gnoi/factory_reset/factory_reset.pb.h"
 #include "gmock/gmock.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/support/status.h"

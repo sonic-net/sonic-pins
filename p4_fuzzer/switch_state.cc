@@ -38,12 +38,12 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/built_ins.h"
-#include "p4_infra/p4_pdpi/entity_keys.h"
-#include "p4_infra/p4_pdpi/internal/ordered_map.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/translation_options.h"
+#include "p4_pdpi/built_ins.h"
+#include "p4_pdpi/entity_keys.h"
+#include "gutil/ordered_map.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 // Remove death behavior from this file (i.e. remove
 // statements that crash like FindOrDie).
@@ -926,7 +926,7 @@ std::string SwitchState::SwitchStateSummary() const {
   if (ordered_tables_.empty()) return std::string("EmptyState()");
   std::string res = "";
   // Ordered is used to get a deterministic order for the summary.
-  for (const auto& [table_id, table] : Ordered(ordered_tables_)) {
+  for (const auto& [table_id, table] : gutil::AsOrderedView(ordered_tables_)) {
     const pdpi::IrTableDefinition& table_definition =
         FindOrDie(ir_p4info_.tables_by_id(), table_id);
     const std::string& table_name = table_definition.preamble().alias();

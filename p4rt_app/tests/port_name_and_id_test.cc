@@ -25,7 +25,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"

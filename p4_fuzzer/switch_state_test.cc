@@ -32,11 +32,11 @@
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/main_p4_pd.pb.h"
-#include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/test_p4info.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/main_p4_pd.pb.h"
+#include "p4_pdpi/pd.h"
+#include "p4_pdpi/test_p4info.h"
 
 namespace p4_fuzzer {
 namespace {

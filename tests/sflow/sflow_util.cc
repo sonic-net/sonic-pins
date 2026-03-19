@@ -40,9 +40,9 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "re2/re2.h"
 #include "thinkit/ssh_client.h"
 

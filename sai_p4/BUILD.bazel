@@ -1,4 +1,5 @@
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
 # load("@rules_cc//cc:cc_library.bzl", "cc_library")
 # load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
@@ -23,10 +24,10 @@ cc_library(
     hdrs = ["capabilities.h"],
     deps = [
         ":capabilities_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_gutil//gutil:status",
-        "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@gutil//gutil:status",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -36,8 +37,8 @@ cc_test(
     deps = [
         ":capabilities",
         ":capabilities_cc_proto",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:proto_matchers",
-        "@com_google_gutil//gutil:status_matchers",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:proto_matchers",
+        "@gutil//gutil:status_matchers",
     ],
 )

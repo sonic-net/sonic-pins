@@ -28,8 +28,8 @@
 #include "gutil/version.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "p4_pdpi/ir.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 

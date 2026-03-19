@@ -25,10 +25,10 @@
 #include "dvaas/test_vector.pb.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "p4_infra/packetlib/bit_widths.h"
-#include "p4_infra/packetlib/packetlib.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
-#include "p4_infra/string_encodings/hex_string.h"
+#include "packetlib/bit_widths.h"
+#include "packetlib/packetlib.h"
+#include "packetlib/packetlib.pb.h"
+#include "string_encodings/hex_string.h"
 #include "re2/re2.h"
 
 namespace dvaas {

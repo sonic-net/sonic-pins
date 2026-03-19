@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <grpcpp/security/credentials.h>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -52,12 +53,12 @@
 #include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
-#include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/sequencing.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
+#include "netaddr/mac_address.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/sequencing.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"

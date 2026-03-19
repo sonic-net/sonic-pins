@@ -27,6 +27,7 @@
 #include "absl/strings/substitute.h"
 #include "google/protobuf/text_format.h"
 #include "grpcpp/client_context.h"
+#include <grpcpp/create_channel.h>
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/security/credentials.h"
 #include "gutil/io.h"
@@ -34,8 +35,8 @@
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 

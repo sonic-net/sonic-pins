@@ -29,8 +29,8 @@
 #include "grpcpp/security/credentials.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 

@@ -12,7 +12,7 @@
 #include "google/protobuf/message.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "p4_infra/p4_pdpi/internal/ordered_map.h"
+#include "gutil/ordered_map.h"
 #include "tests/qos/gnmi_parsers.h"
 
 // -- Pretty printers for golden testing ---------------------------------------
@@ -902,7 +902,7 @@ void RunAllParsersAndPrintTheirOutput() {
               kTestGnmiTimestampConfig);
   if (is_timestamp_enabled_by_interface_name.ok()) {
     for (const auto& [interface_name, is_timestamp_enabled] :
-         Ordered(*is_timestamp_enabled_by_interface_name)) {
+         gutil::AsOrderedView(*is_timestamp_enabled_by_interface_name)) {
       std::cout << interface_name << ": " << is_timestamp_enabled << "\n";
     }
   }

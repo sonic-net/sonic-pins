@@ -35,11 +35,11 @@
 #include "gutil/status.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir_utils.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir_utils.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
-#include "p4_infra/packetlib/packetlib.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "packetlib/packetlib.h"
+#include "packetlib/packetlib.pb.h"
 #include "tests/forwarding/util.h"
 
 namespace dvaas {

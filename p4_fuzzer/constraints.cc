@@ -40,9 +40,9 @@
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
-#include "p4_infra/p4_pdpi/internal/ordered_map.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/ir_properties.h"
+#include "gutil/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir_properties.h"
 
 namespace p4_fuzzer {
 namespace {
@@ -199,7 +199,7 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
 
   // Fuzz all skipped keys normally.
   for (const auto& [name, match_field_def] :
-       Ordered(table.match_fields_by_name())) {
+       gutil::AsOrderedView(table.match_fields_by_name())) {
     ASSIGN_OR_RETURN(std::string fully_qualified_name,
                      GetFullyQualifiedMatchFieldName(table, match_field_def));
     if (IsDisabledForFuzzing(config, fully_qualified_name)) {

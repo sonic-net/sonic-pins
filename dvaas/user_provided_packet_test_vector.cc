@@ -12,8 +12,8 @@
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/packetlib/packetlib.h"
+#include "p4_pdpi/ir.h"
+#include "packetlib/packetlib.h"
 
 namespace dvaas {
 

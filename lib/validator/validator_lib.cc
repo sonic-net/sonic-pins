@@ -40,8 +40,8 @@
 #include "lib/ssh/ssh_wrapper_client.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "system/system.grpc.pb.h"
-#include "system/system.pb.h"
+#include "github.com/openconfig/gnoi/system/system.grpc.pb.h"
+#include "github.com/openconfig/gnoi/system/system.pb.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 

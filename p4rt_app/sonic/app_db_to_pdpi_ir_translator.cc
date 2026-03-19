@@ -28,8 +28,8 @@
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/ir_utils.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir_utils.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
 

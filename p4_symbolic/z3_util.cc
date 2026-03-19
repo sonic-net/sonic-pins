@@ -27,10 +27,10 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "absl/types/optional.h"
-#include "gmpxx.h"
+#include "boost/multiprecision/cpp_int.hpp"
 #include "gutil/status.h"
-#include "p4_infra/string_encodings/bit_string.h"
-#include "p4_infra/string_encodings/hex_string.h"
+#include "string_encodings/bit_string.h"
+#include "string_encodings/hex_string.h"
 #include "z3++.h"
 #include "z3_api.h"
 
@@ -236,10 +236,12 @@ absl::StatusOr<z3::expr> HexStringToZ3Bitvector(z3::context& context,
                                                 const std::string& hex_string,
                                                 absl::optional<int> bitwidth) {
   // TODO: Insert check to ensure this won't throw an exception.
-  mpz_class integer = mpz_class(hex_string, /*base=*/0);
-  std::string decimal = integer.get_str(/*base=*/10);
+  boost::multiprecision::cpp_int integer(hex_string);
+  std::string decimal = integer.str();
   if (!bitwidth.has_value()) {
-    bitwidth = integer.get_str(/*base=*/2).size();
+    bitwidth = integer == 0
+                   ? 1
+                   : static_cast<int>(boost::multiprecision::msb(integer)) + 1;
   }
   return context.bv_val(decimal.c_str(), *bitwidth);
 }

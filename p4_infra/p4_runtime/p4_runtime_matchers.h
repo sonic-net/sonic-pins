@@ -21,8 +21,8 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/packetlib/packetlib.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "packetlib/packetlib.h"
+#include "packetlib/packetlib.pb.h"
 
 namespace p4_runtime {
 

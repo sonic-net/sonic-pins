@@ -32,9 +32,9 @@
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/built_ins.h"
-#include "p4_infra/p4_pdpi/internal/ordered_map.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/built_ins.h"
+#include "gutil/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/parser.h"
@@ -129,7 +129,7 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(
   // dynamic_translation = false) P4Runtime translated types to what has been
   // used in the translator.
   for (const auto &[field, type] :
-       Ordered(state.translator.fields_p4runtime_type)) {
+       gutil::AsOrderedView(state.translator.fields_p4runtime_type)) {
     ASSIGN_OR_RETURN(z3::expr value,
                      headers.has_value()
                          ? headers.value().Get(field)
@@ -192,7 +192,7 @@ absl::Status AddConstraintsForStaticallyTranslatedValues(
         const ir::Action &action = it->second;
 
         for (const auto &[param_name, param_definition] :
-             Ordered(action.action_definition().params_by_name())) {
+             gutil::AsOrderedView(action.action_definition().params_by_name())) {
           const std::string &type_name =
               param_definition.param().type_name().name();
           ASSIGN_OR_RETURN(

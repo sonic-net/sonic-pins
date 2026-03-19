@@ -30,11 +30,11 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/pd.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/mac_address.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/pd.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/solver_state.h"
@@ -149,6 +149,8 @@ constexpr absl::string_view kTableEntriesWithTunneling = R"pb(
         weight: 1
         watch_port: "4"
       }
+      size_semantics: SUM_OF_WEIGHTS
+      action_selection_mode: DEFAULT_MODE_DETERMINED_BY_ACTION_SELECTOR
     }
   }
 

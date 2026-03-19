@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("//p4_symbolic/ir:test.bzl", "ir_parsing_test")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
 # load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 # load("@rules_cc//cc:cc_library.bzl", "cc_library")
 # load("@rules_cc//cc:cc_test.bzl", "cc_test")
@@ -32,7 +33,7 @@ proto_library(
     name = "ir_proto",
     srcs = ["ir.proto"],
     deps = [
-        "//p4_infra/p4_pdpi:ir_proto",
+        "@p4_infra//p4_pdpi:ir_proto",
         "//p4_symbolic/bmv2:bmv2_proto",
     ],
 )
@@ -47,16 +48,16 @@ cc_library(
     ],
     deps = [
         ":ir_cc_proto",
-        "//p4_infra/p4_pdpi:ir",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi:names",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
-        "@com_google_gutil//gutil:status",
+        "@p4_infra//p4_pdpi:ir",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:names",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+        "@gutil//gutil:status",
     ],
 )
 
@@ -72,19 +73,19 @@ cc_library(
         ":cfg",
         ":ir_cc_proto",
         ":table_entries",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi:names",
-        "//p4_infra/p4_pdpi/internal:ordered_map",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:names",
+        "@gutil//gutil:ordered_map",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_gutil//gutil:status",
-        "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@gutil//gutil:status",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -98,17 +99,17 @@ cc_library(
     deps = [
         ":ir_cc_proto",
         ":table_entries",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:node_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_gutil//gutil:status",
-        "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/container:node_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@gutil//gutil:status",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -119,13 +120,13 @@ cc_library(
     deps = [
         ":ir",
         ":table_entries",
-        "//p4_infra/p4_pdpi:ir",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:ir",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/bmv2",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/types:span",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
     ],
 )
 
@@ -136,12 +137,12 @@ cc_test(
         ":cfg",
         ":ir",
         ":ir_cc_proto",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:proto",
-        "@com_google_gutil//gutil:status_matchers",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:proto",
+        "@gutil//gutil:status_matchers",
     ],
 )
 
@@ -154,13 +155,13 @@ cc_binary(
         ":ir_cc_proto",
         ":parser",
         "//p4_symbolic:test_util",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/flags:parse",
-        "@com_google_absl//absl/flags:usage",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_gutil//gutil:io",
-        "@com_google_gutil//gutil:proto",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/flags:usage",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:str_format",
+        "@gutil//gutil:io",
+        "@gutil//gutil:proto",
     ],
 )
 

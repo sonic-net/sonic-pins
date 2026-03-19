@@ -1,10 +1,13 @@
-build --cxxopt='-std=c++17'
-build --host_cxxopt='-std=c++17'
-run --cxxopt='-std=c++17'
-run --host_cxxopt='-std=c++17'
+common --enable_bzlmod
+
+# sonic_swss_common's upstream BUILD has glob patterns that match nothing.
+common --noincompatible_disallow_empty_glob
+
+build --cxxopt='-std=c++20'
+build --host_cxxopt='-std=c++20'
+build --features=-layering_check
+build --host_features=-layering_check
 
 # To allow loops with int and comparison against a .size() that's size_t.
 build --copt='-Wno-error=sign-compare'
 build --host_copt='-Wno-error=sign-compare'
-run --copt='-Wno-error=sign-compare'
-run --host_copt='-Wno-error=sign-compare'

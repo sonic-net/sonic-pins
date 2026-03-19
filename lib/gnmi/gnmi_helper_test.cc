@@ -42,8 +42,8 @@
 #include "gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/openconfig.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
-#include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi_mock.grpc.pb.h"
 
 namespace pins_test {
 namespace {

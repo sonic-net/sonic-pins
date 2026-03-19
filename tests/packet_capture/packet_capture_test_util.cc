@@ -16,7 +16,7 @@
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "platforms/networking/gpins/testing/lib/test_util.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "util/gtl/value_or_die.h"
 
 namespace pins_test {

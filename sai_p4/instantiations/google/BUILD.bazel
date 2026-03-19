@@ -13,11 +13,15 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
-load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("@com_google_gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")
-load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@p4c//bazel:p4_library.bzl", "p4_library")
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@gutil//gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("@gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("@p4_infra//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -109,9 +113,9 @@ proto_library(
     name = "sai_pd_proto",
     srcs = ["sai_pd.proto"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4runtime_proto",
-        "@com_google_googleapis//google/rpc:code_proto",
-        "@com_google_googleapis//google/rpc:status_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_proto",
+        "@googleapis//google/rpc:code_proto",
+        "@googleapis//google/rpc:status_proto",
     ],
 )
 
@@ -134,9 +138,9 @@ cc_library(
     hdrs = ["sai_pd_util.h"],
     deps = [
         ":sai_pd_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:optional",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:optional",
     ],
 )
 
@@ -146,10 +150,10 @@ cc_test(
     deps = [
         ":sai_pd_cc_proto",
         ":sai_pd_util",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:testing",
-        "@com_googlesource_code_re2//:re2",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:testing",
+        "@re2//:re2",
     ],
 )
 
@@ -158,8 +162,8 @@ cc_test(
 #   blaze run :union_p4info_up_to_date_test -- --update
 cmd_diff_test(
     name = "union_p4info_up_to_date_test",
-    actual_cmd = "$(execpath {p4info_union}) --list_of_p4infos='{p4infos}'".format(
-        p4info_union = "//p4_infra/p4_pdpi:p4info_union",
+    actual_cmd = "$(rootpath {p4info_union}) --list_of_p4infos='{p4infos}'".format(
+        p4info_union = "@p4_infra//p4_pdpi:p4info_union",
         p4infos = ",".join([
             "$(location %s.p4info.pb.txt)" % instantiation
             for (instantiation, _) in INSTANTIATIONS
@@ -170,7 +174,7 @@ cmd_diff_test(
         for (instantiation, _) in INSTANTIATIONS
     ],
     expected = "unioned_p4info.pb.txt",
-    tools = ["//p4_infra/p4_pdpi:p4info_union"],
+    tools = ["@p4_infra//p4_pdpi:p4info_union"],
 )
 
 # Only for testing and updating the PD proto when the P4 program changes.
@@ -195,15 +199,15 @@ cc_library(
     deps = [
         ":instantiations",
         ":sai_p4info_fetcher_cc",
-        "//p4_infra/p4_pdpi:ir",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:ir",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
         "//sai_p4/tools:p4info_tools",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -213,16 +217,16 @@ cc_test(
     deps = [
         ":instantiations",
         ":sai_p4info_cc",
-        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:proto_matchers",
-        "@com_google_gutil//gutil:status_matchers",
-        "@com_google_gutil//gutil:version",
-        "@com_google_protobuf//:protobuf",
+        "@p4_constraints//p4_constraints/backend:constraint_info",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:optional",
+        "@abseil-cpp//absl/types:variant",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:proto_matchers",
+        "@gutil//gutil:status_matchers",
+        "@gutil//gutil:version",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -235,13 +239,13 @@ cc_library(
             ":clos_stage",
             ":instantiations",
             ":unioned_p4info_embed",
-            "//p4_infra/p4_pdpi:ir_cc_proto",
+            "@p4_infra//p4_pdpi:ir_cc_proto",
             "//sai_p4/tools:p4info_tools",
-            "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-            "@com_google_absl//absl/log:check",
-            "@com_google_absl//absl/status",
-            "@com_google_absl//absl/strings",
-            "@com_google_protobuf//:protobuf",
+            "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+            "@abseil-cpp//absl/log:check",
+            "@abseil-cpp//absl/status",
+            "@abseil-cpp//absl/strings",
+            "@protobuf//:protobuf",
         ],
 )
 
@@ -252,13 +256,13 @@ cc_test(
         ":clos_stage",
         ":instantiations",
         ":sai_p4info_fetcher_cc",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:proto_matchers",
-        "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:proto_matchers",
+        "@gutil//gutil:status_matchers",
     ],
 )
 
@@ -267,11 +271,11 @@ cc_library(
     srcs = ["instantiations.cc"],
     hdrs = ["instantiations.h"],
     deps = [
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
     ],
 )
 
@@ -352,15 +356,15 @@ cc_library(
     deps = [
         ":instantiations",
         ":sai_nonstandard_platforms_embed",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_protobuf//:protobuf",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -370,9 +374,9 @@ cc_library(
     hdrs = ["clos_stage.h"],
     deps = [
         ":instantiations",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
     ],
 )
 
@@ -382,9 +386,9 @@ cc_test(
     deps = [
         ":clos_stage",
         ":instantiations",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
-        "@com_google_gutil//gutil:testing",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
+        "@gutil//gutil:testing",
     ],
 )
 
@@ -392,7 +396,7 @@ cc_library(
     name = "annotations",
     hdrs = ["annotations.h"],
     deps = [
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/strings",
     ],
 )
 
@@ -429,10 +433,10 @@ cc_test(
     deps = [
         ":instantiations",
         ":sai_nonstandard_platforms_cc",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
     ],
 )
 
@@ -442,10 +446,10 @@ cc_binary(
     deps = [
         ":instantiations",
         ":sai_nonstandard_platforms_cc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/flags:parse",
-        "@com_google_gutil//gutil:proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@gutil//gutil:proto",
     ],
 )
 
@@ -460,8 +464,8 @@ filegroup(
     genrule(
         name = "preprocessed_%s_%s" % (platform, instantiation),
         srcs = [
-            "@com_github_p4lang_p4c//:p4include",
-            "@com_github_p4lang_p4c//:p4include/v1model.p4",
+            "@p4c//:p4include",
+            "@p4c//:p4include/v1model.p4",
             "//sai_p4/instantiations/google:%s.p4" % instantiation,
             "//sai_p4/instantiations/google:sai_p4",
             "//sai_p4/fixed",
@@ -470,7 +474,7 @@ filegroup(
         cmd = """
               # genrules do not support retrieval of directories from dependencies, so we need to use a workaround. 
               # We depend on v1model.p4 and retrieve its parent directory. 
-              P4INCLUDE_DIR=$$(dirname $(location @com_github_p4lang_p4c//:p4include/v1model.p4))
+              P4INCLUDE_DIR=$$(dirname $(location @p4c//:p4include/v1model.p4))
               $(CC) -E -x c -Wno-comment -C -undef -nostdinc -x assembler-with-cpp -I$$P4INCLUDE_DIR -I. %s \
               $(location //sai_p4/instantiations/google:%s.p4) > $(OUTS)
               """ % (
@@ -500,7 +504,7 @@ cc_test(
     deps = [
         ":instantiations",
         ":sai_nonstandard_platforms_cc",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
     ],
 )

@@ -21,8 +21,8 @@ It also defines a Macro that simplifies defining a protobuf test over a sample
 P4 program.
 """
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-load("@com_google_gutil//gutil:diff_test.bzl", "diff_test")
+load("@p4c//bazel:p4_library.bzl", "p4_library")
+load("@gutil//gutil:diff_test.bzl", "diff_test")
 
 def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps = []):
     """Macro that defines exact diff IR testing rules for a given p4 program.

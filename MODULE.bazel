@@ -1,0 +1,73 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+module(
+    name = "sonic_pins",
+    version = "0.0.0",
+    bazel_compatibility = [">=7.6.0"],
+)
+
+# -- BCR dependencies ---------------------------------------------------------
+
+bazel_dep(name = "abseil-cpp", version = "20260107.1")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "buildifier_prebuilt", version = "8.5.1", dev_dependency = True)
+bazel_dep(name = "gazelle", version = "0.47.0")
+bazel_dep(name = "google_benchmark", version = "1.9.5")
+bazel_dep(name = "googleapis", version = "0.0.0-20260223-edfe7983")
+bazel_dep(name = "googleapis-cc", version = "1.0.0")
+bazel_dep(name = "googletest", version = "1.17.0.bcr.2")
+bazel_dep(name = "grpc", version = "1.80.0-pre1")
+bazel_dep(name = "gutil", version = "20260309.0")
+bazel_dep(name = "jsoncpp", version = "1.9.6.bcr.1")
+bazel_dep(name = "nlohmann_json", version = "3.12.0.bcr.1")
+bazel_dep(name = "openconfig_gnmi", version = "0.14.1")
+bazel_dep(name = "openconfig_gnoi", version = "0.6.2")
+bazel_dep(name = "p4_constraints", version = "20260311.0")
+bazel_dep(name = "p4_infra", version = "head")
+bazel_dep(name = "p4c", version = "1.2.5.11")
+bazel_dep(name = "p4runtime", version = "1.5.0.bcr.1")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "protobuf", version = "33.5")
+bazel_dep(name = "re2", version = "2025-11-05.bcr.1")
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_go", version = "0.60.0")
+bazel_dep(name = "rules_license", version = "1.0.0")
+bazel_dep(name = "rules_pkg", version = "1.2.0")
+bazel_dep(name = "rules_proto", version = "7.1.0")
+bazel_dep(name = "z3", version = "4.15.2")
+
+# Boost modules (individual Bzlmod modules replace the monolithic @boost).
+bazel_dep(name = "boost.bimap", version = "1.90.0.bcr.1")
+bazel_dep(name = "boost.graph", version = "1.90.0.bcr.1")
+bazel_dep(name = "boost.multiprecision", version = "1.90.0.bcr.1")
+
+# -- Overrides for deps not yet in BCR ----------------------------------------
+
+# p4_infra is not yet in BCR; pinned to the Bzlmod migration PR.
+# TODO: Switch to BCR once https://github.com/google/p4-infra/pull/61 lands.
+git_override(
+    module_name = "p4_infra",
+    remote = "https://github.com/smolkaj/p4-infra.git",
+    commit = "3f733593d4c2657ad8d8bc9d09cedab86a2eba94",
+)
+
+# -- Non-BCR dependencies (via module extension) ------------------------------
+
+non_bcr_deps = use_extension("//:non_bcr_deps.bzl", "non_bcr_deps")
+use_repo(
+    non_bcr_deps,
+    "com_github_otg_models",
+    "sonic_swss_common",
+)

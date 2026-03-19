@@ -25,9 +25,9 @@ cc_library(
     srcs = ["app_db_entry_builder.cc"],
     hdrs = ["app_db_entry_builder.h"],
     deps = [
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:optional",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:optional",
     ],
 )
 
@@ -36,7 +36,7 @@ cc_test(
     srcs = ["app_db_entry_builder_test.cc"],
     deps = [
         ":app_db_entry_builder",  # fixdeps: keep
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -47,18 +47,18 @@ cc_library(
     hdrs = ["p4runtime_component_test_fixture.h"],
     deps = [
         ":p4runtime_grpc_service",
-        "//p4_infra/p4_pdpi:ir",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:ir",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_runtime:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
+        "@grpc//:grpc++",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
     ],
 )
 
@@ -78,12 +78,12 @@ cc_library(
         "//p4rt_app/sonic/adapters:fake_table_adapter",
         "//p4rt_app/sonic/adapters:fake_warm_boot_state_adapter",
         "//p4rt_app/utils:warm_restart_utility",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/random",
-        "@com_google_absl//absl/random:distributions",
-        "@com_google_absl//absl/strings",
+        "@grpc//:grpc++",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/random",
+        "@abseil-cpp//absl/random:distributions",
+        "@abseil-cpp//absl/strings",
     ],
 )
 
@@ -93,14 +93,14 @@ cc_library(
     srcs = ["p4runtime_request_helpers.cc"],
     hdrs = ["p4runtime_request_helpers.h"],
     deps = [
-        "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi:pd",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:pd",
         "//p4_infra/p4_runtime:p4_runtime_session",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_gutil//gutil:proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@gutil//gutil:proto",
     ],
 )

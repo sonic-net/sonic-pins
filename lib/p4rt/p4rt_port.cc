@@ -26,9 +26,9 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "gutil/status.h"
-#include "p4_infra/string_encodings/byte_string.h"
-#include "p4_infra/string_encodings/decimal_string.h"
-#include "p4_infra/string_encodings/hex_string.h"
+#include "string_encodings/byte_string.h"
+#include "string_encodings/decimal_string.h"
+#include "string_encodings/hex_string.h"
 
 namespace pins_test {
 

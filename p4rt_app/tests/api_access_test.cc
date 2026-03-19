@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <grpcpp/create_channel.h>
+#include <grpcpp/security/credentials.h>
 #include <grpcpp/support/status.h>
 
 #include <cstdint>

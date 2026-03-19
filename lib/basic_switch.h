@@ -22,18 +22,18 @@
 #include <utility>
 
 #include "absl/status/statusor.h"
-#include "cert/cert.grpc.pb.h"
-#include "diag/diag.grpc.pb.h"
-#include "factory_reset/factory_reset.grpc.pb.h"
+#include "github.com/openconfig/gnoi/cert/cert.grpc.pb.h"
+#include "github.com/openconfig/gnoi/diag/diag.grpc.pb.h"
+#include "github.com/openconfig/gnoi/factory_reset/factory_reset.grpc.pb.h"
 #include "grpc/grpc_security_constants.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/channel_arguments.h"
 #include "grpcpp/support/stub_options.h"
-#include "os/os.grpc.pb.h"
+#include "github.com/openconfig/gnoi/os/os.grpc.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
-#include "system/system.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnoi/system/system.grpc.pb.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {

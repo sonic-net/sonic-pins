@@ -36,12 +36,12 @@
 #include "absl/strings/substitute.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
-#include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/packetlib/bit_widths.h"
-#include "p4_infra/packetlib/packetlib.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
+#include "netaddr/mac_address.h"
+#include "packetlib/bit_widths.h"
+#include "packetlib/packetlib.h"
+#include "packetlib/packetlib.pb.h"
 
 namespace pins_test {
 namespace packetgen {

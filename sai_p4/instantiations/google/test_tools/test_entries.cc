@@ -38,17 +38,17 @@
 #include "gutil/testing.h"
 #include "gutil/version.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
-#include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/ir.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/p4_pdpi/ternary.h"
-#include "p4_infra/p4_pdpi/translation_options.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
+#include "netaddr/mac_address.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/pd.h"
+#include "p4_pdpi/ternary.h"
+#include "p4_pdpi/translation_options.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
-#include "p4_infra/string_encodings/hex_string.h"
+#include "string_encodings/hex_string.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -466,9 +466,6 @@ EntryBuilder& EntryBuilder::AddPreIngressAclTableEntry(
   if (match_fields.in_port.has_value()) {
     match.mutable_in_port()->set_value(*match_fields.in_port);
   }
-  if (!match_fields.vlan_id.IsWildcard()) {
-    *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
-  }
   if (match_fields.dst_ipv6.has_value()) {
     match.mutable_is_ipv6()->set_value(BoolToHexString(true));
     match.mutable_dst_ipv6()->set_value(
@@ -493,9 +490,6 @@ EntryBuilder& EntryBuilder::AddPreIngressAclEntrySettingVlanAndAclMetadata(
   }
   if (match_fields.is_ipv6.has_value()) {
     match.mutable_is_ipv6()->set_value(BoolToHexString(*match_fields.is_ipv6));
-  }
-  if (match_fields.in_port.has_value()) {
-    match.mutable_in_port()->set_value(*match_fields.in_port);
   }
   if (!match_fields.vlan_id.IsWildcard()) {
     *match.mutable_vlan_id() = BitSetTernaryToSai(match_fields.vlan_id);
@@ -1189,6 +1183,10 @@ EntryBuilder& EntryBuilder::AddWcmpGroupTableEntry(
   sai::WcmpGroupTableEntry& wcmp_group_entry =
       *entries_.add_entries()->mutable_wcmp_group_table_entry();
   wcmp_group_entry.mutable_match()->set_wcmp_group_id(wcmp_group_id);
+  wcmp_group_entry.set_size_semantics(
+      p4::v1::ActionProfileActionSet::SUM_OF_WEIGHTS);
+  wcmp_group_entry.set_action_selection_mode(
+      p4::v1::ActionProfileActionSet::DEFAULT_MODE_DETERMINED_BY_ACTION_SELECTOR);
   for (const WcmpGroupAction& wcmp_group_action : wcmp_group_actions) {
     sai::WcmpGroupTableEntry_WcmpAction& wcmp_action =
         *wcmp_group_entry.mutable_wcmp_actions()->Add();

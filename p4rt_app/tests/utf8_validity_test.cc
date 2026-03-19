@@ -20,9 +20,9 @@
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
-#include "p4_infra/p4_pdpi/pd.h"
+#include "p4_pdpi/pd.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
-#include "p4_infra/string_encodings/hex_string.h"
+#include "string_encodings/hex_string.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -174,6 +174,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInWcmpGroupTable) {
                     weight: 1
                     watch_port: "2"
                   }
+                  size_semantics: SUM_OF_WEIGHTS
+                  action_selection_mode: DEFAULT_MODE_DETERMINED_BY_ACTION_SELECTOR
                 }
               }
             }
@@ -201,6 +203,8 @@ TEST_F(Utf8ValidityTest, NonUtf8StringFailsInWatchPort) {
                     weight: 1
                     watch_port: "\x01\x33\x00\xF5"
                   }
+                  size_semantics: SUM_OF_WEIGHTS
+                  action_selection_mode: DEFAULT_MODE_DETERMINED_BY_ACTION_SELECTOR
                 }
               }
             }

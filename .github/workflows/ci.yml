@@ -10,7 +10,7 @@ jobs:
   build:
     name: Bazel Build and Test
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       BAZEL_CACHE_USER: github
       BAZEL_CACHE_PWD: ${{ secrets.BAZEL_CACHE_PWD }}
@@ -28,12 +28,11 @@ jobs:
     - name: Mount bazel cache
       uses: actions/cache/restore@v3
       with:
-        # See https://docs.bazel.build/versions/master/output_directories.html
-        path: "/tmp/repo-cache"
-        # See https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-        key: bazel-repo-cache-v3-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
+        # Caches both downloaded repos and compiled build outputs.
+        path: "~/.cache/bazel"
+        key: bazel-v4-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', 'MODULE.bazel', '.bazelrc', '.bazelversion') }}
         restore-keys: |
-          bazel-repo-cache-v3-${{ runner.os }}-
+          bazel-v4-${{ runner.os }}-
 
     - name: Install system dependencies
       run: ./install_dependencies.sh
@@ -56,16 +55,16 @@ jobs:
     # Unauthenticated reads are allowed for PRs from forks
     - name: Build and Test
       run: |
-        mkdir -p /tmp/repo-cache
-        BAZEL_OPTS="--repository_cache=/tmp/repo-cache"
+        BAZEL_OPTS=""
         [ ! -z "$BAZEL_CACHE_USER" ] && [ ! -z "$BAZEL_CACHE_PWD" ] && \
           AUTH="${BAZEL_CACHE_USER}:${BAZEL_CACHE_PWD}@"
         BAZEL_OPTS+=" --remote_cache=https://${AUTH}${BAZEL_CACHE_URL}"
         BAZEL_OPTS+=" --remote_download_minimal"
         bazel build ${BAZEL_OPTS} //...
-        bazel test ${BAZEL_OPTS} //...
+        bazel test ${BAZEL_OPTS} --test_timeout=60,600,900,3600 //...
 
     - name: Save end time
+      if: always()
       uses: josStorer/get-current-time@v2
       id: end-time
       with:
@@ -73,18 +72,23 @@ jobs:
         format: X
 
     - name: Calculate build duration
+      if: always()
       run: |
         START=${{ steps.start-time.outputs.formattedTime }}
         END=${{ steps.end-time.outputs.formattedTime }}
-        DURATION=$(( $END - $START ))
+        DURATION=$(( ${END:-0} - ${START:-0} ))
         echo "duration=$DURATION" | tee "$GITHUB_ENV"
+
+    - name: Compress cache
+      if: always()
+      run: rm -rf $(bazel info repository_cache)
 
     - name: Save bazel cache
       uses: actions/cache/save@v3
-      # We create a new cache entry if either of the following is true:
-      # - We are on the master branch.
-      # - It took more than 5 minutes to build and test.
-      if: github.ref_name == 'main' || env.duration > 300
+      # Save the cache if we're on the main branch, or the build took >5min.
+      # The always() call ensures this step runs even if the build was
+      # cancelled (e.g. by the 6h job timeout), so partial caches are saved.
+      if: always() && (github.ref_name == 'main' || env.duration > 300)
       with:
-        path: "/tmp/repo-cache"
-        key: bazel-repo-cache-v3-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
+        path: "~/.cache/bazel"
+        key: bazel-v4-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', 'MODULE.bazel', '.bazelrc', '.bazelversion') }}

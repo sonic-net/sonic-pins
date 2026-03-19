@@ -11,13 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <grpcpp/security/credentials.h>
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 
 #include <vector>
 
 #include "absl/strings/str_cat.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.h"
+#include "p4_pdpi/ir.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 

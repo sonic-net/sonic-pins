@@ -49,16 +49,16 @@ cc_library(
     name = "switch",
     hdrs = ["switch.h"],
     deps = [
-        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_gnoi//cert:cert_cc_grpc_proto",
-        "@com_github_gnoi//diag:diag_cc_grpc_proto",
-        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
-        "@com_github_gnoi//os:os_cc_grpc_proto",
-        "@com_github_gnoi//system:system_cc_grpc_proto",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@openconfig_gnoi//cert:cert_cc_grpc_proto",
+        "@openconfig_gnoi//diag:diag_cc_grpc_proto",
+        "@openconfig_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@openconfig_gnoi//os:os_cc_grpc_proto",
+        "@openconfig_gnoi//system:system_cc_grpc_proto",
+        "@grpc//:grpc++",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
     ],
 )
 
@@ -67,16 +67,16 @@ cc_test(
     srcs = ["switch_test.cc"],
     deps = [
         ":switch",
-        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_gnoi//cert:cert_cc_grpc_proto",
-        "@com_github_gnoi//diag:diag_cc_grpc_proto",
-        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
-        "@com_github_gnoi//os:os_cc_grpc_proto",
-        "@com_github_gnoi//system:system_cc_grpc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@openconfig_gnoi//cert:cert_cc_grpc_proto",
+        "@openconfig_gnoi//diag:diag_cc_grpc_proto",
+        "@openconfig_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@openconfig_gnoi//os:os_cc_grpc_proto",
+        "@openconfig_gnoi//system:system_cc_grpc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
     ],
 )
 
@@ -86,15 +86,15 @@ cc_library(
     hdrs = ["mock_switch.h"],
     deps = [
         ":switch",
-        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_gnoi//cert:cert_cc_grpc_proto",
-        "@com_github_gnoi//diag:diag_cc_grpc_proto",
-        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
-        "@com_github_gnoi//os:os_cc_grpc_proto",
-        "@com_github_gnoi//system:system_cc_grpc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@openconfig_gnoi//cert:cert_cc_grpc_proto",
+        "@openconfig_gnoi//diag:diag_cc_grpc_proto",
+        "@openconfig_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@openconfig_gnoi//os:os_cc_grpc_proto",
+        "@openconfig_gnoi//system:system_cc_grpc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest",
     ],
 )
 
@@ -103,7 +103,7 @@ cc_test(
     srcs = ["mock_switch_test.cc"],
     deps = [
         ":mock_switch",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -122,11 +122,11 @@ cc_library(
     hdrs = ["mirror_testbed_fixture.h"],
     deps = [
         ":mirror_testbed",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
     ],
 )
 
@@ -138,7 +138,7 @@ cc_library(
         ":mirror_testbed",
         ":switch",
         ":test_environment",
-        "@com_google_googletest//:gtest",
+        "@googletest//:gtest",
     ],
 )
 
@@ -147,7 +147,7 @@ cc_test(
     srcs = ["mock_mirror_testbed_test.cc"],
     deps = [
         ":mock_mirror_testbed",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -156,9 +156,9 @@ cc_library(
     hdrs = ["test_environment.h"],
     deps = [
         "//thinkit/proto:metrics_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_protobuf//:protobuf",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@protobuf//:protobuf",
     ],
 )
 
@@ -169,9 +169,9 @@ cc_library(
     deps = [
         ":test_environment",
         "//thinkit/proto:metrics_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
     ],
 )
 
@@ -180,7 +180,7 @@ cc_test(
     srcs = ["mock_test_environment_test.cc"],
     deps = [
         ":mock_test_environment",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -191,12 +191,12 @@ cc_library(
     hdrs = ["bazel_test_environment.h"],
     deps = [
         ":test_environment",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_gutil//gutil:test_artifact_writer",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@gutil//gutil:test_artifact_writer",
     ],
 )
 
@@ -206,15 +206,15 @@ cc_test(
     deps = [
         ":bazel_test_environment",
         ":test_environment",
-        "@com_google_protobuf//:protobuf",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/strings",
+        "@protobuf//:protobuf",
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/strings",
         # This dependency is not technically needed inside Google3,
         # but is a hack to keep the Copybara rules simple.
-        "@com_google_benchmark//:benchmark",
-        "@com_google_gutil//gutil:status_matchers",
-        "@com_google_gutil//gutil:testing",
+        "@google_benchmark//:benchmark",
+        "@gutil//gutil:status_matchers",
+        "@gutil//gutil:testing",
     ],
 )
 
@@ -222,10 +222,10 @@ cc_library(
     name = "ssh_client",
     hdrs = ["ssh_client.h"],
     deps = [
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
     ],
 )
 
@@ -235,11 +235,11 @@ cc_library(
     hdrs = ["mock_ssh_client.h"],
     deps = [
         ":ssh_client",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest",
     ],
 )
 
@@ -248,7 +248,7 @@ cc_test(
     srcs = ["mock_ssh_client_test.cc"],
     deps = [
         ":mock_ssh_client",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -261,11 +261,11 @@ cc_library(
         ":test_environment",
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
     ],
 )
 
@@ -276,10 +276,10 @@ cc_library(
     deps = [
         ":generic_testbed",
         "//thinkit/proto:generic_testbed_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest",
     ],
 )
 
@@ -293,10 +293,10 @@ cc_library(
         ":switch",
         ":test_environment",
         "@com_github_otg_models//:otg_grpc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
     ],
 )
 
@@ -305,7 +305,7 @@ cc_test(
     srcs = ["mock_generic_testbed_test.cc"],
     deps = [
         ":mock_generic_testbed",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -314,16 +314,16 @@ cc_library(
     hdrs = ["control_device.h"],
     deps = [
         ":packet_generation_finalizer",
-        "@com_github_gnoi//diag:diag_cc_proto",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
+        "@openconfig_gnoi//diag:diag_cc_proto",
+        "@grpc//:grpc++",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
     ],
 )
 
@@ -334,15 +334,15 @@ cc_library(
     deps = [
         ":control_device",
         ":packet_generation_finalizer",
-        "@com_github_gnoi//diag:diag_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
-        "@com_google_googletest//:gtest",
+        "@openconfig_gnoi//diag:diag_cc_proto",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+        "@googletest//:gtest",
     ],
 )
 
@@ -351,7 +351,7 @@ cc_test(
     srcs = ["mock_control_device_test.cc"],
     deps = [
         ":mock_control_device",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -360,7 +360,7 @@ cc_test(
     srcs = ["generic_testbed_test.cc"],
     deps = [
         ":generic_testbed",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -368,7 +368,7 @@ cc_library(
     name = "packet_generation_finalizer",
     hdrs = ["packet_generation_finalizer.h"],
     deps = [
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/time",
     ],
 )

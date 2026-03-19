@@ -6,7 +6,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.pb.h"
 
 namespace dvaas {
 namespace {

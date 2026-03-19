@@ -14,6 +14,9 @@
 #
 # PINS test functions that can be run on any infrastructure that supports ThinKit.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -28,16 +31,16 @@ cc_library(
     copts = ["-fexceptions"],
     features = ["-use_header_modules"],  # Incompatible with -fexceptions.
     deps = [
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_gutil//gutil:status",
-        "@com_jsoncpp//:json",
+        "@nlohmann_json//:json",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/container:flat_hash_set",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@gutil//gutil:status",
+        "@jsoncpp//:jsoncpp",
     ],
 )
 
@@ -46,11 +49,11 @@ cc_test(
     srcs = ["json_utils_test.cc"],
     deps = [
         ":json_utils",
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
-        "@com_jsoncpp//:json",
+        "@nlohmann_json//:json",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
+        "@jsoncpp//:jsoncpp",
     ],
 )
 
@@ -61,9 +64,9 @@ cc_library(
     hdrs = ["json_test_utils.h"],
     deps = [
         ":json_utils",
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest",
+        "@nlohmann_json//:json",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest",
     ],
 )
 
@@ -72,8 +75,8 @@ cc_test(
     srcs = ["json_test_utils_test.cc"],
     deps = [
         ":json_test_utils",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -89,11 +92,11 @@ cc_library(
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_otg_models//:otg_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/types:span",
-        "@com_google_gutil//gutil:status",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+        "@gutil//gutil:status",
     ],
 )
 
@@ -105,7 +108,7 @@ cc_library(
     deps = [
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_otg_models//:otg_cc_proto",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/time",
     ],
 )
 
@@ -119,18 +122,18 @@ cc_test(
         "//thinkit:mock_generic_testbed",
         "//thinkit:mock_switch",
         "//thinkit/proto:generic_testbed_cc_proto",
-        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:proto_matchers",
-        "@com_google_gutil//gutil:status_matchers",
-        "@com_google_gutil//gutil:testing",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:proto_matchers",
+        "@gutil//gutil:status_matchers",
+        "@gutil//gutil:testing",
     ],
 )
 
@@ -143,8 +146,8 @@ cc_library(
         "//lib/validator:validator_lib",
         "//thinkit:ssh_client",
         "//thinkit:switch",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/time",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/time",
     ],
 )
 
@@ -153,11 +156,11 @@ cc_library(
     srcs = ["merging_status_bundle.cc"],
     hdrs = ["merging_status_bundle.h"],
     deps = [
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/synchronization",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/functional:any_invocable",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
     ],
 )
 
@@ -166,9 +169,9 @@ cc_test(
     srcs = ["merging_status_bundle_test.cc"],
     deps = [
         ":merging_status_bundle",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/synchronization",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
     ],
 )

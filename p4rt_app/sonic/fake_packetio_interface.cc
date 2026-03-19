@@ -18,6 +18,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
 #include "gutil/collections.h"
+#include "gutil/status.h"
 
 namespace p4rt_app {
 namespace sonic {

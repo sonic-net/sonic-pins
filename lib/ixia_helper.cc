@@ -49,7 +49,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.pb.h"
 #include "lib/utils/json_utils.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {

@@ -13,11 +13,11 @@
 #include "dvaas/packet_trace.pb.h"
 #include "dvaas/test_vector.pb.h"
 #include "gutil/status.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
-#include "p4_infra/netaddr/mac_address.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
+#include "netaddr/mac_address.h"
+#include "p4_pdpi/ir.pb.h"
+#include "packetlib/packetlib.pb.h"
 #include "re2/re2.h"
 
 namespace dvaas {

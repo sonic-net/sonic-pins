@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -24,8 +27,8 @@ cc_library(
     hdrs = ["packet_listener.h"],
     deps = [
         ":p4rt_programming_context",
-        "//p4_infra/p4_pdpi:ir_cc_proto",
-        "//p4_infra/p4_pdpi:pd",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
+        "@p4_infra//p4_pdpi:pd",
         "//p4_infra/p4_runtime:p4_runtime_session",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
@@ -33,13 +36,13 @@ cc_library(
         "//thinkit:control_device",
         "//thinkit:packet_generation_finalizer",
         "//thinkit:switch",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@gutil//gutil:testing",
     ],
 )
 
@@ -49,10 +52,10 @@ cc_library(
     hdrs = ["p4rt_programming_context.h"],
     deps = [
         "//p4_infra/p4_runtime:p4_runtime_session",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/functional:bind_front",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/functional:bind_front",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
     ],
 )
 
@@ -62,12 +65,12 @@ cc_test(
     deps = [
         ":p4rt_programming_context",
         "//p4_infra/p4_runtime:p4_runtime_session",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:proto_matchers",
-        "@com_google_gutil//gutil:status_matchers",
-        "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:proto_matchers",
+        "@gutil//gutil:status_matchers",
+        "@gutil//gutil:testing",
     ],
 )
 
@@ -76,16 +79,16 @@ cc_library(
     srcs = ["p4rt_port.cc"],
     hdrs = ["p4rt_port.h"],
     deps = [
-        "//p4_infra/string_encodings:byte_string",
-        "//p4_infra/string_encodings:decimal_string",
-        "//p4_infra/string_encodings:hex_string",
-        "@com_google_absl//absl/numeric:bits",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
-        "@com_google_gutil//gutil:status",
+        "@p4_infra//string_encodings:byte_string",
+        "@p4_infra//string_encodings:decimal_string",
+        "@p4_infra//string_encodings:hex_string",
+        "@abseil-cpp//absl/numeric:bits",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/types:span",
+        "@gutil//gutil:status",
     ],
 )
 
@@ -94,9 +97,9 @@ cc_test(
     srcs = ["p4rt_port_test.cc"],
     deps = [
         ":p4rt_port",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_gutil//gutil:status_matchers",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings:string_view",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
     ],
 )

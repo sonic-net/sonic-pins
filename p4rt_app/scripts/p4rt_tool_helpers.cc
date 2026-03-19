@@ -23,6 +23,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "grpcpp/security/credentials.h"
+#include <grpcpp/create_channel.h>
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 ABSL_FLAG(std::string, p4rt_server_address, "unix:/sock/p4rt.sock",

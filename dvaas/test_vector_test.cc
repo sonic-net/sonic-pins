@@ -23,9 +23,9 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "p4_infra/packetlib/bit_widths.h"
-#include "p4_infra/packetlib/packetlib.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "packetlib/bit_widths.h"
+#include "packetlib/packetlib.h"
+#include "packetlib/packetlib.pb.h"
 
 namespace dvaas {
 namespace {

@@ -62,7 +62,7 @@ absl::Status Test() {
   // Dumping JSON.
   google::protobuf::util::JsonPrintOptions dumping_options;
   dumping_options.add_whitespace = true;
-  dumping_options.always_print_primitive_fields = true;
+  dumping_options.always_print_fields_with_no_presence = true;
   dumping_options.preserve_proto_field_names = true;
 
   std::string json_output_str;

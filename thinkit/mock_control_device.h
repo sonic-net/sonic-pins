@@ -27,7 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "diag/diag.pb.h"
+#include "github.com/openconfig/gnoi/diag/diag.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
 #include "gmock/gmock.h"

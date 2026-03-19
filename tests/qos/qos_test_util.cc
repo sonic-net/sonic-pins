@@ -37,8 +37,8 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/utils/json_utils.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
 #include "tests/qos/gnmi_parsers.h"
 
 namespace pins_test {

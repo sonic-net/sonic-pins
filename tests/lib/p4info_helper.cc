@@ -19,7 +19,7 @@
 #include "absl/status/statusor.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/switch.h"
 

@@ -42,8 +42,8 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
 #include "thinkit/switch.h"
 
 //TODO(PINS): To make the flags availble in other files

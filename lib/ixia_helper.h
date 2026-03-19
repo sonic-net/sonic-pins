@@ -29,10 +29,10 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "lib/ixia_helper.pb.h"
-#include "p4_infra/netaddr/ipv4_address.h"
-#include "p4_infra/netaddr/ipv6_address.h"
-#include "p4_infra/netaddr/mac_address.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "netaddr/ipv4_address.h"
+#include "netaddr/ipv6_address.h"
+#include "netaddr/mac_address.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {

@@ -43,11 +43,11 @@ limitations under the License.
 #include "dvaas/validation_result.h"
 #include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "p4_pdpi/ir.pb.h"
+#include "packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/coverage_goal.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {

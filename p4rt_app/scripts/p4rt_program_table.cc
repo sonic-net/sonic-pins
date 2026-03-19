@@ -28,7 +28,7 @@
 #include "grpcpp/grpcpp.h"
 #include "gutil/io.h"
 #include "gutil/proto.h"
-#include "p4_infra/p4_pdpi/pd.h"
+#include "p4_pdpi/pd.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"

@@ -18,15 +18,16 @@
 #include <string>
 #include <type_traits>
 
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/substitute.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
-#include "p4_infra/p4_pdpi/pd.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/pd.h"
+#include "packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"

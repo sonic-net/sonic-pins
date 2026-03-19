@@ -27,7 +27,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "gutil/status.h"
-#include "p4_infra/packetlib/packetlib.pb.h"
+#include "packetlib/packetlib.pb.h"
 
 // Helper library to hold a collection of functions to define a test
 // configuration, define a packet, generate a packet etc.

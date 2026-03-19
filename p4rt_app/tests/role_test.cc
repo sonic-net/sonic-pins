@@ -22,6 +22,7 @@
 #include "absl/types/optional.h"
 #include "gmock/gmock.h"
 #include "grpcpp/client_context.h"
+#include <grpcpp/create_channel.h>
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/sync_stream.h"
 #include "gtest/gtest.h"
@@ -31,7 +32,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"

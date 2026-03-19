@@ -21,7 +21,7 @@
 #include "dvaas/dataplane_validation.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"  // IWYU pragma: keep
-#include "p4_infra/p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
