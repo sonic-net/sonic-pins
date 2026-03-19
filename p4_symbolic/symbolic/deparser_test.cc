@@ -24,7 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/packetlib/packetlib.h"
 #include "p4_infra/packetlib/packetlib.pb.h"

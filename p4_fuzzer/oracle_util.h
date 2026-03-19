@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "absl/types/span.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/switch_state.h"

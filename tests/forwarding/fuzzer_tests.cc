@@ -36,10 +36,10 @@
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/collections.h"
-#include "gutil/gutil/status.h"           // IWYU pragma: keep
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
-#include "gutil/gutil/version.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"           // IWYU pragma: keep
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/version.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"

@@ -15,7 +15,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
-#include "gutil/gutil/collections.h"
+#include "gutil/collections.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"

@@ -34,7 +34,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gmpxx.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/ir_utils.h"
 #include "p4_infra/string_encodings/bit_string.h"

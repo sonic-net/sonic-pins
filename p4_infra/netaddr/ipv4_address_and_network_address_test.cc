@@ -23,8 +23,8 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"
 #include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/string_encodings/safe.h"
 

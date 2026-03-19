@@ -25,7 +25,7 @@ filegroup(
         "bitwidths.p4",
         "bmv2_intrinsics.h",
         "common_actions.p4",
-	"drop_martians.p4",
+        "drop_martians.p4",
         "headers.p4",
         "ids.h",
         "ingress_cloning.p4",

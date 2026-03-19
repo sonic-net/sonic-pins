@@ -28,8 +28,8 @@
 #include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/gutil/status.h"
-#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"

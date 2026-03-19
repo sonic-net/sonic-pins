@@ -19,7 +19,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
-#include "gutil/gutil/test_artifact_writer.h"
+#include "gutil/test_artifact_writer.h"
 
 namespace thinkit {
 

@@ -24,13 +24,13 @@ cc_library(
     srcs = ["table_utility.cc"],
     hdrs = ["table_utility.h"],
     deps = [
-        "//gutil/gutil:status",
         "//p4_infra/p4_pdpi:annotation_parser",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
         "@sonic_swss_common//:libswsscommon",
     ],
@@ -41,12 +41,12 @@ cc_test(
     srcs = ["table_utility_test.cc"],
     deps = [
         ":table_utility",
-        "//gutil/gutil:proto",
-        "//gutil/gutil:proto_matchers",
-        "//gutil/gutil:status_matchers",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_gutil//gutil:proto",
+        "@com_google_gutil//gutil:proto_matchers",
+        "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -98,7 +98,7 @@ cc_library(
     deps = [
         "//p4rt_app/sonic/adapters:table_adapter",
         "//p4rt_app/sonic/adapters:warm_boot_state_adapter",
-        "@com_google_absl//absl/log:log",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
@@ -118,4 +118,3 @@ cc_test(
         "@sonic_swss_common//:common",
     ],
 )
-

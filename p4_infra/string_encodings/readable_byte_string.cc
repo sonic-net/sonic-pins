@@ -21,7 +21,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "gutil/gutil/status.h"
+#include "gutil/status.h"
 #include "p4_infra/string_encodings/bit_string.h"
 #include "p4_infra/string_encodings/hex_string.h"
 
