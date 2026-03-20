@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("@com_google_gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")

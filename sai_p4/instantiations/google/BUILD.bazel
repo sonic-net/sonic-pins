@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("@com_google_gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")
@@ -461,7 +461,7 @@ filegroup(
         name = "preprocessed_%s_%s" % (platform, instantiation),
         srcs = [
             "@com_github_p4lang_p4c//:p4include",
-            "@com_github_p4lang_p4c//:p4include/v1model.p4",
+            "@com_github_p4lang_p4c//p4include:v1model.p4",
             "//sai_p4/instantiations/google:%s.p4" % instantiation,
             "//sai_p4/instantiations/google:sai_p4",
             "//sai_p4/fixed",
@@ -470,7 +470,7 @@ filegroup(
         cmd = """
               # genrules do not support retrieval of directories from dependencies, so we need to use a workaround. 
               # We depend on v1model.p4 and retrieve its parent directory. 
-              P4INCLUDE_DIR=$$(dirname $(location @com_github_p4lang_p4c//:p4include/v1model.p4))
+              P4INCLUDE_DIR=$$(dirname $(location @com_github_p4lang_p4c//p4include:v1model.p4))
               $(CC) -E -x c -Wno-comment -C -undef -nostdinc -x assembler-with-cpp -I$$P4INCLUDE_DIR -I. %s \
               $(location //sai_p4/instantiations/google:%s.p4) > $(OUTS)
               """ % (
