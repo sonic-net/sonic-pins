@@ -19,9 +19,10 @@ This backend provides a fully portable implementation:
   separate trace collection step.
 - **Punt-all entries:** SAI P4 ACL entries that cause all packets to be
   punted to the CPU (needed by DVaaS for the control switch).
-- **Auxiliary entries:** VLAN check disable entries and other SAI P4-specific
-  table entries that model switch behavior not captured by the P4 program
-  alone.
+- **Auxiliary entries:** SAI P4 table entries that mirror gNMI configuration
+  knobs affecting P4 forwarding (VLAN membership, port admin state, etc.).
+  On a real switch, gNMI Set populates these tables; in testing, the backend
+  synthesizes equivalent entries from the gNMI config.
 - **P4 specification inference:** Reads P4Info from the switch and bundles
   it with the 4ward pipeline config.
 - **Packet synthesis:** Not yet implemented. Use
@@ -50,7 +51,7 @@ This backend provides a fully portable implementation:
       │   └─ no-op (traces attached during prediction)
       │
       └─ CreateV1ModelAuxiliaryEntities
-          └─ VLAN disable entries (sai::EntryBuilder)
+          └─ entries mirroring gNMI config (VLAN, port state, etc.)
 ```
 
 ## Usage
