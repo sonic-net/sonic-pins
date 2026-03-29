@@ -8,36 +8,63 @@ behavioral simulator — into sonic-pins as a replacement for BMv2 in DVaaS.
 ```
   DVaaS frontend (dataplane_validation.cc)
       │
-      ├─ output prediction ──▶ FourwardServer (subprocess)
+      ├─ output prediction ──▶ FourwardOracle
       │                            │
       │                            ├─ P4Runtime gRPC (pipeline, entries)
-      │                            └─ Dataplane gRPC (InjectPacket → outputs + TraceTree)
+      │                            └─ Dataplane gRPC (InjectPackets → outputs + TraceTree)
       │
-      └─ trace prediction ───▶ TraceTree → PacketTrace conversion
+      └─ trace prediction ───▶ FourwardTraceTreeToDvaasPacketTrace
 ```
 
 4ward runs as a **subprocess** managed by `FourwardServer`. DVaaS talks to it
 over gRPC — standard P4Runtime for pipeline config and table entries, plus
 4ward's Dataplane service for packet injection and trace collection.
 
-## Key Components
+## Components
 
 ### FourwardServer (`fourward_server.h`)
 
 RAII wrapper for a 4ward P4Runtime server subprocess. Handles the full
-lifecycle: fork/exec the server binary with `--port=0`, parse the actual port
-from the server's startup banner, and kill the process on destruction (SIGTERM
-→ SIGKILL after 5s).
-
-Used by both the `FourwardMirrorTestbed` (development vehicle) and the DVaaS
-frontend (production path).
+lifecycle: resolve the binary from Bazel runfiles, fork/exec with `--port=0`,
+parse the port from the startup banner, and kill the process on destruction
+(SIGTERM → SIGKILL after 5s).
 
 ### FourwardSwitch (`fourward_switch.h`)
 
-Adapts a running 4ward server to the `thinkit::Switch` interface. P4Runtime is
-served by 4ward; gNMI is served by a separate stub (typically
-`FakeGnmiService`) since 4ward doesn't implement gNMI. This split mirrors
-the real-world architecture where P4Runtime and gNMI are independent services.
+`thinkit::Switch` backed by a `FourwardServer`. Starts its own server
+subprocess via `FourwardSwitch::Create()`.
+
+### FourwardOracle (`fourward_oracle.h`)
+
+Manages a 4ward server and provides packet output prediction with traces.
+Handles the full setup: start server, establish P4Runtime session, load
+pipeline, install entries. Prediction uses the streaming `InjectPackets` +
+`SubscribeResults` RPCs for high throughput.
+
+### FakeGnmiService (`fake_gnmi_service.h`)
+
+Minimal in-process gNMI server modeling configurable Ethernet interfaces with
+P4RT port IDs. DVaaS uses gNMI to discover switch ports and check that they
+are up. This fake serves just enough to satisfy those queries.
+
+### PacketBridge (`packet_bridge.h`)
+
+Emulates back-to-back physical links between two 4ward instances. When the SUT
+outputs a packet on port X, the bridge injects it into the control switch on
+port X (and vice versa). Two threads, one per direction, subscribe to
+`SubscribeResults` and forward via `InjectPacket`.
+
+### FourwardMirrorTestbed (`fourward_mirror_testbed.h`)
+
+`thinkit::MirrorTestbed` backed by two 4ward instances with fake gNMI and a
+packet bridge. The development vehicle — exercises all integration code without
+a real switch.
+
+### Trace Conversion (`trace_conversion.h`)
+
+Flattens 4ward's recursive `TraceTree` into DVaaS's flat `PacketTrace`.
+Parallel forks (clone, multicast) follow all branches; alternative forks
+(action selectors) follow the first branch.
 
 ### fourward_pipeline (Bazel rule)
 
@@ -47,36 +74,30 @@ load("@fourward//bazel:fourward_pipeline.bzl", "fourward_pipeline")
 fourward_pipeline(
     name = "sai_middleblock_fourward",
     src = "//sai_p4/instantiations/google:middleblock.p4",
-    includes = ["//sai_p4/fixed:v1model_sai.p4"],
-    extra_srcs = ["//sai_p4:sai_p4_srcs"],
+    out = "sai_middleblock_fourward.binpb",
+    out_format = "p4runtime",
 )
 ```
 
-Compiles a P4 program at build time using `p4c-4ward`. Produces two outputs:
-- `name.pipeline.txtpb` — 4ward-native PipelineConfig (text proto)
-- `name.p4rt.binpb` — P4Runtime ForwardingPipelineConfig (binary proto)
-
-The SAI P4 middleblock compilation uses `v1model_sai.p4` — a minimal fork of
-stock v1model that defines typed `port_id_t` with `@p4runtime_translation`,
-eliminating the port encoding hacks BMv2 requires.
+Compiles a P4 program at build time. `out_format` selects the proto type:
+`"native"` for `fourward.ir.PipelineConfig`, `"p4runtime"` for
+`p4.v1.ForwardingPipelineConfig`.
 
 ## How It Fits Into DVaaS
 
 DVaaS validates switch behavior by comparing a switch under test (SUT) against
-a reference P4 simulator. Today that reference is BMv2. 4ward replaces it with
-three improvements:
+a reference P4 simulator. Today that reference is BMv2. 4ward replaces it with:
 
 1. **Spec compliance.** Full `@p4runtime_translation` support (including string
    ports), `@entry_restriction` / `@action_restriction` validation, all
    v1model features SAI P4 uses.
 
 2. **Trace trees.** 4ward produces structured trace trees natively — all
-   possible outputs at non-deterministic choice points in a single pass. DVaaS
-   currently uses brittle hacks to extract traces from BMv2.
+   possible outputs at non-deterministic choice points in a single pass.
 
 3. **Hermetic build.** `bazel_dep` that just works — no Docker, no system
    packages, no BMv2 build headaches.
 
-The integration is **opt-in and backward compatible**: when a 4ward pipeline
-config is present in `P4Specification`, DVaaS uses 4ward; otherwise, the
-existing BMv2 backend path works unchanged.
+The integration is **opt-in and backward compatible**: when `fourward_config`
+is present in `P4Specification`, DVaaS uses 4ward; otherwise, the existing
+BMv2 backend path works unchanged.

@@ -134,6 +134,7 @@ cc_test(
         "@bazel_tools//tools/cpp/runfiles",
         "@fourward//simulator:simulator_cc_proto",
         "@googletest//:gtest_main",
+        "@gutil//gutil:io",
         "@gutil//gutil:status_matchers",
         "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
@@ -142,15 +143,95 @@ cc_test(
 cc_test(
     name = "fourward_server_test",
     srcs = ["fourward_server_test.cc"],
+    deps = [
+        ":fourward_server",
+        "@googletest//:gtest_main",
+        "@grpc//:grpc++",
+        "@gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+    ],
+)
+
+cc_library(
+    name = "fake_gnmi_service",
+    hdrs = ["fake_gnmi_service.h"],
+    deps = [
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@grpc//:grpc++",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+    ],
+)
+
+cc_test(
+    name = "fake_gnmi_service_test",
+    srcs = ["fake_gnmi_service_test.cc"],
+    deps = [
+        ":fake_gnmi_service",
+        "@googletest//:gtest_main",
+        "@grpc//:grpc++",
+        "@gutil//gutil:status_matchers",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+    ],
+)
+
+cc_library(
+    name = "packet_bridge",
+    srcs = ["packet_bridge.cc"],
+    hdrs = ["packet_bridge.h"],
+    deps = [
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+        "@fourward//p4runtime:dataplane_cc_grpc",
+        "@fourward//p4runtime:dataplane_cc_proto",
+        "@grpc//:grpc++",
+    ],
+)
+
+cc_test(
+    name = "packet_bridge_test",
+    srcs = ["packet_bridge_test.cc"],
     data = [
         "@fourward//p4runtime:p4runtime_server",
     ],
     deps = [
         ":fourward_server",
-        "@abseil-cpp//absl/strings",
-        "@bazel_tools//tools/cpp/runfiles",
+        ":packet_bridge",
         "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
+    ],
+)
+
+cc_library(
+    name = "fourward_mirror_testbed",
+    testonly = True,
+    srcs = ["fourward_mirror_testbed.cc"],
+    hdrs = ["fourward_mirror_testbed.h"],
+    deps = [
+        ":fake_gnmi_service",
+        ":fourward_switch",
+        ":packet_bridge",
+        "@abseil-cpp//absl/status:statusor",
         "@grpc//:grpc++",
+        "@gutil//gutil:status",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "//thinkit:bazel_test_environment",
+        "//thinkit:mirror_testbed",
+    ],
+)
+
+cc_test(
+    name = "fourward_mirror_testbed_test",
+    srcs = ["fourward_mirror_testbed_test.cc"],
+    deps = [
+        ":fourward_mirror_testbed",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:status_matchers",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
     ],
 )

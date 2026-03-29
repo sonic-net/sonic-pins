@@ -9,7 +9,7 @@
 //       FourwardOracle::Create(pipeline_config));
 //   ASSERT_OK(oracle->InstallIrEntities(ir_entities));
 //   ASSERT_OK_AND_ASSIGN(std::vector<PacketPrediction> predictions,
-//       oracle->PredictAll(packets));
+//       oracle->PredictAll({{.ingress_port = "1", .payload = packet}}));
 
 #ifndef PINS_FOURWARD_FOURWARD_ORACLE_H_
 #define PINS_FOURWARD_FOURWARD_ORACLE_H_
@@ -54,7 +54,6 @@ class FourwardOracle {
 
   absl::Status InstallIrEntities(const pdpi::IrEntities& ir_entities);
 
-  absl::StatusOr<PacketPrediction> Predict(const PacketInput& packet);
   absl::StatusOr<std::vector<PacketPrediction>> PredictAll(
       const std::vector<PacketInput>& packets);
 

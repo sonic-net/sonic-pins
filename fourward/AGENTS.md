@@ -1,7 +1,86 @@
 # fourward/ — Agent Guide
 
+**Always work in a dedicated git worktree — never modify the main tree
+directly.** Create one with:
+
+```sh
+git worktree add ../sonic-pins-<branch> -b <branch>
+```
+
+## Repository map
+
+```
+fourward/fourward_server.{h,cc}       RAII subprocess manager for 4ward servers.
+fourward/fourward_switch.{h,cc}       thinkit::Switch backed by a FourwardServer.
+fourward/fourward_oracle.{h,cc}       Output + trace prediction via InjectPackets RPC.
+fourward/fake_gnmi_service.h          In-process fake gNMI for port discovery.
+fourward/packet_bridge.{h,cc}         Emulates back-to-back links between two instances.
+fourward/fourward_mirror_testbed.h    thinkit::MirrorTestbed (two 4ward + gNMI + bridge).
+fourward/trace_conversion.{h,cc}      TraceTree → PacketTrace conversion.
+fourward/BUILD.bazel                  All build targets.
+fourward/README.md                    Architecture overview and component docs.
+fourward/AGENTS.md                    This file.
+```
+
+Unit tests live alongside the source: `foo_test.cc` next to `foo.{h,cc}`.
+
+## Build and test
+
+```sh
+bazel build //fourward/...
+bazel test //fourward/...
+```
+
+## Code conventions
+
 1. **We strictly follow the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html).**
-2. **We strictly write unit tests for each and every `.h`/`.cc` pair.**
-3. **Use status macros** (`ASSIGN_OR_RETURN`, `RETURN_IF_ERROR`) in production code instead of manual `if (!status.ok())` checks.
-4. **Use test status macros** (`ASSERT_OK_AND_ASSIGN`, `ASSERT_OK`, `EXPECT_OK`) in tests instead of manual status checks.
-5. **Propagate errors programmatically** via `absl::Status` or `absl::StatusOr`. Logging errors (`LOG(ERROR)`) is not an acceptable way to report failures — always return a status.
+
+2. **Unit tests for every `.h`/`.cc` pair.** No exceptions.
+
+3. **Use status macros** in production code:
+   - `ASSIGN_OR_RETURN` instead of `if (!x.ok()) return x.status();`
+   - `RETURN_IF_ERROR` instead of `if (!status.ok()) return status;`
+
+4. **Use test status macros** in tests:
+   - `ASSERT_OK_AND_ASSIGN` instead of `ASSERT_TRUE(x.ok()); auto val = *x;`
+   - `ASSERT_OK`, `EXPECT_OK` instead of `EXPECT_TRUE(status.ok());`
+
+5. **Propagate errors via status.** `absl::Status` or `absl::StatusOr` for
+   all fallible operations. Logging errors (`LOG(ERROR)`) is not an
+   acceptable way to report failures.
+
+6. **Exhaustive switch on proto oneofs.** Never use if/else chains to
+   dispatch on proto oneof fields.
+
+7. **Never fail silently.** Prefer compile-time failures (exhaustive switch)
+   over runtime checks. When runtime checks are needed, return an error
+   status with a descriptive message.
+
+## Key design invariants
+
+1. **4ward is a subprocess.** All communication happens over gRPC. The C++
+   code in this directory never links against 4ward's Kotlin code — it only
+   depends on proto definitions and gRPC stubs.
+
+2. **The `dvaas` namespace.** All code in `fourward/` lives in `namespace
+   dvaas`, not `namespace fourward`. The `fourward` namespace belongs to the
+   4ward repo.
+
+3. **The integration is opt-in.** When `P4Specification.fourward_config` is
+   present, DVaaS uses 4ward. Otherwise, the existing BMv2 path works
+   unchanged.
+
+## Commit messages
+
+Focus on *why* the change is being made. Don't restate what the diff shows.
+
+## Pull requests
+
+Open PRs in draft mode (`gh pr create --draft`). Rebase onto `fork/main`
+before submitting. Keep descriptions concise — lead with the win.
+
+## Before submitting a PR
+
+- Run `bazel test //fourward/...`. Fix all failures.
+- Add unit tests for new behavior.
+- Check whether README.md needs updating.

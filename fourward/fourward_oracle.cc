@@ -89,16 +89,6 @@ absl::Status FourwardOracle::InstallIrEntities(
   return p4_runtime::InstallIrEntities(*session_, ir_entities);
 }
 
-absl::StatusOr<PacketPrediction> FourwardOracle::Predict(
-    const PacketInput& packet) {
-  ASSIGN_OR_RETURN(std::vector<PacketPrediction> results,
-                   PredictAll({packet}));
-  if (results.empty()) {
-    return absl::InternalError("PredictAll returned no results");
-  }
-  return std::move(results[0]);
-}
-
 absl::StatusOr<std::vector<PacketPrediction>> FourwardOracle::PredictAll(
     const std::vector<PacketInput>& packets) {
   if (packets.empty()) return std::vector<PacketPrediction>{};
