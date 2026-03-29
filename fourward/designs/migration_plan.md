@@ -242,6 +242,59 @@ owning the oracle, this is a natural opportunity to simplify the
 post-processing flow — reusing the oracle and its installed entities
 rather than reconstructing state from scratch each time.
 
+## GitHub preparation strategy
+
+The google3 submission path is manual, tedious, and slow — each CL needs
+review, and the build environment is different. The GitHub fork is where we
+can move fast, automate, and de-risk before touching google3.
+
+### The challenge
+
+sonic-pins is google3-SoT and exported to GitHub via copybara. Changes must
+be submitted to google3 first, then copybara exports them. We can't just PR
+to `sonic-net/sonic-pins`. The google3 submission involves:
+
+- Manual BUILD file adaptation (Blaze vs Bazel)
+- Dependency resolution against google3 versions
+- CL-by-CL review with google3 reviewers
+- No automation — each CL is hand-crafted
+
+### Strategy: maximize GitHub, minimize google3
+
+Do as much work as possible on GitHub so that each google3 CL is a
+straightforward copy of already-reviewed, already-tested code:
+
+1. **Complete the integration on GitHub first.** Every component fully
+   tested, every edge case covered. The google3 reviewer should see code
+   that's obviously correct — no debugging in google3.
+
+2. **Structure PRs to match google3 CLs.** Each GitHub PR should correspond
+   to exactly one google3 CL (see workstream 2 submission order). Self-
+   contained, small, independently reviewable.
+
+3. **De-risk correctness on GitHub.** BMv2 vs 4ward differential testing on
+   SAI P4 — run real DVaaS-style packets through both and compare. Build
+   the side-by-side comparison infrastructure. If there are mismatches, find
+   and fix them before the google3 import.
+
+4. **Keep 4ward on latest dep versions.** 4ward should build against the
+   latest versions of p4c, p4runtime, p4_constraints, and protobuf. google3
+   has its own versions, but staying current minimizes the delta and makes
+   compatibility issues easier to diagnose.
+
+5. **Complete these items before starting google3 work:**
+   - Oracle reuse in the `DataplaneValidator`
+   - `FourwardMirrorTestbed` with auxiliary entries (transparent to DVaaS)
+   - Full `ValidateDataplane` E2E test
+   - p4-symbolic integration for packet synthesis
+   - Side-by-side BMv2 vs 4ward comparison infrastructure
+
+### What's not worth doing on GitHub
+
+- google3-style BUILD files — the differences are too environment-specific
+- Copybara config — needs google3 access to test
+- Worrying about specific google3 dep versions — just use latest
+
 ## Risks
 
 1. **4ward correctness.** If 4ward produces different outputs than BMv2 for
