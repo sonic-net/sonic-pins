@@ -22,16 +22,16 @@
 #include <utility>
 #include <vector>
 
-#include "absl/status/statusor.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
-#include "dvaas/validation_result.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/validation_result.h"
 #include "fourward/fourward_mirror_testbed.h"
 #include "fourward/fourward_oracle.h"
 #include "fourward/test_vector_generation.h"
@@ -42,7 +42,6 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
-#include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
@@ -241,13 +240,13 @@ TEST(PortablePinsBackendTest, BackendWorksEndToEndWithFourwardTestbed) {
 // The north star test: run the full DVaaS ValidateDataplane flow using
 // a FourwardMirrorTestbed, the portable PINS backend, and user-provided
 // test vectors.
-// TODO: Hits std::bad_alloc inside ValidateDataplaneUsingExistingSwitchApis.
-// Not a memory issue (125GB available). Likely a protobuf/gRPC error surfacing
-// as bad_alloc. Needs investigation: add try-catch, check session validity,
-// or run under sanitizer.
 TEST(PortablePinsBackendTest,
      ValidateDataplaneWithUserProvidedTestVectors) {
   p4::v1::ForwardingPipelineConfig fourward_config = LoadFourwardConfig();
+  // DVaaS reads pkg_info.version from the switch to decide whether to adjust
+  // meter rate limits. The 4ward backend doesn't emit @pkginfo, so set a
+  // version that matches the SAI P4 source we compiled from.
+  fourward_config.mutable_p4info()->mutable_pkg_info()->set_version("5.0.0");
 
   // Create testbed and backend.
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<FourwardMirrorTestbed> testbed,
@@ -256,30 +255,32 @@ TEST(PortablePinsBackendTest,
       CreatePortablePinsBackend(fourward_config);
   DataplaneValidator validator(std::move(backend));
 
-  // Load pipeline on both switches.
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<p4_runtime::P4RuntimeSession> sut_session,
-      p4_runtime::P4RuntimeSession::Create(testbed->Sut()));
-  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
-      sut_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      fourward_config));
+  // Load pipeline on both switches and install forwarding entries on SUT.
+  // ValidateDataplane opens its own P4RT sessions, so close ours before
+  // calling it (4ward supports only one StreamChannel at a time).
+  {
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<p4_runtime::P4RuntimeSession> sut_session,
+        p4_runtime::P4RuntimeSession::Create(testbed->Sut()));
+    ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
+        sut_session.get(),
+        p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+        fourward_config));
+    ASSERT_OK(sai::EntryBuilder()
+                  .AddDisableVlanChecksEntry()
+                  .AddDisableIngressVlanChecksEntry()
+                  .AddDisableEgressVlanChecksEntry()
+                  .AddEntriesForwardingIpPacketsToGivenPort("1")
+                  .InstallDedupedEntities(*sut_session));
 
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<p4_runtime::P4RuntimeSession> control_session,
-      p4_runtime::P4RuntimeSession::Create(testbed->ControlSwitch()));
-  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
-      control_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      fourward_config));
-
-  // Install forwarding entries on SUT: all IP packets → port "1".
-  ASSERT_OK(sai::EntryBuilder()
-                .AddDisableVlanChecksEntry()
-                .AddDisableIngressVlanChecksEntry()
-                .AddDisableEgressVlanChecksEntry()
-                .AddEntriesForwardingIpPacketsToGivenPort("1")
-                .InstallDedupedEntities(*sut_session));
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<p4_runtime::P4RuntimeSession> control_session,
+        p4_runtime::P4RuntimeSession::Create(testbed->ControlSwitch()));
+    ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
+        control_session.get(),
+        p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+        fourward_config));
+  }
 
   // Build a user-provided test vector: send an IPv4 packet, expect it
   // forwarded to port "1".
@@ -323,12 +324,12 @@ TEST(PortablePinsBackendTest,
   PacketTestVector test_vector;
   SwitchInput* input = test_vector.mutable_input();
   input->set_type(SwitchInput::DATAPLANE);
-  input->mutable_packet()->set_port("0");
+  input->mutable_packet()->set_port("1");
   input->mutable_packet()->set_hex(absl::BytesToHexString(tagged_packet));
   *input->mutable_packet()->mutable_parsed() = parsed;
 
   // Expected: at least one output (forwarded). We add an empty acceptable
-  // output — DVaaS checks that the SUT's output matches 4ward's prediction.
+  // output -- DVaaS checks that the SUT's output matches 4ward's prediction.
   test_vector.add_acceptable_outputs();
 
   // Identity port map: both switches have ports 1-8.
@@ -354,78 +355,9 @@ TEST(PortablePinsBackendTest,
   params.packet_test_vector_override = {test_vector};
   params.mirror_testbed_port_map_override = port_map;
 
-  // Close control session before creating DVaaS sessions — having two
-  // active StreamChannels causes Read to deadlock.
-  control_session.reset();
-
-  SwitchApi sut_api;
-  sut_api.p4rt = std::move(sut_session);
-  ASSERT_OK_AND_ASSIGN(sut_api.gnmi, testbed->Sut().CreateGnmiStub());
-
-  // Create control session after closing the installation one.
-  SwitchApi control_api;
-  ASSERT_OK_AND_ASSIGN(
-      control_api.p4rt,
-      p4_runtime::P4RuntimeSession::Create(testbed->ControlSwitch()));
-  ASSERT_OK_AND_ASSIGN(control_api.gnmi,
-                       testbed->ControlSwitch().CreateGnmiStub());
-
-  // Verify sessions work with a raw Read RPC.
-  {
-    grpc::ClientContext context;
-    p4::v1::ReadRequest read_request;
-    read_request.set_device_id(sut_api.p4rt->DeviceId());
-    read_request.add_entities()->mutable_table_entry();
-
-    ASSERT_OK_AND_ASSIGN(
-        std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
-        testbed->Sut().CreateP4RuntimeStub());
-    std::unique_ptr<grpc::ClientReaderInterface<p4::v1::ReadResponse>> reader =
-        stub->Read(&context, read_request);
-
-    p4::v1::ReadResponse response;
-    int count = 0;
-    while (reader->Read(&response)) {
-      count += response.entities_size();
-    }
-    grpc::Status finish_status = reader->Finish();
-    LOG(INFO) << "Raw Read: " << count << " entities, gRPC code="
-              << finish_status.error_code()
-              << " message_size=" << finish_status.error_message().size()
-              << " details_size=" << finish_status.error_details().size();
-    if (!finish_status.ok()) {
-      std::string msg_hex = absl::BytesToHexString(
-          finish_status.error_message().substr(0, 100));
-      LOG(INFO) << "error_message hex (first 100 bytes): " << msg_hex;
-      std::string det_hex = absl::BytesToHexString(
-          finish_status.error_details().substr(0, 100));
-      LOG(INFO) << "error_details hex (first 100 bytes): " << det_hex;
-    }
-    ASSERT_TRUE(finish_status.ok())
-        << "gRPC code=" << finish_status.error_code();
-  }
-
-  // Test: does ReadPiEntitiesSorted work through the existing SUT session?
-  LOG(INFO) << "Testing ReadPiEntitiesSorted on SUT session...";
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> sut_entities,
-                       p4_runtime::ReadPiEntitiesSorted(*sut_api.p4rt));
-  LOG(INFO) << "SUT session Read OK: " << sut_entities.size() << " entities";
-
-  LOG(INFO) << "Calling ValidateDataplaneUsingExistingSwitchApis...";
-  absl::StatusOr<ValidationResult> result =
-      validator.ValidateDataplaneUsingExistingSwitchApis(
-          sut_api, control_api, testbed->Environment(), params);
-  LOG(INFO) << "ValidateDataplaneUsingExistingSwitchApis returned.";
-
-  // TODO: Currently hits std::bad_alloc — likely sandbox memory pressure
-  // from two JVM processes. Investigate: try running outside sandbox, or
-  // reduce JVM heap, or use a single oracle instead of a full testbed.
-  if (result.ok()) {
-    LOG(INFO) << "ValidateDataplane succeeded!";
-    EXPECT_OK(result->HasSuccessRateOfAtLeast(1.0));
-  } else {
-    LOG(WARNING) << "ValidateDataplane failed: " << result.status();
-  }
+  ASSERT_OK_AND_ASSIGN(ValidationResult result,
+                       validator.ValidateDataplane(*testbed, params));
+  EXPECT_OK(result.HasSuccessRateOfAtLeast(1.0));
 }
 
 // The ultimate goal: DVaaS synthesizes test packets automatically via

@@ -166,18 +166,21 @@ absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
 absl::StatusOr<std::vector<p4::v1::Entity>> ReadPiEntitiesSorted(
     P4RuntimeSession& p4rt) {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities, ReadPiEntities(&p4rt));
-  absl::Status status;
+  // RETURN_IF_ERROR creates a local variable named `status`, so the sort's
+  // accumulator must use a different name to avoid shadowing (and UB from
+  // self-initialization of the macro's local).
+  absl::Status sort_status;
   // We sort entities based on their key. Since they were read back from the
   // switch, we know that no two entities can have the same key.
   absl::c_sort(entities,
                [&](const p4::v1::Entity& e1, const p4::v1::Entity& e2) {
                  absl::StatusOr<EntityKey> k1 = EntityKey::MakeEntityKey(e1);
                  absl::StatusOr<EntityKey> k2 = EntityKey::MakeEntityKey(e2);
-                 status.Update(k1.status());
-                 status.Update(k2.status());
-                 return status.ok() ? *k1 < *k2 : true;
+                 sort_status.Update(k1.status());
+                 sort_status.Update(k2.status());
+                 return sort_status.ok() ? *k1 < *k2 : true;
                });
-  RETURN_IF_ERROR(status);
+  RETURN_IF_ERROR(sort_status);
   return entities;
 }
 
