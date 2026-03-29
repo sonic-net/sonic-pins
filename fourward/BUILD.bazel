@@ -28,10 +28,12 @@ cc_library(
     srcs = ["fourward_switch.cc"],
     hdrs = ["fourward_switch.h"],
     deps = [
+        ":fake_gnmi_service",
         ":fourward_server",
         "@abseil-cpp//absl/status:statusor",
         "@grpc//:grpc++",
         "@gutil//gutil:status",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
         "//thinkit:switch",
     ],
@@ -131,6 +133,7 @@ cc_test(
         ":fourward_switch",
         "@googletest//:gtest_main",
         "@gutil//gutil:status_matchers",
+        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
     ],
 )
 
@@ -252,14 +255,10 @@ cc_library(
     srcs = ["fourward_mirror_testbed.cc"],
     hdrs = ["fourward_mirror_testbed.h"],
     deps = [
-        ":fake_gnmi_service",
         ":fourward_switch",
         ":packet_bridge",
         "@abseil-cpp//absl/status:statusor",
-        "@grpc//:grpc++",
         "@gutil//gutil:status",
-        "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
         "//thinkit:bazel_test_environment",
         "//thinkit:mirror_testbed",
     ],
@@ -273,7 +272,6 @@ cc_test(
         "@googletest//:gtest_main",
         "@gutil//gutil:status_matchers",
         "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
     ],
 )
 

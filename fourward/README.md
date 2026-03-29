@@ -107,3 +107,6 @@ a reference P4 simulator. Today that reference is BMv2. 4ward replaces it with:
 The integration is **opt-in and backward compatible**: when `fourward_config`
 is present in `P4Specification`, DVaaS uses 4ward; otherwise, the existing
 BMv2 backend path works unchanged.
+
+See [designs/migration_plan.md](designs/migration_plan.md) for the
+BMv2 → 4ward migration plan.
