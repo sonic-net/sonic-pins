@@ -268,9 +268,10 @@ straightforward copy of already-reviewed, already-tested code:
    tested, every edge case covered. The google3 reviewer should see code
    that's obviously correct — no debugging in google3.
 
-2. **Structure PRs to match google3 CLs.** Each GitHub PR should correspond
-   to exactly one google3 CL (see workstream 2 submission order). Self-
-   contained, small, independently reviewable.
+2. **Structure PRs to match google3 CLs — as a final step.** First get
+   everything working in feature-oriented PRs. Then, as a post-processing
+   step, restructure into CL-sized pieces matching workstream 2's submission
+   order. Each piece self-contained, small, independently reviewable.
 
 3. **De-risk correctness on GitHub.** BMv2 vs 4ward differential testing on
    SAI P4 — run real DVaaS-style packets through both and compare. Build
