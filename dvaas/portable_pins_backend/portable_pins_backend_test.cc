@@ -241,9 +241,10 @@ TEST(PortablePinsBackendTest, BackendWorksEndToEndWithFourwardTestbed) {
 // The north star test: run the full DVaaS ValidateDataplane flow using
 // a FourwardMirrorTestbed, the portable PINS backend, and user-provided
 // test vectors.
-// TODO: Hits std::bad_alloc from sandbox memory pressure (two testbed JVMs
-// + DVaaS internals). Fix by: reducing JVM heap, using --sandbox_writable_path,
-// or restructuring to share 4ward instances between testbed and oracle.
+// TODO: Hits std::bad_alloc inside ValidateDataplaneUsingExistingSwitchApis.
+// Not a memory issue (125GB available). Likely a protobuf/gRPC error surfacing
+// as bad_alloc. Needs investigation: add try-catch, check session validity,
+// or run under sanitizer.
 TEST(PortablePinsBackendTest,
      DISABLED_ValidateDataplaneWithUserProvidedTestVectors) {
   p4::v1::ForwardingPipelineConfig fourward_config = LoadFourwardConfig();
@@ -310,17 +311,21 @@ TEST(PortablePinsBackendTest,
     }
   )pb");
 
-  // Tag the packet with a test ID so DVaaS can correlate outputs.
-  std::string tagged_payload =
-      MakeTestPacketTagFromUniqueId(1, "forwarding test");
+  // Build the test vector with a tagged payload so DVaaS can correlate
+  // outputs with inputs.
+  packetlib::Packet parsed = packetlib::ParsePacket(raw_packet);
+  parsed.set_payload(MakeTestPacketTagFromUniqueId(1, "forwarding test"));
+  ASSERT_OK(packetlib::PadPacketToMinimumSize(parsed));
+  ASSERT_OK(packetlib::UpdateAllComputedFields(parsed));
+  ASSERT_OK_AND_ASSIGN(std::string tagged_packet,
+                       packetlib::SerializePacket(parsed));
 
   PacketTestVector test_vector;
   SwitchInput* input = test_vector.mutable_input();
   input->set_type(SwitchInput::DATAPLANE);
   input->mutable_packet()->set_port("0");
-  input->mutable_packet()->set_hex(absl::BytesToHexString(raw_packet));
-  *input->mutable_packet()->mutable_parsed() =
-      packetlib::ParsePacket(raw_packet);
+  input->mutable_packet()->set_hex(absl::BytesToHexString(tagged_packet));
+  *input->mutable_packet()->mutable_parsed() = parsed;
 
   // Expected: at least one output (forwarded). We add an empty acceptable
   // output — DVaaS checks that the SUT's output matches 4ward's prediction.
