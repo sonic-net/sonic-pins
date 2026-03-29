@@ -58,6 +58,7 @@ cc_test(
     deps = [
         ":portable_pins_backend",
         "//dvaas:dataplane_validation",
+        "//dvaas:port_id_map",
         "//dvaas:switch_api",
         "//dvaas:validation_result",
         "//dvaas:test_vector",
