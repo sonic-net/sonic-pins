@@ -60,6 +60,12 @@ port X (and vice versa). Two threads, one per direction, subscribe to
 packet bridge. The development vehicle — exercises all integration code without
 a real switch.
 
+`Create()` handles the full setup transparently: starts servers, loads
+pipelines, installs SAI P4 auxiliary entries (mirroring the fake gNMI config
+via `sai::CreateV1ModelAuxiliaryEntities`), and starts the packet bridge.
+DVaaS sees a standard `thinkit::MirrorTestbed` — it doesn't know it's
+running on simulated switches.
+
 ### Trace Conversion (`trace_conversion.h`)
 
 Flattens 4ward's recursive `TraceTree` into DVaaS's flat `PacketTrace`.

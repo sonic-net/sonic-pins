@@ -51,7 +51,49 @@ This backend provides a fully portable implementation:
       │   └─ no-op (traces attached during prediction)
       │
       └─ CreateV1ModelAuxiliaryEntities
-          └─ entries mirroring gNMI config (VLAN, port state, etc.)
+          └─ sai::CreateV1ModelAuxiliaryEntities (shared, see below)
+```
+
+## Auxiliary entries and the FourwardMirrorTestbed
+
+SAI P4 has tables that model gNMI configuration knobs affecting forwarding:
+VLAN membership, port admin state, loopback mode, etc. On a real switch,
+gNMI Set populates these tables. On a simulated switch (4ward), the same
+entries must be installed explicitly — otherwise packets get dropped by
+checks the P4 program performs (e.g. ingress VLAN membership).
+
+The core logic lives in
+[`sai_p4/tools/auxiliary_entries_for_v1model_targets.h`](../../sai_p4/tools/auxiliary_entries_for_v1model_targets.h):
+
+```cpp
+// Takes IR entities + gNMI stub, returns auxiliary P4 entries.
+absl::StatusOr<pdpi::IrEntities> sai::CreateV1ModelAuxiliaryEntities(
+    pdpi::IrEntities ir_entities, gnmi::gNMI::StubInterface& gnmi_stub);
+```
+
+This function is shared by two consumers:
+
+1. **This backend** (`CreateV1ModelAuxiliaryEntities` method) — called by
+   DVaaS during validation to augment the SUT's entities with auxiliary
+   entries for the reference simulator.
+
+2. **`FourwardMirrorTestbed`** (`fourward/fourward_mirror_testbed.h`) —
+   calls it during `Create()` to install auxiliary entries on both 4ward
+   servers transparently. DVaaS doesn't know it's running on simulated
+   switches — it just sees a `thinkit::MirrorTestbed`. The testbed's
+   `FakeGnmiService` provides the gNMI stub that
+   `CreateV1ModelAuxiliaryEntities` reads from.
+
+```
+  FourwardMirrorTestbed::Create()
+      │
+      ├─ Start 2 FourwardServers
+      ├─ Start 2 FakeGnmiServers
+      ├─ Load pipeline on both servers
+      ├─ sai::CreateV1ModelAuxiliaryEntities(entities, fake_gnmi)
+      │   └─ reads fake gNMI → produces VLAN/port entries
+      ├─ Install auxiliary entries on both servers
+      └─ Start PacketBridge
 ```
 
 ## Usage
@@ -79,7 +121,7 @@ ASSIGN_OR_RETURN(ValidationResult result,
 
 1. **Packet synthesis via p4-symbolic.** Replace hardcoded test vectors with
    automatically synthesized packets that cover all table entries.
-2. **Full gNMI integration.** Model port loopback mode and other gNMI-derived
-   state in auxiliary entries.
+2. **Full auxiliary entry coverage.** Ensure all gNMI-derived tables in SAI P4
+   are covered by `CreateV1ModelAuxiliaryEntities`.
 3. **Non-SAI P4 support.** Generalize punt-all and auxiliary entries for other
    P4 programs (requires parameterizing by P4 program).
