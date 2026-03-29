@@ -68,6 +68,11 @@ struct P4Specification {
   // specifically modified for BMv2 due to some missing features, e.g. the
   // lack of support for @p4runtime_translation.
   p4::v1::ForwardingPipelineConfig bmv2_config;
+
+  // 4ward pipeline config. When present, DVaaS uses 4ward instead of BMv2
+  // for output prediction and trace collection. The config is a
+  // p4.v1.ForwardingPipelineConfig compiled by p4c-4ward.
+  std::optional<p4::v1::ForwardingPipelineConfig> fourward_config;
 };
 
 // Stores configurable parameters for `PostProcessTestVectorFailure` for packet

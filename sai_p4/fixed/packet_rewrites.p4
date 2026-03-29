@@ -1,7 +1,7 @@
 #ifndef SAI_PACKET_REWRITES_P4_
 #define SAI_PACKET_REWRITES_P4_
 
-#include <v1model.p4>
+#include "v1model_sai.p4"
 #include "headers.p4"
 #include "metadata.p4"
 #include "minimum_guaranteed_sizes.h"

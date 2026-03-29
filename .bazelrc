@@ -3,6 +3,11 @@ common --enable_bzlmod
 # sonic_swss_common's upstream BUILD has glob patterns that match nothing.
 common --noincompatible_disallow_empty_glob
 
+# Use a hermetic remote JDK (for building the 4ward P4Runtime server).
+build --java_runtime_version=remotejdk_21
+build --tool_java_runtime_version=remotejdk_21
+build --java_language_version=21
+
 build --cxxopt='-std=c++20'
 build --host_cxxopt='-std=c++20'
 build --features=-layering_check

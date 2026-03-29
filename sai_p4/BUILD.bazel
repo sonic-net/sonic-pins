@@ -8,6 +8,16 @@ package(
     licenses = ["notice"],
 )
 
+# All SAI P4 source files. References sub-packages since Bazel globs
+# don't cross package boundaries.
+filegroup(
+    name = "sai_p4_srcs",
+    srcs = [
+        "//sai_p4/fixed",
+        "//sai_p4/instantiations/google:p4_srcs",
+    ],
+)
+
 proto_library(
     name = "capabilities_proto",
     srcs = ["capabilities.proto"],

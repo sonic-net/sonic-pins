@@ -1,7 +1,7 @@
 #ifndef SAI_ACL_COMMON_ACTIONS_P4_
 #define SAI_ACL_COMMON_ACTIONS_P4_
 
-#include <v1model.p4>
+#include "../../fixed/v1model_sai.p4"
 #include "ids.h"
 
 // This file lists ACL actions that may be used in multiple control blocks.

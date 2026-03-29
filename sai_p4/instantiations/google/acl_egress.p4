@@ -1,7 +1,7 @@
 #ifndef SAI_ACL_EGRESS_P4_
 #define SAI_ACL_EGRESS_P4_
 
-#include <v1model.p4>
+#include "../../fixed/v1model_sai.p4"
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
 #include "acl_common_actions.p4"
@@ -158,7 +158,7 @@ control acl_egress(in headers_t headers,
   apply {
     // We configure the hardware to explictly ignore the ACL egress tables for
     // CPU traffic.
-    if (standard_metadata.egress_port != SAI_P4_CPU_PORT) {
+    if (standard_metadata.egress_port != kCpuPort) {
       if (headers.ipv4.isValid()) {
         dscp = headers.ipv4.dscp;
         ip_protocol = headers.ipv4.protocol;

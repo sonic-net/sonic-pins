@@ -1,7 +1,7 @@
 #ifndef SAI_ACL_WBB_INGRESS_P4_
 #define SAI_ACL_WBB_INGRESS_P4_
 
-#include <v1model.p4>
+#include "../../fixed/v1model_sai.p4"
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
 #include "ids.h"

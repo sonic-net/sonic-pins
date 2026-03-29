@@ -52,10 +52,8 @@ const vrf_id_t kDefaultVrf = 0;
 #endif
 type bit<ROUTER_INTERFACE_ID_BITWIDTH> router_interface_id_t;
 
-#ifndef PLATFORM_BMV2
-@p4runtime_translation("", string)
-#endif
-type bit<PORT_BITWIDTH> port_id_t;
+// port_id_t is defined in v1model_sai.p4.
+const port_id_t kCpuPort = (port_id_t) SAI_P4_CPU_PORT;
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)
@@ -300,11 +298,11 @@ struct local_metadata_t {
   // The value to be copied into the `ingress_port` field of packet_in_header on
   // punted packets.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
-  bit<PORT_BITWIDTH> packet_in_ingress_port;
+  port_id_t packet_in_ingress_port;
   // The value to be copied into the `target_egress_port` field of
   // packet_in_header on punted packets.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
-  bit<PORT_BITWIDTH> packet_in_target_egress_port;
+  port_id_t packet_in_target_egress_port;
  
   // When `redirect_port_valid` is true, the packet will be redirected to
   // the port specified in `redirect_port`. Note that redirect to port cancels
@@ -312,7 +310,7 @@ struct local_metadata_t {
   // nexthop, the packet rewrites are determined by the the nexthop but the
   // egress port is determined by `redirect_port`.
   bool redirect_port_valid;
-  bit<PORT_BITWIDTH> redirect_port;
+  port_id_t redirect_port;
 
   MeterColor_t color;
   // We consistently use local_metadata.ingress_port instead of

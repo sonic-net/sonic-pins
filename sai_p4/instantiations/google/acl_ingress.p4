@@ -1,7 +1,7 @@
 #ifndef SAI_ACL_INGRESS_P4_
 #define SAI_ACL_INGRESS_P4_
 
-#include <v1model.p4>
+#include "../../fixed/v1model_sai.p4"
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
 #include "../../fixed/packet_io.p4"
@@ -633,7 +633,7 @@ control acl_ingress(in headers_t headers,
     port_id_t redirect_port) {
     // The actual redirect to port happens after routing resolution. Here we
     // just store the redirect port in a metadata.
-    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_port = redirect_port;
     local_metadata.redirect_port_valid = true;
 
     // Cancel other forwarding decisions except for nexthop. If the packet is
@@ -658,7 +658,7 @@ control acl_ingress(in headers_t headers,
     acl_ingress_counter.count();
     local_metadata.marked_to_mirror = true;
     local_metadata.mirror_session_id = mirror_session_id;
-    local_metadata.redirect_port = (bit<9>)redirect_port;
+    local_metadata.redirect_port = redirect_port;
     local_metadata.redirect_port_valid = true;
 
     // Cancel other forwarding decisions except for nexthop. If the packet is

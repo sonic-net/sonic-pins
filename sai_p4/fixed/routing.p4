@@ -1,7 +1,7 @@
 #ifndef SAI_ROUTING_P4_
 #define SAI_ROUTING_P4_
 
-#include <v1model.p4>
+#include "v1model_sai.p4"
 #include "common_actions.p4"
 #include "drop_martians.p4"
 #include "headers.p4"
@@ -367,8 +367,7 @@ control routing_resolution(in headers_t headers,
                                           @id(2) @format(MAC_ADDRESS)
                                           ethernet_addr_t src_mac,
                                           @id(3) vlan_id_t vlan_id) {
-    // Cast is necessary, because v1model does not define port using `type`.
-    standard_metadata.egress_spec = (bit<PORT_BITWIDTH>)port;
+    standard_metadata.egress_spec = port;
     local_metadata.packet_rewrites.src_mac = src_mac;
     local_metadata.packet_rewrites.vlan_id = vlan_id;
   }

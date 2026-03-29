@@ -4,10 +4,9 @@
 // components. For example, it is used to test that the SAI P4 parser and
 // deparser roundtrip.
 
-#include <v1model.p4>
-
 // This header has to come first, to override its fixed counterpart.
 #include "bitwidths.p4"
+#include "../../fixed/v1model_sai.p4"
 #include "../../fixed/parser.p4"
 
 control MinimalVerifyChecksum(inout headers_t headers,
@@ -19,7 +18,7 @@ control MinimalIngress(inout headers_t headers,
                        inout local_metadata_t local_metadata,
                        inout standard_metadata_t standard_metadata) {
   apply {
-    standard_metadata.egress_spec = (bit<PORT_BITWIDTH>)local_metadata.ingress_port;
+    standard_metadata.egress_spec = local_metadata.ingress_port;
   }
 }
 

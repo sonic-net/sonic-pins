@@ -1,7 +1,7 @@
 #ifndef SAI_L3_ADMIT_P4_
 #define SAI_L3_ADMIT_P4_
 
-#include <v1model.p4>
+#include "v1model_sai.p4"
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"

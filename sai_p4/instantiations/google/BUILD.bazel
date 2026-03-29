@@ -28,6 +28,11 @@ package(
     licenses = ["notice"],
 )
 
+filegroup(
+    name = "p4_srcs",
+    srcs = glob(["*.p4", "*.h"]),
+)
+
 # -- P4 program ----------------------------------------------------------------
 
 SHARED_DEPS = [

@@ -1,0 +1,53 @@
+--- v1model.p4
++++ v1model_sai.p4
+@@ -1,3 +1,11 @@
++// Forked v1model for SAI P4.
++//
++// Changes from stock v1model:
++// - Port type uses `type` (newtype) instead of `typedef`, with
++//   @p4runtime_translation for string port names.
++// - Port width uses PORT_BITWIDTH (from bitwidths.p4) instead of
++//   hardcoded 9 bits.
++
+ /*
+ Copyright 2013-present Barefoot Networks, Inc.
+ 
+@@ -56,21 +64,27 @@
+ 
+ const bit<32> __v1model_version = V1MODEL_VERSION;
+ 
+-#if V1MODEL_VERSION >= 20200408
+-typedef bit<9>  PortId_t;       // should not be a constant size?
++// SAI P4 fork: port type is a newtype with @p4runtime_translation,
++// replacing the stock typedef. PORT_BITWIDTH must be defined before
++// including this file.
++#ifndef PORT_BITWIDTH
++#error "PORT_BITWIDTH must be defined before including v1model_sai.p4"
+ #endif
++// Pin well-known ports so they get deterministic P4RT names instead of
++// auto-allocated values. Values match SAI_P4_CPU_PORT / SAI_P4_DROP_PORT
++// in ids.h; raw literals used here to avoid an #include dependency.
++@p4runtime_translation_mappings({
++  {"CPU_PORT", 510},
++  {"DROP_PORT", 511},
++})
++@p4runtime_translation("", string)
++type bit<PORT_BITWIDTH> port_id_t;
+ 
+ @metadata @name("standard_metadata")
+ struct standard_metadata_t {
+-#if V1MODEL_VERSION >= 20200408
+-    PortId_t    ingress_port;
+-    PortId_t    egress_spec;
+-    PortId_t    egress_port;
+-#else
+-    bit<9>      ingress_port;
+-    bit<9>      egress_spec;
+-    bit<9>      egress_port;
+-#endif
++    port_id_t    ingress_port;
++    port_id_t    egress_spec;
++    port_id_t    egress_port;
+     bit<32>     instance_type;
+     bit<32>     packet_length;
+     //

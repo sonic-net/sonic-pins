@@ -13,11 +13,14 @@
 # limitations under the License.
 
 # load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@gutil//gutil:diff_test.bzl", "cmd_diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
 )
+
+exports_files(["v1model_sai.p4"])
 
 filegroup(
     name = "fixed",
@@ -40,6 +43,7 @@ filegroup(
         "roles.h",
         "routing.p4",
         "tunnel_termination.p4",
+        "v1model_sai.p4",
         "vlan.p4",
     ],
 )
@@ -62,4 +66,29 @@ cc_library(
 cc_library(
     name = "bmv2_intrinsics",
     hdrs = ["bmv2_intrinsics.h"],
+)
+
+# Golden diff of v1model_sai.p4 vs stock v1model.p4 — tracks the size of
+# our fork. Update with: bazel run //sai_p4/fixed:v1model_fork_diff_test -- --update
+genrule(
+    name = "stock_v1model",
+    srcs = ["@p4c//p4include:v1model.p4"],
+    outs = ["v1model.p4"],
+    cmd = "cp $< $@",
+)
+
+cmd_diff_test(
+    name = "v1model_fork_diff_test",
+    actual_cmd = " ".join([
+        "diff -u",
+        "--label v1model.p4 --label v1model_sai.p4",
+        "$(location :stock_v1model)",
+        "$(location v1model_sai.p4)",
+        "|| true",
+    ]),
+    data = [
+        "v1model_sai.p4",
+        ":stock_v1model",
+    ],
+    expected = "v1model_fork.golden.diff",
 )

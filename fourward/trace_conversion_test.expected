@@ -1,0 +1,402 @@
+========================================================================
+Description: Empty trace tree → empty packet trace.
+------------------------------------------------------------------------
+Input TraceTree:
+  (empty)
+------------------------------------------------------------------------
+Output PacketTrace:
+  (empty)
+========================================================================
+Description: Table miss + mark_to_drop → TableApply(miss) + MarkToDrop + Drop.
+------------------------------------------------------------------------
+Input TraceTree:
+events {
+  table_lookup {
+    table_name: "ingress.routing.ipv4_table"
+    action_name: "NoAction"
+  }
+}
+events {
+  mark_to_drop {
+  }
+}
+packet_outcome {
+  drop {
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  table_apply {
+    table_name: "ingress.routing.ipv4_table"
+    miss {
+    }
+  }
+}
+events {
+  mark_to_drop {
+  }
+}
+events {
+  drop {
+  }
+}
+========================================================================
+Description: Table hit → forward. Transmit carries port and packet size.
+------------------------------------------------------------------------
+Input TraceTree:
+events {
+  table_lookup {
+    table_name: "ingress.routing.ipv4_table"
+    hit: true
+    action_name: "set_nexthop"
+  }
+}
+packet_outcome {
+  output {
+    payload: "forwarded"
+    p4rt_egress_port: "Ethernet4"
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  table_apply {
+    table_name: "ingress.routing.ipv4_table"
+    hit {
+    }
+  }
+}
+events {
+  transmit {
+    port: "Ethernet4"
+    packet_size: 9
+  }
+}
+========================================================================
+Description: MarkToDrop preserves source_info as source_location.
+------------------------------------------------------------------------
+Input TraceTree:
+events {
+  mark_to_drop {
+  }
+  source_info {
+    source_fragment: "mark_to_drop(standard_metadata)"
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  mark_to_drop {
+    source_location: "mark_to_drop(standard_metadata)"
+  }
+}
+========================================================================
+Description: Clone event → PacketReplication with count 1.
+------------------------------------------------------------------------
+Input TraceTree:
+events {
+  clone {
+    session_id: 42
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  packet_replication {
+    number_of_packets_replicated: 1
+  }
+}
+========================================================================
+Description: Clone fork (parallel): both branches appear in output.
+------------------------------------------------------------------------
+Input TraceTree:
+fork_outcome {
+  reason: CLONE
+  branches {
+    label: "original"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "1"
+        }
+      }
+    }
+  }
+  branches {
+    label: "clone"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "2"
+        }
+      }
+    }
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  transmit {
+    port: "1"
+  }
+}
+events {
+  transmit {
+    port: "2"
+  }
+}
+========================================================================
+Description: Multicast fork (parallel): replication event with count, then all replicas.
+------------------------------------------------------------------------
+Input TraceTree:
+fork_outcome {
+  reason: MULTICAST
+  branches {
+    label: "replica_0"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "1"
+        }
+      }
+    }
+  }
+  branches {
+    label: "replica_1"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "2"
+        }
+      }
+    }
+  }
+  branches {
+    label: "replica_2"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "3"
+        }
+      }
+    }
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  packet_replication {
+    number_of_packets_replicated: 3
+  }
+}
+events {
+  transmit {
+    port: "1"
+  }
+}
+events {
+  transmit {
+    port: "2"
+  }
+}
+events {
+  transmit {
+    port: "3"
+  }
+}
+========================================================================
+Description: Action selector fork (alternative): only the first branch appears.
+------------------------------------------------------------------------
+Input TraceTree:
+fork_outcome {
+  reason: ACTION_SELECTOR
+  branches {
+    label: "member_0"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "1"
+        }
+      }
+    }
+  }
+  branches {
+    label: "member_1"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "2"
+        }
+      }
+    }
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  transmit {
+    port: "1"
+  }
+}
+========================================================================
+Description: Parser transitions, action executions, branch events, and extern calls are ignored (no DVaaS equivalent).
+------------------------------------------------------------------------
+Input TraceTree:
+events {
+  parser_transition {
+    parser_name: "parser"
+    from_state: "start"
+    to_state: "accept"
+  }
+}
+events {
+  action_execution {
+    action_name: "set_dst_mac"
+  }
+}
+events {
+  branch {
+    control_name: "ingress.acl"
+    taken: true
+  }
+}
+events {
+  extern_call {
+    extern_instance_name: "counter0"
+    method: "count"
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+  (empty)
+========================================================================
+Description: Events before a clone fork are preserved in the flattened output.
+------------------------------------------------------------------------
+Input TraceTree:
+events {
+  table_lookup {
+    table_name: "ingress.routing.ipv4_table"
+    hit: true
+    action_name: "forward"
+  }
+}
+events {
+  clone {
+    session_id: 1
+  }
+}
+fork_outcome {
+  reason: CLONE
+  branches {
+    label: "original"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "1"
+        }
+      }
+    }
+  }
+  branches {
+    label: "clone"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "2"
+        }
+      }
+    }
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  table_apply {
+    table_name: "ingress.routing.ipv4_table"
+    hit {
+    }
+  }
+}
+events {
+  packet_replication {
+    number_of_packets_replicated: 1
+  }
+}
+events {
+  transmit {
+    port: "1"
+  }
+}
+events {
+  transmit {
+    port: "2"
+  }
+}
+========================================================================
+Description: Nested forks are fully flattened: clone → multicast.
+------------------------------------------------------------------------
+Input TraceTree:
+fork_outcome {
+  reason: CLONE
+  branches {
+    label: "original"
+    subtree {
+      packet_outcome {
+        output {
+          p4rt_egress_port: "1"
+        }
+      }
+    }
+  }
+  branches {
+    label: "clone"
+    subtree {
+      fork_outcome {
+        reason: MULTICAST
+        branches {
+          label: "replica_0"
+          subtree {
+            packet_outcome {
+              output {
+                p4rt_egress_port: "2"
+              }
+            }
+          }
+        }
+        branches {
+          label: "replica_1"
+          subtree {
+            packet_outcome {
+              output {
+                p4rt_egress_port: "3"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+------------------------------------------------------------------------
+Output PacketTrace:
+events {
+  transmit {
+    port: "1"
+  }
+}
+events {
+  packet_replication {
+    number_of_packets_replicated: 2
+  }
+}
+events {
+  transmit {
+    port: "2"
+  }
+}
+events {
+  transmit {
+    port: "3"
+  }
+}

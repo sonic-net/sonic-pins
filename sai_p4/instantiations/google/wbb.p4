@@ -1,11 +1,10 @@
 #define SAI_INSTANTIATION_WBB
 
-#include <v1model.p4>
-
 // These headers have to come first, to override their fixed counterparts.
 #include "roles.h"
 #include "versions.h"
 #include "bitwidths.p4"
+#include "../../fixed/v1model_sai.p4"
 #include "minimum_guaranteed_sizes.h"
 
 #include "../../fixed/headers.p4"

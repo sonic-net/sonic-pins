@@ -95,6 +95,7 @@
 
 // Port used for PacketIO. Packets sent to this port go to the CPU.
 // Packets received on this port come from the CPU.
+// Raw integer value; use kCpuPort (typed constant) in P4 code.
 // TODO For simplicity, we went with 510/511 as CPU/drop port to
 // begin with, which are the values used by BMv2 by default, and the values
 // hard-coded in p4-symbolic. We should revisit these arbitrary values.
