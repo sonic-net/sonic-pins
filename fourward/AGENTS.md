@@ -62,6 +62,17 @@ bazel test //fourward/...
    over runtime checks. When runtime checks are needed, return an error
    status with a descriptive message.
 
+9. **Prefer golden tests for proto-to-proto or text-output functions.** Golden
+   tests are less brittle than substring assertions — when output format
+   changes, you just `--update` the golden file instead of fixing N assertions.
+   Use `cmd_diff_test` from `@gutil//gutil:diff_test.bzl` with a runner binary
+   that prints input + output for each test case. See
+   `trace_conversion_golden_test` for a good example: a runner binary
+   (`trace_conversion_golden_test_runner.cc`) prints the input TraceTree and
+   output PacketTrace for each case, and `cmd_diff_test` diffs against
+   `trace_conversion_test.expected`. Update via:
+   `bazel run //fourward:trace_conversion_golden_test -- --update`.
+
 ## Key design invariants
 
 1. **4ward is a subprocess.** All communication happens over gRPC. The C++
