@@ -273,17 +273,23 @@ straightforward copy of already-reviewed, already-tested code:
    step, restructure into CL-sized pieces matching workstream 2's submission
    order. Each piece self-contained, small, independently reviewable.
 
-3. **De-risk correctness on GitHub.** BMv2 vs 4ward differential testing on
-   SAI P4 — run real DVaaS-style packets through both and compare. Build
-   the side-by-side comparison infrastructure. If there are mismatches, find
-   and fix them before the google3 import.
+3. **De-risk correctness on GitHub.** BMv2 vs 4ward differential testing
+   on SAI P4 — done. 4ward passes all 186 v1model corpus tests and BMv2
+   differential testing surfaces no mismatches. See
+   [PERFORMANCE.md](https://github.com/smolkaj/4ward/blob/main/docs/PERFORMANCE.md)
+   and the BMv2 diff test suite in the 4ward repo.
 
-4. **Keep 4ward on latest dep versions.** 4ward should build against the
+4. **De-risk performance on GitHub.** SAI P4 benchmark — done. 4ward
+   meets the 1k pps target with a 127× improvement over baseline and
+   outperforms BMv2 by 6× on L3 forwarding. See
+   [PERFORMANCE.md](https://github.com/smolkaj/4ward/blob/main/docs/PERFORMANCE.md).
+
+5. **Keep 4ward on latest dep versions.** 4ward should build against the
    latest versions of p4c, p4runtime, p4_constraints, and protobuf. google3
    has its own versions, but staying current minimizes the delta and makes
    compatibility issues easier to diagnose.
 
-5. **Complete these items before starting google3 work:**
+6. **Complete these items before starting google3 work:**
    - Oracle reuse in the `DataplaneValidator`
    - `FourwardMirrorTestbed` with auxiliary entries (transparent to DVaaS)
    - Full `ValidateDataplane` E2E test
