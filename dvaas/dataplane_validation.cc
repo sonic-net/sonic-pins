@@ -38,6 +38,8 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/failure_post_processing.h"
+#include "fourward/fourward_oracle.h"
+#include "fourward/test_vector_generation.h"
 #include "dvaas/label.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.h"
@@ -518,16 +520,33 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
       ToString(generate_test_vectors_result.packet_synthesis_result
                    .synthesized_packets)));
 
-  // Generate test vectors with output prediction from the synthesized
-  // packets.
+  // Generate test vectors with output prediction.
   LOG(INFO) << "Generating test vectors with output prediction";
   gutil::Timer generate_test_vectors_timer;
-  ASSIGN_OR_RETURN(generate_test_vectors_result.packet_test_vector_by_id,
-                   backend.GeneratePacketTestVectors(
-                       ir_p4info, entities, p4_spec.bmv2_config, ports,
-                       generate_test_vectors_result.packet_synthesis_result
-                           .synthesized_packets,
-                       default_ingress_port));
+  if (p4_spec.fourward_config.has_value()) {
+    // Use 4ward for output prediction and traces.
+    LOG(INFO) << "Using 4ward for output prediction";
+    ASSIGN_OR_RETURN(
+        std::unique_ptr<dvaas::FourwardOracle> oracle,
+        dvaas::FourwardOracle::Create(*p4_spec.fourward_config));
+    RETURN_IF_ERROR(oracle->InstallIrEntities(entities));
+    ASSIGN_OR_RETURN(
+        generate_test_vectors_result.packet_test_vector_by_id,
+        dvaas::GeneratePacketTestVectorsUsingFourward(
+            *oracle,
+            generate_test_vectors_result.packet_synthesis_result
+                .synthesized_packets,
+            default_ingress_port));
+  } else {
+    // Use BMv2 backend for output prediction.
+    ASSIGN_OR_RETURN(
+        generate_test_vectors_result.packet_test_vector_by_id,
+        backend.GeneratePacketTestVectors(
+            ir_p4info, entities, p4_spec.bmv2_config, ports,
+            generate_test_vectors_result.packet_synthesis_result
+                .synthesized_packets,
+            default_ingress_port));
+  }
   LogAndRecordDurationForDvaasComponent(
       "generate_test_vectors", generate_test_vectors_timer.GetDuration());
 
@@ -957,13 +976,16 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                            v1model_augmented_entities, ir_p4info, *sut.gnmi));
       v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
-      // The test packets likely already have a compact version of the traces,
-      // but we want to augment them with the full version.
+      // When using 4ward, traces are already attached during test vector
+      // generation. Only augment with BMv2 traces when using the backend.
       gutil::Timer failure_packet_trace_timer;
-      auto status = backend_->AugmentPacketTestVectorsWithPacketTraces(
-          failed_test_vectors, ir_p4info, v1model_augmented_entities,
-          p4_spec.bmv2_config,
-          /*use_compact_traces=*/false);
+      absl::Status status;
+      if (!p4_spec.fourward_config.has_value()) {
+        status = backend_->AugmentPacketTestVectorsWithPacketTraces(
+            failed_test_vectors, ir_p4info, v1model_augmented_entities,
+            p4_spec.bmv2_config,
+            /*use_compact_traces=*/false);
+      }
       LogAndRecordDurationForDvaasComponent(
           "failure_packet_trace", failure_packet_trace_timer.GetDuration());
       if (!status.ok()) {

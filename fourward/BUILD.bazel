@@ -60,6 +60,47 @@ cc_library(
 )
 
 cc_library(
+    name = "test_vector_generation",
+    testonly = True,
+    srcs = ["test_vector_generation.cc"],
+    hdrs = ["test_vector_generation.h"],
+    deps = [
+        ":fourward_oracle",
+        ":trace_conversion",
+        "//dvaas:test_vector",
+        "//dvaas:test_vector_cc_proto",
+        "//lib/p4rt:p4rt_port",
+        "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@gutil//gutil:status",
+        "@p4_infra//packetlib",
+        "@p4_infra//packetlib:packetlib_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "trace_summary",
+    srcs = ["trace_summary.cc"],
+    hdrs = ["trace_summary.h"],
+    deps = [
+        "@abseil-cpp//absl/strings",
+        "@fourward//simulator:simulator_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "trace_summary_test",
+    srcs = ["trace_summary_test.cc"],
+    deps = [
+        ":trace_summary",
+        "@fourward//simulator:simulator_cc_proto",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:testing",
+    ],
+)
+
+cc_library(
     name = "trace_conversion",
     srcs = ["trace_conversion.cc"],
     hdrs = ["trace_conversion.h"],
@@ -233,5 +274,28 @@ cc_test(
         "@gutil//gutil:status_matchers",
         "@openconfig_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+    ],
+)
+
+cc_test(
+    name = "fourward_oracle_e2e_test",
+    size = "large",
+    srcs = ["fourward_oracle_e2e_test.cc"],
+    data = [
+        ":sai_middleblock_fourward",
+    ],
+    deps = [
+        ":fourward_oracle",
+        ":trace_summary",
+        "//sai_p4/instantiations/google/test_tools:test_entries",
+        "@bazel_tools//tools/cpp/runfiles",
+        "@googletest//:gtest_main",
+        "@gutil//gutil:io",
+        "@gutil//gutil:status_matchers",
+        "@gutil//gutil:testing",
+        "@p4_infra//p4_pdpi:ir_cc_proto",
+        "@p4_infra//packetlib",
+        "@p4_infra//packetlib:packetlib_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )

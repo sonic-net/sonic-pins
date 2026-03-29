@@ -33,9 +33,11 @@ bazel test //fourward/...
 
 ## Code conventions
 
-1. **We strictly follow the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html).**
+1. **We strictly follow the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html)**
+   and the [Abseil Tips of the Week](https://abseil.io/tips/).
 
-2. **Unit tests for every `.h`/`.cc` pair.** No exceptions.
+2. **Unit tests for every `.h`/`.cc` pair.** No exceptions. A test for
+   `foo.{h,cc}` must be named `foo_<optional_middle_part>_test.cc`.
 
 3. **Use status macros** in production code:
    - `ASSIGN_OR_RETURN` instead of `if (!x.ok()) return x.status();`
@@ -52,7 +54,11 @@ bazel test //fourward/...
 6. **Exhaustive switch on proto oneofs.** Never use if/else chains to
    dispatch on proto oneof fields.
 
-7. **Never fail silently.** Prefer compile-time failures (exhaustive switch)
+7. **Use `int` for loop variables**, per Google Style Guide. The
+   `-Wno-sign-compare` flag in `.bazelrc` suppresses warnings when comparing
+   `int` against `.size()`. Never use `unsigned` or `size_t` for loops.
+
+8. **Never fail silently.** Prefer compile-time failures (exhaustive switch)
    over runtime checks. When runtime checks are needed, return an error
    status with a descriptive message.
 

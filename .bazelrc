@@ -13,6 +13,6 @@ build --host_cxxopt='-std=c++20'
 build --features=-layering_check
 build --host_features=-layering_check
 
-# To allow loops with int and comparison against a .size() that's size_t.
-build --copt='-Wno-error=sign-compare'
-build --host_copt='-Wno-error=sign-compare'
+# Suppress int vs size_t warnings in for loops (Google style uses int).
+build --copt='-Wno-sign-compare'
+build --host_copt='-Wno-sign-compare'

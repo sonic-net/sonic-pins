@@ -35,6 +35,8 @@ cc_library(
         ":output_writer",
         ":packet_injection",
         ":packet_trace",
+        "//fourward:fourward_oracle",
+        "//fourward:test_vector_generation",
         ":packet_trace_cc_proto",
         ":port_id_map",
         ":switch_api",
