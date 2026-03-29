@@ -459,7 +459,9 @@ absl::StatusOr<P4Specification> InferP4Specification(
 // P4Info, and relevant P4RT port IDs from the switch.
 absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
     const DataplaneValidationParams& params, SwitchApi& sut,
-    DataplaneValidationBackend& backend, gutil::TestArtifactWriter& writer) {
+    DataplaneValidationBackend& backend,
+    std::unique_ptr<FourwardOracle>& oracle,
+    gutil::TestArtifactWriter& writer) {
   // Determine the P4 specification to test against.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
                    InferP4Specification(params, backend, sut));
@@ -524,11 +526,11 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   LOG(INFO) << "Generating test vectors with output prediction";
   gutil::Timer generate_test_vectors_timer;
   if (p4_spec.fourward_config.has_value()) {
-    // Use 4ward for output prediction and traces.
     LOG(INFO) << "Using 4ward for output prediction";
-    ASSIGN_OR_RETURN(
-        std::unique_ptr<dvaas::FourwardOracle> oracle,
-        dvaas::FourwardOracle::Create(*p4_spec.fourward_config));
+    if (oracle == nullptr) {
+      ASSIGN_OR_RETURN(oracle,
+                       FourwardOracle::Create(*p4_spec.fourward_config));
+    }
     RETURN_IF_ERROR(oracle->InstallIrEntities(entities));
     ASSIGN_OR_RETURN(
         generate_test_vectors_result.packet_test_vector_by_id,
@@ -882,7 +884,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   if (params.packet_test_vector_override.empty()) {
     LOG(INFO) << "Auto-generating test vectors";
     ASSIGN_OR_RETURN(generate_test_vectors_result,
-                     GenerateTestVectors(params, sut, *backend_,
+                     GenerateTestVectors(params, sut, *backend_, oracle_,
                                          dvaas_test_artifact_writer));
   } else {
     LOG(INFO) << "Checking user-provided test vectors for well-formedness";
@@ -980,7 +982,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       // generation. Only augment with BMv2 traces when using the backend.
       gutil::Timer failure_packet_trace_timer;
       absl::Status status;
-      if (!p4_spec.fourward_config.has_value()) {
+      if (oracle_ == nullptr) {
         status = backend_->AugmentPacketTestVectorsWithPacketTraces(
             failed_test_vectors, ir_p4info, v1model_augmented_entities,
             p4_spec.bmv2_config,
@@ -1072,12 +1074,23 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                   synthesized_packets = {synthesized_packet};
               // TODO: Move to using `ValidateDataplane` once the
               // bug is fixed.
-              ASSIGN_OR_RETURN(
-                  PacketTestVectorById test_vectors,
-                  backend_->GeneratePacketTestVectors(
-                      ir_p4info, ir_entities, p4_spec.bmv2_config, ports,
-                      synthesized_packets, default_ingress_port,
-                      /*check_prediction_conformity=*/false));
+              PacketTestVectorById test_vectors;
+              if (p4_spec.fourward_config.has_value() &&
+                  oracle_ != nullptr) {
+                RETURN_IF_ERROR(oracle_->InstallIrEntities(ir_entities));
+                ASSIGN_OR_RETURN(
+                    test_vectors,
+                    GeneratePacketTestVectorsUsingFourward(
+                        *oracle_, synthesized_packets,
+                        default_ingress_port));
+              } else {
+                ASSIGN_OR_RETURN(
+                    test_vectors,
+                    backend_->GeneratePacketTestVectors(
+                        ir_p4info, ir_entities, p4_spec.bmv2_config, ports,
+                        synthesized_packets, default_ingress_port,
+                        /*check_prediction_conformity=*/false));
+              }
 
               // Send packets to the switch and collect results.
               PacketStatistics statistics;

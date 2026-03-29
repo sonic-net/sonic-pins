@@ -31,6 +31,7 @@ limitations under the License.
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/labeler.h"
+#include "fourward/fourward_oracle.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
@@ -246,6 +247,10 @@ class DataplaneValidator {
 
  private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
+  // Owned oracle, reused across the validation run (including failure
+  // post-processing). Created lazily by GenerateTestVectors when
+  // fourward_config is present.
+  std::unique_ptr<FourwardOracle> oracle_;
   // Used to write artifacts.
   gutil::BazelTestArtifactWriter artifact_writer_;
   // Records packet statistics during dataplane validation.
