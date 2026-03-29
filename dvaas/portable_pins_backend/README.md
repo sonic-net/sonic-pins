@@ -135,5 +135,3 @@ ASSIGN_OR_RETURN(ValidationResult result,
    are covered by `CreateV1ModelAuxiliaryEntities`.
 3. **Reactive auxiliary entries.** Update auxiliary entries when entities or
    gNMI config change, rather than computing them once up front.
-4. **Non-SAI P4 support.** Generalize punt-all and auxiliary entries for other
-   P4 programs (requires parameterizing by P4 program).
