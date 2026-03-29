@@ -246,7 +246,7 @@ TEST(PortablePinsBackendTest, BackendWorksEndToEndWithFourwardTestbed) {
 // as bad_alloc. Needs investigation: add try-catch, check session validity,
 // or run under sanitizer.
 TEST(PortablePinsBackendTest,
-     DISABLED_ValidateDataplaneWithUserProvidedTestVectors) {
+     ValidateDataplaneWithUserProvidedTestVectors) {
   p4::v1::ForwardingPipelineConfig fourward_config = LoadFourwardConfig();
 
   // Create testbed and backend.
@@ -354,20 +354,68 @@ TEST(PortablePinsBackendTest,
   params.packet_test_vector_override = {test_vector};
   params.mirror_testbed_port_map_override = port_map;
 
-  // Use existing APIs to skip testbed connection setup (gNMI port
-  // mirroring, WaitForEnabledEthernetInterfacesToBeUp).
+  // Close control session before creating DVaaS sessions — having two
+  // active StreamChannels causes Read to deadlock.
+  control_session.reset();
+
   SwitchApi sut_api;
   sut_api.p4rt = std::move(sut_session);
   ASSERT_OK_AND_ASSIGN(sut_api.gnmi, testbed->Sut().CreateGnmiStub());
 
+  // Create control session after closing the installation one.
   SwitchApi control_api;
-  control_api.p4rt = std::move(control_session);
+  ASSERT_OK_AND_ASSIGN(
+      control_api.p4rt,
+      p4_runtime::P4RuntimeSession::Create(testbed->ControlSwitch()));
   ASSERT_OK_AND_ASSIGN(control_api.gnmi,
                        testbed->ControlSwitch().CreateGnmiStub());
 
+  // Verify sessions work with a raw Read RPC.
+  {
+    grpc::ClientContext context;
+    p4::v1::ReadRequest read_request;
+    read_request.set_device_id(sut_api.p4rt->DeviceId());
+    read_request.add_entities()->mutable_table_entry();
+
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
+        testbed->Sut().CreateP4RuntimeStub());
+    std::unique_ptr<grpc::ClientReaderInterface<p4::v1::ReadResponse>> reader =
+        stub->Read(&context, read_request);
+
+    p4::v1::ReadResponse response;
+    int count = 0;
+    while (reader->Read(&response)) {
+      count += response.entities_size();
+    }
+    grpc::Status finish_status = reader->Finish();
+    LOG(INFO) << "Raw Read: " << count << " entities, gRPC code="
+              << finish_status.error_code()
+              << " message_size=" << finish_status.error_message().size()
+              << " details_size=" << finish_status.error_details().size();
+    if (!finish_status.ok()) {
+      std::string msg_hex = absl::BytesToHexString(
+          finish_status.error_message().substr(0, 100));
+      LOG(INFO) << "error_message hex (first 100 bytes): " << msg_hex;
+      std::string det_hex = absl::BytesToHexString(
+          finish_status.error_details().substr(0, 100));
+      LOG(INFO) << "error_details hex (first 100 bytes): " << det_hex;
+    }
+    ASSERT_TRUE(finish_status.ok())
+        << "gRPC code=" << finish_status.error_code();
+  }
+
+  // Test: does ReadPiEntitiesSorted work through the existing SUT session?
+  LOG(INFO) << "Testing ReadPiEntitiesSorted on SUT session...";
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> sut_entities,
+                       p4_runtime::ReadPiEntitiesSorted(*sut_api.p4rt));
+  LOG(INFO) << "SUT session Read OK: " << sut_entities.size() << " entities";
+
+  LOG(INFO) << "Calling ValidateDataplaneUsingExistingSwitchApis...";
   absl::StatusOr<ValidationResult> result =
       validator.ValidateDataplaneUsingExistingSwitchApis(
           sut_api, control_api, testbed->Environment(), params);
+  LOG(INFO) << "ValidateDataplaneUsingExistingSwitchApis returned.";
 
   // TODO: Currently hits std::bad_alloc — likely sandbox memory pressure
   // from two JVM processes. Investigate: try running outside sandbox, or

@@ -73,6 +73,18 @@ bazel test //fourward/...
    `trace_conversion_test.expected`. Update via:
    `bazel run //fourward:trace_conversion_golden_test -- --update`.
 
+## Debugging
+
+When a test crashes, **observe, don't guess**:
+
+```sh
+# Debug build with symbols:
+bazel run -c dbg //path/to:test -- --gtest_filter="*FailingTest*"
+
+# Run under GDB:
+bazel run -c dbg //path/to:test --run_under=gdb -- --gtest_filter="*FailingTest*"
+```
+
 ## Key design invariants
 
 1. **4ward is a subprocess.** All communication happens over gRPC. The C++
