@@ -117,11 +117,23 @@ ASSIGN_OR_RETURN(ValidationResult result,
                  validator.ValidateDataplane(testbed, params));
 ```
 
+## Known limitations
+
+- **Auxiliary entries are computed once.** Both the backend and
+  `FourwardMirrorTestbed` currently compute auxiliary entries at
+  creation/validation time. If entities are installed or gNMI config changes
+  later (e.g. during failure post-processing or multi-round validation), the
+  auxiliary entries may become stale. A reactive approach — updating auxiliary
+  entries in response to P4Runtime Write or gNMI Set — would be more correct
+  but is not yet implemented.
+
 ## Roadmap
 
 1. **Packet synthesis via p4-symbolic.** Replace hardcoded test vectors with
    automatically synthesized packets that cover all table entries.
 2. **Full auxiliary entry coverage.** Ensure all gNMI-derived tables in SAI P4
    are covered by `CreateV1ModelAuxiliaryEntities`.
-3. **Non-SAI P4 support.** Generalize punt-all and auxiliary entries for other
+3. **Reactive auxiliary entries.** Update auxiliary entries when entities or
+   gNMI config change, rather than computing them once up front.
+4. **Non-SAI P4 support.** Generalize punt-all and auxiliary entries for other
    P4 programs (requires parameterizing by P4 program).
