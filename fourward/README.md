@@ -49,10 +49,11 @@ are up. This fake serves just enough to satisfy those queries.
 
 ### PacketBridge (`packet_bridge.h`)
 
-Emulates back-to-back physical links between two 4ward instances. When the SUT
-outputs a packet on port X, the bridge injects it into the control switch on
-port X (and vice versa). Two threads, one per direction, subscribe to
-`SubscribeResults` and forward via `InjectPacket`.
+Emulates back-to-back physical links between two 4ward instances. Connects
+ports by gNMI interface name — SUT's "Ethernet0" connects to control switch's
+"Ethernet0", even if they have different P4RT IDs or dataplane ports. Reads
+gNMI per packet to resolve the mapping. See
+[designs/port_identity.md](designs/port_identity.md) for the full design.
 
 ### FourwardMirrorTestbed (`fourward_mirror_testbed.h`)
 
@@ -60,11 +61,11 @@ port X (and vice versa). Two threads, one per direction, subscribe to
 packet bridge. The development vehicle — exercises all integration code without
 a real switch.
 
-`Create()` handles the full setup transparently: starts servers, loads
-pipelines, installs SAI P4 auxiliary entries (mirroring the fake gNMI config
-via `sai::CreateV1ModelAuxiliaryEntities`), and starts the packet bridge.
+`Create()` starts two `FourwardPinsSwitch` instances and a `PacketBridge`.
+Auxiliary entries are reconciled transparently via the pre-packet hook
+(see [designs/pins_switch_auxiliary_entries.md](designs/pins_switch_auxiliary_entries.md)).
 DVaaS sees a standard `thinkit::MirrorTestbed` — it doesn't know it's
-running on simulated switches.
+running on P4-simulated switches.
 
 ### Trace Conversion (`trace_conversion.h`)
 
