@@ -31,6 +31,13 @@ bazel build //fourward/...
 bazel test //fourward/...
 ```
 
+## Test-driven development
+
+**Write the test first.** The test is the spec — it defines the behavior
+you want before you write the code. If you can't write a clear test, you
+don't understand the problem yet. A failing test is the starting point for
+every change, not an afterthought.
+
 ## Code conventions
 
 1. **We strictly follow the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html)**
