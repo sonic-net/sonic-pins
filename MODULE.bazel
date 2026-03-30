@@ -29,7 +29,7 @@ bazel_dep(name = "googleapis", version = "0.0.0-20260223-edfe7983")
 bazel_dep(name = "googleapis-cc", version = "1.0.0")
 bazel_dep(name = "googletest", version = "1.17.0.bcr.2")
 bazel_dep(name = "grpc", version = "1.80.0-pre1")
-bazel_dep(name = "gutil", version = "20260309.0")
+bazel_dep(name = "gutil", version = "20260309.0.bcr.1")
 bazel_dep(name = "jsoncpp", version = "1.9.6.bcr.1")
 bazel_dep(name = "nlohmann_json", version = "3.12.0.bcr.1")
 bazel_dep(name = "openconfig_gnmi", version = "0.14.1")
@@ -69,7 +69,7 @@ git_override(
 git_override(
     module_name = "fourward",
     remote = "https://github.com/smolkaj/4ward.git",
-    commit = "6245e26e91de0e118388c7cd18fe93f3022915d3",
+    commit = "e2da84c663bcae8b4e15276cf672bbe8e5e9da4a",
 )
 
 # p4c fork that exports //p4include as a Bazel package (needed by fourward_compile).

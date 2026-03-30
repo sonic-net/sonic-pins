@@ -9,6 +9,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "dataplane.grpc.pb.h"
+#include "dataplane.pb.h"
 #include "fourward/fourward_server.h"
 #include "grpcpp/channel.h"
 #include "grpcpp/client_context.h"
@@ -19,8 +21,6 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
-#include "dataplane.grpc.pb.h"
-#include "dataplane.pb.h"
 
 namespace dvaas {
 namespace {

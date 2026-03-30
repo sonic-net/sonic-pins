@@ -53,7 +53,17 @@ void CollectEvents(const fourward::sim::TraceTree& tree,
         drops.push_back(drop);
         break;
       }
-      default:
+      case fourward::sim::TraceEvent::kParserTransition:
+      case fourward::sim::TraceEvent::kActionExecution:
+      case fourward::sim::TraceEvent::kExternCall:
+      case fourward::sim::TraceEvent::kPacketIngress:
+      case fourward::sim::TraceEvent::kPipelineStage:
+      case fourward::sim::TraceEvent::kClone:
+      case fourward::sim::TraceEvent::kCloneSessionLookup:
+      case fourward::sim::TraceEvent::kLogMessage:
+      case fourward::sim::TraceEvent::kAssertion:
+      case fourward::sim::TraceEvent::kDeparserEmit:
+      case fourward::sim::TraceEvent::EVENT_NOT_SET:
         break;
     }
   }
@@ -73,7 +83,7 @@ void CollectEvents(const fourward::sim::TraceTree& tree,
                   : std::string(
                         tree.packet_outcome().output().p4rt_egress_port()));
           break;
-        default:
+        case fourward::sim::PacketOutcome::OUTCOME_NOT_SET:
           fate = "UNKNOWN";
           break;
       }
@@ -85,7 +95,7 @@ void CollectEvents(const fourward::sim::TraceTree& tree,
                       fate);
       }
       break;
-    default:
+    case fourward::sim::TraceTree::OUTCOME_NOT_SET:
       break;
   }
 }

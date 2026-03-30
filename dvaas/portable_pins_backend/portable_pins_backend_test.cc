@@ -243,10 +243,6 @@ TEST(PortablePinsBackendTest, BackendWorksEndToEndWithFourwardTestbed) {
 TEST(PortablePinsBackendTest,
      ValidateDataplaneWithUserProvidedTestVectors) {
   p4::v1::ForwardingPipelineConfig fourward_config = LoadFourwardConfig();
-  // DVaaS reads pkg_info.version from the switch to decide whether to adjust
-  // meter rate limits. The 4ward backend doesn't emit @pkginfo, so set a
-  // version that matches the SAI P4 source we compiled from.
-  fourward_config.mutable_p4info()->mutable_pkg_info()->set_version("5.0.0");
 
   // Create testbed and backend.
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<FourwardMirrorTestbed> testbed,

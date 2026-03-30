@@ -88,7 +88,6 @@ void AppendOutcome(const fourward::sim::TraceTree& tree,
           break;
         }
         case fourward::sim::FORK_REASON_UNSPECIFIED:
-        default:
           break;
       }
       break;

@@ -13,6 +13,7 @@ Input TraceTree:
 events {
   table_lookup {
     table_name: "ingress.routing.ipv4_table"
+    hit: false
     action_name: "NoAction"
   }
 }

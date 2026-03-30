@@ -55,6 +55,9 @@ jobs:
     # Unauthenticated reads are allowed for PRs from forks
     - name: Build and Test
       run: |
+        # Prevent rules_android from finding the runner's partial Android SDK
+        # (has no API levels installed, causing analysis failures).
+        sudo rm -rf /usr/local/lib/android
         BAZEL_OPTS=""
         [ ! -z "$BAZEL_CACHE_USER" ] && [ ! -z "$BAZEL_CACHE_PWD" ] && \
           AUTH="${BAZEL_CACHE_USER}:${BAZEL_CACHE_PWD}@"
