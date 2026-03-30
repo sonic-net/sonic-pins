@@ -1,4 +1,4 @@
-# fourward/ — Agent Guide
+# sonic-pins — Agent Guide
 
 **Always work in a dedicated git worktree — never modify the main tree
 directly.** Create one with:
@@ -6,6 +6,15 @@ directly.** Create one with:
 ```sh
 git worktree add ../sonic-pins-<branch> -b <branch>
 ```
+
+## Understand ideal before settling for less
+
+Before committing to any design or implementation, define what the ideal
+solution looks like — unconstrained by schedule, legacy, or expedience.
+You don't have to build the ideal, but you must understand it. A pragmatic
+shortcut is a legitimate engineering choice; a shortcut you took because you
+never considered the alternative is just a blind spot. Name the north star,
+name what you're trading away, and name why.
 
 ## Repository map
 
@@ -19,7 +28,6 @@ fourward/fourward_mirror_testbed.h    thinkit::MirrorTestbed (two 4ward + gNMI +
 fourward/trace_conversion.{h,cc}      TraceTree → PacketTrace conversion.
 fourward/BUILD.bazel                  All build targets.
 fourward/README.md                    Architecture overview and component docs.
-fourward/AGENTS.md                    This file.
 ```
 
 Unit tests live alongside the source: `foo_test.cc` next to `foo.{h,cc}`.
