@@ -190,5 +190,46 @@ TEST(FourwardPinsSwitchTest,
       << "Expected at least the user-installed ACL entry";
 }
 
+// ---------------------------------------------------------------------------
+// Litmus test 4: With vs without — prove auxiliary entries are the cause
+// ---------------------------------------------------------------------------
+
+// Same switch, same ACL trap entry, same packet. First inject WITHOUT
+// auxiliary entries (hook disabled or not yet triggered) and verify the
+// punt fails. Then inject WITH auxiliary entries and verify it succeeds.
+// This proves causality — the auxiliary entries are what makes it work.
+TEST(FourwardPinsSwitchTest,
+     DISABLED_AclTrapFailsWithoutAuxEntriesSucceedsWith) {
+  p4::v1::ForwardingPipelineConfig config = LoadFourwardConfig();
+  ASSERT_OK_AND_ASSIGN(FourwardSwitch pins_switch, FourwardSwitch::Create());
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<p4_runtime::P4RuntimeSession> session,
+      p4_runtime::P4RuntimeSession::Create(pins_switch));
+  ASSERT_OK(p4_runtime::SetMetadataAndSetForwardingPipelineConfig(
+      session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      config));
+
+  // Install only an ACL trap entry.
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+                .InstallDedupedEntities(*session));
+
+  // Phase 1: WITHOUT auxiliary entries.
+  // TODO: Inject packet via Dataplane service with hook disabled.
+  // Verify: no PacketIn (punt fails silently — no PRE clone session).
+  p4::v1::StreamMessageResponse response;
+  EXPECT_FALSE(session->StreamChannelRead(response, absl::Seconds(2)))
+      << "Expected NO PacketIn without auxiliary entries, but got: "
+      << response.DebugString();
+
+  // Phase 2: WITH auxiliary entries.
+  // TODO: Inject same packet with hook enabled (or call reconcile).
+  // Verify: PacketIn arrives (punt succeeds — PRE clone session exists).
+  ASSERT_TRUE(session->StreamChannelRead(response, absl::Seconds(5)))
+      << "Expected PacketIn with auxiliary entries, but none received.";
+  EXPECT_TRUE(response.has_packet());
+}
+
 }  // namespace
 }  // namespace dvaas
