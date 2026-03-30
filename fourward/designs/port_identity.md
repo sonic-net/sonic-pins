@@ -97,12 +97,24 @@ established at switch creation (from the `FakeInterface` list) and can be
 changed via gNMI Set (e.g. by DVaaS mirroring SUT port config to the
 control switch).
 
-### No enforcement of mapping-before-entries ordering
+### No gNMI/P4RT coupling
 
-DVaaS always clears entries before remapping ports, so stale entries
-referencing old P4RT IDs are not a problem in practice. We do not enforce
-this ordering — for simplicity, gNMI Set succeeds regardless of installed
-entries.
+The gNMI and P4Runtime control planes are deliberately decoupled:
+
+- **gNMI Set succeeds regardless of installed entries.** DVaaS always
+  clears entries before remapping ports, so stale entries are not a
+  problem in practice. We do not enforce this ordering for simplicity.
+- **P4Runtime Writes succeed regardless of gNMI state.** An entry
+  referencing P4RT port "99" is accepted even if no gNMI interface has
+  that ID.
+- **Unmapped ports are dropped in the dataplane.** If a packet is
+  forwarded to a P4RT port ID that has no corresponding gNMI interface,
+  the packet is dropped and a warning is logged. This catches
+  misconfigurations at the point they matter (packet forwarding) without
+  complicating the control plane.
+
+This is a good tradeoff for our use case: DVaaS sequences its operations
+correctly, so enforcement would add complexity without catching real bugs.
 
 ## PacketBridge design
 
