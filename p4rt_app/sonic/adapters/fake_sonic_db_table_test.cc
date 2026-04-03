@@ -118,7 +118,7 @@ TEST(FakeSonicDbTest, DefaultNotificationResponseIsSuccess) {
 
   // First insert.
   EXPECT_TRUE(table.PushNotification("entry"));
-  table.GetNextNotification(op, data, values);
+  EXPECT_OK(table.GetNextNotification(op, data, values));
   EXPECT_EQ(op, "SWSS_RC_SUCCESS");
   EXPECT_EQ(data, "entry");
   EXPECT_THAT(values,
@@ -134,7 +134,7 @@ TEST(FakeSonicDbTest, SetNotificationResponseForKey) {
   table.SetResponseForKey(/*key=*/"entry", /*code=*/"SWSS_RC_UNKNOWN",
                           /*message=*/"my error message");
   EXPECT_FALSE(table.PushNotification("entry"));
-  table.GetNextNotification(op, data, values);
+  EXPECT_OK(table.GetNextNotification(op, data, values));
   EXPECT_EQ(op, "SWSS_RC_UNKNOWN");
   EXPECT_EQ(data, "entry");
   EXPECT_THAT(values,
