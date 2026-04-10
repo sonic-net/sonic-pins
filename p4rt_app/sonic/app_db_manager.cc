@@ -404,7 +404,7 @@ absl::StatusOr<AppDbUpdate> CreateAppDbUpdate(p4::v1::Update::Type update_type,
          << "[P4RT App] Entity has no AppDb translation.";
 }
 
-absl::Status PerformAppDbUpdates(
+absl::StatusOr<bool> PerformAppDbUpdates(
     P4rtTable& p4rt_table, VrfTable& vrf_table,
     const std::vector<std::pair<AppDbUpdate, pdpi::IrUpdateStatus*>>&
         updates_and_results) {
@@ -422,9 +422,8 @@ absl::Status PerformAppDbUpdates(
         // Flush any P4 updates before attempting the VRF update.
         // This maintains fail-on-first-error behavior where we shouldn't
         // attempt the VRF update if any of the queued P4 updates fails.
-        bool p4_success;
         ASSIGN_OR_RETURN(
-            p4_success,
+            bool p4_success,
             PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results));
         p4rt_updates.clear();
         p4rt_results.clear();
@@ -447,9 +446,8 @@ absl::Status PerformAppDbUpdates(
     }
   }
 
-  RETURN_IF_ERROR(
-      PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results).status());
-  return absl::OkStatus();
+  if (failed) return false;
+  return PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results);
 }
 
 absl::StatusOr<std::string> GetRedisP4rtTableKey(
