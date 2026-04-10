@@ -554,6 +554,27 @@ TEST(CalculateTransition, CalculatesPartialAclTableModification) {
               IsOkAndHolds(TransitionIs(expected_transition)));
 }
 
+TEST(CalculateTransition, CanForceTransitionForUnmodifiedAclTable) {
+  pdpi::IrP4Info new_p4info = GetIrP4Info();
+  new_p4info.mutable_tables_by_name()
+      ->at("acl_ingress_table_b")
+      .mutable_preamble()
+      ->add_annotations("@reinstall_during_upgrade");
+  new_p4info.mutable_tables_by_name()
+      ->at("acl_ingress_table_d")
+      .mutable_preamble()
+      ->add_annotations("@reinstall_during_upgrade");
+
+  P4InfoReconcileTransition expected_transition = {
+      .nonessential_acl_tables_to_modify = {"acl_ingress_table_b"},
+      .essential_acl_tables_to_modify = {"acl_ingress_table_d"},
+  };
+  EXPECT_THAT(CalculateTransition(GetIrP4Info(), new_p4info),
+              IsOkAndHolds(TransitionIs(expected_transition)));
+  EXPECT_THAT(CalculateTransition(new_p4info, GetIrP4Info()),
+              IsOkAndHolds(TransitionIs({})));
+}
+
 TEST(CalculateTransition, IgnoresFixedTableDeletion) {
   const pdpi::IrP4Info original = GetIrP4Info();
   pdpi::IrP4Info without_fixed_tables = original;

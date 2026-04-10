@@ -136,7 +136,8 @@ TEST_F(PortNameAndIdTest, PortIdTranslationFailsForUnknownPortId) {
   EXPECT_THAT(
       p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    request),
-      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: FAILED_PRECONDITION")));
 
   // The port id is used in the action param, so it doesn't affect the key.
   EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable().GetAllKeys(),
@@ -151,7 +152,8 @@ TEST_F(PortNameAndIdTest, PortIdTranslationCanBeRemoved) {
   EXPECT_THAT(
       p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    request),
-      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: FAILED_PRECONDITION")));
 
   EXPECT_THAT(p4rt_service_.GetPortAppDbTable().GetAllKeys(), IsEmpty());
   EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable().GetAllKeys(), IsEmpty());

@@ -162,7 +162,7 @@ TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
   ASSERT_OK(RemovePacketIoPort("Ethernet1/1/0"));
   EXPECT_THAT(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 
   sonic::PacketIoCounters counters =
       p4rt_service_.GetP4rtServer().GetPacketIoCounters();
@@ -180,7 +180,7 @@ TEST_F(FakePacketIoTest, PacketInFailsWithoutPortTranslation) {
   ASSERT_OK(p4rt_service_.GetP4rtServer().AddPacketIoPort("Ethernet1/1/0"));
   EXPECT_THAT(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 
   sonic::PacketIoCounters counters =
       p4rt_service_.GetP4rtServer().GetPacketIoCounters();
@@ -249,7 +249,7 @@ TEST_F(FakePacketIoTest, PacketOutFailAfterPortRemoval) {
   ASSERT_EQ(actual_responses.size(), 1);
   ASSERT_TRUE(actual_responses[0].has_error());
   ASSERT_EQ(actual_responses[0].error().canonical_code(),
-            grpc::StatusCode::INVALID_ARGUMENT);
+            grpc::StatusCode::FAILED_PRECONDITION);
 
   sonic::PacketIoCounters counters =
       p4rt_service_.GetP4rtServer().GetPacketIoCounters();
