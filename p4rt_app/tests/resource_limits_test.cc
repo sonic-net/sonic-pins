@@ -228,6 +228,64 @@ TEST_F(SumOfWeightsResourceLimitsTest,
 }
 
 TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingRejectsGroupSizeThatIsTooLarge) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-1", max_group_size + 1));
+
+  EXPECT_THAT(
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: INVALID_ARGUMENT: [P4RT App] too many actions")));
+}
+
+TEST_F(SumOfWeightsResourceLimitsTest,
+       WcmpAccountingRejectsGroupWeightGreaterThanSize) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(ir_p4_info_, p4::v1::Update::INSERT,
+                             /*group_id=*/"group-1", max_group_size / 10,
+                             /*member_weight=*/50));
+
+  EXPECT_THAT(
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          HasSubstr(
+              "#1: INVALID_ARGUMENT: [P4RT App] too much weight in actions")));
+}
+
+TEST_F(SumOfMembersResourceLimitsTest,
+       WcmpAccountingAcceptsGroupWeightGreaterThanSize) {
+  ASSERT_OK_AND_ASSIGN(
+      int64_t max_group_size,
+      GetMaxGroupSizeForActionProfile(ir_p4_info_, kWcmpGroupSelectorName));
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK_AND_ASSIGN(
+      *request.add_updates(),
+      WcmpUpdateWithNMembers(
+          ir_p4_info_, p4::v1::Update::INSERT,
+          /*group_id=*/"group-1", max_group_size / 10,
+          /*member_weight=*/kActionProfileMaxMemberWeight / 2));
+
+  EXPECT_THAT(
+      p4_runtime::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      IsOk());
+}
+
+TEST_F(SumOfMembersResourceLimitsTest,
        WcmpAccountingRejectsSingleMemberWeightGreaterThanMaxMemberWeight) {
   ASSERT_OK_AND_ASSIGN(
       int64_t max_group_size,
