@@ -61,6 +61,17 @@ go_register_toolchains(version = "1.21.1")
 
 gazelle_dependencies(go_repository_default_config = "@//:WORKSPACE.bazel")
 
+# -- Load boringssl -------------------------------------------------------------
+
+http_archive(
+    name = "boringssl",
+    sha256 = "1e759891e168c5957f2f4d519929e2b4cef9303b7cf2049601081f4fca95bf21",
+    strip_prefix = "boringssl-88d7a40bd06a34da6ee0d985545755199d047258",
+    urls = [
+        "https://github.com/google/boringssl/archive/88d7a40bd06a34da6ee0d985545755199d047258.tar.gz",
+    ],
+)
+
 # -- Load GRPC -------------------------------------------------------------
 
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
