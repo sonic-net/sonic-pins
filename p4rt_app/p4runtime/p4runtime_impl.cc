@@ -1933,35 +1933,17 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     }
   }
 
-  // Configure the lower layers.
-  // Apply ir_p4info to DB if we are committing to DB.
-  // Apply a config if we don't currently have one.
-  absl::Status config_result = ConfigureAppDbTables(config_info->ir_p4info);
-  if (!config_result.ok()) {
-    return EnterCriticalState(
-        absl::StrCat("Failed to apply ForwardingPipelineConfig: ",
-                     config_result.ToString()));
-  }
-
-    // Store resource utilization limits for any ActionProfiles.
-  for (const auto &[action_profile_name, action_profile_def] :
-       config_info->ir_p4info.action_profiles_by_name()) {
-    capacity_by_action_profile_name_[action_profile_name] =
-        GetActionProfileResourceCapacity(action_profile_def);
-    LOG(INFO) << "Adding action profile limits for '" << action_profile_name
-              << "': max_weights_for_all_groups="
-              << action_profile_def.action_profile().size();
-  }
-
-    // Update P4RuntimeImpl's state only if we succeed.
+  // Update P4RuntimeImpl's state only if we succeed.
   p4_constraint_info_ = std::move(config_info->constraints);
   ir_p4info_ = std::move(config_info->ir_p4info);
   forwarding_pipeline_config_ = request.config();
 
   // Save the ForwardingPipelineConfig if we are committing.
-  LOG(INFO)
-      << "ForwardingPipelineConfig was successfully applied. Saving to disk.";
-  return SavePipelineConfig(*forwarding_pipeline_config_);
+  if (commit_to_hardware) {
+    LOG(INFO)
+        << "ForwardingPipelineConfig was successfully applied. Saving to disk.";
+    return SavePipelineConfig(*forwarding_pipeline_config_);
+  }
   return grpc::Status::OK;
 }
 
