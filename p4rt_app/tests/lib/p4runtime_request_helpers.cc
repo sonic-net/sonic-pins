@@ -13,6 +13,10 @@
 // limitations under the License.
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 
+#include <stdint.h>
+
+#include <optional>
+
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gutil/proto.h"
@@ -21,6 +25,8 @@
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/pd.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
+#include "sai_p4/capabilities.h"
+#include "sai_p4/capabilities.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace p4rt_app {
@@ -40,6 +46,17 @@ absl::StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
   RETURN_IF_ERROR(gutil::ReadProtoFromString(ir_request, &ir_proto))
       << "Unable to translate IrWriteRequest proto string";
   return pdpi::IrWriteRequestToPi(ir_p4_info, ir_proto);
+}
+
+absl::StatusOr<sai::WcmpGroupLimitations> GetWcmpGroupCapabilities(
+    p4_runtime::P4RuntimeSession* session, const std::optional<uint64_t>& device_id) {
+  p4::v1::CapabilitiesRequest request;
+  if (device_id.has_value()) {
+    request.set_device_id(device_id.value());
+  }
+  ASSIGN_OR_RETURN(p4::v1::CapabilitiesResponse capability_response,
+                   session->GetSwitchCapabilities(request));
+  return sai::GetWcmpGroupLimitations(capability_response);
 }
 
 }  // namespace test_lib
