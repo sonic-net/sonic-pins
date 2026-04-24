@@ -48,19 +48,27 @@ constexpr absl::string_view kActionMakeUntaggedMemberName =
 constexpr absl::string_view kMatchPort = "port";
 constexpr absl::string_view kMatchVlanId = "vlan_id";
 
-std::vector<swss::FieldValueTuple> GetVlanValues() {
-  return std::vector<swss::FieldValueTuple>{
-      std::make_pair("source", "P4"),
-  };
+std::vector<swss::FieldValueTuple> GetVlanValues(
+    const pdpi::IrTableEntry& entry) {
+  std::vector<swss::FieldValueTuple> result = {{"source", "P4"}};
+  if (!entry.controller_metadata().empty()) {
+    result.push_back(
+        std::make_pair("controller_metadata", entry.controller_metadata()));
+  }
+  return result;
 }
 
 std::vector<swss::FieldValueTuple> GetVlanMemberValues(
     const pdpi::IrTableEntry& entry) {
+  std::vector<swss::FieldValueTuple> result = {{"source", "P4"}};
   bool tagged = entry.action().name() == kActionMakeTaggedMemberName;
-  return std::vector<swss::FieldValueTuple>{
-      std::make_pair("tagging_mode", tagged ? "tagged" : "untagged"),
-      std::make_pair("source", "P4"),
-  };
+  result.push_back(
+      std::make_pair("tagging_mode", tagged ? "tagged" : "untagged"));
+  if (!entry.controller_metadata().empty()) {
+    result.push_back(
+        std::make_pair("controller_metadata", entry.controller_metadata()));
+  }
+  return result;
 }
 
 absl::StatusOr<std::string> StripVlanPrefixAndReturnHexString(
@@ -161,7 +169,7 @@ absl::StatusOr<swss::KeyOpFieldsValuesTuple> CreateAppDbVlanUpdate(
   ASSIGN_OR_RETURN(kfvKey(tuple), GetVlanTableKey(entry));
   switch (update_type) {
     case p4::v1::Update::INSERT: {
-      kfvFieldsValues(tuple) = GetVlanValues();
+      kfvFieldsValues(tuple) = GetVlanValues(entry);
       kfvOp(tuple) = SET_COMMAND;
     } break;
     case p4::v1::Update::MODIFY:
@@ -256,7 +264,8 @@ absl::StatusOr<std::vector<pdpi::IrTableEntry>> GetAllAppDbVlanTableEntries(
     for (const auto& [field, data] : vlan_table.app_db->get(key)) {
       if (field == "source" && data == "P4") {
         source_p4 = true;
-        break;
+      } else if (field == "controller_metadata") {
+        table_entry.set_controller_metadata(data);
       }
     }
 
@@ -302,6 +311,8 @@ GetAllAppDbVlanMemberTableEntries(VlanMemberTable& vlan_member_table) {
         if (data == "P4") {
           source_p4 = true;
         }
+      } else if (field == "controller_metadata") {
+        table_entry.set_controller_metadata(data);
       }
     }
 

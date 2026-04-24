@@ -48,6 +48,7 @@ using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::SizeIs;
 
 class VlanEntryTranslationTest : public ::testing::Test {
  protected:
@@ -104,16 +105,28 @@ class VlanEntryTranslationTest : public ::testing::Test {
 
 TEST_F(VlanEntryTranslationTest, InsertVlanEntry) {
   pdpi::IrTableEntry table_entry;
-  ASSERT_TRUE(
-      TextFormat::ParseFromString(R"pb(matches {
-                                         name: "vlan_id"
-                                         exact { hex_str: "0x064" }
-                                       }
-                                       action { name: "no_action" })pb",
-                                  &table_entry));
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(matches {
+             name: "vlan_id"
+             exact { hex_str: "0x064" }
+           }
+           action { name: "no_action" }
+           controller_metadata: "test_metadata")pb",
+      &table_entry));
+
+  // Expected RedisDB entry.
+  const std::vector<std::pair<std::string, std::string>> kfv_values = {
+      std::make_pair("source", "P4"),
+      std::make_pair("controller_metadata", "test_metadata"),
+  };
+  const std::string expected_key = "Vlan100";
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
 
   ASSERT_OK_AND_ASSIGN(
       auto update, CreateAppDbVlanUpdate(p4::v1::Update::INSERT, table_entry));
+  ASSERT_THAT(CreateAppDbVlanUpdate(p4::v1::Update::INSERT, table_entry),
+              IsOkAndHolds(expected_key_value));
 
   EXPECT_CALL(*mock_vlan_producer_state_, set(Eq("Vlan100"), _)).Times(1);
   EXPECT_CALL(*mock_vlan_notifier_, WaitForNotificationAndPop)
@@ -249,6 +262,47 @@ TEST_F(VlanEntryTranslationTest, DeleteVlanEntry) {
               IsOkAndHolds(EqualsProto("code: OK")));
 }
 
+TEST_F(VlanEntryTranslationTest, VlanTableRead) {
+  pdpi::IrTableEntry table_entry_1;
+  pdpi::IrTableEntry table_entry_2;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(table_name: "vlan_table"
+           matches {
+             name: "vlan_id"
+             exact { hex_str: "0x064" }
+           }
+           action { name: "no_action" }
+           controller_metadata: "test_metadata")pb",
+      &table_entry_1));
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(table_name: "vlan_table"
+           matches {
+             name: "vlan_id"
+             exact { hex_str: "0x0c8" }
+           }
+           action { name: "no_action" }
+           controller_metadata: "test_metadata_2")pb",
+      &table_entry_2));
+
+  EXPECT_CALL(*mock_vlan_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{"Vlan100", "Vlan200"}));
+  EXPECT_CALL(*mock_vlan_app_db_, get("Vlan100"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
+          std::make_pair("source", "P4"),
+          std::make_pair("controller_metadata", "test_metadata"),
+      }));
+  EXPECT_CALL(*mock_vlan_app_db_, get("Vlan200"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
+          std::make_pair("source", "P4"),
+          std::make_pair("controller_metadata", "test_metadata_2"),
+      }));
+
+  ASSERT_OK_AND_ASSIGN(auto entries, GetAllAppDbVlanTableEntries(vlan_table_));
+  EXPECT_THAT(entries, SizeIs(2));
+  EXPECT_THAT(entries[0], EqualsProto(table_entry_1));
+  EXPECT_THAT(entries[1], EqualsProto(table_entry_2));
+}
+
 TEST_F(VlanEntryTranslationTest, VlanTableReadFailsIfKeyHasIncorrectPrefix) {
   pdpi::IrTableEntry table_entry;
 
@@ -290,13 +344,15 @@ TEST_F(VlanEntryTranslationTest, InsertVlanMemberEntryTaggedMember) {
              name: "port"
              exact { str: "Ethernet1/1/1" }
            }
-           action { name: "make_tagged_member" })pb",
+           action { name: "make_tagged_member" }
+           controller_metadata: "test_metadata")pb",
       &table_entry));
 
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
-      std::make_pair("tagging_mode", "tagged"),
       std::make_pair("source", "P4"),
+      std::make_pair("tagging_mode", "tagged"),
+      std::make_pair("controller_metadata", "test_metadata"),
   };
   const std::string expected_key = "Vlan100:Ethernet1/1/1";
   swss::KeyOpFieldsValuesTuple expected_key_value =
@@ -332,13 +388,15 @@ TEST_F(VlanEntryTranslationTest, InsertVlanMemberEntryUntaggedMember) {
              name: "port"
              exact { str: "Ethernet1/1/1" }
            }
-           action { name: "make_untagged_member" })pb",
+           action { name: "make_untagged_member" }
+           controller_metadata: "test_metadata")pb",
       &table_entry));
 
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
-      std::make_pair("tagging_mode", "untagged"),
       std::make_pair("source", "P4"),
+      std::make_pair("tagging_mode", "untagged"),
+      std::make_pair("controller_metadata", "test_metadata"),
   };
   const std::string expected_key = "Vlan100:Ethernet1/1/1";
   swss::KeyOpFieldsValuesTuple expected_key_value =
@@ -521,6 +579,59 @@ TEST_F(VlanEntryTranslationTest, VlanMemberEntryUnknownOperationFails) {
   kfvOp(update) = "Other";
   EXPECT_THAT(PerformAppDbVlanMemberUpdate(vlan_member_table_, update),
               StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(VlanEntryTranslationTest, VlanMemberTableRead) {
+  pdpi::IrTableEntry table_entry_1;
+  pdpi::IrTableEntry table_entry_2;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(table_name: "vlan_membership_table"
+           matches {
+             name: "vlan_id"
+             exact { hex_str: "0x064" }
+           }
+           matches {
+             name: "port"
+             exact { str: "Ethernet1/1/1" }
+           }
+           action { name: "make_untagged_member" }
+           controller_metadata: "test_metadata")pb",
+      &table_entry_1));
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(table_name: "vlan_membership_table"
+           matches {
+             name: "vlan_id"
+             exact { hex_str: "0x0c8" }
+           }
+           matches {
+             name: "port"
+             exact { str: "Ethernet1/1/2" }
+           }
+           action { name: "make_tagged_member" }
+           controller_metadata: "test_metadata_2")pb",
+      &table_entry_2));
+
+  EXPECT_CALL(*mock_vlan_member_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{"Vlan100:Ethernet1/1/1",
+                                                "Vlan200:Ethernet1/1/2"}));
+  EXPECT_CALL(*mock_vlan_member_app_db_, get("Vlan100:Ethernet1/1/1"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
+          std::make_pair("source", "P4"),
+          std::make_pair("tagging_mode", "untagged"),
+          std::make_pair("controller_metadata", "test_metadata"),
+      }));
+  EXPECT_CALL(*mock_vlan_member_app_db_, get("Vlan200:Ethernet1/1/2"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
+          std::make_pair("source", "P4"),
+          std::make_pair("tagging_mode", "tagged"),
+          std::make_pair("controller_metadata", "test_metadata_2"),
+      }));
+
+  ASSERT_OK_AND_ASSIGN(auto entries,
+                       GetAllAppDbVlanMemberTableEntries(vlan_member_table_));
+  EXPECT_THAT(entries, SizeIs(2));
+  EXPECT_THAT(entries[0], EqualsProto(table_entry_1));
+  EXPECT_THAT(entries[1], EqualsProto(table_entry_2));
 }
 
 TEST_F(VlanEntryTranslationTest, VlanMemberTableReadFailsIfKeyFormatIncorrect) {
