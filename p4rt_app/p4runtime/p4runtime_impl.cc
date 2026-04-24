@@ -82,6 +82,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/sonic/state_verification.h"
+#include "p4rt_app/sonic/vlan_entry_translation.h"
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
@@ -89,6 +90,7 @@
 /*#include "swss/component_state_helper_interface.h"
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
+#include "swss/rediscommand.h"
 #include "swss/warm_restart.h"
 
 namespace p4rt_app {
@@ -553,7 +555,8 @@ RebuildEntityEntryCache(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
     const QueueTranslator& front_panel_queue_translator,
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
+    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table,
+    sonic::VlanTable& vlan_table, sonic::VlanMemberTable& vlan_member_table) {
   absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> cache;
   // Get all P4RT keys associated with IrTableEntry objects from the AppDb.
   for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
@@ -595,6 +598,56 @@ RebuildEntityEntryCache(
              << "[P4RT/PDPI] " << vrf_entry.status().message();
     }
     *cache[pdpi::EntityKey(*vrf_entry)].mutable_table_entry() = *vrf_entry;
+  }
+
+  // Get all VLAN_TABLE_P4 entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vlan_entries,
+                   sonic::GetAllAppDbVlanTableEntries(vlan_table));
+  for (auto& ir_table_entry : vlan_entries) {
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
+        },
+        ir_table_entry))
+        << " Entry: " << google::protobuf::ShortFormat(ir_table_entry);
+    auto vlan_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vlan_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vlan_entry.status().code())
+             << "[P4RT/PDPI] " << vlan_entry.status().message();
+    }
+    *cache[pdpi::EntityKey(*vlan_entry)].mutable_table_entry() = *vlan_entry;
+  }
+
+  // Get all VLAN_MEMBER_TABLE entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vlan_member_entries,
+                   sonic::GetAllAppDbVlanMemberTableEntries(vlan_member_table));
+  for (auto& ir_table_entry : vlan_member_entries) {
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
+        },
+        ir_table_entry));
+    auto vlan_member_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vlan_member_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vlan_member_entry.status().code())
+             << "[P4RT/PDPI] " << vlan_member_entry.status().message();
+    }
+    *cache[pdpi::EntityKey(*vlan_member_entry)].mutable_table_entry() =
+        *vlan_member_entry;
   }
 
   // Get all packet replication entries from the AppDb.
@@ -1019,12 +1072,48 @@ absl::Status P4RuntimeImpl::TransitionAcls(
   return absl::OkStatus();
 }
 
+void P4RuntimeImpl::RecordTransitionTelemetry(
+    const P4InfoReconcileTransition& transition) {
+  std::vector<swss::FieldValueTuple> fvs;
+  // Hashing telemetry
+  // TODO: write hash table transition data once the removal of LAG
+  // hash configs is supported.
+
+  // ACL telemetry
+  fvs.emplace_back("added_tables",
+                   absl::StrJoin(transition.acl_tables_to_add, ","));
+  fvs.emplace_back("removed_tables",
+                   absl::StrJoin(transition.acl_tables_to_delete, ","));
+  fvs.emplace_back(
+      "modified_essential_tables",
+      absl::StrJoin(transition.essential_acl_tables_to_modify, ","));
+  fvs.emplace_back(
+      "modified_nonessential_tables",
+      absl::StrJoin(transition.nonessential_acl_tables_to_modify, ","));
+  p4rt_telemetry_table_.state_db->set("acl_recarving", fvs);
+}
+
+void P4RuntimeImpl::ResetTransitionTelemetry() {
+  std::vector<swss::FieldValueTuple> fvs;
+  // Hashing telemetry
+  // TODO: reset hash table transition data once the removal of LAG
+  // hash configs is supported.
+
+  // ACL telemetry
+  fvs.emplace_back("added_tables", "");
+  fvs.emplace_back("removed_tables", "");
+  fvs.emplace_back("modified_essential_tables", "");
+  fvs.emplace_back("modified_nonessential_tables", "");
+  p4rt_telemetry_table_.state_db->set("acl_recarving", fvs);
+}
+
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
     sonic::VlanTable vlan_table, sonic::VlanMemberTable vlan_member_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
     sonic::SwitchCapabilityTable switch_capability_table,
+    sonic::P4rtTelemetryTable p4rt_telemetry_table,
     std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
     // TODO(PINS): To add component_state, system_state and netdev_translator.
@@ -1041,6 +1130,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       port_table_(std::move(port_table)),
       host_stats_table_(std::move(host_stats_table)),
       switch_capability_table_(std::move(switch_capability_table)),
+      p4rt_telemetry_table_(std::move(p4rt_telemetry_table)),
       warm_boot_state_adapter_(std::move(warm_boot_state_adapter)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
@@ -1709,6 +1799,24 @@ absl::Status P4RuntimeImpl::VerifyState() {
                     vrf_table_failures.end());
   }
 
+  // Verify the VLAN_TABLE_P4 entries.
+  std::vector<std::string> vlan_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vlan_table_.app_state_db,
+                                             *vlan_table_.app_db);
+  if (!vlan_table_failures.empty()) {
+    failures.insert(failures.end(), vlan_table_failures.begin(),
+                    vlan_table_failures.end());
+  }
+
+  // Verify the VLAN_MEMBER_TABLE_P4 entries.
+  std::vector<std::string> vlan_member_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vlan_member_table_.app_state_db,
+                                             *vlan_member_table_.app_db);
+  if (!vlan_member_table_failures.empty()) {
+    failures.insert(failures.end(), vlan_member_table_failures.begin(),
+                    vlan_member_table_failures.end());
+  }
+
   // Verify the HASH_TABLE entries.
   std::vector<std::string> hash_table_failures =
       sonic::VerifyAppStateDbAndAppDbEntries(*hash_table_.app_state_db,
@@ -1818,7 +1926,8 @@ grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
   auto entity_cache = RebuildEntityEntryCache(
       *ir_p4info_, translate_port_ids_, port_translation_map_,
       *cpu_queue_translator_, *front_panel_queue_translator_, 
-      p4rt_table_, vrf_table_);
+      p4rt_table_, vrf_table_,
+      vlan_table_, vlan_member_table_);
   if (!entity_cache.ok()) {
     LOG(ERROR) << "Failed to build the table cache during COMMIT: "
                << entity_cache.status();
@@ -1861,6 +1970,7 @@ grpc::Status P4RuntimeImpl::CommitPipelineConfig(
 grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest& request,
     bool commit_to_hardware) {
+  ResetTransitionTelemetry();
   auto config_info = PreprocessConfig(request);
   if (!config_info.ok()) {
     return gutil::AbslStatusToGrpcStatus(config_info.status());
@@ -1907,6 +2017,7 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
           "Failed to reconcile ACL tables in new ForwardingPipelineConfig: ",
           result.message()));
     }
+    RecordTransitionTelemetry(*transition);
 
     capacity_by_action_profile_name_ = std::move(*capacity);
   } else {
@@ -2247,7 +2358,7 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
         RebuildEntityEntryCache(*ir_p4info_, translate_port_ids_,
                                 port_translation_map_, *cpu_queue_translator_,
                                 *front_panel_queue_translator_, p4rt_table_,
-                                vrf_table_));
+                                vrf_table_, vlan_table_, vlan_member_table_));
   }
 
   return absl::OkStatus();
