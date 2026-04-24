@@ -96,6 +96,8 @@ cc_library(
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:pd",
         "//p4_infra/p4_runtime:p4_runtime_session",
+        "//sai_p4:capabilities",
+        "//sai_p4:capabilities_cc_proto",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
