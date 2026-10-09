@@ -38,7 +38,7 @@ constexpr std::string_view kPowerOffCommand = "/sbin/poweroff";
 constexpr std::string_view kSetTimezoneCommand =
     "sudo timedatectl set-timezone America/Los_Angeles";
 constexpr std::string_view kRedisDumpCommand =
-    "redis-dump -H 127.0.0.1 -p 6379 -d %d -y";
+    "redis-dump -s /var/run/redis/redis.sock -d %d -y";
 
 }  // namespace
 

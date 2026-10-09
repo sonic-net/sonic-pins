@@ -1206,7 +1206,8 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       ssh_client->RunCommand(device_name,
                              /*command=*/
                              nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
+                                 "redis-dump -s /var/run/redis/redis.sock "
+                                 "-d 0 -y",
                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_db.txt"), result));
@@ -1217,7 +1218,8 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       ssh_client->RunCommand(device_name,
                              /*command=*/
                              nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
+                                 "redis-dump -s /var/run/redis/redis.sock "
+                                 "-d 1 -y",
                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_asic_db.txt"), result));
@@ -1228,7 +1230,8 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       ssh_client->RunCommand(device_name,
                              /*command=*/
                              nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
+                                 "redis-dump -s /var/run/redis/redis.sock "
+                                 "-d 4 -y",
                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_config_db.txt"), result));
@@ -1239,7 +1242,8 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       ssh_client->RunCommand(device_name,
                              /*command=*/
                              nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 6 -y",
+                                 "redis-dump -s /var/run/redis/redis.sock "
+                                 "-d 6 -y",
                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_state_db.txt"), result));
@@ -1250,7 +1254,8 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       ssh_client->RunCommand(device_name,
                              /*command=*/
                              nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
+                                 "redis-dump -s /var/run/redis/redis.sock "
+                                 "-d 14 -y",
                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_state_db.txt"), result));
