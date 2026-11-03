@@ -1353,6 +1353,30 @@ TEST(IpAddressTest, SameIpv6AddressDifferentFormat4) {
               IsOkAndHolds(true));
 }
 
+TEST(PortIndexTest, SonicUsesNamedDatabaseCommand) {
+  thinkit::MockSSHClient mock_ssh_client;
+  EXPECT_CALL(
+      mock_ssh_client,
+      RunCommand("switch_x", "sonic-db-cli -s STATE_DB keys PORT_INDEX_TABLE*",
+                 absl::Seconds(5)))
+      .WillOnce(Return("PORT_INDEX_TABLE|Ethernet0"));
+  const std::vector<std::string> port_names = {"Ethernet0"};
+  EXPECT_OK(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                             "/usr/bin/", port_names, true));
+}
+
+TEST(PortIndexTest, OtherSystemsKeepNativeCommand) {
+  thinkit::MockSSHClient mock_ssh_client;
+  EXPECT_CALL(mock_ssh_client,
+              RunCommand("switch_x",
+                         "/usr/tools/bin/redis-cli -n 6 keys PORT_INDEX_TABLE*",
+                         absl::Seconds(5)))
+      .WillOnce(Return("PORT_INDEX_TABLE|Ethernet0"));
+  const std::vector<std::string> port_names = {"Ethernet0"};
+  EXPECT_OK(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                             "/usr/tools/bin/", port_names));
+}
+
 TEST(PortIndexTest, SshCommandFailCheckFail) {
   thinkit::MockSSHClient mock_ssh_client;
   ON_CALL(mock_ssh_client, RunCommand)
