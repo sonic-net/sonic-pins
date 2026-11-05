@@ -164,10 +164,10 @@ constexpr char kUnfreeze[] =
     R"(/usr/tools/bin/redis-cli -n 1 "PUBLISH" "NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL" "[\"unfreeze\",\"unfreeze\"]")";
 
 constexpr char kSonicFreeze[] =
-    R"(sonic-db-cli -s ASIC_DB PUBLISH NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL "[\"freeze\",\"freeze\"]")";
+    R"(sonic-db-cli -s --authenticate ASIC_DB PUBLISH NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL "[\"freeze\",\"freeze\"]")";
 
 constexpr char kSonicUnfreeze[] =
-    R"(sonic-db-cli -s ASIC_DB PUBLISH NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL "[\"unfreeze\",\"unfreeze\"]")";
+    R"(sonic-db-cli -s --authenticate ASIC_DB PUBLISH NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL "[\"unfreeze\",\"unfreeze\"]")";
 
 constexpr int kNsfTrafficTestDurationSecs = 10;
 
@@ -1715,7 +1715,7 @@ void SflowTestFixture::SetUp() {
       testbed_->Sut().ChassisName(),
       /*command=*/
       nos_param_.kIsSonicDebianLinux
-          ? nos_param_.kSudoCmdPrefix + "sonic-db-cli -s APPL_STATE_DB hset "
+          ? nos_param_.kSudoCmdPrefix + "sonic-db-cli -s --authenticate APPL_STATE_DB hset "
                                         "\"PORT_TABLE:CPU\" \"NULL\" \"NULL\""
           : nos_param_.kRedisExecPrefix +
                 "redis-cli -n 14 hset \"PORT_TABLE:CPU\" \"NULL\" \"NULL\"",
