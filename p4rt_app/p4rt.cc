@@ -475,10 +475,10 @@ int main(int argc, char** argv) {
 */
 
   // Open a database connection into the SONiC AppDb.
-  swss::DBConnector app_db("APPL_DB", /*timeout=*/0);
-  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
+  swss::DBConnector app_db("APPL_DB", /*timeout=*/0, false, "", true);
+  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0, false, "", true);
   swss::DBConnector counters_db("COUNTERS_DB", /*timeout=*/0);
-  swss::DBConnector state_db("STATE_DB", /*timeout=*/0);
+  swss::DBConnector state_db("STATE_DB", /*timeout=*/0, false, "", true);
   swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
 
   // Zmq request-reply one-to-one connection with the swss server.
@@ -595,7 +595,7 @@ int main(int argc, char** argv) {
                        &monitor_config_db_events));
 
   // Start listening for state verification events, and update StateDb for P4RT.
-  swss::DBConnector state_verification_db("STATE_DB", /*timeout=*/0);
+  swss::DBConnector state_verification_db("STATE_DB", /*timeout=*/0, false, "", true);
   p4rt_app::sonic::TableAdapter state_verification_table_adapter(
       &state_verification_db, "VERIFY_STATE_RESP_TABLE");
   p4rt_app::sonic::ConsumerNotifierAdapter state_verification_notifier(

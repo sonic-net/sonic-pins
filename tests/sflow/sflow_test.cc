@@ -163,6 +163,12 @@ constexpr char kFreeze[] =
 constexpr char kUnfreeze[] =
     R"(/usr/tools/bin/redis-cli -n 1 "PUBLISH" "NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL" "[\"unfreeze\",\"unfreeze\"]")";
 
+constexpr char kSonicFreeze[] =
+    R"(sonic-db-cli -s --authenticate ASIC_DB PUBLISH NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL "[\"freeze\",\"freeze\"]")";
+
+constexpr char kSonicUnfreeze[] =
+    R"(sonic-db-cli -s --authenticate ASIC_DB PUBLISH NSF_MANAGER_COMMON_NOTIFICATION_CHANNEL "[\"unfreeze\",\"unfreeze\"]")";
+
 constexpr int kNsfTrafficTestDurationSecs = 10;
 
 // IpV4 address for filtering the sFlow packet.
@@ -1200,58 +1206,53 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "ipv6_neigh_show.txt"), result));
 
+  const std::string redis_dump_command =
+      nos_param.kRedisExecPrefix +
+      (nos_param.kIsSonicDebianLinux ? "redis-dump -s /var/run/redis/redis.sock"
+                                     : "redis-dump -H 127.0.0.1 -p 6379");
+
   // APPL_DB
-  ASSERT_OK_AND_ASSIGN(
-      result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/
-                             nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 0 -y",
-                             absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result,
+                       ssh_client->RunCommand(device_name,
+                                              /*command=*/
+                                              redis_dump_command + " -d 0 -y",
+                                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_db.txt"), result));
 
   // ASIC_DB
-  ASSERT_OK_AND_ASSIGN(
-      result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/
-                             nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
-                             absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result,
+                       ssh_client->RunCommand(device_name,
+                                              /*command=*/
+                                              redis_dump_command + " -d 1 -y",
+                                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_asic_db.txt"), result));
 
   // CONFIG_DB
-  ASSERT_OK_AND_ASSIGN(
-      result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/
-                             nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
-                             absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result,
+                       ssh_client->RunCommand(device_name,
+                                              /*command=*/
+                                              redis_dump_command + " -d 4 -y",
+                                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_config_db.txt"), result));
 
   // STATE_DB
-  ASSERT_OK_AND_ASSIGN(
-      result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/
-                             nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 6 -y",
-                             absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result,
+                       ssh_client->RunCommand(device_name,
+                                              /*command=*/
+                                              redis_dump_command + " -d 6 -y",
+                                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_state_db.txt"), result));
 
   // APPL_STATE_DB
-  ASSERT_OK_AND_ASSIGN(
-      result,
-      ssh_client->RunCommand(device_name,
-                             /*command=*/
-                             nos_param.kRedisExecPrefix +
-                                 "redis-dump -H 127.0.0.1 -p 6379 -d 14 -y",
-                             absl::Seconds(20)));
+  ASSERT_OK_AND_ASSIGN(result,
+                       ssh_client->RunCommand(device_name,
+                                              /*command=*/
+                                              redis_dump_command + " -d 14 -y",
+                                              absl::Seconds(20)));
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "sut_appl_state_db.txt"), result));
 }
@@ -1713,8 +1714,11 @@ void SflowTestFixture::SetUp() {
   ASSERT_OK(GetParam().ssh_client->RunCommand(
       testbed_->Sut().ChassisName(),
       /*command=*/
-      nos_param_.kRedisExecPrefix +
-          "redis-cli -n 14 hset \"PORT_TABLE:CPU\" \"NULL\" \"NULL\"",
+      nos_param_.kIsSonicDebianLinux
+          ? nos_param_.kSudoCmdPrefix + "sonic-db-cli -s --authenticate APPL_STATE_DB hset "
+                                        "\"PORT_TABLE:CPU\" \"NULL\" \"NULL\""
+          : nos_param_.kRedisExecPrefix +
+                "redis-cli -n 14 hset \"PORT_TABLE:CPU\" \"NULL\" \"NULL\"",
       absl::Seconds(20)));
 
   std::vector<std::pair<std::string, int>> collector_address_and_port;
@@ -2556,7 +2560,8 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
       CheckStateDbPortIndexTableExists, absl::Minutes(2), *ssh_client_,
       testbed_->Sut().ChassisName(), nos_param_.kRedisCliPath,
       std::vector<std::string>{sflow_enabled_interfaces.begin(),
-                               sflow_enabled_interfaces.end()}));
+                               sflow_enabled_interfaces.end()},
+      nos_param_.kIsSonicDebianLinux));
 
   // Verify that sample rate on all interfaces remains the same after NSF.
   ASSERT_OK(IsExpectedSamplingRateFromGnmi(
@@ -2644,7 +2649,10 @@ TEST_P(SflowNsfTestFixture, VerifySflowAfterFreezeAndUnfreeze) {
                             /*pkt_count=*/pkt_count, nos_param_.kCpuQueueName));
     // Freeze the switch.
     ASSERT_OK(ssh_client_
-                  ->RunCommand(testbed_.get()->Sut().ChassisName(), kFreeze,
+                  ->RunCommand(testbed_.get()->Sut().ChassisName(),
+                               nos_param_.kIsSonicDebianLinux
+                                   ? nos_param_.kSudoCmdPrefix + kSonicFreeze
+                                   : kFreeze,
                                kCommandTimeout)
                   .status());
     absl::SleepFor(kFreezeTimeout);
@@ -2655,7 +2663,10 @@ TEST_P(SflowNsfTestFixture, VerifySflowAfterFreezeAndUnfreeze) {
                 IsOkAndHolds(Eq(0)));
     // Unfreeze the switch.
     ASSERT_OK(ssh_client_
-                  ->RunCommand(testbed_.get()->Sut().ChassisName(), kUnfreeze,
+                  ->RunCommand(testbed_.get()->Sut().ChassisName(),
+                               nos_param_.kIsSonicDebianLinux
+                                   ? nos_param_.kSudoCmdPrefix + kSonicUnfreeze
+                                   : kUnfreeze,
                                kCommandTimeout)
                   .status());
     absl::SleepFor(kFreezeTimeout);
@@ -3241,7 +3252,8 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
   ASSERT_OK(pins_test::WaitForCondition(
       CheckStateDbPortIndexTableExists, absl::Minutes(2),
       *GetParam().ssh_client, testbed.Sut().ChassisName(),
-      nos_param_.kRedisCliPath, interface_names));
+      nos_param_.kRedisCliPath, interface_names,
+      nos_param_.kIsSonicDebianLinux));
   ASSERT_OK(pins_test::WaitForCondition(pins_test::PortsUp, absl::Minutes(3),
                                         testbed.Sut(), interface_names,
                                         /*with_healthz=*/false));
@@ -3999,7 +4011,8 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
   ASSERT_OK(pins_test::WaitForCondition(
       CheckStateDbPortIndexTableExists, absl::Minutes(2),
       *GetParam().ssh_client, testbed.Sut().ChassisName(),
-      nos_param_.kRedisCliPath, interface_names));
+      nos_param_.kRedisCliPath, interface_names,
+      nos_param_.kIsSonicDebianLinux));
   LOG(INFO) << "Sflow states are converged after reboot.";
   
   if (nos_param_.kIsSonicDebianLinux) {
@@ -4153,7 +4166,8 @@ TEST_P(SflowRebootTestFixture, TestNoSamplesOnDisabledInterfacesAfterReboot) {
   ASSERT_OK(pins_test::WaitForCondition(
       CheckStateDbPortIndexTableExists, absl::Seconds(30),
       *GetParam().ssh_client, testbed.Sut().ChassisName(),
-      nos_param_.kRedisCliPath, traffic_interfaces));
+      nos_param_.kRedisCliPath, traffic_interfaces,
+      nos_param_.kIsSonicDebianLinux));
 
   const int num_packets = 10000;
   std::string sflow_result;
@@ -4230,7 +4244,8 @@ TEST_P(SflowRebootTestFixture, TestNoSamplesOnDisabledInterfacesAfterReboot) {
   ASSERT_OK(pins_test::WaitForCondition(
       CheckStateDbPortIndexTableExists, absl::Minutes(2),
       *GetParam().ssh_client, testbed.Sut().ChassisName(),
-      nos_param_.kRedisCliPath, traffic_interfaces));
+      nos_param_.kRedisCliPath, traffic_interfaces,
+      nos_param_.kIsSonicDebianLinux));
   LOG(INFO) << "Sflow states are converged after reboot.";
    
   if (nos_param_.kIsSonicDebianLinux) {
