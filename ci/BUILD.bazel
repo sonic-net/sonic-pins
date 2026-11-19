@@ -1,0 +1,17 @@
+filegroup(
+    name = "runtime_test_command",
+    testonly = True,
+    srcs = ["runtime_test_command.py"],
+    visibility = ["//p4rt_app/tests:__pkg__"],
+)
+
+filegroup(
+    name = "runtime_test_imports",
+    testonly = True,
+    srcs = [
+        "production_handoff.py",
+        "runtime_contract.py",
+        "runtime_run_under.py",
+    ],
+    visibility = ["//p4rt_app/tests:__pkg__"],
+)

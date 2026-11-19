@@ -593,11 +593,17 @@ cmd_diff_test(
     name = "p4_constraints_test",
     actual_cmd =
         " | ".join([
-            "$(execpath :p4_constraints_test_runner)",
+            # gutil does not merge Python toolchain runfiles. Use the native
+            # Python already required by this profile with explicit inputs.
+            "python3 -B $(execpath //ci:runtime_test_command) $(execpath :p4_constraints_test_runner)",
             # Strip unnecessary lines for golden testing.
             "sed '1,/^###/d'",  # Strip everything up to a line beginning with '###'.
             "sed '/^\\[/d'",  # Strip every line beginning with '['.
         ]),
+    data = [
+        "//ci:runtime_test_command",
+        "//ci:runtime_test_imports",
+    ],
     expected = "golden_outputs/p4_constraints_test.expected",
     tools = [
         ":p4_constraints_test_runner",

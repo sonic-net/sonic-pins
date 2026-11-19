@@ -28,6 +28,19 @@ def pins_infra_deps():
             strip_prefix = "rules_boost-5160325dbdc8c9e499f9d9917d913f35f1785d52",
             sha256 = "feb4b1294684c79df7c1e08f1aec5da0da52021e33db59c88edbe86b4d1a017a",
         )
+    # rules_boost honors an existing XZ repository. Keep its BUILD file and
+    # archive checksum, and prefer the official release to the Fedora lookaside.
+    if not native.existing_rule("org_lzma_lzma"):
+        http_archive(
+            name = "org_lzma_lzma",
+            build_file = "@com_github_nelhage_rules_boost//:lzma.BUILD",
+            sha256 = "aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c",
+            strip_prefix = "xz-5.4.6",
+            urls = [
+                "https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.gz",
+                "https://src.fedoraproject.org/lookaside/extras/xz/xz-5.4.6.tar.gz/sha512/b08a61d8d478d3b4675cb1ddacdbbd98dc6941a55bcdd81a28679e54e9367d3a595fa123ac97874a17da571c1b712e2a3e901c2737099a9d268616a1ba3de497/xz-5.4.6.tar.gz",
+            ],
+        )
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
