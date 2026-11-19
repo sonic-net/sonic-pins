@@ -1,0 +1,154 @@
+name: Production P4RT TARs
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4rt-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Production runtime and original tests (amd64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    container:
+      image: debian:trixie-20260918
+      options: --init
+    defaults:
+      run:
+        shell: bash
+    env:
+      USER: root
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install native P4RT test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            binutils binutils-gold build-essential ca-certificates git python3 gdb \
+            bison flex libfl-dev libgmp-dev patch unzip zip pkg-config \
+            libhiredis-dev libnl-3-dev libnl-genl-3-dev libnl-nf-3-dev \
+            libnl-route-3-dev libzmq3-dev libboost-serialization-dev \
+            nlohmann-json3-dev uuid-dev
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: securely1g/sonic-buildimage
+          ref: 6d99dee019c676acd940b3d14b9a795fe5393696
+          path: .ci-deps/buildimage
+          persist-credentials: false
+
+      - name: Prepare the established Common SDK handoff
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/.ci-deps/buildimage"
+          git -C .ci-deps/buildimage submodule update --init --depth=1 src/sonic-swss-common
+          test "$(git -C .ci-deps/buildimage/src/sonic-swss-common rev-parse HEAD)" = 334389eae54afd1f4f5ee69f89c3a7ad2062ee61
+          test "$(dpkg --print-architecture)" = amd64
+          test "$(cat .bazelversion)" = 6.4.0
+          mkdir -p artifacts/p4rt
+
+      - name: Check source and package provenance guards
+        run: python3 -B -m unittest discover -s ci -p '*_test.py'
+
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          bazelisk-version: 1.29.0
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: p4rt-production-amd64
+          cache-version: "8.5.1-6.4.0"
+
+      - name: Configure shared source download mirrors
+        run: |
+          python3 -B .ci-deps/buildimage/tools/bazel/ci/source_mirrors.py \
+            --output "$RUNNER_TEMP/sonic-source-mirrors.cfg"
+
+      - name: Audit Common's configured SDK and runtime graph
+        working-directory: .ci-deps/buildimage/src/sonic-swss-common
+        env:
+          USE_BAZEL_VERSION: 8.5.1
+        run: |
+          bazel --output_base="$RUNNER_TEMP/common-bazel-8" aquery \
+            --downloader_config="$RUNNER_TEMP/sonic-source-mirrors.cfg" \
+            --host_platform=@sonic_build_infra//platforms:x86_64_trixie \
+            --jobs=2 --//tools/bazel:yang_modules=True --output=jsonproto \
+            --include_artifacts --include_commandline=false \
+            'deps(set(//dist:libswsscommon_sdk @libyang//:libyang_pkg @libnl3//:libnl-3_pkg @libnl3//:libnl-route-3_pkg @libnl3//:libnl-nf-3_pkg))' \
+            > "$RUNNER_TEMP/common-actions.json"
+          python3 - "$RUNNER_TEMP/common-actions.json" "$GITHUB_WORKSPACE/artifacts/p4rt/common-action-audit.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          graph = json.loads(Path(sys.argv[1]).read_text())
+          fragments = {str(item['id']): item for item in graph['pathFragments']}
+          artifacts = {str(item['id']): item for item in graph['artifacts']}
+          outputs = [artifacts[str(identity)] for action in graph['actions']
+                     for identity in action.get('outputIds', [])]
+          assert not any(fragments[str(item['pathFragmentId'])]['label'].endswith('.deb')
+                         for item in outputs), 'Common SDK must not produce DEBs'
+          Path(sys.argv[2]).write_text(json.dumps({'actions': len(graph['actions']),
+              'outputs': len(outputs), 'deb_outputs': 0}, indent=2) + '\n')
+          PY
+
+      - name: Build Common's SDK with Bazel 8.5.1
+        run: |
+          python3 -B .ci-deps/buildimage/tools/bazel/p4rt_common_sdk.py \
+            --common-source .ci-deps/buildimage/src/sonic-swss-common \
+            --output-dir "$RUNNER_TEMP/common-sdk" \
+            --output-base "$RUNNER_TEMP/common-bazel-8" \
+            --arch amd64 --bazel-arg=--jobs=2 \
+            --bazel-arg=--downloader_config="$RUNNER_TEMP/sonic-source-mirrors.cfg"
+
+      - name: Prepare Common's native runtime dependencies
+        working-directory: .ci-deps/buildimage/src/sonic-swss-common
+        env:
+          USE_BAZEL_VERSION: 8.5.1
+        run: |
+          python3 -B tools/bazel/runtime/prepare.py \
+            --image-reference debian:trixie-20260918 \
+            --output "$GITHUB_WORKSPACE/artifacts/p4rt/test-runtime.json"
+          native_args=(
+            --downloader_config="$RUNNER_TEMP/sonic-source-mirrors.cfg"
+            --host_platform=@sonic_build_infra//platforms:x86_64_trixie
+          )
+          runtime_targets=(
+            @libyang//:libyang_pkg
+            @libnl3//:libnl-3_pkg
+            @libnl3//:libnl-route-3_pkg
+            @libnl3//:libnl-nf-3_pkg
+          )
+          bazel --output_base="$RUNNER_TEMP/common-bazel-8" build \
+            "${native_args[@]}" --jobs=2 --//tools/bazel:yang_modules=True "${runtime_targets[@]}"
+          for target in "${runtime_targets[@]}"; do
+            archive="$(bazel --output_base="$RUNNER_TEMP/common-bazel-8" cquery \
+              "${native_args[@]}" --//tools/bazel:yang_modules=True --output=files "$target")"
+            test -f "$archive"
+            tar -xf "$archive" -C /
+          done
+          ldconfig
+          bazel --output_base="$RUNNER_TEMP/common-bazel-8" shutdown
+
+      - name: Audit and build the production TARs, then run every P4RT test
+        run: |
+          python3 -B ci/production_runtime.py \
+            --buildimage .ci-deps/buildimage --sdk "$RUNNER_TEMP/common-sdk" \
+            --output-base "$RUNNER_TEMP/p4rt-bazel-6" \
+            --output artifacts/p4rt --jobs 4
+
+      - name: Retain production TARs and acceptance evidence
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: p4rt-production-amd64
+          path: artifacts/p4rt/
+          if-no-files-found: error

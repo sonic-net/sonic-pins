@@ -169,18 +169,13 @@ cc_library(
         "-I",
         "/usr/include/libnl3/",
     ],  # Sonic-dependancy
-    linkopts = [
-        "-lnl-3",
-        "-lnl-genl-3",
-        "-lnl-nf-3",
-        "-lnl-route-3",
-    ],
     # copts = ["-I /usr/include/libnl3/"],
     deps = [
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_gutil//gutil:status",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

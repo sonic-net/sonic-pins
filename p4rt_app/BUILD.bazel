@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_pkg//:pkg.bzl", "pkg_deb", "pkg_tar")
 # load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 
@@ -22,6 +23,21 @@ package(
 p4rt_version = "0.0.1"
 
 p4rt_maintainer = "PINS Working Group <pins-wg@opennetworking.org>"
+
+_RUNTIME_DEPENDS = [
+    "libswsscommon",
+    "libgmpxx4ldbl",
+]
+
+# These installed tools are production programs. Keep the measurement-test
+# executable in the unchanged legacy/test bundle below.
+_PRODUCTION_BINARIES = [
+    ":p4rt",
+    "//p4rt_app/scripts:p4rt_program_table",
+    "//p4rt_app/scripts:p4rt_read",
+    "//p4rt_app/scripts:p4rt_set_forwarding_pipeline",
+    "//p4rt_app/scripts:p4rt_write",
+]
 
 cc_binary(
     name = "p4rt",
@@ -70,6 +86,113 @@ cc_binary(
     ],
 )
 
+# Source-owned OCI inputs. Build with --config=p4rt-runtime and the declared
+# Common SDK repository; neither target depends on a Debian package producer.
+pkg_tar(
+    name = "p4rt_runtime",
+    srcs = _PRODUCTION_BINARIES,
+    extension = "tar",
+    mode = "0755",
+    mtime = 0,
+    owner = "0.0",
+    package_dir = "usr/local/bin",
+    portable_mtime = False,
+    stamp = 0,
+    tags = ["manual"],  # Explicit optimized production profile; preserve //... defaults.
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
+pkg_tar(
+    name = "p4rt_runtime_debug",
+    srcs = [binary + ".dwp" for binary in _PRODUCTION_BINARIES],
+    extension = "tar",
+    mode = "0644",
+    mtime = 0,
+    owner = "0.0",
+    package_dir = "usr/local/bin",
+    portable_mtime = False,
+    stamp = 0,
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
+# Keep package identity and installed paths with the source producer. The
+# producer driver adds the verified checkout revision and actual TAR hash;
+# these templates alone are not accepted image handoffs.
+[
+    write_file(
+        name = name + "_contract_template",
+        out = name + "_contract_template.json",
+        content = [json.encode({
+            "schema": 1,
+            "owner": "sonic-pins",
+            "packages": {
+                package_name: {
+                    "control_fields": {
+                        "Package": package_name,
+                        "Version": p4rt_version,
+                        "Architecture": "amd64",
+                        "Maintainer": p4rt_maintainer,
+                        "Description": description,
+                        "Depends": ", ".join(depends),
+                    },
+                    "target": "//p4rt_app:" + name,
+                    "required_paths": [
+                        "usr/local/bin/" + binary.split(":")[-1] + suffix
+                        for binary in _PRODUCTION_BINARIES
+                    ],
+                },
+            },
+        })],
+    )
+    for name, package_name, description, depends, suffix in [
+        ("p4rt_runtime", "sonic-p4rt", "P4RT service", _RUNTIME_DEPENDS, ""),
+        ("p4rt_runtime_debug", "sonic-p4rt-dbgsym", "P4RT service debug symbols", [], ".dwp"),
+    ]
+]
+
+py_test(
+    name = "runtime_package_test",
+    timeout = "long",
+    srcs = ["runtime_package_test.py"],
+    args = [
+        "--runtime",
+        "$(rootpath :p4rt_runtime)",
+        "--debug",
+        "$(rootpath :p4rt_runtime_debug)",
+        "--common-library",
+        "$(rootpath @sonic_swss_common//:lib/libswsscommon.so.0)",
+        "--runtime-contract",
+        "$(rootpath :p4rt_runtime_contract_template)",
+        "--debug-contract",
+        "$(rootpath :p4rt_runtime_debug_contract_template)",
+    ],
+    data = [
+        "p4rt.cc",
+        ":p4rt_runtime",
+        ":p4rt_runtime_contract_template",
+        ":p4rt_runtime_debug",
+        ":p4rt_runtime_debug_contract_template",
+        "//p4rt_app/scripts:p4rt_program_table.cc",
+        "//p4rt_app/scripts:p4rt_read.cc",
+        "//p4rt_app/scripts:p4rt_set_forwarding_pipeline.cc",
+        "//p4rt_app/scripts:p4rt_write.cc",
+        "@sonic_swss_common//:lib/libswsscommon.so.0",
+    ],
+    python_version = "PY3",
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
 pkg_tar(
     name = "p4rt_binaries",
     testonly = True,  # requred for p4rt_route_measurement_test
@@ -114,10 +237,7 @@ pkg_deb(
     testonly = True,  # requred for p4rt_route_measurement_test
     architecture = "amd64",
     data = ":p4rt_binaries",
-    depends = [
-        "libswsscommon",
-        "libgmpxx4ldbl",
-    ],
+    depends = _RUNTIME_DEPENDS,
     description = "P4RT service",
     maintainer = p4rt_maintainer,
     package = "sonic-p4rt",

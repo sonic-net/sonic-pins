@@ -8,3 +8,14 @@ build --copt='-Wno-error=sign-compare'
 build --host_copt='-Wno-error=sign-compare'
 run --copt='-Wno-error=sign-compare'
 run --host_copt='-Wno-error=sign-compare'
+
+# The production TARs keep the executable's split-DWARF skeleton and export
+# matching DWP files. Preserve the existing SONiC optimized build contract.
+build:p4rt-runtime --compilation_mode=opt
+build:p4rt-runtime --fission=opt
+build:p4rt-runtime --strip=never
+build:p4rt-runtime --copt=-g
+# GNU dwp 2.44 cannot package GCC 14's default DWARF 5 output.
+build:p4rt-runtime --copt=-gdwarf-4
+build:p4rt-runtime --copt=-Wno-array-bounds
+build:p4rt-runtime --copt=-Wno-stringop-overflow

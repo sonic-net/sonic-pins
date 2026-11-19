@@ -1,2 +1,6 @@
 # Bazel Build System.
 bazel*
+
+# Pinned CI tools and retained production acceptance outputs.
+/.ci-deps/
+/artifacts/
