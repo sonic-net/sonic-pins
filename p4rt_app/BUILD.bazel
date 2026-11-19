@@ -76,10 +76,7 @@ pkg_tar(
     srcs = [
         ":p4rt",  # TODO explore p4rt.stripped
         "//p4rt_app/scripts:p4rt_program_table",
-        "//p4rt_app/scripts:p4rt_read",
         "//p4rt_app/scripts:p4rt_route_measurement_test",
-        "//p4rt_app/scripts:p4rt_set_forwarding_pipeline",
-        "//p4rt_app/scripts:p4rt_write",
     ],
     extension = "tar.bz2",
     mode = "0755",
@@ -91,6 +88,9 @@ pkg_tar(
     name = "p4rt_debug",
     srcs = [
         ":p4rt.dwp",
+        "//p4rt_app/scripts:p4rt_read",
+        "//p4rt_app/scripts:p4rt_set_forwarding_pipeline",
+        "//p4rt_app/scripts:p4rt_write",
     ],
     extension = "tar.bz2",
     mode = "0755",
@@ -128,7 +128,7 @@ pkg_deb(
     name = "p4rt_dbg_deb",
     architecture = "amd64",
     data = ":p4rt_debug",
-    description = "P4RT service debug symbols",
+    description = "P4RT service debug symbols and CLI tools",
     maintainer = p4rt_maintainer,
     package = "sonic-p4rt-dbgsym",
     version = p4rt_version,

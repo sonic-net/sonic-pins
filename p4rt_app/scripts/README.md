@@ -2,18 +2,20 @@
 
 ## Building the P4RT helper tools
 
-The P4RT tools can be built individually with Bazel. They can also be built as
-part of the `p4rt_deb.deb` package:
+The P4RT debug CLI tools (`p4rt_read`, `p4rt_set_forwarding_pipeline`, and
+`p4rt_write`) can be built individually with Bazel and are packaged in
+`p4rt_dbg_deb` (`sonic-p4rt-dbgsym`, installed in `docker-sonic-p4rt-dbg`)
+rather than production `p4rt_deb` (`sonic-p4rt`):
 
 ```bash
-$ bazel build //p4rt_app:p4rt_deb
+$ bazel build //p4rt_app:p4rt_dbg_deb
 ```
 
 Once copied into the sonic-p4rt container the debian package can be installed
 using:
 
 ```bash
-$ apt install --reinstall /etc/sonic/p4rt_deb.deb
+$ apt install --reinstall /etc/sonic/p4rt_dbg_deb.deb
 ```
 
 ## Useful Command Examples
