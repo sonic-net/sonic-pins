@@ -541,7 +541,7 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
                              p4_constraints::ConstraintSolver::Create(
                                  *table_info, skip_key));
             ASSIGN_OR_RETURN(bool is_sat,
-                             solver.AddConstraint(*additional_constraint));
+                             solver.AddTableConstraint(*additional_constraint));
 
             // If appending the additional constraint makes the constraint
             // unsatisfiable, then we cannot enforce this field presence.

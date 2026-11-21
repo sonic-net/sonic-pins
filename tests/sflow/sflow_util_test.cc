@@ -28,7 +28,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"
-#include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi_mock.grpc.pb.h"
 #include "thinkit/mock_ssh_client.h"
 
 namespace pins {

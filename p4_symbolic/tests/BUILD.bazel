@@ -1,4 +1,4 @@
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -9,6 +9,7 @@ cc_test(
     name = "sai_p4_integration_test",
     timeout = "long",
     srcs = ["sai_p4_integration_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/netaddr:ipv4_address",
         "//p4_infra/netaddr:mac_address",
@@ -25,8 +26,7 @@ cc_test(
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//sai_p4/instantiations/google/test_tools:test_entries",
         "//thinkit:bazel_test_environment",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_github_z3prover_z3//:api",
+        "@com_github_z3prover_z3//:z3_static",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -36,12 +36,14 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "symbolic_table_entries_test",
     srcs = ["symbolic_table_entries_test.cc"],
+    copts = ["-std=c++20"],
     data = [
         "//p4_symbolic/testdata:ipv4-routing/basic.config.json",
         "//p4_symbolic/testdata:ipv4-routing/basic.p4info.pb.txt",
@@ -69,9 +71,7 @@ cc_test(
         "//sai_p4/instantiations/google:sai_nonstandard_platforms_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/forwarding:packet_at_port",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_github_z3prover_z3//:api",
+        "@com_github_z3prover_z3//:z3_static",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -82,5 +82,7 @@ cc_test(
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:test_artifact_writer",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )

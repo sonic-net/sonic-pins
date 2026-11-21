@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
 load("@com_google_gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -46,12 +47,12 @@ cc_library(
     name = "p4info_verification_schema",
     srcs = ["p4info_verification_schema.cc"],
     hdrs = ["p4info_verification_schema.h"],
+    copts = ["-std=c++20"],
     deps = [
         "p4info_verification_schema_cc_proto",
         "p4info_verification_schema_embed",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:table_utility",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -59,12 +60,14 @@ cc_library(
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
 cc_test(
     name = "p4info_verification_schema_test",
     srcs = ["p4info_verification_schema_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_verification_schema",
         ":p4info_verification_schema_cc_proto",
@@ -87,6 +90,7 @@ cc_library(
     name = "p4info_verification",
     srcs = ["p4info_verification.cc"],
     hdrs = ["p4info_verification.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_verification_schema",
         ":p4info_verification_schema_cc_proto",
@@ -96,26 +100,26 @@ cc_library(
         "//p4rt_app/sonic:hashing",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
 cc_test(
     name = "p4info_verification_test",
     srcs = ["p4info_verification_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_verification",
         "//p4_infra/p4_pdpi:ir_utils",
         "//p4rt_app/utils:status_utility",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -126,6 +130,7 @@ cc_test(
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -133,6 +138,7 @@ cc_library(
     name = "p4runtime_impl",
     srcs = ["p4runtime_impl.cc"],
     hdrs = ["p4runtime_impl.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":entity_update",
         ":ir_translation",
@@ -163,14 +169,11 @@ cc_library(
         "//p4rt_app/utils:table_utility",
         "//sai_p4:capabilities",
         "//sai_p4:capabilities_cc_proto",
-        "@boost//:bimap",
-        "@boost//:graph",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:interpreter",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -190,7 +193,10 @@ cc_library(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -202,9 +208,9 @@ cc_library(
         ":p4runtime_impl",
         ":queue_translator",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -212,6 +218,7 @@ cc_library(
     name = "p4runtime_read",
     srcs = ["p4runtime_read.cc"],
     hdrs = ["p4runtime_read.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_translation",
         ":queue_translator",
@@ -220,15 +227,15 @@ cc_library(
         "//p4rt_app/sonic:app_db_manager",
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/utils:table_utility",
-        "@boost//:bimap",
-        "@boost//:graph",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -236,6 +243,7 @@ cc_library(
     name = "packetio_helpers",
     srcs = ["packetio_helpers.cc"],
     hdrs = ["packetio_helpers.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_translation",
         "//p4_infra/p4_pdpi:ir",
@@ -244,19 +252,20 @@ cc_library(
         "//p4rt_app/sonic:packetio_impl",
         "//p4rt_app/sonic:packetio_interface",
         "//sai_p4/fixed:p4_ids",
-        "@boost//:bimap",
-        "@boost//:graph",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:common",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "packetio_helpers_test",
     srcs = ["packetio_helpers_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_verification",
         ":packetio_helpers",
@@ -266,15 +275,15 @@ cc_test(
         "//p4rt_app/sonic/adapters:mock_system_call_adapter",
         "//sai_p4/fixed:p4_ids",
         "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@boost//:bimap",
-        "@boost//:graph",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -282,6 +291,7 @@ cc_library(
     name = "ir_translation",
     srcs = ["ir_translation.cc"],
     hdrs = ["ir_translation.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":queue_translator",
         "//p4_infra/netaddr:ipv6_address",
@@ -289,10 +299,8 @@ cc_library(
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:translation_options",
-        "@boost//:bimap",
-        "@boost//:graph",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -301,12 +309,15 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "ir_translation_test",
     srcs = ["ir_translation_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_translation",
         ":queue_translator",
@@ -314,8 +325,8 @@ cc_test(
         "//p4rt_app/utils:ir_builder",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@boost//:bimap",
-        "@boost//:graph",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
@@ -328,10 +339,9 @@ cc_library(
     name = "sdn_controller_manager",
     srcs = ["sdn_controller_manager.cc"],
     hdrs = ["sdn_controller_manager.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//sai_p4/fixed:p4_roles",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -343,6 +353,8 @@ cc_library(
         "@com_google_absl//absl/types:optional",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -350,12 +362,11 @@ cc_library(
     name = "resource_utilization",
     srcs = ["resource_utilization.cc"],
     hdrs = ["resource_utilization.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":entity_update",
         "//p4_infra/p4_pdpi:entity_keys",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -363,12 +374,15 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "resource_utilization_test",
     srcs = ["resource_utilization_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":entity_update",
         ":resource_utilization",
@@ -378,7 +392,6 @@ cc_test(
         "//p4rt_app/utils:ir_builder",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -389,6 +402,7 @@ cc_test(
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -396,6 +410,7 @@ cc_library(
     name = "queue_translator",
     srcs = ["queue_translator.cc"],
     hdrs = ["queue_translator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -411,6 +426,7 @@ cc_library(
 cc_test(
     name = "queue_translator_test",
     srcs = ["queue_translator_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":queue_translator",
         "@com_google_absl//absl/strings",
@@ -423,6 +439,7 @@ cc_library(
     name = "p4info_reconcile",
     srcs = ["p4info_reconcile.cc"],
     hdrs = ["p4info_reconcile.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":resource_utilization",
         "//p4_infra/p4_pdpi:annotation_parser",
@@ -445,13 +462,13 @@ cc_library(
 cc_test(
     name = "p4info_reconcile_test",
     srcs = ["p4info_reconcile_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_reconcile",
         ":resource_utilization",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:ir_builder",
         "//p4rt_app/utils:table_utility",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
@@ -460,6 +477,7 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -470,6 +488,6 @@ cc_library(
         "//p4_infra/p4_pdpi:entity_keys",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic:app_db_manager",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )

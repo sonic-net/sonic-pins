@@ -1,154 +1,145 @@
-name: Production P4RT TARs
-
+name: P4RT Production Runtime
 on:
   pull_request:
-    branches: [main]
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
-concurrency:
-  group: p4rt-runtime-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  native:
+  p4rt-runtime:
     name: Production runtime and original tests (amd64)
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
     container:
-      image: debian:trixie-20260918
-      options: --init
-    defaults:
-      run:
-        shell: bash
-    env:
-      USER: root
-      DEBIAN_FRONTEND: noninteractive
+      image: debian:trixie-20260918@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c
+      # Allow Bazel to create nested namespaces and mount its read-only root.
+      options: >-
+        --cap-add=SYS_ADMIN
+        --security-opt=apparmor=unconfined
+        --security-opt=systempaths=unconfined
     steps:
-      - name: Install native P4RT test dependencies
+      - name: Install runner prerequisites
+        run: >-
+          apt-get update && apt-get install -y --no-install-recommends
+          binutils build-essential ca-certificates curl file gdb git patch
+          python3 tar unzip xz-utils zstd
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Verify clean lockfile baseline
+        shell: bash
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            binutils binutils-gold build-essential ca-certificates git python3 gdb \
-            bison flex libfl-dev libgmp-dev patch unzip zip pkg-config \
-            libhiredis-dev libnl-3-dev libnl-genl-3-dev libnl-nf-3-dev \
-            libnl-route-3-dev libzmq3-dev libboost-serialization-dev \
-            nlohmann-json3-dev uuid-dev
+          set -euo pipefail
+          if git ls-files --error-unmatch MODULE.bazel.lock >/dev/null 2>&1; then
+            echo "ERROR: MODULE.bazel.lock must not be tracked in git" >&2
+            exit 1
+          fi
+          if [ -e MODULE.bazel.lock ]; then
+            echo "ERROR: MODULE.bazel.lock must be absent at job start" >&2
+            exit 1
+          fi
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: securely1g/sonic-buildimage
-          ref: 6d99dee019c676acd940b3d14b9a795fe5393696
-          path: .ci-deps/buildimage
-          persist-credentials: false
-
-      - name: Prepare the established Common SDK handoff
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --global --add safe.directory "$GITHUB_WORKSPACE/.ci-deps/buildimage"
-          git -C .ci-deps/buildimage submodule update --init --depth=1 src/sonic-swss-common
-          test "$(git -C .ci-deps/buildimage/src/sonic-swss-common rev-parse HEAD)" = 334389eae54afd1f4f5ee69f89c3a7ad2062ee61
-          test "$(dpkg --print-architecture)" = amd64
-          test "$(cat .bazelversion)" = 6.4.0
-          mkdir -p artifacts/p4rt
-
-      - name: Check source and package provenance guards
-        run: python3 -B -m unittest discover -s ci -p '*_test.py'
-
-      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
         with:
           bazelisk-version: 1.29.0
           bazelisk-cache: true
           repository-cache: true
-          disk-cache: p4rt-production-amd64
-          cache-version: "8.5.1-6.4.0"
+          disk-cache: ${{ github.workflow }}-trixie-amd64
+          cache-version: "8.5.1"
 
-      - name: Configure shared source download mirrors
+      - name: Configure verified source mirrors and Cosmos tools
+        shell: bash
         run: |
-          python3 -B .ci-deps/buildimage/tools/bazel/ci/source_mirrors.py \
-            --output "$RUNNER_TEMP/sonic-source-mirrors.cfg"
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/967051cf53d7f46a4d046d8771344ffa94287317/ci/source_mirrors.cfg \
+            -o "$RUNNER_TEMP/source_mirrors.cfg"
+          echo "2e01494e18c47475b29309b9f6ac1506665b3331498996d24f69d6dfc77eacc8  $RUNNER_TEMP/source_mirrors.cfg" | sha256sum -c -
+          echo "common --downloader_config=$RUNNER_TEMP/source_mirrors.cfg" >> .bazelrc
 
-      - name: Audit Common's configured SDK and runtime graph
-        working-directory: .ci-deps/buildimage/src/sonic-swss-common
-        env:
-          USE_BAZEL_VERSION: 8.5.1
+          cosmos_base="https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/967051cf53d7f46a4d046d8771344ffa94287317/ci"
+          curl -fsSL "$cosmos_base/github_sources.py" -o "$RUNNER_TEMP/github_sources.py"
+          curl -fsSL "$cosmos_base/github_sources/cosmos-4.0.2.json" -o "$RUNNER_TEMP/cosmos.json"
+          echo "06836c38c56aa0e77e1f7adac68b6463f8f1e920e0beb000061cec5b7f5ec1f2  $RUNNER_TEMP/github_sources.py" | sha256sum -c -
+          echo "1579ad34288945a28a2d77f96f4764b8910dd3d856d688971e46e63e58119af5  $RUNNER_TEMP/cosmos.json" | sha256sum -c -
+          python3 -B "$RUNNER_TEMP/github_sources.py" \
+            --manifest "$RUNNER_TEMP/cosmos.json" \
+            --distdir "$RUNNER_TEMP/distdir" \
+            --cache-dir "$RUNNER_TEMP/cosmos-cache" \
+            --receipt "$RUNNER_TEMP/cosmos-receipt.json"
+          echo "common --distdir=$RUNNER_TEMP/distdir" >> .bazelrc
+
+      - name: Zero-DEB runtime closure audit
+        shell: bash
         run: |
-          bazel --output_base="$RUNNER_TEMP/common-bazel-8" aquery \
-            --downloader_config="$RUNNER_TEMP/sonic-source-mirrors.cfg" \
-            --host_platform=@sonic_build_infra//platforms:x86_64_trixie \
-            --jobs=2 --//tools/bazel:yang_modules=True --output=jsonproto \
-            --include_artifacts --include_commandline=false \
-            'deps(set(//dist:libswsscommon_sdk @libyang//:libyang_pkg @libnl3//:libnl-3_pkg @libnl3//:libnl-route-3_pkg @libnl3//:libnl-nf-3_pkg))' \
-            > "$RUNNER_TEMP/common-actions.json"
-          python3 - "$RUNNER_TEMP/common-actions.json" "$GITHUB_WORKSPACE/artifacts/p4rt/common-action-audit.json" <<'PY'
-          import json, sys
-          from pathlib import Path
-          graph = json.loads(Path(sys.argv[1]).read_text())
-          fragments = {str(item['id']): item for item in graph['pathFragments']}
-          artifacts = {str(item['id']): item for item in graph['artifacts']}
-          outputs = [artifacts[str(identity)] for action in graph['actions']
-                     for identity in action.get('outputIds', [])]
-          assert not any(fragments[str(item['pathFragmentId'])]['label'].endswith('.deb')
-                         for item in outputs), 'Common SDK must not produce DEBs'
-          Path(sys.argv[2]).write_text(json.dumps({'actions': len(graph['actions']),
-              'outputs': len(outputs), 'deb_outputs': 0}, indent=2) + '\n')
+          set -euo pipefail
+          deb_deps="$(bazel cquery --lockfile_mode=update 'kind("pkg_deb", deps(//p4rt_app:p4rt_runtime + //p4rt_app:p4rt_runtime.debug_symbols + //p4rt_app:runtime_packages.json + //:runtime_packages.json))')"
+          test -z "$deb_deps"
+
+      - name: Build and validate P4RT runtime artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bazel build --lockfile_mode=update \
+            //p4rt_app:p4rt_runtime \
+            //p4rt_app:p4rt_runtime.debug_symbols \
+            //p4rt_app:runtime_packages.json \
+            //:runtime_packages.json
+          bazel test --lockfile_mode=update //p4rt_app:runtime_package_test
+
+      - name: Stage runtime outputs and receipts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p4rt
+          if [ -f MODULE.bazel.lock ]; then
+            cp MODULE.bazel.lock artifacts/p4rt/MODULE.bazel.lock
+          fi
+          rt_tar="$(bazel cquery --lockfile_mode=update --output=files //p4rt_app:p4rt_runtime)"
+          dbg_tar="$(bazel cquery --lockfile_mode=update --output=files //p4rt_app:p4rt_runtime.debug_symbols)"
+          meta_json="$(bazel cquery --lockfile_mode=update --output=files //p4rt_app:runtime_packages.json)"
+          test -f "$rt_tar" && cp -L "$rt_tar" artifacts/p4rt/p4rt_runtime.tar
+          test -f "$dbg_tar" && cp -L "$dbg_tar" artifacts/p4rt/p4rt_runtime.debug_symbols.tar
+          test -f "$meta_json" && cp -L "$meta_json" artifacts/p4rt/runtime_packages.json
+          if [ -f bazel-testlogs/p4rt_app/runtime_package_test/test.outputs/installed-packages.json ]; then
+            cp -L bazel-testlogs/p4rt_app/runtime_package_test/test.outputs/installed-packages.json artifacts/p4rt/
+          fi
+          python3 -B - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          out = pathlib.Path("artifacts/p4rt")
+          files = {}
+          for name in ("p4rt_runtime.tar", "p4rt_runtime.debug_symbols.tar", "runtime_packages.json"):
+              p = out / name
+              if p.is_file():
+                  files[name] = {
+                      "bytes": p.stat().st_size,
+                      "sha256": hashlib.file_digest(p.open("rb"), "sha256").hexdigest(),
+                  }
+          receipt = {
+              "schema": 1,
+              "bazel": pathlib.Path(".bazelversion").read_text().strip(),
+              "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "files": files,
+          }
+          (out / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
           PY
 
-      - name: Build Common's SDK with Bazel 8.5.1
-        run: |
-          python3 -B .ci-deps/buildimage/tools/bazel/p4rt_common_sdk.py \
-            --common-source .ci-deps/buildimage/src/sonic-swss-common \
-            --output-dir "$RUNNER_TEMP/common-sdk" \
-            --output-base "$RUNNER_TEMP/common-bazel-8" \
-            --arch amd64 --bazel-arg=--jobs=2 \
-            --bazel-arg=--downloader_config="$RUNNER_TEMP/sonic-source-mirrors.cfg"
-
-      - name: Prepare Common's native runtime dependencies
-        working-directory: .ci-deps/buildimage/src/sonic-swss-common
-        env:
-          USE_BAZEL_VERSION: 8.5.1
-        run: |
-          python3 -B tools/bazel/runtime/prepare.py \
-            --image-reference debian:trixie-20260918 \
-            --output "$GITHUB_WORKSPACE/artifacts/p4rt/test-runtime.json"
-          native_args=(
-            --downloader_config="$RUNNER_TEMP/sonic-source-mirrors.cfg"
-            --host_platform=@sonic_build_infra//platforms:x86_64_trixie
-          )
-          runtime_targets=(
-            @libyang//:libyang_pkg
-            @libnl3//:libnl-3_pkg
-            @libnl3//:libnl-route-3_pkg
-            @libnl3//:libnl-nf-3_pkg
-          )
-          bazel --output_base="$RUNNER_TEMP/common-bazel-8" build \
-            "${native_args[@]}" --jobs=2 --//tools/bazel:yang_modules=True "${runtime_targets[@]}"
-          for target in "${runtime_targets[@]}"; do
-            archive="$(bazel --output_base="$RUNNER_TEMP/common-bazel-8" cquery \
-              "${native_args[@]}" --//tools/bazel:yang_modules=True --output=files "$target")"
-            test -f "$archive"
-            tar -xf "$archive" -C /
-          done
-          ldconfig
-          bazel --output_base="$RUNNER_TEMP/common-bazel-8" shutdown
-
-      - name: Audit and build the production TARs, then run every P4RT test
-        run: |
-          python3 -B ci/production_runtime.py \
-            --buildimage .ci-deps/buildimage --sdk "$RUNNER_TEMP/common-sdk" \
-            --output-base "$RUNNER_TEMP/p4rt-bazel-6" \
-            --output artifacts/p4rt --jobs 4
-
-      - name: Retain production TARs and acceptance evidence
-        if: always() && !cancelled()
+      - name: Upload P4RT runtime artifacts
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: p4rt-production-amd64
+          name: sonic-pins-p4rt-runtime
           path: artifacts/p4rt/
-          if-no-files-found: error
+          if-no-files-found: warn

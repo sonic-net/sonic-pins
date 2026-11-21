@@ -1,5 +1,6 @@
 # Bazel Build System.
-bazel*
+/bazel-*
+/MODULE.bazel.lock
 
 # Pinned CI tools and retained production acceptance outputs.
 /.ci-deps/

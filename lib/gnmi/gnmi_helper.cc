@@ -60,8 +60,8 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "lib/utils/json_utils.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
 #include "re2/re2.h"
 #include "thinkit/switch.h"
 

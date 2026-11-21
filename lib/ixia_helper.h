@@ -32,7 +32,7 @@
 #include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/netaddr/ipv6_address.h"
 #include "p4_infra/netaddr/mac_address.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {

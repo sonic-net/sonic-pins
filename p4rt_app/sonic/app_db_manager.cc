@@ -34,7 +34,7 @@
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "google/rpc/status.pb.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"

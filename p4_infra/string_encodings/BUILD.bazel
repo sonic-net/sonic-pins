@@ -1,4 +1,6 @@
 load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -9,6 +11,7 @@ cc_library(
     name = "byte_string",
     srcs = ["byte_string.cc"],
     hdrs = ["byte_string.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -20,6 +23,7 @@ cc_library(
 cc_test(
     name = "byte_string_test",
     srcs = ["byte_string_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":byte_string",
         ":safe",
@@ -34,12 +38,14 @@ cc_library(
     name = "safe",
     srcs = ["safe.cc"],
     hdrs = ["safe.h"],
+    copts = ["-std=c++20"],
 )
 
 cc_library(
     name = "bit_string",
     srcs = ["bit_string.cc"],
     hdrs = ["bit_string.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":hex_string",
         "//p4_infra/netaddr:ipv4_address",
@@ -55,6 +61,7 @@ cc_library(
 cc_test(
     name = "bit_string_test",
     srcs = ["bit_string_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":bit_string",
         "@com_google_absl//absl/status",
@@ -67,6 +74,7 @@ cc_library(
     name = "readable_byte_string",
     srcs = ["readable_byte_string.cc"],
     hdrs = ["readable_byte_string.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":bit_string",
         ":hex_string",
@@ -79,6 +87,7 @@ cc_library(
 cc_test(
     name = "readable_byte_string_test",
     srcs = ["readable_byte_string_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":readable_byte_string",
         "@com_google_googletest//:gtest_main",
@@ -90,6 +99,7 @@ cc_library(
     name = "hex_string",
     srcs = ["hex_string.cc"],
     hdrs = ["hex_string.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":safe",
         "@com_google_absl//absl/log",
@@ -103,6 +113,7 @@ cc_library(
 cc_test(
     name = "hex_string_test_runner",
     srcs = ["hex_string_test_runner.cc"],
+    copts = ["-std=c++20"],
     linkstatic = True,
     deps = [
         ":hex_string",
@@ -123,6 +134,7 @@ cc_library(
     name = "decimal_string",
     srcs = ["decimal_string.cc"],
     hdrs = ["decimal_string.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -134,6 +146,7 @@ cc_library(
 cc_test(
     name = "decimal_string_test_runner",
     srcs = ["decimal_string_test_runner.cc"],
+    copts = ["-std=c++20"],
     linkstatic = True,
     deps = [
         ":decimal_string",

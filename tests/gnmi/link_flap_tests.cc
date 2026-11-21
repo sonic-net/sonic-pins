@@ -34,7 +34,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/gnmi/util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"

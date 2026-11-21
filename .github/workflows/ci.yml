@@ -1,90 +1,123 @@
-name: "build"
-
+name: CI
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Bazel Build and Test
-
-    runs-on: ubuntu-22.04
-    env:
-      BAZEL_CACHE_USER: github
-      BAZEL_CACHE_PWD: ${{ secrets.BAZEL_CACHE_PWD }}
-      BAZEL_CACHE_URL: pins-bazel-cache.onf.dev:9090
-
+  bazel-test:
+    name: Bazel 8.5.1 Test Suite (Trixie amd64)
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie-20260918@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c
+      # Allow Bazel to create nested namespaces and mount its read-only root.
+      options: >-
+        --cap-add=SYS_ADMIN
+        --security-opt=apparmor=unconfined
+        --security-opt=systempaths=unconfined
     steps:
-    - uses: actions/checkout@v3
+      - name: Install runner prerequisites
+        # libzmq5 supplies the libraries that Debian's libzmq.so.5 loads at
+        # test time (libsodium and others); it has no RUNPATH to Bazel's copies.
+        run: >-
+          apt-get update && apt-get install -y --no-install-recommends
+          binutils build-essential ca-certificates curl file gdb git libzmq5
+          patch python3 tar unzip xz-utils zstd
 
-    - name: Free disk space as workaround for https://github.com/actions/runner-images/issues/2875.
-      uses: jlumbroso/free-disk-space@v1.3.1
-      with:
-        # Keeping these as a precaution, in case we do need them.
-        large-packages: false
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-    - name: Mount bazel cache
-      uses: actions/cache/restore@v3
-      with:
-        # See https://docs.bazel.build/versions/master/output_directories.html
-        path: "/tmp/repo-cache"
-        # See https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-        key: bazel-repo-cache-v3-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
-        restore-keys: |
-          bazel-repo-cache-v3-${{ runner.os }}-
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-    - name: Install system dependencies
-      run: ./install_dependencies.sh
+      - name: Verify clean lockfile baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files --error-unmatch MODULE.bazel.lock >/dev/null 2>&1; then
+            echo "ERROR: MODULE.bazel.lock must not be tracked in git" >&2
+            exit 1
+          fi
+          if [ -e MODULE.bazel.lock ]; then
+            echo "ERROR: MODULE.bazel.lock must be absent at job start" >&2
+            exit 1
+          fi
 
-    - name: Install bazelisk
-      run: |
-        ARCH=$(dpkg --print-architecture)
-        sudo curl -fsSL -o /usr/local/bin/bazel \
-          https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${ARCH}
-        sudo chmod +x /usr/local/bin/bazel
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          bazelisk-version: 1.29.0
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-trixie-amd64
+          cache-version: "8.5.1"
 
-    - name: Save start time
-      uses: josStorer/get-current-time@v2
-      id: start-time
-      with:
-        # Unix timestamp -- seconds since 1970.
-        format: X
+      - name: Configure verified source mirrors and Cosmos tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/967051cf53d7f46a4d046d8771344ffa94287317/ci/source_mirrors.cfg \
+            -o "$RUNNER_TEMP/source_mirrors.cfg"
+          echo "2e01494e18c47475b29309b9f6ac1506665b3331498996d24f69d6dfc77eacc8  $RUNNER_TEMP/source_mirrors.cfg" | sha256sum -c -
+          echo "common --downloader_config=$RUNNER_TEMP/source_mirrors.cfg" >> .bazelrc
 
-    # Authentication is enabled for R/W access for builds on main and branch PRs
-    # Unauthenticated reads are allowed for PRs from forks
-    - name: Build and Test
-      run: |
-        mkdir -p /tmp/repo-cache
-        BAZEL_OPTS="--repository_cache=/tmp/repo-cache"
-        [ ! -z "$BAZEL_CACHE_USER" ] && [ ! -z "$BAZEL_CACHE_PWD" ] && \
-          AUTH="${BAZEL_CACHE_USER}:${BAZEL_CACHE_PWD}@"
-        BAZEL_OPTS+=" --remote_cache=https://${AUTH}${BAZEL_CACHE_URL}"
-        BAZEL_OPTS+=" --remote_download_minimal"
-        bazel build ${BAZEL_OPTS} //...
-        bazel test ${BAZEL_OPTS} //...
+          cosmos_base="https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/967051cf53d7f46a4d046d8771344ffa94287317/ci"
+          curl -fsSL "$cosmos_base/github_sources.py" -o "$RUNNER_TEMP/github_sources.py"
+          curl -fsSL "$cosmos_base/github_sources/cosmos-4.0.2.json" -o "$RUNNER_TEMP/cosmos.json"
+          echo "06836c38c56aa0e77e1f7adac68b6463f8f1e920e0beb000061cec5b7f5ec1f2  $RUNNER_TEMP/github_sources.py" | sha256sum -c -
+          echo "1579ad34288945a28a2d77f96f4764b8910dd3d856d688971e46e63e58119af5  $RUNNER_TEMP/cosmos.json" | sha256sum -c -
+          python3 -B "$RUNNER_TEMP/github_sources.py" \
+            --manifest "$RUNNER_TEMP/cosmos.json" \
+            --distdir "$RUNNER_TEMP/distdir" \
+            --cache-dir "$RUNNER_TEMP/cosmos-cache" \
+            --receipt "$RUNNER_TEMP/cosmos-receipt.json"
+          echo "common --distdir=$RUNNER_TEMP/distdir" >> .bazelrc
 
-    - name: Save end time
-      uses: josStorer/get-current-time@v2
-      id: end-time
-      with:
-        # Unix timestamp -- seconds since 1970.
-        format: X
+      - name: Zero-DEB production graph audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg_deb_nonmanual="$(bazel query --lockfile_mode=update 'kind("pkg_deb", //... except attr("tags", "\bmanual\b", //...))')"
+          test -z "$pkg_deb_nonmanual"
+          pkg_deb_deps="$(bazel cquery --lockfile_mode=update 'kind("pkg_deb", deps(//... except attr("tags", "\bmanual\b", //...)))')"
+          test -z "$pkg_deb_deps"
+          deb_actions="$(bazel aquery --lockfile_mode=update 'mnemonic("(MakeDeb|DebPackage)", //... except attr("tags", "\bmanual\b", //...))' | grep -c '^action ' || true)"
+          test "$deb_actions" -eq 0
 
-    - name: Calculate build duration
-      run: |
-        START=${{ steps.start-time.outputs.formattedTime }}
-        END=${{ steps.end-time.outputs.formattedTime }}
-        DURATION=$(( $END - $START ))
-        echo "duration=$DURATION" | tee "$GITHUB_ENV"
+      - name: Build and run full test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          bazel run --lockfile_mode=update //:buildifier -- --mode=check -r .
+          bazel test --lockfile_mode=update //p4rt_app:runtime_package_test //...
 
-    - name: Save bazel cache
-      uses: actions/cache/save@v3
-      # We create a new cache entry if either of the following is true:
-      # - We are on the master branch.
-      # - It took more than 5 minutes to build and test.
-      if: github.ref_name == 'main' || env.duration > 300
-      with:
-        path: "/tmp/repo-cache"
-        key: bazel-repo-cache-v3-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
+      - name: Collect lockfile and verification receipts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci
+          test -f MODULE.bazel.lock
+          cp MODULE.bazel.lock artifacts/ci/MODULE.bazel.lock
+          if [ -f "$RUNNER_TEMP/cosmos-receipt.json" ]; then
+            cp "$RUNNER_TEMP/cosmos-receipt.json" artifacts/ci/
+          fi
+          bazel info > artifacts/ci/bazel-info.txt 2>&1 || true
+          bazel mod graph > artifacts/ci/mod-graph.txt 2>&1 || true
+
+      - name: Upload CI receipts and lockfile
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sonic-pins-ci-receipts
+          path: artifacts/ci/
+          if-no-files-found: warn

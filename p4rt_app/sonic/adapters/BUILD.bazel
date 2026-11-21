@@ -1,5 +1,5 @@
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 # Copyright 2020 Google LLC
 #
@@ -23,9 +23,10 @@ cc_library(
     name = "consumer_notifier_adapter",
     srcs = ["consumer_notifier_adapter.cc"],
     hdrs = ["consumer_notifier_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/log",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -36,7 +37,7 @@ cc_library(
     deps = [
         ":consumer_notifier_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -45,6 +46,7 @@ cc_library(
     testonly = True,
     srcs = ["fake_consumer_notifier_adapter.cc"],
     hdrs = ["fake_consumer_notifier_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":consumer_notifier_adapter",
         ":fake_sonic_db_table",
@@ -56,7 +58,8 @@ cc_library(
     name = "notification_producer_adapter",
     srcs = ["notification_producer_adapter.cc"],
     hdrs = ["notification_producer_adapter.h"],
-    deps = ["@sonic_swss_common//:libswsscommon"],
+    copts = ["-std=c++20"],
+    deps = ["@sonic_swss_common//:libswsscommon_shared"],
 )
 
 cc_library(
@@ -66,7 +69,7 @@ cc_library(
     deps = [
         ":notification_producer_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -74,9 +77,10 @@ cc_library(
     name = "producer_state_table_adapter",
     srcs = ["producer_state_table_adapter.cc"],
     hdrs = ["producer_state_table_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/log",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -87,7 +91,7 @@ cc_library(
     deps = [
         ":producer_state_table_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -96,11 +100,12 @@ cc_library(
     testonly = True,
     srcs = ["fake_producer_state_table_adapter.cc"],
     hdrs = ["fake_producer_state_table_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":fake_sonic_db_table",
         ":producer_state_table_adapter",
         "@com_google_absl//absl/log",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -108,6 +113,7 @@ cc_library(
     name = "system_call_adapter",
     srcs = ["system_call_adapter.cc"],
     hdrs = ["system_call_adapter.h"],
+    copts = ["-std=c++20"],
 )
 
 cc_library(
@@ -124,9 +130,10 @@ cc_library(
     name = "table_adapter",
     srcs = ["table_adapter.cc"],
     hdrs = ["table_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -137,7 +144,7 @@ cc_library(
     deps = [
         ":table_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -146,12 +153,13 @@ cc_library(
     testonly = True,
     srcs = ["fake_table_adapter.cc"],
     hdrs = ["fake_table_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":fake_sonic_db_table",
         ":table_adapter",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -160,9 +168,10 @@ cc_library(
     testonly = True,
     srcs = ["fake_warm_boot_state_adapter.cc"],
     hdrs = ["fake_warm_boot_state_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":warm_boot_state_adapter",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -171,6 +180,7 @@ cc_library(
     testonly = True,
     srcs = ["fake_sonic_db_table.cc"],
     hdrs = ["fake_sonic_db_table.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -186,6 +196,7 @@ cc_library(
 cc_test(
     name = "fake_sonic_db_table_test",
     srcs = ["fake_sonic_db_table_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":fake_sonic_db_table",
         "@com_google_absl//absl/status",
@@ -198,10 +209,11 @@ cc_test(
 cc_test(
     name = "fake_warm_boot_state_adapter_test",
     srcs = ["fake_warm_boot_state_adapter_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":fake_warm_boot_state_adapter",
         "@com_google_googletest//:gtest_main",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -209,9 +221,10 @@ cc_library(
     name = "subscriber_state_table_adapter",
     srcs = ["subscriber_state_table_adapter.cc"],
     hdrs = ["subscriber_state_table_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/log",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -222,7 +235,7 @@ cc_library(
     deps = [
         ":subscriber_state_table_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -230,7 +243,8 @@ cc_library(
     name = "warm_boot_state_adapter",
     srcs = ["warm_boot_state_adapter.cc"],
     hdrs = ["warm_boot_state_adapter.h"],
-    deps = ["@sonic_swss_common//:libswsscommon"],
+    copts = ["-std=c++20"],
+    deps = ["@sonic_swss_common//:libswsscommon_shared"],
 )
 
 cc_library(
@@ -240,7 +254,7 @@ cc_library(
     deps = [
         ":warm_boot_state_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -248,7 +262,8 @@ cc_library(
     name = "zmq_producer_state_table_adapter",
     srcs = ["zmq_producer_state_table_adapter.cc"],
     hdrs = ["zmq_producer_state_table_adapter.h"],
-    deps = ["@sonic_swss_common//:libswsscommon"],
+    copts = ["-std=c++20"],
+    deps = ["@sonic_swss_common//:libswsscommon_shared"],
 )
 
 cc_library(
@@ -256,11 +271,12 @@ cc_library(
     testonly = True,
     srcs = ["fake_zmq_producer_state_table_adapter.cc"],
     hdrs = ["fake_zmq_producer_state_table_adapter.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":fake_sonic_db_table",
         ":zmq_producer_state_table_adapter",
         "@com_google_absl//absl/status",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -271,6 +287,6 @@ cc_library(
     deps = [
         ":zmq_producer_state_table_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )

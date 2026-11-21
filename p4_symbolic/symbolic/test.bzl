@@ -22,7 +22,7 @@ It also defines a Macro that simplifies defining a protobuf test
 over a sample P4 program.
 """
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 load("@com_google_gutil//gutil:diff_test.bzl", "diff_test")
 
 def end_to_end_test(
@@ -92,6 +92,7 @@ def end_to_end_test(
     # interesting testing packets.
     packets_output_file = "generated/%s.txt" % name
     smt_output_file = "generated/%s.smt2" % name
+    p4_symbolic_main = str(Label("//p4_symbolic:main"))
     native.genrule(
         name = "%s_test_runner" % name,
         srcs = [
@@ -99,9 +100,9 @@ def end_to_end_test(
             p4info_file,
         ] + ([table_entries] if table_entries else []),
         outs = [packets_output_file, smt_output_file],
-        tools = ["//p4_symbolic:main"],
+        tools = [p4_symbolic_main],
         cmd = " ".join([
-            "$(location //p4_symbolic:main)",
+            "$(location %s)" % p4_symbolic_main,
             ("--bmv2=$(location %s)" % bmv2_file),
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),

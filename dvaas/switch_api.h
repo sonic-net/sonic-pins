@@ -17,6 +17,7 @@
 
 #include <memory>
 
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 
 namespace dvaas {

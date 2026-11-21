@@ -14,7 +14,7 @@
 
 # This package implements the various traffic generator helpers for PINs NSF tests.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -26,6 +26,7 @@ cc_library(
     testonly = True,
     srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/utils:generic_testbed_utils",
         "//lib/validator:validator_lib",

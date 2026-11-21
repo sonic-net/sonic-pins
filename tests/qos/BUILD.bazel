@@ -14,8 +14,8 @@
 #
 
 load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test")
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -31,6 +31,7 @@ cc_library(
     hdrs = [
         "cpu_qos_test.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":gnmi_parsers",
         ":packet_in_receiver",
@@ -66,8 +67,6 @@ cc_library(
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -91,6 +90,8 @@ cc_library(
         "@com_google_gutil//gutil:testing",
         "@com_google_gutil//gutil:version",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )
@@ -104,6 +105,7 @@ cc_library(
     hdrs = [
         "punt_qos_test.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":packet_in_receiver",
         ":qos_test_util",
@@ -131,8 +133,6 @@ cc_library(
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -150,6 +150,8 @@ cc_library(
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )
@@ -159,6 +161,7 @@ cc_library(
     testonly = True,
     srcs = ["pfc_test.cc"],
     hdrs = ["pfc_test.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":qos_test_util",
         "//lib:ixia_helper",
@@ -198,6 +201,7 @@ cc_library(
     testonly = True,
     srcs = ["frontpanel_qos_test.cc"],
     hdrs = ["frontpanel_qos_test.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":packet_in_receiver",
         ":qos_test_util",
@@ -227,8 +231,6 @@ cc_library(
         "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
@@ -245,11 +247,13 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
         "@com_google_gutil//gutil:collections",
-	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )
@@ -258,6 +262,7 @@ cc_library(
     name = "gnmi_parsers",
     srcs = ["gnmi_parsers.cc"],
     hdrs = ["gnmi_parsers.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:openconfig_cc_proto",
         "//p4_infra/netaddr:ipv4_address",
@@ -274,14 +279,15 @@ cc_library(
 cc_test(
     name = "gnmi_parsers_test_runner",
     srcs = ["gnmi_parsers_test_runner.cc"],
+    copts = ["-std=c++20"],
     linkstatic = True,
     deps = [
         ":gnmi_parsers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:proto",
-	"@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
     ],
@@ -298,6 +304,7 @@ cc_library(
     name = "qos_test_util",
     srcs = ["qos_test_util.cc"],
     hdrs = ["qos_test_util.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":gnmi_parsers",
         "//lib/gnmi:gnmi_helper",
@@ -308,7 +315,6 @@ cc_library(
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
@@ -321,6 +327,7 @@ cc_library(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@nlohmann_json//:json",
     ],
 )
 

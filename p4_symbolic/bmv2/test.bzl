@@ -22,7 +22,7 @@ It also defines a Macro that simplifies defining a protobuf test
 over a sample P4 program.
 """
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 load("@com_google_gutil//gutil:diff_test.bzl", "diff_test")
 
 def _subset_diff_impl(ctx):
@@ -33,7 +33,7 @@ def _subset_diff_impl(ctx):
     ctx.actions.write(
         output = ctx.outputs.executable,
         is_executable = True,
-        content = "python {sdiff_py} {expected} {actual}".format(
+        content = "python3 {sdiff_py} {expected} {actual}".format(
             sdiff_py = ctx.file._sdiff_py.short_path,
             expected = ctx.file.expected.short_path,
             actual = ctx.file.actual.short_path,
@@ -154,13 +154,14 @@ def bmv2_protobuf_parsing_test(name, p4_program, golden_file, p4_deps = []):
     proto_filename = name + "_tmp.pb.txt"
     json_filename = name + "_tmp.json"
 
+    bmv2_tool = str(Label("//p4_symbolic/bmv2:test"))
     native.genrule(
         name = parse_name,
         srcs = [bmv2_json],
         outs = [proto_filename, json_filename],
-        tools = ["//p4_symbolic/bmv2:test"],
+        tools = [bmv2_tool],
         cmd = " ".join([
-            "$(location //p4_symbolic/bmv2:test)",
+            "$(location %s)" % bmv2_tool,
             ("--bmv2=$(location %s)" % bmv2_json),
             ("--protobuf=$(location %s)" % proto_filename),
             ("--json=$(location %s)" % json_filename),

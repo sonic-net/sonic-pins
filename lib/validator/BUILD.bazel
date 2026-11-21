@@ -15,6 +15,9 @@
 # The validator library is designed to provide a backend-agnostic method
 # to query the status of entities used in tests.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -24,6 +27,7 @@ cc_library(
     name = "validator",
     srcs = ["validator.cc"],
     hdrs = ["validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":validator_backend",
         "@com_google_absl//absl/algorithm:container",
@@ -38,6 +42,7 @@ cc_library(
     name = "validator_backend",
     srcs = ["validator_backend.cc"],
     hdrs = ["validator_backend.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -55,6 +60,7 @@ cc_library(
     testonly = 1,
     srcs = ["common_backend.cc"],
     hdrs = ["common_backend.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":validator",
         ":validator_backend",
@@ -67,6 +73,7 @@ cc_library(
 cc_test(
     name = "validator_backend_test",
     srcs = ["validator_backend_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":validator_backend",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -83,6 +90,7 @@ cc_library(
     testonly = 1,
     srcs = ["pins_backend.cc"],
     hdrs = ["pins_backend.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":validator",
         ":validator_backend",
@@ -102,6 +110,7 @@ cc_library(
     testonly = 1,
     srcs = ["validator_lib.cc"],
     hdrs = ["validator_lib.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//lib/gnoi:gnoi_helper",
@@ -112,8 +121,6 @@ cc_library(
         "@com_github_gnoi//system:system_cc_grpc_proto",
         "@com_github_gnoi//system:system_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -121,12 +128,15 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "validator_lib_test",
     srcs = ["validator_lib_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":validator_lib",
         "//thinkit:switch",
@@ -143,13 +153,13 @@ cc_library(
     name = "config_validator",
     srcs = ["config_validator.cc"],
     hdrs = ["config_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//lib/utils:json_utils",
         "//thinkit:switch",
         "//thinkit:test_environment",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -159,24 +169,26 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@nlohmann_json//:json",
     ],
 )
 
 cc_test(
     name = "config_validator_test",
     srcs = ["config_validator_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":config_validator",
         "//thinkit:mock_switch",
         "//thinkit:mock_test_environment",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@nlohmann_json//:json",
     ],
 )

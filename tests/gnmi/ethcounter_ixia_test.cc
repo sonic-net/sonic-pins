@@ -49,7 +49,7 @@
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.h"
 #include "p4_infra/netaddr/mac_address.h"

@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("@com_google_gutil//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
 
 package(
@@ -27,6 +31,7 @@ cc_library(
     name = "references",
     srcs = ["references.cc"],
     hdrs = ["references.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
@@ -34,7 +39,6 @@ cc_library(
         ":ir_cc_proto",
         ":reference_annotations",
         "//p4_infra/string_encodings:byte_string",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -46,12 +50,14 @@ cc_library(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "references_test",
     srcs = ["references_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "references",
         "@com_google_absl//absl/hash:hash_testing",
@@ -67,6 +73,7 @@ cc_library(
     hdrs = [
         "built_ins.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_cc_proto",
         "@com_google_absl//absl/status:statusor",
@@ -81,6 +88,7 @@ cc_test(
     srcs = [
         "built_ins_test.cc",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":built_ins",
         ":ir_cc_proto",
@@ -97,11 +105,11 @@ cc_library(
     hdrs = [
         "reference_annotations.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":annotation_parser",
         ":built_ins",
         ":ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
@@ -109,9 +117,10 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_gutil//gutil:collections",
-	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -120,6 +129,7 @@ cc_test(
     srcs = [
         "reference_annotations_test.cc",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_cc_proto",
         ":reference_annotations",
@@ -140,11 +150,11 @@ cc_library(
     name = "sequencing_util",
     srcs = ["sequencing_util.cc"],
     hdrs = ["sequencing_util.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
@@ -153,6 +163,8 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -160,6 +172,7 @@ cc_test(
     name =
         "sequencing_util_test",
     srcs = ["sequencing_util_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "sequencing_util",
         "@com_google_absl//absl/hash:hash_testing",
@@ -171,6 +184,7 @@ cc_library(
     name = "sequencing",
     srcs = ["sequencing.cc"],
     hdrs = ["sequencing.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
@@ -178,11 +192,9 @@ cc_library(
         ":names",
         ":references",
         ":sequencing_util",
-        "@boost//:bimap",
-        "@boost//:graph",
+        "@boost.bimap",
+        "@boost.graph",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -196,6 +208,8 @@ cc_library(
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -203,6 +217,7 @@ cc_library(
     name = "pd",
     srcs = ["pd.cc"],
     hdrs = ["pd.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
@@ -212,8 +227,6 @@ cc_library(
         ":translation_options",
         "//p4_infra/string_encodings:hex_string",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
@@ -223,21 +236,23 @@ cc_library(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_gutil//gutil:collections",
-	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_binary(
     name = "pdgen",
     srcs = ["pdgen.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir",
         ":ir_cc_proto",
         ":pdgenlib",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
@@ -246,6 +261,7 @@ cc_binary(
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -253,18 +269,19 @@ cc_library(
     name = "pdgenlib",
     srcs = ["pdgenlib.cc"],
     hdrs = ["pdgenlib.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         ":pd",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:collections",
-	"@com_google_gutil//gutil:ordered_map",
+        "@com_google_gutil//gutil:ordered_map",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -272,11 +289,10 @@ cc_library(
     name = "p4info_union_lib",
     srcs = ["p4info_union_lib.cc"],
     hdrs = ["p4info_union_lib.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -284,30 +300,33 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_gutil//gutil:proto",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
     ],
 )
 
 cc_test(
     name = "p4info_union_test",
     srcs = ["p4info_union_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_union_lib",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
     ],
 )
 
 cc_binary(
     name = "p4info_union",
     srcs = ["p4info_union.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4info_union_lib",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
@@ -315,6 +334,7 @@ cc_binary(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:proto",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -322,6 +342,7 @@ cc_library(
     name = "ir",
     srcs = ["ir.cc"],
     hdrs = ["ir.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
@@ -331,9 +352,6 @@ cc_library(
         ":reference_annotations",
         ":translation_options",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -349,12 +367,16 @@ cc_library(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "ir_to_ir_test",
     srcs = ["ir_to_ir_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir",
         "@com_google_googletest//:gtest_main",
@@ -368,10 +390,10 @@ proto_library(
     name = "ir_proto",
     srcs = ["ir.proto"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4info_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_proto",
         "@com_google_googleapis//google/rpc:code_proto",
         "@com_google_googleapis//google/rpc:status_proto",
+        "@p4runtime//proto/p4/config/v1:p4info_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_proto",
     ],
 )
 
@@ -383,6 +405,7 @@ cc_library(
     hdrs = [
         "ir_utils.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_cc_proto",
         ":translation_options",
@@ -390,9 +413,6 @@ cc_library(
         "//p4_infra/netaddr:ipv6_address",
         "//p4_infra/netaddr:mac_address",
         "//p4_infra/string_encodings:byte_string",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
@@ -403,12 +423,16 @@ cc_library(
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
         "@com_google_protobuf//third_party/utf8_range:utf8_validity",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "ir_utils_test",
     srcs = ["ir_utils_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_cc_proto",
         ":ir_utils",
@@ -432,19 +456,20 @@ cc_library(
     name = "pi",
     srcs = ["pi.cc"],
     hdrs = ["pi.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         ":ir_utils",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -452,15 +477,17 @@ cc_library(
     name = "ir_properties",
     srcs = ["ir_properties.cc"],
     hdrs = ["ir_properties.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
 cc_test(
     name = "ir_properties_test",
     srcs = ["ir_properties_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_properties",
         "@com_google_googletest//:gtest_main",
@@ -472,31 +499,33 @@ cc_library(
     name = "ir_tools",
     srcs = ["ir_tools.cc"],
     hdrs = ["ir_tools.h"],
+    copts = ["-std=c++20"],
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:variant",
         "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
     ],
 )
 
 cc_test(
     name = "ir_tools_test",
     srcs = ["ir_tools_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir_cc_proto",
         ":ir_tools",
         ":main_p4_pd_cc_proto",
         ":pd",
         ":test_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -506,6 +535,7 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4types_cc_proto",
     ],
 )
 
@@ -523,6 +553,7 @@ cc_library(
     hdrs = [
         "annotation_parser.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -533,6 +564,7 @@ cc_library(
 cc_test(
     name = "annotation_parser_test",
     srcs = ["annotation_parser_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":annotation_parser",
         "@com_google_absl//absl/status",
@@ -547,8 +579,8 @@ cc_library(
     name = "entity_keys",
     srcs = ["entity_keys.cc"],
     hdrs = ["entity_keys.h"],
+    copts = ["-std=c++20"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
@@ -556,12 +588,14 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "entity_keys_test",
     srcs = ["entity_keys_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":entity_keys",
         "@com_google_absl//absl/hash:hash_testing",
@@ -576,37 +610,40 @@ cc_library(
     name = "names",
     srcs = ["names.cc"],
     hdrs = ["names.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":built_ins",
         ":ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "names_test",
     srcs = ["names_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":built_ins",
         ":ir_cc_proto",
         ":names",
         ":test_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "ternary_test",
     srcs = ["ternary_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ternary",
         "//p4_infra/netaddr:ipv4_address",
@@ -663,9 +700,9 @@ proto_library(
     name = "union_main_p4_pd_proto",
     srcs = ["union_main_p4_pd.proto"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4runtime_proto",
         "@com_google_googleapis//google/rpc:code_proto",
         "@com_google_googleapis//google/rpc:status_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_proto",
     ],
 )
 
@@ -678,14 +715,15 @@ cc_library(
     name = "test_p4info_cc",
     srcs = ["test_p4info.cc"],
     hdrs = ["test_p4info.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir",
         ":ir_cc_proto",
         ":test_p4info_embed",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -701,9 +739,9 @@ proto_library(
     name = "main_p4_pd_proto",
     srcs = ["main_p4_pd.proto"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4runtime_proto",
         "@com_google_googleapis//google/rpc:code_proto",
         "@com_google_googleapis//google/rpc:status_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_proto",
     ],
 )
 
@@ -740,6 +778,7 @@ cc_test(
     name = "sequencing_test_runner",
     srcs = ["sequencing_test_runner.cc"],
     args = ["$(location :main-p4info.pb.txt)"],
+    copts = ["-std=c++20"],
     data = ["main-p4info.pb.txt"],
     linkstatic = True,
     deps = [
@@ -749,8 +788,6 @@ cc_test(
         ":pd",
         ":sequencing",
         ":test_helper",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -758,6 +795,8 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -774,6 +813,7 @@ cmd_diff_test(
 cc_test(
     name = "sequencing_util_test_runner",
     srcs = ["sequencing_util_test_runner.cc"],
+    copts = ["-std=c++20"],
     linkstatic = True,
     deps = [
         ":ir_cc_proto",
@@ -802,6 +842,7 @@ cmd_diff_test(
 cc_test(
     name = "references_test_runner",
     srcs = ["references_test_runner.cc"],
+    copts = ["-std=c++20"],
     linkstatic = True,
     deps = [
         ":ir_cc_proto",
@@ -810,7 +851,6 @@ cc_test(
         ":references",
         ":test_helper",
         ":test_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
@@ -819,6 +859,7 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -833,13 +874,13 @@ cc_test(
     name = "p4info_test_runner",
     srcs = ["p4info_test_runner.cc"],
     args = ["$(location :main-p4info.pb.txt)"],
+    copts = ["-std=c++20"],
     data = ["main-p4info.pb.txt"],
     linkstatic = True,
     deps = [
         ":ir",
         ":ir_cc_proto",
         ":test_helper",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -847,6 +888,7 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -864,6 +906,7 @@ cc_test(
     name = "rpc_test_runner",
     srcs = ["rpc_test_runner.cc"],
     args = ["$(location :main-p4info.pb.txt)"],
+    copts = ["-std=c++20"],
     data = ["main-p4info.pb.txt"],
     linkstatic = True,
     deps = [
@@ -874,8 +917,6 @@ cc_test(
         ":test_helper",
         ":translation_options",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -884,6 +925,8 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -901,6 +944,7 @@ cc_test(
     name = "packet_io_test_runner",
     srcs = ["packet_io_test_runner.cc"],
     args = ["$(location :main-p4info.pb.txt)"],
+    copts = ["-std=c++20"],
     data = ["main-p4info.pb.txt"],
     linkstatic = True,
     deps = [
@@ -910,13 +954,13 @@ cc_test(
         ":pd",
         ":test_helper",
         ":translation_options",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -934,6 +978,7 @@ cc_test(
     name = "table_entry_test_runner",
     srcs = ["table_entry_test_runner.cc"],
     args = ["$(location :main-p4info.pb.txt)"],
+    copts = ["-std=c++20"],
     data = ["main-p4info.pb.txt"],
     linkstatic = True,
     deps = [
@@ -943,13 +988,13 @@ cc_test(
         ":test_helper",
         ":translation_options",
         ":union_main_p4_pd_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -966,10 +1011,10 @@ cmd_diff_test(
 cc_test(
     name = "helper_function_test",
     srcs = ["helper_function_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "main_p4_pd_cc_proto",
         ":pd",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googleapis//google/rpc:code_cc_proto",
@@ -977,12 +1022,14 @@ cc_test(
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "table_entry_gunit_test",
     srcs = ["table_entry_gunit_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ir",
         ":ir_cc_proto",
@@ -990,7 +1037,6 @@ cc_test(
         ":pd",
         ":test_p4info_cc",
         ":translation_options",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -1000,5 +1046,6 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )

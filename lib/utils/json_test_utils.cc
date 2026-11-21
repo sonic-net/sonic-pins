@@ -17,7 +17,7 @@
 #include <string_view>
 
 #include "absl/status/statusor.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "lib/utils/json_utils.h"
 
 namespace pins_test {

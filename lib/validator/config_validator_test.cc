@@ -12,8 +12,8 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "include/nlohmann/json.hpp"
-#include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "nlohmann/json.hpp"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi_mock.grpc.pb.h"
 #include "thinkit/mock_switch.h"
 #include "thinkit/mock_test_environment.h"
 

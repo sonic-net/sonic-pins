@@ -14,7 +14,7 @@
 
 # This package contains the interfaces, structs, and enums to be used in PINs NSF tests.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -44,8 +44,8 @@ cc_library(
         ":image_config_params",
         ":testbed",
         "//thinkit:ssh_client",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -78,8 +78,8 @@ cc_library(
     name = "image_config_params",
     hdrs = ["image_config_params.h"],
     deps = [
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/time",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 

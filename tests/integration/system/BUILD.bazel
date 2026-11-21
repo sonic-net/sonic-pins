@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -24,6 +24,7 @@ cc_library(
     testonly = True,
     srcs = ["random_blackbox_events_tests.cc"],
     hdrs = ["random_blackbox_events_tests.h"],
+    copts = ["-std=c++20"],
     data = ["gnmi_subscription_request.textproto"],
     deps = [
         "//lib/basic_traffic",
@@ -52,8 +53,6 @@ cc_library(
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/random",
@@ -64,6 +63,8 @@ cc_library(
         "@com_google_googletest//:gtest",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )
@@ -73,6 +74,7 @@ cc_library(
     testonly = True,
     srcs = ["packet_forwarding_tests.cc"],
     hdrs = ["packet_forwarding_tests.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/basic_traffic",
         "//lib/basic_traffic:basic_p4rt_util",
@@ -92,8 +94,6 @@ cc_library(
         "//thinkit:generic_testbed_fixture",
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
@@ -107,6 +107,8 @@ cc_library(
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )
@@ -116,6 +118,7 @@ cc_library(
     testonly = True,
     srcs = ["linerate_traffic_test.cc"],
     hdrs = ["linerate_traffic_test.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//lib/utils:generic_testbed_utils",
@@ -142,8 +145,6 @@ cc_library(
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -160,6 +161,8 @@ cc_library(
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )
@@ -169,6 +172,7 @@ cc_library(
     testonly = True,
     srcs = ["control_device_reboot_test.cc"],
     hdrs = ["control_device_reboot_test.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//thinkit:control_device",
         "//thinkit:generic_testbed",
@@ -195,6 +199,7 @@ cc_library(
     hdrs = [
         "alpm_miss_counter_tests.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",

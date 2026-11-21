@@ -29,7 +29,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"

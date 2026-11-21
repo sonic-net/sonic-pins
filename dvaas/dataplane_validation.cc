@@ -71,7 +71,7 @@
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_infra/string_encodings/hex_string.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"

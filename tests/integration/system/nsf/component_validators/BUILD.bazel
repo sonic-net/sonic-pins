@@ -18,7 +18,7 @@
 # Component owners need to have their own implementations and register to be used by the NSF Upgrade
 # tests.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -30,6 +30,7 @@ cc_library(
     testonly = True,
     srcs = ["p4rt_validator.cc"],
     hdrs = ["p4rt_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//tests/integration/system/nsf:util",
@@ -65,6 +66,7 @@ cc_library(
     testonly = True,
     srcs = ["swss_validator.cc"],
     hdrs = ["swss_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//tests/integration/system/nsf:util",
         "//tests/integration/system/nsf/interfaces:component_validator",
@@ -84,6 +86,7 @@ cc_library(
     testonly = True,
     srcs = ["syncd_validator.cc"],
     hdrs = ["syncd_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//tests/integration/system/nsf:util",
         "//tests/integration/system/nsf/interfaces:component_validator",
@@ -104,6 +107,7 @@ cc_library(
     testonly = True,
     srcs = ["telemetry_validator.cc"],
     hdrs = ["telemetry_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//tests/integration/system/nsf:util",
         "//tests/integration/system/nsf/interfaces:component_validator",
@@ -124,6 +128,7 @@ cc_library(
     testonly = True,
     srcs = ["component_perf_validator.cc"],
     hdrs = ["component_perf_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//tests/integration/system/nsf:util",
         "//tests/integration/system/nsf/interfaces:component_validator",
@@ -147,6 +152,7 @@ cc_library(
     testonly = True,
     srcs = ["xcvrd_validator.cc"],
     hdrs = ["xcvrd_validator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//tests:thinkit_gnmi_interface_util",
