@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_testonly = True,
@@ -26,6 +26,7 @@ cc_library(
     testonly = True,
     srcs = ["test_entries.cc"],
     hdrs = ["test_entries.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/netaddr:ipv4_address",
         "//p4_infra/netaddr:ipv6_address",
@@ -41,7 +42,6 @@ cc_library(
         "//sai_p4/instantiations/google:p4_versions",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -54,12 +54,14 @@ cc_library(
         "@com_google_gutil//gutil:testing",
         "@com_google_gutil//gutil:version",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "test_entries_test",
     srcs = ["test_entries_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":test_entries",
         "//p4_infra/netaddr:ipv4_address",
@@ -72,12 +74,12 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -86,31 +88,33 @@ cc_library(
     testonly = True,
     srcs = ["table_entry_generator_helper.cc"],
     hdrs = ["table_entry_generator_helper.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/netaddr:ipv4_address",
         "//p4_infra/netaddr:ipv6_address",
         "//p4_infra/netaddr:mac_address",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/functional:bind_front",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
 cc_test(
     name = "table_entry_generator_helper_test",
     srcs = ["table_entry_generator_helper_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":table_entry_generator_helper",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -119,10 +123,10 @@ cc_library(
     testonly = True,
     srcs = ["table_entry_generator.cc"],
     hdrs = ["table_entry_generator.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":table_entry_generator_helper",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
@@ -131,12 +135,14 @@ cc_library(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
 cc_test(
     name = "table_entry_generator_test",
     srcs = ["table_entry_generator_test.cc"],
+    copts = ["-std=c++20"],
     shard_count = 50,
     deps = [
         ":table_entry_generator",
@@ -147,12 +153,12 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )

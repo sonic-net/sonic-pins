@@ -18,7 +18,7 @@
 #include <string_view>
 
 #include "gtest/gtest.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "lib/utils/json_utils.h"
 
 namespace pins_test {

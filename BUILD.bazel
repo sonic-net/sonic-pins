@@ -1,4 +1,4 @@
-load("@com_github_bazelbuild_buildtools//buildifier:def.bzl", "buildifier")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,7 +6,17 @@ licenses(["notice"])
 
 exports_files(["LICENSE"])
 
-buildifier(
+cc_library(
+    name = "gmp",
+    deps = ["@p4c_deps//libgmp-dev:libgmpxx_static"],
+)
+
+alias(
     name = "buildifier",
-    exclude_patterns = ["./third_party/*"],
+    actual = "@buildifier_prebuilt//:buildifier",
+)
+
+alias(
+    name = "runtime_packages.json",
+    actual = "//p4rt_app:runtime_packages.json",
 )

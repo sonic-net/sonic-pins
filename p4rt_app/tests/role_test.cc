@@ -22,6 +22,7 @@
 #include "absl/types/optional.h"
 #include "gmock/gmock.h"
 #include "grpcpp/client_context.h"
+#include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/sync_stream.h"
 #include "gtest/gtest.h"

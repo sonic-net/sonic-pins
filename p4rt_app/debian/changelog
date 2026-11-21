@@ -1,0 +1,5 @@
+sonic-pins (0.0.1) UNRELEASED; urgency=medium
+
+  * Initial Bzlmod runtime package metadata.
+
+ -- PINS Working Group <pins-wg@opennetworking.org>  Thu, 14 Nov 2024 12:48:22 -0700

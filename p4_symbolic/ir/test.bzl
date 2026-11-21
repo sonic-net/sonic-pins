@@ -21,7 +21,7 @@ It also defines a Macro that simplifies defining a protobuf test over a sample
 P4 program.
 """
 
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("@com_github_p4lang_p4c//bazel:p4_library.bzl", "p4_library")
 load("@com_google_gutil//gutil:diff_test.bzl", "diff_test")
 
 def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps = []):
@@ -67,6 +67,7 @@ def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps
 
     # Use p4_symbolic/ir/test.cc to parse input json with p4info and dump
     # (tmp) output.
+    ir_tool = str(Label("//p4_symbolic/ir:test"))
     native.genrule(
         name = "%s_parse" % name,
         srcs = [
@@ -74,9 +75,9 @@ def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps
             p4info_file,
         ] + ([table_entries] if table_entries else []),
         outs = [test_output_file],
-        tools = ["//p4_symbolic/ir:test"],
+        tools = [ir_tool],
         cmd = " ".join([
-            "$(location //p4_symbolic/ir:test)",
+            "$(location %s)" % ir_tool,
             ("--bmv2=$(location %s)" % bmv2_file),
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),

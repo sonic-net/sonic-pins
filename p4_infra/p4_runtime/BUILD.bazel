@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -20,13 +23,14 @@ package(
 )
 
 cc_library(
-    name = "p4_runtime_session",
+    name = "p4_runtime_session_core",
     srcs = [
         "p4_runtime_session.cc",
     ],
     hdrs = [
         "p4_runtime_session.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:entity_keys",
         "//p4_infra/p4_pdpi:ir",
@@ -35,11 +39,8 @@ cc_library(
         "//p4_infra/p4_pdpi:sequencing",
         "//sai_p4/fixed:p4_roles",
         "//sai_p4/instantiations/google:p4_versions",
-        "//thinkit:switch",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc_security_base",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/functional:any_invocable",
@@ -56,13 +57,30 @@ cc_library(
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:version",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "p4_runtime_session",
+    srcs = [
+        "p4_runtime_session_thinkit.cc",
+    ],
+    copts = ["-std=c++20"],
+    deps = [
+        ":p4_runtime_session_core",
+        "//thinkit:switch",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
 proto_library(
     name = "p4_runtime_session_extras_proto",
     srcs = ["p4_runtime_session_extras.proto"],
-    deps = ["@com_github_p4lang_p4runtime//:p4runtime_proto"],
+    deps = ["@p4runtime//proto/p4/v1:p4runtime_proto"],
 )
 
 cc_proto_library(
@@ -74,6 +92,7 @@ cc_library(
     name = "p4_runtime_session_extras",
     srcs = ["p4_runtime_session_extras.cc"],
     hdrs = ["p4_runtime_session_extras.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4_runtime_session",
         ":p4_runtime_session_extras_cc_proto",
@@ -81,8 +100,6 @@ cc_library(
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:pd",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -91,6 +108,8 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -101,22 +120,23 @@ cc_library(
     deps = [
         "//p4_infra/packetlib",
         "//p4_infra/packetlib:packetlib_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
         "@com_google_gutil//gutil:proto_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "p4_runtime_matchers_test",
     srcs = ["p4_runtime_matchers_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":p4_runtime_matchers",
         "//p4_infra/packetlib",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )

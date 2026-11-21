@@ -30,7 +30,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -39,12 +39,12 @@
 #include "p4_infra/p4_pdpi/test_p4info.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/p4_runtime/p4_runtime_session_mocking.h"
-#include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi_mock.grpc.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mock_switch.h"
-#include "third_party/json/include/nlohmann/json_fwd.hpp"
+#include "nlohmann/json_fwd.hpp"
 
 namespace pins_test {
 namespace {

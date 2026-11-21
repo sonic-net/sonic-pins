@@ -1,0 +1,30 @@
+diff --git a/BUILD.bazel b/BUILD.bazel
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -18,6 +18,7 @@
+ 
+ cmake(
+     name = "z3_dynamic",
++    features = ["-sanitize_pwd"],
+     generate_args = [
+         "-G Ninja", 
+         "-D Z3_EXPORTED_TARGETS=",  # prevents installation, leaving symlinks between dylibs intact on copy
+@@ -35,6 +36,7 @@
+ 
+ cmake(
+     name = "z3_static",
++    features = ["-sanitize_pwd"],
+     generate_args = [
+         "-G Ninja", 
+         "-D BUILD_SHARED_LIBS=OFF",
+diff --git a/cmake/cxx_compiler_flags_overrides.cmake b/cmake/cxx_compiler_flags_overrides.cmake
+--- a/cmake/cxx_compiler_flags_overrides.cmake
++++ b/cmake/cxx_compiler_flags_overrides.cmake
+@@ -6,7 +6,6 @@
+ # CMake's MSVC logic is complicated so for now it's better to just inherit CMake's defaults.
+ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU"))
+   # Taken from Modules/Compiler/GNU.cmake
+-  set(CMAKE_CXX_FLAGS_INIT "")
+   set(CMAKE_CXX_FLAGS_DEBUG_INIT "-g -O0")
+   set(CMAKE_CXX_FLAGS_MINSIZEREL_INIT "-Os -DNDEBUG")
+   set(CMAKE_CXX_FLAGS_RELEASE_INIT "-O3 -DNDEBUG")

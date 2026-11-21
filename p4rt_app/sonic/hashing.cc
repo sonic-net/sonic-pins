@@ -30,7 +30,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "google/rpc/code.pb.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "gutil/status.h"
 #include "p4_infra/p4_pdpi/annotation_parser.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"

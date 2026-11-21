@@ -40,10 +40,10 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "lib/gnmi/openconfig.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
-#include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi_mock.grpc.pb.h"
 
 namespace pins_test {
 namespace {

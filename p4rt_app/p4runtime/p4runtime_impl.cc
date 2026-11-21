@@ -56,7 +56,7 @@
 #include "gutil/io.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"

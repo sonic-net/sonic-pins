@@ -10,7 +10,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 

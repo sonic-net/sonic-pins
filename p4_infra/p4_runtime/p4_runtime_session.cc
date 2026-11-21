@@ -47,7 +47,6 @@
 #include "p4_infra/p4_pdpi/names.h"
 #include "p4_infra/p4_pdpi/sequencing.h"
 #include "sai_p4/instantiations/google/versions.h"
-#include "thinkit/switch.h"
 
 namespace p4_runtime {
 
@@ -175,14 +174,6 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
     uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata,
     bool error_if_not_primary) {
   return Create(CreateP4RuntimeStub(address, credentials), device_id, metadata,
-                error_if_not_primary);
-}
-
-absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
-    thinkit::Switch& thinkit_switch,
-    const P4RuntimeSessionOptionalArgs& metadata, bool error_if_not_primary) {
-  ASSIGN_OR_RETURN(auto stub, thinkit_switch.CreateP4RuntimeStub());
-  return Create(std::move(stub), thinkit_switch.DeviceId(), metadata,
                 error_if_not_primary);
 }
 
@@ -437,22 +428,6 @@ void P4RuntimeSession::CollectStreamReadMessages() {
 
   absl::MutexLock mu(&stream_read_lock_);
   set_is_stream_up(false);
-}
-
-absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
-P4RuntimeSession::CreateWithP4InfoAndClearTables(
-    thinkit::Switch& thinkit_switch, const p4::config::v1::P4Info& p4info,
-    const P4RuntimeSessionOptionalArgs& metadata) {
-  ASSIGN_OR_RETURN(std::unique_ptr<P4RuntimeSession> session,
-                   P4RuntimeSession::Create(thinkit_switch, metadata));
-  RETURN_IF_ERROR(ClearEntities(*session));
-  RETURN_IF_ERROR(SetMetadataAndSetForwardingPipelineConfig(
-      session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest_Action_RECONCILE_AND_COMMIT,
-      p4info));
-  RETURN_IF_ERROR(CheckNoEntities(*session)).SetPrepend()
-      << "cleared all entities and set a new forwarding pipeline config: ";
-  return session;
 }
 
 std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,

@@ -14,7 +14,7 @@
 #
 # PINS test functions that can be run on any infrastructure that supports ThinKit.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -30,6 +30,7 @@ cc_library(
     hdrs = [
         "mtu_tests.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/basic_traffic",
         "//lib/basic_traffic:basic_p4rt_util",
@@ -50,7 +51,6 @@ cc_library(
         "//thinkit:generic_testbed_fixture",
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:config",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -64,6 +64,7 @@ cc_library(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
     alwayslink = True,
 )

@@ -26,7 +26,7 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"  // IWYU pragma: keep
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"

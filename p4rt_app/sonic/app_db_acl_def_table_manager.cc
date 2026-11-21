@@ -32,7 +32,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "gutil/status.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 #include "p4_infra/p4_pdpi/annotation_parser.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"

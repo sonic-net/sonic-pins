@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@com_google_gutil//gutil:diff_test.bzl", "cmd_diff_test")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -22,6 +23,7 @@ package(
 cc_test(
     name = "acl_table_test",
     srcs = ["acl_table_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -35,9 +37,6 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -46,19 +45,21 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "api_access_test",
     srcs = ["api_access_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -66,19 +67,20 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "arbitration_test",
     srcs = ["arbitration_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -87,12 +89,15 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "action_set_test",
     srcs = ["action_set_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_runtime:p4_runtime_session",
@@ -102,8 +107,6 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -111,12 +114,15 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "fixed_l3_tables_test",
     srcs = ["fixed_l3_tables_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -130,9 +136,6 @@ cc_test(
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -142,12 +145,16 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "forwarding_pipeline_config_test",
     srcs = ["forwarding_pipeline_config_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:annotation_parser",
@@ -167,8 +174,6 @@ cc_test(
         "//sai_p4/instantiations/google/test_tools:table_entry_generator_helper",
         "//sai_p4/tools:p4info_tools",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
@@ -182,13 +187,16 @@ cc_test(
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:common",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "p4_programs_test",
     srcs = ["p4_programs_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:annotation_parser",
@@ -199,11 +207,11 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -211,6 +219,7 @@ cc_test(
     name = "packetio_test",
     size = "small",
     srcs = ["packetio_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -225,8 +234,6 @@ cc_test(
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -236,12 +243,15 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "debug_data_dump_test",
     srcs = ["debug_data_dump_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_runtime:p4_runtime_session",
@@ -256,13 +266,14 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:io",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "port_name_and_id_test",
     srcs = ["port_name_and_id_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -273,19 +284,20 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "cpu_queue_name_and_id_test",
     srcs = ["cpu_queue_name_and_id_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_runtime:p4_runtime_session",
@@ -295,31 +307,33 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
-        "@sonic_swss_common//:common",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "front_panel_queue_name_and_id_test",
     srcs = ["front_panel_queue_name_and_id_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4rt_app/event_monitoring:config_db_queue_table_event",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
-        "@sonic_swss_common//:common",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "packet_replication_table_test",
     srcs = ["packet_replication_table_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -328,17 +342,18 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "response_path_test",
     srcs = ["response_path_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -350,8 +365,6 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
@@ -359,12 +372,15 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "role_test",
     srcs = ["role_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -377,9 +393,6 @@ cc_test(
         "//sai_p4/instantiations/google:p4_roles",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -389,12 +402,16 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "state_verification_test",
     srcs = ["state_verification_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_runtime:p4_runtime_session",
@@ -402,16 +419,17 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "vrf_table_test",
     srcs = ["vrf_table_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir",
@@ -422,18 +440,19 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "vlan_tables_test",
     srcs = ["vlan_tables_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -442,11 +461,11 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -454,6 +473,7 @@ cc_test(
     name = "grpc_behavior_test",
     timeout = "short",
     srcs = ["grpc_behavior_test.cc"],
+    copts = ["-std=c++20"],
     tags = ["exclusive"],
     deps = [
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -461,16 +481,17 @@ cc_test(
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:fake_warm_boot_state_adapter",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_googletest//:gtest_main",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "warm_restart_bootup_test",
     srcs = ["warm_restart_bootup_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_runtime:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
@@ -482,9 +503,6 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -496,7 +514,10 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
-        "@sonic_swss_common//:common",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -504,6 +525,7 @@ cc_test(
 cc_test(
     name = "p4_constraints_test_runner",
     srcs = ["p4_constraints_test_runner.cc"],
+    copts = ["-std=c++20"],
     linkstatic = True,
     tags = ["exclusive"],
     deps = [
@@ -514,8 +536,6 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -523,12 +543,15 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "resource_limits_test",
     srcs = ["resource_limits_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
@@ -536,8 +559,6 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -545,12 +566,15 @@ cc_test(
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "utf8_validity_test",
     srcs = ["utf8_validity_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:pd",
         "//p4_infra/p4_runtime:p4_runtime_session",
@@ -569,6 +593,7 @@ cc_test(
 cc_test(
     name = "wcmp_group_capabilities_test",
     srcs = ["wcmp_group_capabilities_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_runtime:p4_runtime_session",
@@ -578,14 +603,14 @@ cc_test(
         "//sai_p4:capabilities_cc_proto",
         "//sai_p4/instantiations/google:instantiations",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -593,17 +618,11 @@ cmd_diff_test(
     name = "p4_constraints_test",
     actual_cmd =
         " | ".join([
-            # gutil does not merge Python toolchain runfiles. Use the native
-            # Python already required by this profile with explicit inputs.
-            "python3 -B $(execpath //ci:runtime_test_command) $(execpath :p4_constraints_test_runner)",
+            "$(execpath :p4_constraints_test_runner)",
             # Strip unnecessary lines for golden testing.
             "sed '1,/^###/d'",  # Strip everything up to a line beginning with '###'.
             "sed '/^\\[/d'",  # Strip every line beginning with '['.
         ]),
-    data = [
-        "//ci:runtime_test_command",
-        "//ci:runtime_test_imports",
-    ],
     expected = "golden_outputs/p4_constraints_test.expected",
     tools = [
         ":p4_constraints_test_runner",

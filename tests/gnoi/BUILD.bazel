@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -28,6 +28,7 @@ cc_library(
     hdrs = [
         "bert_tests.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//lib/validator:validator_lib",
@@ -73,6 +74,7 @@ cc_library(
     hdrs = [
         "factory_reset_test.h",
     ],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/validator:validator_lib",
         "//thinkit:ssh_client",

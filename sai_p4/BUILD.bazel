@@ -1,6 +1,7 @@
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -21,18 +22,20 @@ cc_library(
     name = "capabilities",
     srcs = ["capabilities.cc"],
     hdrs = ["capabilities.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":capabilities_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_gutil//gutil:status",
         "@com_google_protobuf//:protobuf",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
 cc_test(
     name = "capabilities_test",
     srcs = ["capabilities_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":capabilities",
         ":capabilities_cc_proto",

@@ -1,21 +1,35 @@
-build --cxxopt='-std=c++17'
-build --host_cxxopt='-std=c++17'
-run --cxxopt='-std=c++17'
-run --host_cxxopt='-std=c++17'
+common --registry=https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/main
+common --registry=https://bcr.bazel.build
+common --lockfile_mode=update
+common --noincompatible_disallow_empty_glob
+common --incompatible_strict_action_env
+common --legacy_external_runfiles
 
-# To allow loops with int and comparison against a .size() that's size_t.
-build --copt='-Wno-error=sign-compare'
-build --host_copt='-Wno-error=sign-compare'
-run --copt='-Wno-error=sign-compare'
-run --host_copt='-Wno-error=sign-compare'
+# Execute and target Debian Trixie using the shared sonic-build-infra toolchains.
+common --platforms=@sonic_build_infra//platforms:x86_64_trixie
+common --host_platform=@sonic_build_infra//platforms:x86_64_trixie
+common:aarch64 --platforms=@sonic_build_infra//platforms:aarch64_trixie
+common:aarch64 --host_platform=@sonic_build_infra//platforms:aarch64_trixie
 
-# The production TARs keep the executable's split-DWARF skeleton and export
-# matching DWP files. Preserve the existing SONiC optimized build contract.
-build:p4rt-runtime --compilation_mode=opt
-build:p4rt-runtime --fission=opt
-build:p4rt-runtime --strip=never
-build:p4rt-runtime --copt=-g
-# GNU dwp 2.44 cannot package GCC 14's default DWARF 5 output.
-build:p4rt-runtime --copt=-gdwarf-4
-build:p4rt-runtime --copt=-Wno-array-bounds
-build:p4rt-runtime --copt=-Wno-stringop-overflow
+# Build sonic-swss-common with its YANG C++ sources and schema generator.
+common --@sonic_swss_common//tools/bazel:yang_modules=True
+
+# Match Trixie libswsscommon ABI and upstream PINS warning tolerances.
+build --cxxopt=-std=c++20
+build --host_cxxopt=-std=c++20
+run --cxxopt=-std=c++20
+run --host_cxxopt=-std=c++20
+build --copt=-Wno-error=sign-compare
+build --host_copt=-Wno-error=sign-compare
+run --copt=-Wno-error=sign-compare
+run --host_copt=-Wno-error=sign-compare
+build --copt=-Wno-array-bounds
+build --copt=-Wno-stringop-overflow
+
+# Match sonic-buildimage gRPC settings.
+build --@com_github_grpc_grpc//:disable_grpc_rls=true
+
+build:release --compilation_mode=opt
+test --test_output=errors
+
+try-import %workspace%/.bazelrc.user

@@ -25,7 +25,7 @@
 #include "absl/time/time.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/thinkit_util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"

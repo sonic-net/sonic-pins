@@ -55,7 +55,7 @@
 #include "p4_infra/packetlib/packetlib.pb.h"
 #include "p4_infra/string_encodings/decimal_string.h"
 #include "p4_infra/string_encodings/hex_string.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"

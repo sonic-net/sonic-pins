@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_google_googleapis_imports//:imports.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -24,6 +27,7 @@ cc_library(
     testonly = 1,
     srcs = ["pins_control_device.cc"],
     hdrs = ["pins_control_device.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//lib/p4rt:p4rt_programming_context",
@@ -49,8 +53,6 @@ cc_library(
         "@com_github_gnoi//system:system_cc_grpc_proto",
         "@com_github_gnoi//system:system_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
@@ -62,6 +64,8 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_gutil//gutil:status",
         "@com_google_gutil//gutil:testing",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
     ],
 )
 
@@ -70,6 +74,7 @@ cc_library(
     testonly = True,
     srcs = ["ixia_helper.cc"],
     hdrs = ["ixia_helper.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ixia_helper_cc_proto",
         "//lib/gnmi:gnmi_helper",
@@ -79,7 +84,6 @@ cc_library(
         "//p4_infra/netaddr:mac_address",
         "//thinkit:generic_testbed",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/log",
@@ -94,12 +98,14 @@ cc_library(
         "@com_google_gutil//gutil:overload",
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:status",
+        "@nlohmann_json//:json",
     ],
 )
 
 cc_test(
     name = "ixia_helper_test",
     srcs = ["ixia_helper_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ixia_helper",
         ":ixia_helper_cc_proto",
@@ -107,7 +113,6 @@ cc_test(
         "//lib/utils:json_utils",
         "//thinkit:generic_testbed",
         "//thinkit:mock_generic_testbed",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -116,6 +121,7 @@ cc_test(
         "@com_google_gutil//gutil:proto",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
+        "@nlohmann_json//:json",
     ],
 )
 
@@ -142,10 +148,10 @@ cc_library(
         "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
         "@com_github_gnoi//os:os_cc_grpc_proto",
         "@com_github_gnoi//system:system_cc_grpc_proto",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+        "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc_security_base",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/status:statusor",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
     ],
 )
 
@@ -157,15 +163,16 @@ cc_library(
         "//p4_infra/p4_runtime:p4_runtime_session",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc_security_base",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status:statusor",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
     ],
 )
 
 cc_test(
     name = "basic_switch_test",
     srcs = ["basic_switch_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":basic_switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
@@ -174,10 +181,10 @@ cc_test(
         "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
         "@com_github_gnoi//os:os_cc_grpc_proto",
         "@com_github_gnoi//system:system_cc_grpc_proto",
-        "@com_github_grpc_grpc//:grpc++_public_hdrs",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_github_grpc_grpc//:grpc++",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_grpc",
     ],
 )
 
@@ -186,6 +193,7 @@ cc_library(
     testonly = True,
     srcs = ["lacp_ixia_helper.cc"],
     hdrs = ["lacp_ixia_helper.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ixia_helper",
         "//thinkit:generic_testbed",
@@ -199,6 +207,7 @@ cc_library(
 cc_test(
     name = "lacp_ixia_helper_test",
     srcs = ["lacp_ixia_helper_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ixia_helper",
         ":lacp_ixia_helper",
@@ -216,6 +225,7 @@ cc_library(
     testonly = True,
     srcs = ["ixia_protocol_helper.cc"],
     hdrs = ["ixia_protocol_helper.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":ixia_helper",
         "//thinkit:generic_testbed",
@@ -229,6 +239,7 @@ cc_library(
 cc_test(
     name = "ixia_protocol_helper_test",
     srcs = ["ixia_protocol_helper_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":ixia_protocol_helper",
         "//lib/utils:json_test_utils",
@@ -244,6 +255,7 @@ cc_library(
     testonly = True,
     srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_otg_models//:otg_cc_proto",
@@ -258,6 +270,7 @@ cc_library(
 cc_test(
     name = "otg_helper_test",
     srcs = ["otg_helper_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":otg_helper",
         "@com_github_grpc_grpc//:grpc++",

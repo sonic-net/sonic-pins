@@ -141,9 +141,9 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
                    ConstraintSolver::Create(*table_info, skip_key));
 
   if (additional_constraint_ast.has_value()) {
-    ASSIGN_OR_RETURN(bool constraint_added, constraint_solver.AddConstraint(
-                                                *additional_constraint_ast,
-                                                additional_constraint_source));
+    ASSIGN_OR_RETURN(
+        bool constraint_added,
+        constraint_solver.AddTableConstraint(*additional_constraint));
     if (!constraint_added) {
       return gutil::InvalidArgumentErrorBuilder()
              << "additional constraint '" << *additional_constraint
@@ -156,7 +156,7 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   // priority, skipping if the initial value yields an unsatisfiable constraint.
   if (table.requires_priority()) {
     RETURN_IF_ERROR(constraint_solver
-                        .AddConstraint(absl::Substitute(
+                        .AddTableConstraint(absl::Substitute(
                             "::priority == $0",
                             static_cast<int>(FuzzUint64(&gen, /*bits=*/16))))
                         .status());
@@ -165,7 +165,8 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   // TODO: Add additional randomness for match fields too before
   // generating a model.
 
-  ASSIGN_OR_RETURN(TableEntry table_entry, constraint_solver.ConcretizeEntry());
+  ASSIGN_OR_RETURN(TableEntry table_entry,
+                   constraint_solver.ConcretizeEntryKey());
 
   // Construct a set of match field names that are disabled for constraint
   // fuzzing.

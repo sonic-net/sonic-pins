@@ -1,5 +1,5 @@
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
-# load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
 # Copyright 2020 Google LLC
 #
@@ -23,40 +23,42 @@ cc_library(
     name = "app_db_acl_def_table_manager",
     srcs = ["app_db_acl_def_table_manager.cc"],
     hdrs = ["app_db_acl_def_table_manager.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":response_handler",
         "//p4_infra/p4_pdpi:annotation_parser",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:table_utility",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
-        "@com_google_gutil//gutil:status",
         "@com_google_absl//absl/types:span",
-        "@sonic_swss_common//:libswsscommon",
+        "@com_google_gutil//gutil:status",
+        "@nlohmann_json//:json",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "app_db_acl_def_table_manager_test",
     srcs = ["app_db_acl_def_table_manager_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":app_db_acl_def_table_manager",
         ":redis_connections",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/sonic/adapters:fake_zmq_producer_state_table_adapter",
         "//p4rt_app/utils:ir_builder",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
+        "@nlohmann_json//:json",
     ],
 )
 
@@ -64,6 +66,7 @@ cc_library(
     name = "app_db_manager",
     srcs = ["app_db_manager.cc"],
     hdrs = ["app_db_manager.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":app_db_to_pdpi_ir_translator",
         ":packet_replication_entry_translation",
@@ -75,7 +78,6 @@ cc_library(
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -86,13 +88,15 @@ cc_library(
         "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "app_db_manager_test",
     srcs = ["app_db_manager_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":app_db_manager",
         ":packet_replication_entry_translation",
@@ -121,7 +125,7 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -129,11 +133,11 @@ cc_library(
     name = "app_db_to_pdpi_ir_translator",
     srcs = ["app_db_to_pdpi_ir_translator.cc"],
     hdrs = ["app_db_to_pdpi_ir_translator.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:ir_utils",
         "//p4rt_app/utils:table_utility",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -141,12 +145,14 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
+        "@nlohmann_json//:json",
     ],
 )
 
 cc_test(
     name = "app_db_to_pdpi_ir_translator_test",
     srcs = ["app_db_to_pdpi_ir_translator_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":app_db_to_pdpi_ir_translator",
         "//p4_infra/p4_pdpi:ir",
@@ -165,17 +171,18 @@ cc_library(
     name = "receive_genetlink",
     srcs = ["receive_genetlink.cc"],
     hdrs = ["receive_genetlink.h"],
-    copts = [
-        "-I",
-        "/usr/include/libnl3/",
-    ],  # Sonic-dependancy
+    copts = ["-std=c++20"],
     # copts = ["-I /usr/include/libnl3/"],
     deps = [
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@libnl3//:libnl_3",
+        "@libnl3//:libnl_genl_3",
+        "@libnl3//:libnl_nf_3",
+        "@libnl3//:libnl_route_3",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -192,10 +199,11 @@ cc_library(
     name = "packetio_selectables",
     srcs = ["packetio_selectables.cc"],
     hdrs = ["packetio_selectables.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":receive_genetlink",
         "@com_google_absl//absl/log",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -203,6 +211,7 @@ cc_library(
     name = "packetio_port",
     srcs = ["packetio_port.cc"],
     hdrs = ["packetio_port.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":packetio_selectables",
         ":receive_genetlink",
@@ -216,7 +225,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -224,6 +233,7 @@ cc_library(
     name = "packetio_impl",
     srcs = ["packetio_impl.cc"],
     hdrs = ["packetio_impl.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":packetio_interface",
         ":packetio_port",
@@ -237,13 +247,14 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "packetio_impl_test",
     srcs = ["packetio_impl_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":packetio_impl",
         "//p4rt_app/sonic/adapters:mock_system_call_adapter",
@@ -259,6 +270,7 @@ cc_library(
     name = "fake_packetio_interface",
     srcs = ["fake_packetio_interface.cc"],
     hdrs = ["fake_packetio_interface.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":packetio_interface",
         "@com_google_absl//absl/base:core_headers",
@@ -270,12 +282,14 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_gutil//gutil:collections",
+        "@com_google_gutil//gutil:status",
     ],
 )
 
 cc_test(
     name = "packetio_port_test",
     srcs = ["packetio_port_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":packetio_port",
         "//p4rt_app/sonic/adapters:mock_system_call_adapter",
@@ -300,6 +314,7 @@ cc_library(
     name = "response_handler",
     srcs = ["response_handler.cc"],
     hdrs = ["response_handler.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4_infra/p4_pdpi:ir_utils",
@@ -313,13 +328,14 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "response_handler_test",
     srcs = ["response_handler_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":response_handler",
         "//p4_infra/p4_pdpi:ir",
@@ -338,6 +354,7 @@ cc_library(
     name = "state_verification",
     srcs = ["state_verification.cc"],
     hdrs = ["state_verification.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":app_db_manager",
         ":app_db_to_pdpi_ir_translator",
@@ -345,7 +362,6 @@ cc_library(
         ":redis_connections",
         "//p4_infra/p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:table_adapter",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -353,13 +369,15 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "state_verification_test",
     srcs = ["state_verification_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":state_verification",
@@ -377,11 +395,11 @@ cc_library(
     name = "vlan_entry_translation",
     srcs = ["vlan_entry_translation.cc"],
     hdrs = ["vlan_entry_translation.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":response_handler",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -389,13 +407,15 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "vlan_entry_translation_test",
     srcs = ["vlan_entry_translation_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":vlan_entry_translation",
@@ -403,14 +423,14 @@ cc_test(
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -418,22 +438,24 @@ cc_library(
     name = "vrf_entry_translation",
     srcs = ["vrf_entry_translation.cc"],
     hdrs = ["vrf_entry_translation.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":response_handler",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "vrf_entry_translation_test",
     srcs = ["vrf_entry_translation_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":vrf_entry_translation",
@@ -441,7 +463,6 @@ cc_test(
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_googleapis//google/rpc:code_cc_proto",
@@ -449,7 +470,8 @@ cc_test(
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -457,25 +479,27 @@ cc_library(
     name = "packet_replication_entry_translation",
     srcs = ["packet_replication_entry_translation.cc"],
     hdrs = ["packet_replication_entry_translation.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":app_db_to_pdpi_ir_translator",
         ":redis_connections",
         "//p4_infra/p4_pdpi:ir",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@nlohmann_json//:json",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "packet_replication_entry_translation_test",
     srcs = ["packet_replication_entry_translation_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":packet_replication_entry_translation",
         ":redis_connections",
@@ -483,15 +507,15 @@ cc_test(
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:proto_matchers",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//:libswsscommon",
+        "@nlohmann_json//:json",
+        "@p4runtime//proto/p4/v1:p4runtime_cc_proto",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
@@ -499,12 +523,12 @@ cc_library(
     name = "hashing",
     srcs = ["hashing.cc"],
     hdrs = ["hashing.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":redis_connections",
         ":response_handler",
         "//p4_infra/p4_pdpi:annotation_parser",
         "//p4_infra/p4_pdpi:ir_cc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -516,13 +540,15 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@nlohmann_json//:json",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "hashing_test",
     srcs = ["hashing_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":hashing",
         ":redis_connections",
@@ -533,8 +559,6 @@ cc_test(
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/sonic/adapters:fake_table_adapter",
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
-        "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -544,6 +568,8 @@ cc_test(
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
         "@com_google_protobuf//:protobuf",
+        "@nlohmann_json//:json",
+        "@p4runtime//proto/p4/config/v1:p4info_cc_proto",
     ],
 )
 
@@ -551,23 +577,25 @@ cc_library(
     name = "swss_utils",
     srcs = ["swss_utils.cc"],
     hdrs = ["swss_utils.h"],
+    copts = ["-std=c++20"],
     deps = [
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_gutil//gutil:status",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )
 
 cc_test(
     name = "swss_utils_test",
     srcs = ["swss_utils_test.cc"],
+    copts = ["-std=c++20"],
     deps = [
         ":swss_utils",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
         "@com_google_gutil//gutil:status_matchers",
-        "@sonic_swss_common//:libswsscommon",
+        "@sonic_swss_common//:libswsscommon_shared",
     ],
 )

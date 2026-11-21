@@ -53,7 +53,7 @@
 #include "p4_infra/p4_pdpi/sequencing.h"
 #include "p4_infra/p4_runtime/p4_runtime_session.h"
 #include "p4_infra/p4_runtime/p4_runtime_session_extras.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/thinkit_sanity_tests.h"

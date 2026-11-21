@@ -43,7 +43,7 @@
 #include "lib/ixia_helper.h"
 #include "p4_infra/netaddr/ipv4_address.h"
 #include "p4_infra/netaddr/mac_address.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "github.com/openconfig/gnmi/proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"

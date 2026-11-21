@@ -23,7 +23,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "include/json/value.h"
-#include "include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 
 namespace pins_test {
 

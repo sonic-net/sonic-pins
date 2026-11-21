@@ -1,0 +1,11 @@
+Source: sonic-pins
+Section: net
+Priority: optional
+Maintainer: PINS Working Group <pins-wg@opennetworking.org>
+Build-Depends: debhelper (>= 8.0.0)
+Homepage: https://github.com/sonic-net/sonic-pins
+
+Package: sonic-p4rt
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: P4RT service

@@ -47,7 +47,10 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "sai_p4/fixed/roles.h"
-#include "thinkit/switch.h"
+
+namespace thinkit {
+class Switch;
+}  // namespace thinkit
 
 namespace p4_runtime {
 

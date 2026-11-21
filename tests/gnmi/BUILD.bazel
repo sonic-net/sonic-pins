@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -24,6 +24,7 @@ cc_library(
     testonly = True,
     srcs = ["util.cc"],
     hdrs = ["util.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib/gnmi:gnmi_helper",
         "//tests:thinkit_gnmi_subscribe_tests",
@@ -45,6 +46,7 @@ cc_library(
     testonly = True,
     srcs = ["link_flap_tests.cc"],
     hdrs = ["link_flap_tests.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":util",
         "//lib/gnmi:gnmi_helper",
@@ -74,6 +76,7 @@ cc_library(
     testonly = True,
     srcs = ["host_link_flap_tests.cc"],
     hdrs = ["link_flap_tests.h"],
+    copts = ["-std=c++20"],
     deps = [
         ":util",
         "//lib/gnmi:gnmi_helper",
@@ -99,6 +102,7 @@ cc_library(
     testonly = True,
     srcs = ["ethcounter_ixia_test.cc"],
     hdrs = ["ethcounter_ixia_test.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib:ixia_helper",
         "//lib/gnmi:gnmi_helper",
@@ -114,7 +118,6 @@ cc_library(
         "//thinkit:generic_testbed_fixture",
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
-        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -127,6 +130,7 @@ cc_library(
         "@com_google_gutil//gutil:collections",
         "@com_google_gutil//gutil:status_matchers",
         "@com_google_gutil//gutil:testing",
+        "@nlohmann_json//:json",
     ],
     alwayslink = True,
 )
@@ -136,6 +140,7 @@ cc_library(
     testonly = True,
     srcs = ["counter_timestamp_test.cc"],
     hdrs = ["ethcounter_ixia_test.h"],
+    copts = ["-std=c++20"],
     deps = [
         "//lib:ixia_helper",
         "//lib:ixia_helper_cc_proto",
