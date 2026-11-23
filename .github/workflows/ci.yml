@@ -65,12 +65,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/967051cf53d7f46a4d046d8771344ffa94287317/ci/source_mirrors.cfg \
+          curl -fsSL https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/e7ee462aaa8fbd137ea2187f175506e308d81dcb/ci/source_mirrors.cfg \
             -o "$RUNNER_TEMP/source_mirrors.cfg"
-          echo "2e01494e18c47475b29309b9f6ac1506665b3331498996d24f69d6dfc77eacc8  $RUNNER_TEMP/source_mirrors.cfg" | sha256sum -c -
+          echo "c28e6882aa9ebed84fd32586112e5fbfe9684af4e4aaa9942170919a3cbd308e  $RUNNER_TEMP/source_mirrors.cfg" | sha256sum -c -
           echo "common --downloader_config=$RUNNER_TEMP/source_mirrors.cfg" >> .bazelrc
 
-          cosmos_base="https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/967051cf53d7f46a4d046d8771344ffa94287317/ci"
+          cosmos_base="https://raw.githubusercontent.com/securely1g/sonic-bazel-registry/e7ee462aaa8fbd137ea2187f175506e308d81dcb/ci"
           curl -fsSL "$cosmos_base/github_sources.py" -o "$RUNNER_TEMP/github_sources.py"
           curl -fsSL "$cosmos_base/github_sources/cosmos-4.0.2.json" -o "$RUNNER_TEMP/cosmos.json"
           echo "06836c38c56aa0e77e1f7adac68b6463f8f1e920e0beb000061cec5b7f5ec1f2  $RUNNER_TEMP/github_sources.py" | sha256sum -c -
