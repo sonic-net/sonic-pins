@@ -65,12 +65,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/sonic-net/sonic-bazel-registry/e73724fb0134430da236e501e0770fe4d273782b/ci/source_mirrors.cfg \
+          curl -fsSL https://raw.githubusercontent.com/sonic-net/sonic-bazel-registry/55c38af2284155eee8c7bf2481e719ec23fa2695/ci/source_mirrors.cfg \
             -o "$RUNNER_TEMP/source_mirrors.cfg"
           echo "c28e6882aa9ebed84fd32586112e5fbfe9684af4e4aaa9942170919a3cbd308e  $RUNNER_TEMP/source_mirrors.cfg" | sha256sum -c -
           echo "common --downloader_config=$RUNNER_TEMP/source_mirrors.cfg" >> .bazelrc
 
-          cosmos_base="https://raw.githubusercontent.com/sonic-net/sonic-bazel-registry/e73724fb0134430da236e501e0770fe4d273782b/ci"
+          cosmos_base="https://raw.githubusercontent.com/sonic-net/sonic-bazel-registry/55c38af2284155eee8c7bf2481e719ec23fa2695/ci"
           curl -fsSL "$cosmos_base/github_sources.py" -o "$RUNNER_TEMP/github_sources.py"
           curl -fsSL "$cosmos_base/github_sources/cosmos-4.0.2.json" -o "$RUNNER_TEMP/cosmos.json"
           echo "06836c38c56aa0e77e1f7adac68b6463f8f1e920e0beb000061cec5b7f5ec1f2  $RUNNER_TEMP/github_sources.py" | sha256sum -c -
