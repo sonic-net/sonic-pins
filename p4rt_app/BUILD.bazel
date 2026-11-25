@@ -39,12 +39,12 @@ _RUNTIME_DEPENDS = [
     "libnl-genl-3-200",
 ]
 
-# These installed tools are production programs. Keep the measurement-test
-# executable in the unchanged legacy/test bundle below.
+# Production P4RT daemon and installed companion tools.
 _PRODUCTION_BINARIES = [
     ":p4rt",
     "//p4rt_app/scripts:p4rt_program_table",
     "//p4rt_app/scripts:p4rt_read",
+    "//p4rt_app/scripts:p4rt_route_measurement_test",
     "//p4rt_app/scripts:p4rt_set_forwarding_pipeline",
     "//p4rt_app/scripts:p4rt_write",
 ]
@@ -161,6 +161,7 @@ py_test(
         ":runtime_packages.json",
         "//p4rt_app/scripts:p4rt_program_table.cc",
         "//p4rt_app/scripts:p4rt_read.cc",
+        "//p4rt_app/scripts:p4rt_route_measurement_test.cc",
         "//p4rt_app/scripts:p4rt_set_forwarding_pipeline.cc",
         "//p4rt_app/scripts:p4rt_write.cc",
         "@libnl3//:libnl_3_shared",
