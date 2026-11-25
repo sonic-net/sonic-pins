@@ -12,7 +12,7 @@ module(
 # SONiC infrastructure and platform dependencies aligned with sonic-buildimage.
 bazel_dep(
     name = "sonic-build-infra",
-    version = "0.0.44-35726399908a3beb947174e9359f902077928289",
+    version = "0.0.45-77ef625a4ddafc8cdc15f3cc6aee31eabac8a5de",
     repo_name = "sonic_build_infra",
 )
 bazel_dep(
@@ -96,7 +96,7 @@ single_version_override(
 
 single_version_override(
     module_name = "sonic-rust-deps",
-    version = "0.0.5-5bf69bc0a7d9ea9f4a5606264be592867cd29d1e",
+    version = "0.0.5-4064a814e8530300a7acbad4a9aff0621e2fb98e",
 )
 
 # p4_constraints@20260909.0.sonic.1 declares p4c@1.2.5.11; pin SONiC's p4c 1.2.4.2.
