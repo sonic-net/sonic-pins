@@ -44,13 +44,9 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/io.h"
-#include "gutil/status.h"  // IWYU pragma: keep
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_infra/netaddr/ipv4_address.h"
@@ -64,6 +60,11 @@
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
+
+// Local test macros to replace GoogleTest status matchers without testonly
+// dependencies.
+#define ASSERT_OK(expr) RETURN_IF_ERROR(expr)
+#define ASSERT_OK_AND_ASSIGN(lhs, expr) ASSIGN_OR_RETURN(lhs, expr)
 
 // The test can be run over a unix socket or TCP connection. In general (i.e.
 // verify for your own environment) the socket will be unsecured while the TCP
@@ -405,9 +406,9 @@ absl::Status VerifyP4WcmpWriteSizes(
   return absl::OkStatus();
 }
 
-class P4rtRouteTest : public testing::Test {
- protected:
-  void SetUp() override {
+class P4rtRouteTest {
+ public:
+  absl::Status SetUp() {
     ASSERT_OK_AND_ASSIGN(p4rt_session_, OpenP4RuntimeSession());
     ASSERT_OK_AND_ASSIGN(ir_p4info_,
                          GetExistingP4InfoOrSetDefault(
@@ -417,16 +418,20 @@ class P4rtRouteTest : public testing::Test {
     if (absl::GetFlag(FLAGS_cleanup)) {
       ASSERT_OK(p4_runtime::ClearEntities(*p4rt_session_.get()));
     }
+    return absl::OkStatus();
   }
 
-  void TearDown() override {
+  absl::Status TearDown() {
     // Remove table entries that were created.
     if (p4rt_session_ != nullptr) {
       if (absl::GetFlag(FLAGS_cleanup)) {
         ASSERT_OK(p4_runtime::ClearEntities(*p4rt_session_.get()));
       }
     }
+    return absl::OkStatus();
   }
+
+  absl::Status MeasureWriteLatency();
 
   // Set connection & switch IDs so the request will not be rejected.
   void UpdateRequestMetadata(std::vector<p4::v1::WriteRequest>& requests) {
@@ -1504,7 +1509,7 @@ absl::StatusOr<P4WriteRequests> ComputeIv6MulticastRouteWriteRequests(
   return requests;
 }
 
-TEST_F(P4rtRouteTest, MeasureWriteLatency) {
+absl::Status P4rtRouteTest::MeasureWriteLatency() {
   int32_t number_of_batches = absl::GetFlag(FLAGS_number_batches);
   int32_t requests_per_batch = absl::GetFlag(FLAGS_batch_size);
   std::string available_port_ids = absl::GetFlag(FLAGS_port_ids);
@@ -1936,16 +1941,35 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     }
     std::cout << std::endl;
   }
+  return absl::OkStatus();
 }
 
 }  // namespace
 }  // namespace p4rt_app
 
-// Temporary fix to have performance tests run nightly until we find a way to
-// bring p4rt_test_main.cc to p4rt_app specific tests alone.
-GTEST_API_ int main(int argc, char** argv) {
+int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+
+  p4rt_app::P4rtRouteTest test;
+  absl::Status setup_status = test.SetUp();
+  if (!setup_status.ok()) {
+    LOG(ERROR) << "SetUp failed: " << setup_status;
+    return 1;
+  }
+
+  absl::Status test_status = test.MeasureWriteLatency();
+  if (!test_status.ok()) {
+    LOG(ERROR) << "Test failed: " << test_status;
+  }
+
+  absl::Status teardown_status = test.TearDown();
+  if (!teardown_status.ok()) {
+    LOG(ERROR) << "TearDown failed: " << teardown_status;
+  }
+
+  if (!test_status.ok() || !teardown_status.ok()) {
+    return 1;
+  }
+  return 0;
 }

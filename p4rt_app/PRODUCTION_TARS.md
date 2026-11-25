@@ -12,6 +12,7 @@ built natively with Bazel 8.5.1 (Bzlmod) using `@sonic_build_infra`
   - `p4rt`
   - `p4rt_program_table`
   - `p4rt_read`
+  - `p4rt_route_measurement_test`
   - `p4rt_set_forwarding_pipeline`
   - `p4rt_write`
 - `//p4rt_app:p4rt_runtime.debug_symbols` — detached `.debug` ELF files indexed

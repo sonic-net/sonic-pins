@@ -16,6 +16,10 @@ PROGRAMS = {
     "p4rt": ("p4rt_app/p4rt.cc", "p4rt_grpc_port"),
     "p4rt_program_table": ("p4rt_app/scripts/p4rt_program_table.cc", "push_config"),
     "p4rt_read": ("p4rt_app/scripts/p4rt_read.cc", "table_ids"),
+    "p4rt_route_measurement_test": (
+        "p4rt_app/scripts/p4rt_route_measurement_test.cc",
+        "server_address",
+    ),
     "p4rt_set_forwarding_pipeline": (
         "p4rt_app/scripts/p4rt_set_forwarding_pipeline.cc",
         "default_middleblock_p4info",
