@@ -22,6 +22,7 @@ load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//p4_infra/p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load(":preprocess.bzl", "preprocess_p4")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -473,4 +474,41 @@ cc_binary(
 filegroup(
     name = "sai_p4",
     srcs = glob(["**/*.p4"]) + glob(["**/*.h"]),
+)
+
+[
+    preprocess_p4(
+        name = "preprocessed_%s_%s" % (platform, instantiation),
+        src = "%s.p4" % instantiation,
+        define = MACRO_BY_NONSTANDARD_PLATFORM_NAME.get(platform, ""),
+        deps = [
+            ":sai_p4",
+            "//sai_p4/fixed",
+        ],
+    )
+    for (instantiation, _) in INSTANTIATIONS
+    for platform in ("standard", "bmv2")
+]
+
+filegroup(
+    name = "preprocessed_sai_programs",
+    srcs = [
+        ":preprocessed_%s_%s" % (platform, instantiation)
+        for (instantiation, _) in INSTANTIATIONS
+        for platform in ("standard", "bmv2")
+    ],
+)
+
+cc_test(
+    name = "preprocessed_sai_programs_test",
+    srcs = ["preprocessed_sai_programs_test.cc"],
+    copts = ["-std=c++20"],
+    data = [":preprocessed_sai_programs"],
+    deps = [
+        ":instantiations",
+        ":sai_nonstandard_platforms_cc",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
