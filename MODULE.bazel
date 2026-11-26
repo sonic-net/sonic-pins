@@ -27,6 +27,9 @@ bazel_dep(name = "rules_cc", version = "0.2.20")
 
 bazel_dep(name = "rules_distroless", version = "0.9.4.sonic.26", dev_dependency = True)
 
+# Needed by BCR p4c's flex/bison toolchains: 0.3.1 renames gnulib error.h to
+# gnulib-error.h so glibc's error.h does not shadow it under -nostdinc.
+bazel_dep(name = "rules_m4", version = "0.3.1")
 bazel_dep(name = "rules_pkg", version = "1.1.0")
 bazel_dep(name = "rules_python", version = "1.9.0.sonic.2")
 
@@ -58,7 +61,7 @@ bazel_dep(name = "openconfig_gnmi", version = "0.14.1", dev_dependency = True, r
 bazel_dep(name = "openconfig_gnoi", version = "0.6.2", dev_dependency = True, repo_name = "com_github_gnoi")
 
 bazel_dep(name = "p4_constraints", version = "20260909.0.sonic.1", repo_name = "com_github_p4lang_p4_constraints")
-bazel_dep(name = "p4c", version = "1.2.4.2.sonic.7", repo_name = "com_github_p4lang_p4c")
+bazel_dep(name = "p4c", version = "1.2.5.18", repo_name = "com_github_p4lang_p4c")
 bazel_dep(name = "p4runtime", version = "1.6.0")
 bazel_dep(name = "protobuf", version = "33.5", repo_name = "com_google_protobuf")
 bazel_dep(name = "re2", version = "2024-07-02.bcr.1", repo_name = "com_googlesource_code_re2")
@@ -97,12 +100,6 @@ single_version_override(
 single_version_override(
     module_name = "sonic-rust-deps",
     version = "0.0.5-4064a814e8530300a7acbad4a9aff0621e2fb98e",
-)
-
-# p4_constraints@20260909.0.sonic.1 declares p4c@1.2.5.11; pin SONiC's p4c 1.2.4.2.
-single_version_override(
-    module_name = "p4c",
-    version = "1.2.4.2.sonic.7",
 )
 
 # Preserve toolchain sysroot include flags and real execroot for BCR Z3 CMake build.
