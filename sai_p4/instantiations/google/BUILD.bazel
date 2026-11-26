@@ -291,16 +291,12 @@ cc_library(
 [
     [
         # Ensures that the checked in and compile-time generated P4Infos match.
-        # Tagged manual because SONiC's p4c@1.2.4.2.sonic.7 omits proto-file
-        # comments and emits @platform_property/@selector_size_semantics as
-        # annotations rather than pkg_info.platform_properties / sum_of_weights.
-        # To update the checked in P4Info with a newer upstream p4c:
+        # To update the checked in P4Info:
         #   blaze run :<instantiation>_p4info_up_to_date_test -- --update
         diff_test(
             name = "%s_p4info_up_to_date_test" % instantiation,
             actual = "generated/%s.p4info.pb.txt" % instantiation,  # Generated.
             expected = "%s.p4info.pb.txt" % instantiation,  # Checked in.
-            tags = ["manual"],
         ),
 
         # Auxiliary targets, see go/totw/128.
