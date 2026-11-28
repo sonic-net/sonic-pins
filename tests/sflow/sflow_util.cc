@@ -593,13 +593,16 @@ int GetSflowCollectorPort() { return kSflowStandaloneCollectorPort; }
 
 absl::Status CheckStateDbPortIndexTableExists(
     thinkit::SSHClient& ssh_client, absl::string_view device_name,
-    const std::string redis_cli_path,
-    absl::Span<const std::string> interfaces) {
+    const std::string redis_cli_path, absl::Span<const std::string> interfaces,
+    bool is_sonic) {
   ASSIGN_OR_RETURN(
       std::string ssh_result,
       ssh_client.RunCommand(
           device_name,
-          /*command=*/redis_cli_path + "redis-cli -n 6 keys PORT_INDEX_TABLE*",
+          /*command=*/
+              is_sonic
+              ? "sonic-db-cli -s STATE_DB keys PORT_INDEX_TABLE*"
+              : redis_cli_path + "redis-cli -n 6 keys PORT_INDEX_TABLE*",
           /*timeout=*/absl::Seconds(5)));
   LOG(INFO) << "ssh_result: " << ssh_result;
   absl::flat_hash_set<std::string> port_index_table_interfaces;
